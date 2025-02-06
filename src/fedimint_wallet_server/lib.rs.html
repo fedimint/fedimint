@@ -2348,7 +2348,11 @@
 <a href="#2347" id="2347">2347</a>
 <a href="#2348" id="2348">2348</a>
 <a href="#2349" id="2349">2349</a>
-<a href="#2350" id="2350">2350</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2350" id="2350">2350</a>
+<a href="#2351" id="2351">2351</a>
+<a href="#2352" id="2352">2352</a>
+<a href="#2353" id="2353">2353</a>
+<a href="#2354" id="2354">2354</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2387,6 +2391,7 @@
 };
 <span class="kw">use </span>envs::get_feerate_multiplier;
 <span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, FederationApiExt};
+<span class="kw">use </span>fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -2432,7 +2437,7 @@
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::{
     Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
-    CONFIRMATION_TARGET, MODULE_CONSENSUS_VERSION,
+    MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
@@ -2645,6 +2650,7 @@
             args.task_group(),
             args.our_peer_id(),
             args.module_api().clone(),
+            <span class="kw-2">&amp;</span>args.shared(),
         )
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into())
@@ -3353,7 +3359,7 @@
     <span class="doccomment">/// Block count updated periodically by a background task
     </span>block_count_rx: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
     <span class="doccomment">/// Fee rate updated periodically by a background task
-    </span>fee_rate_rx: watch::Receiver&lt;Feerate&gt;,
+    </span>fee_rate_rx: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt;,
 
     <span class="doccomment">/// Broadcasting pending txes can be triggered immediately with this
     </span>broadcast_pending: Arc&lt;Notify&gt;,
@@ -3372,50 +3378,48 @@
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
+        shared_bitcoin: <span class="kw-2">&amp;</span>ServerModuleSharedBitcoin,
     ) -&gt; anyhow::Result&lt;Wallet&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id, module_api).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new_with_bitcoind(
+            cfg,
+            db,
+            btc_rpc,
+            task_group,
+            our_peer_id,
+            module_api,
+            shared_bitcoin,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">pub async fn </span>new_with_bitcoind(
         cfg: WalletConfig,
         db: <span class="kw-2">&amp;</span>Database,
-        bitcoind: DynBitcoindRpc,
+        btc_rpc: DynBitcoindRpc,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
+        shared_bitcoin: <span class="kw-2">&amp;</span>ServerModuleSharedBitcoin,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
-        <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
-        <span class="kw">let </span>(fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
+        <span class="kw">let </span>fee_rate_rx = shared_bitcoin
+            .feerate_receiver(cfg.consensus.network.<span class="number">0</span>, btc_rpc.clone())
+            .<span class="kw">await
+            </span>.map_err(|e| {
+                WalletCreationError::FeerateSourceError(e.fmt_compact_anyhow().to_string())
+            })<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_count_rx = shared_bitcoin
+            .block_count_receiver(cfg.consensus.network.<span class="number">0</span>, btc_rpc.clone())
+            .<span class="kw">await</span>;
         <span class="kw">let </span>broadcast_pending = Arc::new(Notify::new());
-        <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>bitcoind, db, broadcast_pending.clone());
-        bitcoind
-            .clone()
-            .spawn_fee_rate_update_task(task_group, cfg.consensus.network.<span class="number">0</span>, CONFIRMATION_TARGET, {
-                <span class="kw">move </span>|feerate| {
-                    <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, %feerate, <span class="string">"New feerate"</span>);
-                    <span class="kw">let _ </span>= fee_rate_tx.send(feerate);
-                }
-            })
-            .map_err(|e| WalletCreationError::FeerateSourceError(e.to_string()))<span class="question-mark">?</span>;
-        bitcoind
-            .clone()
-            .spawn_block_count_update_task(task_group, {
-                <span class="kw">move </span>|count| {
-                    <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, %count, <span class="string">"New block count"</span>);
-                    <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(count));
-                }
-            })
-            .map_err(|e| WalletCreationError::BlockCountSourceError(e.to_string()))<span class="question-mark">?</span>;
+        <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>btc_rpc, db, broadcast_pending.clone());
 
         <span class="kw">let </span>peer_supported_consensus_version =
             <span class="self">Self</span>::spawn_peer_supported_consensus_version_task(module_api, task_group);
 
-        <span class="kw">let </span>bitcoind_rpc = bitcoind;
-
         <span class="kw">let </span>bitcoind_net = NetworkLegacyEncodingWrapper(
             retry(<span class="string">"verify network"</span>, backoff_util::aggressive_backoff(), || {
-                bitcoind_rpc.get_network()
+                btc_rpc.get_network()
             })
             .<span class="kw">await
             </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>,
@@ -3430,7 +3434,7 @@
         <span class="kw">let </span>wallet = Wallet {
             cfg,
             secp: Default::default(),
-            btc_rpc: bitcoind_rpc,
+            btc_rpc,
             our_peer_id,
             block_count_rx,
             fee_rate_rx,
@@ -3560,7 +3564,11 @@
         </span><span class="attr">#[allow(clippy::cast_precision_loss)]
         #[allow(clippy::cast_sign_loss)]
         </span>Feerate {
-            sats_per_kvb: ((<span class="self">self</span>.fee_rate_rx.borrow().sats_per_kvb <span class="kw">as </span>f64
+            sats_per_kvb: ((<span class="self">self
+                </span>.fee_rate_rx
+                .borrow()
+                .unwrap_or(<span class="self">self</span>.cfg.consensus.default_fee)
+                .sats_per_kvb <span class="kw">as </span>f64
                 * get_feerate_multiplier())
             .round()) <span class="kw">as </span>u64,
         }

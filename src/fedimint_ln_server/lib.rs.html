@@ -1513,7 +1513,23 @@
 <a href="#1512" id="1512">1512</a>
 <a href="#1513" id="1513">1513</a>
 <a href="#1514" id="1514">1514</a>
-<a href="#1515" id="1515">1515</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -1526,6 +1542,7 @@
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
 <span class="kw">use </span>fedimint_bitcoind::create_bitcoind;
+<span class="kw">use </span>fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1541,7 +1558,7 @@
     TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, InPoint, NumPeersExt, OutPoint,
     PeerId,
@@ -1734,12 +1751,11 @@
         <span class="comment">// Eagerly initialize metrics that trigger infrequently
         </span>LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        <span class="prelude-val">Ok</span>(Lightning::new(
-            args.cfg().to_typed()<span class="question-mark">?</span>,
-            args.our_peer_id(),
-            args.task_group(),
-        )<span class="question-mark">?
-        </span>.into())
+        <span class="prelude-val">Ok</span>(
+            Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>, args.our_peer_id(), <span class="kw-2">&amp;</span>args.shared())
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.into(),
+        )
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -2459,19 +2475,15 @@
 }
 
 <span class="kw">impl </span>Lightning {
-    <span class="kw">fn </span>new(
+    <span class="kw">async fn </span>new(
         cfg: LightningConfig,
         our_peer_id: PeerId,
-        task_group: <span class="kw-2">&amp;</span>TaskGroup,
+        shared: <span class="kw-2">&amp;</span>ServerModuleSharedBitcoin,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc)<span class="question-mark">?</span>;
-        btc_rpc.spawn_block_count_update_task(task_group, {
-            <span class="kw">move </span>|count| {
-                <span class="macro">debug!</span>(target: LOG_MODULE_LN, %count, <span class="string">"New block count"</span>);
-                <span class="kw">let _ </span>= block_count_tx.send(<span class="prelude-val">Some</span>(count));
-            }
-        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_count_rx = shared
+            .block_count_receiver(cfg.consensus.network.<span class="number">0</span>, btc_rpc.clone())
+            .<span class="kw">await</span>;
         <span class="prelude-val">Ok</span>(Lightning {
             cfg,
             our_peer_id,
@@ -2769,6 +2781,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>assert_matches::assert_matches;
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash};
+    <span class="kw">use </span>fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
     <span class="kw">use </span>fedimint_core::config::ConfigGenModuleParams;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -2792,7 +2805,7 @@
         PreimageKey,
     };
     <span class="kw">use </span>fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
-    <span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit};
+    <span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleShared <span class="kw">as _</span>};
     <span class="kw">use </span>rand::rngs::OsRng;
 
     <span class="kw">use </span><span class="kw">crate</span>::db::{ContractKey, LightningAuditItemKey};
@@ -2845,7 +2858,14 @@
     </span><span class="kw">async fn </span>encrypted_preimage_only_usable_once() {
         <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into(), <span class="kw-2">&amp;</span>task_group).unwrap();
+
+        <span class="kw">let </span>server = Lightning::new(
+            server_cfg[<span class="number">0</span>].clone(),
+            <span class="number">0</span>.into(),
+            <span class="kw-2">&amp;</span>ServerModuleSharedBitcoin::new(task_group),
+        )
+        .<span class="kw">await
+        </span>.unwrap();
 
         <span class="kw">let </span>preimage = [<span class="number">42u8</span>; <span class="number">32</span>];
         <span class="kw">let </span>encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([<span class="number">42</span>; <span class="number">32</span>]));
@@ -2907,7 +2927,13 @@
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>;
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into(), <span class="kw-2">&amp;</span>task_group).unwrap();
+        <span class="kw">let </span>server = Lightning::new(
+            server_cfg[<span class="number">0</span>].clone(),
+            <span class="number">0</span>.into(),
+            <span class="kw-2">&amp;</span>ServerModuleSharedBitcoin::new(task_group),
+        )
+        .<span class="kw">await
+        </span>.unwrap();
 
         <span class="kw">let </span>preimage = PreimageKey(generate_keypair(<span class="kw-2">&amp;mut </span>OsRng).<span class="number">1</span>.serialize());
         <span class="kw">let </span>funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -2975,7 +3001,13 @@
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).<span class="number">0</span>;
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="number">0</span>.into(), <span class="kw-2">&amp;</span>task_group).unwrap();
+        <span class="kw">let </span>server = Lightning::new(
+            server_cfg[<span class="number">0</span>].clone(),
+            <span class="number">0</span>.into(),
+            <span class="kw-2">&amp;</span>ServerModuleSharedBitcoin::new(task_group),
+        )
+        .<span class="kw">await
+        </span>.unwrap();
 
         <span class="kw">let </span>preimage = Preimage([<span class="number">42u8</span>; <span class="number">32</span>]);
         <span class="kw">let </span>gateway_key = random_pub_key();

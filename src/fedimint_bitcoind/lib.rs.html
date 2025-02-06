@@ -349,7 +349,8 @@
 <a href="#348" id="348">348</a>
 <a href="#349" id="349">349</a>
 <a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_errors_doc)]
@@ -385,6 +386,8 @@
 <span class="attr">#[cfg(feature = <span class="string">"esplora-client"</span>)]
 </span><span class="kw">mod </span>esplora;
 <span class="kw">mod </span>feerate_source;
+
+<span class="kw">pub mod </span>shared;
 
 <span class="comment">// &lt;https://blockstream.info/api/block-height/0&gt;
 </span><span class="kw">const </span>MAINNET_GENESIS_BLOCK_HASH: <span class="kw-2">&amp;</span>str =
@@ -550,7 +553,7 @@
         <span class="self">self</span>,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
         on_update: <span class="kw">impl </span>Fn(u64) + Send + Sync + <span class="lifetime">'static</span>,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    ) {
         <span class="kw">let </span><span class="kw-2">mut </span>desired_interval = get_bitcoin_polling_interval();
 
         <span class="comment">// Note: atomic only to workaround Send+Sync async closure limitation
@@ -589,7 +592,6 @@
                 }
             }
         });
-        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Spawns a background task that queries the feerate periodically and sends
