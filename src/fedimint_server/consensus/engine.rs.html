@@ -1487,7 +1487,7 @@
         <span class="kw">let </span>session_checkpoint_dir = checkpoint_dir.join(<span class="macro">format!</span>(<span class="string">"{session_index}"</span>));
 
         {
-            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"database-checkpoint"</span>).level(Level::DEBUG);
+            <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"database-checkpoint"</span>).level(Level::TRACE);
             <span class="kw">match </span><span class="self">self</span>.db.checkpoint(<span class="kw-2">&amp;</span>session_checkpoint_dir) {
                 <span class="prelude-val">Ok</span>(()) =&gt; {
                     <span class="macro">debug!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>session_checkpoint_dir, <span class="question-mark">?</span>session_index, <span class="string">"Created db checkpoint"</span>);
@@ -1500,7 +1500,7 @@
 
         {
             <span class="comment">// Check if any old checkpoint need to be cleaned up
-            </span><span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"remove-database-checkpoint"</span>).level(Level::DEBUG);
+            </span><span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"remove-database-checkpoint"</span>).level(Level::TRACE);
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.delete_old_database_checkpoint(session_index, <span class="kw-2">&amp;</span>checkpoint_dir) {
                 <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>e, <span class="string">"Could not delete old checkpoints"</span>);
             }
