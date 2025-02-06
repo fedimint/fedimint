@@ -24,9 +24,18 @@ if [ -z "${NO_STASH:-}" ] && [ $is_unclean -ne 0 ]; then
 fi
 
 export FLAKEBOX_GIT_LS
-FLAKEBOX_GIT_LS="$(git ls-files)"
+if [ -z "${FLAKEBOX_GIT_LS_IGNORE:-}" ]; then
+  FLAKEBOX_GIT_LS="$(git ls-files | while read -r file; do [ ! -L "$file" ] && echo "$file"; done)"
+else
+  FLAKEBOX_GIT_LS="$(git ls-files | grep -v -E "${FLAKEBOX_GIT_LS_IGNORE}" | while read -r file; do [ ! -L "$file" ] && echo "$file"; done)"
+fi
+
 export FLAKEBOX_GIT_LS_TEXT
-FLAKEBOX_GIT_LS_TEXT="$(echo "$FLAKEBOX_GIT_LS" | grep -v -E "\.(png|ods|jpg|jpeg|woff2|keystore|wasm|ttf|jar|ico|gif)\$")"
+if [ -z "${FLAKEBOX_GIT_LS_TEXT_IGNORE:-}" ]; then
+  FLAKEBOX_GIT_LS_TEXT="$(echo "$FLAKEBOX_GIT_LS" | grep -v -E "\.(png|ods|jpg|jpeg|woff2|keystore|wasm|ttf|jar|ico|gif)\$")"
+else
+  FLAKEBOX_GIT_LS_TEXT="$(echo "$FLAKEBOX_GIT_LS" | grep -v -E "\.(png|ods|jpg|jpeg|woff2|keystore|wasm|ttf|jar|ico|gif)\$" | grep -v -E "${FLAKEBOX_GIT_LS_TEXT_IGNORE}")"
+fi
 
 
 function check_nothing() {
