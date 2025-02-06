@@ -161,7 +161,7 @@ come online and reissue the notes themselves.</p>
     include_invite: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
     extra_meta: M,
 ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.95/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;(<a class="struct" href="../fedimint_core/core/struct.OperationId.html" title="struct fedimint_core::core::OperationId">OperationId</a>, <a class="struct" href="struct.OOBNotes.html" title="struct fedimint_mint_client::OOBNotes">OOBNotes</a>)&gt;</h4></section></summary><div class="docblock"><p>Fetches and removes notes from the wallet to be sent to the recipient
-out of band. The not selection algorithm is determined by
+out of band. The note selection algorithm is determined by
 <code>note_selector</code>. See the <a href="trait.NotesSelector.html" title="trait fedimint_mint_client::NotesSelector"><code>NotesSelector</code></a> trait for available
 implementations.</p>
 <p>These spends can be canceled by calling
