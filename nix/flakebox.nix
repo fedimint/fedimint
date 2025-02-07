@@ -555,8 +555,8 @@ in
 
     workspaceTestCovBase =
       { times }:
-      craneLib.buildPackage {
-        pname = "fedimint-workspace-lcov";
+      craneLib.mkCargoDerivation {
+        pname = "fedimint-workspace-lcov-test";
         cargoArtifacts = workspaceCov;
 
         FM_DISCOVER_API_VERSION_TIMEOUT = "10";
@@ -574,7 +574,7 @@ in
             mkdir -p $out
             cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info
           '';
-        installPhaseCommand = "true";
+        doInstallCargoArtifacts = false;
         nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
         doCheck = false;
       };
