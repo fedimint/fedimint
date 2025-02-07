@@ -3,6 +3,7 @@
 
 set -euo pipefail
 export RUST_LOG="${RUST_LOG:-info}"
+export FM_ENABLE_MODULE_LNV2=${FM_ENABLE_MODULE_LNV2:-1}
 
 source scripts/_common.sh
 build_workspace

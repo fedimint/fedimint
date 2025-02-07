@@ -462,8 +462,6 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 fedimintd_version
             );
 
-            info!(?paths, "JUMOELL printing paths");
-
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
             try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
