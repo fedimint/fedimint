@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v15
         with:
           name: fedimint
@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v4
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v15
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
@@ -138,7 +138,7 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         uses: ./.github/actions/prepare
 
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
         if: github.event_name != 'pull_request' || matrix.build-in-pr
       - uses: cachix/cachix-action@v15
         if: github.event_name != 'pull_request' || matrix.build-in-pr
@@ -217,7 +217,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v15
         with:
           name: fedimint
@@ -245,7 +245,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare
         uses: ./.github/actions/prepare
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v15
         with:
           name: fedimint
@@ -321,7 +321,7 @@ jobs:
       - uses: actions/checkout@v4
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: cachix/cachix-action@v15
@@ -352,7 +352,7 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v15
         with:
           name: fedimint
@@ -471,7 +471,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v15
         with:
           name: fedimint

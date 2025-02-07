@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare
         uses: ./.github/actions/prepare
-      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v15
         with:
           name: fedimint
