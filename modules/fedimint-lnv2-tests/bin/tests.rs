@@ -1,7 +1,7 @@
 use anyhow::ensure;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
-use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_7_0_ALPHA};
+use devimint::version_constants::VERSION_0_7_0_ALPHA;
 use devimint::{cmd, util, Gatewayd};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::{backoff_util, retry};

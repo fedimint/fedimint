@@ -203,7 +203,9 @@ function generate_matrix() {
 
           # bash doesn't allow returning arrays, however we can mimic the
           # behavior of returning an array by echoing each element
-          if supports_lnv2 $fed_version $client_version $gateway_version; then
+          if are_all_versions_current $fed_version $client_version $gateway_version; then
+              echo "FM: $fed_version CLI: $client_version GW: $gateway_version LNv2: 1"
+          elif supports_lnv2 $fed_version $client_version $gateway_version; then
             for enable_lnv2 in {0..1}; do
               echo "FM: $fed_version CLI: $client_version GW: $gateway_version LNv2: $enable_lnv2"
             done
