@@ -84,7 +84,8 @@ pub struct ConsensusApi {
     pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub shutdown_receiver: Receiver<Option<u64>>,
     pub shutdown_sender: Sender<Option<u64>>,
-    pub status_receivers: BTreeMap<PeerId, (Receiver<P2PConnectionStatus>, Receiver<Option<u64>>)>,
+    pub p2p_status_receivers: BTreeMap<PeerId, Receiver<P2PConnectionStatus>>,
+    pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
 }
@@ -219,9 +220,11 @@ impl ConsensusApi {
         let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
 
         let status_by_peer = self
-            .status_receivers
+            .p2p_status_receivers
             .iter()
-            .map(|(peer, (p2p_receiver, ci_receiver))| {
+            .map(|(peer, p2p_receiver)| {
+                let ci_receiver = self.ci_status_receivers.get(peer).unwrap();
+
                 let consensus_status = PeerStatus {
                     connection_status: *p2p_receiver.borrow(),
                     last_contribution: *ci_receiver.borrow(),

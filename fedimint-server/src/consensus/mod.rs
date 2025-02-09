@@ -17,13 +17,15 @@ use async_channel::Sender;
 use db::get_global_database_migrations;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
+use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{apply_migrations, apply_migrations_server_dbtx, Database};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::NumPeers;
+use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use jsonrpsee::server::ServerHandle;
@@ -43,7 +45,8 @@ const TRANSACTION_BUFFER: usize = 1000;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
-    p2p_bind_addr: SocketAddr,
+    connections: DynP2PConnections<P2PMessage>,
+    p2p_status_receivers: BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>,
     api_bind_addr: SocketAddr,
     cfg: ServerConfig,
     db: Database,
@@ -118,18 +121,14 @@ pub async fn run(
     let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
 
-    let mut p2p_status_senders = BTreeMap::new();
     let mut ci_status_senders = BTreeMap::new();
-    let mut status_receivers = BTreeMap::new();
+    let mut ci_status_receivers = BTreeMap::new();
 
     for peer in cfg.consensus.broadcast_public_keys.keys().copied() {
-        let (p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
         let (ci_sender, ci_receiver) = watch::channel(None);
 
-        p2p_status_senders.insert(peer, p2p_sender);
         ci_status_senders.insert(peer, ci_sender);
-
-        status_receivers.insert(peer, (p2p_receiver, ci_receiver));
+        ci_status_receivers.insert(peer, ci_receiver);
     }
 
     let consensus_api = ConsensusApi {
@@ -144,7 +143,8 @@ pub async fn run(
             &cfg.consensus.modules,
             &module_init_registry,
         ),
-        status_receivers,
+        p2p_status_receivers,
+        ci_status_receivers,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };
@@ -196,7 +196,7 @@ pub async fn run(
             .map(|x| x.to_string())
             .collect(),
         cfg: cfg.clone(),
-        p2p_status_senders,
+        connections,
         ci_status_senders,
         submission_receiver,
         shutdown_receiver,
@@ -204,7 +204,6 @@ pub async fn run(
         task_group: task_group.clone(),
         data_dir,
         checkpoint_retention,
-        p2p_bind_addr,
     }
     .run()
     .await?;
