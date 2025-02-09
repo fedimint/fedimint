@@ -18,6 +18,7 @@ use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
+use fedimint_core::net::peers::IP2PConnections;
 use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_TEST;
@@ -27,7 +28,8 @@ use fedimint_server::config::{
 };
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
-use fedimint_server::net::p2p_connector::parse_host_port;
+use fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
+use fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::Gateway;
 use tokio_rustls::rustls;
@@ -218,14 +220,14 @@ impl FederationTestBuilder {
             ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
 
         let task_group = TaskGroup::new();
-        for (peer_id, config) in configs.clone() {
+        for (peer_id, cfg) in configs.clone() {
             let p2p_bind_addr = params.get(&peer_id).expect("Must exist").local.p2p_bind;
             let api_bind_addr = params.get(&peer_id).expect("Must exist").local.api_bind;
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
 
-            let instances = config.consensus.iter_module_instances();
+            let instances = cfg.consensus.iter_module_instances();
             let decoders = self.server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
@@ -233,11 +235,31 @@ impl FederationTestBuilder {
             let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
             let code_version_str = env!("CARGO_PKG_VERSION");
 
+            let connector = TlsTcpConnector::new(
+                cfg.tls_config(),
+                p2p_bind_addr,
+                cfg.local.p2p_endpoints.clone(),
+                cfg.local.identity,
+            )
+            .into_dyn();
+
+            let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+
+            let connections = ReconnectP2PConnections::new(
+                cfg.local.identity,
+                connector,
+                &task_group,
+                p2p_status_senders,
+            )
+            .await
+            .into_dyn();
+
             task_group.spawn("fedimintd", move |_| async move {
                 consensus::run(
-                    p2p_bind_addr,
+                    connections,
+                    p2p_status_receivers,
                     api_bind_addr,
-                    config.clone(),
+                    cfg.clone(),
                     db.clone(),
                     module_init_registry,
                     &subgroup,

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -8,8 +7,9 @@ use std::time::{Duration, Instant};
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::Receiver;
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus, PeerError};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerError};
 use fedimint_api_client::query::FilterMap;
+use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
@@ -19,7 +19,7 @@ use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
+use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -41,7 +41,7 @@ use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, Ord
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
 use crate::consensus::aleph_bft::spawner::Spawner;
-use crate::consensus::aleph_bft::{to_node_index, Message};
+use crate::consensus::aleph_bft::to_node_index;
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
@@ -54,8 +54,6 @@ use crate::metrics::{
     CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
-use crate::net::p2p::ReconnectP2PConnections;
-use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.
@@ -69,7 +67,7 @@ pub struct ConsensusEngine {
     pub cfg: ServerConfig,
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
-    pub p2p_status_senders: BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>,
+    pub connections: DynP2PConnections<P2PMessage>,
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     /// Just a string version of `cfg.local.identity` for performance
     pub self_id_str: String,
@@ -78,7 +76,6 @@ pub struct ConsensusEngine {
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub checkpoint_retention: u64,
-    pub p2p_bind_addr: SocketAddr,
 }
 
 impl ConsensusEngine {
@@ -96,8 +93,7 @@ impl ConsensusEngine {
             self.run_single_guardian(self.task_group.make_handle())
                 .await
         } else {
-            self.run_consensus(self.p2p_bind_addr, self.task_group.make_handle())
-                .await
+            self.run_consensus(self.task_group.make_handle()).await
         }
     }
 
@@ -161,38 +157,11 @@ impl ConsensusEngine {
         Ok(())
     }
 
-    pub async fn run_consensus(
-        &self,
-        p2p_bind_addr: SocketAddr,
-        task_handle: TaskHandle,
-    ) -> anyhow::Result<()> {
+    pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         // We need four peers to run the atomic broadcast
         assert!(self.num_peers().total() >= 4);
 
         self.confirm_server_config_consensus_hash().await?;
-
-        // Build P2P connections for the atomic broadcast
-        let connector = TlsTcpConnector::new(
-            self.cfg.tls_config(),
-            p2p_bind_addr,
-            self.cfg
-                .local
-                .p2p_endpoints
-                .iter()
-                .map(|(&id, endpoint)| (id, endpoint.url.clone()))
-                .collect(),
-            self.identity(),
-        )
-        .into_dyn();
-
-        let connections = ReconnectP2PConnections::new(
-            self.cfg.local.identity,
-            connector,
-            &self.task_group,
-            Some(self.p2p_status_senders.clone()),
-        )
-        .await
-        .into_dyn();
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
@@ -203,7 +172,8 @@ impl ConsensusEngine {
 
             info!(target: LOG_CONSENSUS, session_index, "Starting consensus session");
 
-            self.run_session(connections.clone(), session_index).await?;
+            self.run_session(self.connections.clone(), session_index)
+                .await?;
 
             info!(target: LOG_CONSENSUS, session_index, "Completed consensus session");
 
@@ -248,7 +218,7 @@ impl ConsensusEngine {
 
     pub async fn run_session(
         &self,
-        connections: DynP2PConnections<Message>,
+        connections: DynP2PConnections<P2PMessage>,
         session_index: u64,
     ) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of

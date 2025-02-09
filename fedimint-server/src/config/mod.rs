@@ -1,5 +1,4 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -7,8 +6,8 @@ use anyhow::{bail, ensure, format_err, Context};
 use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, ConfigGenParamsRequest};
 pub use fedimint_core::config::{
-    serde_binary_human_readable, ClientConfig, DkgPeerMessage, FederationId, GlobalClientConfig,
-    JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
+    serde_binary_human_readable, ClientConfig, FederationId, GlobalClientConfig, JsonWithKind,
+    ModuleInitRegistry, P2PMessage, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -18,8 +17,8 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-use fedimint_core::net::peers::{IP2PConnections, Recipient};
-use fedimint_core::task::{sleep, timeout, TaskGroup};
+use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 use fedimint_logging::LOG_NET_PEER_DKG;
@@ -29,13 +28,11 @@ use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tokio_rustls::rustls;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::config::distributedgen::PeerHandleOps;
-use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
-use crate::net::p2p::ReconnectP2PConnections;
-use crate::net::p2p_connector::{dns_sanitize, IP2PConnector, TlsConfig, TlsTcpConnector};
+use crate::net::p2p_connector::{dns_sanitize, TlsConfig};
 
 pub mod api;
 pub mod distributedgen;
@@ -458,10 +455,11 @@ impl ServerConfig {
 
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
-        p2p_bind_addr: SocketAddr,
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
         code_version_str: String,
+        connections: DynP2PConnections<P2PMessage>,
+        p2p_status_receivers: BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>,
     ) -> anyhow::Result<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
 
@@ -474,39 +472,6 @@ impl ServerConfig {
             );
             return Ok(server[&params.local.our_id].clone());
         }
-
-        let connector = TlsTcpConnector::new(
-            params.tls_config(),
-            p2p_bind_addr,
-            params
-                .p2p_urls()
-                .into_iter()
-                .map(|(id, peer)| (id, peer.url))
-                .collect(),
-            params.local.our_id,
-        )
-        .into_dyn();
-
-        let mut p2p_status_senders = BTreeMap::new();
-        let mut p2p_status_receivers = BTreeMap::new();
-
-        for peer in connector.peers() {
-            let (p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
-
-            p2p_status_senders.insert(peer, p2p_sender);
-            p2p_status_receivers.insert(peer, p2p_receiver);
-        }
-
-        let task_group = TaskGroup::new();
-
-        let connections = ReconnectP2PConnections::new(
-            params.local.our_id,
-            connector,
-            &task_group,
-            Some(p2p_status_senders),
-        )
-        .await
-        .into_dyn();
 
         while p2p_status_receivers
             .values()
@@ -528,7 +493,7 @@ impl ServerConfig {
         let checksum = params.consensus.peers.consensus_hash_sha256();
 
         connections
-            .send(Recipient::Everyone, DkgPeerMessage::Checksum(checksum))
+            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
             .await;
 
         for peer in params
@@ -541,7 +506,7 @@ impl ServerConfig {
                     .receive_from_peer(peer)
                     .await
                     .context("Unexpected shutdown of p2p connections")?
-                    == DkgPeerMessage::Checksum(checksum),
+                    == P2PMessage::Checksum(checksum),
                 "Peer {peer} has not send the correct checksum message"
             );
         }
@@ -595,7 +560,7 @@ impl ServerConfig {
         let checksum = cfg.consensus.consensus_hash_sha256();
 
         connections
-            .send(Recipient::Everyone, DkgPeerMessage::Checksum(checksum))
+            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
             .await;
 
         for peer in params
@@ -608,7 +573,7 @@ impl ServerConfig {
                     .receive_from_peer(peer)
                     .await
                     .context("Unexpected shutdown of p2p connections")?
-                    == DkgPeerMessage::Checksum(checksum),
+                    == P2PMessage::Checksum(checksum),
                 "Peer {peer} has not send the correct checksum message"
             );
         }
@@ -617,27 +582,6 @@ impl ServerConfig {
             target: LOG_NET_PEER_DKG,
             "Distributed key generation has completed successfully!"
         );
-
-        connections
-            .send(Recipient::Everyone, DkgPeerMessage::Completed)
-            .await;
-
-        if timeout(Duration::from_secs(30), async {
-            for peer in params
-                .peer_ids()
-                .into_iter()
-                .filter(|p| *p != params.local.our_id)
-            {
-                connections.receive_from_peer(peer).await;
-            }
-        })
-        .await
-        .is_err()
-        {
-            error!(target: LOG_NET_PEER_DKG, "Timeout waiting for dkg completion confirmation");
-        }
-
-        task_group.shutdown_join_all(None).await?;
 
         Ok(cfg)
     }
@@ -655,10 +599,6 @@ impl ServerConfig {
                 .map(|(id, endpoint)| (*id, endpoint.name.to_string()))
                 .collect(),
         }
-    }
-
-    pub fn get_incoming_count(&self) -> u16 {
-        self.local.identity.into()
     }
 }
 
@@ -718,14 +658,6 @@ impl ConfigGenParams {
             })
             .collect::<BTreeMap<_, _>>()
     }
-}
-
-// TODO: Remove once new config gen UI is written
-pub fn max_connections() -> u32 {
-    env::var(FM_MAX_CLIENT_CONNECTIONS_ENV)
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(DEFAULT_MAX_CLIENT_CONNECTIONS)
 }
 
 pub fn gen_cert_and_key(
