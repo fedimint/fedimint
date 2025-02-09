@@ -1,4 +1,3 @@
-use std::fmt::Debug;
 use std::io::Cursor;
 
 use anyhow::Context;
@@ -6,7 +5,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -27,12 +26,6 @@ pub trait IP2PConnection<M>: Send + 'static {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LegacyMessage<M> {
-    Message(M),
-    Ping,
-}
-
 #[async_trait]
 impl<M> IP2PConnection<M> for Framed<TlsStream<TcpStream>, LengthDelimitedCodec>
 where
@@ -41,7 +34,7 @@ where
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
 
-        bincode::serialize_into(&mut bytes, &LegacyMessage::Message(message))?;
+        bincode::serialize_into(&mut bytes, &message)?;
 
         SinkExt::send(self, Bytes::from_owner(bytes)).await?;
 
@@ -49,18 +42,9 @@ where
     }
 
     async fn receive(&mut self) -> anyhow::Result<M> {
-        loop {
-            let bytes = self.next().await.context("Framed stream is closed")??;
-
-            if let Ok(legacy_message) = bincode::deserialize_from(Cursor::new(&bytes)) {
-                match legacy_message {
-                    LegacyMessage::Message(message) => return Ok(message),
-                    LegacyMessage::Ping => continue,
-                }
-            }
-
-            return Ok(bincode::deserialize_from(Cursor::new(&bytes))?);
-        }
+        Ok(bincode::deserialize_from(Cursor::new(
+            &self.next().await.context("Framed stream is closed")??,
+        ))?)
     }
 }
 

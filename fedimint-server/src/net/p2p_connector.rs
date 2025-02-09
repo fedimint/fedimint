@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use anyhow::{ensure, format_err, Context};
 use async_trait::async_trait;
+use fedimint_core::config::PeerUrl;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use futures::Stream;
@@ -70,13 +71,13 @@ impl TlsTcpConnector {
     pub fn new(
         cfg: TlsConfig,
         p2p_bind_addr: SocketAddr,
-        peers: BTreeMap<PeerId, SafeUrl>,
+        peers: BTreeMap<PeerId, PeerUrl>,
         identity: PeerId,
     ) -> TlsTcpConnector {
         TlsTcpConnector {
             cfg,
             p2p_bind_addr,
-            peers,
+            peers: peers.into_iter().map(|(id, peer)| (id, peer.url)).collect(),
             identity,
         }
     }

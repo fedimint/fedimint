@@ -1,11 +1,11 @@
 use bitcoin::hashes::{sha256, Hash};
+use fedimint_core::config::P2PMessage;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use parity_scale_codec::{Decode, Encode, IoReader};
 
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
-use super::Message;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hasher;
@@ -26,11 +26,11 @@ pub type NetworkData = aleph_bft::NetworkData<
 >;
 
 pub struct Network {
-    connections: DynP2PConnections<Message>,
+    connections: DynP2PConnections<P2PMessage>,
 }
 
 impl Network {
-    pub fn new(connections: DynP2PConnections<Message>) -> Self {
+    pub fn new(connections: DynP2PConnections<P2PMessage>) -> Self {
         Self { connections }
     }
 }
@@ -47,18 +47,18 @@ impl aleph_bft::Network<NetworkData> for Network {
         };
 
         self.connections
-            .try_send(recipient, Message(network_data.encode()));
+            .try_send(recipient, P2PMessage::Aleph(network_data.encode()));
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {
         loop {
-            if let Ok(network_data) = NetworkData::decode(&mut IoReader(
-                self.connections.receive().await?.1 .0.as_slice(),
-            )) {
-                // in order to bound the RAM consumption of a session we have to bound an
-                // individual units size, hence the size of its attached unitdata in memory
-                if network_data.included_data().iter().all(UnitData::is_valid) {
-                    return Some(network_data);
+            if let P2PMessage::Aleph(bytes) = self.connections.receive().await?.1 {
+                if let Ok(network_data) = NetworkData::decode(&mut IoReader(bytes.as_slice())) {
+                    // in order to bound the RAM consumption of a session we have to bound an
+                    // individual units size, hence the size of its attached unitdata in memory
+                    if network_data.included_data().iter().all(UnitData::is_valid) {
+                        return Some(network_data);
+                    }
                 }
             }
         }

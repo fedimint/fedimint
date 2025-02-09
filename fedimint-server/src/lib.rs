@@ -23,29 +23,38 @@
 extern crate fedimint_core;
 mod db;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
 use fedimint_aead::random_salt;
+use fedimint_api_client::api::P2PConnectionStatus;
+use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
+use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
 use net::api::ApiSecrets;
+use tokio::sync::watch;
 use tracing::{info, warn};
 
 use crate::config::api::ConfigGenApi;
 use crate::config::io::{write_server_config, SALT_FILE};
 use crate::config::ConfigGenSettings;
 use crate::db::{ServerInfo, ServerInfoKey};
+use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
 use crate::net::api::RpcHandlerCtx;
+use crate::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
+use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 
 pub mod envs;
 pub mod metrics;
@@ -68,13 +77,35 @@ pub async fn run(
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
 ) -> anyhow::Result<()> {
-    let cfg = match get_config(&data_dir)? {
-        Some(cfg) => cfg,
+    let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
+        Some(cfg) => {
+            let connector = TlsTcpConnector::new(
+                cfg.tls_config(),
+                settings.p2p_bind,
+                cfg.local.p2p_endpoints.clone(),
+                cfg.local.identity,
+            )
+            .into_dyn();
+
+            let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+
+            let connections = ReconnectP2PConnections::new(
+                cfg.local.identity,
+                connector,
+                &task_group,
+                p2p_status_senders,
+            )
+            .await
+            .into_dyn();
+
+            (cfg, connections, p2p_status_receivers)
+        }
         None => {
             run_config_gen(
                 data_dir.clone(),
                 settings.clone(),
                 db.clone(),
+                &task_group,
                 code_version_str.clone(),
                 force_api_secrets.clone(),
             )
@@ -96,7 +127,8 @@ pub async fn run(
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await;
 
     consensus::run(
-        settings.p2p_bind,
+        connections,
+        p2p_status_receivers,
         settings.api_bind,
         cfg,
         db,
@@ -154,16 +186,21 @@ pub async fn run_config_gen(
     data_dir: PathBuf,
     settings: ConfigGenSettings,
     db: Database,
+    task_group: &TaskGroup,
     code_version_str: String,
     force_api_secrets: ApiSecrets,
-) -> anyhow::Result<ServerConfig> {
+) -> anyhow::Result<(
+    ServerConfig,
+    DynP2PConnections<P2PMessage>,
+    BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>,
+)> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
 
     initialize_gauge_metrics(&db).await;
 
-    let (cfg_sender, mut cfg_receiver) = tokio::sync::mpsc::channel(1);
+    let (cgp_sender, mut cgp_receiver) = tokio::sync::mpsc::channel(1);
 
-    let config_gen = ConfigGenApi::new(settings.clone(), db.clone(), cfg_sender);
+    let config_gen = ConfigGenApi::new(settings.clone(), db.clone(), cgp_sender);
 
     let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
 
@@ -178,7 +215,10 @@ pub async fn run_config_gen(
     )
     .await;
 
-    let cfg = cfg_receiver.recv().await.expect("should not close");
+    let cg_params = cgp_receiver
+        .recv()
+        .await
+        .expect("Config gen params receiver closed unexpectedly");
 
     api_handler
         .stop()
@@ -186,11 +226,31 @@ pub async fn run_config_gen(
 
     api_handler.stopped().await;
 
-    let cfg = ServerConfig::distributed_gen(
+    let connector = TlsTcpConnector::new(
+        cg_params.tls_config(),
         settings.p2p_bind,
-        &cfg,
+        cg_params.p2p_urls(),
+        cg_params.local.our_id,
+    )
+    .into_dyn();
+
+    let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+
+    let connections = ReconnectP2PConnections::new(
+        cg_params.local.our_id,
+        connector,
+        task_group,
+        p2p_status_senders,
+    )
+    .await
+    .into_dyn();
+
+    let cfg = ServerConfig::distributed_gen(
+        &cg_params,
         settings.registry.clone(),
         code_version_str.clone(),
+        connections.clone(),
+        p2p_status_receivers.clone(),
     )
     .await?;
 
@@ -205,5 +265,5 @@ pub async fn run_config_gen(
         force_api_secrets.get_active(),
     )?;
 
-    Ok(cfg)
+    Ok((cfg, connections, p2p_status_receivers))
 }

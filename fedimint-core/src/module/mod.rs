@@ -35,7 +35,7 @@ use tracing::Instrument;
 // TODO: Make this module public and remove theDkgPeerMessage`pub use` below
 mod version;
 pub use self::version::*;
-use crate::config::DkgPeerMessage;
+use crate::config::P2PMessage;
 use crate::core::{
     ClientConfig, Decoder, DecoderBuilder, Input, InputError, ModuleConsensusItem,
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
@@ -672,14 +672,14 @@ pub struct PeerHandle<'a> {
     #[doc(hidden)]
     pub identity: PeerId,
     #[doc(hidden)]
-    pub connections: &'a DynP2PConnections<DkgPeerMessage>,
+    pub connections: &'a DynP2PConnections<P2PMessage>,
 }
 
 impl<'a> PeerHandle<'a> {
     pub fn new(
         num_peers: NumPeers,
         identity: PeerId,
-        connections: &'a DynP2PConnections<DkgPeerMessage>,
+        connections: &'a DynP2PConnections<P2PMessage>,
     ) -> Self {
         Self {
             num_peers,
