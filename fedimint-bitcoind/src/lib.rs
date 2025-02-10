@@ -15,13 +15,13 @@ use std::{env, iter};
 use anyhow::{Context, Result};
 use bitcoin::{Block, BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
-    is_running_in_test_env, BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV,
-    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_WALLET_FEERATE_SOURCES_ENV,
+    is_running_in_test_env, BitcoinRpcConfig, FM_BITCOIN_POLLING_INTERVAL_SECS_ENV,
+    FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV, FM_WALLET_FEERATE_SOURCES_ENV,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::{LOG_BITCOIND, LOG_CORE};
 use feerate_source::{FeeRateSource, FetchJson};
@@ -314,14 +314,31 @@ impl DynBitcoindRpc {
 }
 
 fn get_bitcoin_polling_interval() -> Interval {
-    tokio::time::interval(if is_running_in_test_env() {
-        // In devimint, the setup is blocked by detecting block height changes,
-        // and polling more often is not an issue.
-        debug!(target: LOG_BITCOIND, "Running in devimint, using fast node polling");
-        Duration::from_millis(100)
-    } else {
-        Duration::from_secs(30)
-    })
+    fn get_bitcoin_polling_period() -> Duration {
+        if let Ok(s) = env::var(FM_BITCOIN_POLLING_INTERVAL_SECS_ENV) {
+            use std::str::FromStr;
+            match u64::from_str(&s) {
+                Ok(secs) => return Duration::from_secs(secs),
+                Err(err) => {
+                    warn!(
+                        target: LOG_BITCOIND,
+                        err = %err.fmt_compact(),
+                        env = FM_BITCOIN_POLLING_INTERVAL_SECS_ENV,
+                        "Could not parse env variable"
+                    );
+                }
+            }
+        };
+        if is_running_in_test_env() {
+            // In devimint, the setup is blocked by detecting block height changes,
+            // and polling more often is not an issue.
+            debug!(target: LOG_BITCOIND, "Running in devimint, using fast node polling");
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(60)
+        }
+    }
+    tokio::time::interval(get_bitcoin_polling_period())
 }
 
 /// Computes the median from a slice of `u64`s
