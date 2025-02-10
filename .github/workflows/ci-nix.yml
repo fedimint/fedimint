@@ -233,52 +233,6 @@ jobs:
         run: |
           nix build -L .#ci.cargoDeny
 
-  # Code Coverage will build using a completely different profile (neither debug/release)
-  # Which means we can not reuse much from `build` job. Might as well run it as another
-  # build in parallel
-  ccov:
-    if: github.repository == 'fedimint/fedimint'
-    name: "Code coverage"
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare
-        uses: ./.github/actions/prepare
-      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
-      - uses: cachix/cachix-action@v15
-        with:
-          name: fedimint
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        continue-on-error: true
-
-      - name: Validate codecov.yaml configuration
-        run: nix run nixpkgs#curl -- --fail-with-body -X POST --data-binary @.codecov.yml https://codecov.io/validate
-
-      - name: Build and run tests with Code Coverage
-        run: |
-          env \
-            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
-              run \
-                --metric pq4AyxybSD--isFtVmPGpg \
-                --metadata "commit=${LAST_COMMIT_SHA}" \
-                -- \
-            nix build -L .#ci.workspaceTestCov
-
-      - name: Ensure lcov.info exists
-        run: test -f result/lcov.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: result/lcov.info
-
-      - name: Build and run tests with Code Coverage (5 times more)
-        if: github.event_name == 'merge_group'
-        run: nix build -L .#ci.workspaceTest5TimesCov
-
   cross:
     name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.toolchain }}"
     needs: [lint, shell]
@@ -602,7 +556,7 @@ jobs:
 
   status:
     name: Status
-    needs: [lint, shell, build, cross, ccov, containers, pkgs]
+    needs: [lint, shell, build, cross, containers, pkgs]
     if: ${{ always() }}
     runs-on: [self-hosted, linux]
     steps:
@@ -621,7 +575,7 @@ jobs:
     runs-on: [self-hosted, linux]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
-    needs: [ lint, build, shell, cross, ccov, containers, pkgs ]
+    needs: [ lint, build, shell, cross, containers, pkgs ]
 
     steps:
     - name: Discord notifications on failure
