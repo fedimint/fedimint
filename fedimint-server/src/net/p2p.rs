@@ -17,7 +17,7 @@ use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use futures::future::select_all;
-use futures::{FutureExt, StreamExt};
+use futures::FutureExt;
 use tokio::sync::watch;
 use tracing::{info, info_span, warn, Instrument};
 
@@ -48,7 +48,7 @@ pub struct ReconnectP2PConnections<M> {
 }
 
 impl<M: Send + 'static> ReconnectP2PConnections<M> {
-    pub async fn new(
+    pub fn new(
         identity: PeerId,
         connector: DynP2PConnector<M>,
         task_group: &TaskGroup,
@@ -78,13 +78,11 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
             connections.insert(peer_id, connection);
         }
 
-        let mut listener = connector.listen().await;
-
         task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
-            info!(target: LOG_NET_PEER, "Shutting down listening task for p2p connections");
+            info!(target: LOG_NET_PEER, "Starting listening task for p2p connections");
 
             loop {
-                match listener.next().await.expect("Listener closed") {
+                match connector.accept().await {
                     Ok((peer, connection)) => {
                         if connection_senders
                             .get_mut(&peer)

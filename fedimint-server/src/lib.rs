@@ -85,6 +85,7 @@ pub async fn run(
                 cfg.local.p2p_endpoints.clone(),
                 cfg.local.identity,
             )
+            .await
             .into_dyn();
 
             let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
@@ -95,7 +96,6 @@ pub async fn run(
                 &task_group,
                 p2p_status_senders,
             )
-            .await
             .into_dyn();
 
             (cfg, connections, p2p_status_receivers)
@@ -232,6 +232,7 @@ pub async fn run_config_gen(
         cg_params.p2p_urls(),
         cg_params.local.our_id,
     )
+    .await
     .into_dyn();
 
     let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
@@ -242,7 +243,6 @@ pub async fn run_config_gen(
         task_group,
         p2p_status_senders,
     )
-    .await
     .into_dyn();
 
     let cfg = ServerConfig::distributed_gen(
