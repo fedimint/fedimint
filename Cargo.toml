@@ -1,73 +1,73 @@
 [workspace]
 members = [
-    "crypto/aead",
-    "crypto/derive-secret",
-    "crypto/hkdf",
-    "crypto/tbs",
-    "crypto/tpe",
-    "devimint",
-    "docs",
-    "fedimint-api-client",
-    "fedimint-bip39",
-    "fedimint-bitcoind",
-    "fedimint-build",
-    "fedimint-cli",
-    "fedimint-client",
-    "fedimint-client-wasm",
-    "fedimint-core",
-    "fedimint-dbtool",
-    "fedimint-derive",
-    "fedimint-eventlog",
-    "fedimint-load-test-tool",
-    "fedimint-logging",
-    "fedimint-metrics",
-    "fedimint-recoverytool",
-    "fedimint-rocksdb",
-    "fedimint-server",
-    "fedimint-server-core",
-    "fedimint-server-tests",
-    "fedimint-testing",
-    "fedimint-testing-core",
-    "fedimint-wasm-tests",
-    "fedimint-workspace",
-    "fedimintd",
-    "fuzz",
-    "gateway/cli",
-    "gateway/fedimint-lightning",
-    "gateway/integration_tests",
-    "gateway/ln-gateway",
-    "modules/fedimint-dummy-client",
-    "modules/fedimint-dummy-common",
-    "modules/fedimint-dummy-server",
-    "modules/fedimint-dummy-tests",
-    "modules/fedimint-empty-client",
-    "modules/fedimint-empty-common",
-    "modules/fedimint-empty-server",
-    "modules/fedimint-gw-client",
-    "modules/fedimint-gwv2-client",
-    "modules/fedimint-ln-client",
-    "modules/fedimint-ln-common",
-    "modules/fedimint-ln-server",
-    "modules/fedimint-ln-tests",
-    "modules/fedimint-lnv2-client",
-    "modules/fedimint-lnv2-common",
-    "modules/fedimint-lnv2-server",
-    "modules/fedimint-lnv2-tests",
-    "modules/fedimint-meta-client",
-    "modules/fedimint-meta-common",
-    "modules/fedimint-meta-server",
-    "modules/fedimint-meta-tests",
-    "modules/fedimint-mint-client",
-    "modules/fedimint-mint-common",
-    "modules/fedimint-mint-server",
-    "modules/fedimint-mint-tests",
-    "modules/fedimint-unknown-common",
-    "modules/fedimint-unknown-server",
-    "modules/fedimint-wallet-client",
-    "modules/fedimint-wallet-common",
-    "modules/fedimint-wallet-server",
-    "modules/fedimint-wallet-tests",
-    "utils/portalloc"
+  "crypto/aead",
+  "crypto/derive-secret",
+  "crypto/hkdf",
+  "crypto/tbs",
+  "crypto/tpe",
+  "devimint",
+  "docs",
+  "fedimint-api-client",
+  "fedimint-bip39",
+  "fedimint-bitcoind",
+  "fedimint-build",
+  "fedimint-cli",
+  "fedimint-client",
+  "fedimint-client-wasm",
+  "fedimint-core",
+  "fedimint-dbtool",
+  "fedimint-derive",
+  "fedimint-eventlog",
+  "fedimint-load-test-tool",
+  "fedimint-logging",
+  "fedimint-metrics",
+  "fedimint-recoverytool",
+  "fedimint-rocksdb",
+  "fedimint-server",
+  "fedimint-server-core",
+  "fedimint-server-tests",
+  "fedimint-testing",
+  "fedimint-testing-core",
+  "fedimint-wasm-tests",
+  "fedimint-workspace",
+  "fedimintd",
+  "fuzz",
+  "gateway/cli",
+  "gateway/fedimint-lightning",
+  "gateway/integration_tests",
+  "gateway/ln-gateway",
+  "modules/fedimint-dummy-client",
+  "modules/fedimint-dummy-common",
+  "modules/fedimint-dummy-server",
+  "modules/fedimint-dummy-tests",
+  "modules/fedimint-empty-client",
+  "modules/fedimint-empty-common",
+  "modules/fedimint-empty-server",
+  "modules/fedimint-gw-client",
+  "modules/fedimint-gwv2-client",
+  "modules/fedimint-ln-client",
+  "modules/fedimint-ln-common",
+  "modules/fedimint-ln-server",
+  "modules/fedimint-ln-tests",
+  "modules/fedimint-lnv2-client",
+  "modules/fedimint-lnv2-common",
+  "modules/fedimint-lnv2-server",
+  "modules/fedimint-lnv2-tests",
+  "modules/fedimint-meta-client",
+  "modules/fedimint-meta-common",
+  "modules/fedimint-meta-server",
+  "modules/fedimint-meta-tests",
+  "modules/fedimint-mint-client",
+  "modules/fedimint-mint-common",
+  "modules/fedimint-mint-server",
+  "modules/fedimint-mint-tests",
+  "modules/fedimint-unknown-common",
+  "modules/fedimint-unknown-server",
+  "modules/fedimint-wallet-client",
+  "modules/fedimint-wallet-common",
+  "modules/fedimint-wallet-server",
+  "modules/fedimint-wallet-tests",
+  "utils/portalloc",
 ]
 resolver = "2"
 
@@ -121,7 +121,7 @@ criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.7.0-alpha" }
 erased-serde = "0.4"
 esplora-client = { version = "0.10.0", default-features = false, features = [
-    "async-https-rustls",
+  "async-https-rustls",
 ] }
 fedimintd = { path = "./fedimintd", version = "=0.7.0-alpha" }
 fedimint-aead = { path = "./crypto/aead", version = "=0.7.0-alpha" }
@@ -174,7 +174,7 @@ hex = "0.4.3"
 hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.7.0-alpha" }
 hyper = "1.6"
-iroh = { version = "0.30.0", default-features = false }
+iroh = { version = "0.32.1", default-features = false }
 itertools = "0.13.0"
 jaq-core = "2.1.0"
 jaq-json = { version = "1.1.0", features = ["serde_json"] }
@@ -186,11 +186,11 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
 reqwest = { version = "0.12.9", features = [
-    "json",
-    "rustls-tls",
-    "charset",
-    "http2",
-    "stream",
+  "json",
+  "rustls-tls",
+  "charset",
+  "http2",
+  "stream",
 ], default-features = false }
 ring = "0.17.8"
 secp256k1 = { version = "0.29.0", default-features = false }
@@ -210,10 +210,10 @@ threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.43.0"
 tikv-jemallocator = "0.5"
 tokio-rustls = "0.24.1"
-tokio-stream =  "0.1.17"
+tokio-stream = "0.1.17"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
-    "lightningrpc",
-    "routerrpc",
+  "lightningrpc",
+  "routerrpc",
 ] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.7.0-alpha" }
 tracing = "0.1.41"
