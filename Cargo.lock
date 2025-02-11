@@ -3611,7 +3611,6 @@ dependencies = [
  "test-log",
  "tokio",
  "tokio-rustls 0.24.1",
- "tokio-stream",
  "tokio-util",
  "tower 0.4.13",
  "tracing",
