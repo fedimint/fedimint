@@ -241,6 +241,7 @@ impl FederationTestBuilder {
                 cfg.local.p2p_endpoints.clone(),
                 cfg.local.identity,
             )
+            .await
             .into_dyn();
 
             let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
@@ -251,7 +252,6 @@ impl FederationTestBuilder {
                 &task_group,
                 p2p_status_senders,
             )
-            .await
             .into_dyn();
 
             task_group.spawn("fedimintd", move |_| async move {
