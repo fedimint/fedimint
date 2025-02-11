@@ -6,6 +6,9 @@
     nixpkgs-old = {
       url = "github:nixos/nixpkgs/nixos-23.05";
     };
+    nixpkgs-unstable = {
+      url = "github:nixos/nixpkgs/nixos-unstable";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -35,6 +38,7 @@
       self,
       nixpkgs,
       nixpkgs-old,
+      nixpkgs-unstable,
       flake-utils,
       flakebox,
       cargo-deluxe,
@@ -71,6 +75,7 @@
     // flake-utils.lib.eachDefaultSystem (
       system:
       let
+        pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
         pkgs-old = import nixpkgs-old {
           inherit system;
           overlays = [
@@ -318,6 +323,8 @@
                     pkgs.tokio-console
                     pkgs.git
 
+                    (pkgs-unstable.callPackage ./nix/pkgs/wild.nix { })
+
                     # Nix
                     pkgs.nixfmt-rfc-style
                     pkgs.shellcheck
@@ -374,6 +381,8 @@
                   if [ -z "$(git config --global merge.ours.driver)" ]; then
                       >&2 echo "⚠️  Recommended to run 'git config --global merge.ours.driver true' to enable better lock file handling. See https://blog.aspect.dev/easier-merges-on-lockfiles for more info"
                   fi
+
+                  export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=--ld-path=wild"
                 '';
               };
           in
