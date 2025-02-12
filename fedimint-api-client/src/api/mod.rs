@@ -499,9 +499,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         name: String,
         federation_name: Option<String>,
         auth: ApiAuth,
-    ) -> FederationResult<()>;
-
-    async fn get_peer_connection_info(&self, auth: ApiAuth) -> FederationResult<String>;
+    ) -> FederationResult<String>;
 
     async fn add_peer_connection_info(&self, info: String, auth: ApiAuth) -> FederationResult<()>;
 
