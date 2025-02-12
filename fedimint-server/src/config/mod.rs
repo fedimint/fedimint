@@ -240,27 +240,10 @@ impl ServerConfig {
         broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
         broadcast_secret_key: SecretKey,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
-        code_version_str: String,
+        code_version: String,
     ) -> Self {
-        let private = ServerConfigPrivate {
-            api_auth: params.local.api_auth.clone(),
-            tls_key: params.local.our_private_key.clone(),
-            broadcast_secret_key,
-            modules: BTreeMap::new(),
-        };
-        let local = ServerConfigLocal {
-            p2p_endpoints: params.p2p_urls(),
-            identity,
-            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-            broadcast_round_delay_ms: if is_running_in_test_env() {
-                DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
-            } else {
-                DEFAULT_BROADCAST_ROUND_DELAY_MS
-            },
-            modules: BTreeMap::new(),
-        };
         let consensus = ServerConfigConsensus {
-            code_version: code_version_str,
+            code_version,
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
             broadcast_rounds_per_session: if is_running_in_test_env() {
@@ -270,16 +253,43 @@ impl ServerConfig {
             },
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
-            modules: BTreeMap::new(),
-            meta: params.consensus.meta,
+            modules: modules
+                .iter()
+                .map(|(peer, cfg)| (*peer, cfg.consensus.clone()))
+                .collect(),
+            meta: params.consensus.meta.clone(),
         };
-        let mut cfg = Self {
+
+        let local = ServerConfigLocal {
+            p2p_endpoints: params.p2p_urls(),
+            identity,
+            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
+            broadcast_round_delay_ms: if is_running_in_test_env() {
+                DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
+            } else {
+                DEFAULT_BROADCAST_ROUND_DELAY_MS
+            },
+            modules: modules
+                .iter()
+                .map(|(peer, cfg)| (*peer, cfg.local.clone()))
+                .collect(),
+        };
+
+        let private = ServerConfigPrivate {
+            api_auth: params.local.api_auth.clone(),
+            tls_key: params.local.our_private_key.clone(),
+            broadcast_secret_key,
+            modules: modules
+                .iter()
+                .map(|(peer, cfg)| (*peer, cfg.private.clone()))
+                .collect(),
+        };
+
+        Self {
             consensus,
             local,
             private,
-        };
-        cfg.add_modules(modules);
-        cfg
+        }
     }
 
     pub fn get_invite_code(&self, api_secret: Option<String>) -> InviteCode {
@@ -295,20 +305,6 @@ impl ServerConfig {
 
     pub fn calculate_federation_id(&self) -> FederationId {
         FederationId(self.consensus.api_endpoints.consensus_hash())
-    }
-
-    pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {
-        for (name, config) in modules {
-            let ServerModuleConfig {
-                local,
-                private,
-                consensus,
-            } = config;
-
-            self.local.modules.insert(name, local);
-            self.private.modules.insert(name, private);
-            self.consensus.modules.insert(name, consensus);
-        }
     }
 
     /// Constructs a module config by name
