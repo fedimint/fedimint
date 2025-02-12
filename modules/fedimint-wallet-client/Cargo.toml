@@ -28,7 +28,7 @@ bitcoin = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-client = { workspace = true }
+fedimint-client = { workspace = true, package = "fedimint-client-module" }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -47,5 +47,5 @@ fedimint-bitcoind = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 fedimint-bitcoind = { version = "=0.7.0-alpha", path = "../../fedimint-bitcoind", default-features = false, features = [
-    "esplora-client",
+  "esplora-client",
 ] }
