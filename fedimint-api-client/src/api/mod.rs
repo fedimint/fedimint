@@ -57,7 +57,7 @@ use serde_json::Value;
 use tokio_rustls::rustls::RootCertStore;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
-use tracing::{debug, info, instrument, trace, trace_span, warn, Instrument};
+use tracing::{debug, instrument, trace, trace_span, warn, Instrument};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 mod error;
@@ -1151,7 +1151,7 @@ impl ClientConnection {
                     }
                 }
 
-                info!(target: LOG_CLIENT_NET_API, "Shutting down peer api connection task");
+                trace!(target: LOG_CLIENT_NET_API, "Shutting down peer api connection task");
             }
             .instrument(trace_span!("peer-api-connection", ?peer)),
         );
