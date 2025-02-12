@@ -695,52 +695,7 @@ impl FedimintCli {
         .await
     }
 
-    pub async fn set_local_leader_params(
-        self,
-        name: &str,
-        federation_name: &str,
-        auth: &ApiAuth,
-        endpoint: &str,
-    ) -> Result<()> {
-        cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "config-gen",
-            "--ws",
-            endpoint,
-            "set-local-params",
-            name,
-            "--federation-name",
-            federation_name
-        )
-        .run()
-        .await
-    }
-
-    pub async fn set_local_follower_params(
-        self,
-        name: String,
-        auth: &ApiAuth,
-        endpoint: &str,
-    ) -> Result<()> {
-        cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "config-gen",
-            "--ws",
-            endpoint,
-            "set-local-params",
-            name
-        )
-        .run()
-        .await
-    }
-
-    pub async fn get_peer_connection_info(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+    pub async fn set_local_params_leader(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
         let json = cmd!(
             self,
             "--password",
@@ -749,7 +704,28 @@ impl FedimintCli {
             "config-gen",
             "--ws",
             endpoint,
-            "get-peer-connection-info",
+            "set-local-params",
+            "Devimint Leader",
+            "--federation-name",
+            "Devimint Federation"
+        )
+        .out_json()
+        .await?;
+
+        Ok(serde_json::from_value(json)?)
+    }
+
+    pub async fn set_local_params_follower(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+        let json = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "set-local-params",
+            "Devimint Follower"
         )
         .out_json()
         .await?;

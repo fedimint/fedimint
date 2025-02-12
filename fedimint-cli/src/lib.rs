@@ -407,7 +407,6 @@ enum ConfigGenAdminCmd {
         #[clap(long)]
         federation_name: Option<String>,
     },
-    GetPeerConnectionInfo,
     AddPeerConnectionInfo {
         info: String,
     },
@@ -1265,17 +1264,12 @@ impl FedimintCli {
                 name,
                 federation_name,
             } => {
-                client
+                let info = client
                     .set_local_params(name.clone(), federation_name.clone(), cli.auth()?)
                     .await?;
 
-                Ok(CliOutput::Raw(Value::Null))
-            }
-            ConfigGenAdminCmd::GetPeerConnectionInfo => {
-                let params = client.get_peer_connection_info(cli.auth()?).await?;
-
                 Ok(CliOutput::Raw(
-                    serde_json::to_value(params).map_err_cli_msg("invalid response")?,
+                    serde_json::to_value(info).map_err_cli_msg("invalid response")?,
                 ))
             }
             ConfigGenAdminCmd::AddPeerConnectionInfo { info } => {

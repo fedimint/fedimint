@@ -1,4 +1,3 @@
-pub const GET_PEER_CONNECTION_INFO_ENDPOINT: &str = "get_peer_connection_info";
 pub const ADD_PEER_CONNECTION_INFO_ENDPOINT: &str = "add_peer_connection_info";
 pub const AUDIT_ENDPOINT: &str = "audit";
 pub const GUARDIAN_CONFIG_BACKUP_ENDPOINT: &str = "download_guardian_backup";
