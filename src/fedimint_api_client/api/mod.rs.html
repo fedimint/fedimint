@@ -1425,7 +1425,7 @@
 </span><span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
 <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">use </span>tokio_rustls::{rustls::ClientConfig <span class="kw">as </span>TlsClientConfig, TlsConnector};
-<span class="kw">use </span>tracing::{debug, info, instrument, trace, trace_span, warn, Instrument};
+<span class="kw">use </span>tracing::{debug, instrument, trace, trace_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 <span class="kw">mod </span>error;
@@ -2519,7 +2519,7 @@
                     }
                 }
 
-                <span class="macro">info!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Shutting down peer api connection task"</span>);
+                <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Shutting down peer api connection task"</span>);
             }
             .instrument(<span class="macro">trace_span!</span>(<span class="string">"peer-api-connection"</span>, <span class="question-mark">?</span>peer)),
         );
