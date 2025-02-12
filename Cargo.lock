@@ -2608,6 +2608,13 @@ dependencies = [
 name = "fedimint-client"
 version = "0.7.0-alpha"
 dependencies = [
+ "fedimint-client-module",
+]
+
+[[package]]
+name = "fedimint-client-module"
+version = "0.7.0-alpha"
+dependencies = [
  "anyhow",
  "aquamarine",
  "async-stream",

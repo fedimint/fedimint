@@ -17,39 +17,11 @@ normal = ["aquamarine"]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-tor = ["fedimint-api-client/tor"]
+tor = ["fedimint-client-module/tor"]
 
 [lib]
 name = "fedimint_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
-aquamarine = { workspace = true }
-async-stream = { workspace = true }
-async-trait = { workspace = true }
-bitcoin = { workspace = true }
-fedimint-aead = { workspace = true }
-fedimint-api-client = { path = "../fedimint-api-client", version = "=0.7.0-alpha" }
-fedimint-core = { workspace = true }
-fedimint-derive-secret = { workspace = true }
-fedimint-eventlog = { workspace = true }
-fedimint-logging = { workspace = true }
-futures = { workspace = true }
-itertools = { workspace = true }
-rand = { workspace = true }
-reqwest = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["time", "macros", "rt"] }
-tokio-stream = { workspace = true, features = ["sync"] }
-tracing = { workspace = true }
-
-[dev-dependencies]
-tracing-test = "0.2.5"
-
-[build-dependencies]
-fedimint-build = { workspace = true }
+fedimint-client-module = { workspace = true }

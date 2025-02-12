@@ -1,0 +1,55 @@
+[package]
+name = "fedimint-client-module"
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+readme = { workspace = true }
+description = "Library for sending transactions to the Fedimint federation."
+
+[package.metadata.cargo-udeps.ignore]
+# cargo udeps can't detect that one
+normal = ["aquamarine"]
+
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
+[features]
+tor = ["fedimint-api-client/tor"]
+
+[lib]
+name = "fedimint_client_module"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+aquamarine = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+bitcoin = { workspace = true }
+fedimint-aead = { workspace = true }
+fedimint-api-client = { path = "../fedimint-api-client", version = "=0.7.0-alpha" }
+fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
+fedimint-eventlog = { workspace = true }
+fedimint-logging = { workspace = true }
+futures = { workspace = true }
+itertools = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "macros", "rt"] }
+tokio-stream = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tracing-test = "0.2.5"
+
+[build-dependencies]
+fedimint-build = { workspace = true }
