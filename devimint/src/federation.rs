@@ -1224,32 +1224,27 @@ pub async fn run_cli_dkg_v2(
         assert_eq!(status, ServerStatus::AwaitingLocalParams);
     }
 
-    debug!(target: LOG_DEVIMINT, "Setting local parameters");
+    debug!(target: LOG_DEVIMINT, "Setting local parameters...");
+
+    let mut connection_info = BTreeMap::new();
 
     for (peer, endpoint) in &endpoints {
-        if *peer == PeerId::from(0) {
+        let info = if peer.to_usize() == 0 {
             crate::util::FedimintCli
-                .set_local_leader_params(
-                    "Guardian Leader",
-                    "Devimint Test Federation",
-                    auth_for(peer),
-                    endpoint,
-                )
-                .await?;
+                .set_local_params_leader(auth_for(peer), endpoint)
+                .await?
         } else {
             crate::util::FedimintCli
-                .set_local_follower_params(format!("Guardian {peer}"), auth_for(peer), endpoint)
-                .await?;
-        }
+                .set_local_params_follower(auth_for(peer), endpoint)
+                .await?
+        };
+
+        connection_info.insert(peer, info);
     }
 
-    debug!(target: LOG_DEVIMINT, "Exchanging peer params");
+    debug!(target: LOG_DEVIMINT, "Exchanging peer connection info...");
 
-    for (peer, endpoint) in &endpoints {
-        let info = crate::util::FedimintCli
-            .get_peer_connection_info(auth_for(peer), endpoint)
-            .await?;
-
+    for (peer, info) in connection_info {
         for (p, endpoint) in &endpoints {
             if p != peer {
                 crate::util::FedimintCli
@@ -1259,7 +1254,7 @@ pub async fn run_cli_dkg_v2(
         }
     }
 
-    debug!(target: LOG_DEVIMINT, "Starting DKG");
+    debug!(target: LOG_DEVIMINT, "Starting DKG...");
 
     for (peer, endpoint) in &endpoints {
         crate::util::FedimintCli

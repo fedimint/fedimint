@@ -10,8 +10,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
     ADD_PEER_CONNECTION_INFO_ENDPOINT, AUTH_ENDPOINT, CHECK_BITCOIN_STATUS_ENDPOINT,
-    GET_PEER_CONNECTION_INFO_ENDPOINT, RESET_SETUP_ENDPOINT, SERVER_STATUS_ENDPOINT,
-    SET_LOCAL_PARAMS_ENDPOINT, START_DKG_ENDPOINT,
+    RESET_SETUP_ENDPOINT, SERVER_STATUS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
@@ -97,7 +96,7 @@ impl ConfigGenApi {
         &self,
         auth: ApiAuth,
         request: SetLocalParamsRequest,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<PeerConnectionInfo> {
         ensure!(
             auth.0.trim() == auth.0,
             "Password contains leading/trailing whitespace",
@@ -105,40 +104,55 @@ impl ConfigGenApi {
 
         let mut state = self.state.lock().await;
 
-        ensure!(
-            state.local_params.is_none(),
-            "Local parameters have already been set."
-        );
+        if let Some(lp) = state.local_params.clone() {
+            ensure!(
+                lp.auth == auth,
+                "Local parameters have already been set with a different auth."
+            );
 
-        let (tls_cert, tls_private) = gen_cert_and_key(&request.name).expect("Cant generate TLS");
+            ensure!(
+                lp.name == request.name,
+                "Local parameters have already been set with a different name."
+            );
 
-        state.local_params = Some(LocalParams {
+            ensure!(
+                lp.federation_name == request.federation_name,
+                "Local parameters have already been set with a different federation name."
+            );
+
+            let info = PeerConnectionInfo {
+                cert: lp.tls_cert.clone().0,
+                p2p_url: self.settings.p2p_url.clone(),
+                api_url: self.settings.api_url.clone(),
+                name: lp.name,
+                federation_name: lp.federation_name,
+            };
+
+            return Ok(info);
+        }
+
+        let (tls_cert, tls_private) = gen_cert_and_key(&request.name)
+            .expect("Failed to generate TLS for given guardian name");
+
+        let lp = LocalParams {
             auth,
-            tls_private,
             tls_cert,
+            tls_private,
             name: request.name,
             federation_name: request.federation_name,
-        });
+        };
 
-        Ok(())
-    }
+        state.local_params = Some(lp.clone());
 
-    pub async fn get_peer_connection_info(&self) -> PeerConnectionInfo {
-        let local_params = self
-            .state
-            .lock()
-            .await
-            .local_params
-            .clone()
-            .expect("The endpoint is authenticated.");
-
-        PeerConnectionInfo {
-            cert: local_params.tls_cert.clone().0,
+        let info = PeerConnectionInfo {
+            cert: lp.tls_cert.clone().0,
             p2p_url: self.settings.p2p_url.clone(),
             api_url: self.settings.api_url.clone(),
-            name: local_params.name,
-            federation_name: local_params.federation_name,
-        }
+            name: lp.name,
+            federation_name: lp.federation_name,
+        };
+
+        Ok(info)
     }
 
     pub async fn add_peer_connection_info(&self, info: PeerConnectionInfo) -> anyhow::Result<()> {
@@ -262,23 +276,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         api_endpoint! {
             SET_LOCAL_PARAMS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, request: SetLocalParamsRequest| -> () {
+            async |config: &ConfigGenApi, context, request: SetLocalParamsRequest| -> String {
                 let auth = context
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                config.set_local_parameters(auth, request)
+                let info = config.set_local_parameters(auth, request)
                     .await
-                    .map_err(|e| ApiError::bad_request(e.to_string()))
-            }
-        },
-        api_endpoint! {
-            GET_PEER_CONNECTION_INFO_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, _v: ()| -> String {
-                check_auth(context)?;
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
-                Ok(config.get_peer_connection_info().await.encode_base58())
+                Ok(info.encode_base58())
             }
         },
         api_endpoint! {

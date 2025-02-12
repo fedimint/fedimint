@@ -18,8 +18,8 @@ use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT,
     BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
     CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    FEDIMINTD_VERSION_ENDPOINT, GET_PEER_CONNECTION_INFO_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-    RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
     SERVER_STATUS_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
     SESSION_STATUS_V2_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
     SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
@@ -376,22 +376,13 @@ where
         name: String,
         federation_name: Option<String>,
         auth: ApiAuth,
-    ) -> FederationResult<()> {
+    ) -> FederationResult<String> {
         self.request_admin(
             SET_LOCAL_PARAMS_ENDPOINT,
             ApiRequestErased::new(SetLocalParamsRequest {
                 name,
                 federation_name,
             }),
-            auth,
-        )
-        .await
-    }
-
-    async fn get_peer_connection_info(&self, auth: ApiAuth) -> FederationResult<String> {
-        self.request_admin(
-            GET_PEER_CONNECTION_INFO_ENDPOINT,
-            ApiRequestErased::default(),
             auth,
         )
         .await
