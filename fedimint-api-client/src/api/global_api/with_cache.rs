@@ -388,7 +388,11 @@ where
         .await
     }
 
-    async fn add_peer_connection_info(&self, info: String, auth: ApiAuth) -> FederationResult<()> {
+    async fn add_peer_connection_info(
+        &self,
+        info: String,
+        auth: ApiAuth,
+    ) -> FederationResult<String> {
         self.request_admin(
             ADD_PEER_CONNECTION_INFO_ENDPOINT,
             ApiRequestErased::new(info),

@@ -501,7 +501,11 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         auth: ApiAuth,
     ) -> FederationResult<String>;
 
-    async fn add_peer_connection_info(&self, info: String, auth: ApiAuth) -> FederationResult<()>;
+    async fn add_peer_connection_info(
+        &self,
+        info: String,
+        auth: ApiAuth,
+    ) -> FederationResult<String>;
 
     /// During config gen, sets the server connection containing our endpoints
     ///

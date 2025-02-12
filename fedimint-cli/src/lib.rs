@@ -392,13 +392,6 @@ struct ConfigGenAdminArgs {
     subcommand: ConfigGenAdminCmd,
 }
 
-impl ConfigGenAdminArgs {
-    fn ws_admin_client(&self, api_secret: &Option<String>) -> DynGlobalApi {
-        let ws = self.ws.clone();
-        DynGlobalApi::from_pre_peer_id_admin_endpoint(ws, api_secret)
-    }
-}
-
 #[derive(Debug, Clone, Subcommand)]
 enum ConfigGenAdminCmd {
     ServerStatus,
@@ -873,9 +866,11 @@ impl FedimintCli {
                         .map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::ConfigGen(dkg_args)) => {
-                self.handle_admin_dkg_command(cli, dkg_args).await
-            }
+            Command::Admin(AdminCmd::ConfigGen(dkg_args)) => self
+                .handle_admin_config_gen_command(cli, dkg_args)
+                .await
+                .map(CliOutput::Raw)
+                .map_err_cli_msg("Config Gen Error"),
             Command::Admin(AdminCmd::SignApiAnnouncement {
                 api_url,
                 override_url,
@@ -1249,17 +1244,22 @@ impl FedimintCli {
         }
     }
 
-    async fn handle_admin_dkg_command(
+    async fn handle_admin_config_gen_command(
         &self,
         cli: Opts,
-        dkg_args: ConfigGenAdminArgs,
-    ) -> CliOutputResult {
-        let client = dkg_args.ws_admin_client(&dkg_args.api_secret);
-        match &dkg_args.subcommand {
-            ConfigGenAdminCmd::ServerStatus => Ok(CliOutput::Raw(
-                serde_json::to_value(client.server_status(cli.auth()?).await?)
-                    .map_err_cli_msg("Invalid JSON")?,
-            )),
+        config_gen_args: ConfigGenAdminArgs,
+    ) -> anyhow::Result<Value> {
+        let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
+            config_gen_args.ws.clone(),
+            &config_gen_args.api_secret,
+        );
+
+        match &config_gen_args.subcommand {
+            ConfigGenAdminCmd::ServerStatus => {
+                let status = client.server_status(cli.auth()?).await?;
+
+                Ok(serde_json::to_value(status).expect("JSON serialization failed"))
+            }
             ConfigGenAdminCmd::SetLocalParams {
                 name,
                 federation_name,
@@ -1268,21 +1268,19 @@ impl FedimintCli {
                     .set_local_params(name.clone(), federation_name.clone(), cli.auth()?)
                     .await?;
 
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(info).map_err_cli_msg("invalid response")?,
-                ))
+                Ok(serde_json::to_value(info).expect("JSON serialization failed"))
             }
             ConfigGenAdminCmd::AddPeerConnectionInfo { info } => {
-                client
+                let name = client
                     .add_peer_connection_info(info.clone(), cli.auth()?)
                     .await?;
 
-                Ok(CliOutput::Raw(Value::Null))
+                Ok(serde_json::to_value(name).expect("JSON serialization failed"))
             }
             ConfigGenAdminCmd::StartDkg => {
                 client.start_dkg(cli.auth()?).await?;
 
-                Ok(CliOutput::Raw(Value::Null))
+                Ok(Value::Null)
             }
         }
     }
