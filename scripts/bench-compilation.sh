@@ -49,11 +49,11 @@ echo -e "                       total    user     sys"
 for profile in dev release ; do
   for command in check build ; do
 
-    if echo "$BENCH_COMP_SKIP_PROFILE" | grep -wq "$profile"; then
+    if echo "${BENCH_COMP_SKIP_PROFILE:-}" | grep -wq "$profile"; then
       continue
     fi
 
-    if echo "$BENCH_COMP_SKIP_COMMAND" | grep -wq "$command"; then
+    if echo "${BENCH_COMP_SKIP_COMMAND:-}" | grep -wq "$command"; then
       continue
     fi
 
