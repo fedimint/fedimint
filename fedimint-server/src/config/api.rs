@@ -291,16 +291,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         api_endpoint! {
             ADD_PEER_CONNECTION_INFO_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, info: String| -> () {
+            async |config: &ConfigGenApi, context, info: String| -> String {
                 check_auth(context)?;
 
                 let info = PeerConnectionInfo::decode_base58(&info)
                     .map_err(|e|ApiError::bad_request(e.to_string()))?;
 
-                config.add_peer_connection_info(info).await
+                config.add_peer_connection_info(info.clone()).await
                     .map_err(|e|ApiError::bad_request(e.to_string()))?;
 
-                Ok(())
+                Ok(info.name)
             }
         },
         api_endpoint! {
