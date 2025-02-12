@@ -60,7 +60,7 @@ use fedimint_core::module::{
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow as _};
+use fedimint_core::util::{backoff_util, retry, FmtCompact, FmtCompactAnyhow as _};
 use fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
     Feerate, InPoint, NumPeersExt, OutPoint, PeerId,
@@ -1061,7 +1061,7 @@ impl Wallet {
         Self::spawn_broadcast_pending_task(task_group, &btc_rpc, db, broadcast_pending.clone());
 
         let peer_supported_consensus_version =
-            Self::spawn_peer_supported_consensus_version_task(module_api, task_group);
+            Self::spawn_peer_supported_consensus_version_task(module_api, task_group, our_peer_id);
 
         let bitcoind_net = NetworkLegacyEncodingWrapper(
             retry("verify network", backoff_util::aggressive_backoff(), || {
@@ -1707,13 +1707,18 @@ impl Wallet {
     fn spawn_peer_supported_consensus_version_task(
         api_client: DynModuleApi,
         task_group: &TaskGroup,
+        our_peer_id: PeerId,
     ) -> watch::Receiver<Option<ModuleConsensusVersion>> {
         let (sender, receiver) = watch::channel(None);
         task_group.spawn_cancellable("fetch-peer-consensus-versions", async move {
             loop {
-                let request_futures = api_client.all_peers().iter().map(|&peer| {
+                let request_futures = api_client.all_peers().iter().filter_map(|&peer| {
+                    if peer == our_peer_id {
+                        return None;
+                    }
+
                     let api_client_inner = api_client.clone();
-                    async move {
+                    Some(async move {
                         api_client_inner
                             .request_single_peer::<ModuleConsensusVersion>(
                                 SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT.to_owned(),
@@ -1721,8 +1726,14 @@ impl Wallet {
                                 peer,
                             )
                             .await
+                            .inspect_err(|err| warn!(
+                                target: LOG_MODULE_WALLET,
+                                 %peer,
+                                 err=%err.fmt_compact(),
+                                "Failed to fetch consensus version from peer"
+                            ))
                             .ok()
-                    }
+                    })
                 });
 
                 let peer_consensus_versions = join_all(request_futures)
@@ -1750,6 +1761,10 @@ impl Wallet {
 
                         Some(min_supported_version)
                     } else {
+                        assert!(
+                            sorted_consensus_versions.len() <= api_client.all_peers().len(),
+                            "Too many peer responses",
+                        );
                         trace!(
                             target: LOG_MODULE_WALLET,
                             ?sorted_consensus_versions,
@@ -1767,7 +1782,7 @@ impl Wallet {
                     // Even in tests we don't want to spam the federation with requests about it
                     sleep(Duration::from_secs(30)).await;
                 } else {
-                    sleep(Duration::from_secs(3600)).await;
+                    sleep(Duration::from_secs(600)).await;
                 }
             }
         });
