@@ -252,7 +252,7 @@
     </span>num_route_hints: u32,
 
     <span class="doccomment">/// The Lightning module to use: LNv1, LNv2, or both
-    </span><span class="attr">#[arg(long = <span class="string">"lightning-module-mode"</span>, env = envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, default_value_t = LightningModuleMode::All)]
+    </span><span class="attr">#[arg(long = <span class="string">"lightning-module-mode"</span>, env = envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, default_value_t = LightningModuleMode::LNv1)]
     </span>lightning_module_mode: LightningModuleMode,
 }
 
