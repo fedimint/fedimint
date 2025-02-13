@@ -88,7 +88,7 @@ pub struct GatewayOpts {
     num_route_hints: u32,
 
     /// The Lightning module to use: LNv1, LNv2, or both
-    #[arg(long = "lightning-module-mode", env = envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, default_value_t = LightningModuleMode::All)]
+    #[arg(long = "lightning-module-mode", env = envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, default_value_t = LightningModuleMode::LNv1)]
     lightning_module_mode: LightningModuleMode,
 }
 
