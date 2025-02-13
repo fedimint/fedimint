@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::iter::once;
 use std::pin::Pin;
 use std::result;
@@ -938,6 +938,15 @@ pub enum ApiMethod {
     Module(ModuleInstanceId, String),
 }
 
+impl fmt::Display for ApiMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ApiMethod::Core(s) => f.write_str(s),
+            ApiMethod::Module(module_id, s) => f.write_fmt(format_args!("{module_id}-{s}")),
+        }
+    }
+}
+
 pub type DynClientConnector = Arc<dyn IClientConnector>;
 
 /// Allows to connect to peers. Connections are request based and should be
@@ -1082,15 +1091,21 @@ impl ReconnectClientConnections {
         method: ApiMethod,
         request: ApiRequestErased,
     ) -> PeerResult<Value> {
-        self.connections
+        trace!(target: LOG_NET_API, %method, "Api request");
+        let res = self
+            .connections
             .get(&peer)
             .expect("Could not find client connection for peer {peer}")
             .connection()
             .await
             .context("Failed to connect to peer")
             .map_err(PeerError::Connection)?
-            .request(method, request)
-            .await
+            .request(method.clone(), request)
+            .await;
+
+        trace!(target: LOG_NET_API, ?method, res_ok = res.is_ok(), "Api response");
+
+        res
     }
 }
 
