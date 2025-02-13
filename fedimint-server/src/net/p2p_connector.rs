@@ -1,4 +1,4 @@
-//! Provides an abstract network connection interface and multiple
+//! Provides an abstract network connector interface and multiple
 //! implementations
 
 use std::collections::BTreeMap;
@@ -9,8 +9,10 @@ use std::sync::Arc;
 use anyhow::{ensure, format_err, Context};
 use async_trait::async_trait;
 use fedimint_core::config::PeerUrl;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
+use iroh::{Endpoint, NodeId, SecretKey};
 use rustls::ServerName;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -226,92 +228,78 @@ pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
     Ok(format!("{host}:{port}"))
 }
 
-#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
-pub mod iroh {
-    use std::collections::BTreeMap;
+#[derive(Debug, Clone)]
+pub struct IrohConnector {
+    /// Map of all peers' connection information we want to be connected to
+    pub node_ids: BTreeMap<PeerId, NodeId>,
+    /// The Iroh endpoint
+    pub endpoint: Endpoint,
+}
 
-    use anyhow::Context;
-    use async_trait::async_trait;
-    use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::PeerId;
-    use iroh::{Endpoint, NodeId, SecretKey};
+const FEDIMINT_P2P_ALPN: &[u8] = "FEDIMINT_P2P_ALPN".as_bytes();
 
-    use crate::net::p2p_connection::IP2PConnection;
-    use crate::net::p2p_connector::{DynP2PConnection, IP2PConnector};
+impl IrohConnector {
+    pub async fn new(secret_key: SecretKey, node_ids: BTreeMap<PeerId, NodeId>) -> Self {
+        let identity = *node_ids
+            .iter()
+            .find(|entry| entry.1 == &secret_key.public())
+            .expect("Our public key is not part of the keyset")
+            .0;
 
-    #[derive(Debug, Clone)]
-    pub struct IrohConnector {
-        /// Map of all peers' connection information we want to be connected to
-        pub node_ids: BTreeMap<PeerId, NodeId>,
-        /// The Iroh endpoint
-        pub endpoint: Endpoint,
-    }
-
-    const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
-
-    impl IrohConnector {
-        pub async fn new(secret_key: SecretKey, node_ids: BTreeMap<PeerId, NodeId>) -> Self {
-            let identity = *node_ids
-                .iter()
-                .find(|entry| entry.1 == &secret_key.public())
-                .expect("Our public key is not part of the keyset")
-                .0;
-
-            Self {
-                node_ids: node_ids
-                    .into_iter()
-                    .filter(|entry| entry.0 != identity)
-                    .collect(),
-                endpoint: Endpoint::builder()
-                    .discovery_n0()
-                    .secret_key(secret_key)
-                    .alpns(vec![FEDIMINT_ALPN.to_vec()])
-                    .bind()
-                    .await
-                    .expect("Could not bind to port"),
-            }
-        }
-    }
-
-    #[async_trait]
-    impl<M> IP2PConnector<M> for IrohConnector
-    where
-        M: Encodable + Decodable + Send + 'static,
-    {
-        fn peers(&self) -> Vec<PeerId> {
-            self.node_ids.keys().copied().collect()
-        }
-
-        async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
-            let node_id = *self
-                .node_ids
-                .get(&peer)
-                .expect("No node id found for peer {peer}");
-
-            let connection = self.endpoint.connect(node_id, FEDIMINT_ALPN).await?;
-
-            Ok(connection.into_dyn())
-        }
-
-        async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<M>)> {
-            let connection = self
-                .endpoint
-                .accept()
+        Self {
+            node_ids: node_ids
+                .into_iter()
+                .filter(|entry| entry.0 != identity)
+                .collect(),
+            endpoint: Endpoint::builder()
+                .discovery_n0()
+                .secret_key(secret_key)
+                .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()])
+                .bind()
                 .await
-                .context("Listener closed unexpectedly")?
-                .accept()?
-                .await?;
-
-            let node_id = iroh::endpoint::get_remote_node_id(&connection)?;
-
-            let auth_peer = self
-                .node_ids
-                .iter()
-                .find(|entry| entry.1 == &node_id)
-                .context("Node id {node_id} is unknown")?
-                .0;
-
-            Ok((*auth_peer, connection.into_dyn()))
+                .expect("Could not bind to port"),
         }
+    }
+}
+
+#[async_trait]
+impl<M> IP2PConnector<M> for IrohConnector
+where
+    M: Encodable + Decodable + Send + 'static,
+{
+    fn peers(&self) -> Vec<PeerId> {
+        self.node_ids.keys().copied().collect()
+    }
+
+    async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
+        let node_id = *self
+            .node_ids
+            .get(&peer)
+            .expect("No node id found for peer {peer}");
+
+        let connection = self.endpoint.connect(node_id, FEDIMINT_P2P_ALPN).await?;
+
+        Ok(connection.into_dyn())
+    }
+
+    async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<M>)> {
+        let connection = self
+            .endpoint
+            .accept()
+            .await
+            .context("Listener closed unexpectedly")?
+            .accept()?
+            .await?;
+
+        let node_id = connection.remote_node_id()?;
+
+        let auth_peer = self
+            .node_ids
+            .iter()
+            .find(|entry| entry.1 == &node_id)
+            .context("Node id {node_id} is unknown")?
+            .0;
+
+        Ok((*auth_peer, connection.into_dyn()))
     }
 }
