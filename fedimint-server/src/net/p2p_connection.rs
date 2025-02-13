@@ -64,7 +64,6 @@ where
     }
 }
 
-#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
 pub mod iroh {
     use async_trait::async_trait;
     use fedimint_core::encoding::{Decodable, Encodable};

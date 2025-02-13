@@ -242,7 +242,6 @@ pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
     Ok(format!("{host}:{port}"))
 }
 
-#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
 pub mod iroh {
     use std::collections::BTreeMap;
 
@@ -336,7 +335,7 @@ pub mod iroh {
     {
         let connection = incoming.accept()?.await?;
 
-        let node_id = iroh::endpoint::get_remote_node_id(&connection)?;
+        let node_id = iroh::endpoint::Connection::remote_node_id(&connection)?;
 
         let peer_id = peers
             .iter()
