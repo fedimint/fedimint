@@ -13,6 +13,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{CoreMigrationFn, Database, DatabaseVersion};
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
     ModuleInit, PeerHandle, SupportedModuleApiVersions,
@@ -47,6 +48,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
+        bitcoin_rpc: BitcoinRpcConfig,
         shared: SharedAnymap,
     ) -> anyhow::Result<DynServerModule>;
 
@@ -96,6 +98,7 @@ where
     our_peer_id: PeerId,
     num_peers: NumPeers,
     module_api: DynModuleApi,
+    bitcoin_rpc: BitcoinRpcConfig,
     // Things that can be shared between modules
     //
     // If two modules can coordinate on using a shared type, they can
@@ -132,6 +135,10 @@ where
 
     pub fn module_api(&self) -> &DynModuleApi {
         &self.module_api
+    }
+
+    pub fn bitcoin_rpc(&self) -> &BitcoinRpcConfig {
+        &self.bitcoin_rpc
     }
 
     pub fn with_shared<T, R>(&self, f: impl FnOnce(&T) -> R) -> R
@@ -251,6 +258,7 @@ where
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
+        bitcoin_rpc: BitcoinRpcConfig,
         shared: SharedAnymap,
     ) -> anyhow::Result<DynServerModule> {
         <Self as ServerModuleInit>::init(
@@ -263,6 +271,7 @@ where
                 our_peer_id,
                 _marker: PhantomData,
                 module_api,
+                bitcoin_rpc,
                 shared,
             },
         )

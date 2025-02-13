@@ -159,9 +159,9 @@ impl WalletConfig {
         threshold: usize,
         network: Network,
         finality_delay: u32,
-        bitcoin_rpc: BitcoinRpcConfig,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
         fee_consensus: FeeConsensus,
+        bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {
         let peg_in_descriptor = if pubkeys.len() == 1 {
             PegInDescriptor::Wpkh(

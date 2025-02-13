@@ -19,6 +19,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
@@ -189,9 +190,11 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(args.cfg().to_typed()?, &args.shared())
-            .await?
-            .into())
+        Ok(
+            Lightning::new(args.cfg().to_typed()?, &args.shared(), args.bitcoin_rpc())
+                .await?
+                .into(),
+        )
     }
 
     fn trusted_dealer_gen(
@@ -638,8 +641,9 @@ impl Lightning {
     async fn new(
         cfg: LightningConfig,
         shared_bitcoin: &ServerModuleSharedBitcoin,
+        bitcoin_rpc: &BitcoinRpcConfig,
     ) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
+        let btc_rpc = create_bitcoind(bitcoin_rpc)?;
         let block_count_rx = shared_bitcoin
             .block_count_receiver(cfg.consensus.network, btc_rpc.clone())
             .await;

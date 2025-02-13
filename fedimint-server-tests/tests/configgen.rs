@@ -11,6 +11,7 @@ use fedimint_core::admin_client::{
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::IRawDatabaseExt;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -80,6 +81,11 @@ impl TestConfigApi {
         let dir_clone = dir.clone();
         let settings_clone = settings.clone();
 
+        let bitcoin_rpc = BitcoinRpcConfig {
+            kind: "esplora".to_string(),
+            url: "http://ignored".parse().unwrap(),
+        };
+
         spawn("fedimint server", async move {
             fedimint_server::run(
                 dir_clone,
@@ -89,6 +95,7 @@ impl TestConfigApi {
                 "dummyversionhash".to_owned(),
                 &module_inits,
                 TaskGroup::new(),
+                bitcoin_rpc,
             )
             .await
             .expect("Failed to run fedimint server");

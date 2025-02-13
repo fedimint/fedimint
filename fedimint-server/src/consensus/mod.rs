@@ -19,7 +19,7 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{apply_migrations, apply_migrations_server_dbtx, Database};
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{is_running_in_test_env, BitcoinRpcConfig};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
@@ -52,6 +52,7 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
+    bitcoind_rpc: BitcoinRpcConfig,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -101,6 +102,7 @@ pub async fn run(
                         task_group,
                         cfg.local.identity,
                         global_api.with_module(*module_id),
+                        bitcoind_rpc.clone(),
                         shared_anymap.clone(),
                     )
                     .await?;

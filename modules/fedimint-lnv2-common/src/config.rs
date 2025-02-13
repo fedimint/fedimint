@@ -50,6 +50,7 @@ pub struct LightningConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
 pub struct LightningConfigLocal {
+    /// Configures which bitcoin RPC to use
     pub bitcoin_rpc: BitcoinRpcConfig,
 }
 
@@ -198,14 +199,5 @@ fn migrate_config_private(
 ) -> LightningConfigPrivate {
     LightningConfigPrivate {
         sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
-    }
-}
-
-#[allow(dead_code)]
-fn migrate_config_local(
-    config: fedimint_ln_common::config::LightningConfigLocal,
-) -> LightningConfigLocal {
-    LightningConfigLocal {
-        bitcoin_rpc: config.bitcoin_rpc,
     }
 }

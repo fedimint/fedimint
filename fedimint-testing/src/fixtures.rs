@@ -154,6 +154,7 @@ impl Fixtures {
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_module_kind.clone(),
+            self.bitcoin_rpc.clone(),
         )
     }
 

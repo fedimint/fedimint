@@ -20,6 +20,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::Encodable;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
@@ -220,11 +221,14 @@ impl ServerModuleInit for LightningInit {
         // Eagerly initialize metrics that trigger infrequently
         LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        Ok(
-            Lightning::new(args.cfg().to_typed()?, args.our_peer_id(), &args.shared())
-                .await?
-                .into(),
+        Ok(Lightning::new(
+            args.cfg().to_typed()?,
+            args.our_peer_id(),
+            &args.shared(),
+            args.bitcoin_rpc(),
         )
+        .await?
+        .into())
     }
 
     fn trusted_dealer_gen(
@@ -948,8 +952,9 @@ impl Lightning {
         cfg: LightningConfig,
         our_peer_id: PeerId,
         shared: &ServerModuleSharedBitcoin,
+        bitcoin_rpc: &BitcoinRpcConfig,
     ) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
+        let btc_rpc = create_bitcoind(bitcoin_rpc)?;
         let block_count_rx = shared
             .block_count_receiver(cfg.consensus.network.0, btc_rpc.clone())
             .await;
@@ -1328,10 +1333,15 @@ mod tests {
         let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
 
+        let bitcoin_rpc = BitcoinRpcConfig {
+            kind: "esplora".to_string(),
+            url: "http://ignored".parse().unwrap(),
+        };
         let server = Lightning::new(
             server_cfg[0].clone(),
             0.into(),
             &ServerModuleSharedBitcoin::new(task_group),
+            &bitcoin_rpc,
         )
         .await
         .unwrap();
@@ -1396,10 +1406,15 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+        let bitcoin_rpc = BitcoinRpcConfig {
+            kind: "esplora".to_string(),
+            url: "http://ignored".parse().unwrap(),
+        };
         let server = Lightning::new(
             server_cfg[0].clone(),
             0.into(),
             &ServerModuleSharedBitcoin::new(task_group),
+            &bitcoin_rpc,
         )
         .await
         .unwrap();
@@ -1470,10 +1485,15 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+        let bitcoin_rpc = BitcoinRpcConfig {
+            kind: "esplora".to_string(),
+            url: "http://ignored".parse().unwrap(),
+        };
         let server = Lightning::new(
             server_cfg[0].clone(),
             0.into(),
             &ServerModuleSharedBitcoin::new(task_group),
+            &bitcoin_rpc,
         )
         .await
         .unwrap();
