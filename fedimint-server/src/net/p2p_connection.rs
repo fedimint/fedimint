@@ -3,7 +3,10 @@ use std::io::Cursor;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::{SinkExt, StreamExt};
+use iroh::endpoint::Connection;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::net::TcpStream;
@@ -48,37 +51,27 @@ where
     }
 }
 
-#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
-pub mod iroh {
-    use async_trait::async_trait;
-    use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use iroh::endpoint::Connection;
+#[async_trait]
+impl<M> IP2PConnection<M> for Connection
+where
+    M: Encodable + Decodable + Send + 'static,
+{
+    async fn send(&mut self, message: M) -> anyhow::Result<()> {
+        let mut sink = self.open_uni().await?;
 
-    use crate::net::p2p_connection::IP2PConnection;
+        sink.write_all(&message.consensus_encode_to_vec()).await?;
 
-    #[async_trait]
-    impl<M> IP2PConnection<M> for Connection
-    where
-        M: Encodable + Decodable + Send + 'static,
-    {
-        async fn send(&mut self, message: M) -> anyhow::Result<()> {
-            let mut sink = self.open_uni().await?;
+        sink.finish()?;
 
-            sink.write_all(&message.consensus_encode_to_vec()).await?;
+        Ok(())
+    }
 
-            sink.finish()?;
+    async fn receive(&mut self) -> anyhow::Result<M> {
+        let bytes = self.accept_uni().await?.read_to_end(1_000_000_000).await?;
 
-            Ok(())
-        }
-
-        async fn receive(&mut self) -> anyhow::Result<M> {
-            let bytes = self.accept_uni().await?.read_to_end(1_000_000_000).await?;
-
-            Ok(Decodable::consensus_decode_whole(
-                &bytes,
-                &ModuleDecoderRegistry::default(),
-            )?)
-        }
+        Ok(Decodable::consensus_decode_whole(
+            &bytes,
+            &ModuleDecoderRegistry::default(),
+        )?)
     }
 }
