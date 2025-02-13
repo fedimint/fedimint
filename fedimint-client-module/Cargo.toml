@@ -1,12 +1,13 @@
 [package]
-name = "fedimint-ln-client"
-version = { workspace = true }
-authors = { workspace = true }
+name = "fedimint-client-module"
 edition = { workspace = true }
-description = "fedimint-ln is a lightning payment service module."
+homepage = { workspace = true }
+keywords = { workspace = true }
 license = { workspace = true }
-readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
+readme = { workspace = true }
+description = "Library for sending transactions to the Fedimint federation."
 
 [package.metadata.cargo-udeps.ignore]
 # cargo udeps can't detect that one
@@ -16,11 +17,10 @@ normal = ["aquamarine"]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default = []
-cli = ["dep:clap"]
+tor = ["fedimint-api-client/tor"]
 
 [lib]
-name = "fedimint_ln_client"
+name = "fedimint_client_module"
 path = "src/lib.rs"
 
 [dependencies]
@@ -29,17 +29,14 @@ aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-clap = { workspace = true, optional = true }
-erased-serde = { workspace = true }
-fedimint-api-client = { workspace = true }
-fedimint-client = { workspace = true, package = "fedimint-client-module" }
+fedimint-aead = { workspace = true }
+fedimint-api-client = { path = "../fedimint-api-client", version = "=0.7.0-alpha" }
 fedimint-core = { workspace = true }
-fedimint-ln-common = { workspace = true }
+fedimint-derive-secret = { workspace = true }
+fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-lightning-invoice = { workspace = true, features = ["serde"] }
-lnurl-rs = { version = "0.9.0", features = ["async"], default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
@@ -47,5 +44,12 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["time", "macros", "rt"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tracing-test = "0.2.5"
+
+[build-dependencies]
+fedimint-build = { workspace = true }

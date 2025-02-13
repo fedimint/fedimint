@@ -40,7 +40,7 @@ bls12_381 = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-client = { workspace = true }
+fedimint-client = { workspace = true, package = "fedimint-client-module" }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
