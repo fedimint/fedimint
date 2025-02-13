@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ClientBackup","EncryptedClientBackup","EventBackupDone","Metadata"]};

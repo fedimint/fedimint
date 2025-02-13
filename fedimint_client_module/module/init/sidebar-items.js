@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["recovery"],"struct":["ClientModuleInitArgs","ClientModuleRecoverArgs","DynClientModuleInit"],"trait":["ClientModuleInit","IClientModuleInit"],"type":["ClientModuleInitRegistry"]};
