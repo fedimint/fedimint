@@ -174,6 +174,8 @@ declare_vars! {
          // Enable to us to make an unbounded number of payments
         FM_DEFAULT_GATEWAY_FEES: String = "0,0"; env: "FM_DEFAULT_GATEWAY_FEES";
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = "1"; env: "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
+        FM_GATEWAY_NETWORK: String = "regtest"; env: "FM_GATEWAY_NETWORK";
+        FM_GATEWAY_LIGHTNING_MODULE_MODE: String = "All"; env: "FM_GATEWAY_LIGHTNING_MODULE_MODE";
 
         FM_CLN_EXTENSION_LISTEN_ADDRESS: String = f!("0.0.0.0:{FM_PORT_CLN_EXTENSION}"); env: "FM_CLN_EXTENSION_LISTEN_ADDRESS";
         FM_GATEWAY_LIGHTNING_ADDR: String = f!("http://localhost:{FM_PORT_CLN_EXTENSION}"); env: "FM_GATEWAY_LIGHTNING_ADDR";
