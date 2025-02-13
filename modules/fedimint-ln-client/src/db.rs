@@ -20,6 +20,7 @@ use crate::receive::{
     LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer, LightningReceiveSubmittedOfferV0,
 };
+use crate::recurring::RecurringPaymentCodeEntry;
 use crate::{LightningClientStateMachines, OutgoingLightningPayment, ReceivingKey};
 
 #[repr(u8)]
@@ -30,6 +31,7 @@ pub enum DbKeyPrefix {
     PaymentResult = 0x29,
     MetaOverridesDeprecated = 0x30,
     LightningGateway = 0x45,
+    RecurringPaymentKey = 0x46,
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
     ExternalReservedStart = 0xb0,
@@ -97,6 +99,27 @@ impl_db_record!(
 impl_db_lookup!(
     key = LightningGatewayKey,
     query_prefix = LightningGatewayKeyPrefix
+);
+
+/// A single recurring payment code (e.g. LNURL) that was registered with a
+/// server
+#[derive(Debug, Encodable, Decodable)]
+pub struct RecurringPaymentCodeKey {
+    pub derivation_idx: u64,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RecurringPaymentCodeKeyPrefix;
+
+impl_db_record!(
+    key = RecurringPaymentCodeKey,
+    value = RecurringPaymentCodeEntry,
+    db_prefix = DbKeyPrefix::RecurringPaymentKey,
+);
+
+impl_db_lookup!(
+    key = RecurringPaymentCodeKey,
+    query_prefix = RecurringPaymentCodeKeyPrefix
 );
 
 /// Migrates `SubmittedOfferV0` to `SubmittedOffer` and `ConfirmedInvoiceV0` to

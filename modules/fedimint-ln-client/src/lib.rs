@@ -13,6 +13,8 @@ pub mod db;
 pub mod incoming;
 pub mod pay;
 pub mod receive;
+/// Implements recurring payment codes (e.g. LNURL, BOLT12)
+pub mod recurring;
 
 use std::collections::BTreeMap;
 use std::iter::once;
@@ -30,7 +32,7 @@ use db::{
 };
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::db::{migrate_state, ClientMigrationFn};
-use fedimint_client::derivable_secret::ChildId;
+use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -90,7 +92,7 @@ use serde_json::json;
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info};
 
-use crate::db::PaymentResultPrefix;
+use crate::db::{PaymentResultPrefix, RecurringPaymentCodeKeyPrefix};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -103,6 +105,7 @@ use crate::receive::{
     get_incoming_contract, LightningReceiveError, LightningReceiveStateMachine,
     LightningReceiveStates, LightningReceiveSubmittedOffer,
 };
+use crate::recurring::RecurringPaymentCodeEntry;
 
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
@@ -320,6 +323,16 @@ impl ModuleInit for LightningClientInit {
                         "Lightning Gateways"
                     );
                 }
+                DbKeyPrefix::RecurringPaymentKey => {
+                    push_db_pair_items!(
+                        dbtx,
+                        RecurringPaymentCodeKeyPrefix,
+                        RecurringPaymentCodeKey,
+                        RecurringPaymentCodeEntry,
+                        ln_client_items,
+                        "Recurring Payment Code"
+                    );
+                }
                 DbKeyPrefix::ExternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedEnd => {}
@@ -335,6 +348,7 @@ impl ModuleInit for LightningClientInit {
 pub enum LightningChildKeys {
     RedeemKey = 0,
     PreimageAuthentication = 1,
+    RecurringPaymentCodeSecret = 2,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -390,6 +404,7 @@ pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<LightningClientStateMachines>,
     redeem_key: Keypair,
+    recurring_payment_code_secret: DerivableSecret,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
     preimage_auth: Keypair,
@@ -620,6 +635,9 @@ impl LightningClientModule {
                 .module_root_secret()
                 .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
                 .to_secp_key(&secp),
+            recurring_payment_code_secret: args.module_root_secret().child_key(ChildId(
+                LightningChildKeys::RecurringPaymentCodeSecret as u64,
+            )),
             module_api: args.module_api().clone(),
             preimage_auth: args
                 .module_root_secret()
@@ -1450,6 +1468,7 @@ impl LightningClientModule {
 
     /// Scan unspent incoming contracts for a payment hash that matches a
     /// tweaked keys in the `indices` vector
+    #[deprecated(since = "0.7.0", note = "Please use `scan_receive_for_user` instead")]
     pub async fn scan_receive_for_user_tweaked<M: Serialize + Send + Sync + Clone>(
         &self,
         key_pair: Keypair,
