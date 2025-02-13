@@ -1366,8 +1366,23 @@
 <a href="#1365" id="1365">1365</a>
 <a href="#1366" id="1366">1366</a>
 <a href="#1367" id="1367">1367</a>
-<a href="#1368" id="1368">1368</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::fmt::Debug;
+<a href="#1368" id="1368">1368</a>
+<a href="#1369" id="1369">1369</a>
+<a href="#1370" id="1370">1370</a>
+<a href="#1371" id="1371">1371</a>
+<a href="#1372" id="1372">1372</a>
+<a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::result;
@@ -2305,6 +2320,15 @@
     Module(ModuleInstanceId, String),
 }
 
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>ApiMethod {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="kw">match </span><span class="self">self </span>{
+            ApiMethod::Core(s) =&gt; f.write_str(s),
+            ApiMethod::Module(module_id, s) =&gt; f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{module_id}-{s}"</span>)),
+        }
+    }
+}
+
 <span class="kw">pub type </span>DynClientConnector = Arc&lt;<span class="kw">dyn </span>IClientConnector&gt;;
 
 <span class="doccomment">/// Allows to connect to peers. Connections are request based and should be
@@ -2449,16 +2473,22 @@
         method: ApiMethod,
         request: ApiRequestErased,
     ) -&gt; PeerResult&lt;Value&gt; {
-        <span class="self">self</span>.connections
+        <span class="macro">trace!</span>(target: LOG_NET_API, %method, <span class="string">"Api request"</span>);
+        <span class="kw">let </span>res = <span class="self">self
+            </span>.connections
             .get(<span class="kw-2">&amp;</span>peer)
             .expect(<span class="string">"Could not find client connection for peer {peer}"</span>)
             .connection()
             .<span class="kw">await
             </span>.context(<span class="string">"Failed to connect to peer"</span>)
             .map_err(PeerError::Connection)<span class="question-mark">?
-            </span>.request(method, request)
-            .<span class="kw">await
-    </span>}
+            </span>.request(method.clone(), request)
+            .<span class="kw">await</span>;
+
+        <span class="macro">trace!</span>(target: LOG_NET_API, <span class="question-mark">?</span>method, res_ok = res.is_ok(), <span class="string">"Api response"</span>);
+
+        res
+    }
 }
 
 <span class="attr">#[derive(Clone, Debug)]
