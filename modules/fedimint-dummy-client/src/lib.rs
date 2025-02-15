@@ -12,12 +12,12 @@ use anyhow::{anyhow, format_err, Context as _};
 use common::broken_fed_key_pair;
 use db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
-use fedimint_client::db::{migrate_state, ClientMigrationFn};
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client::sm::{Context, ModuleNotifier};
-use fedimint_client::transaction::{
+use fedimint_client_module::db::{migrate_state, ClientMigrationFn};
+use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client_module::module::recovery::NoModuleBackup;
+use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::sm::{Context, ModuleNotifier};
+use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };

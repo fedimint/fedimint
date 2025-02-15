@@ -36,8 +36,10 @@ erased-serde = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.7.0-alpha" }
 fedimint-bip39 = { version = "=0.7.0-alpha", path = "../../fedimint-bip39" }
-fedimint-client = { path = "../../fedimint-client", version = "=0.7.0-alpha" }
+fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gw-client = { workspace = true }
 fedimint-gwv2-client = { workspace = true }

@@ -7,12 +7,12 @@ use anyhow::{bail, format_err, Context};
 use fedimint_client::db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
 };
-use fedimint_client::module::init::DynClientModuleInit;
-use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{
     ActiveStateKeyBytes, ActiveStateKeyPrefix, ActiveStateMeta, InactiveStateKeyBytes,
     InactiveStateKeyPrefix, InactiveStateMeta,
 };
+use fedimint_client_module::module::init::DynClientModuleInit;
+use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     apply_migrations, apply_migrations_server, CoreMigrationFn, Database, DatabaseVersion,

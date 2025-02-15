@@ -1,8 +1,8 @@
 use anyhow::bail;
-use fedimint_client::module::OutPointRange;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
+use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -149,7 +149,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
 
 mod fedimint_migration_tests {
     use anyhow::ensure;
-    use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_client_module::module::init::DynClientModuleInit;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,

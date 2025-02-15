@@ -24,6 +24,7 @@ bytes = { workspace = true }
 clap = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { workspace = true }

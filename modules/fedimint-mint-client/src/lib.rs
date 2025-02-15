@@ -44,19 +44,19 @@ use client_db::{
     ReusedNoteIndices,
 };
 use event::{NoteSpent, OOBNotesReissued, OOBNotesSpent};
-use fedimint_client::db::{migrate_state, ClientMigrationFn};
-use fedimint_client::module::init::{
+use fedimint_client_module::db::{migrate_state, ClientMigrationFn};
+use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
-use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{
+use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
+use fedimint_client_module::sm::util::MapStateTransitions;
+use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
+use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -1556,7 +1556,7 @@ impl MintClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
             stream! {
                 yield ReissueExternalNotesState::Created;
 
@@ -1781,7 +1781,7 @@ impl MintClientModule {
 
         Ok(self
             .client_ctx
-            .outcome_or_updates(&operation, operation_id, || {
+            .outcome_or_updates(operation, operation_id, move || {
                 stream! {
                     yield SpendOOBState::Created;
 

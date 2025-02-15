@@ -34,18 +34,17 @@ use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::init::{
+use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client::oplog::UpdateStreamOrOutcome;
-use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{
+use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::sm::util::MapStateTransitions;
+use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
+use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -63,6 +62,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
     TransactionId,
 };
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -840,10 +840,11 @@ impl WalletClientModule {
             return Ok(UpdateStreamOrOutcome::Outcome(outcome_v2));
         };
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, {
             let stream_rpc = self.rpc.clone();
             let stream_client_ctx = self.client_ctx.clone();
             let stream_script_pub_key = address.script_pubkey();
+            move || {
 
             stream! {
                 yield DepositStateV2::WaitingForTransaction;
@@ -899,7 +900,7 @@ impl WalletClientModule {
                     Err(e) => yield DepositStateV2::Failed(e.to_string())
                 }
             }
-        }))
+        }}))
     }
 
     pub async fn find_tweak_idx_by_address(
@@ -1226,7 +1227,7 @@ impl WalletClientModule {
 
         Ok(self
             .client_ctx
-            .outcome_or_updates(&operation, operation_id, || {
+            .outcome_or_updates(operation, operation_id, move || {
                 stream! {
                     match next_withdraw_state(&mut operation_stream).await {
                         Some(WithdrawStates::Created(_)) => {

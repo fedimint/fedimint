@@ -28,6 +28,7 @@ bitcoincore-rpc = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.7.0-alpha" }
 fedimint-ln-common = { workspace = true }

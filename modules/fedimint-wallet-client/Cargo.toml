@@ -28,8 +28,9 @@ bitcoin = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-client = { workspace = true, package = "fedimint-client-module" }
+fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-wallet-common = { workspace = true }

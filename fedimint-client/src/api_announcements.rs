@@ -72,7 +72,7 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
                 }
 
                 client_inner
-                    .db
+                    .db()
                     .autocommit(
                         |dbtx, _|{
                             let announcements_inner = announcements.clone();

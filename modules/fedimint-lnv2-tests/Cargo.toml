@@ -21,6 +21,7 @@ async-trait = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-dummy-client = { workspace = true }
 fedimint-dummy-common = { workspace = true }

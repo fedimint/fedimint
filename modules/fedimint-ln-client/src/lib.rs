@@ -29,19 +29,18 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_client::db::{migrate_state, ClientMigrationFn};
-use fedimint_client::derivable_secret::ChildId;
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
-use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{
+use fedimint_client_module::db::{migrate_state, ClientMigrationFn};
+use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client_module::module::recovery::NoModuleBackup;
+use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::sm::util::MapStateTransitions;
+use fedimint_client_module::sm::{DynState, ModuleNotifier, State, StateTransition};
+use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM,
     TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
+use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -58,6 +57,7 @@ use fedimint_core::util::{backoff_util, retry, BoxStream};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
 };
+use fedimint_derive_secret::ChildId;
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
@@ -1298,7 +1298,7 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
             stream! {
                 yield InternalPayState::Funding;
 
@@ -1363,7 +1363,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 
@@ -1692,7 +1692,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
             stream! {
                 yield LnReceiveState::AwaitingFunds;
 
@@ -1725,7 +1725,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
             stream! {
 
                 let self_ref = client_ctx.self_ref();
@@ -2137,7 +2137,7 @@ pub struct LightningClientContext {
     pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
-impl fedimint_client::sm::Context for LightningClientContext {
+impl fedimint_client_module::sm::Context for LightningClientContext {
     const KIND: Option<ModuleKind> = Some(KIND);
 }
 
@@ -2253,21 +2253,4 @@ impl GatewayConnection for MockGatewayConnection {
         // Just return a fake preimage to indicate success
         Ok("00000000".to_string())
     }
-}
-
-pub async fn ln_operation(
-    client: &ClientHandleArc,
-    operation_id: OperationId,
-) -> anyhow::Result<OperationLogEntry> {
-    let operation = client
-        .operation_log()
-        .get_operation(operation_id)
-        .await
-        .ok_or(anyhow::anyhow!("Operation not found"))?;
-
-    if operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
-        bail!("Operation is not a lightning operation");
-    }
-
-    Ok(operation)
 }

@@ -3,7 +3,7 @@ use std::ops;
 use std::str::FromStr;
 use std::time::SystemTime;
 
-use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
+use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};

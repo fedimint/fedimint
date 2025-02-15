@@ -20,16 +20,16 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1;
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, OutPointRange};
-use fedimint_client::oplog::UpdateStreamOrOutcome;
-use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{
+use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client_module::module::recovery::NoModuleBackup;
+use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
+use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::sm::util::MapStateTransitions;
+use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
+use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -643,7 +643,7 @@ impl LightningClientModule {
         let client_ctx = self.client_ctx.clone();
         let module_api = self.module_api.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Send(state)) = stream.next().await {
@@ -935,7 +935,7 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, || {
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
             stream! {
                 loop {
                     if let Some(LightningClientStateMachines::Receive(state)) = stream.next().await {

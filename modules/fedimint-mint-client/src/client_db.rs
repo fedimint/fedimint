@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
-use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
-use fedimint_client::module::{IdxRange, OutPointRange};
+use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
+use fedimint_client_module::module::{IdxRange, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore};
 use fedimint_core::encoding::{Decodable, Encodable};
