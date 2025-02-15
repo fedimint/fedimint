@@ -121,11 +121,12 @@ async fn await_consensus_upgrade(client: &ClientHandleArc) {
         "waiting for consensus upgrade",
         fedimint_core::util::backoff_util::aggressive_backoff(),
         || async {
-            client
+            let is_upgraded = client
                 .get_first_module::<WalletClientModule>()?
                 .btc_tx_has_no_size_limit()
                 .await?;
 
+            anyhow::ensure!(is_upgraded);
             Ok(())
         },
     )
