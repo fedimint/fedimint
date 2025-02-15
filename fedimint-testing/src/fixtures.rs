@@ -141,19 +141,25 @@ impl Fixtures {
         self
     }
 
-    /// Starts a new federation with default number of peers for testing
-    pub async fn new_default_fed(&self) -> FederationTest {
-        self.new_fed_builder().build().await
+    /// Starts a new federation with 3/4 peers online
+    pub async fn new_fed_degraded(&self) -> FederationTest {
+        self.new_fed_builder(1).build().await
+    }
+
+    /// Starts a new federation with 4/4 peers online
+    pub async fn new_fed_not_degraded(&self) -> FederationTest {
+        self.new_fed_builder(0).build().await
     }
 
     /// Creates a new `FederationTestBuilder` that can be used to build up a
     /// `FederationTest` for module tests.
-    pub fn new_fed_builder(&self) -> FederationTestBuilder {
+    pub fn new_fed_builder(&self, num_offline: u16) -> FederationTestBuilder {
         FederationTestBuilder::new(
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_module_kind.clone(),
+            num_offline,
         )
     }
 

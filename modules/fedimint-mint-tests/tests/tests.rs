@@ -53,7 +53,7 @@ struct BackupTestMetadata {
 #[tokio::test(flavor = "multi_thread")]
 async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
     let keypair = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
@@ -101,7 +101,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
 #[tokio::test(flavor = "multi_thread")]
 async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
@@ -139,7 +139,7 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn blind_nonce_index() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
@@ -189,7 +189,7 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
 #[ignore] // TODO: flaky https://github.com/fedimint/fedimint/issues/4508
 async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let client1 = fed.new_client_rocksdb().await;
     let client2 = fed.new_client_rocksdb().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
@@ -287,7 +287,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
     // Print notes for client
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
@@ -313,7 +313,7 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
     // Print notes for client
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
@@ -336,7 +336,7 @@ async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let client = fed.new_client().await;
     let dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -372,7 +372,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let (client, client2) = fed.two_clients().await;
     let dummy_module = client.get_first_module::<DummyClientModule>()?;
     info!("### PRINT NOTES");
@@ -452,7 +452,7 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let (client1, _client2) = fed.two_clients().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
@@ -479,7 +479,7 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_default_fed().await;
+    let fed = fixtures().new_fed_degraded().await;
     let (client1, _client2) = fed.two_clients().await;
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;

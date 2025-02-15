@@ -137,7 +137,7 @@ async fn await_consensus_upgrade(client: &ClientHandleArc) {
 #[tokio::test(flavor = "multi_thread")]
 async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // Avoid other tests from interfering here
@@ -179,7 +179,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let bitcoin = fixtures.bitcoin();
@@ -329,7 +329,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
@@ -406,7 +406,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
@@ -451,7 +451,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // Need lock to keep tx in mempool from getting mined
@@ -543,7 +543,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // This test has many assumptions about bitcoin L1 blocks
@@ -761,7 +761,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn construct_wallet_summary() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
