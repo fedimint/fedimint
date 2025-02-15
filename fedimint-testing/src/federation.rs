@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use fedimint_api_client::api::net::Connector;
@@ -34,6 +34,8 @@ use fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
 use fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
 use tokio_rustls::rustls;
 use tracing::info;
+
+pub static API_AUTH: LazyLock<ApiAuth> = LazyLock::new(|| ApiAuth("pass".to_string()));
 
 /// Test fixture for a running fedimint federation
 #[derive(Clone)]
@@ -79,6 +81,17 @@ impl FederationTest {
             None,
         )
         .await
+    }
+
+    /// Create a new admin api for the given PeerId
+    pub fn new_admin_api(&self, peer_id: PeerId) -> DynGlobalApi {
+        let config = self.configs.get(&peer_id).expect("peer to have config");
+        DynGlobalApi::new_admin(
+            peer_id,
+            config.consensus.api_endpoints[&peer_id].url.clone(),
+            &None,
+            &Connector::default(),
+        )
     }
 
     /// Create a new admin client connected to this fed
@@ -152,6 +165,11 @@ impl FederationTest {
     pub fn online_peer_ids(&self) -> impl Iterator<Item = PeerId> {
         // we can assume this ordering since peers are started in ascending order
         (0..(self.num_peers - self.num_offline)).map(PeerId::from)
+    }
+
+    /// Returns true if the federation is running in a degraded state
+    pub fn is_degraded(&self) -> bool {
+        self.num_offline > 0
     }
 }
 
@@ -367,7 +385,7 @@ pub fn local_config_gen_params(
                 local: ConfigGenParamsLocal {
                     our_id: *peer,
                     our_private_key: tls_keys[peer].1.clone(),
-                    api_auth: ApiAuth("pass".to_string()),
+                    api_auth: API_AUTH.clone(),
                     p2p_bind: p2p_bind.parse().expect("Valid address"),
                     api_bind: api_bind.parse().expect("Valid address"),
                 },

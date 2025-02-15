@@ -1721,6 +1721,13 @@ impl Wallet {
                                 peer,
                             )
                             .await
+                            .inspect(|res| debug!(
+                                target: LOG_MODULE_WALLET,
+                                %peer,
+                                %our_peer_id,
+                                ?res,
+                                "Fetched supported module consensus version from peer"
+                            ))
                             .inspect_err(|err| warn!(
                                 target: LOG_MODULE_WALLET,
                                  %peer,
