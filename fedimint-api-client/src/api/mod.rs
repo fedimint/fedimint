@@ -1095,7 +1095,7 @@ impl ReconnectClientConnections {
         let res = self
             .connections
             .get(&peer)
-            .expect("Could not find client connection for peer {peer}")
+            .unwrap_or_else(|| panic!("Could not find client connection for peer {peer}"))
             .connection()
             .await
             .context("Failed to connect to peer")
