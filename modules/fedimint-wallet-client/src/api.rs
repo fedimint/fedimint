@@ -5,9 +5,9 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, PeerId};
 use fedimint_wallet_common::endpoint_constants::{
-    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
-    MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
-    WALLET_SUMMARY_ENDPOINT,
+    ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
+    BLOCK_COUNT_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+    UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::{PegOutFees, WalletSummary};
 
@@ -30,6 +30,8 @@ pub trait WalletFederationApi {
     async fn fetch_wallet_summary(&self) -> FederationResult<WalletSummary>;
 
     async fn is_utxo_confirmed(&self, outpoint: bitcoin::OutPoint) -> FederationResult<bool>;
+
+    async fn activate_consensus_version_voting(&self, auth: ApiAuth) -> FederationResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -113,6 +115,15 @@ where
         self.request_current_consensus(
             WALLET_SUMMARY_ENDPOINT.to_string(),
             ApiRequestErased::default(),
+        )
+        .await
+    }
+
+    async fn activate_consensus_version_voting(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(
+            ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
         )
         .await
     }
