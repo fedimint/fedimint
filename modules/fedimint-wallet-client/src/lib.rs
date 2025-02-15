@@ -1263,6 +1263,20 @@ impl WalletClientModule {
                 }
             }))
     }
+
+    fn admin_auth(&self) -> anyhow::Result<ApiAuth> {
+        self.admin_auth
+            .clone()
+            .ok_or_else(|| anyhow::format_err!("Admin auth not set"))
+    }
+
+    pub async fn activate_consensus_version_voting(&self) -> anyhow::Result<()> {
+        self.module_api
+            .activate_consensus_version_voting(self.admin_auth()?)
+            .await?;
+
+        Ok(())
+    }
 }
 
 /// Polls the federation checking if the activated module consensus version
