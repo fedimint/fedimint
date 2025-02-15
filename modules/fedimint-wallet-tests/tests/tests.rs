@@ -996,6 +996,16 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn verify_auto_consensus_voting() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    Ok(())
+}
+
 async fn sync_wallet_to_block(
     dbtx: &mut DatabaseTransaction<'_>,
     wallet: &mut fedimint_wallet_server::Wallet,
