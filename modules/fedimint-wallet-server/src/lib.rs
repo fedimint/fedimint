@@ -939,6 +939,7 @@ impl ServerModule for Wallet {
                 async |_module: &Wallet, context, _params: ()| -> () {
                     check_auth(context)?;
 
+                    // api_endpoint! calls dbtx.commit_tx_result
                     let mut dbtx = context.dbtx();
                     dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
                     Ok(())
