@@ -43,6 +43,8 @@ pub struct FederationTest {
     client_init: ClientModuleInitRegistry,
     primary_module_kind: ModuleKind,
     _task: TaskGroup,
+    num_peers: u16,
+    num_offline: u16,
 }
 
 impl FederationTest {
@@ -145,6 +147,12 @@ impl FederationTest {
         .await
         .expect("Failed to connect federation");
     }
+
+    /// Return all online PeerIds
+    pub fn online_peer_ids(&self) -> impl Iterator<Item = PeerId> {
+        // we can assume this ordering since peers are started in ascending order
+        (0..(self.num_peers - self.num_offline)).map(PeerId::from)
+    }
 }
 
 /// Builder struct for creating a `FederationTest`.
@@ -166,11 +174,12 @@ impl FederationTestBuilder {
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
         primary_module_kind: ModuleKind,
+        num_offline: u16,
     ) -> FederationTestBuilder {
         let num_peers = 4;
         Self {
             num_peers,
-            num_offline: 1,
+            num_offline,
             base_port: block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
                 .expect("Failed to allocate a port range"),
             primary_module_kind,
@@ -304,6 +313,8 @@ impl FederationTestBuilder {
             client_init: self.client_init,
             primary_module_kind: self.primary_module_kind,
             _task: task_group,
+            num_peers: self.num_peers,
+            num_offline: self.num_offline,
         }
     }
 }

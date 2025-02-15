@@ -115,7 +115,7 @@ where
     let fixtures = fixtures();
     let other_ln = FakeLightningTest::new();
 
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
     fed.connect_gateway(&gateway).await;
     let user_client = fed.new_client().await;
@@ -138,8 +138,8 @@ where
     B: Future<Output = anyhow::Result<()>>,
 {
     let fixtures = fixtures();
-    let fed1 = fixtures.new_default_fed().await;
-    let fed2 = fixtures.new_default_fed().await;
+    let fed1 = fixtures.new_fed_degraded().await;
+    let fed2 = fixtures.new_fed_degraded().await;
     let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
 
     f(gateway, fed1, fed2, fixtures.bitcoin()).await?;
@@ -982,7 +982,7 @@ async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, m
 #[tokio::test(flavor = "multi_thread")]
 async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
 
     let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
 
@@ -1026,7 +1026,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
 #[tokio::test(flavor = "multi_thread")]
 async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
 
     let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
 
@@ -1070,7 +1070,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
 
     let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
 
@@ -1126,8 +1126,8 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn gateway_read_payment_log() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed1 = fixtures.new_default_fed().await;
-    let fed2 = fixtures.new_default_fed().await;
+    let fed1 = fixtures.new_fed_degraded().await;
+    let fed2 = fixtures.new_fed_degraded().await;
     let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
     fed1.connect_gateway(&gateway).await;
     fed2.connect_gateway(&gateway).await;

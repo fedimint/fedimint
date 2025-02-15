@@ -81,7 +81,7 @@ async fn pay_invoice(
 #[tokio::test(flavor = "multi_thread")]
 async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
@@ -143,7 +143,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
 #[tokio::test(flavor = "multi_thread")]
 async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
@@ -222,7 +222,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let gw = gateway(&fixtures, &fed).await;
     let client = fed.new_client().await;
     let dummy_module = client.get_first_module::<DummyClientModule>()?;
@@ -290,7 +290,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
@@ -389,7 +389,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
@@ -518,7 +518,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let gw = gateway(&fixtures, &fed).await;
     let (client1, client2) = fed.two_clients().await;
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
@@ -594,7 +594,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let gw = gateway(&fixtures, &fed).await;
     let client1 = fed.new_client().await;
 
