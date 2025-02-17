@@ -1465,7 +1465,15 @@
 <a href="#1464" id="1464">1464</a>
 <a href="#1465" id="1465">1465</a>
 <a href="#1466" id="1466">1466</a>
-<a href="#1467" id="1467">1467</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a></pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1815,6 +1823,11 @@
         }
 
         <span class="kw">if </span>!skip_setup {
+            <span class="comment">// we don't guarantee backwards-compatibility for dkg, so we use the
+            // fedimint-cli version that matches fedimintd
+            </span><span class="kw">let </span>(original_fedimint_cli_path, original_fm_mint_client) =
+                <span class="kw">crate</span>::util::use_matching_fedimint_cli_for_dkg().<span class="kw">await</span><span class="question-mark">?</span>;
+
             <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
             <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
                 run_cli_dkg(params, endpoints).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1823,6 +1836,9 @@
                 // setup while fedimint-cli &lt;= v0.2.x is supported
                 </span>run_client_dkg(admin_clients, params).<span class="kw">await</span><span class="question-mark">?</span>;
             }
+
+            <span class="comment">// we're done with dkg, so we can reset the fedimint-cli version
+            </span><span class="kw">crate</span>::util::use_fedimint_cli(original_fedimint_cli_path, original_fm_mint_client);
 
             <span class="comment">// move configs to config directory
             </span><span class="kw">let </span>client_dir = utf8(<span class="kw-2">&amp;</span>process_mgr.globals.FM_CLIENT_DIR);

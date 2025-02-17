@@ -1100,10 +1100,59 @@
 <a href="#1099" id="1099">1099</a>
 <a href="#1100" id="1100">1100</a>
 <a href="#1101" id="1101">1101</a>
-<a href="#1102" id="1102">1102</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::ops::ControlFlow;
+<span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::process::Stdio;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1132,8 +1181,9 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::{
     FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIND_BASE_EXECUTABLE_ENV,
-    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_DEVIMINT_CMD_INHERIT_STDERR_ENV,
-    FM_ELECTRS_BASE_EXECUTABLE_ENV, FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
+    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_CLIENT_DIR_ENV,
+    FM_DEVIMINT_CMD_INHERIT_STDERR_ENV, FM_ELECTRS_BASE_EXECUTABLE_ENV,
+    FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
     FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
     FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_LND_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
@@ -2171,6 +2221,52 @@
 <span class="doccomment">/// Returns true if running backwards-compatibility tests
 </span><span class="kw">pub fn </span>is_backwards_compatibility_test() -&gt; bool {
     is_env_var_set(FM_BACKWARDS_COMPATIBILITY_TEST_ENV)
+}
+
+<span class="doccomment">/// Sets the fedimint-cli binary to match the fedimintd's version, which is
+/// needed for running DKG. Returns the original fedimint-cli path and mint
+/// client alias so the caller can reset the fedimint-cli version after DKG
+</span><span class="kw">pub async fn </span>use_matching_fedimint_cli_for_dkg() -&gt; <span class="prelude-ty">Result</span>&lt;(String, String)&gt; {
+    <span class="kw">let </span>pkg_version = semver::Version::parse(<span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>))<span class="question-mark">?</span>;
+    <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>original_fedimint_cli_path = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">" "</span>);
+
+    <span class="kw">if </span>pkg_version == fedimintd_version {
+        <span class="comment">// we're on the current version if the fedimintd version is the same as the
+        // package version. to use the current version of `fedimint-cli` built by cargo,
+        // we need to unset FM_FEDIMINT_CLI_BASE_EXECUTABLE
+        </span>std::env::remove_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV);
+    } <span class="kw">else </span>{
+        <span class="kw">let </span>parsed_fedimintd_version = fedimintd_version.to_string().replace([<span class="string">'-'</span>, <span class="string">'.'</span>], <span class="string">"_"</span>);
+
+        <span class="comment">// matches format defined by nix_binary_version_var_name in scripts/_common.sh
+        </span><span class="kw">let </span>fedimint_cli_path_var = <span class="macro">format!</span>(<span class="string">"fm_bin_fedimint_cli_v{parsed_fedimintd_version}"</span>);
+        <span class="kw">let </span>fedimint_cli_path = std::env::var(fedimint_cli_path_var)<span class="question-mark">?</span>;
+        std::env::set_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, fedimint_cli_path);
+    }
+
+    <span class="kw">let </span>original_fm_mint_client = std::env::var(FM_MINT_CLIENT_ENV)<span class="question-mark">?</span>;
+    <span class="kw">let </span>fm_client_dir = std::env::var(FM_CLIENT_DIR_ENV)<span class="question-mark">?</span>;
+    <span class="kw">let </span>fm_client_dir_path_buf: PathBuf = PathBuf::from(fm_client_dir);
+
+    <span class="kw">let </span>fm_mint_client: String = <span class="macro">format!</span>(
+        <span class="string">"{fedimint_cli} --data-dir {datadir}"</span>,
+        fedimint_cli = <span class="kw">crate</span>::util::get_fedimint_cli_path().join(<span class="string">" "</span>),
+        datadir = <span class="kw">crate</span>::vars::utf8(<span class="kw-2">&amp;</span>fm_client_dir_path_buf)
+    );
+    std::env::set_var(FM_MINT_CLIENT_ENV, fm_mint_client);
+
+    <span class="prelude-val">Ok</span>((original_fedimint_cli_path, original_fm_mint_client))
+}
+
+<span class="doccomment">/// Sets the fedimint-cli and mint client alias
+</span><span class="kw">pub fn </span>use_fedimint_cli(original_fedimint_cli_path: String, original_fm_mint_client: String) {
+    std::env::set_var(
+        FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
+        original_fedimint_cli_path,
+    );
+
+    std::env::set_var(FM_MINT_CLIENT_ENV, original_fm_mint_client);
 }
 
 <span class="doccomment">/// Parses a version string returned from clap
