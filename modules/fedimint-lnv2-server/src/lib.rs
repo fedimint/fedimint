@@ -215,9 +215,7 @@ impl ServerModuleInit for LightningInit {
             .iter()
             .map(|peer| {
                 let cfg = LightningConfig {
-                    local: LightningConfigLocal {
-                        bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-                    },
+                    local: LightningConfigLocal,
                     consensus: LightningConfigConsensus {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
@@ -243,9 +241,7 @@ impl ServerModuleInit for LightningInit {
         let (polynomial, sks) = peers.run_dkg_g1().await?;
 
         let server = LightningConfig {
-            local: LightningConfigLocal {
-                bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-            },
+            local: LightningConfigLocal,
             consensus: LightningConfigConsensus {
                 tpe_agg_pk: tpe::AggregatePublicKey(polynomial[0].to_affine()),
                 tpe_pks: peers
