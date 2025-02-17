@@ -273,6 +273,13 @@ else
       continue
     fi
     for binary in "${binaries[@]}" ; do
+      # one approach
+      # build same fedimint-cli binary version if it's fedimintd
+      # hacky and gross, but may unblock getting things to work
+      if [ "$binary" == "fedimintd" ]; then
+        var_name=$(nix_binary_version_var_name "fedimint-cli" "$version")
+        export "${var_name}=$(nix_build_binary_for_version "fedimint-cli" "$version")"
+      fi
       var_name=$(nix_binary_version_var_name "$binary" "$version")
       export "${var_name}=$(nix_build_binary_for_version "$binary" "$version")"
     done

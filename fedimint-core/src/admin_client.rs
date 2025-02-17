@@ -131,11 +131,32 @@ pub struct ConfigGenParamsConsensus {
     pub modules: ServerModuleConfigGenParamsRegistry,
 }
 
+/// The config gen params that need to be in consensus, sent by the config gen
+/// leader to all the other guardians
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ConfigGenParamsConsensusLegacy {
+    /// Endpoints of all servers
+    pub peers: BTreeMap<PeerId, PeerServerParams>,
+    /// Guardian-defined key-value pairs that will be passed to the client
+    pub meta: BTreeMap<String, String>,
+    /// Module init params (also contains local params from us)
+    pub modules: ServerModuleConfigGenParamsRegistry,
+}
+
 /// The config gen params response which includes our peer id
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ConfigGenParamsResponse {
     /// The same for all peers
     pub consensus: ConfigGenParamsConsensus,
+    /// Our id (might change if new peers join)
+    pub our_current_id: PeerId,
+}
+
+/// The config gen params response which includes our peer id
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ConfigGenParamsResponseLegacy {
+    /// The same for all peers
+    pub consensus: ConfigGenParamsConsensusLegacy,
     /// Our id (might change if new peers join)
     pub our_current_id: PeerId,
 }
