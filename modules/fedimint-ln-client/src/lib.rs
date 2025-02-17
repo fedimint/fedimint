@@ -58,14 +58,14 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
 };
 use fedimint_derive_secret::ChildId;
+use fedimint_lightning::common::Preimage;
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
     OutgoingContract, OutgoingContractAccount, OutgoingContractData,
 };
 use fedimint_ln_common::contracts::{
-    Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
-    PreimageKey,
+    Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, PreimageKey,
 };
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -884,7 +884,7 @@ impl LightningClientModule {
         expiry_time: Option<u64>,
         src_node_id: secp256k1::PublicKey,
         short_channel_id: u64,
-        route_hints: &[fedimint_ln_common::route_hints::RouteHint],
+        route_hints: &[fedimint_lightning::common::RouteHint],
         network: Network,
     ) -> anyhow::Result<(
         OperationId,

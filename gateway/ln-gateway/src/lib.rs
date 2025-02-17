@@ -71,6 +71,7 @@ use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
 use fedimint_gwv2_client::events::compute_lnv2_stats;
 use fedimint_gwv2_client::{GatewayClientModuleV2, IGatewayClientV2, EXPIRATION_DELTA_MINIMUM_V2};
+use fedimint_lightning::common::Preimage;
 use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
@@ -82,7 +83,7 @@ use fedimint_lightning::{
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-use fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
+use fedimint_ln_common::contracts::IdentifiableContract;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{

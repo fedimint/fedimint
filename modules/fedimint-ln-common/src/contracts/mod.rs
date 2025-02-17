@@ -8,6 +8,7 @@ use bitcoin::hashes::{hash_newtype, Hash as BitcoinHash};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{secp256k1, OutPoint};
+use fedimint_lightning::common::Preimage;
 use serde::{Deserialize, Serialize};
 
 /// Anything representing a contract which thus has an associated [`ContractId`]
@@ -115,9 +116,6 @@ impl Decodable for ContractId {
         ))
     }
 }
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Preimage(pub [u8; 32]);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PreimageKey(#[serde(with = "serde_big_array::BigArray")] pub [u8; 33]);

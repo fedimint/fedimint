@@ -37,6 +37,7 @@ use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint};
 use fedimint_derive_secret::ChildId;
+use fedimint_lightning::common::{Preimage, RouteHint};
 use fedimint_lightning::{
     InterceptPaymentRequest, InterceptPaymentResponse, LightningContext, LightningRpcError,
     PayInvoiceResponse,
@@ -52,8 +53,7 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-use fedimint_ln_common::contracts::{ContractId, Preimage};
-use fedimint_ln_common::route_hints::RouteHint;
+use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::{
     create_gateway_remove_message, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,

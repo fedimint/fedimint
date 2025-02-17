@@ -34,6 +34,7 @@ use fedimint_gwv2_client::events::{
     OutgoingPaymentStarted, OutgoingPaymentSucceeded,
 };
 use fedimint_gwv2_client::{FinalReceiveState, GatewayClientModuleV2};
+use fedimint_lightning::common::{Preimage, PrunedInvoice};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -44,8 +45,8 @@ use fedimint_ln_client::{
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
-use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput, PrunedInvoice};
+use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, PreimageKey};
+use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput};
 use fedimint_ln_server::LightningInit;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;

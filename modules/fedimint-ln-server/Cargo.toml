@@ -22,6 +22,7 @@ bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-lightning = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }

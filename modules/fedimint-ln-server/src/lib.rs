@@ -32,6 +32,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, Amount, InPoint, NumPeersExt, OutPoint,
     PeerId,
 };
+use fedimint_lightning::common::Preimage;
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
@@ -40,8 +41,7 @@ use fedimint_ln_common::config::{
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::{
     Contract, ContractId, ContractOutcome, DecryptedPreimage, DecryptedPreimageStatus,
-    EncryptedPreimage, FundedContract, IdentifiableContract, Preimage, PreimageDecryptionShare,
-    PreimageKey,
+    EncryptedPreimage, FundedContract, IdentifiableContract, PreimageDecryptionShare, PreimageKey,
 };
 use fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
@@ -1261,6 +1261,7 @@ mod tests {
     use fedimint_core::secp256k1::{generate_keypair, PublicKey};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, InPoint, OutPoint, PeerId, TransactionId};
+    use fedimint_lightning::common::Preimage;
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
         LightningGenParamsLocal, Network,
@@ -1270,8 +1271,7 @@ mod tests {
     };
     use fedimint_ln_common::contracts::outgoing::OutgoingContract;
     use fedimint_ln_common::contracts::{
-        DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, Preimage,
-        PreimageKey,
+        DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract, PreimageKey,
     };
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
     use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleShared as _};

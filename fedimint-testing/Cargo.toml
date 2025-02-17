@@ -31,7 +31,6 @@ fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.7.0-alpha" }
-fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-portalloc = { workspace = true }
 fedimint-rocksdb = { workspace = true }

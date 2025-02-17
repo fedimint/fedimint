@@ -635,6 +635,7 @@ mod fedimint_migration_tests {
     use fedimint_core::encoding::Encodable;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TransactionId};
+    use fedimint_lightning::common::{RouteHint, RouteHintHop};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
     use fedimint_ln_client::pay::{
         LightningPayCommon, LightningPayStates, PayInvoicePayload, PaymentData,
@@ -654,7 +655,6 @@ mod fedimint_migration_tests {
         outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract,
         IdentifiableContract, PreimageDecryptionShare, PreimageKey,
     };
-    use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
     use fedimint_ln_common::{
         ContractAccount, LightningCommonInit, LightningGateway, LightningGatewayRegistration,
         LightningOutputOutcomeV0,

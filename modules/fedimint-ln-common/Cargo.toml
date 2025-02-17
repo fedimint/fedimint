@@ -23,6 +23,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-lightning = { workspace = true }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }

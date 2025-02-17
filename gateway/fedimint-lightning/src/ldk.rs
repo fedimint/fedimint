@@ -12,7 +12,6 @@ use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
 use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
-use fedimint_ln_common::contracts::Preimage;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::routing::gossip::NodeAlias;
@@ -28,6 +27,7 @@ use tracing::{error, info};
 use super::{
     ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
 };
+use crate::common::Preimage;
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,

@@ -12,6 +12,7 @@ use bitcoin::secp256k1::{self, PublicKey, SecretKey};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
+use fedimint_lightning::common::{Preimage, PrunedInvoice, RouteHint};
 use fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
@@ -19,9 +20,6 @@ use fedimint_lightning::{
     LightningRpcError, ListActiveChannelsResponse, OpenChannelRequest, OpenChannelResponse,
     PayInvoiceResponse, RouteHtlcStream, SendOnchainRequest, SendOnchainResponse,
 };
-use fedimint_ln_common::contracts::Preimage;
-use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_ln_common::PrunedInvoice;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,

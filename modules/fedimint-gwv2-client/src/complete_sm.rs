@@ -4,7 +4,8 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_lightning::{InterceptPaymentResponse, PaymentAction, Preimage};
+use fedimint_lightning::common::Preimage;
+use fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
 use fedimint_lnv2_common::contracts::PaymentImage;
 
 use super::events::CompleteLightningPaymentSucceeded;

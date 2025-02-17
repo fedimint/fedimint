@@ -12,8 +12,9 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
+use fedimint_lightning::common::Preimage;
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
-use fedimint_ln_common::contracts::{ContractId, DecryptedPreimageStatus, Preimage};
+use fedimint_ln_common::contracts::{ContractId, DecryptedPreimageStatus};
 use fedimint_ln_common::federation_endpoint_constants::{
     ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
     AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,

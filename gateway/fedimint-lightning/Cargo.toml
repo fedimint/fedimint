@@ -19,8 +19,6 @@ bitcoin = { workspace = true }
 fedimint-bip39 = { version = "=0.7.0-alpha", path = "../../fedimint-bip39" }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
-# TODO: Remove dependency on LN module
-fedimint-ln-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 ldk-node = "0.4.3"

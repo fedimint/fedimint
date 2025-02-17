@@ -8,9 +8,6 @@ use async_trait::async_trait;
 use bitcoin::hashes::Hash;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
-use fedimint_ln_common::contracts::Preimage;
-use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
-use fedimint_ln_common::PrunedInvoice;
 use hex::ToHex;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc;
@@ -43,6 +40,7 @@ use super::{
     ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
     MAX_LIGHTNING_RETRIES,
 };
+use crate::common::{Preimage, PrunedInvoice, RouteHint, RouteHintHop};
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
@@ -1348,9 +1346,7 @@ impl ILnRpcClient for GatewayLndClient {
     }
 }
 
-fn route_hints_to_lnd(
-    route_hints: &[fedimint_ln_common::route_hints::RouteHint],
-) -> Vec<tonic_lnd::lnrpc::RouteHint> {
+fn route_hints_to_lnd(route_hints: &[RouteHint]) -> Vec<tonic_lnd::lnrpc::RouteHint> {
     route_hints
         .iter()
         .map(|hint| tonic_lnd::lnrpc::RouteHint {
