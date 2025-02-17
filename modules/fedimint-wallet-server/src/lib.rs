@@ -297,6 +297,7 @@ impl ServerModuleInit for WalletInit {
             args.our_peer_id(),
             args.module_api().clone(),
             &args.shared(),
+            args.bitcoin_rpc(),
         )
         .await?
         .into())
@@ -327,9 +328,9 @@ impl ServerModuleInit for WalletInit {
                     peers.to_num_peers().threshold(),
                     params.consensus.network,
                     params.consensus.finality_delay,
-                    params.local.bitcoin_rpc.clone(),
                     params.consensus.client_default_bitcoin_rpc.clone(),
                     params.consensus.fee_consensus,
+                    params.local.bitcoin_rpc.clone(),
                 );
                 (*id, cfg)
             })
@@ -363,9 +364,9 @@ impl ServerModuleInit for WalletInit {
             peers.num_peers().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
-            params.local.bitcoin_rpc.clone(),
             params.consensus.client_default_bitcoin_rpc.clone(),
             params.consensus.fee_consensus,
+            params.local.bitcoin_rpc.clone(),
         );
 
         Ok(wallet_cfg.to_erased())
@@ -1025,8 +1026,9 @@ impl Wallet {
         our_peer_id: PeerId,
         module_api: DynModuleApi,
         shared_bitcoin: &ServerModuleSharedBitcoin,
+        bitcoin_rpc: &BitcoinRpcConfig,
     ) -> anyhow::Result<Wallet> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
+        let btc_rpc = create_bitcoind(bitcoin_rpc)?;
         Ok(Self::new_with_bitcoind(
             cfg,
             db,

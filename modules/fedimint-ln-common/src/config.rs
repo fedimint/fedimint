@@ -45,10 +45,7 @@ pub struct LightningConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct LightningConfigLocal {
-    /// Configures which bitcoin RPC to use
-    pub bitcoin_rpc: BitcoinRpcConfig,
-}
+pub struct LightningConfigLocal;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningConfigConsensus {

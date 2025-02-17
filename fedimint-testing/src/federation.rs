@@ -16,6 +16,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
@@ -155,6 +156,7 @@ pub struct FederationTestBuilder {
     params: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
+    bitcoin_rpc: BitcoinRpcConfig,
 }
 
 impl FederationTestBuilder {
@@ -163,6 +165,7 @@ impl FederationTestBuilder {
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
         primary_module_kind: ModuleKind,
+        bitcoin_rpc: BitcoinRpcConfig,
     ) -> FederationTestBuilder {
         let num_peers = 4;
         Self {
@@ -175,6 +178,7 @@ impl FederationTestBuilder {
             params,
             server_init,
             client_init,
+            bitcoin_rpc,
         }
     }
 
@@ -231,6 +235,7 @@ impl FederationTestBuilder {
             let subgroup = task_group.make_subgroup();
             let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
             let code_version_str = env!("CARGO_PKG_VERSION");
+            let bitcoin_rpc = self.bitcoin_rpc.clone();
 
             task_group.spawn("fedimintd", move |_| async move {
                 consensus::run(
@@ -243,6 +248,7 @@ impl FederationTestBuilder {
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
+                    bitcoin_rpc,
                 )
                 .await
                 .expect("Could not initialise consensus");
