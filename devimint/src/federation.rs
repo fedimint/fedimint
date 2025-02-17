@@ -348,6 +348,11 @@ impl Federation {
         }
 
         if !skip_setup {
+            // we don't guarantee backwards-compatibility for dkg, so we use the
+            // fedimint-cli version that matches fedimintd
+            let (original_fedimint_cli_path, original_fm_mint_client) =
+                crate::util::use_matching_fedimint_cli_for_dkg().await?;
+
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
             if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
                 run_cli_dkg(params, endpoints).await?;
@@ -356,6 +361,9 @@ impl Federation {
                 // setup while fedimint-cli <= v0.2.x is supported
                 run_client_dkg(admin_clients, params).await?;
             }
+
+            // we're done with dkg, so we can reset the fedimint-cli version
+            crate::util::use_fedimint_cli(original_fedimint_cli_path, original_fm_mint_client);
 
             // move configs to config directory
             let client_dir = utf8(&process_mgr.globals.FM_CLIENT_DIR);

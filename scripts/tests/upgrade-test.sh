@@ -68,7 +68,13 @@ for upgrade_path in "${upgrade_paths[@]}"; do
         # Add current binaries from PATH
         fedimintd_paths+=("fedimintd")
       else
-        fedimintd_paths+=("$(nix_build_binary_for_version 'fedimintd' "$version")")
+        # for dkg we need to use the fedimint-cli version that matches fedimintd
+        var_name=$(nix_binary_version_var_name "fedimint-cli" "$version")
+        export "${var_name}=$(nix_build_binary_for_version "fedimint-cli" "$version")"
+
+        var_name=$(nix_binary_version_var_name "fedimintd" "$version")
+        export "${var_name}=$(nix_build_binary_for_version "fedimintd" "$version")"
+        fedimintd_paths+=("${!var_name}")
       fi
     done
 
