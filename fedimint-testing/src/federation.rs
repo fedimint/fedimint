@@ -8,7 +8,7 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::module::init::ClientModuleInitRegistry;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client_module::AdminCreds;
-use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
+use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerConnectionInfo};
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
@@ -18,15 +18,18 @@ use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
+use fedimint_core::net::peers::IP2PConnections;
 use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
-use fedimint_server::config::api::ConfigGenParamsLocal;
-use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+use fedimint_server::config::{
+    gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ServerConfig,
+};
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
-use fedimint_server::net::p2p_connector::parse_host_port;
+use fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
+use fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
 use ln_gateway::rpc::ConnectFedPayload;
 use ln_gateway::Gateway;
 use tokio_rustls::rustls;
@@ -217,14 +220,14 @@ impl FederationTestBuilder {
             ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
 
         let task_group = TaskGroup::new();
-        for (peer_id, config) in configs.clone() {
+        for (peer_id, cfg) in configs.clone() {
             let p2p_bind_addr = params.get(&peer_id).expect("Must exist").local.p2p_bind;
             let api_bind_addr = params.get(&peer_id).expect("Must exist").local.api_bind;
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
 
-            let instances = config.consensus.iter_module_instances();
+            let instances = cfg.consensus.iter_module_instances();
             let decoders = self.server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
@@ -232,11 +235,31 @@ impl FederationTestBuilder {
             let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
             let code_version_str = env!("CARGO_PKG_VERSION");
 
+            let connector = TlsTcpConnector::new(
+                cfg.tls_config(),
+                p2p_bind_addr,
+                cfg.local.p2p_endpoints.clone(),
+                cfg.local.identity,
+            )
+            .await
+            .into_dyn();
+
+            let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+
+            let connections = ReconnectP2PConnections::new(
+                cfg.local.identity,
+                connector,
+                &task_group,
+                p2p_status_senders,
+            )
+            .into_dyn();
+
             task_group.spawn("fedimintd", move |_| async move {
                 consensus::run(
-                    p2p_bind_addr,
+                    connections,
+                    p2p_status_receivers,
                     api_bind_addr,
-                    config.clone(),
+                    cfg.clone(),
                     db.clone(),
                     module_init_registry,
                     &subgroup,
@@ -305,19 +328,19 @@ pub fn local_config_gen_params(
         .collect();
 
     // Generate the P2P and API URL on 2 different ports for each peer
-    let connections: BTreeMap<PeerId, PeerServerParams> = peers
+    let connections: BTreeMap<PeerId, PeerConnectionInfo> = peers
         .iter()
         .map(|peer| {
             let peer_port = base_port + u16::from(*peer) * 2;
             let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
             let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
-            let params: PeerServerParams = PeerServerParams {
-                cert: tls_keys[peer].0.clone(),
+            let params = PeerConnectionInfo {
+                cert: tls_keys[peer].0.clone().0,
                 p2p_url: p2p_url.parse().expect("Should parse"),
                 api_url: api_url.parse().expect("Should parse"),
                 name: format!("peer-{}", peer.to_usize()),
-                status: None,
+                federation_name: None,
             };
             (*peer, params)
         })
@@ -336,7 +359,6 @@ pub fn local_config_gen_params(
                     api_auth: ApiAuth("pass".to_string()),
                     p2p_bind: p2p_bind.parse().expect("Valid address"),
                     api_bind: api_bind.parse().expect("Valid address"),
-                    max_connections: 10,
                 },
                 consensus: ConfigGenParamsConsensus {
                     peers: connections.clone(),

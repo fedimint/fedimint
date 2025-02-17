@@ -16,7 +16,7 @@ use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError, PeerError};
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
-    ServerStatus,
+    ServerStatus, ServerStatusLegacy,
 };
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
@@ -492,6 +492,21 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Must be called first before any other calls to the API
     async fn set_password(&self, auth: ApiAuth) -> FederationResult<()>;
 
+    async fn server_status(&self, auth: ApiAuth) -> FederationResult<ServerStatus>;
+
+    async fn set_local_params(
+        &self,
+        name: String,
+        federation_name: Option<String>,
+        auth: ApiAuth,
+    ) -> FederationResult<String>;
+
+    async fn add_peer_connection_info(
+        &self,
+        info: String,
+        auth: ApiAuth,
+    ) -> FederationResult<String>;
+
     /// During config gen, sets the server connection containing our endpoints
     ///
     /// Optionally sends our server info to the config gen leader using
@@ -541,7 +556,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
-    async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()>;
+    async fn start_dkg(&self, auth: ApiAuth) -> FederationResult<()>;
 
     /// After DKG, returns the hash of the consensus config tweaked with our id.
     /// We need to share this with all other peers to complete verification.
@@ -1321,7 +1336,7 @@ pub enum P2PConnectionStatus {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StatusResponse {
-    pub server: ServerStatus,
+    pub server: ServerStatusLegacy,
     pub federation: Option<FederationStatus>,
 }
 

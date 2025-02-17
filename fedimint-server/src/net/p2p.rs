@@ -17,7 +17,7 @@ use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use futures::future::select_all;
-use futures::{FutureExt, StreamExt};
+use futures::FutureExt;
 use tokio::sync::watch;
 use tracing::{info, info_span, warn, Instrument};
 
@@ -25,17 +25,34 @@ use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_CO
 use crate::net::p2p_connection::DynP2PConnection;
 use crate::net::p2p_connector::DynP2PConnector;
 
+pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>;
+pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>;
+
+pub fn p2p_status_channels(peers: Vec<PeerId>) -> (P2PStatusSenders, P2PStatusReceivers) {
+    let mut senders = BTreeMap::new();
+    let mut receivers = BTreeMap::new();
+
+    for peer in peers {
+        let (sender, receiver) = watch::channel(P2PConnectionStatus::Disconnected);
+
+        senders.insert(peer, sender);
+        receivers.insert(peer, receiver);
+    }
+
+    (senders, receivers)
+}
+
 #[derive(Clone)]
 pub struct ReconnectP2PConnections<M> {
     connections: BTreeMap<PeerId, P2PConnection<M>>,
 }
 
 impl<M: Send + 'static> ReconnectP2PConnections<M> {
-    pub async fn new(
+    pub fn new(
         identity: PeerId,
         connector: DynP2PConnector<M>,
         task_group: &TaskGroup,
-        mut status_channels: Option<BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>>,
+        status_senders: P2PStatusSenders,
     ) -> Self {
         let mut connection_senders = BTreeMap::new();
         let mut connections = BTreeMap::new();
@@ -50,11 +67,10 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
                 peer_id,
                 connector.clone(),
                 connection_receiver,
-                status_channels.as_mut().map(|channels| {
-                    channels
-                        .remove(&peer_id)
-                        .expect("No p2p status sender for peer {peer}")
-                }),
+                status_senders
+                    .get(&peer_id)
+                    .expect("No p2p status sender for peer {peer}")
+                    .clone(),
                 task_group,
             );
 
@@ -62,13 +78,11 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
             connections.insert(peer_id, connection);
         }
 
-        let mut listener = connector.listen().await;
-
         task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
-            info!(target: LOG_NET_PEER, "Shutting down listening task for p2p connections");
+            info!(target: LOG_NET_PEER, "Starting listening task for p2p connections");
 
             loop {
-                match listener.next().await.expect("Listener closed") {
+                match connector.accept().await {
                     Ok((peer, connection)) => {
                         if connection_senders
                             .get_mut(&peer)
@@ -159,7 +173,7 @@ impl<M: Send + 'static> P2PConnection<M> {
         peer_id: PeerId,
         connector: DynP2PConnector<M>,
         incoming_connections: Receiver<DynP2PConnection<M>>,
-        status_channel: Option<watch::Sender<P2PConnectionStatus>>,
+        status_sender: watch::Sender<P2PConnectionStatus>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
         let (outgoing_sender, outgoing_receiver) = bounded(1024);
@@ -180,7 +194,7 @@ impl<M: Send + 'static> P2PConnection<M> {
                         peer_id,
                         connector,
                         incoming_connections,
-                        status_channel,
+                        status_sender,
                     },
                     state: P2PConnectionSMState::Disconnected(api_networking_backoff()),
                 };
@@ -227,7 +241,7 @@ struct P2PConnectionSMCommon<M> {
     peer_id_str: String,
     connector: DynP2PConnector<M>,
     incoming_connections: Receiver<DynP2PConnection<M>>,
-    status_channel: Option<watch::Sender<P2PConnectionStatus>>,
+    status_sender: watch::Sender<P2PConnectionStatus>,
 }
 
 enum P2PConnectionSMState<M> {
@@ -239,16 +253,18 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
             P2PConnectionSMState::Disconnected(disconnected) => {
-                if let Some(channel) = &self.common.status_channel {
-                    channel.send(P2PConnectionStatus::Disconnected).ok();
-                }
+                self.common
+                    .status_sender
+                    .send(P2PConnectionStatus::Disconnected)
+                    .ok();
 
                 self.common.transition_disconnected(disconnected).await
             }
             P2PConnectionSMState::Connected(connected) => {
-                if let Some(channel) = &self.common.status_channel {
-                    channel.send(P2PConnectionStatus::Connected).ok();
-                }
+                self.common
+                    .status_sender
+                    .send(P2PConnectionStatus::Connected)
+                    .ok();
 
                 self.common.transition_connected(connected).await
             }

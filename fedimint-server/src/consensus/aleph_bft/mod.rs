@@ -6,17 +6,7 @@ pub mod network;
 pub mod spawner;
 
 use aleph_bft::NodeIndex;
-use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::PeerId;
-use serde::{Deserialize, Serialize};
-
-/// The majority of these messages need to be delivered to the intended
-/// recipient for Aleph BFT to make progress. However, Aleph BFT does
-/// not assume a reliable network layer and implements all necessary retry
-/// logic. Therefore, the network layer can discard a message if its
-/// intended recipient is offline.
-#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
-pub struct Message(Vec<u8>);
 
 pub fn to_peer_id(node_index: NodeIndex) -> PeerId {
     u16::try_from(usize::from(node_index))

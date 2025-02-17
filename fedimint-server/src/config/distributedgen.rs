@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin::hashes::Hash as BitcoinHash;
 use bls12_381::Scalar;
-use fedimint_core::config::{DkgGroup, DkgMessage, DkgPeerMessage, ISupportedDkgMessage};
+use fedimint_core::config::{DkgGroup, DkgMessage, ISupportedDkgMessage, P2PMessage};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::PeerHandle;
@@ -251,7 +251,7 @@ pub async fn run_dkg<G: DkgGroup>(
     num_peers: NumPeers,
     identity: PeerId,
     generator: G,
-    connections: &DynP2PConnections<DkgPeerMessage>,
+    connections: &DynP2PConnections<P2PMessage>,
 ) -> anyhow::Result<(Vec<G>, Scalar)>
 where
     DkgMessage<G>: ISupportedDkgMessage,
@@ -261,7 +261,7 @@ where
     connections
         .send(
             Recipient::Everyone,
-            DkgPeerMessage::DistributedGen(initial_message.to_msg()),
+            P2PMessage::DistributedGen(initial_message.to_msg()),
         )
         .await;
 
@@ -273,7 +273,7 @@ where
                 .context("Unexpected shutdown of p2p connections")?;
 
             let message = match message {
-                DkgPeerMessage::DistributedGen(message) => message,
+                P2PMessage::DistributedGen(message) => message,
                 _ => anyhow::bail!("Wrong message received: {message:?}"),
             };
 
@@ -282,7 +282,7 @@ where
                     connections
                         .send(
                             Recipient::Everyone,
-                            DkgPeerMessage::DistributedGen(message.to_msg()),
+                            P2PMessage::DistributedGen(message.to_msg()),
                         )
                         .await;
                 }
@@ -291,7 +291,7 @@ where
                         connections
                             .send(
                                 Recipient::Peer(peer),
-                                DkgPeerMessage::DistributedGen(message.to_msg()),
+                                P2PMessage::DistributedGen(message.to_msg()),
                             )
                             .await;
                     }
@@ -394,7 +394,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
         self.connections
             .send(
                 Recipient::Everyone,
-                DkgPeerMessage::Encodable(data.consensus_encode_to_vec()),
+                P2PMessage::Encodable(data.consensus_encode_to_vec()),
             )
             .await;
 
@@ -408,7 +408,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
                 .context("Unexpected shutdown of p2p connections")?;
 
             match message {
-                DkgPeerMessage::Encodable(bytes) => {
+                P2PMessage::Encodable(bytes) => {
                     peer_data.insert(
                         peer,
                         T::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())?,

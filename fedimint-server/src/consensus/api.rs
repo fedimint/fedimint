@@ -10,7 +10,7 @@ use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
     FederationStatus, GuardianConfigBackup, P2PConnectionStatus, PeerStatus, StatusResponse,
 };
-use fedimint_core::admin_client::ServerStatus;
+use fedimint_core::admin_client::{ServerStatus, ServerStatusLegacy};
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
@@ -28,9 +28,9 @@ use fedimint_core::endpoint_constants::{
     BACKUP_STATISTICS_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
     FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SERVER_STATUS_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -84,7 +84,8 @@ pub struct ConsensusApi {
     pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub shutdown_receiver: Receiver<Option<u64>>,
     pub shutdown_sender: Sender<Option<u64>>,
-    pub status_receivers: BTreeMap<PeerId, (Receiver<P2PConnectionStatus>, Receiver<Option<u64>>)>,
+    pub p2p_status_receivers: BTreeMap<PeerId, Receiver<P2PConnectionStatus>>,
+    pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
 }
@@ -219,9 +220,11 @@ impl ConsensusApi {
         let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
 
         let status_by_peer = self
-            .status_receivers
+            .p2p_status_receivers
             .iter()
-            .map(|(peer, (p2p_receiver, ci_receiver))| {
+            .map(|(peer, p2p_receiver)| {
+                let ci_receiver = self.ci_status_receivers.get(peer).unwrap();
+
                 let consensus_status = PeerStatus {
                     connection_status: *p2p_receiver.borrow(),
                     last_contribution: *ci_receiver.borrow(),
@@ -634,11 +637,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            SERVER_STATUS_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |_f: &ConsensusApi, _c, _v: ()| -> ServerStatus {
+                Ok(ServerStatus::ConsensusRunning)
+            }
+        },
+        api_endpoint! {
             STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 Ok(StatusResponse {
-                    server: ServerStatus::ConsensusRunning,
+                    server: ServerStatusLegacy::ConsensusRunning,
                     federation: Some(fedimint.get_federation_status().await?)
                 })
             }

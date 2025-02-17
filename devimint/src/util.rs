@@ -11,7 +11,7 @@ use std::{env, unreachable};
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use fedimint_api_client::api::StatusResponse;
 use fedimint_core::admin_client::{
-    ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
+    ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams, ServerStatus,
 };
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::is_env_var_set;
@@ -22,6 +22,7 @@ use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_DEVIMINT;
+use legacy_types::ConfigGenParamsResponseLegacy;
 use semver::Version;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
@@ -695,6 +696,97 @@ impl FedimintCli {
         .await
     }
 
+    pub async fn set_local_params_leader(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+        let json = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "set-local-params",
+            "Devimint Leader",
+            "--federation-name",
+            "Devimint Federation"
+        )
+        .out_json()
+        .await?;
+
+        Ok(serde_json::from_value(json)?)
+    }
+
+    pub async fn set_local_params_follower(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+        let json = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "set-local-params",
+            "Devimint Follower"
+        )
+        .out_json()
+        .await?;
+
+        Ok(serde_json::from_value(json)?)
+    }
+
+    pub async fn add_peer_connection_info(
+        self,
+        params: &str,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "add-peer-connection-info",
+            params
+        )
+        .run()
+        .await
+    }
+
+    pub async fn server_status(self, auth: &ApiAuth, endpoint: &str) -> Result<ServerStatus> {
+        let json = cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "server-status",
+        )
+        .out_json()
+        .await?;
+
+        Ok(serde_json::from_value(json)?)
+    }
+
+    pub async fn start_dkg(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "admin",
+            "config-gen",
+            "--ws",
+            endpoint,
+            "start-dkg"
+        )
+        .run()
+        .await
+    }
+
     pub async fn set_config_gen_params(
         self,
         auth: &ApiAuth,
@@ -724,6 +816,24 @@ impl FedimintCli {
         self,
         endpoint: &str,
     ) -> Result<ConfigGenParamsResponse> {
+        let result = cmd!(
+            self,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "consensus-config-gen-params"
+        )
+        .out_json()
+        .await
+        .context("non-json returned for consensus_config_gen_params")?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    pub async fn consensus_config_gen_params_legacy(
+        self,
+        endpoint: &str,
+    ) -> Result<ConfigGenParamsResponseLegacy> {
         let result = cmd!(
             self,
             "admin",
@@ -1147,4 +1257,34 @@ fn test_parse_clap_version() -> Result<()> {
     assert_eq!(expected_version, parse_clap_version(version_str));
 
     Ok(())
+}
+
+mod legacy_types {
+    use std::collections::BTreeMap;
+
+    use fedimint_core::admin_client::PeerServerParams;
+    use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
+    use fedimint_core::PeerId;
+    use serde::{Deserialize, Serialize};
+
+    /// The config gen params that need to be in consensus, sent by the config
+    /// gen leader to all the other guardians
+    #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+    pub struct ConfigGenParamsConsensusLegacy {
+        /// Endpoints of all servers
+        pub peers: BTreeMap<PeerId, PeerServerParams>,
+        /// Guardian-defined key-value pairs that will be passed to the client
+        pub meta: BTreeMap<String, String>,
+        /// Module init params (also contains local params from us)
+        pub modules: ServerModuleConfigGenParamsRegistry,
+    }
+
+    /// The config gen params response which includes our peer id
+    #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+    pub struct ConfigGenParamsResponseLegacy {
+        /// The same for all peers
+        pub consensus: ConfigGenParamsConsensusLegacy,
+        /// Our id (might change if new peers join)
+        pub our_current_id: PeerId,
+    }
 }

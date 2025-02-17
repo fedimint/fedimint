@@ -11,7 +11,7 @@ use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ServerStatus,
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ServerStatus, ServerStatusLegacy,
 };
 use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -44,7 +44,9 @@ use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{poll, poll_with_timeout, FedimintdCmd};
-use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0};
+use crate::version_constants::{
+    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_7_0_ALPHA,
+};
 use crate::{poll_eq, vars};
 
 #[derive(Clone)]
@@ -354,7 +356,10 @@ impl Federation {
                 crate::util::use_matching_fedimint_cli_for_dkg().await?;
 
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-            if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
+
+            if fedimint_cli_version >= *VERSION_0_7_0_ALPHA {
+                run_cli_dkg_v2(params, endpoints).await?;
+            } else if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
                 run_cli_dkg(params, endpoints).await?;
             } else {
                 // TODO(support:v0.2): old fedimint-cli can't do DKG commands. keep this old DKG
@@ -1071,7 +1076,7 @@ pub async fn run_cli_dkg(
         let status = crate::util::FedimintCli.ws_status(endpoint).await?;
         assert_eq!(
             status.server,
-            ServerStatus::AwaitingPassword,
+            ServerStatusLegacy::AwaitingPassword,
             "peer_id isn't waiting for password: {peer_id}"
         );
     }
@@ -1152,13 +1157,13 @@ pub async fn run_cli_dkg(
     assert_eq!(found_names, all_names);
 
     debug!(target: LOG_DEVIMINT, "Waiting for SharingConfigGenParams");
-    cli_wait_server_status(leader_endpoint, ServerStatus::SharingConfigGenParams).await?;
+    cli_wait_server_status(leader_endpoint, ServerStatusLegacy::SharingConfigGenParams).await?;
 
     debug!(target: LOG_DEVIMINT, "Getting consensus configs");
     let mut configs = vec![];
     for endpoint in endpoints.values() {
         let config = crate::util::FedimintCli
-            .consensus_config_gen_params(endpoint)
+            .consensus_config_gen_params_legacy(endpoint)
             .await?;
         configs.push(config);
     }
@@ -1178,7 +1183,7 @@ pub async fn run_cli_dkg(
     debug!(target: LOG_DEVIMINT, "Running DKG");
     let (dkg_results, leader_wait_result) = tokio::join!(
         join_all(dkg_results),
-        cli_wait_server_status(leader_endpoint, ServerStatus::VerifyingConfigs)
+        cli_wait_server_status(leader_endpoint, ServerStatusLegacy::VerifyingConfigs)
     );
     for result in dkg_results {
         result?;
@@ -1189,7 +1194,7 @@ pub async fn run_cli_dkg(
     debug!(target: LOG_DEVIMINT, "Verifying config hashes");
     let mut hashes = HashSet::new();
     for (peer_id, endpoint) in &endpoints {
-        cli_wait_server_status(endpoint, ServerStatus::VerifyingConfigs).await?;
+        cli_wait_server_status(endpoint, ServerStatusLegacy::VerifyingConfigs).await?;
         let hash = crate::util::FedimintCli
             .get_verify_config_hash(auth_for(peer_id), endpoint)
             .await?;
@@ -1203,8 +1208,81 @@ pub async fn run_cli_dkg(
         if let Err(e) = result {
             tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...");
         }
-        cli_wait_server_status(endpoint, ServerStatus::ConsensusRunning).await?;
+        cli_wait_server_status(endpoint, ServerStatusLegacy::ConsensusRunning).await?;
     }
+    Ok(())
+}
+
+pub async fn run_cli_dkg_v2(
+    params: HashMap<PeerId, ConfigGenParams>,
+    endpoints: BTreeMap<PeerId, String>,
+) -> Result<()> {
+    let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].local.api_auth };
+
+    for (peer, endpoint) in &endpoints {
+        let status = poll("awaiting-server-status", || async {
+            crate::util::FedimintCli
+                .server_status(auth_for(peer), endpoint)
+                .await
+                .map_err(ControlFlow::Continue)
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(status, ServerStatus::AwaitingLocalParams);
+    }
+
+    debug!(target: LOG_DEVIMINT, "Setting local parameters...");
+
+    let mut connection_info = BTreeMap::new();
+
+    for (peer, endpoint) in &endpoints {
+        let info = if peer.to_usize() == 0 {
+            crate::util::FedimintCli
+                .set_local_params_leader(auth_for(peer), endpoint)
+                .await?
+        } else {
+            crate::util::FedimintCli
+                .set_local_params_follower(auth_for(peer), endpoint)
+                .await?
+        };
+
+        connection_info.insert(peer, info);
+    }
+
+    debug!(target: LOG_DEVIMINT, "Exchanging peer connection info...");
+
+    for (peer, info) in connection_info {
+        for (p, endpoint) in &endpoints {
+            if p != peer {
+                crate::util::FedimintCli
+                    .add_peer_connection_info(&info, auth_for(p), endpoint)
+                    .await?;
+            }
+        }
+    }
+
+    debug!(target: LOG_DEVIMINT, "Starting DKG...");
+
+    for (peer, endpoint) in &endpoints {
+        crate::util::FedimintCli
+            .start_dkg(auth_for(peer), endpoint)
+            .await?;
+    }
+
+    for (peer, endpoint) in &endpoints {
+        let status = poll("awaiting-server-status", || async {
+            crate::util::FedimintCli
+                .server_status(auth_for(peer), endpoint)
+                .await
+                .map_err(ControlFlow::Continue)
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(status, ServerStatus::ConsensusRunning);
+    }
+
     Ok(())
 }
 
@@ -1228,7 +1306,7 @@ pub async fn run_client_dkg(
     for (peer_id, client) in &admin_clients {
         assert_eq!(
             client.status().await?.server,
-            ServerStatus::AwaitingPassword,
+            ServerStatusLegacy::AwaitingPassword,
             "peer_id isn't waiting for password: {peer_id}"
         );
     }
@@ -1313,7 +1391,7 @@ pub async fn run_client_dkg(
         names
     };
     assert_eq!(found_names, all_names);
-    wait_server_status(leader, ServerStatus::SharingConfigGenParams).await?;
+    wait_server_status(leader, ServerStatusLegacy::SharingConfigGenParams).await?;
 
     let mut configs = vec![];
     for client in admin_clients.values() {
@@ -1331,11 +1409,11 @@ pub async fn run_client_dkg(
     assert_eq!(ids.len(), admin_clients.len());
     let dkg_results = admin_clients
         .iter()
-        .map(|(peer_id, client)| client.run_dkg(auth_for(peer_id)));
+        .map(|(peer_id, client)| client.start_dkg(auth_for(peer_id)));
     debug!(target: LOG_DEVIMINT, "Running DKG");
     let (dkg_results, leader_wait_result) = tokio::join!(
         join_all(dkg_results),
-        wait_server_status(leader, ServerStatus::VerifyingConfigs)
+        wait_server_status(leader, ServerStatusLegacy::VerifyingConfigs)
     );
     for result in dkg_results {
         result?;
@@ -1345,7 +1423,7 @@ pub async fn run_client_dkg(
     // verify config hashes equal for all peers
     let mut hashes = HashSet::new();
     for (peer_id, client) in &admin_clients {
-        wait_server_status(client, ServerStatus::VerifyingConfigs).await?;
+        wait_server_status(client, ServerStatusLegacy::VerifyingConfigs).await?;
         hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).await?);
     }
     assert_eq!(hashes.len(), 1);
@@ -1353,7 +1431,7 @@ pub async fn run_client_dkg(
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
             tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...");
         }
-        wait_server_status(client, ServerStatus::ConsensusRunning).await?;
+        wait_server_status(client, ServerStatusLegacy::ConsensusRunning).await?;
     }
     Ok(())
 }
@@ -1428,7 +1506,10 @@ async fn cli_set_config_gen_params(
     Ok(())
 }
 
-async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus) -> Result<()> {
+async fn wait_server_status(
+    client: &DynGlobalApi,
+    expected_status: ServerStatusLegacy,
+) -> Result<()> {
     poll(
         &format!("waiting-server-status: {expected_status:?}"),
         || async {
@@ -1451,7 +1532,7 @@ async fn wait_server_status(client: &DynGlobalApi, expected_status: ServerStatus
     Ok(())
 }
 
-async fn cli_wait_server_status(endpoint: &str, expected_status: ServerStatus) -> Result<()> {
+async fn cli_wait_server_status(endpoint: &str, expected_status: ServerStatusLegacy) -> Result<()> {
     poll(
         &format!("waiting-server-status: {expected_status:?}"),
         || async {
