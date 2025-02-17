@@ -854,39 +854,8 @@
 <a href="#853" id="853">853</a>
 <a href="#854" id="854">854</a>
 <a href="#855" id="855">855</a>
-<a href="#856" id="856">856</a>
-<a href="#857" id="857">857</a>
-<a href="#858" id="858">858</a>
-<a href="#859" id="859">859</a>
-<a href="#860" id="860">860</a>
-<a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#856" id="856">856</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
-<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, Instant};
@@ -894,8 +863,9 @@
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::Receiver;
-<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, P2PConnectionStatus, PeerError};
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerError};
 <span class="kw">use </span>fedimint_api_client::query::FilterMap;
+<span class="kw">use </span>fedimint_core::config::P2PMessage;
 <span class="kw">use </span>fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
@@ -905,7 +875,7 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
+<span class="kw">use </span>fedimint_core::net::peers::DynP2PConnections;
 <span class="kw">use </span>fedimint_core::runtime::spawn;
 <span class="kw">use </span>fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -927,7 +897,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::keychain::Keychain;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::network::Network;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::spawner::Spawner;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::{to_node_index, Message};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::to_node_index;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
@@ -940,8 +910,6 @@
     CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
-<span class="kw">use </span><span class="kw">crate</span>::net::p2p::ReconnectP2PConnections;
-<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
 
 <span class="comment">// The name of the directory where the database checkpoints are stored.
@@ -955,7 +923,7 @@
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>submission_receiver: Receiver&lt;ConsensusItem&gt;,
     <span class="kw">pub </span>shutdown_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
-    <span class="kw">pub </span>p2p_status_senders: BTreeMap&lt;PeerId, watch::Sender&lt;P2PConnectionStatus&gt;&gt;,
+    <span class="kw">pub </span>connections: DynP2PConnections&lt;P2PMessage&gt;,
     <span class="kw">pub </span>ci_status_senders: BTreeMap&lt;PeerId, watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;&gt;,
     <span class="doccomment">/// Just a string version of `cfg.local.identity` for performance
     </span><span class="kw">pub </span>self_id_str: String,
@@ -964,7 +932,6 @@
     <span class="kw">pub </span>task_group: TaskGroup,
     <span class="kw">pub </span>data_dir: PathBuf,
     <span class="kw">pub </span>checkpoint_retention: u64,
-    <span class="kw">pub </span>p2p_bind_addr: SocketAddr,
 }
 
 <span class="kw">impl </span>ConsensusEngine {
@@ -982,8 +949,7 @@
             <span class="self">self</span>.run_single_guardian(<span class="self">self</span>.task_group.make_handle())
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
-            <span class="self">self</span>.run_consensus(<span class="self">self</span>.p2p_bind_addr, <span class="self">self</span>.task_group.make_handle())
-                .<span class="kw">await
+            <span class="self">self</span>.run_consensus(<span class="self">self</span>.task_group.make_handle()).<span class="kw">await
         </span>}
     }
 
@@ -1047,38 +1013,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>run_consensus(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        p2p_bind_addr: SocketAddr,
-        task_handle: TaskHandle,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">pub async fn </span>run_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// We need four peers to run the atomic broadcast
         </span><span class="macro">assert!</span>(<span class="self">self</span>.num_peers().total() &gt;= <span class="number">4</span>);
 
         <span class="self">self</span>.confirm_server_config_consensus_hash().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="comment">// Build P2P connections for the atomic broadcast
-        </span><span class="kw">let </span>connector = TlsTcpConnector::new(
-            <span class="self">self</span>.cfg.tls_config(),
-            p2p_bind_addr,
-            <span class="self">self</span>.cfg
-                .local
-                .p2p_endpoints
-                .iter()
-                .map(|(<span class="kw-2">&amp;</span>id, endpoint)| (id, endpoint.url.clone()))
-                .collect(),
-            <span class="self">self</span>.identity(),
-        )
-        .into_dyn();
-
-        <span class="kw">let </span>connections = ReconnectP2PConnections::new(
-            <span class="self">self</span>.cfg.local.identity,
-            connector,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.task_group,
-            <span class="prelude-val">Some</span>(<span class="self">self</span>.p2p_status_senders.clone()),
-        )
-        .<span class="kw">await
-        </span>.into_dyn();
 
         <span class="self">self</span>.initialize_checkpoint_directory(<span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>)<span class="question-mark">?</span>;
 
@@ -1089,7 +1028,8 @@
 
             <span class="macro">info!</span>(target: LOG_CONSENSUS, session_index, <span class="string">"Starting consensus session"</span>);
 
-            <span class="self">self</span>.run_session(connections.clone(), session_index).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.run_session(<span class="self">self</span>.connections.clone(), session_index)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="macro">info!</span>(target: LOG_CONSENSUS, session_index, <span class="string">"Completed consensus session"</span>);
 
@@ -1134,7 +1074,7 @@
 
     <span class="kw">pub async fn </span>run_session(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        connections: DynP2PConnections&lt;Message&gt;,
+        connections: DynP2PConnections&lt;P2PMessage&gt;,
         session_index: u64,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// In order to bound a sessions RAM consumption we need to bound its number of

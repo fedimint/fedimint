@@ -769,7 +769,17 @@
 <a href="#768" id="768">768</a>
 <a href="#769" id="769">769</a>
 <a href="#770" id="770">770</a>
-<a href="#771" id="771">771</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -781,7 +791,7 @@
 <span class="kw">use </span>fedimint_api_client::api::{
     FederationStatus, GuardianConfigBackup, P2PConnectionStatus, PeerStatus, StatusResponse,
 };
-<span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
+<span class="kw">use </span>fedimint_core::admin_client::{ServerStatus, ServerStatusLegacy};
 <span class="kw">use </span>fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
@@ -799,9 +809,9 @@
     BACKUP_STATISTICS_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
     FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SERVER_STATUS_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::audit::{Audit, AuditSummary};
@@ -855,7 +865,8 @@
     </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;ConsensusItem&gt;,
     <span class="kw">pub </span>shutdown_receiver: Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
     <span class="kw">pub </span>shutdown_sender: Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
-    <span class="kw">pub </span>status_receivers: BTreeMap&lt;PeerId, (Receiver&lt;P2PConnectionStatus&gt;, Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;)&gt;,
+    <span class="kw">pub </span>p2p_status_receivers: BTreeMap&lt;PeerId, Receiver&lt;P2PConnectionStatus&gt;&gt;,
+    <span class="kw">pub </span>ci_status_receivers: BTreeMap&lt;PeerId, Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;&gt;,
     <span class="kw">pub </span>supported_api_versions: SupportedApiVersionsSummary,
     <span class="kw">pub </span>code_version_str: String,
 }
@@ -990,9 +1001,11 @@
         <span class="kw">let </span>scheduled_shutdown = <span class="self">self</span>.shutdown_receiver.borrow().to_owned();
 
         <span class="kw">let </span>status_by_peer = <span class="self">self
-            </span>.status_receivers
+            </span>.p2p_status_receivers
             .iter()
-            .map(|(peer, (p2p_receiver, ci_receiver))| {
+            .map(|(peer, p2p_receiver)| {
+                <span class="kw">let </span>ci_receiver = <span class="self">self</span>.ci_status_receivers.get(peer).unwrap();
+
                 <span class="kw">let </span>consensus_status = PeerStatus {
                     connection_status: <span class="kw-2">*</span>p2p_receiver.borrow(),
                     last_contribution: <span class="kw-2">*</span>ci_receiver.borrow(),
@@ -1405,11 +1418,18 @@
             }
         },
         <span class="macro">api_endpoint!</span> {
+            SERVER_STATUS_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
+            <span class="kw">async </span>|_f: <span class="kw-2">&amp;</span>ConsensusApi, _c, _v: ()| -&gt; ServerStatus {
+                <span class="prelude-val">Ok</span>(ServerStatus::ConsensusRunning)
+            }
+        },
+        <span class="macro">api_endpoint!</span> {
             STATUS_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; StatusResponse {
                 <span class="prelude-val">Ok</span>(StatusResponse {
-                    server: ServerStatus::ConsensusRunning,
+                    server: ServerStatusLegacy::ConsensusRunning,
                     federation: <span class="prelude-val">Some</span>(fedimint.get_federation_status().<span class="kw">await</span><span class="question-mark">?</span>)
                 })
             }

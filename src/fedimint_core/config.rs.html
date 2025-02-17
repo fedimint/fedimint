@@ -1950,12 +1950,12 @@
     }
 }
 
-<span class="doccomment">/// Things that a `distributed_gen` config can send between peers
-</span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
-</span><span class="kw">pub enum </span>DkgPeerMessage {
+<span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+</span><span class="kw">pub enum </span>P2PMessage {
+    Aleph(Vec&lt;u8&gt;),
+    Checksum(sha256::Hash),
     DistributedGen(SupportedDkgMessage),
     Encodable(Vec&lt;u8&gt;),
-    Completed,
 }
 
 <span class="doccomment">/// Supported (by Fedimint's code) `DkgMessage&lt;T&gt;` types
@@ -1971,7 +1971,7 @@
 }
 
 <span class="doccomment">/// `enum` version of [`SupportedDkgMessage`]
-</span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
+</span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 </span><span class="kw">pub enum </span>SupportedDkgMessage {
     G1(DkgMessage&lt;G1Projective&gt;),
     G2(DkgMessage&lt;G2Projective&gt;),

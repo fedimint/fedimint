@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["server_endpoints"],"struct":["BitcoinRpcConnectionStatus","ConfigGenApi","ConfigGenLocalConnection","ConfigGenParamsLocal","ConfigGenSettings","ConfigGenState"]};
+window.SIDEBAR_ITEMS = {"fn":["check_bitcoin_status","server_endpoints"],"struct":["BitcoinRpcConnectionStatus","ConfigGenApi","ConfigGenState","LocalParams"]};

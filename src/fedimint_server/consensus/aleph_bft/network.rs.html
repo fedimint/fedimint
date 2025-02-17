@@ -65,13 +65,13 @@
 <a href="#64" id="64">64</a>
 <a href="#65" id="65">65</a>
 <a href="#66" id="66">66</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
+<span class="kw">use </span>fedimint_core::config::P2PMessage;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, Recipient};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode, IoReader};
 
 <span class="kw">use </span><span class="kw">super</span>::data_provider::UnitData;
 <span class="kw">use </span><span class="kw">super</span>::keychain::Keychain;
-<span class="kw">use </span><span class="kw">super</span>::Message;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>Hasher;
@@ -92,11 +92,11 @@
 &gt;;
 
 <span class="kw">pub struct </span>Network {
-    connections: DynP2PConnections&lt;Message&gt;,
+    connections: DynP2PConnections&lt;P2PMessage&gt;,
 }
 
 <span class="kw">impl </span>Network {
-    <span class="kw">pub fn </span>new(connections: DynP2PConnections&lt;Message&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(connections: DynP2PConnections&lt;P2PMessage&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ connections }
     }
 }
@@ -113,18 +113,18 @@
         };
 
         <span class="self">self</span>.connections
-            .try_send(recipient, Message(network_data.encode()));
+            .try_send(recipient, P2PMessage::Aleph(network_data.encode()));
     }
 
     <span class="kw">async fn </span>next_event(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;NetworkData&gt; {
         <span class="kw">loop </span>{
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(network_data) = NetworkData::decode(<span class="kw-2">&amp;mut </span>IoReader(
-                <span class="self">self</span>.connections.receive().<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">1 </span>.<span class="number">0</span>.as_slice(),
-            )) {
-                <span class="comment">// in order to bound the RAM consumption of a session we have to bound an
-                // individual units size, hence the size of its attached unitdata in memory
-                </span><span class="kw">if </span>network_data.included_data().iter().all(UnitData::is_valid) {
-                    <span class="kw">return </span><span class="prelude-val">Some</span>(network_data);
+            <span class="kw">if let </span>P2PMessage::Aleph(bytes) = <span class="self">self</span>.connections.receive().<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">1 </span>{
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(network_data) = NetworkData::decode(<span class="kw-2">&amp;mut </span>IoReader(bytes.as_slice())) {
+                    <span class="comment">// in order to bound the RAM consumption of a session we have to bound an
+                    // individual units size, hence the size of its attached unitdata in memory
+                    </span><span class="kw">if </span>network_data.included_data().iter().all(UnitData::is_valid) {
+                        <span class="kw">return </span><span class="prelude-val">Some</span>(network_data);
+                    }
                 }
             }
         }

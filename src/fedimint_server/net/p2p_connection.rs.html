@@ -75,38 +75,17 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
-<span class="kw">use </span>std::io::Cursor;
+<a href="#77" id="77">77</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bytes::Bytes;
+<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>futures::{SinkExt, StreamExt};
+<span class="kw">use </span>iroh::endpoint::Connection;
 <span class="kw">use </span>serde::de::DeserializeOwned;
-<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>tokio::net::TcpStream;
 <span class="kw">use </span>tokio_rustls::TlsStream;
 <span class="kw">use </span>tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -127,12 +106,6 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>LegacyMessage&lt;M&gt; {
-    Message(M),
-    Ping,
-}
-
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;M&gt; IP2PConnection&lt;M&gt; <span class="kw">for </span>Framed&lt;TlsStream&lt;TcpStream&gt;, LengthDelimitedCodec&gt;
 <span class="kw">where
@@ -141,7 +114,7 @@
     <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
 
-        bincode::serialize_into(<span class="kw-2">&amp;mut </span>bytes, <span class="kw-2">&amp;</span>LegacyMessage::Message(message))<span class="question-mark">?</span>;
+        bincode::serialize_into(<span class="kw-2">&amp;mut </span>bytes, <span class="kw-2">&amp;</span>message)<span class="question-mark">?</span>;
 
         SinkExt::send(<span class="self">self</span>, Bytes::from_owner(bytes)).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -149,53 +122,34 @@
     }
 
     <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;M&gt; {
-        <span class="kw">loop </span>{
-            <span class="kw">let </span>bytes = <span class="self">self</span>.next().<span class="kw">await</span>.context(<span class="string">"Framed stream is closed"</span>)<span class="question-mark">??</span>;
-
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(legacy_message) = bincode::deserialize_from(Cursor::new(<span class="kw-2">&amp;</span>bytes)) {
-                <span class="kw">match </span>legacy_message {
-                    LegacyMessage::Message(message) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(message),
-                    LegacyMessage::Ping =&gt; <span class="kw">continue</span>,
-                }
-            }
-
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(bincode::deserialize_from(Cursor::new(<span class="kw-2">&amp;</span>bytes))<span class="question-mark">?</span>);
-        }
+        <span class="prelude-val">Ok</span>(bincode::deserialize_from(Cursor::new(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.next().<span class="kw">await</span>.context(<span class="string">"Framed stream is closed"</span>)<span class="question-mark">??</span>,
+        ))<span class="question-mark">?</span>)
     }
 }
 
-<span class="attr">#[cfg(all(feature = <span class="string">"iroh"</span>, not(target_family = <span class="string">"wasm"</span>)))]
-</span><span class="kw">pub mod </span>iroh {
-    <span class="kw">use </span>async_trait::async_trait;
-    <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-    <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-    <span class="kw">use </span>iroh::endpoint::Connection;
+<span class="attr">#[async_trait]
+</span><span class="kw">impl</span>&lt;M&gt; IP2PConnection&lt;M&gt; <span class="kw">for </span>Connection
+<span class="kw">where
+    </span>M: Encodable + Decodable + Send + <span class="lifetime">'static</span>,
+{
+    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>sink = <span class="self">self</span>.open_uni().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::IP2PConnection;
+        sink.write_all(<span class="kw-2">&amp;</span>message.consensus_encode_to_vec()).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="attr">#[async_trait]
-    </span><span class="kw">impl</span>&lt;M&gt; IP2PConnection&lt;M&gt; <span class="kw">for </span>Connection
-    <span class="kw">where
-        </span>M: Encodable + Decodable + Send + <span class="lifetime">'static</span>,
-    {
-        <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; anyhow::Result&lt;()&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>sink = <span class="self">self</span>.open_uni().<span class="kw">await</span><span class="question-mark">?</span>;
+        sink.finish()<span class="question-mark">?</span>;
 
-            sink.write_all(<span class="kw-2">&amp;</span>message.consensus_encode_to_vec()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
 
-            sink.finish()<span class="question-mark">?</span>;
+    <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;M&gt; {
+        <span class="kw">let </span>bytes = <span class="self">self</span>.accept_uni().<span class="kw">await</span><span class="question-mark">?</span>.read_to_end(<span class="number">1_000_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="prelude-val">Ok</span>(())
-        }
-
-        <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;M&gt; {
-            <span class="kw">let </span>bytes = <span class="self">self</span>.accept_uni().<span class="kw">await</span><span class="question-mark">?</span>.read_to_end(<span class="number">1_000_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="prelude-val">Ok</span>(Decodable::consensus_decode_whole(
-                <span class="kw-2">&amp;</span>bytes,
-                <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-            )<span class="question-mark">?</span>)
-        }
+        <span class="prelude-val">Ok</span>(Decodable::consensus_decode_whole(
+            <span class="kw-2">&amp;</span>bytes,
+            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+        )<span class="question-mark">?</span>)
     }
 }
 </code></pre></div></section></main></body></html>

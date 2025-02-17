@@ -306,8 +306,7 @@
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
+<a href="#308" id="308">308</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>debug;
@@ -326,13 +325,15 @@
 <span class="kw">use </span>db::get_global_database_migrations;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
+<span class="kw">use </span>fedimint_core::config::P2PMessage;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{apply_migrations, apply_migrations_server_dbtx, Database};
 <span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
+<span class="kw">use </span>fedimint_core::net::peers::DynP2PConnections;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::NumPeers;
+<span class="kw">use </span>fedimint_core::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 <span class="kw">use </span>fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 <span class="kw">use </span>jsonrpsee::server::ServerHandle;
@@ -352,7 +353,8 @@
 
 <span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">pub async fn </span>run(
-    p2p_bind_addr: SocketAddr,
+    connections: DynP2PConnections&lt;P2PMessage&gt;,
+    p2p_status_receivers: BTreeMap&lt;PeerId, watch::Receiver&lt;P2PConnectionStatus&gt;&gt;,
     api_bind_addr: SocketAddr,
     cfg: ServerConfig,
     db: Database,
@@ -427,18 +429,14 @@
     <span class="kw">let </span>(submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = watch::channel(<span class="prelude-val">None</span>);
 
-    <span class="kw">let </span><span class="kw-2">mut </span>p2p_status_senders = BTreeMap::new();
     <span class="kw">let </span><span class="kw-2">mut </span>ci_status_senders = BTreeMap::new();
-    <span class="kw">let </span><span class="kw-2">mut </span>status_receivers = BTreeMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>ci_status_receivers = BTreeMap::new();
 
     <span class="kw">for </span>peer <span class="kw">in </span>cfg.consensus.broadcast_public_keys.keys().copied() {
-        <span class="kw">let </span>(p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
         <span class="kw">let </span>(ci_sender, ci_receiver) = watch::channel(<span class="prelude-val">None</span>);
 
-        p2p_status_senders.insert(peer, p2p_sender);
         ci_status_senders.insert(peer, ci_sender);
-
-        status_receivers.insert(peer, (p2p_receiver, ci_receiver));
+        ci_status_receivers.insert(peer, ci_receiver);
     }
 
     <span class="kw">let </span>consensus_api = ConsensusApi {
@@ -453,7 +451,8 @@
             <span class="kw-2">&amp;</span>cfg.consensus.modules,
             <span class="kw-2">&amp;</span>module_init_registry,
         ),
-        status_receivers,
+        p2p_status_receivers,
+        ci_status_receivers,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };
@@ -505,7 +504,7 @@
             .map(|x| x.to_string())
             .collect(),
         cfg: cfg.clone(),
-        p2p_status_senders,
+        connections,
         ci_status_senders,
         submission_receiver,
         shutdown_receiver,
@@ -513,7 +512,6 @@
         task_group: task_group.clone(),
         data_dir,
         checkpoint_retention,
-        p2p_bind_addr,
     }
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;

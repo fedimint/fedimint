@@ -1381,7 +1381,22 @@
 <a href="#1380" id="1380">1380</a>
 <a href="#1381" id="1381">1381</a>
 <a href="#1382" id="1382">1382</a>
-<a href="#1383" id="1383">1383</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::pin::Pin;
@@ -1399,7 +1414,7 @@
 <span class="kw">pub use </span>error::{FederationError, OutputOutcomeError, PeerError};
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
-    ServerStatus,
+    ServerStatus, ServerStatusLegacy,
 };
 <span class="kw">use </span>fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
@@ -1875,6 +1890,21 @@
     /// Must be called first before any other calls to the API
     </span><span class="kw">async fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt;;
 
+    <span class="kw">async fn </span>server_status(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;ServerStatus&gt;;
+
+    <span class="kw">async fn </span>set_local_params(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        name: String,
+        federation_name: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;String&gt;;
+
+    <span class="kw">async fn </span>add_peer_connection_info(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        info: String,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;String&gt;;
+
     <span class="doccomment">/// During config gen, sets the server connection containing our endpoints
     ///
     /// Optionally sends our server info to the config gen leader using
@@ -1924,7 +1954,7 @@
     <span class="doccomment">/// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
     /// error and config gen must be restarted.
-    </span><span class="kw">async fn </span>run_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt;;
+    </span><span class="kw">async fn </span>start_dkg(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt;;
 
     <span class="doccomment">/// After DKG, returns the hash of the consensus config tweaked with our id.
     /// We need to share this with all other peers to complete verification.
@@ -2704,7 +2734,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>StatusResponse {
-    <span class="kw">pub </span>server: ServerStatus,
+    <span class="kw">pub </span>server: ServerStatusLegacy,
     <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;FederationStatus&gt;,
 }
 

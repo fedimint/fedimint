@@ -351,7 +351,29 @@
 <a href="#350" id="350">350</a>
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -361,7 +383,7 @@
 <span class="kw">use </span>fedimint_client_module::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client_module::AdminCreds;
-<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
+<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerConnectionInfo};
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
@@ -371,15 +393,18 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
+<span class="kw">use </span>fedimint_core::net::peers::IP2PConnections;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
-<span class="kw">use </span>fedimint_server::config::api::ConfigGenParamsLocal;
-<span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+<span class="kw">use </span>fedimint_server::config::{
+    gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ServerConfig,
+};
 <span class="kw">use </span>fedimint_server::consensus;
 <span class="kw">use </span>fedimint_server::core::ServerModuleInitRegistry;
-<span class="kw">use </span>fedimint_server::net::p2p_connector::parse_host_port;
+<span class="kw">use </span>fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
+<span class="kw">use </span>fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
 <span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tokio_rustls::rustls;
@@ -570,14 +595,14 @@
             ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, <span class="kw-2">&amp;</span><span class="self">self</span>.server_init, <span class="kw-2">&amp;</span><span class="self">self</span>.version_hash);
 
         <span class="kw">let </span>task_group = TaskGroup::new();
-        <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
+        <span class="kw">for </span>(peer_id, cfg) <span class="kw">in </span>configs.clone() {
             <span class="kw">let </span>p2p_bind_addr = params.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"Must exist"</span>).local.p2p_bind;
             <span class="kw">let </span>api_bind_addr = params.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"Must exist"</span>).local.api_bind;
             <span class="kw">if </span>u16::from(peer_id) &gt;= <span class="self">self</span>.num_peers - <span class="self">self</span>.num_offline {
                 <span class="kw">continue</span>;
             }
 
-            <span class="kw">let </span>instances = config.consensus.iter_module_instances();
+            <span class="kw">let </span>instances = cfg.consensus.iter_module_instances();
             <span class="kw">let </span>decoders = <span class="self">self</span>.server_init.available_decoders(instances).unwrap();
             <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
             <span class="kw">let </span>module_init_registry = <span class="self">self</span>.server_init.clone();
@@ -585,11 +610,31 @@
             <span class="kw">let </span>checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
             <span class="kw">let </span>code_version_str = <span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>);
 
+            <span class="kw">let </span>connector = TlsTcpConnector::new(
+                cfg.tls_config(),
+                p2p_bind_addr,
+                cfg.local.p2p_endpoints.clone(),
+                cfg.local.identity,
+            )
+            .<span class="kw">await
+            </span>.into_dyn();
+
+            <span class="kw">let </span>(p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+
+            <span class="kw">let </span>connections = ReconnectP2PConnections::new(
+                cfg.local.identity,
+                connector,
+                <span class="kw-2">&amp;</span>task_group,
+                p2p_status_senders,
+            )
+            .into_dyn();
+
             task_group.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
                 consensus::run(
-                    p2p_bind_addr,
+                    connections,
+                    p2p_status_receivers,
                     api_bind_addr,
-                    config.clone(),
+                    cfg.clone(),
                     db.clone(),
                     module_init_registry,
                     <span class="kw-2">&amp;</span>subgroup,
@@ -658,19 +703,19 @@
         .collect();
 
     <span class="comment">// Generate the P2P and API URL on 2 different ports for each peer
-    </span><span class="kw">let </span>connections: BTreeMap&lt;PeerId, PeerServerParams&gt; = peers
+    </span><span class="kw">let </span>connections: BTreeMap&lt;PeerId, PeerConnectionInfo&gt; = peers
         .iter()
         .map(|peer| {
             <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">2</span>;
             <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{peer_port}"</span>);
             <span class="kw">let </span>api_url = <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{}"</span>, peer_port + <span class="number">1</span>);
 
-            <span class="kw">let </span>params: PeerServerParams = PeerServerParams {
-                cert: tls_keys[peer].<span class="number">0</span>.clone(),
+            <span class="kw">let </span>params = PeerConnectionInfo {
+                cert: tls_keys[peer].<span class="number">0</span>.clone().<span class="number">0</span>,
                 p2p_url: p2p_url.parse().expect(<span class="string">"Should parse"</span>),
                 api_url: api_url.parse().expect(<span class="string">"Should parse"</span>),
                 name: <span class="macro">format!</span>(<span class="string">"peer-{}"</span>, peer.to_usize()),
-                status: <span class="prelude-val">None</span>,
+                federation_name: <span class="prelude-val">None</span>,
             };
             (<span class="kw-2">*</span>peer, params)
         })
@@ -689,7 +734,6 @@
                     api_auth: ApiAuth(<span class="string">"pass"</span>.to_string()),
                     p2p_bind: p2p_bind.parse().expect(<span class="string">"Valid address"</span>),
                     api_bind: api_bind.parse().expect(<span class="string">"Valid address"</span>),
-                    max_connections: <span class="number">10</span>,
                 },
                 consensus: ConfigGenParamsConsensus {
                     peers: connections.clone(),

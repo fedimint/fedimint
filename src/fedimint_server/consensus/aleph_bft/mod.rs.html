@@ -17,17 +17,7 @@
 <a href="#16" id="16">16</a>
 <a href="#17" id="17">17</a>
 <a href="#18" id="18">18</a>
-<a href="#19" id="19">19</a>
-<a href="#20" id="20">20</a>
-<a href="#21" id="21">21</a>
-<a href="#22" id="22">22</a>
-<a href="#23" id="23">23</a>
-<a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a>
-<a href="#27" id="27">27</a>
-<a href="#28" id="28">28</a>
-<a href="#29" id="29">29</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backup;
+<a href="#19" id="19">19</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>backup;
 <span class="kw">pub mod </span>data_provider;
 <span class="kw">pub mod </span>finalization_handler;
 <span class="kw">pub mod </span>keychain;
@@ -35,17 +25,7 @@
 <span class="kw">pub mod </span>spawner;
 
 <span class="kw">use </span>aleph_bft::NodeIndex;
-<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::PeerId;
-<span class="kw">use </span>serde::{Deserialize, Serialize};
-
-<span class="doccomment">/// The majority of these messages need to be delivered to the intended
-/// recipient for Aleph BFT to make progress. However, Aleph BFT does
-/// not assume a reliable network layer and implements all necessary retry
-/// logic. Therefore, the network layer can discard a message if its
-/// intended recipient is offline.
-</span><span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>Message(Vec&lt;u8&gt;);
 
 <span class="kw">pub fn </span>to_peer_id(node_index: NodeIndex) -&gt; PeerId {
     u16::try_from(usize::from(node_index))

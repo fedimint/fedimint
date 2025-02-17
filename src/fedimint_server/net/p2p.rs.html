@@ -354,7 +354,23 @@
 <a href="#353" id="353">353</a>
 <a href="#354" id="354">354</a>
 <a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
 //! The main interface is [`fedimint_core::net::peers::IP2PConnections`] and
@@ -373,7 +389,7 @@
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 <span class="kw">use </span>futures::future::select_all;
-<span class="kw">use </span>futures::{FutureExt, StreamExt};
+<span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::{info, info_span, warn, Instrument};
 
@@ -381,17 +397,34 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connection::DynP2PConnection;
 <span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::DynP2PConnector;
 
+<span class="kw">pub type </span>P2PStatusSenders = BTreeMap&lt;PeerId, watch::Sender&lt;P2PConnectionStatus&gt;&gt;;
+<span class="kw">pub type </span>P2PStatusReceivers = BTreeMap&lt;PeerId, watch::Receiver&lt;P2PConnectionStatus&gt;&gt;;
+
+<span class="kw">pub fn </span>p2p_status_channels(peers: Vec&lt;PeerId&gt;) -&gt; (P2PStatusSenders, P2PStatusReceivers) {
+    <span class="kw">let </span><span class="kw-2">mut </span>senders = BTreeMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>receivers = BTreeMap::new();
+
+    <span class="kw">for </span>peer <span class="kw">in </span>peers {
+        <span class="kw">let </span>(sender, receiver) = watch::channel(P2PConnectionStatus::Disconnected);
+
+        senders.insert(peer, sender);
+        receivers.insert(peer, receiver);
+    }
+
+    (senders, receivers)
+}
+
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ReconnectP2PConnections&lt;M&gt; {
     connections: BTreeMap&lt;PeerId, P2PConnection&lt;M&gt;&gt;,
 }
 
 <span class="kw">impl</span>&lt;M: Send + <span class="lifetime">'static</span>&gt; ReconnectP2PConnections&lt;M&gt; {
-    <span class="kw">pub async fn </span>new(
+    <span class="kw">pub fn </span>new(
         identity: PeerId,
         connector: DynP2PConnector&lt;M&gt;,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
-        <span class="kw-2">mut </span>status_channels: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;PeerId, watch::Sender&lt;P2PConnectionStatus&gt;&gt;&gt;,
+        status_senders: P2PStatusSenders,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>connection_senders = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>connections = BTreeMap::new();
@@ -406,11 +439,10 @@
                 peer_id,
                 connector.clone(),
                 connection_receiver,
-                status_channels.as_mut().map(|channels| {
-                    channels
-                        .remove(<span class="kw-2">&amp;</span>peer_id)
-                        .expect(<span class="string">"No p2p status sender for peer {peer}"</span>)
-                }),
+                status_senders
+                    .get(<span class="kw-2">&amp;</span>peer_id)
+                    .expect(<span class="string">"No p2p status sender for peer {peer}"</span>)
+                    .clone(),
                 task_group,
             );
 
@@ -418,13 +450,11 @@
             connections.insert(peer_id, connection);
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>listener = connector.listen().<span class="kw">await</span>;
-
         task_group.spawn_cancellable(<span class="string">"handle-incoming-p2p-connections"</span>, <span class="kw">async move </span>{
-            <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">"Shutting down listening task for p2p connections"</span>);
+            <span class="macro">info!</span>(target: LOG_NET_PEER, <span class="string">"Starting listening task for p2p connections"</span>);
 
             <span class="kw">loop </span>{
-                <span class="kw">match </span>listener.next().<span class="kw">await</span>.expect(<span class="string">"Listener closed"</span>) {
+                <span class="kw">match </span>connector.accept().<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>((peer, connection)) =&gt; {
                         <span class="kw">if </span>connection_senders
                             .get_mut(<span class="kw-2">&amp;</span>peer)
@@ -515,7 +545,7 @@
         peer_id: PeerId,
         connector: DynP2PConnector&lt;M&gt;,
         incoming_connections: Receiver&lt;DynP2PConnection&lt;M&gt;&gt;,
-        status_channel: <span class="prelude-ty">Option</span>&lt;watch::Sender&lt;P2PConnectionStatus&gt;&gt;,
+        status_sender: watch::Sender&lt;P2PConnectionStatus&gt;,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; P2PConnection&lt;M&gt; {
         <span class="kw">let </span>(outgoing_sender, outgoing_receiver) = bounded(<span class="number">1024</span>);
@@ -536,7 +566,7 @@
                         peer_id,
                         connector,
                         incoming_connections,
-                        status_channel,
+                        status_sender,
                     },
                     state: P2PConnectionSMState::Disconnected(api_networking_backoff()),
                 };
@@ -583,7 +613,7 @@
     peer_id_str: String,
     connector: DynP2PConnector&lt;M&gt;,
     incoming_connections: Receiver&lt;DynP2PConnection&lt;M&gt;&gt;,
-    status_channel: <span class="prelude-ty">Option</span>&lt;watch::Sender&lt;P2PConnectionStatus&gt;&gt;,
+    status_sender: watch::Sender&lt;P2PConnectionStatus&gt;,
 }
 
 <span class="kw">enum </span>P2PConnectionSMState&lt;M&gt; {
@@ -595,16 +625,18 @@
     <span class="kw">async fn </span>state_transition(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">match </span><span class="self">self</span>.state {
             P2PConnectionSMState::Disconnected(disconnected) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(channel) = <span class="kw-2">&amp;</span><span class="self">self</span>.common.status_channel {
-                    channel.send(P2PConnectionStatus::Disconnected).ok();
-                }
+                <span class="self">self</span>.common
+                    .status_sender
+                    .send(P2PConnectionStatus::Disconnected)
+                    .ok();
 
                 <span class="self">self</span>.common.transition_disconnected(disconnected).<span class="kw">await
             </span>}
             P2PConnectionSMState::Connected(connected) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(channel) = <span class="kw-2">&amp;</span><span class="self">self</span>.common.status_channel {
-                    channel.send(P2PConnectionStatus::Connected).ok();
-                }
+                <span class="self">self</span>.common
+                    .status_sender
+                    .send(P2PConnectionStatus::Connected)
+                    .ok();
 
                 <span class="self">self</span>.common.transition_connected(connected).<span class="kw">await
             </span>}

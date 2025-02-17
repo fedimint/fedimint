@@ -730,17 +730,31 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::env;
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{bail, format_err, Context};
+<span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
 <span class="kw">use </span>fedimint_api_client::api::P2PConnectionStatus;
-<span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsConsensus;
+<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, ConfigGenParamsRequest};
 <span class="kw">pub use </span>fedimint_core::config::{
-    serde_binary_human_readable, ClientConfig, DkgPeerMessage, FederationId, GlobalClientConfig,
-    JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
+    serde_binary_human_readable, ClientConfig, FederationId, GlobalClientConfig, JsonWithKind,
+    ModuleInitRegistry, P2PMessage, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig,
 };
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -750,8 +764,9 @@
     ApiAuth, ApiVersion, CoreConsensusVersion, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_core::net::peers::{IP2PConnections, Recipient};
-<span class="kw">use </span>fedimint_core::task::{sleep, timeout, TaskGroup};
+<span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, Recipient};
+<span class="kw">use </span>fedimint_core::task::sleep;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_PEER_DKG;
 <span class="kw">use </span>fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
@@ -760,14 +775,11 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tokio_rustls::rustls;
-<span class="kw">use </span>tracing::{error, info};
+<span class="kw">use </span>tracing::info;
 
-<span class="kw">use </span><span class="kw">crate</span>::config::api::ConfigGenParamsLocal;
 <span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::PeerHandleOps;
-<span class="kw">use </span><span class="kw">crate</span>::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<span class="kw">use </span><span class="kw">crate</span>::net::p2p::ReconnectP2PConnections;
-<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{dns_sanitize, IP2PConnector, TlsConfig, TlsTcpConnector};
+<span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{dns_sanitize, TlsConfig};
 
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>distributedgen;
@@ -883,6 +895,23 @@
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
 }
 
+<span class="doccomment">/// All the info we configure prior to config gen starting
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>ConfigGenSettings {
+    <span class="doccomment">/// Bind address for our P2P connection
+    </span><span class="kw">pub </span>p2p_bind: SocketAddr,
+    <span class="doccomment">/// Bind address for our API connection
+    </span><span class="kw">pub </span>api_bind: SocketAddr,
+    <span class="doccomment">/// URL for our P2P connection
+    </span><span class="kw">pub </span>p2p_url: SafeUrl,
+    <span class="doccomment">/// URL for our API connection
+    </span><span class="kw">pub </span>api_url: SafeUrl,
+    <span class="doccomment">/// The default params for the modules
+    </span><span class="kw">pub </span>default_params: ConfigGenParamsRequest,
+    <span class="doccomment">/// Registry for config gen
+    </span><span class="kw">pub </span>registry: ServerModuleInitRegistry,
+}
+
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="doccomment">/// All the parameters necessary for generating the `ServerConfig` during setup
 ///
@@ -891,6 +920,21 @@
 </span><span class="kw">pub struct </span>ConfigGenParams {
     <span class="kw">pub </span>local: ConfigGenParamsLocal,
     <span class="kw">pub </span>consensus: ConfigGenParamsConsensus,
+}
+
+<span class="doccomment">/// Config gen params that are only used locally, shouldn't be shared
+</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>ConfigGenParamsLocal {
+    <span class="doccomment">/// Our peer id
+    </span><span class="kw">pub </span>our_id: PeerId,
+    <span class="doccomment">/// Our TLS private key
+    </span><span class="kw">pub </span>our_private_key: rustls::PrivateKey,
+    <span class="doccomment">/// Secret API auth string
+    </span><span class="kw">pub </span>api_auth: ApiAuth,
+    <span class="doccomment">/// Bind address for P2P communication
+    </span><span class="kw">pub </span>p2p_bind: SocketAddr,
+    <span class="doccomment">/// Bind address for API communication
+    </span><span class="kw">pub </span>api_bind: SocketAddr,
 }
 
 <span class="kw">impl </span>ServerConfigConsensus {
@@ -943,27 +987,10 @@
         broadcast_public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
         broadcast_secret_key: SecretKey,
         modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt;,
-        code_version_str: String,
+        code_version: String,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>private = ServerConfigPrivate {
-            api_auth: params.local.api_auth.clone(),
-            tls_key: params.local.our_private_key.clone(),
-            broadcast_secret_key,
-            modules: BTreeMap::new(),
-        };
-        <span class="kw">let </span>local = ServerConfigLocal {
-            p2p_endpoints: params.p2p_urls(),
-            identity,
-            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-            broadcast_round_delay_ms: <span class="kw">if </span>is_running_in_test_env() {
-                DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
-            } <span class="kw">else </span>{
-                DEFAULT_BROADCAST_ROUND_DELAY_MS
-            },
-            modules: BTreeMap::new(),
-        };
         <span class="kw">let </span>consensus = ServerConfigConsensus {
-            code_version: code_version_str,
+            code_version,
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
             broadcast_rounds_per_session: <span class="kw">if </span>is_running_in_test_env() {
@@ -973,16 +1000,43 @@
             },
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
-            modules: BTreeMap::new(),
-            meta: params.consensus.meta,
+            modules: modules
+                .iter()
+                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.consensus.clone()))
+                .collect(),
+            meta: params.consensus.meta.clone(),
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
+
+        <span class="kw">let </span>local = ServerConfigLocal {
+            p2p_endpoints: params.p2p_urls(),
+            identity,
+            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
+            broadcast_round_delay_ms: <span class="kw">if </span>is_running_in_test_env() {
+                DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
+            } <span class="kw">else </span>{
+                DEFAULT_BROADCAST_ROUND_DELAY_MS
+            },
+            modules: modules
+                .iter()
+                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.local.clone()))
+                .collect(),
+        };
+
+        <span class="kw">let </span>private = ServerConfigPrivate {
+            api_auth: params.local.api_auth.clone(),
+            tls_key: params.local.our_private_key.clone(),
+            broadcast_secret_key,
+            modules: modules
+                .iter()
+                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.private.clone()))
+                .collect(),
+        };
+
+        <span class="self">Self </span>{
             consensus,
             local,
             private,
-        };
-        cfg.add_modules(modules);
-        cfg
+        }
     }
 
     <span class="kw">pub fn </span>get_invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; InviteCode {
@@ -998,20 +1052,6 @@
 
     <span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
         FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash())
-    }
-
-    <span class="kw">pub fn </span>add_modules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt;) {
-        <span class="kw">for </span>(name, config) <span class="kw">in </span>modules {
-            <span class="kw">let </span>ServerModuleConfig {
-                local,
-                private,
-                consensus,
-            } = config;
-
-            <span class="self">self</span>.local.modules.insert(name, local);
-            <span class="self">self</span>.private.modules.insert(name, private);
-            <span class="self">self</span>.consensus.modules.insert(name, consensus);
-        }
     }
 
     <span class="doccomment">/// Constructs a module config by name
@@ -1158,11 +1198,11 @@
 
     <span class="doccomment">/// Runs the distributed key gen algorithm
     </span><span class="kw">pub async fn </span>distributed_gen(
-        p2p_bind_addr: SocketAddr,
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         registry: ServerModuleInitRegistry,
-        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         code_version_str: String,
+        connections: DynP2PConnections&lt;P2PMessage&gt;,
+        p2p_status_receivers: BTreeMap&lt;PeerId, watch::Receiver&lt;P2PConnectionStatus&gt;&gt;,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"distributed-gen"</span>).info();
 
@@ -1176,37 +1216,6 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(server[<span class="kw-2">&amp;</span>params.local.our_id].clone());
         }
 
-        <span class="kw">let </span>connector = TlsTcpConnector::new(
-            params.tls_config(),
-            p2p_bind_addr,
-            params
-                .p2p_urls()
-                .into_iter()
-                .map(|(id, peer)| (id, peer.url))
-                .collect(),
-            params.local.our_id,
-        )
-        .into_dyn();
-
-        <span class="kw">let </span><span class="kw-2">mut </span>p2p_status_senders = BTreeMap::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>p2p_status_receivers = BTreeMap::new();
-
-        <span class="kw">for </span>peer <span class="kw">in </span>connector.peers() {
-            <span class="kw">let </span>(p2p_sender, p2p_receiver) = watch::channel(P2PConnectionStatus::Disconnected);
-
-            p2p_status_senders.insert(peer, p2p_sender);
-            p2p_status_receivers.insert(peer, p2p_receiver);
-        }
-
-        <span class="kw">let </span>connections = ReconnectP2PConnections::new(
-            params.local.our_id,
-            connector,
-            task_group,
-            <span class="prelude-val">Some</span>(p2p_status_senders),
-        )
-        .<span class="kw">await
-        </span>.into_dyn();
-
         <span class="kw">while </span>p2p_status_receivers
             .values()
             .any(|r| <span class="kw-2">*</span>r.borrow() == P2PConnectionStatus::Disconnected)
@@ -1217,6 +1226,32 @@
             </span>);
 
             sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+        }
+
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER_DKG,
+            <span class="string">"Comparing peer connection info checksum..."
+        </span>);
+
+        <span class="kw">let </span>checksum = params.consensus.peers.consensus_hash_sha256();
+
+        connections
+            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
+            .<span class="kw">await</span>;
+
+        <span class="kw">for </span>peer <span class="kw">in </span>params
+            .peer_ids()
+            .into_iter()
+            .filter(|p| <span class="kw-2">*</span>p != params.local.our_id)
+        {
+            <span class="macro">ensure!</span>(
+                connections
+                    .receive_from_peer(peer)
+                    .<span class="kw">await
+                    </span>.context(<span class="string">"Unexpected shutdown of p2p connections"</span>)<span class="question-mark">?
+                    </span>== P2PMessage::Checksum(checksum),
+                <span class="string">"Peer {peer} has not send the correct checksum message"
+            </span>);
         }
 
         <span class="macro">info!</span>(
@@ -1251,31 +1286,7 @@
             module_cfgs.insert(module_id, cfg);
         }
 
-        <span class="macro">info!</span>(
-            target: LOG_NET_PEER_DKG,
-            <span class="string">"Distributed key generation has completed successfully!"
-        </span>);
-
-        connections
-            .send(Recipient::Everyone, DkgPeerMessage::Completed)
-            .<span class="kw">await</span>;
-
-        <span class="kw">if </span>timeout(Duration::from_secs(<span class="number">30</span>), <span class="kw">async </span>{
-            <span class="kw">for </span>peer <span class="kw">in </span>params
-                .peer_ids()
-                .into_iter()
-                .filter(|p| <span class="kw-2">*</span>p != params.local.our_id)
-            {
-                connections.receive_from_peer(peer).<span class="kw">await</span>;
-            }
-        })
-        .<span class="kw">await
-        </span>.is_err()
-        {
-            <span class="macro">error!</span>(target: LOG_NET_PEER_DKG, <span class="string">"Timeout waiting for dkg completion confirmation"</span>);
-        }
-
-        <span class="kw">let </span>server = ServerConfig::from(
+        <span class="kw">let </span>cfg = ServerConfig::from(
             params.clone(),
             params.local.our_id,
             broadcast_public_keys,
@@ -1284,7 +1295,38 @@
             code_version_str,
         );
 
-        <span class="prelude-val">Ok</span>(server)
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER_DKG,
+            <span class="string">"Comparing consensus config checksum..."
+        </span>);
+
+        <span class="kw">let </span>checksum = cfg.consensus.consensus_hash_sha256();
+
+        connections
+            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
+            .<span class="kw">await</span>;
+
+        <span class="kw">for </span>peer <span class="kw">in </span>params
+            .peer_ids()
+            .into_iter()
+            .filter(|p| <span class="kw-2">*</span>p != params.local.our_id)
+        {
+            <span class="macro">ensure!</span>(
+                connections
+                    .receive_from_peer(peer)
+                    .<span class="kw">await
+                    </span>.context(<span class="string">"Unexpected shutdown of p2p connections"</span>)<span class="question-mark">?
+                    </span>== P2PMessage::Checksum(checksum),
+                <span class="string">"Peer {peer} has not send the correct checksum message"
+            </span>);
+        }
+
+        <span class="macro">info!</span>(
+            target: LOG_NET_PEER_DKG,
+            <span class="string">"Distributed key generation has completed successfully!"
+        </span>);
+
+        <span class="prelude-val">Ok</span>(cfg)
     }
 }
 
@@ -1300,10 +1342,6 @@
                 .map(|(id, endpoint)| (<span class="kw-2">*</span>id, endpoint.name.to_string()))
                 .collect(),
         }
-    }
-
-    <span class="kw">pub fn </span>get_incoming_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u16 {
-        <span class="self">self</span>.local.identity.into()
     }
 }
 
@@ -1328,7 +1366,7 @@
         <span class="self">self</span>.consensus
             .peers
             .iter()
-            .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.cert.clone()))
+            .map(|(id, peer)| (<span class="kw-2">*</span>id, rustls::Certificate(peer.cert.clone())))
             .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
     }
 
@@ -1363,14 +1401,6 @@
             })
             .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
     }
-}
-
-<span class="comment">// TODO: Remove once new config gen UI is written
-</span><span class="kw">pub fn </span>max_connections() -&gt; u32 {
-    env::var(FM_MAX_CLIENT_CONNECTIONS_ENV)
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(DEFAULT_MAX_CLIENT_CONNECTIONS)
 }
 
 <span class="kw">pub fn </span>gen_cert_and_key(
