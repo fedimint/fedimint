@@ -42,6 +42,7 @@ use crate::core::{
 };
 use crate::db::{
     Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    NonCommittable,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
@@ -186,13 +187,13 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Database tx handle, will be committed
-    pub fn dbtx<'s, 'mtx>(&'s mut self) -> DatabaseTransaction<'mtx, Committable>
+    pub fn dbtx<'s, 'mtx>(&'s mut self) -> DatabaseTransaction<'mtx, NonCommittable>
     where
         'a: 'mtx,
         's: 'mtx,
     {
         // dbtx is already isolated.
-        self.dbtx.to_ref()
+        self.dbtx.to_ref_nc()
     }
 
     /// Returns the auth set on the request (regardless of whether it was
