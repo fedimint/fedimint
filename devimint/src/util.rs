@@ -22,6 +22,7 @@ use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_DEVIMINT;
+use legacy_types::ConfigGenParamsResponseLegacy;
 use semver::Version;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
@@ -829,6 +830,24 @@ impl FedimintCli {
         Ok(serde_json::from_value(result)?)
     }
 
+    pub async fn consensus_config_gen_params_legacy(
+        self,
+        endpoint: &str,
+    ) -> Result<ConfigGenParamsResponseLegacy> {
+        let result = cmd!(
+            self,
+            "admin",
+            "dkg",
+            "--ws",
+            endpoint,
+            "consensus-config-gen-params"
+        )
+        .out_json()
+        .await
+        .context("non-json returned for consensus_config_gen_params")?;
+        Ok(serde_json::from_value(result)?)
+    }
+
     pub async fn get_default_config_gen_params(
         self,
         auth: &ApiAuth,
@@ -1238,4 +1257,34 @@ fn test_parse_clap_version() -> Result<()> {
     assert_eq!(expected_version, parse_clap_version(version_str));
 
     Ok(())
+}
+
+mod legacy_types {
+    use std::collections::BTreeMap;
+
+    use fedimint_core::admin_client::PeerServerParams;
+    use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
+    use fedimint_core::PeerId;
+    use serde::{Deserialize, Serialize};
+
+    /// The config gen params that need to be in consensus, sent by the config
+    /// gen leader to all the other guardians
+    #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+    pub struct ConfigGenParamsConsensusLegacy {
+        /// Endpoints of all servers
+        pub peers: BTreeMap<PeerId, PeerServerParams>,
+        /// Guardian-defined key-value pairs that will be passed to the client
+        pub meta: BTreeMap<String, String>,
+        /// Module init params (also contains local params from us)
+        pub modules: ServerModuleConfigGenParamsRegistry,
+    }
+
+    /// The config gen params response which includes our peer id
+    #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+    pub struct ConfigGenParamsResponseLegacy {
+        /// The same for all peers
+        pub consensus: ConfigGenParamsConsensusLegacy,
+        /// Our id (might change if new peers join)
+        pub our_current_id: PeerId,
+    }
 }

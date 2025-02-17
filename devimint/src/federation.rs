@@ -1163,7 +1163,7 @@ pub async fn run_cli_dkg(
     let mut configs = vec![];
     for endpoint in endpoints.values() {
         let config = crate::util::FedimintCli
-            .consensus_config_gen_params(endpoint)
+            .consensus_config_gen_params_legacy(endpoint)
             .await?;
         configs.push(config);
     }
