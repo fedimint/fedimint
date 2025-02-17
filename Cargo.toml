@@ -184,7 +184,7 @@ lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
 ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.7.0-alpha" }
 miniscript = "12.3.0"
-rand = "0.8.5"
+rand = "0.9.0"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
 reqwest = { version = "0.12.9", features = [
