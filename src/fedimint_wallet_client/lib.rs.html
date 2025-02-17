@@ -1512,7 +1512,8 @@
 <a href="#1511" id="1511">1511</a>
 <a href="#1512" id="1512">1512</a>
 <a href="#1513" id="1513">1513</a>
-<a href="#1514" id="1514">1514</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1548,18 +1549,17 @@
 <span class="kw">use </span>client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 <span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, FederationResult};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-<span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_client::module::init::{
+<span class="kw">use </span>fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-<span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
-<span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{
+<span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+<span class="kw">use </span>fedimint_client_module::oplog::UpdateStreamOrOutcome;
+<span class="kw">use </span>fedimint_client_module::sm::util::MapStateTransitions;
+<span class="kw">use </span>fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
+<span class="kw">use </span>fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -1577,6 +1577,7 @@
     apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
     TransactionId,
 };
+<span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
@@ -2354,10 +2355,11 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(UpdateStreamOrOutcome::Outcome(outcome_v2));
         };
 
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(operation, operation_id, {
             <span class="kw">let </span>stream_rpc = <span class="self">self</span>.rpc.clone();
             <span class="kw">let </span>stream_client_ctx = <span class="self">self</span>.client_ctx.clone();
             <span class="kw">let </span>stream_script_pub_key = address.script_pubkey();
+            <span class="kw">move </span>|| {
 
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>DepositStateV2::WaitingForTransaction;
@@ -2413,7 +2415,7 @@
                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">yield </span>DepositStateV2::Failed(e.to_string())
                 }
             }
-        }))
+        }}))
     }
 
     <span class="kw">pub async fn </span>find_tweak_idx_by_address(
@@ -2740,7 +2742,7 @@
 
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.client_ctx
-            .outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+            .outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
                 <span class="macro">stream!</span> {
                     <span class="kw">match </span>next_withdraw_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
                         <span class="prelude-val">Some</span>(WithdrawStates::Created(<span class="kw">_</span>)) =&gt; {

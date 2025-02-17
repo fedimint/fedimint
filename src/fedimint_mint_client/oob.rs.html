@@ -358,10 +358,10 @@
 <a href="#357" id="357">357</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
-<span class="kw">use </span>fedimint_client::module::OutPointRange;
-<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
-<span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_client_module::module::OutPointRange;
+<span class="kw">use </span>fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<span class="kw">use </span>fedimint_client_module::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
+<span class="kw">use </span>fedimint_client_module::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{runtime, Amount, TransactionId};

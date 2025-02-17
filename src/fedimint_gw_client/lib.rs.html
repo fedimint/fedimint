@@ -927,7 +927,8 @@
 <a href="#926" id="926">926</a>
 <a href="#927" id="927">927</a>
 <a href="#928" id="928">928</a>
-<a href="#929" id="929">929</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a></pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>events;
 <span class="kw">pub mod </span>pay;
 
@@ -945,18 +946,18 @@
 <span class="kw">use </span>complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 <span class="kw">use </span>events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
-<span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-<span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
-<span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
-<span class="kw">use </span>fedimint_client::transaction::{
+<span class="kw">use </span>fedimint_client::ClientHandleArc;
+<span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
+<span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+<span class="kw">use </span>fedimint_client_module::oplog::UpdateStreamOrOutcome;
+<span class="kw">use </span>fedimint_client_module::sm::util::MapStateTransitions;
+<span class="kw">use </span>fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State};
+<span class="kw">use </span>fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-<span class="kw">use </span>fedimint_client::{
-    sm_enum_variant_translation, AddStateMachinesError, ClientHandleArc, DynGlobalClientContext,
+<span class="kw">use </span>fedimint_client_module::{
+    sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -965,6 +966,7 @@
 <span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint};
+<span class="kw">use </span>fedimint_derive_secret::ChildId;
 <span class="kw">use </span>fedimint_lightning::{
     InterceptPaymentRequest, InterceptPaymentResponse, LightningContext, LightningRpcError,
     PayInvoiceResponse,
@@ -1464,7 +1466,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
 
                 <span class="kw">yield </span>GatewayExtReceiveStates::Funding;
@@ -1613,7 +1615,7 @@
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>GatewayExtPayStates::Created;
 

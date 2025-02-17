@@ -1160,7 +1160,32 @@
 <a href="#1159" id="1159">1159</a>
 <a href="#1160" id="1160">1160</a>
 <a href="#1161" id="1161">1161</a>
-<a href="#1162" id="1162">1162</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
+<a href="#1173" id="1173">1173</a>
+<a href="#1174" id="1174">1174</a>
+<a href="#1175" id="1175">1175</a>
+<a href="#1176" id="1176">1176</a>
+<a href="#1177" id="1177">1177</a>
+<a href="#1178" id="1178">1178</a>
+<a href="#1179" id="1179">1179</a>
+<a href="#1180" id="1180">1180</a>
+<a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::ops::Range;
@@ -1195,12 +1220,10 @@
 
 <span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::{DynModuleBackup, ModuleBackup};
-<span class="kw">use </span><span class="kw">crate</span>::oplog::{OperationLog, OperationLogEntry, UpdateStreamOrOutcome};
+<span class="kw">use </span><span class="kw">crate</span>::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 <span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveStateMeta, Context, DynContext, DynState, Executor, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
-<span class="kw">use crate</span>::{
-    oplog, AddStateMachinesResult, Client, InstancelessDynClientInputBundle, TransactionUpdates,
-};
+<span class="kw">use crate</span>::{oplog, AddStateMachinesResult, InstancelessDynClientInputBundle, TransactionUpdates};
 
 <span class="kw">pub mod </span>init;
 <span class="kw">pub mod </span>recovery;
@@ -1245,7 +1268,7 @@
         </span>outputs: Vec&lt;OutPoint&gt;,
     ) -&gt; anyhow::Result&lt;()&gt;;
 
-    <span class="kw">fn </span>operation_log(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>OperationLog;
+    <span class="kw">fn </span>operation_log(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>IOperationLog;
 
     <span class="kw">async fn </span>has_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; bool;
 
@@ -1272,7 +1295,7 @@
     );
 }
 
-<span class="doccomment">/// A final, fully initialized [`crate::Client`]
+<span class="doccomment">/// A final, fully initialized client
 ///
 /// Client modules need to be able to access a `Client` they are a part
 /// of. To break the circular dependency, the final `Client` is passed
@@ -1294,7 +1317,7 @@
             .expect(<span class="string">"client module context must not be use past client shutdown"</span>)
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>set(<span class="kw-2">&amp;</span><span class="self">self</span>, client: Weak&lt;<span class="kw">dyn </span>ClientContextIface&gt;) {
+    <span class="kw">pub fn </span>set(<span class="kw-2">&amp;</span><span class="self">self</span>, client: Weak&lt;<span class="kw">dyn </span>ClientContextIface&gt;) {
         <span class="self">self</span>.<span class="number">0</span>.set(client).expect(<span class="string">"FinalLazyClient already set"</span>);
     }
 }
@@ -1470,8 +1493,7 @@
         DynState::from_typed(<span class="self">self</span>.module_instance_id, sm)
     }
 
-    <span class="doccomment">/// See [`crate::Client::finalize_and_submit_transaction`]
-    </span><span class="kw">pub async fn </span>finalize_and_submit_transaction&lt;F, Meta&gt;(
+    <span class="kw">pub async fn </span>finalize_and_submit_transaction&lt;F, Meta&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         operation_type: <span class="kw-2">&amp;</span>str,
@@ -1495,13 +1517,11 @@
             .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// See [`crate::Client::transaction_updates`]
-    </span><span class="kw">pub async fn </span>transaction_updates(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; TransactionUpdates {
+    <span class="kw">pub async fn </span>transaction_updates(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; TransactionUpdates {
         <span class="self">self</span>.client.get().transaction_updates(operation_id).<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// See [`crate::Client::await_primary_module_outputs`]
-    </span><span class="kw">pub async fn </span>await_primary_module_outputs(
+    <span class="kw">pub async fn </span>await_primary_module_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         <span class="comment">// TODO: make `impl Iterator&lt;Item = ...&gt;`
@@ -1670,7 +1690,14 @@
         dbtx.ensure_global()
             .expect(<span class="string">"Must deal with global dbtx here"</span>);
 
-        <span class="kw">if </span>Client::operation_exists_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id).<span class="kw">await </span>{
+        <span class="kw">if </span><span class="self">self
+            </span>.client
+            .get()
+            .operation_log()
+            .get_operation_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id)
+            .<span class="kw">await
+            </span>.is_some()
+        {
             <span class="macro">bail!</span>(
                 <span class="string">"Operation with id {} already exists"</span>,
                 operation_id.fmt_short()
@@ -1680,7 +1707,12 @@
         <span class="self">self</span>.client
             .get()
             .operation_log()
-            .add_operation_log_entry(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id, op_type, operation_meta)
+            .add_operation_log_entry_dbtx(
+                <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
+                operation_id,
+                op_type,
+                serde_json::to_value(operation_meta).expect(<span class="string">"Can't fail"</span>),
+            )
             .<span class="kw">await</span>;
 
         <span class="self">self</span>.client
@@ -1695,15 +1727,33 @@
 
     <span class="kw">pub fn </span>outcome_or_updates&lt;U, S&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation: <span class="kw-2">&amp;</span>OperationLogEntry,
+        operation: OperationLogEntry,
         operation_id: OperationId,
-        stream_gen: <span class="kw">impl </span>FnOnce() -&gt; S,
+        stream_gen: <span class="kw">impl </span>FnOnce() -&gt; S + <span class="lifetime">'static</span>,
     ) -&gt; UpdateStreamOrOutcome&lt;U&gt;
     <span class="kw">where
         </span>U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: Stream&lt;Item = U&gt; + MaybeSend + <span class="lifetime">'static</span>,
     {
-        operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.global_db(), operation_id, stream_gen)
+        <span class="kw">use </span>futures::StreamExt;
+        <span class="kw">match </span><span class="self">self</span>.client.get().operation_log().outcome_or_updates(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.global_db(),
+            operation_id,
+            operation,
+            Box::new(<span class="kw">move </span>|| {
+                <span class="kw">let </span>stream_gen = stream_gen();
+                Box::pin(
+                    stream_gen.map(<span class="kw">move </span>|item| serde_json::to_value(item).expect(<span class="string">"Can't fail"</span>)),
+                )
+            }),
+        ) {
+            UpdateStreamOrOutcome::UpdateStream(stream) =&gt; UpdateStreamOrOutcome::UpdateStream(
+                Box::pin(stream.map(|u| serde_json::from_value(u).expect(<span class="string">"Can't fail"</span>))),
+            ),
+            UpdateStreamOrOutcome::Outcome(o) =&gt; {
+                UpdateStreamOrOutcome::Outcome(serde_json::from_value(o).expect(<span class="string">"Can't fail"</span>))
+            }
+        }
     }
 
     <span class="kw">pub async fn </span>claim_inputs&lt;I, S&gt;(
@@ -1761,11 +1811,11 @@
         <span class="self">self</span>.client
             .get()
             .operation_log()
-            .add_operation_log_entry(
+            .add_operation_log_entry_dbtx(
                 <span class="kw-2">&amp;mut </span>dbtx.global_dbtx(<span class="self">self</span>.global_dbtx_access_token),
                 operation_id,
                 operation_type,
-                operation_meta,
+                serde_json::to_value(operation_meta).expect(<span class="string">"Can't fail"</span>),
             )
             .<span class="kw">await</span>;
     }

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["UpdateStreamOrOutcome"],"fn":["caching_operation_update_stream"],"struct":["JsonStringed","OperationLog","OperationLogEntry","OperationLogEntryV0"]};
+window.SIDEBAR_ITEMS = {"fn":["caching_operation_update_stream","rev_epoch_ranges"],"struct":["OperationLog"]};

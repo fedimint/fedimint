@@ -2254,24 +2254,7 @@
 <a href="#2253" id="2253">2253</a>
 <a href="#2254" id="2254">2254</a>
 <a href="#2255" id="2255">2255</a>
-<a href="#2256" id="2256">2256</a>
-<a href="#2257" id="2257">2257</a>
-<a href="#2258" id="2258">2258</a>
-<a href="#2259" id="2259">2259</a>
-<a href="#2260" id="2260">2260</a>
-<a href="#2261" id="2261">2261</a>
-<a href="#2262" id="2262">2262</a>
-<a href="#2263" id="2263">2263</a>
-<a href="#2264" id="2264">2264</a>
-<a href="#2265" id="2265">2265</a>
-<a href="#2266" id="2266">2266</a>
-<a href="#2267" id="2267">2267</a>
-<a href="#2268" id="2268">2268</a>
-<a href="#2269" id="2269">2269</a>
-<a href="#2270" id="2270">2270</a>
-<a href="#2271" id="2271">2271</a>
-<a href="#2272" id="2272">2272</a>
-<a href="#2273" id="2273">2273</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2256" id="2256">2256</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2302,19 +2285,18 @@
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
-<span class="kw">use </span>fedimint_client::db::{migrate_state, ClientMigrationFn};
-<span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-<span class="kw">use </span>fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
-<span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{
+<span class="kw">use </span>fedimint_client_module::db::{migrate_state, ClientMigrationFn};
+<span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
+<span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+<span class="kw">use </span>fedimint_client_module::oplog::UpdateStreamOrOutcome;
+<span class="kw">use </span>fedimint_client_module::sm::util::MapStateTransitions;
+<span class="kw">use </span>fedimint_client_module::sm::{DynState, ModuleNotifier, State, StateTransition};
+<span class="kw">use </span>fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM,
     TransactionBuilder,
 };
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -2331,6 +2313,7 @@
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
 };
+<span class="kw">use </span>fedimint_derive_secret::ChildId;
 <span class="kw">use </span>fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::{
@@ -3571,7 +3554,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>InternalPayState::Funding;
 
@@ -3636,7 +3619,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
                 <span class="kw">let </span>self_ref = client_ctx.self_ref();
 
@@ -3965,7 +3948,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>LnReceiveState::AwaitingFunds;
 
@@ -3998,7 +3981,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(<span class="kw-2">&amp;</span>operation, operation_id, || {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.client_ctx.outcome_or_updates(operation, operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
 
                 <span class="kw">let </span>self_ref = client_ctx.self_ref();
@@ -4410,7 +4393,7 @@
     <span class="kw">pub </span>gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
 }
 
-<span class="kw">impl </span>fedimint_client::sm::Context <span class="kw">for </span>LightningClientContext {
+<span class="kw">impl </span>fedimint_client_module::sm::Context <span class="kw">for </span>LightningClientContext {
     <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(KIND);
 }
 
@@ -4526,22 +4509,5 @@
         <span class="comment">// Just return a fake preimage to indicate success
         </span><span class="prelude-val">Ok</span>(<span class="string">"00000000"</span>.to_string())
     }
-}
-
-<span class="kw">pub async fn </span>ln_operation(
-    client: <span class="kw-2">&amp;</span>ClientHandleArc,
-    operation_id: OperationId,
-) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {
-    <span class="kw">let </span>operation = client
-        .operation_log()
-        .get_operation(operation_id)
-        .<span class="kw">await
-        </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Operation not found"</span>))<span class="question-mark">?</span>;
-
-    <span class="kw">if </span>operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
-        <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning operation"</span>);
-    }
-
-    <span class="prelude-val">Ok</span>(operation)
 }
 </code></pre></div></section></main></body></html>

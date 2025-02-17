@@ -350,15 +350,17 @@
 <a href="#349" id="349">349</a>
 <a href="#350" id="350">350</a>
 <a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
-<span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
-<span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{AdminCreds, Client, ClientHandleArc};
+<span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
+<span class="kw">use </span>fedimint_client_module::module::init::ClientModuleInitRegistry;
+<span class="kw">use </span>fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+<span class="kw">use </span>fedimint_client_module::AdminCreds;
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,

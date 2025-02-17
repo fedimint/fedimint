@@ -571,13 +571,17 @@
 <a href="#570" id="570">570</a>
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
 
-<span class="kw">use </span>fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
-<span class="kw">use </span>fedimint_client::module::init::ClientModuleRecoverArgs;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, OutPointRange};
+<span class="kw">use </span>fedimint_client_module::module::init::recovery::{
+    RecoveryFromHistory, RecoveryFromHistoryCommon,
+};
+<span class="kw">use </span>fedimint_client_module::module::init::ClientModuleRecoverArgs;
+<span class="kw">use </span>fedimint_client_module::module::{ClientContext, OutPointRange};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};

@@ -647,7 +647,8 @@
 <a href="#646" id="646">646</a>
 <a href="#647" id="647">647</a>
 <a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a></pre></div><pre class="rust"><code><span class="kw">mod </span>api;
 <span class="kw">mod </span>complete_sm;
 <span class="kw">pub mod </span>events;
 <span class="kw">mod </span>receive_sm;
@@ -664,15 +665,16 @@
 <span class="kw">use </span>bitcoin::secp256k1::Message;
 <span class="kw">use </span>events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-<span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{
+<span class="kw">use </span>fedimint_client::ClientHandleArc;
+<span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
+<span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+<span class="kw">use </span>fedimint_client_module::sm::util::MapStateTransitions;
+<span class="kw">use </span>fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
+<span class="kw">use </span>fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-<span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::DatabaseTransaction;

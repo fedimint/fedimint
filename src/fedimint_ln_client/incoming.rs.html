@@ -364,9 +364,9 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::hashes::sha256;
-<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
-<span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<span class="kw">use </span>fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
+<span class="kw">use </span>fedimint_client_module::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::runtime::sleep;
@@ -455,7 +455,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-    ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+    ) -&gt; Vec&lt;fedimint_client_module::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             IncomingSmStates::FundingOffer(state) =&gt; state.transitions(global_context),
             IncomingSmStates::DecryptingPreimage(_state) =&gt; {

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["FetchKind"],"fn":["fetch_meta_overrides","parse_meta_value_static"],"struct":["LegacyMetaSource","MetaService","MetaValue","MetaValues"],"trait":["MetaSource"]};
+window.SIDEBAR_ITEMS = {"fn":["parse_meta_value_static"],"struct":["MetaService"]};

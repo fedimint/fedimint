@@ -462,12 +462,12 @@
 <span class="kw">use </span>common::broken_fed_key_pair;
 <span class="kw">use </span>db::{migrate_to_v1, DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey};
 <span class="kw">use </span>fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
-<span class="kw">use </span>fedimint_client::db::{migrate_state, ClientMigrationFn};
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-<span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
-<span class="kw">use </span>fedimint_client::transaction::{
+<span class="kw">use </span>fedimint_client_module::db::{migrate_state, ClientMigrationFn};
+<span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
+<span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+<span class="kw">use </span>fedimint_client_module::sm::{Context, ModuleNotifier};
+<span class="kw">use </span>fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };

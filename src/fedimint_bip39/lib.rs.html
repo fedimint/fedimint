@@ -54,10 +54,10 @@
 </span><span class="kw">use </span>std::io::{Read, Write};
 
 <span class="kw">pub use </span>bip39::{Language, Mnemonic};
-<span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_client::secret::RootSecretStrategy;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
+<span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 
 <span class="doccomment">/// BIP39 root secret encoding strategy allowing retrieval of the seed phrase.

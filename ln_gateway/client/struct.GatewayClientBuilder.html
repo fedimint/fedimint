@@ -16,7 +16,7 @@ Only used for “legacy” federations before v0.5.0</p>
     db: <a class="struct" href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">Database</a>,
     federation_config: &amp;<a class="struct" href="../db/struct.FederationConfig.html" title="struct ln_gateway::db::FederationConfig">FederationConfig</a>,
     gateway: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../struct.Gateway.html" title="struct ln_gateway::Gateway">Gateway</a>&gt;,
-) -&gt; <a class="type" href="../type.AdminResult.html" title="type ln_gateway::AdminResult">AdminResult</a>&lt;<a class="struct" href="../../fedimint_client_module/struct.ClientBuilder.html" title="struct fedimint_client_module::ClientBuilder">ClientBuilder</a>&gt;</h4></section></summary><div class="docblock"><p>Constructs the client builder with the modules, database, and connector
+) -&gt; <a class="type" href="../type.AdminResult.html" title="type ln_gateway::AdminResult">AdminResult</a>&lt;<a class="struct" href="../../fedimint_client/client/builder/struct.ClientBuilder.html" title="struct fedimint_client::client::builder::ClientBuilder">ClientBuilder</a>&gt;</h4></section></summary><div class="docblock"><p>Constructs the client builder with the modules, database, and connector
 used to create clients for connected federations.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.recover" class="method"><a class="src rightside" href="../../src/ln_gateway/client.rs.html#98-138">Source</a><h4 class="code-header">pub async fn <a href="#method.recover" class="fn">recover</a>(
     &amp;self,
@@ -32,7 +32,7 @@ for a balance to be present.</p>
     config: <a class="struct" href="../db/struct.FederationConfig.html" title="struct ln_gateway::db::FederationConfig">FederationConfig</a>,
     gateway: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../struct.Gateway.html" title="struct ln_gateway::Gateway">Gateway</a>&gt;,
     mnemonic: &amp;Mnemonic,
-) -&gt; <a class="type" href="../type.AdminResult.html" title="type ln_gateway::AdminResult">AdminResult</a>&lt;<a class="type" href="../../fedimint_client_module/type.ClientHandleArc.html" title="type fedimint_client_module::ClientHandleArc">ClientHandleArc</a>&gt;</h4></section></summary><div class="docblock"><p>Builds a new client with the provided <code>FederationConfig</code> and <code>Mnemonic</code>.
+) -&gt; <a class="type" href="../type.AdminResult.html" title="type ln_gateway::AdminResult">AdminResult</a>&lt;<a class="type" href="../../fedimint_client/client/handle/type.ClientHandleArc.html" title="type fedimint_client::client::handle::ClientHandleArc">ClientHandleArc</a>&gt;</h4></section></summary><div class="docblock"><p>Builds a new client with the provided <code>FederationConfig</code> and <code>Mnemonic</code>.
 Only used for newly joined federations.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.verify_client_config" class="method"><a class="src rightside" href="../../src/ln_gateway/client.rs.html#186-196">Source</a><h4 class="code-header">async fn <a href="#method.verify_client_config" class="fn">verify_client_config</a>(
     db: &amp;<a class="struct" href="../../fedimint_core/db/struct.Database.html" title="struct fedimint_core::db::Database">Database</a>,

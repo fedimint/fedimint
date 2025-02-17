@@ -137,11 +137,11 @@
 </span><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>db::DbKeyPrefix;
-<span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
-<span class="kw">use </span>fedimint_client::sm::Context;
+<span class="kw">use </span>fedimint_client_module::db::ClientMigrationFn;
+<span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
+<span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client_module::sm::Context;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};

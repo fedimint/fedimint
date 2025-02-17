@@ -565,7 +565,8 @@
 <a href="#564" id="564">564</a>
 <a href="#565" id="565">565</a>
 <a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::ops::RangeInclusive;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -839,6 +840,11 @@
         }
     }
 }
+<span class="kw">impl</span>&lt;O, S&gt; ClientOutputBundle&lt;O, S&gt; {
+    <span class="kw">pub fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientOutput&lt;O&gt;] {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.outputs
+    }
+}
 
 <span class="kw">impl</span>&lt;O, S&gt; ClientOutputBundle&lt;O, S&gt;
 <span class="kw">where
@@ -847,10 +853,6 @@
 {
     <span class="kw">pub fn </span>new(outputs: Vec&lt;ClientOutput&lt;O&gt;&gt;, sm_gens: Vec&lt;ClientOutputSM&lt;S&gt;&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ outputs, sm_gens }
-    }
-
-    <span class="kw">pub fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientOutput&lt;O&gt;] {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.outputs
     }
 
     <span class="kw">pub fn </span>sms(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[ClientOutputSM&lt;S&gt;] {
@@ -1081,11 +1083,11 @@
         (transaction, input_states.chain(output_states).collect())
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientInput&gt; {
+    <span class="kw">pub fn </span>inputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientInput&gt; {
         <span class="self">self</span>.inputs.iter().flat_map(|i| i.inputs.iter())
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientOutput&gt; {
+    <span class="kw">pub fn </span>outputs(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>ClientOutput&gt; {
         <span class="self">self</span>.outputs.iter().flat_map(|i| i.outputs.iter())
     }
 }

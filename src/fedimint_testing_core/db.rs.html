@@ -541,12 +541,12 @@
 <span class="kw">use </span>fedimint_client::db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
 };
-<span class="kw">use </span>fedimint_client::module::init::DynClientModuleInit;
-<span class="kw">use </span>fedimint_client::module::ClientModule;
 <span class="kw">use </span>fedimint_client::sm::{
     ActiveStateKeyBytes, ActiveStateKeyPrefix, ActiveStateMeta, InactiveStateKeyBytes,
     InactiveStateKeyPrefix, InactiveStateMeta,
 };
+<span class="kw">use </span>fedimint_client_module::module::init::DynClientModuleInit;
+<span class="kw">use </span>fedimint_client_module::module::ClientModule;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations, apply_migrations_server, CoreMigrationFn, Database, DatabaseVersion,

@@ -262,7 +262,7 @@
 };
 <span class="kw">use </span>fedimint_core::PeerId;
 
-<span class="kw">fn </span>discover_common_core_api_version(
+<span class="kw">pub fn </span>discover_common_core_api_version(
     client_versions: <span class="kw-2">&amp;</span>SupportedCoreApiVersions,
     peer_versions: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, SupportedCoreApiVersions&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;ApiVersion&gt; {

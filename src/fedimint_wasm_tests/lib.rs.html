@@ -466,8 +466,8 @@
     <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>anyhow::{anyhow, bail};
-    <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
     <span class="kw">use </span>fedimint_core::Amount;
+    <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
     <span class="kw">use </span>fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };

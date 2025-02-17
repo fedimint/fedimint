@@ -301,12 +301,12 @@
 <span class="kw">use </span>common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 <span class="kw">use </span>db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
-<span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
-<span class="kw">use </span>fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
-<span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-<span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
-<span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
-<span class="kw">use </span>fedimint_client::sm::Context;
+<span class="kw">use </span>fedimint_client_module::db::ClientMigrationFn;
+<span class="kw">use </span>fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
+<span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+<span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
+<span class="kw">use </span>fedimint_client_module::module::{ClientModule, IClientModule};
+<span class="kw">use </span>fedimint_client_module::sm::Context;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -511,9 +511,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client_config: <span class="kw-2">&amp;</span>ClientConfig,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
-        fetch_kind: fedimint_client::meta::FetchKind,
+        fetch_kind: fedimint_client_module::meta::FetchKind,
         last_revision: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; anyhow::Result&lt;fedimint_client::meta::MetaValues&gt; {
+    ) -&gt; anyhow::Result&lt;fedimint_client_module::meta::MetaValues&gt; {
         <span class="kw">let </span>backoff = <span class="kw">match </span>fetch_kind {
             <span class="comment">// need to be fast the first time.
             </span>FetchKind::Initial =&gt; backoff_util::aggressive_backoff(),

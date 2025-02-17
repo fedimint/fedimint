@@ -293,9 +293,9 @@
 <span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, PeerError};
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
-<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-<span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientInputBundle};
-<span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+<span class="kw">use </span>fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
+<span class="kw">use </span>fedimint_client_module::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;

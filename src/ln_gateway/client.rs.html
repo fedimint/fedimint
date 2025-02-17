@@ -227,14 +227,14 @@
 
 <span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 <span class="kw">use </span>fedimint_client::db::ClientConfigKey;
-<span class="kw">use </span>fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-<span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
-<span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{Client, ClientBuilder};
+<span class="kw">use </span>fedimint_client_module::module::init::ClientModuleInitRegistry;
+<span class="kw">use </span>fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <span class="kw">use </span>fedimint_gw_client::GatewayClientInit;
 <span class="kw">use </span>fedimint_gwv2_client::GatewayClientInitV2;
 
