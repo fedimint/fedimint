@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::future::Future;
 use std::ops::ControlFlow;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,8 +31,9 @@ use tracing::{debug, warn};
 
 use crate::envs::{
     FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIND_BASE_EXECUTABLE_ENV,
-    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_DEVIMINT_CMD_INHERIT_STDERR_ENV,
-    FM_ELECTRS_BASE_EXECUTABLE_ENV, FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
+    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_CLIENT_DIR_ENV,
+    FM_DEVIMINT_CMD_INHERIT_STDERR_ENV, FM_ELECTRS_BASE_EXECUTABLE_ENV,
+    FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
     FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
     FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_LND_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
@@ -1160,6 +1162,52 @@ fn to_command(cli: Vec<String>) -> Command {
 /// Returns true if running backwards-compatibility tests
 pub fn is_backwards_compatibility_test() -> bool {
     is_env_var_set(FM_BACKWARDS_COMPATIBILITY_TEST_ENV)
+}
+
+/// Sets the fedimint-cli binary to match the fedimintd's version, which is
+/// needed for running DKG. Returns the original fedimint-cli path and mint
+/// client alias so the caller can reset the fedimint-cli version after DKG
+pub async fn use_matching_fedimint_cli_for_dkg() -> Result<(String, String)> {
+    let pkg_version = semver::Version::parse(env!("CARGO_PKG_VERSION"))?;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+    let original_fedimint_cli_path = crate::util::get_fedimint_cli_path().join(" ");
+
+    if pkg_version == fedimintd_version {
+        // we're on the current version if the fedimintd version is the same as the
+        // package version. to use the current version of `fedimint-cli` built by cargo,
+        // we need to unset FM_FEDIMINT_CLI_BASE_EXECUTABLE
+        std::env::remove_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV);
+    } else {
+        let parsed_fedimintd_version = fedimintd_version.to_string().replace(['-', '.'], "_");
+
+        // matches format defined by nix_binary_version_var_name in scripts/_common.sh
+        let fedimint_cli_path_var = format!("fm_bin_fedimint_cli_v{parsed_fedimintd_version}");
+        let fedimint_cli_path = std::env::var(fedimint_cli_path_var)?;
+        std::env::set_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, fedimint_cli_path);
+    }
+
+    let original_fm_mint_client = std::env::var(FM_MINT_CLIENT_ENV)?;
+    let fm_client_dir = std::env::var(FM_CLIENT_DIR_ENV)?;
+    let fm_client_dir_path_buf: PathBuf = PathBuf::from(fm_client_dir);
+
+    let fm_mint_client: String = format!(
+        "{fedimint_cli} --data-dir {datadir}",
+        fedimint_cli = crate::util::get_fedimint_cli_path().join(" "),
+        datadir = crate::vars::utf8(&fm_client_dir_path_buf)
+    );
+    std::env::set_var(FM_MINT_CLIENT_ENV, fm_mint_client);
+
+    Ok((original_fedimint_cli_path, original_fm_mint_client))
+}
+
+/// Sets the fedimint-cli and mint client alias
+pub fn use_fedimint_cli(original_fedimint_cli_path: String, original_fm_mint_client: String) {
+    std::env::set_var(
+        FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
+        original_fedimint_cli_path,
+    );
+
+    std::env::set_var(FM_MINT_CLIENT_ENV, original_fm_mint_client);
 }
 
 /// Parses a version string returned from clap
