@@ -15,15 +15,16 @@ use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::Message;
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
-use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{
+use fedimint_client::ClientHandleArc;
+use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client_module::module::recovery::NoModuleBackup;
+use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::sm::util::MapStateTransitions;
+use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
+use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
+use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;

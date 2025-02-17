@@ -33,12 +33,10 @@ use tracing::warn;
 
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
-use crate::oplog::{OperationLog, OperationLogEntry, UpdateStreamOrOutcome};
+use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, Executor, State};
 use crate::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
-use crate::{
-    oplog, AddStateMachinesResult, Client, InstancelessDynClientInputBundle, TransactionUpdates,
-};
+use crate::{oplog, AddStateMachinesResult, InstancelessDynClientInputBundle, TransactionUpdates};
 
 pub mod init;
 pub mod recovery;
@@ -83,7 +81,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         outputs: Vec<OutPoint>,
     ) -> anyhow::Result<()>;
 
-    fn operation_log(&self) -> &OperationLog;
+    fn operation_log(&self) -> &dyn IOperationLog;
 
     async fn has_active_states(&self, operation_id: OperationId) -> bool;
 
@@ -110,7 +108,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
     );
 }
 
-/// A final, fully initialized [`crate::Client`]
+/// A final, fully initialized client
 ///
 /// Client modules need to be able to access a `Client` they are a part
 /// of. To break the circular dependency, the final `Client` is passed
@@ -132,7 +130,7 @@ impl FinalClientIface {
             .expect("client module context must not be use past client shutdown")
     }
 
-    pub(crate) fn set(&self, client: Weak<dyn ClientContextIface>) {
+    pub fn set(&self, client: Weak<dyn ClientContextIface>) {
         self.0.set(client).expect("FinalLazyClient already set");
     }
 }
@@ -308,7 +306,6 @@ where
         DynState::from_typed(self.module_instance_id, sm)
     }
 
-    /// See [`crate::Client::finalize_and_submit_transaction`]
     pub async fn finalize_and_submit_transaction<F, Meta>(
         &self,
         operation_id: OperationId,
@@ -333,12 +330,10 @@ where
             .await
     }
 
-    /// See [`crate::Client::transaction_updates`]
     pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
         self.client.get().transaction_updates(operation_id).await
     }
 
-    /// See [`crate::Client::await_primary_module_outputs`]
     pub async fn await_primary_module_outputs(
         &self,
         operation_id: OperationId,
@@ -508,7 +503,14 @@ where
         dbtx.ensure_global()
             .expect("Must deal with global dbtx here");
 
-        if Client::operation_exists_dbtx(&mut dbtx.to_ref_nc(), operation_id).await {
+        if self
+            .client
+            .get()
+            .operation_log()
+            .get_operation_dbtx(&mut dbtx.to_ref_nc(), operation_id)
+            .await
+            .is_some()
+        {
             bail!(
                 "Operation with id {} already exists",
                 operation_id.fmt_short()
@@ -518,7 +520,12 @@ where
         self.client
             .get()
             .operation_log()
-            .add_operation_log_entry(&mut dbtx.to_ref_nc(), operation_id, op_type, operation_meta)
+            .add_operation_log_entry_dbtx(
+                &mut dbtx.to_ref_nc(),
+                operation_id,
+                op_type,
+                serde_json::to_value(operation_meta).expect("Can't fail"),
+            )
             .await;
 
         self.client
@@ -533,15 +540,33 @@ where
 
     pub fn outcome_or_updates<U, S>(
         &self,
-        operation: &OperationLogEntry,
+        operation: OperationLogEntry,
         operation_id: OperationId,
-        stream_gen: impl FnOnce() -> S,
+        stream_gen: impl FnOnce() -> S + 'static,
     ) -> UpdateStreamOrOutcome<U>
     where
         U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
         S: Stream<Item = U> + MaybeSend + 'static,
     {
-        operation.outcome_or_updates(&self.global_db(), operation_id, stream_gen)
+        use futures::StreamExt;
+        match self.client.get().operation_log().outcome_or_updates(
+            &self.global_db(),
+            operation_id,
+            operation,
+            Box::new(move || {
+                let stream_gen = stream_gen();
+                Box::pin(
+                    stream_gen.map(move |item| serde_json::to_value(item).expect("Can't fail")),
+                )
+            }),
+        ) {
+            UpdateStreamOrOutcome::UpdateStream(stream) => UpdateStreamOrOutcome::UpdateStream(
+                Box::pin(stream.map(|u| serde_json::from_value(u).expect("Can't fail"))),
+            ),
+            UpdateStreamOrOutcome::Outcome(o) => {
+                UpdateStreamOrOutcome::Outcome(serde_json::from_value(o).expect("Can't fail"))
+            }
+        }
     }
 
     pub async fn claim_inputs<I, S>(
@@ -599,11 +624,11 @@ where
         self.client
             .get()
             .operation_log()
-            .add_operation_log_entry(
+            .add_operation_log_entry_dbtx(
                 &mut dbtx.global_dbtx(self.global_dbtx_access_token),
                 operation_id,
                 operation_type,
-                operation_meta,
+                serde_json::to_value(operation_meta).expect("Can't fail"),
             )
             .await;
     }

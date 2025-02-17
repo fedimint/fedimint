@@ -1,9 +1,9 @@
 use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::sha256;
-use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};

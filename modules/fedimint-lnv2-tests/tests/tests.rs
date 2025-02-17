@@ -2,8 +2,8 @@ mod mock;
 
 use std::sync::Arc;
 
-use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{sats, Amount};

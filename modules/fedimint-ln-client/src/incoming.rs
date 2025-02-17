@@ -11,9 +11,9 @@ use core::fmt;
 use std::time::Duration;
 
 use bitcoin::hashes::sha256;
-use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::runtime::sleep;
@@ -102,7 +102,7 @@ impl State for IncomingStateMachine {
         &self,
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
-    ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
+    ) -> Vec<fedimint_client_module::sm::StateTransition<Self>> {
         match &self.state {
             IncomingSmStates::FundingOffer(state) => state.transitions(global_context),
             IncomingSmStates::DecryptingPreimage(_state) => {

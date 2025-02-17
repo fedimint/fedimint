@@ -9,7 +9,7 @@ use std::{env, fs, iter};
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_client::module::ClientModule;
+use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ServerStatus,
 };

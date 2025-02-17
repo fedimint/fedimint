@@ -110,8 +110,8 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::{anyhow, bail};
-    use fedimint_client::derivable_secret::DerivableSecret;
     use fedimint_core::Amount;
+    use fedimint_derive_secret::DerivableSecret;
     use fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };

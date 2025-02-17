@@ -5,14 +5,14 @@ use std::sync::Arc;
 
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ClientConfigKey;
-use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{Client, ClientBuilder};
+use fedimint_client_module::module::init::ClientModuleInitRegistry;
+use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_gw_client::GatewayClientInit;
 use fedimint_gwv2_client::GatewayClientInitV2;
 

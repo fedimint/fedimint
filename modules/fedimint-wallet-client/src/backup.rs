@@ -4,10 +4,12 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
-use fedimint_client::module::init::ClientModuleRecoverArgs;
-use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
-use fedimint_client::module::ClientContext;
+use fedimint_client_module::module::init::recovery::{
+    RecoveryFromHistory, RecoveryFromHistoryCommon,
+};
+use fedimint_client_module::module::init::ClientModuleRecoverArgs;
+use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
+use fedimint_client_module::module::ClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};

@@ -272,6 +272,11 @@ impl<O> ClientOutputBundle<O, NeverClientStateMachine> {
         }
     }
 }
+impl<O, S> ClientOutputBundle<O, S> {
+    pub fn outputs(&self) -> &[ClientOutput<O>] {
+        &self.outputs
+    }
+}
 
 impl<O, S> ClientOutputBundle<O, S>
 where
@@ -280,10 +285,6 @@ where
 {
     pub fn new(outputs: Vec<ClientOutput<O>>, sm_gens: Vec<ClientOutputSM<S>>) -> Self {
         Self { outputs, sm_gens }
-    }
-
-    pub fn outputs(&self) -> &[ClientOutput<O>] {
-        &self.outputs
     }
 
     pub fn sms(&self) -> &[ClientOutputSM<S>] {
@@ -514,11 +515,11 @@ impl TransactionBuilder {
         (transaction, input_states.chain(output_states).collect())
     }
 
-    pub(crate) fn inputs(&self) -> impl Iterator<Item = &ClientInput> {
+    pub fn inputs(&self) -> impl Iterator<Item = &ClientInput> {
         self.inputs.iter().flat_map(|i| i.inputs.iter())
     }
 
-    pub(crate) fn outputs(&self) -> impl Iterator<Item = &ClientOutput> {
+    pub fn outputs(&self) -> impl Iterator<Item = &ClientOutput> {
         self.outputs.iter().flat_map(|i| i.outputs.iter())
     }
 }

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-use fedimint_client::module::init::{
+use fedimint_client_module::module::init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
 use fedimint_core::config::{ModuleInitParams, ServerModuleConfigGenParamsRegistry};

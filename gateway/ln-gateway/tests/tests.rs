@@ -7,11 +7,11 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin::hashes::{sha256, Hash};
-use fedimint_client::module::OutPointRange;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
 use fedimint_client::ClientHandleArc;
+use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;

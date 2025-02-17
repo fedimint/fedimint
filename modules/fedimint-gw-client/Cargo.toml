@@ -27,8 +27,10 @@ async-trait = { workspace = true }
 bitcoin = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.7.0-alpha" }
-fedimint-client = { path = "../../fedimint-client", version = "=0.7.0-alpha" }
+fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-lightning = { path = "../../gateway/fedimint-lightning", version = "=0.7.0-alpha" }
 fedimint-ln-client = { workspace = true }

@@ -6,9 +6,9 @@ use fedimint_api_client::api::{
     deserialize_outcome, FederationApiExt, PeerError, SerdeOutputOutcome,
 };
 use fedimint_api_client::query::FilterMapThreshold;
-use fedimint_client::module::{ClientContext, OutPointRange};
-use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::DynGlobalClientContext;
+use fedimint_client_module::module::{ClientContext, OutPointRange};
+use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};

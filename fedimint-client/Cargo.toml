@@ -24,4 +24,26 @@ name = "fedimint_client"
 path = "src/lib.rs"
 
 [dependencies]
+anyhow = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+bitcoin = { workspace = true, features = ["rand-std"] }
+fedimint-aead = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client-module = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
+fedimint-eventlog = { workspace = true }
+fedimint-logging = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
+
+[build-dependencies]
+fedimint-build = { workspace = true }

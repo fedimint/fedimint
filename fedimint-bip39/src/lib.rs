@@ -5,10 +5,10 @@
 use std::io::{Read, Write};
 
 pub use bip39::{Language, Mnemonic};
-use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_derive_secret::DerivableSecret;
 use rand::{CryptoRng, RngCore};
 
 /// BIP39 root secret encoding strategy allowing retrieval of the seed phrase.

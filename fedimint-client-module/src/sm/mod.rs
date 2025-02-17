@@ -1,5 +1,5 @@
 mod dbtx;
-pub(crate) mod executor;
+pub mod executor;
 /// State machine state interface
 mod state;
 pub mod util;

@@ -15,12 +15,12 @@ use api::MetaFederationApi;
 use common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
-use fedimint_client::db::ClientMigrationFn;
-use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientModule, IClientModule};
-use fedimint_client::sm::Context;
+use fedimint_client_module::db::ClientMigrationFn;
+use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
+use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client_module::module::recovery::NoModuleBackup;
+use fedimint_client_module::module::{ClientModule, IClientModule};
+use fedimint_client_module::sm::Context;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -225,9 +225,9 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
         &self,
         client_config: &ClientConfig,
         api: &DynGlobalApi,
-        fetch_kind: fedimint_client::meta::FetchKind,
+        fetch_kind: fedimint_client_module::meta::FetchKind,
         last_revision: Option<u64>,
-    ) -> anyhow::Result<fedimint_client::meta::MetaValues> {
+    ) -> anyhow::Result<fedimint_client_module::meta::MetaValues> {
         let backoff = match fetch_kind {
             // need to be fast the first time.
             FetchKind::Initial => backoff_util::aggressive_backoff(),

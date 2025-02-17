@@ -1,19 +1,23 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use anyhow::bail;
 use assert_matches::assert_matches;
-use fedimint_client::Client;
+use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client_module::oplog::OperationLogEntry;
+use fedimint_core::core::OperationId;
+use fedimint_core::module::CommonModuleInit as _;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, secp256k1, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
-    ln_operation, InternalPayState, LightningClientInit, LightningClientModule,
-    LightningOperationMeta, LnPayState, LnReceiveState, MockGatewayConnection,
-    OutgoingLightningPayment, PayType,
+    InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
+    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
+use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
@@ -22,6 +26,23 @@ use fedimint_testing::{Gateway, LightningModuleMode};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::rngs::OsRng;
 use secp256k1::Keypair;
+
+pub async fn ln_operation(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+) -> anyhow::Result<OperationLogEntry> {
+    let operation = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
+
+    if operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
+        bail!("Operation is not a lightning operation");
+    }
+
+    Ok(operation)
+}
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -605,7 +626,7 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash as BitcoinHash};
-    use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_client_module::module::init::DynClientModuleInit;
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{

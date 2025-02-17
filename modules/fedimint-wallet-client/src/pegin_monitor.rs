@@ -4,8 +4,8 @@ use std::time::{Duration, SystemTime};
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
-use fedimint_client::module::{ClientContext, OutPointRange};
-use fedimint_client::transaction::{ClientInput, ClientInputBundle};
+use fedimint_client_module::module::{ClientContext, OutPointRange};
+use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,

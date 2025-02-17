@@ -7,7 +7,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::PeerId;
 
-fn discover_common_core_api_version(
+pub fn discover_common_core_api_version(
     client_versions: &SupportedCoreApiVersions,
     peer_versions: &BTreeMap<PeerId, SupportedCoreApiVersions>,
 ) -> Option<ApiVersion> {

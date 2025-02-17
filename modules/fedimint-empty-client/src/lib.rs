@@ -4,11 +4,11 @@
 use std::collections::BTreeMap;
 
 use db::DbKeyPrefix;
-use fedimint_client::db::ClientMigrationFn;
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
-use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
-use fedimint_client::sm::Context;
+use fedimint_client_module::db::ClientMigrationFn;
+use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
+use fedimint_client_module::module::recovery::NoModuleBackup;
+use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client_module::sm::Context;
 use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};

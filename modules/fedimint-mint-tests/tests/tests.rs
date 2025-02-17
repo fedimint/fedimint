@@ -506,9 +506,10 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bls12_381::Scalar;
-    use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-    use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
-    use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_client_module::module::init::recovery::{
+        RecoveryFromHistory, RecoveryFromHistoryCommon,
+    };
+    use fedimint_client_module::module::init::DynClientModuleInit;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -516,6 +517,7 @@ mod fedimint_migration_tests {
     use fedimint_core::{
         secp256k1, Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId,
     };
+    use fedimint_derive_secret::{ChildId, DerivableSecret};
     use fedimint_logging::TracingSetup;
     use fedimint_mint_client::backup::recovery::{
         MintRecovery, MintRecoveryState, MintRecoveryStateV2,

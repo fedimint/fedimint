@@ -4,9 +4,10 @@ use std::time::Duration;
 
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
-use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{AdminCreds, Client, ClientHandleArc};
+use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client_module::module::init::ClientModuleInitRegistry;
+use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client_module::AdminCreds;
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,

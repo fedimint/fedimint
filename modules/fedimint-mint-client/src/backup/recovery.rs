@@ -2,9 +2,11 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
-use fedimint_client::module::init::ClientModuleRecoverArgs;
-use fedimint_client::module::{ClientContext, OutPointRange};
+use fedimint_client_module::module::init::recovery::{
+    RecoveryFromHistory, RecoveryFromHistoryCommon,
+};
+use fedimint_client_module::module::init::ClientModuleRecoverArgs;
+use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};

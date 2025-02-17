@@ -18,6 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 fedimint-client = { workspace = true }
+fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-rocksdb = { workspace = true }

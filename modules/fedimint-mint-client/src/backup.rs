@@ -1,4 +1,4 @@
-use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
+use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};

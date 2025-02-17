@@ -30,8 +30,11 @@ impl<'inner, 'parent> ClientSMDatabaseTransaction<'inner, 'parent> {
     /// Returns the non-isolated database transaction only accessible to the
     /// client internal code. This is useful for submitting Fedimint
     /// transactions from within state transitions.
-    #[allow(dead_code)]
-    pub(crate) fn global_tx(&mut self) -> &mut DatabaseTransaction<'parent> {
+    // TODO: We don't want the client module to call this directly, ideally this
+    // would be private, but after we've split fedimint-client-module and fedimint-client
+    // we need to make it public.
+    #[doc(hidden)]
+    pub fn global_tx(&mut self) -> &mut DatabaseTransaction<'parent> {
         self.dbtx
     }
 
