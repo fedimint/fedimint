@@ -248,9 +248,7 @@ impl ServerModuleInit for LightningInit {
                 (
                     peer,
                     LightningConfig {
-                        local: LightningConfigLocal {
-                            bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-                        },
+                        local: LightningConfigLocal,
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
@@ -278,9 +276,7 @@ impl ServerModuleInit for LightningInit {
         let (polynomial, mut sks) = peers.run_dkg_g1().await?;
 
         let server = LightningConfig {
-            local: LightningConfigLocal {
-                bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-            },
+            local: LightningConfigLocal,
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: PublicKeySet::from(Commitment::from(polynomial)),
                 fee_consensus: FeeConsensus::default(),
