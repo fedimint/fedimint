@@ -17,8 +17,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Committable, CoreMigrationFn, DatabaseTransaction, DatabaseVersion,
-    IDatabaseTransactionOpsCoreTyped, NonCommittable,
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    NonCommittable,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -468,7 +468,7 @@ impl ServerModule for Meta {
 impl Meta {
     async fn handle_submit_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, Committable>,
+        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
         _auth: &ApiAuth,
         req: &SubmitRequest,
     ) -> Result<(), ApiError> {

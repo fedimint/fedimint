@@ -940,13 +940,8 @@ impl ServerModule for Wallet {
                     check_auth(context)?;
 
                     let mut dbtx = context.dbtx();
-
                     dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
-
-                    dbtx.commit_tx_result().await.map_err(|e| ApiError::server_error(e.to_string()))?;
-
                     Ok(())
-
                 }
             },
             api_endpoint! {
