@@ -2347,12 +2347,7 @@
 <a href="#2346" id="2346">2346</a>
 <a href="#2347" id="2347">2347</a>
 <a href="#2348" id="2348">2348</a>
-<a href="#2349" id="2349">2349</a>
-<a href="#2350" id="2350">2350</a>
-<a href="#2351" id="2351">2351</a>
-<a href="#2352" id="2352">2352</a>
-<a href="#2353" id="2353">2353</a>
-<a href="#2354" id="2354">2354</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2349" id="2349">2349</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -3296,13 +3291,8 @@
                     check_auth(context)<span class="question-mark">?</span>;
 
                     <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.dbtx();
-
                     dbtx.insert_entry(<span class="kw-2">&amp;</span>ConsensusVersionVotingActivationKey, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
-
-                    dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|e| ApiError::server_error(e.to_string()))<span class="question-mark">?</span>;
-
                     <span class="prelude-val">Ok</span>(())
-
                 }
             },
             <span class="macro">api_endpoint!</span> {

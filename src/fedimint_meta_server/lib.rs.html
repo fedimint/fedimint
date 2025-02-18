@@ -546,8 +546,8 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{
-    Committable, CoreMigrationFn, DatabaseTransaction, DatabaseVersion,
-    IDatabaseTransactionOpsCoreTyped, NonCommittable,
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    NonCommittable,
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
@@ -997,7 +997,7 @@
 <span class="kw">impl </span>Meta {
     <span class="kw">async fn </span>handle_submit_request(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Committable&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
         _auth: <span class="kw-2">&amp;</span>ApiAuth,
         req: <span class="kw-2">&amp;</span>SubmitRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {

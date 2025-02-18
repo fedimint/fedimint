@@ -692,7 +692,8 @@
 <a href="#691" id="691">691</a>
 <a href="#692" id="692">692</a>
 <a href="#693" id="693">693</a>
-<a href="#694" id="694">694</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core module system traits and types.
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a></pre></div><pre class="rust"><code><span class="doccomment">//! Core module system traits and types.
 //!
 //! Fedimint supports modules to allow extending its functionality.
 //! Some of the standard functionality is implemented in form of modules as
@@ -736,6 +737,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
+    NonCommittable,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::fmt_utils::AbbreviateHexBytes;
@@ -880,13 +882,13 @@
     }
 
     <span class="doccomment">/// Database tx handle, will be committed
-    </span><span class="kw">pub fn </span>dbtx&lt;<span class="lifetime">'s</span>, <span class="lifetime">'mtx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">'mtx</span>, Committable&gt;
+    </span><span class="kw">pub fn </span>dbtx&lt;<span class="lifetime">'s</span>, <span class="lifetime">'mtx</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'s </span><span class="kw-2">mut </span><span class="self">self</span>) -&gt; DatabaseTransaction&lt;<span class="lifetime">'mtx</span>, NonCommittable&gt;
     <span class="kw">where
         </span><span class="lifetime">'a</span>: <span class="lifetime">'mtx</span>,
         <span class="lifetime">'s</span>: <span class="lifetime">'mtx</span>,
     {
         <span class="comment">// dbtx is already isolated.
-        </span><span class="self">self</span>.dbtx.to_ref()
+        </span><span class="self">self</span>.dbtx.to_ref_nc()
     }
 
     <span class="doccomment">/// Returns the auth set on the request (regardless of whether it was
