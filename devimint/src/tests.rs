@@ -1048,7 +1048,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         );
     }
 
-    Ok(())
+    panic!("Let's see the logs");
 }
 
 pub async fn start_hold_invoice_payment(
