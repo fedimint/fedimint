@@ -2370,8 +2370,8 @@
 
         <span class="kw">let </span>(action, preimage) = <span class="kw">match </span>action {
             PaymentAction::Settle(preimage) =&gt; (ResolveHoldForwardAction::Settle, preimage),
-            PaymentAction::Cancel =&gt; (ResolveHoldForwardAction::Resume, Preimage([<span class="number">0</span>; <span class="number">32</span>])),
-            PaymentAction::Forward =&gt; (ResolveHoldForwardAction::Fail, Preimage([<span class="number">0</span>; <span class="number">32</span>])),
+            PaymentAction::Cancel =&gt; (ResolveHoldForwardAction::Fail, Preimage([<span class="number">0</span>; <span class="number">32</span>])),
+            PaymentAction::Forward =&gt; (ResolveHoldForwardAction::Resume, Preimage([<span class="number">0</span>; <span class="number">32</span>])),
         };
 
         <span class="comment">// First check if this completion request corresponds to a HOLD LNv2 invoice
