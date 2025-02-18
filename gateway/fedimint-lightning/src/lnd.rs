@@ -929,8 +929,8 @@ impl ILnRpcClient for GatewayLndClient {
 
         let (action, preimage) = match action {
             PaymentAction::Settle(preimage) => (ResolveHoldForwardAction::Settle, preimage),
-            PaymentAction::Cancel => (ResolveHoldForwardAction::Resume, Preimage([0; 32])),
-            PaymentAction::Forward => (ResolveHoldForwardAction::Fail, Preimage([0; 32])),
+            PaymentAction::Cancel => (ResolveHoldForwardAction::Fail, Preimage([0; 32])),
+            PaymentAction::Forward => (ResolveHoldForwardAction::Resume, Preimage([0; 32])),
         };
 
         // First check if this completion request corresponds to a HOLD LNv2 invoice
