@@ -23,7 +23,7 @@ use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_testing::ln::LightningNodeType;
 use itertools::Itertools;
 use ln_gateway::rpc::{GatewayBalances, GatewayFedConfig, GatewayInfo};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Parser)]
 struct GatewayTestOpts {
@@ -570,6 +570,16 @@ async fn liquidity_test() -> anyhow::Result<()> {
             let invoice = gw_receive.create_invoice(1_000_000).await?;
             gw_send.pay_invoice(invoice).await?;
         }
+
+        info!("Testing paying through LND Gateway...");
+        let invoice = gw_ldk.create_invoice(1_550_000).await?;
+        let cln = dev_fed.cln().await?;
+        // Need to try to pay the invoice multiple times in case the channel graph has not been updated yet.
+        retry("CLN pay LDK", aggressive_backoff_long(), || async {
+            debug!("Trying CLN -> LND -> LDK...");
+            cln.pay_bolt11_invoice(invoice.to_string()).await?;
+            Ok(())
+        }).await?;
 
         info!("Pegging-out gateways...");
         federation.pegout_gateways(500_000_000, gateways.clone()).await?;
