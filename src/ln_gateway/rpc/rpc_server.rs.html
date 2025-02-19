@@ -452,7 +452,19 @@
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -462,7 +474,9 @@
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_lightning::{CloseChannelsWithPeerRequest, OpenChannelRequest, SendOnchainRequest};
+<span class="kw">use </span>fedimint_lightning::{
+    CloseChannelsWithPeerRequest, GetInvoiceRequest, OpenChannelRequest, SendOnchainRequest,
+};
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
@@ -484,11 +498,11 @@
     SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT,
     BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
     CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
-    RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::error::{AdminGatewayError, PublicGatewayError};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -609,6 +623,7 @@
             PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
             post(pay_invoice_operator),
         )
+        .route(GET_INVOICE_ENDPOINT, post(get_invoice))
         .route(GET_LN_ONCHAIN_ADDRESS_ENDPOINT, get(get_ln_onchain_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
@@ -905,5 +920,14 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
     <span class="kw">let </span>payment_summary = gateway.handle_payment_summary_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(payment_summary)))
+}
+
+<span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]
+</span><span class="kw">async fn </span>get_invoice(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;GetInvoiceRequest&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, AdminGatewayError&gt; {
+    <span class="kw">let </span>invoice = gateway.handle_get_invoice_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(invoice)))
 }
 </code></pre></div></section></main></body></html>

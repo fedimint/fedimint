@@ -2416,7 +2416,18 @@
 <a href="#2415" id="2415">2415</a>
 <a href="#2416" id="2416">2416</a>
 <a href="#2417" id="2417">2417</a>
-<a href="#2418" id="2418">2418</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2418" id="2418">2418</a>
+<a href="#2419" id="2419">2419</a>
+<a href="#2420" id="2420">2420</a>
+<a href="#2421" id="2421">2421</a>
+<a href="#2422" id="2422">2422</a>
+<a href="#2423" id="2423">2423</a>
+<a href="#2424" id="2424">2424</a>
+<a href="#2425" id="2425">2425</a>
+<a href="#2426" id="2426">2426</a>
+<a href="#2427" id="2427">2427</a>
+<a href="#2428" id="2428">2428</a>
+<a href="#2429" id="2429">2429</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2493,9 +2504,9 @@
 <span class="kw">use </span>fedimint_lightning::lnd::GatewayLndClient;
 <span class="kw">use </span>fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningContext, LightningRpcError, OpenChannelRequest, PayInvoiceResponse, PaymentAction,
-    RouteHtlcStream, SendOnchainRequest,
+    GetInvoiceRequest, GetInvoiceResponse, ILnRpcClient, InterceptPaymentRequest,
+    InterceptPaymentResponse, InvoiceDescription, LightningContext, LightningRpcError,
+    OpenChannelRequest, PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
 };
 <span class="kw">use </span>fedimint_ln_client::pay::PaymentData;
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
@@ -4066,6 +4077,17 @@
             outgoing: PaymentStats::compute(<span class="kw-2">&amp;</span>outgoing),
             incoming: PaymentStats::compute(<span class="kw-2">&amp;</span>incoming),
         })
+    }
+
+    <span class="doccomment">/// Retrieves an invoice by the payment hash if it exists, otherwise returns
+    /// `None`.
+    </span><span class="kw">pub async fn </span>handle_get_invoice_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: GetInvoiceRequest,
+    ) -&gt; AdminResult&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;&gt; {
+        <span class="kw">let </span>lightning_context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>invoice = lightning_context.lnrpc.get_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(invoice)
     }
 
     <span class="doccomment">/// Registers the gateway with each specified federation.

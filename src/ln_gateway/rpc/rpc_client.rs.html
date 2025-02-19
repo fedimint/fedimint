@@ -319,12 +319,23 @@
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
 <a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Txid};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_lightning::{
-    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, OpenChannelRequest,
-    SendOnchainRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
+    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
 };
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>reqwest::{Method, StatusCode};
@@ -341,7 +352,7 @@
     SpendEcashResponse, WithdrawPayload, WithdrawResponse, ADDRESS_ENDPOINT,
     ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
@@ -590,6 +601,17 @@
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(PAYMENT_SUMMARY_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>get_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: GetInvoiceRequest,
+    ) -&gt; GatewayRpcResult&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(GET_INVOICE_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}

@@ -2940,7 +2940,7 @@
     </span><span class="macro">info!</span>(<span class="string">"Testing CLN can pay LND directly"</span>);
     <span class="kw">let </span>(invoice, payment_hash) = lnd.invoice(<span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     cln.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
-    lnd.wait_bolt11_invoice(payment_hash).<span class="kw">await</span><span class="question-mark">?</span>;
+    gw_lnd.wait_bolt11_invoice(payment_hash).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// fedimintd introduced wpkh for single guardian federations in v0.3.0 (9e35bdb)
     // The code path is backwards-compatible, however this test will fail if we
