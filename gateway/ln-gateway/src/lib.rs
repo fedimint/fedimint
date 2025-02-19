@@ -1836,14 +1836,16 @@ impl Gateway {
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     pub async fn unannounce_from_all_federations(&self) {
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
-        let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
+        if self.is_running_lnv1() {
+            let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+            let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
 
-        self.federation_manager
-            .read()
-            .await
-            .unannounce_from_all_federations(gateway_keypair)
-            .await;
+            self.federation_manager
+                .read()
+                .await
+                .unannounce_from_all_federations(gateway_keypair)
+                .await;
+        }
     }
 
     fn create_lightning_client(
