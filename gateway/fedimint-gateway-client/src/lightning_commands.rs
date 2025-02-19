@@ -1,7 +1,7 @@
 use bitcoin::hashes::sha256;
 use clap::Subcommand;
+use fedimint_gateway_client::GatewayRpcClient;
 use fedimint_gateway_common::{CreateInvoiceForOperatorPayload, PayInvoiceForOperatorPayload};
-use fedimint_gateway_server::rpc::rpc_client::GatewayRpcClient;
 use fedimint_lightning::{CloseChannelsWithPeerRequest, GetInvoiceRequest, OpenChannelRequest};
 use lightning_invoice::Bolt11Invoice;
 

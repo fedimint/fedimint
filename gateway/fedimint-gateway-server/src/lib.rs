@@ -19,7 +19,7 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
-pub mod rpc;
+pub mod rpc_server;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -36,8 +36,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
 use clap::Parser;
 use client::GatewayClientBuilder;
+use config::GatewayOpts;
 pub use config::GatewayParameters;
-use config::{GatewayOpts, LightningMode};
 use db::GatewayDbtxNcExt;
 use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
@@ -69,11 +69,11 @@ use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentE
 use fedimint_gateway_common::{
     BackupPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
     DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig, FederationInfo,
-    GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, PaymentStats,
-    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse,
-    V1_API_ENDPOINT,
+    GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload, LightningMode,
+    MnemonicResponse, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
+    PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload,
+    ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
+    WithdrawResponse, V1_API_ENDPOINT,
 };
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
@@ -116,7 +116,7 @@ use crate::db::get_gatewayd_database_migrations;
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
-use crate::rpc::rpc_server::run_webserver;
+use crate::rpc_server::run_webserver;
 use crate::types::PrettyInterceptPaymentRequest;
 
 /// How long a gateway announcement stays valid
@@ -747,7 +747,7 @@ impl Gateway {
                 block_height: None,
                 synced_to_chain: false,
                 api: self.versioned_api.clone(),
-                //lightning_mode: self.lightning_mode.clone(),
+                lightning_mode: self.lightning_mode.clone(),
             });
         };
 
@@ -783,7 +783,7 @@ impl Gateway {
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
-            //lightning_mode: self.lightning_mode.clone(),
+            lightning_mode: self.lightning_mode.clone(),
         })
     }
 

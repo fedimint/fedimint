@@ -13,6 +13,7 @@ tor = ["fedimint-api-client/tor"]
 
 [dependencies]
 bitcoin = { workspace = true }
+clap = { workspace = true }
 fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.7.0-alpha" }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }

@@ -3,6 +3,11 @@ use std::time::Duration;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
+use clap::Subcommand;
+use envs::{
+    FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
+    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+};
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::OperationId;
@@ -16,6 +21,8 @@ use fedimint_mint_client::OOBNotes;
 use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
+
+mod envs;
 
 pub const V1_API_ENDPOINT: &str = "v1";
 
@@ -139,7 +146,7 @@ pub struct GatewayInfo {
     #[serde(default)]
     pub synced_to_chain: bool,
     pub api: SafeUrl,
-    //pub lightning_mode: serde_json::Value,
+    pub lightning_mode: LightningMode,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -283,4 +290,40 @@ impl PaymentStats {
 pub struct PaymentSummaryPayload {
     pub start_millis: u64,
     pub end_millis: u64,
+}
+
+#[derive(Debug, Clone, Subcommand, Serialize, Deserialize, Eq, PartialEq)]
+pub enum LightningMode {
+    #[clap(name = "lnd")]
+    Lnd {
+        /// LND RPC address
+        #[arg(long = "lnd-rpc-host", env = FM_LND_RPC_ADDR_ENV)]
+        lnd_rpc_addr: String,
+
+        /// LND TLS cert file path
+        #[arg(long = "lnd-tls-cert", env = FM_LND_TLS_CERT_ENV)]
+        lnd_tls_cert: String,
+
+        /// LND macaroon file path
+        #[arg(long = "lnd-macaroon", env = FM_LND_MACAROON_ENV)]
+        lnd_macaroon: String,
+    },
+    #[clap(name = "ldk")]
+    Ldk {
+        /// LDK esplora server URL
+        #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
+        esplora_server_url: Option<String>,
+
+        /// LDK bitcoind server URL
+        #[arg(long = "ldk-bitcoind-rpc-url", env = FM_LDK_BITCOIND_RPC_URL)]
+        bitcoind_rpc_url: Option<String>,
+
+        /// LDK network (defaults to regtest if not provided)
+        #[arg(long = "ldk-network", env = FM_LDK_NETWORK, default_value = "regtest")]
+        network: Network,
+
+        /// LDK lightning server port
+        #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
+        lightning_port: u16,
+    },
 }

@@ -33,7 +33,7 @@ members = [
   "fedimint-workspace",
   "fedimintd",
   "fuzz",
-  "gateway/cli",
+  "gateway/fedimint-gateway-client",
   "gateway/fedimint-gateway-common",
   "gateway/fedimint-gateway-server",
   "gateway/fedimint-lightning",
