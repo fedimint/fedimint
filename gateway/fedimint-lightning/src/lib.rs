@@ -4,6 +4,7 @@ pub mod lnd;
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use async_trait::async_trait;
 use bitcoin::address::NetworkUnchecked;
@@ -210,6 +211,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Returns a summary of the lightning node's balance, including the onchain
     /// wallet, outbound liquidity, and inbound liquidity.
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError>;
+
+    async fn get_invoice(
+        &self,
+        get_invoice_request: GetInvoiceRequest,
+    ) -> Result<Option<GetInvoiceResponse>, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {
@@ -397,4 +403,25 @@ pub struct SendOnchainRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetInvoiceRequest {
+    pub payment_hash: sha256::Hash,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetInvoiceResponse {
+    pub preimage: Option<String>,
+    pub payment_hash: Option<sha256::Hash>,
+    pub amount: Amount,
+    pub created_at: SystemTime,
+    pub status: PaymentStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum PaymentStatus {
+    Pending,
+    Succeeded,
+    Failed,
 }

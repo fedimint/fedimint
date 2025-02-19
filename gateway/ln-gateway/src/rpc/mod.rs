@@ -31,6 +31,7 @@ pub const CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt11_in
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
 pub const GET_BALANCES_ENDPOINT: &str = "/balances";
 pub const GATEWAY_INFO_POST_ENDPOINT: &str = "/info";
+pub const GET_INVOICE_ENDPOINT: &str = "/get_invoice";
 pub const GET_LN_ONCHAIN_ADDRESS_ENDPOINT: &str = "/get_ln_onchain_address";
 pub const LEAVE_FED_ENDPOINT: &str = "/leave_fed";
 pub const LIST_ACTIVE_CHANNELS_ENDPOINT: &str = "/list_active_channels";

@@ -1,11 +1,12 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use bitcoin::hashes::Hash;
+use bitcoin::hashes::{sha256, Hash};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::contracts::Preimage;
@@ -45,10 +46,10 @@ use super::{
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
-    SendOnchainResponse,
+    CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
+    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelResponse,
+    PayInvoiceResponse, PaymentAction, SendOnchainRequest, SendOnchainResponse,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
@@ -1345,6 +1346,46 @@ impl ILnRpcClient for GatewayLndClient {
             lightning_balance_msats,
             inbound_lightning_liquidity_msats,
         })
+    }
+
+    async fn get_invoice(
+        &self,
+        get_invoice_request: GetInvoiceRequest,
+    ) -> Result<Option<GetInvoiceResponse>, LightningRpcError> {
+        let mut client = self.connect().await?;
+        let invoice = client
+            .invoices()
+            .lookup_invoice_v2(LookupInvoiceMsg {
+                invoice_ref: Some(InvoiceRef::PaymentHash(
+                    get_invoice_request.payment_hash.consensus_encode_to_vec(),
+                )),
+                ..Default::default()
+            })
+            .await;
+        let invoice = match invoice {
+            Ok(invoice) => invoice.into_inner(),
+            Err(_) => return Ok(None),
+        };
+        let preimage: [u8; 32] = invoice
+            .clone()
+            .r_preimage
+            .try_into()
+            .expect("Could not convert preimage");
+        let status = match &invoice.state() {
+            InvoiceState::Settled => crate::PaymentStatus::Succeeded,
+            InvoiceState::Canceled => crate::PaymentStatus::Failed,
+            _ => crate::PaymentStatus::Pending,
+        };
+
+        Ok(Some(GetInvoiceResponse {
+            preimage: Some(preimage.consensus_encode_to_hex()),
+            payment_hash: Some(
+                sha256::Hash::from_slice(&invoice.r_hash).expect("Could not convert payment hash"),
+            ),
+            amount: Amount::from_msats(invoice.value_msat as u64),
+            created_at: UNIX_EPOCH + Duration::from_secs(invoice.creation_date as u64),
+            status,
+        }))
     }
 }
 

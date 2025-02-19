@@ -75,9 +75,9 @@ use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    LightningContext, LightningRpcError, OpenChannelRequest, PayInvoiceResponse, PaymentAction,
-    RouteHtlcStream, SendOnchainRequest,
+    GetInvoiceRequest, GetInvoiceResponse, ILnRpcClient, InterceptPaymentRequest,
+    InterceptPaymentResponse, InvoiceDescription, LightningContext, LightningRpcError,
+    OpenChannelRequest, PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -1648,6 +1648,17 @@ impl Gateway {
             outgoing: PaymentStats::compute(&outgoing),
             incoming: PaymentStats::compute(&incoming),
         })
+    }
+
+    /// Retrieves an invoice by the payment hash if it exists, otherwise returns
+    /// `None`.
+    pub async fn handle_get_invoice_msg(
+        &self,
+        payload: GetInvoiceRequest,
+    ) -> AdminResult<Option<GetInvoiceResponse>> {
+        let lightning_context = self.get_lightning_context().await?;
+        let invoice = lightning_context.lnrpc.get_invoice(payload).await?;
+        Ok(invoice)
     }
 
     /// Registers the gateway with each specified federation.

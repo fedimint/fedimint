@@ -2,8 +2,8 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
 use fedimint_lightning::{
-    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, OpenChannelRequest,
-    SendOnchainRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
+    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
 };
 use lightning_invoice::Bolt11Invoice;
 use reqwest::{Method, StatusCode};
@@ -20,7 +20,7 @@ use super::{
     SpendEcashResponse, WithdrawPayload, WithdrawResponse, ADDRESS_ENDPOINT,
     ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
@@ -269,6 +269,17 @@ impl GatewayRpcClient {
         let url = self
             .base_url
             .join(PAYMENT_SUMMARY_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn get_invoice(
+        &self,
+        payload: GetInvoiceRequest,
+    ) -> GatewayRpcResult<Option<GetInvoiceResponse>> {
+        let url = self
+            .base_url
+            .join(GET_INVOICE_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }

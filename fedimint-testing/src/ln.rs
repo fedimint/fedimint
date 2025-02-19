@@ -14,10 +14,11 @@ use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
 use fedimint_lightning::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
-    LightningRpcError, ListActiveChannelsResponse, OpenChannelRequest, OpenChannelResponse,
-    PayInvoiceResponse, RouteHtlcStream, SendOnchainRequest, SendOnchainResponse,
+    CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
+    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, ILnRpcClient,
+    InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
+    ListActiveChannelsResponse, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
+    RouteHtlcStream, SendOnchainRequest, SendOnchainResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
@@ -295,6 +296,15 @@ impl ILnRpcClient for FakeLightningTest {
             onchain_balance_sats: 0,
             lightning_balance_msats: 0,
             inbound_lightning_liquidity_msats: 0,
+        })
+    }
+
+    async fn get_invoice(
+        &self,
+        _get_invoice_request: GetInvoiceRequest,
+    ) -> Result<Option<GetInvoiceResponse>, LightningRpcError> {
+        Err(LightningRpcError::FailedToGetInvoice {
+            failure_reason: "FakeLightningTest does not support getting invoices".to_string(),
         })
     }
 }
