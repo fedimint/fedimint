@@ -1372,9 +1372,9 @@ impl ILnRpcClient for GatewayLndClient {
             .try_into()
             .expect("Could not convert preimage");
         let status = match &invoice.state() {
-            InvoiceState::Settled => crate::PaymentStatus::Succeeded,
-            InvoiceState::Canceled => crate::PaymentStatus::Failed,
-            _ => crate::PaymentStatus::Pending,
+            InvoiceState::Settled => fedimint_gateway_common::PaymentStatus::Succeeded,
+            InvoiceState::Canceled => fedimint_gateway_common::PaymentStatus::Failed,
+            _ => fedimint_gateway_common::PaymentStatus::Pending,
         };
 
         Ok(Some(GetInvoiceResponse {

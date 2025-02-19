@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use bitcoin::address::NetworkUnchecked;
+use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network};
 use clap::Subcommand;
 use envs::{
@@ -290,6 +291,61 @@ impl PaymentStats {
 pub struct PaymentSummaryPayload {
     pub start_millis: u64,
     pub end_millis: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChannelInfo {
+    pub remote_pubkey: secp256k1::PublicKey,
+    pub channel_size_sats: u64,
+    pub outbound_liquidity_sats: u64,
+    pub inbound_liquidity_sats: u64,
+    pub short_channel_id: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OpenChannelRequest {
+    pub pubkey: secp256k1::PublicKey,
+    pub host: String,
+    pub channel_size_sats: u64,
+    pub push_amount_sats: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SendOnchainRequest {
+    pub address: Address<NetworkUnchecked>,
+    pub amount: BitcoinAmountOrAll,
+    pub fee_rate_sats_per_vbyte: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloseChannelsWithPeerRequest {
+    pub pubkey: secp256k1::PublicKey,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloseChannelsWithPeerResponse {
+    pub num_channels_closed: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetInvoiceRequest {
+    pub payment_hash: sha256::Hash,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetInvoiceResponse {
+    pub preimage: Option<String>,
+    pub payment_hash: Option<sha256::Hash>,
+    pub amount: Amount,
+    pub created_at: SystemTime,
+    pub status: PaymentStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum PaymentStatus {
+    Pending,
+    Succeeded,
+    Failed,
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize, Eq, PartialEq)]

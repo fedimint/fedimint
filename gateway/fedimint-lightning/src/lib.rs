@@ -4,17 +4,19 @@ pub mod lnd;
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use async_trait::async_trait;
-use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::sha256;
-use bitcoin::{Address, Network};
+use bitcoin::Network;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_core::Amount;
+use fedimint_gateway_common::{
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
+    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+};
 pub use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
@@ -281,15 +283,6 @@ impl dyn ILnRpcClient {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ChannelInfo {
-    pub remote_pubkey: secp256k1::PublicKey,
-    pub channel_size_sats: u64,
-    pub outbound_liquidity_sats: u64,
-    pub inbound_liquidity_sats: u64,
-    pub short_channel_id: u64,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetNodeInfoResponse {
     pub pub_key: PublicKey,
@@ -369,11 +362,6 @@ pub struct OpenChannelResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CloseChannelsWithPeerResponse {
-    pub num_channels_closed: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ListActiveChannelsResponse {
     pub channels: Vec<ChannelInfo>,
 }
@@ -383,45 +371,4 @@ pub struct GetBalancesResponse {
     pub onchain_balance_sats: u64,
     pub lightning_balance_msats: u64,
     pub inbound_lightning_liquidity_msats: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct OpenChannelRequest {
-    pub pubkey: secp256k1::PublicKey,
-    pub host: String,
-    pub channel_size_sats: u64,
-    pub push_amount_sats: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SendOnchainRequest {
-    pub address: Address<NetworkUnchecked>,
-    pub amount: BitcoinAmountOrAll,
-    pub fee_rate_sats_per_vbyte: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CloseChannelsWithPeerRequest {
-    pub pubkey: secp256k1::PublicKey,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetInvoiceRequest {
-    pub payment_hash: sha256::Hash,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetInvoiceResponse {
-    pub preimage: Option<String>,
-    pub payment_hash: Option<sha256::Hash>,
-    pub amount: Amount,
-    pub created_at: SystemTime,
-    pub status: PaymentStatus,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub enum PaymentStatus {
-    Pending,
-    Succeeded,
-    Failed,
 }

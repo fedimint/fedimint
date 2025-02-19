@@ -67,13 +67,14 @@ use fedimint_core::{
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
-    BackupPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
-    DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig, FederationInfo,
-    GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload, LightningMode,
-    MnemonicResponse, PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse,
-    PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload,
-    ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
-    WithdrawResponse, V1_API_ENDPOINT,
+    BackupPayload, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
+    FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
+    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningMode,
+    MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentLogPayload,
+    PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse, V1_API_ENDPOINT,
 };
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
@@ -83,10 +84,9 @@ use fedimint_gwv2_client::{GatewayClientModuleV2, IGatewayClientV2, EXPIRATION_D
 use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    GetInvoiceRequest, GetInvoiceResponse, ILnRpcClient, InterceptPaymentRequest,
-    InterceptPaymentResponse, InvoiceDescription, LightningContext, LightningRpcError,
-    OpenChannelRequest, PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
+    CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
+    InvoiceDescription, LightningContext, LightningRpcError, PayInvoiceResponse, PaymentAction,
+    RouteHtlcStream,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -1352,7 +1352,7 @@ impl Gateway {
     /// Lightning node.
     pub async fn handle_list_active_channels_msg(
         &self,
-    ) -> AdminResult<Vec<fedimint_lightning::ChannelInfo>> {
+    ) -> AdminResult<Vec<fedimint_gateway_common::ChannelInfo>> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.list_active_channels().await?;
         Ok(response.channels)

@@ -17,6 +17,12 @@ find modules/ -name Cargo.toml | grep common/ | while read -r cargo_toml ; do
     return 1
   fi
 done
+find gateway/fedimint-gateway-client/ -name Cargo.toml | while read -r cargo_toml ; do
+  if grep -E "fedimint-lightning" "$cargo_toml" > &2 ; then
+    >&2 echo "$cargo_toml must not depend on fedimint-lightning"
+    return 1
+  fi
+done
 find gateway/ -name Cargo.toml | while read -r cargo_toml ; do
   if grep -E "fedimint-server" "$cargo_toml" >&2 ; then
     >&2 echo "$cargo_toml must not depend on fedimint-server"

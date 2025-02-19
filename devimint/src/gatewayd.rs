@@ -11,9 +11,9 @@ use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
 use fedimint_gateway_common::{
-    GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT,
+    ChannelInfo, GatewayBalances, GetInvoiceResponse, MnemonicResponse, PaymentStatus,
+    PaymentSummaryResponse, V1_API_ENDPOINT,
 };
-use fedimint_lightning::{ChannelInfo, GetInvoiceResponse, PaymentStatus};
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
