@@ -1,5 +1,6 @@
+use bitcoin::hashes::sha256;
 use clap::Subcommand;
-use fedimint_lightning::{CloseChannelsWithPeerRequest, OpenChannelRequest};
+use fedimint_lightning::{CloseChannelsWithPeerRequest, GetInvoiceRequest, OpenChannelRequest};
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 
@@ -48,6 +49,12 @@ pub enum LightningCommands {
     },
     /// List active channels.
     ListActiveChannels,
+    /// Get details about a specific invoice
+    GetInvoice {
+        /// The payment hash of the invoice
+        #[clap(long)]
+        payment_hash: sha256::Hash,
+    },
 }
 
 impl LightningCommands {
@@ -101,6 +108,12 @@ impl LightningCommands {
             }
             Self::ListActiveChannels => {
                 let response = create_client().list_active_channels().await?;
+                print_response(response);
+            }
+            Self::GetInvoice { payment_hash } => {
+                let response = create_client()
+                    .get_invoice(GetInvoiceRequest { payment_hash })
+                    .await?;
                 print_response(response);
             }
         };

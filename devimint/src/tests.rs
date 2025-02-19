@@ -735,7 +735,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing CLN can pay LND directly");
     let (invoice, payment_hash) = lnd.invoice(1_000_000).await?;
     cln.pay_bolt11_invoice(invoice).await?;
-    lnd.wait_bolt11_invoice(payment_hash).await?;
+    gw_lnd.wait_bolt11_invoice(payment_hash).await?;
 
     // fedimintd introduced wpkh for single guardian federations in v0.3.0 (9e35bdb)
     // The code path is backwards-compatible, however this test will fail if we

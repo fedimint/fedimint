@@ -4,13 +4,14 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Context, Result};
+use bitcoin::hashes::sha256;
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::{Amount, BitcoinAmountOrAll};
-use fedimint_lightning::ChannelInfo;
+use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
+use fedimint_lightning::{ChannelInfo, GetInvoiceResponse, PaymentStatus};
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
@@ -24,7 +25,9 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA};
+use crate::version_constants::{
+    VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA,
+};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -620,5 +623,34 @@ impl Gatewayd {
     pub async fn payment_summary(&self) -> Result<PaymentSummaryResponse> {
         let out_json = cmd!(self, "payment-summary").out_json().await?;
         Ok(serde_json::from_value(out_json).expect("Could not deserialize PaymentSummaryResponse"))
+    }
+
+    pub async fn wait_bolt11_invoice(&self, payment_hash: Vec<u8>) -> Result<()> {
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_7_0_ALPHA {
+            match &self.ln {
+                Some(LightningNode::Lnd(lnd)) => {
+                    return lnd.wait_bolt11_invoice(payment_hash).await;
+                }
+                _ => panic!("Cannot wait on invoice in LDK before v0.7.0"),
+            }
+        }
+
+        let payment_hash =
+            sha256::Hash::from_slice(&payment_hash).expect("Could not parse payment hash");
+        let invoice_val = cmd!(
+            self,
+            "lightning",
+            "get-invoice",
+            "--payment-hash",
+            payment_hash
+        )
+        .out_json()
+        .await?;
+        let invoice: GetInvoiceResponse =
+            serde_json::from_value(invoice_val).expect("Could not parse GetInvoiceResponse");
+        anyhow::ensure!(invoice.status == PaymentStatus::Succeeded);
+
+        Ok(())
     }
 }

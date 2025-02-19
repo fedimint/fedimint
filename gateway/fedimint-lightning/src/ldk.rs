@@ -1,13 +1,14 @@
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use bitcoin::hashes::Hash;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{Network, OutPoint};
 use fedimint_bip39::Mnemonic;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
 use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
@@ -16,7 +17,7 @@ use fedimint_ln_common::contracts::Preimage;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::routing::gossip::NodeAlias;
-use ldk_node::payment::{PaymentKind, PaymentStatus, SendingParameters};
+use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::PaymentPreimage;
 use lightning::util::scid_utils::scid_from_parts;
@@ -30,9 +31,10 @@ use super::{
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
+    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelRequest,
+    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
     SendOnchainResponse,
 };
 
@@ -652,5 +654,91 @@ impl ILnRpcClient for GatewayLdkClient {
             lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
             inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
         })
+    }
+
+    async fn get_invoice(
+        &self,
+        get_invoice_request: GetInvoiceRequest,
+    ) -> Result<Option<GetInvoiceResponse>, LightningRpcError> {
+        let invoices = self
+            .node
+            .list_payments_with_filter(|details| {
+                details.direction == PaymentDirection::Inbound
+                    && details.id == PaymentId(get_invoice_request.payment_hash.to_byte_array())
+                    && !matches!(details.kind, PaymentKind::Onchain)
+            })
+            .iter()
+            .map(|details| {
+                let (preimage, payment_hash) = get_preimage_and_payment_hash(&details.kind);
+                let status = match details.status {
+                    PaymentStatus::Failed => crate::PaymentStatus::Failed,
+                    PaymentStatus::Succeeded => crate::PaymentStatus::Succeeded,
+                    PaymentStatus::Pending => crate::PaymentStatus::Pending,
+                };
+                GetInvoiceResponse {
+                    preimage: preimage.map(|p| p.0.consensus_encode_to_hex()),
+                    payment_hash,
+                    amount: Amount::from_msats(
+                        details
+                            .amount_msat
+                            .expect("amountless invoices are not supported"),
+                    ),
+                    created_at: UNIX_EPOCH + Duration::from_secs(details.latest_update_timestamp),
+                    status,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(invoices.first().cloned())
+    }
+}
+
+/// Maps LDK's `PaymentKind` to an optional preimage and an optional payment
+/// hash depending on the type of payment.
+fn get_preimage_and_payment_hash(kind: &PaymentKind) -> (Option<Preimage>, Option<sha256::Hash>) {
+    match kind {
+        PaymentKind::Bolt11 {
+            hash,
+            preimage,
+            secret: _,
+        } => (
+            preimage.map(|p| Preimage(p.0)),
+            Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
+        ),
+        PaymentKind::Bolt11Jit {
+            hash,
+            preimage,
+            secret: _,
+            lsp_fee_limits: _,
+        } => (
+            preimage.map(|p| Preimage(p.0)),
+            Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
+        ),
+        PaymentKind::Bolt12Offer {
+            hash,
+            preimage,
+            secret: _,
+            offer_id: _,
+            payer_note: _,
+            quantity: _,
+        } => (
+            preimage.map(|p| Preimage(p.0)),
+            hash.map(|h| sha256::Hash::from_slice(&h.0).expect("Failed to convert payment hash")),
+        ),
+        PaymentKind::Bolt12Refund {
+            hash,
+            preimage,
+            secret: _,
+            payer_note: _,
+            quantity: _,
+        } => (
+            preimage.map(|p| Preimage(p.0)),
+            hash.map(|h| sha256::Hash::from_slice(&h.0).expect("Failed to convert payment hash")),
+        ),
+        PaymentKind::Spontaneous { hash, preimage } => (
+            preimage.map(|p| Preimage(p.0)),
+            Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
+        ),
+        PaymentKind::Onchain => panic!("No preimage for onchain payment"),
     }
 }

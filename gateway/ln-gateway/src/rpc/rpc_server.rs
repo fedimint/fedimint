@@ -8,7 +8,9 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
-use fedimint_lightning::{CloseChannelsWithPeerRequest, OpenChannelRequest, SendOnchainRequest};
+use fedimint_lightning::{
+    CloseChannelsWithPeerRequest, GetInvoiceRequest, OpenChannelRequest, SendOnchainRequest,
+};
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
@@ -30,11 +32,11 @@ use super::{
     SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT,
     BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
     CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
-    RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::rpc::ConfigPayload;
@@ -155,6 +157,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
             post(pay_invoice_operator),
         )
+        .route(GET_INVOICE_ENDPOINT, post(get_invoice))
         .route(GET_LN_ONCHAIN_ADDRESS_ENDPOINT, get(get_ln_onchain_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
@@ -451,4 +454,13 @@ async fn payment_summary(
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let payment_summary = gateway.handle_payment_summary_msg(payload).await?;
     Ok(Json(json!(payment_summary)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn get_invoice(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<GetInvoiceRequest>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let invoice = gateway.handle_get_invoice_msg(payload).await?;
+    Ok(Json(json!(invoice)))
 }
