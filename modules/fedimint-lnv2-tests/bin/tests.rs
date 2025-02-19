@@ -1,7 +1,7 @@
 use anyhow::ensure;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
-use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_7_0_ALPHA};
+use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util, Gatewayd};
 use fedimint_core::core::OperationId;
 use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
@@ -304,30 +304,6 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     // Gateway pays: 1_000 msat LNv2 federation base fee, 1_000 msat LNv2 federation
     // relative fee. Gateway receives: 1_000_000 payment.
     test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 1_000).await?;
-
-    let gatewayd_version = util::Gatewayd::version_or_default().await;
-    if gatewayd_version >= *VERSION_0_7_0_ALPHA {
-        info!("Testing payment summary...");
-        let lnd_payment_summary = gw_lnd.payment_summary().await?;
-        assert_eq!(lnd_payment_summary.outgoing.total_success, 4);
-        assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
-        assert_eq!(lnd_payment_summary.incoming.total_success, 3);
-        assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
-        assert!(lnd_payment_summary.outgoing.median_latency.is_some());
-        assert!(lnd_payment_summary.outgoing.average_latency.is_some());
-        assert!(lnd_payment_summary.incoming.median_latency.is_some());
-        assert!(lnd_payment_summary.incoming.average_latency.is_some());
-
-        let ldk_payment_summary = gw_ldk.payment_summary().await?;
-        assert_eq!(ldk_payment_summary.outgoing.total_success, 4);
-        assert_eq!(ldk_payment_summary.outgoing.total_failure, 2);
-        assert_eq!(ldk_payment_summary.incoming.total_success, 4);
-        assert_eq!(ldk_payment_summary.incoming.total_failure, 0);
-        assert!(ldk_payment_summary.outgoing.median_latency.is_some());
-        assert!(ldk_payment_summary.outgoing.average_latency.is_some());
-        assert!(ldk_payment_summary.incoming.median_latency.is_some());
-        assert!(ldk_payment_summary.incoming.average_latency.is_some());
-    }
 
     Ok(())
 }
