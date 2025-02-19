@@ -57,7 +57,7 @@ futures-util = { workspace = true }
 hex = { workspace = true }
 lightning-invoice = { workspace = true }
 lockable = "0.1.1"
-prost = "0.13.4"
+prost = "0.13.5"
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
