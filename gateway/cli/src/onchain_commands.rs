@@ -1,8 +1,8 @@
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::BitcoinAmountOrAll;
+use fedimint_gateway_server::rpc::rpc_client::GatewayRpcClient;
 use fedimint_lightning::SendOnchainRequest;
-use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 
 use crate::print_response;
 

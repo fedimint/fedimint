@@ -68,7 +68,7 @@ impl FakeLightningTest {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Bolt11Invoice> {
+    ) -> fedimint_gateway_server::Result<Bolt11Invoice> {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 

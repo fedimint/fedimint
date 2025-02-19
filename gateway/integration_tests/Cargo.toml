@@ -18,9 +18,9 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-gateway-server = { workspace = true }
 fedimint-testing = { workspace = true }
 itertools = { workspace = true }
-ln-gateway = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

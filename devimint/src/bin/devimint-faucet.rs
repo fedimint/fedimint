@@ -15,8 +15,8 @@ use devimint::envs::{
 };
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::handle_version_hash_command;
+use fedimint_gateway_server::rpc::V1_API_ENDPOINT;
 use fedimint_logging::TracingSetup;
-use ln_gateway::rpc::V1_API_ENDPOINT;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;

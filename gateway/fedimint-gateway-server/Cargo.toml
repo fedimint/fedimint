@@ -1,9 +1,9 @@
 [package]
-name = "fedimint-ln-gateway"
+name = "fedimint-gateway-server"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
-description = "fedimint-ln-gateway sends/receives Lightning Network payments on behalf of Fedimint clients"
+description = "fedimint-gateway-server sends/receives Lightning Network payments on behalf of Fedimint clients"
 license = { workspace = true }
 readme = { workspace = true }
 repository = { workspace = true }
@@ -16,7 +16,7 @@ name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
 [lib]
-name = "ln_gateway"
+name = "fedimint_gateway_server"
 path = "src/lib.rs"
 
 [[test]]

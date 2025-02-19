@@ -21,6 +21,8 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::net::peers::IP2PConnections;
 use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 use fedimint_core::PeerId;
+use fedimint_gateway_server::rpc::ConnectFedPayload;
+use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::{
@@ -30,8 +32,6 @@ use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
 use fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
-use ln_gateway::rpc::ConnectFedPayload;
-use ln_gateway::Gateway;
 use tokio_rustls::rustls;
 use tracing::info;
 

@@ -5,8 +5,8 @@ use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::time::now;
 use fedimint_eventlog::{EventKind, EventLogId};
-use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{
+use fedimint_gateway_server::rpc::rpc_client::GatewayRpcClient;
+use fedimint_gateway_server::rpc::{
     ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
 };
 

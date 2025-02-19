@@ -10,12 +10,14 @@ use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
+use fedimint_gateway_server::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
+use fedimint_gateway_server::rpc::{
+    GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT,
+};
 use fedimint_lightning::{ChannelInfo, GetInvoiceResponse, PaymentStatus};
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
-use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::cmd;

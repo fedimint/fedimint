@@ -25,6 +25,7 @@ fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-gateway-server = { workspace = true }
 fedimint-lightning = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-ln-server = { workspace = true }
@@ -45,7 +46,6 @@ fs-lock = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
-ln-gateway = { workspace = true }
 nix = { version = "0.29.0", features = ["signal"] }
 rand = { workspace = true }
 semver = { workspace = true }

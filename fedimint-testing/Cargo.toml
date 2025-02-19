@@ -12,7 +12,7 @@ repository = { workspace = true }
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-tor = ["ln-gateway/tor"]
+tor = ["fedimint-gateway-server/tor"]
 
 [lib]
 name = "fedimint_testing"
@@ -30,6 +30,7 @@ fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-gateway-server = { package = "fedimint-gateway-server", path = "../gateway/fedimint-gateway-server", version = "=0.7.0-alpha" }
 fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.7.0-alpha" }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -39,7 +40,6 @@ fedimint-server = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
-ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway", version = "=0.7.0-alpha" }
 rand = { workspace = true }
 tempfile = "3.16.0"
 tokio = { workspace = true }

@@ -34,9 +34,9 @@ members = [
   "fedimintd",
   "fuzz",
   "gateway/cli",
+  "gateway/fedimint-gateway-server",
   "gateway/fedimint-lightning",
   "gateway/integration_tests",
-  "gateway/ln-gateway",
   "modules/fedimint-dummy-client",
   "modules/fedimint-dummy-common",
   "modules/fedimint-dummy-server",
@@ -140,6 +140,7 @@ fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=
 fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.7.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.7.0-alpha" }
 fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.7.0-alpha" }
+fedimint-gateway-server = { package = "fedimint-gateway-server", path = "./gateway/fedimint-gateway-server", version = "=0.7.0-alpha" }
 fedimint-gw-client = { path = "./modules/fedimint-gw-client", version = "=0.7.0-alpha" }
 fedimint-gwv2-client = { path = "./modules/fedimint-gwv2-client", version = "=0.7.0-alpha" }
 fedimint-lightning = { package = "fedimint-lightning", path = "./gateway/fedimint-lightning", version = "=0.7.0-alpha" }
@@ -182,7 +183,6 @@ jaq-core = "2.1.0"
 jaq-json = { version = "1.1.0", features = ["serde_json"] }
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
-ln-gateway = { package = "fedimint-ln-gateway", path = "./gateway/ln-gateway", version = "=0.7.0-alpha" }
 miniscript = "12.3.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
