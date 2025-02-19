@@ -341,8 +341,25 @@ done
 
 tests_with_versions=()
 for version_combo in "${version_matrix[@]}"; do
+
+  # read the versions from the format "FM: $fed_version CLI: $client_version GW: $gateway_version"
+  IFS=' ' read -r -a tokens <<< "$version_combo"
+  fed_version="${tokens[1]}"
+  client_version="${tokens[3]}"
+  gateway_version="${tokens[5]}"
+
+  if are_all_versions_current "$fed_version" "$client_version" "$gateway_version"; then
+    lnv2_flags=("LNv2: 1")
+  elif supports_lnv2 "$fed_version" "$client_version" "$gateway_version"; then
+    lnv2_flags=("LNv2: 0" "LNv2: 1")
+  else
+    lnv2_flags=("LNv2: 0")
+  fi
+
   for test in "${tests_to_run_in_parallel[@]}"; do
-    tests_with_versions+=("run_test_for_versions $test $version_combo")
+    for lnv2 in "${lnv2_flags[@]}"; do
+      tests_with_versions+=("run_test_for_versions $test $version_combo $lnv2")
+    done
   done
 done
 

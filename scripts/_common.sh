@@ -200,36 +200,28 @@ function generate_matrix() {
     for client_version in "${versions[@]}"; do
       for gateway_version in "${versions[@]}"; do
         if "$filter_fn" "$fed_version" "$client_version" "$gateway_version"; then
-
           # bash doesn't allow returning arrays, however we can mimic the
           # behavior of returning an array by echoing each element
-          if are_all_versions_current $fed_version $client_version $gateway_version; then
-              echo "FM: $fed_version CLI: $client_version GW: $gateway_version LNv2: 1"
-          elif supports_lnv2 $fed_version $client_version $gateway_version; then
-            for enable_lnv2 in {0..1}; do
-              echo "FM: $fed_version CLI: $client_version GW: $gateway_version LNv2: $enable_lnv2"
-            done
-          else
-              echo "FM: $fed_version CLI: $client_version GW: $gateway_version LNv2: 0"
-          fi
+          echo "FM: $fed_version CLI: $client_version GW: $gateway_version"
         fi
       done
     done
   done
 }
 
-export LNV2_STABLE_VERSION="v0.6-rc.1"
+export LNV2_STABLE_VERSION="v0.6.0-rc.1"
 function version_lt() {
-  #[ "$1" != "$(echo -e "$1\n$2" | sort -V | tail -n 1)" ]
-  if [ "$1" = "current" ] && [ "$2" = "current" ]; then
-    return 1
-  elif [ "$1" = "current" ]; then
+  if [ "$1" = "current" ]; then
     return 1
   elif [ "$2" = "current" ]; then
     return 0
-  else
-    [ "$1" != "$(echo -e "$1\n$2" | sort -V | tail -n 1)" ]
   fi
+
+  # replace `-` with `~` so `sort -V` correctly sorts pre-releases
+  v1="${1//-/\~}"
+  v2="${2//-/\~}"
+
+  [ "$v1" != "$(echo -e "$v1\n$v2" | sort -V | tail -n 1)" ]
 }
 
 function supports_lnv2() {
@@ -237,17 +229,11 @@ function supports_lnv2() {
   client_version=$2
   gateway_version=$3
 
-  if version_lt $fed_version $LNV2_STABLE_VERSION; then
-      return 1
-  fi
-
-  if version_lt $client_version $LNV2_STABLE_VERSION; then
-      return 1
-  fi
-
-  if version_lt $gateway_version $LNV2_STABLE_VERSION; then
-      return 1
-  fi
+  for version in "$fed_version" "$client_version" "$gateway_version"; do
+    if version_lt "$version" "$LNV2_STABLE_VERSION"; then
+        return 1
+    fi
+  done
 
   return 0
 }

@@ -59,6 +59,12 @@ for upgrade_path in "${upgrade_paths[@]}"; do
   versions_str=$(IFS=,; echo "${versions[*]}")
   first_version="${versions[0]}"
 
+  if version_lt "$first_version" "$LNV2_STABLE_VERSION"; then
+    lnv2_flags=(0)
+  else
+    lnv2_flags=(0 1)
+  fi
+
   if contains "fedimintd" "${test_kinds[@]}"; then
     fedimintd_paths=()
     for version in "${versions[@]}"; do
@@ -76,19 +82,11 @@ for upgrade_path in "${upgrade_paths[@]}"; do
       fi
     done
 
-    # If the first version is before LNv2's stablization, then we run the upgrade tests with LNv2 off since that is how users will upgrade in production.
-    # If it is equal or greater than LNv2 stablization, then we need to run the upgrade tests with LNv2 on and off.
-    if version_lt $first_version $LNV2_STABLE_VERSION; then
+    for enable_lnv2 in "${lnv2_flags[@]}"; do
       upgrade_tests+=(
-        "fm-run-test fedimintd-${versions_str}-lnv2-0 devimint upgrade-tests --lnv2 0 fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+        "fm-run-test fedimintd-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
       )
-    else
-      for enable_lnv2 in {0..1}; do
-        upgrade_tests+=(
-          "fm-run-test fedimintd-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
-        )
-      done
-    fi
+    done
   fi
 
   if contains "fedimint-cli" "${test_kinds[@]}"; then
@@ -102,17 +100,11 @@ for upgrade_path in "${upgrade_paths[@]}"; do
       fi
     done
 
-    if version_lt $first_version $LNV2_STABLE_VERSION; then
+    for enable_lnv2 in "${lnv2_flags[@]}"; do
       upgrade_tests+=(
-        "fm-run-test fedimint-cli-${versions_str}-lnv2-0 devimint upgrade-tests --lnv2 0 fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+        "fm-run-test fedimint-cli-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
       )
-    else
-      for enable_lnv2 in {0..1}; do
-        upgrade_tests+=(
-          "fm-run-test fedimint-cli-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
-        )
-      done
-    fi
+    done
   fi
 
   if contains "gateway" "${test_kinds[@]}"; then
@@ -129,17 +121,11 @@ for upgrade_path in "${upgrade_paths[@]}"; do
       fi
     done
 
-    if version_lt $first_version $LNV2_STABLE_VERSION; then
+    for enable_lnv2 in "${lnv2_flags[@]}"; do
       upgrade_tests+=(
-        "fm-run-test gateway-${versions_str}-lnv2-0 devimint upgrade-tests --lnv2 0 gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+        "fm-run-test gateway-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
       )
-    else
-      for enable_lnv2 in {0..1}; do
-        upgrade_tests+=(
-          "fm-run-test gateway-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
-        )
-      done
-    fi
+    done
   fi
 
   if contains "mnemonic" "${test_kinds[@]}"; then
