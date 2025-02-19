@@ -23,8 +23,8 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
+use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
 use fedimint_gateway_server::config::LightningModuleMode;
-use fedimint_gateway_server::rpc::{PaymentLogPayload, SetFeesPayload};
 use fedimint_gateway_server::Gateway;
 use fedimint_gw_client::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,

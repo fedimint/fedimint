@@ -15,7 +15,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::{Amount, PeerId};
-use fedimint_gateway_server::rpc::GatewayInfo;
+use fedimint_gateway_common::GatewayInfo;
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use futures::future::try_join_all;

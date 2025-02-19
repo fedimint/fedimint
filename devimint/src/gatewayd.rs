@@ -10,8 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
-use fedimint_gateway_server::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-use fedimint_gateway_server::rpc::{
+use fedimint_gateway_common::{
     GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT,
 };
 use fedimint_lightning::{ChannelInfo, GetInvoiceResponse, PaymentStatus};
@@ -69,7 +68,7 @@ impl Gatewayd {
         if !supports_lnv2() {
             tracing::info!("LNv2 is not supported, running gatewayd in LNv1 mode");
             gateway_env.insert(
-                FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
+                "FM_GATEWAY_LIGHTNING_MODULE_MODE".to_owned(),
                 "LNv1".to_string(),
             );
         }

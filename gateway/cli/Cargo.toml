@@ -14,7 +14,7 @@ rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 default = ["tor"]
-tor = ["fedimint-gateway-server/tor"]
+tor = ["fedimint-gateway-server/tor", "fedimint-gateway-common/tor"]
 
 [[bin]]
 name = "gateway-cli"
@@ -28,6 +28,7 @@ clap = { workspace = true }
 clap_complete = "4.5.44"
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-gateway-common = { workspace = true }
 fedimint-gateway-server = { package = "fedimint-gateway-server", path = "../fedimint-gateway-server", version = "=0.7.0-alpha" }
 fedimint-lightning = { package = "fedimint-lightning", path = "../fedimint-lightning", version = "=0.7.0-alpha" }
 fedimint-logging = { workspace = true }

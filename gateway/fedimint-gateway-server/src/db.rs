@@ -12,6 +12,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
+use fedimint_gateway_common::FederationConfig;
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -289,18 +290,6 @@ pub struct FederationConfigV1 {
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct FederationConfigKey {
     id: FederationId,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-pub struct FederationConfig {
-    pub invite_code: InviteCode,
-    // Unique integer identifier per-federation that is assigned when the gateways joins a
-    // federation.
-    #[serde(alias = "mint_channel_id")]
-    pub federation_index: u64,
-    pub lightning_fee: PaymentFee,
-    pub transaction_fee: PaymentFee,
-    pub connector: Connector,
 }
 
 impl_db_record!(

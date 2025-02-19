@@ -1,5 +1,6 @@
 use bitcoin::hashes::sha256;
 use clap::Subcommand;
+use fedimint_gateway_common::{CreateInvoiceForOperatorPayload, PayInvoiceForOperatorPayload};
 use fedimint_gateway_server::rpc::rpc_client::GatewayRpcClient;
 use fedimint_lightning::{CloseChannelsWithPeerRequest, GetInvoiceRequest, OpenChannelRequest};
 use lightning_invoice::Bolt11Invoice;
@@ -70,21 +71,17 @@ impl LightningCommands {
                 description,
             } => {
                 let response = create_client()
-                    .create_invoice_for_self(
-                        fedimint_gateway_server::rpc::CreateInvoiceForOperatorPayload {
-                            amount_msats,
-                            expiry_secs,
-                            description,
-                        },
-                    )
+                    .create_invoice_for_self(CreateInvoiceForOperatorPayload {
+                        amount_msats,
+                        expiry_secs,
+                        description,
+                    })
                     .await?;
                 println!("{response}");
             }
             Self::PayInvoice { invoice } => {
                 let response = create_client()
-                    .pay_invoice(fedimint_gateway_server::rpc::PayInvoiceForOperatorPayload {
-                        invoice,
-                    })
+                    .pay_invoice(PayInvoiceForOperatorPayload { invoice })
                     .await?;
                 println!("{response}");
             }

@@ -6,10 +6,10 @@ use std::str::FromStr;
 use bitcoin::Network;
 use clap::{Parser, Subcommand};
 use fedimint_core::util::SafeUrl;
+use fedimint_gateway_common::V1_API_ENDPOINT;
 use serde::{Deserialize, Serialize};
 
 use super::envs;
-use super::rpc::V1_API_ENDPOINT;
 use crate::envs::{
     FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
     FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,

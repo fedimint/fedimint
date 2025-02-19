@@ -5,10 +5,10 @@ use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::time::now;
 use fedimint_eventlog::{EventKind, EventLogId};
-use fedimint_gateway_server::rpc::rpc_client::GatewayRpcClient;
-use fedimint_gateway_server::rpc::{
+use fedimint_gateway_common::{
     ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
 };
+use fedimint_gateway_server::rpc::rpc_client::GatewayRpcClient;
 
 use crate::print_response;
 

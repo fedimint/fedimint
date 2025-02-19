@@ -1,17 +1,7 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
-use fedimint_lightning::{
-    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
-};
-use lightning_invoice::Bolt11Invoice;
-use reqwest::{Method, StatusCode};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use thiserror::Error;
-
-use super::{
+use fedimint_gateway_common::{
     BackupPayload, ConfigPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload,
     DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GatewayBalances,
     GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
@@ -26,6 +16,15 @@ use super::{
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
+use fedimint_lightning::{
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
+    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+};
+use lightning_invoice::Bolt11Invoice;
+use reqwest::{Method, StatusCode};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use thiserror::Error;
 
 pub struct GatewayRpcClient {
     /// Base URL to gateway web server

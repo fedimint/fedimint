@@ -21,7 +21,7 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::net::peers::IP2PConnections;
 use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 use fedimint_core::PeerId;
-use fedimint_gateway_server::rpc::ConnectFedPayload;
+use fedimint_gateway_common::ConnectFedPayload;
 use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;

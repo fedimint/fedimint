@@ -23,7 +23,7 @@ use fedimint_core::task::block_on;
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
-use fedimint_gateway_server::rpc::WithdrawResponse;
+use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;

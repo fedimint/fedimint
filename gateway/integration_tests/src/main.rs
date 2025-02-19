@@ -19,7 +19,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
-use fedimint_gateway_server::rpc::{GatewayBalances, GatewayFedConfig, GatewayInfo};
+use fedimint_gateway_common::{GatewayBalances, GatewayFedConfig, GatewayInfo};
 use fedimint_testing::ln::LightningNodeType;
 use itertools::Itertools;
 use tracing::{debug, info, warn};

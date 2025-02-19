@@ -9,7 +9,7 @@ readme = { workspace = true }
 repository = { workspace = true }
 
 [features]
-tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
+tor = ["fedimint-client/tor", "fedimint-api-client/tor", "fedimint-gateway-common/tor"]
 
 [[bin]]
 name = "gatewayd"
@@ -41,6 +41,7 @@ fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-gateway-common = { workspace = true }
 fedimint-gw-client = { workspace = true }
 fedimint-gwv2-client = { workspace = true }
 fedimint-lightning = { path = "../fedimint-lightning", version = "=0.7.0-alpha" }

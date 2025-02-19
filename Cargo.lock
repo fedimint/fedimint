@@ -2012,7 +2012,7 @@ dependencies = [
  "fedimint-client-module",
  "fedimint-cln-rpc",
  "fedimint-core",
- "fedimint-gateway-server",
+ "fedimint-gateway-common",
  "fedimint-lightning",
  "fedimint-ln-client",
  "fedimint-ln-server",
@@ -2991,6 +2991,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-eventlog",
+ "fedimint-gateway-common",
  "fedimint-gateway-server",
  "fedimint-lightning",
  "fedimint-logging",
@@ -2999,6 +3000,22 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "fedimint-gateway-common"
+version = "0.7.0-alpha"
+dependencies = [
+ "bitcoin",
+ "fedimint-api-client",
+ "fedimint-core",
+ "fedimint-eventlog",
+ "fedimint-lnv2-common",
+ "fedimint-mint-client",
+ "fedimint-wallet-client",
+ "lightning-invoice",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3027,6 +3044,7 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-eventlog",
+ "fedimint-gateway-common",
  "fedimint-gw-client",
  "fedimint-gwv2-client",
  "fedimint-lightning",
@@ -3748,6 +3766,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",
+ "fedimint-gateway-common",
  "fedimint-gateway-server",
  "fedimint-lightning",
  "fedimint-ln-common",
@@ -4377,7 +4396,7 @@ dependencies = [
  "clap",
  "devimint",
  "fedimint-core",
- "fedimint-gateway-server",
+ "fedimint-gateway-common",
  "fedimint-testing",
  "itertools 0.13.0",
  "serde_json",

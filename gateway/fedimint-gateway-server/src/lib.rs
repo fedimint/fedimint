@@ -66,6 +66,15 @@ use fedimint_core::{
     fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
+use fedimint_gateway_common::{
+    BackupPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
+    DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig, FederationInfo,
+    GatewayBalances, GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse,
+    V1_API_ENDPOINT,
+};
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
@@ -99,26 +108,15 @@ use fedimint_wallet_client::{
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::thread_rng;
-use rpc::{
-    CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
-    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
-};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn};
 
 use crate::config::LightningModuleMode;
-use crate::db::{get_gatewayd_database_migrations, FederationConfig};
+use crate::db::get_gatewayd_database_migrations;
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
 use crate::rpc::rpc_server::run_webserver;
-use crate::rpc::{
-    BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, WithdrawPayload,
-};
 use crate::types::PrettyInterceptPaymentRequest;
 
 /// How long a gateway announcement stays valid
@@ -749,7 +747,7 @@ impl Gateway {
                 block_height: None,
                 synced_to_chain: false,
                 api: self.versioned_api.clone(),
-                lightning_mode: self.lightning_mode.clone(),
+                //lightning_mode: self.lightning_mode.clone(),
             });
         };
 
@@ -785,7 +783,7 @@ impl Gateway {
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
-            lightning_mode: self.lightning_mode.clone(),
+            //lightning_mode: self.lightning_mode.clone(),
         })
     }
 
