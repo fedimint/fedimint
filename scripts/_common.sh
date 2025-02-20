@@ -76,6 +76,7 @@ function run_test_for_versions() {
   fed_version=$3
   client_version=$5
   gateway_version=$7
+  export FM_ENABLE_MODULE_LNV2=$9
 
   use_fed_binaries_for_version "$fed_version"
   use_client_binaries_for_version "$client_version"
@@ -90,12 +91,12 @@ function run_test_for_versions() {
     export FM_BACKWARDS_COMPATIBILITY_TEST=1
     # run back-compat tests with 4/4 setup
     export FM_OFFLINE_NODES=0
-    export FM_RUN_TEST_VERSIONS="FM: $fed_version, CLI: $client_version, GW: $gateway_version"
+    export FM_RUN_TEST_VERSIONS="FM: $fed_version, CLI: $client_version, GW: $gateway_version LNv2: $FM_ENABLE_MODULE_LNV2"
   else
     # default to run current tests in 3/4 setup
     export FM_OFFLINE_NODES=1
     export FM_DISCOVER_API_VERSION_TIMEOUT=5
-    unset FM_RUN_TEST_VERSIONS
+    export FM_RUN_TEST_VERSIONS="LNv2: $FM_ENABLE_MODULE_LNV2"
   fi
 
   if [[ ("$client_version"  == "v0.2.1" || "$client_version"  == "v0.2.2" ) && "$fed_version" == "current" ]]; then
@@ -206,6 +207,35 @@ function generate_matrix() {
       done
     done
   done
+}
+
+export LNV2_STABLE_VERSION="v0.6.0-rc.1"
+function version_lt() {
+  if [ "$1" = "current" ]; then
+    return 1
+  elif [ "$2" = "current" ]; then
+    return 0
+  fi
+
+  # replace `-` with `~` so `sort -V` correctly sorts pre-releases
+  v1="${1//-/\~}"
+  v2="${2//-/\~}"
+
+  [ "$v1" != "$(echo -e "$v1\n$v2" | sort -V | tail -n 1)" ]
+}
+
+function supports_lnv2() {
+  fed_version=$1
+  client_version=$2
+  gateway_version=$3
+
+  for version in "$fed_version" "$client_version" "$gateway_version"; do
+    if version_lt "$version" "$LNV2_STABLE_VERSION"; then
+        return 1
+    fi
+  done
+
+  return 0
 }
 
 # Returns true if fed, client, or gateway have a different version.

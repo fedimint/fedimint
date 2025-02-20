@@ -60,7 +60,6 @@ jobs:
 
           # if empty, defaults to all test kinds within script
           export TEST_KINDS="${{ github.event.inputs.test_kinds }}"
-          export FM_DEVIMINT_DISABLE_MODULE_LNV2=1
 
           export FM_TEST_CI_ALL_JOBS
           export FM_TEST_UPGRADE_TIMEOUT

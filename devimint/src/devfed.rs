@@ -2,7 +2,6 @@ use std::ops::Deref as _;
 use std::sync::Arc;
 
 use anyhow::Result;
-use fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 use fedimint_core::runtime;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
@@ -15,8 +14,7 @@ use crate::external::{
 };
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
-use crate::util::ProcessManager;
-use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
+use crate::util::{supports_lnv2, ProcessManager};
 use crate::LightningNode;
 
 async fn spawn_drop<T>(t: T)
@@ -68,8 +66,7 @@ impl DevFed {
     }
 }
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
-    DevJitFed::new(process_mgr, false)
-        .await?
+    DevJitFed::new(process_mgr, false)?
         .to_dev_fed(process_mgr)
         .await
 }
@@ -94,7 +91,7 @@ pub struct DevJitFed {
 }
 
 impl DevJitFed {
-    pub async fn new(process_mgr: &ProcessManager, skip_setup: bool) -> Result<DevJitFed> {
+    pub fn new(process_mgr: &ProcessManager, skip_setup: bool) -> Result<DevJitFed> {
         let fed_size = process_mgr.globals.FM_FED_SIZE;
         let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
         anyhow::ensure!(
@@ -217,24 +214,10 @@ impl DevJitFed {
             }
         });
 
-        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        let should_enable_ldk = gatewayd_version >= *VERSION_0_5_0_ALPHA
-                    && fedimintd_version >= *VERSION_0_5_0_ALPHA
-                    // and lnv2 was not explicitly disabled
-                    && !is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV);
-        let should_disable_lnv2 = gateway_cli_version <= *VERSION_0_4_0_ALPHA
-            || gatewayd_version <= *VERSION_0_4_0_ALPHA
-            || fedimintd_version <= *VERSION_0_4_0_ALPHA
-            || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-            || !should_enable_ldk;
-
         let gw_ldk = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             move || async move {
-                // TODO(support:v0.4.0): Only run LDK gateway when the federation supports LNv2
-                if should_enable_ldk {
+                if supports_lnv2() {
                     debug!(target: LOG_DEVIMINT, "Starting ldk gateway...");
                     let start_time = fedimint_core::time::now();
                     let ldk_gw = Gatewayd::new(&process_mgr, LightningNode::Ldk).await?;
@@ -276,25 +259,12 @@ impl DevJitFed {
                 // other.
 
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
+                let gw_ldk = gw_ldk.get_try().await?.deref();
 
-                if should_disable_lnv2 {
-                    let lnd = lnd.get_try().await?.deref().clone();
-                    let cln = cln.get_try().await?.deref().clone();
-
-                    debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
-                    let start_time = fedimint_core::time::now();
-                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
-                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
-                } else {
+                if let Some(gw_ldk) = gw_ldk {
                     tokio::try_join!(
                         async {
                             let gw_lnd = gw_lnd.get_try().await?.deref();
-                            let gw_ldk = gw_ldk
-                                .get_try()
-                                .await?
-                                .deref()
-                                .as_ref()
-                                .expect("GW LDK should be present");
                             let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
                             debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
@@ -314,6 +284,14 @@ impl DevJitFed {
                             res
                         }
                     )?;
+                } else {
+                    let lnd = lnd.get_try().await?.deref().clone();
+                    let cln = cln.get_try().await?.deref().clone();
+
+                    debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
+                    let start_time = fedimint_core::time::now();
+                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
                 }
 
                 Ok(Arc::new(()))

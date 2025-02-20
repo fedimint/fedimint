@@ -10,7 +10,7 @@ use bitcoin::Txid;
 use clap::Subcommand;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
-use fedimint_core::envs::is_env_var_set;
+use fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
@@ -2106,6 +2106,8 @@ pub enum TestCmd {
     UpgradeTests {
         #[clap(subcommand)]
         binary: UpgradeTest,
+        #[arg(long)]
+        lnv2: String,
     },
 }
 
@@ -2196,7 +2198,8 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let dev_fed = dev_fed(&process_mgr).await?;
             cannot_replay_tx_test(dev_fed).await?;
         }
-        TestCmd::UpgradeTests { binary } => {
+        TestCmd::UpgradeTests { binary, lnv2 } => {
+            std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2);
             let (process_mgr, _) = setup(common_args).await?;
             Box::pin(upgrade_tests(&process_mgr, binary)).await?;
         }

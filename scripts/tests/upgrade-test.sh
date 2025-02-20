@@ -18,9 +18,6 @@ PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 export FM_TEST_UPGRADE_TIMEOUT=${FM_TEST_UPGRADE_TIMEOUT:-800}
 export FM_RUN_TEST_TIMEOUT=$((FM_TEST_UPGRADE_TIMEOUT - 30))
 
-# TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
-# -> v0.5.0 over and over again. Once we have verified this test passes for
-# v0.5.0, it can safely be removed.
 default_test_kinds=("fedimintd" "fedimint-cli" "gateway" "mnemonic")
 
 # runs a subset of tests if the user provides `TEST_KINDS`
@@ -60,6 +57,13 @@ for upgrade_path in "${upgrade_paths[@]}"; do
   IFS=' ' read -r -a versions <<< "$upgrade_path"
   echo "## Starting upgrade test for path: $upgrade_path"
   versions_str=$(IFS=,; echo "${versions[*]}")
+  first_version="${versions[0]}"
+
+  if version_lt "$first_version" "$LNV2_STABLE_VERSION"; then
+    lnv2_flags=(0)
+  else
+    lnv2_flags=(0 1)
+  fi
 
   if contains "fedimintd" "${test_kinds[@]}"; then
     fedimintd_paths=()
@@ -78,9 +82,11 @@ for upgrade_path in "${upgrade_paths[@]}"; do
       fi
     done
 
-    upgrade_tests+=(
-      "fm-run-test fedimintd-${versions_str} devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
-    )
+    for enable_lnv2 in "${lnv2_flags[@]}"; do
+      upgrade_tests+=(
+        "fm-run-test fedimintd-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+      )
+    done
   fi
 
   if contains "fedimint-cli" "${test_kinds[@]}"; then
@@ -94,9 +100,11 @@ for upgrade_path in "${upgrade_paths[@]}"; do
       fi
     done
 
-    upgrade_tests+=(
-      "fm-run-test fedimint-cli-${versions_str} devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
-    )
+    for enable_lnv2 in "${lnv2_flags[@]}"; do
+      upgrade_tests+=(
+        "fm-run-test fedimint-cli-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+      )
+    done
   fi
 
   if contains "gateway" "${test_kinds[@]}"; then
@@ -113,9 +121,11 @@ for upgrade_path in "${upgrade_paths[@]}"; do
       fi
     done
 
-    upgrade_tests+=(
-      "fm-run-test gateway-${versions_str} devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
-    )
+    for enable_lnv2 in "${lnv2_flags[@]}"; do
+      upgrade_tests+=(
+        "fm-run-test gateway-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+      )
+    done
   fi
 
   if contains "mnemonic" "${test_kinds[@]}"; then
@@ -124,12 +134,12 @@ for upgrade_path in "${upgrade_paths[@]}"; do
     old_gateway_cli=$(nix_build_binary_for_version 'gateway-cli' "v0.4.0")
     new_gateway_cli="gateway-cli"
 
+    # LNv2 is always set to off for the mnemonic test because the gateway has always had mnemonics since LNv2 stablization
     upgrade_tests+=(
-      "fm-run-test mnemonic-${versions_str} gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
+      "fm-run-test mnemonic-${versions_str} gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli"
     )
   fi
 done
-
 
 parsed_test_commands=$(printf "%s\n" "${upgrade_tests[@]}")
 
