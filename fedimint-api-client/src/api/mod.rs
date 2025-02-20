@@ -15,8 +15,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError, PeerError};
 use fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
-    ServerStatus, ServerStatusLegacy,
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, PeerServerParams, ServerStatus,
+    ServerStatusLegacy,
 };
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
@@ -544,11 +544,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         requested: ConfigGenParamsRequest,
         auth: ApiAuth,
     ) -> FederationResult<()>;
-
-    /// Returns the consensus config gen params, followers will delegate this
-    /// call to the leader.  Once this endpoint returns successfully we can run
-    /// DKG.
-    async fn consensus_config_gen_params(&self) -> FederationResult<ConfigGenParamsResponse>;
 
     /// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500

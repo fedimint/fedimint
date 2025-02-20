@@ -7,8 +7,8 @@ use anyhow::{anyhow, format_err};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 use fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
-    ServerStatus, SetLocalParamsRequest,
+    ConfigGenConnectionsRequest, ConfigGenParamsRequest, PeerServerParams, ServerStatus,
+    SetLocalParamsRequest,
 };
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
@@ -17,10 +17,10 @@ use fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, ADD_PEER_CONNECTION_INFO_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT,
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT,
     BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, SERVER_STATUS_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
+    SERVER_STATUS_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
     SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
     SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, START_CONSENSUS_ENDPOINT,
     START_DKG_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
@@ -436,14 +436,6 @@ where
             SET_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiRequestErased::new(requested),
             auth,
-        )
-        .await
-    }
-
-    async fn consensus_config_gen_params(&self) -> FederationResult<ConfigGenParamsResponse> {
-        self.request_admin_no_auth(
-            CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
-            ApiRequestErased::default(),
         )
         .await
     }

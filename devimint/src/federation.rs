@@ -10,9 +10,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::ClientModule;
-use fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ServerStatus, ServerStatusLegacy,
-};
+use fedimint_core::admin_client::{ServerStatus, ServerStatusLegacy};
 use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -359,12 +357,8 @@ impl Federation {
 
             if fedimint_cli_version >= *VERSION_0_7_0_ALPHA {
                 run_cli_dkg_v2(params, endpoints).await?;
-            } else if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-                run_cli_dkg(params, endpoints).await?;
             } else {
-                // TODO(support:v0.2): old fedimint-cli can't do DKG commands. keep this old DKG
-                // setup while fedimint-cli <= v0.2.x is supported
-                run_client_dkg(admin_clients, params).await?;
+                run_cli_dkg(params, endpoints).await?;
             }
 
             // we're done with dkg, so we can reset the fedimint-cli version
@@ -1286,191 +1280,6 @@ pub async fn run_cli_dkg_v2(
     Ok(())
 }
 
-pub async fn run_client_dkg(
-    admin_clients: BTreeMap<PeerId, DynGlobalApi>,
-    params: HashMap<PeerId, ConfigGenParams>,
-) -> Result<()> {
-    let auth_for = |peer: &PeerId| -> ApiAuth { params[peer].local.api_auth.clone() };
-    for (peer_id, client) in &admin_clients {
-        poll("trying-to-connect-to-peers", || async {
-            client
-                .status()
-                .await
-                .context("dkg status")
-                .map_err(ControlFlow::Continue)
-        })
-        .await?;
-        debug!(target: LOG_DEVIMINT, "Connected to {peer_id}");
-    }
-
-    for (peer_id, client) in &admin_clients {
-        assert_eq!(
-            client.status().await?.server,
-            ServerStatusLegacy::AwaitingPassword,
-            "peer_id isn't waiting for password: {peer_id}"
-        );
-    }
-
-    for (peer_id, client) in &admin_clients {
-        client.set_password(auth_for(peer_id)).await?;
-    }
-
-    let (leader_id, leader) = admin_clients.iter().next().context("missing peer")?;
-    let followers = admin_clients
-        .iter()
-        .filter(|(id, _)| *id != leader_id)
-        .collect::<BTreeMap<_, _>>();
-
-    // Note: names prefixed by peerid, as DKG sort peers by submitted name
-    // by default.
-    let leader_name = format!("{leader_id}-leader");
-    leader
-        .set_config_gen_connections(
-            ConfigGenConnectionsRequest {
-                our_name: leader_name.clone(),
-                leader_api_url: None,
-            },
-            auth_for(leader_id),
-        )
-        .await?;
-
-    let _ = leader
-        .get_default_config_gen_params(auth_for(leader_id))
-        .await?; // sanity check
-    let server_gen_params = params[leader_id].consensus.modules.clone();
-    set_config_gen_params(leader, auth_for(leader_id), server_gen_params.clone()).await?;
-    let followers_names = followers
-        .keys()
-        .map(|peer_id| {
-            (*peer_id, {
-                // This is to be clear that the name will be unrelated to peer id
-                let random_string = rand::thread_rng()
-                    .sample_iter(&rand::distributions::Alphanumeric)
-                    .take(5)
-                    .map(char::from)
-                    .collect::<String>();
-                format!("{peer_id}-random-{random_string}{peer_id}")
-            })
-        })
-        .collect::<BTreeMap<_, _>>();
-    for (peer_id, client) in &followers {
-        let name = followers_names
-            .get(peer_id)
-            .context("missing follower name")?;
-        debug!(target: LOG_DEVIMINT, "calling set_config_gen_connections for {peer_id} {name}");
-        client
-            .set_config_gen_connections(
-                ConfigGenConnectionsRequest {
-                    our_name: name.clone(),
-                    leader_api_url: Some(
-                        params
-                            .get(leader_id)
-                            .expect("Must have leader configs")
-                            .consensus
-                            .peers
-                            .get(leader_id)
-                            .expect("Must have leader api_endpoint")
-                            .api_url
-                            .clone(),
-                    ),
-                },
-                auth_for(peer_id),
-            )
-            .await?;
-        set_config_gen_params(client, auth_for(peer_id), server_gen_params.clone()).await?;
-    }
-    let found_names = leader
-        .get_config_gen_peers()
-        .await?
-        .into_iter()
-        .map(|peer| peer.name)
-        .collect::<HashSet<_>>();
-    let all_names = {
-        let mut names = followers_names.values().cloned().collect::<HashSet<_>>();
-        names.insert(leader_name);
-        names
-    };
-    assert_eq!(found_names, all_names);
-    wait_server_status(leader, ServerStatusLegacy::SharingConfigGenParams).await?;
-
-    let mut configs = vec![];
-    for client in admin_clients.values() {
-        configs.push(client.consensus_config_gen_params().await?);
-    }
-    // Confirm all consensus configs are the same
-    let mut consensus: Vec<_> = configs.iter().map(|p| p.consensus.clone()).collect();
-    consensus.dedup();
-    assert_eq!(consensus.len(), 1);
-    // Confirm all peer ids are unique
-    let ids = configs
-        .iter()
-        .map(|p| p.our_current_id)
-        .collect::<HashSet<_>>();
-    assert_eq!(ids.len(), admin_clients.len());
-    let dkg_results = admin_clients
-        .iter()
-        .map(|(peer_id, client)| client.start_dkg(auth_for(peer_id)));
-    debug!(target: LOG_DEVIMINT, "Running DKG");
-    let (dkg_results, leader_wait_result) = tokio::join!(
-        join_all(dkg_results),
-        wait_server_status(leader, ServerStatusLegacy::VerifyingConfigs)
-    );
-    for result in dkg_results {
-        result?;
-    }
-    leader_wait_result?;
-
-    // verify config hashes equal for all peers
-    let mut hashes = HashSet::new();
-    for (peer_id, client) in &admin_clients {
-        wait_server_status(client, ServerStatusLegacy::VerifyingConfigs).await?;
-        hashes.insert(client.get_verify_config_hash(auth_for(peer_id)).await?);
-    }
-    assert_eq!(hashes.len(), 1);
-    for (peer_id, client) in &admin_clients {
-        if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
-            tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...");
-        }
-        wait_server_status(client, ServerStatusLegacy::ConsensusRunning).await?;
-    }
-    Ok(())
-}
-
-async fn set_config_gen_params(
-    client: &DynGlobalApi,
-    auth: ApiAuth,
-    mut server_gen_params: ServerModuleConfigGenParamsRegistry,
-) -> Result<()> {
-    // TODO(support:v0.3): v0.4 introduced lnv2 modules, so we need to skip
-    // attaching the module for old fedimintd versions
-    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-    self::config::attach_default_module_init_params(
-        &BitcoinRpcConfig::get_defaults_from_env_vars()?,
-        &mut server_gen_params,
-        Network::Regtest,
-        10,
-        &fedimintd_version,
-    );
-    // Since we are not actually calling `fedimintd` binary, parse and handle
-    // `FM_EXTRA_META_DATA` like it would do.
-    let mut extra_meta_data = parse_map(
-        &std::env::var(FM_EXTRA_DKG_META_ENV)
-            .ok()
-            .unwrap_or_default(),
-    )
-    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_ENV}"))
-    .expect("Failed");
-    let mut meta = BTreeMap::from([("federation_name".to_string(), "testfed".to_string())]);
-    meta.append(&mut extra_meta_data);
-
-    let request = ConfigGenParamsRequest {
-        meta,
-        modules: server_gen_params,
-    };
-    client.set_config_gen_params(request, auth.clone()).await?;
-    Ok(())
-}
-
 async fn cli_set_config_gen_params(
     endpoint: &str,
     auth: &ApiAuth,
@@ -1503,32 +1312,6 @@ async fn cli_set_config_gen_params(
     crate::util::FedimintCli
         .set_config_gen_params(auth, endpoint, meta, server_gen_params)
         .await?;
-    Ok(())
-}
-
-async fn wait_server_status(
-    client: &DynGlobalApi,
-    expected_status: ServerStatusLegacy,
-) -> Result<()> {
-    poll(
-        &format!("waiting-server-status: {expected_status:?}"),
-        || async {
-            let server_status = client
-                .status()
-                .await
-                .context("server status")
-                .map_err(ControlFlow::Continue)?
-                .server;
-            if server_status == expected_status {
-                Ok(())
-            } else {
-                Err(ControlFlow::Continue(anyhow!(
-                    "expected status: {expected_status:?} current status: {server_status:?}"
-                )))
-            }
-        },
-    )
-    .await?;
     Ok(())
 }
 

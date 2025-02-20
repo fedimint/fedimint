@@ -77,7 +77,7 @@ pub struct SetLocalParamsRequest {
     pub federation_name: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable, Decodable)]
+#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
 /// Connection information sent between peers in order to start config gen
 pub struct PeerConnectionInfo {
     /// TLS cert is necessary for P2P auth during DKG and consensus
@@ -114,7 +114,7 @@ impl PeerConnectionInfo {
 
 /// The config gen params that need to be in consensus, sent by the config gen
 /// leader to all the other guardians
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConfigGenParamsConsensus {
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
@@ -122,15 +122,6 @@ pub struct ConfigGenParamsConsensus {
     pub meta: BTreeMap<String, String>,
     /// Module init params (also contains local params from us)
     pub modules: ServerModuleConfigGenParamsRegistry,
-}
-
-/// The config gen params response which includes our peer id
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub struct ConfigGenParamsResponse {
-    /// The same for all peers
-    pub consensus: ConfigGenParamsConsensus,
-    /// Our id (might change if new peers join)
-    pub our_current_id: PeerId,
 }
 
 /// Config gen params that can be configured from the UI
