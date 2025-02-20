@@ -477,9 +477,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     async fn await_transaction(&self, txid: TransactionId) -> TransactionId;
 
-    /// Fetches the server consensus hash if enough peers agree on it
-    async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash>;
-
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()>;
 
     async fn download_backup(

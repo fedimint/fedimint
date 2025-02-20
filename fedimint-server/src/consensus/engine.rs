@@ -15,7 +15,6 @@ use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCo
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
@@ -48,7 +47,6 @@ use crate::consensus::db::{
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
-use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
     CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
@@ -161,8 +159,6 @@ impl ConsensusEngine {
         // We need four peers to run the atomic broadcast
         assert!(self.num_peers().total() >= 4);
 
-        self.confirm_server_config_consensus_hash().await?;
-
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
         while !task_handle.is_shutting_down() {
@@ -189,31 +185,6 @@ impl ConsensusEngine {
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
 
         Ok(())
-    }
-
-    async fn confirm_server_config_consensus_hash(&self) -> anyhow::Result<()> {
-        let our_hash = self.cfg.consensus.consensus_hash();
-
-        info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
-
-        loop {
-            match self.federation_api.server_config_consensus_hash().await {
-                Ok(consensus_hash) => {
-                    if consensus_hash != our_hash {
-                        bail!("Our consensus config doesn't match peers!")
-                    }
-
-                    info!(target: LOG_CONSENSUS, "Confirmed peers config {our_hash}");
-
-                    return Ok(());
-                }
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e));
-                }
-            }
-
-            sleep(Duration::from_millis(100)).await;
-        }
     }
 
     pub async fn run_session(

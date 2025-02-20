@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{bail, ensure, format_err, Context};
+use bitcoin::hashes::sha256;
 use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, ConfigGenParamsRequest};
 pub use fedimint_core::config::{
@@ -127,6 +128,32 @@ pub struct ServerConfigConsensus {
     pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+}
+
+pub fn legacy_consensus_config_hash(cfg: &ServerConfigConsensus) -> sha256::Hash {
+    #[derive(Encodable)]
+    struct LegacyServerConfigConsensusHashMap {
+        code_version: String,
+        version: CoreConsensusVersion,
+        broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
+        broadcast_rounds_per_session: u16,
+        api_endpoints: BTreeMap<PeerId, PeerUrl>,
+        tls_certs: BTreeMap<PeerId, rustls::Certificate>,
+        modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
+        meta: BTreeMap<String, String>,
+    }
+
+    LegacyServerConfigConsensusHashMap {
+        code_version: cfg.code_version.clone(),
+        version: cfg.version,
+        broadcast_public_keys: cfg.broadcast_public_keys.clone(),
+        broadcast_rounds_per_session: cfg.broadcast_rounds_per_session,
+        api_endpoints: cfg.api_endpoints.clone(),
+        tls_certs: cfg.tls_certs.clone(),
+        modules: cfg.modules.clone(),
+        meta: cfg.meta.clone(),
+    }
+    .consensus_hash_sha256()
 }
 
 // FIXME: (@leonardo) Should this have another field for the expected transport
