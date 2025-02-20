@@ -8,7 +8,6 @@ use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client_module::AdminCreds;
-use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerConnectionInfo};
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
@@ -26,7 +25,8 @@ use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::{
-    gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ServerConfig,
+    gen_cert_and_key, ConfigGenParams, ConfigGenParamsConsensus, ConfigGenParamsLocal,
+    PeerConnectionInfo, ServerConfig,
 };
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;

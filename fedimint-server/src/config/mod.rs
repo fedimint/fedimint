@@ -5,15 +5,18 @@ use std::time::Duration;
 use anyhow::{bail, ensure, format_err, Context};
 use bitcoin::hashes::sha256;
 use fedimint_api_client::api::P2PConnectionStatus;
-use fedimint_core::admin_client::{ConfigGenParamsConsensus, ConfigGenParamsRequest};
+use fedimint_core::admin_client::ConfigGenParamsRequest;
+use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, FederationId, GlobalClientConfig, JsonWithKind,
     ModuleInitRegistry, P2PMessage, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, MultiApiVersion, PeerHandle,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
@@ -214,6 +217,53 @@ pub struct ConfigGenParamsLocal {
     pub p2p_bind: SocketAddr,
     /// Bind address for API communication
     pub api_bind: SocketAddr,
+}
+
+/// The config gen params that need to be in consensus, sent by the config gen
+/// leader to all the other guardians
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ConfigGenParamsConsensus {
+    /// Endpoints of all servers
+    pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
+    /// Guardian-defined key-value pairs that will be passed to the client
+    pub meta: BTreeMap<String, String>,
+    /// Module init params (also contains local params from us)
+    pub modules: ServerModuleConfigGenParamsRegistry,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
+/// Connection information sent between peers in order to start config gen
+pub struct PeerConnectionInfo {
+    /// TLS cert is necessary for P2P auth during DKG and consensus
+    pub cert: Vec<u8>,
+    /// P2P is the network for running DKG and consensus
+    pub p2p_url: SafeUrl,
+    /// API for secure websocket requests
+    pub api_url: SafeUrl,
+    /// Name of the peer, used in TLS auth
+    pub name: String,
+    /// Federation name set by the leader
+    pub federation_name: Option<String>,
+}
+
+impl PeerConnectionInfo {
+    pub fn encode_base58(&self) -> String {
+        format!(
+            "fedimint{}",
+            bs58::encode(&self.consensus_encode_to_vec()).into_string()
+        )
+    }
+
+    pub fn decode_base58(s: &str) -> anyhow::Result<Self> {
+        ensure!(s.starts_with("fedimint"), "Invalid Prefix");
+
+        let params = Self::consensus_decode_whole(
+            &bs58::decode(&s[8..]).into_vec()?,
+            &ModuleDecoderRegistry::default(),
+        )?;
+
+        Ok(params)
+    }
 }
 
 impl ServerConfigConsensus {

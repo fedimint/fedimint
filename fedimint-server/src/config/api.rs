@@ -3,9 +3,7 @@ use std::collections::BTreeMap;
 use anyhow::{ensure, Context};
 use async_trait::async_trait;
 use fedimint_bitcoind::create_bitcoind;
-use fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, PeerConnectionInfo, ServerStatus, SetLocalParamsRequest,
-};
+use fedimint_core::admin_client::{ServerStatus, SetLocalParamsRequest};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
@@ -23,7 +21,10 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
 
-use crate::config::{gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ConfigGenSettings};
+use crate::config::{
+    gen_cert_and_key, ConfigGenParams, ConfigGenParamsConsensus, ConfigGenParamsLocal,
+    ConfigGenSettings, PeerConnectionInfo,
+};
 use crate::net::api::{check_auth, ApiResult, HasApiContext};
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
