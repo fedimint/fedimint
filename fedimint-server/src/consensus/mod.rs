@@ -74,7 +74,7 @@ pub async fn run(
     // TODO: make it work with all transports and federation secrets
     let global_api = DynGlobalApi::from_endpoints(
         cfg.consensus
-            .api_endpoints
+            .api_endpoints()
             .iter()
             .map(|(&peer_id, url)| (peer_id, url.url.clone())),
         &None,
@@ -98,7 +98,7 @@ pub async fn run(
 
                 let module = module_init
                     .init(
-                        NumPeers::from(cfg.consensus.api_endpoints.len()),
+                        NumPeers::from(cfg.consensus.api_endpoints().len()),
                         cfg.get_module_config(*module_id)?,
                         db.with_prefix_module_id(*module_id).0,
                         task_group,
@@ -192,7 +192,7 @@ pub async fn run(
             &Connector::default(),
         ),
         self_id_str: cfg.local.identity.to_string(),
-        peer_id_str: (0..cfg.consensus.api_endpoints.len())
+        peer_id_str: (0..cfg.consensus.api_endpoints().len())
             .map(|x| x.to_string())
             .collect(),
         cfg: cfg.clone(),

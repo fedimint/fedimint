@@ -240,14 +240,27 @@ pub async fn run_config_gen(
 
     api_handler.stopped().await;
 
-    let connector = TlsTcpConnector::new(
-        cg_params.tls_config(),
-        settings.p2p_bind,
-        cg_params.p2p_urls(),
-        cg_params.identity,
-    )
-    .await
-    .into_dyn();
+    let connector = if cg_params.iroh_endpoints().is_empty() {
+        TlsTcpConnector::new(
+            cg_params.tls_config(),
+            settings.p2p_bind,
+            cg_params.p2p_urls(),
+            cg_params.identity,
+        )
+        .await
+        .into_dyn()
+    } else {
+        IrohConnector::new(
+            cg_params.iroh_p2p_sk.clone().unwrap(),
+            cg_params
+                .iroh_endpoints()
+                .iter()
+                .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
+                .collect(),
+        )
+        .await
+        .into_dyn()
+    };
 
     let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
 
@@ -267,6 +280,11 @@ pub async fn run_config_gen(
         p2p_status_receivers.clone(),
     )
     .await?;
+
+    assert_ne!(
+        cfg.consensus.iroh_endpoints.is_empty(),
+        cfg.consensus.api_endpoints.is_empty(),
+    );
 
     // TODO: Make writing password optional
     write_new(data_dir.join(PLAINTEXT_PASSWORD), &cfg.private.api_auth.0)?;

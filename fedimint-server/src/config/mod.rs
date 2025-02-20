@@ -223,7 +223,11 @@ pub struct ConfigGenParams {
     /// Our own peer id
     pub identity: PeerId,
     /// Our TLS certificate private key
-    pub tls_key: rustls::PrivateKey,
+    pub tls_key: Option<rustls::PrivateKey>,
+    /// Optional secret key for our iroh api endpoint
+    pub iroh_api_sk: Option<iroh::SecretKey>,
+    /// Optional secret key for our iroh p2p endpoint
+    pub iroh_p2p_sk: Option<iroh::SecretKey>,
     /// Secret API auth string
     pub api_auth: ApiAuth,
     /// Bind address for P2P communication
@@ -241,14 +245,10 @@ pub struct ConfigGenParams {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 /// Connection information sent between peers in order to start config gen
 pub struct PeerConnectionInfo {
-    /// TLS cert is necessary for P2P auth during DKG and consensus
-    pub cert: Vec<u8>,
-    /// P2P is the network for running DKG and consensus
-    pub p2p_url: SafeUrl,
-    /// API for secure websocket requests
-    pub api_url: SafeUrl,
     /// Name of the peer, used in TLS auth
     pub name: String,
+    /// The peer's api and p2p endpoint
+    pub endpoints: PeerEndpoints,
     /// Federation name set by the leader
     pub federation_name: Option<String>,
 }
@@ -273,7 +273,45 @@ impl PeerConnectionInfo {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
+pub enum PeerEndpoints {
+    Tcp {
+        /// TLS certificate for our websocket p2p endpoint       
+        cert: Vec<u8>,
+        /// Url for our websocket p2p endpoint
+        p2p_url: SafeUrl,
+        /// Url for our websocket api endpoint
+        api_url: SafeUrl,
+    },
+    Iroh {
+        /// Public key for our iroh api endpoint
+        api_pk: iroh::PublicKey,
+        /// Public key for our iroh p2p endpoint
+        p2p_pk: iroh::PublicKey,
+    },
+}
+
 impl ServerConfigConsensus {
+    pub fn api_endpoints(&self) -> BTreeMap<PeerId, PeerUrl> {
+        if self.iroh_endpoints.is_empty() {
+            self.api_endpoints.clone()
+        } else {
+            self.iroh_endpoints
+                .iter()
+                .map(|(peer, endpoints)| {
+                    let url = PeerUrl {
+                        name: endpoints.name.clone(),
+                        url: format!("iroh://{}", endpoints.api_pk)
+                            .parse()
+                            .expect("Failed to parse iroh url"),
+                    };
+
+                    (*peer, url)
+                })
+                .collect()
+        }
+    }
+
     pub fn iter_module_instances(
         &self,
     ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
@@ -286,7 +324,7 @@ impl ServerConfigConsensus {
     ) -> Result<ClientConfig, anyhow::Error> {
         let client = ClientConfig {
             global: GlobalClientConfig {
-                api_endpoints: self.api_endpoints.clone(),
+                api_endpoints: self.api_endpoints(),
                 broadcast_public_keys: Some(self.broadcast_public_keys.clone()),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
@@ -335,7 +373,7 @@ impl ServerConfig {
                 DEFAULT_BROADCAST_ROUNDS_PER_SESSION
             },
             api_endpoints: params.api_urls(),
-            iroh_endpoints: BTreeMap::new(),
+            iroh_endpoints: params.iroh_endpoints(),
             tls_certs: params.tls_certs(),
             modules: modules
                 .iter()
@@ -361,9 +399,9 @@ impl ServerConfig {
 
         let private = ServerConfigPrivate {
             api_auth: params.api_auth.clone(),
-            tls_key: Some(params.tls_key.0.encode_hex()),
-            iroh_api_sk: None,
-            iroh_p2p_sk: None,
+            tls_key: params.tls_key.map(|key| key.0.encode_hex()),
+            iroh_api_sk: params.iroh_api_sk,
+            iroh_p2p_sk: params.iroh_p2p_sk,
             broadcast_secret_key,
             modules: modules
                 .iter()
@@ -380,7 +418,7 @@ impl ServerConfig {
 
     pub fn get_invite_code(&self, api_secret: Option<String>) -> InviteCode {
         InviteCode::new(
-            self.consensus.api_endpoints[&self.local.identity]
+            self.consensus.api_endpoints()[&self.local.identity]
                 .url
                 .clone(),
             self.local.identity,
@@ -390,7 +428,7 @@ impl ServerConfig {
     }
 
     pub fn calculate_federation_id(&self) -> FederationId {
-        FederationId(self.consensus.api_endpoints.consensus_hash())
+        FederationId(self.consensus.api_endpoints().consensus_hash())
     }
 
     /// Constructs a module config by name
@@ -698,7 +736,7 @@ impl ConfigGenParams {
 
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            private_key: self.tls_key.clone(),
+            private_key: self.tls_key.clone().unwrap(),
             certificates: self
                 .tls_certs()
                 .iter()
@@ -715,38 +753,63 @@ impl ConfigGenParams {
     pub fn tls_certs(&self) -> BTreeMap<PeerId, String> {
         self.peers
             .iter()
-            .map(|(peer, info)| (*peer, info.cert.encode_hex()))
+            .filter_map(|(id, peer)| {
+                match peer.endpoints.clone() {
+                    PeerEndpoints::Tcp { cert, .. } => Some(cert.encode_hex()),
+                    PeerEndpoints::Iroh { .. } => None,
+                }
+                .map(|peer| (*id, peer))
+            })
             .collect()
     }
 
     pub fn p2p_urls(&self) -> BTreeMap<PeerId, PeerUrl> {
         self.peers
             .iter()
-            .map(|(id, peer)| {
-                (
-                    *id,
-                    PeerUrl {
+            .filter_map(|(id, peer)| {
+                match peer.endpoints.clone() {
+                    PeerEndpoints::Tcp { p2p_url, .. } => Some(PeerUrl {
                         name: peer.name.clone(),
-                        url: peer.p2p_url.clone(),
-                    },
-                )
+                        url: p2p_url.clone(),
+                    }),
+                    PeerEndpoints::Iroh { .. } => None,
+                }
+                .map(|peer| (*id, peer))
             })
-            .collect::<BTreeMap<_, _>>()
+            .collect()
     }
 
     pub fn api_urls(&self) -> BTreeMap<PeerId, PeerUrl> {
         self.peers
             .iter()
-            .map(|(id, peer)| {
-                (
-                    *id,
-                    PeerUrl {
+            .filter_map(|(id, peer)| {
+                match peer.endpoints.clone() {
+                    PeerEndpoints::Tcp { api_url, .. } => Some(PeerUrl {
                         name: peer.name.clone(),
-                        url: peer.api_url.clone(),
-                    },
-                )
+                        url: api_url.clone(),
+                    }),
+                    PeerEndpoints::Iroh { .. } => None,
+                }
+                .map(|peer| (*id, peer))
             })
-            .collect::<BTreeMap<_, _>>()
+            .collect()
+    }
+
+    pub fn iroh_endpoints(&self) -> BTreeMap<PeerId, PeerIrohEndpoints> {
+        self.peers
+            .iter()
+            .filter_map(|(id, peer)| {
+                match peer.endpoints.clone() {
+                    PeerEndpoints::Tcp { .. } => None,
+                    PeerEndpoints::Iroh { api_pk, p2p_pk } => Some(PeerIrohEndpoints {
+                        name: peer.name.clone(),
+                        api_pk,
+                        p2p_pk,
+                    }),
+                }
+                .map(|peer| (*id, peer))
+            })
+            .collect()
     }
 }
 

@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::mem::discriminant;
 
 use anyhow::{ensure, Context};
 use async_trait::async_trait;
@@ -15,11 +16,14 @@ use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
 use fedimint_core::PeerId;
+use iroh::SecretKey;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
 
+use super::PeerEndpoints;
 use crate::config::{gen_cert_and_key, ConfigGenParams, ConfigGenSettings, PeerConnectionInfo};
 use crate::net::api::{check_auth, ApiResult, HasApiContext};
 
@@ -38,9 +42,13 @@ pub struct LocalParams {
     /// Our auth string
     auth: ApiAuth,
     /// Our TLS private key
-    tls_key: rustls::PrivateKey,
-    /// Our TLS public cert
-    tls_cert: rustls::Certificate,
+    tls_key: Option<rustls::PrivateKey>,
+    /// Optional secret key for our iroh api endpoint
+    iroh_api_sk: Option<iroh::SecretKey>,
+    /// Optional secret key for our iroh p2p endpoint
+    iroh_p2p_sk: Option<iroh::SecretKey>,
+    /// Our api and p2p endpoint
+    endpoints: PeerEndpoints,
     /// Name of the peer, used in TLS auth
     name: String,
     /// Federation name set by the leader
@@ -118,9 +126,7 @@ impl ConfigGenApi {
             );
 
             let info = PeerConnectionInfo {
-                cert: lp.tls_cert.clone().0,
-                p2p_url: self.settings.p2p_url.clone(),
-                api_url: self.settings.api_url.clone(),
+                endpoints: lp.endpoints,
                 name: lp.name,
                 federation_name: lp.federation_name,
             };
@@ -128,23 +134,45 @@ impl ConfigGenApi {
             return Ok(info);
         }
 
-        let (tls_cert, tls_key) = gen_cert_and_key(&request.name)
-            .expect("Failed to generate TLS for given guardian name");
+        let lp = if true {
+            let (tls_cert, tls_key) = gen_cert_and_key(&request.name)
+                .expect("Failed to generate TLS for given guardian name");
 
-        let lp = LocalParams {
-            auth,
-            tls_cert,
-            tls_key,
-            name: request.name,
-            federation_name: request.federation_name,
+            LocalParams {
+                auth,
+                tls_key: Some(tls_key),
+                iroh_api_sk: None,
+                iroh_p2p_sk: None,
+                endpoints: PeerEndpoints::Tcp {
+                    cert: tls_cert.0,
+                    p2p_url: self.settings.p2p_url.clone(),
+                    api_url: self.settings.api_url.clone(),
+                },
+                name: request.name,
+                federation_name: request.federation_name,
+            }
+        } else {
+            let iroh_api_sk = SecretKey::generate(&mut OsRng);
+            let iroh_p2p_sk = SecretKey::generate(&mut OsRng);
+
+            LocalParams {
+                auth,
+                tls_key: None,
+                iroh_api_sk: Some(iroh_api_sk.clone()),
+                iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
+                endpoints: PeerEndpoints::Iroh {
+                    api_pk: iroh_api_sk.public(),
+                    p2p_pk: iroh_p2p_sk.public(),
+                },
+                name: request.name,
+                federation_name: request.federation_name,
+            }
         };
 
         state.local_params = Some(lp.clone());
 
         let info = PeerConnectionInfo {
-            cert: lp.tls_cert.clone().0,
-            p2p_url: self.settings.p2p_url.clone(),
-            api_url: self.settings.api_url.clone(),
+            endpoints: lp.endpoints,
             name: lp.name,
             federation_name: lp.federation_name,
         };
@@ -158,6 +186,16 @@ impl ConfigGenApi {
         if state.connection_info.contains(&info) {
             return Ok(());
         }
+
+        let local_params = state
+            .local_params
+            .clone()
+            .expect("The endpoint is authenticated.");
+
+        ensure!(
+            discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
+            "Guardian has different endpoint variant (TCP/Iroh) than us.",
+        );
 
         if let Some(federation_name) = state
             .connection_info
@@ -184,9 +222,7 @@ impl ConfigGenApi {
             .expect("The endpoint is authenticated.");
 
         let our_peer_info = PeerConnectionInfo {
-            cert: local_params.tls_cert.0,
-            p2p_url: self.settings.p2p_url.clone(),
-            api_url: self.settings.api_url.clone(),
+            endpoints: local_params.endpoints,
             name: local_params.name,
             federation_name: local_params.federation_name,
         };
@@ -208,6 +244,8 @@ impl ConfigGenApi {
         let params = ConfigGenParams {
             identity: PeerId::from(our_id as u16),
             tls_key: local_params.tls_key,
+            iroh_api_sk: local_params.iroh_api_sk,
+            iroh_p2p_sk: local_params.iroh_p2p_sk,
             api_auth: local_params.auth,
             p2p_bind: self.settings.p2p_bind,
             api_bind: self.settings.api_bind,

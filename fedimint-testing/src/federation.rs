@@ -25,12 +25,12 @@ use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::{
-    gen_cert_and_key, ConfigGenParams, PeerConnectionInfo, ServerConfig,
+    gen_cert_and_key, ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig,
 };
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
-use fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
+use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use tokio_rustls::rustls;
 use tracing::info;
 
@@ -87,7 +87,7 @@ impl FederationTest {
         let config = self.configs.get(&peer_id).expect("peer to have config");
         DynGlobalApi::new_admin(
             peer_id,
-            config.consensus.api_endpoints[&peer_id].url.clone(),
+            config.consensus.api_endpoints()[&peer_id].url.clone(),
             &None,
             &Connector::default(),
         )
@@ -307,7 +307,7 @@ impl FederationTestBuilder {
             // defaulting to Tcp variant.
             let api = DynGlobalApi::new_admin(
                 peer_id,
-                config.consensus.api_endpoints[&peer_id].url.clone(),
+                config.consensus.api_endpoints()[&peer_id].url.clone(),
                 &None,
                 &Connector::default(),
             );
@@ -360,13 +360,16 @@ pub fn local_config_gen_params(
         .iter()
         .map(|peer| {
             let peer_port = base_port + u16::from(*peer) * 2;
+
             let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
             let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
             let params = PeerConnectionInfo {
-                cert: tls_keys[peer].0.clone().0,
-                p2p_url: p2p_url.parse().expect("Should parse"),
-                api_url: api_url.parse().expect("Should parse"),
+                endpoints: PeerEndpoints::Tcp {
+                    cert: tls_keys[peer].0.clone().0,
+                    p2p_url: p2p_url.parse().expect("Should parse"),
+                    api_url: api_url.parse().expect("Should parse"),
+                },
                 name: format!("peer-{}", peer.to_usize()),
                 federation_name: None,
             };
@@ -377,13 +380,17 @@ pub fn local_config_gen_params(
     peers
         .iter()
         .map(|peer| {
-            let p2p_bind = parse_host_port(&connections[peer].clone().p2p_url)?;
-            let api_bind = parse_host_port(&connections[peer].clone().api_url)?;
+            let peer_port = base_port + u16::from(*peer) * 2;
+
+            let p2p_bind = format!("127.0.0.1:{peer_port}");
+            let api_bind = format!("127.0.0.1:{}", peer_port + 1);
 
             let params = ConfigGenParams {
                 identity: *peer,
-                tls_key: tls_keys[peer].1.clone(),
                 api_auth: API_AUTH.clone(),
+                tls_key: Some(tls_keys[peer].1.clone()),
+                iroh_api_sk: None,
+                iroh_p2p_sk: None,
                 p2p_bind: p2p_bind.parse().expect("Valid address"),
                 api_bind: api_bind.parse().expect("Valid address"),
                 peers: connections.clone(),
@@ -395,5 +402,5 @@ pub fn local_config_gen_params(
             };
             Ok((*peer, params))
         })
-        .collect::<anyhow::Result<HashMap<_, _>>>()
+        .collect()
 }
