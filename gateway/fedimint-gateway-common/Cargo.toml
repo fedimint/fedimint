@@ -11,6 +11,10 @@ repository = { workspace = true }
 [features]
 tor = ["fedimint-api-client/tor"]
 
+[lib]
+name = "fedimint_gateway_common"
+path = "src/lib.rs"
+
 [dependencies]
 bitcoin = { workspace = true }
 clap = { workspace = true }

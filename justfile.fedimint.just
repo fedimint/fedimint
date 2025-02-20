@@ -69,7 +69,7 @@ check-wasm:
 # ex: `just snapshot-server-db-migrations fedimint-ln-tests`
 # ex: `just snapshot-server-db-migrations fedimint-wallet-tests`
 # ex: `just snapshot-server-db-migrations fedimint-dummy-tests`
-# ex: `just snapshot-server-db-migrations fedimint-ln-gateway`
+# ex: `just snapshot-server-db-migrations fedimint-gateway-server`
 snapshot-server-db-migrations PACKAGE *EXTRA_ARGS:
   env FM_PREPARE_DB_MIGRATION_SNAPSHOTS=force cargo nextest run --workspace --all-targets ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -E 'package({{PACKAGE}})' snapshot_server_db_migrations {{EXTRA_ARGS}}
   just test-server-db-migrations {{PACKAGE}} {{EXTRA_ARGS}}
@@ -100,7 +100,7 @@ test-db-migrations:
   just test-server-db-migrations fedimint-ln-tests
   just test-server-db-migrations fedimint-wallet-tests
   just test-server-db-migrations fedimint-server
-  just test-server-db-migrations fedimint-ln-gateway
+  just test-server-db-migrations fedimint-gateway-server
 
 snapshot-db-migrations:
   just snapshot-client-db-migrations fedimint-dummy-tests
@@ -112,7 +112,7 @@ snapshot-db-migrations:
   just snapshot-server-db-migrations fedimint-ln-tests
   just snapshot-server-db-migrations fedimint-wallet-tests
   just snapshot-server-db-migrations fedimint-server
-  just snapshot-server-db-migrations fedimint-ln-gateway
+  just snapshot-server-db-migrations fedimint-gateway-server
   just test-db-migrations
 
 # start mprocs with a dev federation setup. Default: 4 nodes, add `-n 1` argument to start only 1 node

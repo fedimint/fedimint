@@ -141,7 +141,7 @@ impl Gatewayd {
 
         if supports_lnv2() {
             tracing::info!("LNv2 is now supported, running in All mode");
-            std::env::set_var(FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, "All");
+            std::env::set_var("FM_GATEWAY_LIGHTNING_MODULE_MODE", "All");
         }
 
         let new_ln = ln;

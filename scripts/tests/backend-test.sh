@@ -67,14 +67,14 @@ function run_tests() {
       cargo nextest run --locked --workspace --all-targets \
         ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
         ${TEST_ARGS_SERIALIZED} \
-        -E 'package(fedimint-ln-gateway) & test(gateway_client)'
+        -E 'package(fedimint-gateway-server) & test(gateway_client)'
     fi
 
     if [ -z "${FM_BITCOIND_GW_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_GW_TEST_ONLY:-}" = "not-gateway-client" ]; then
       cargo nextest run --locked --workspace --all-targets \
         ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
         ${TEST_ARGS_SERIALIZED} \
-        -E 'package(fedimint-ln-gateway) & not test(gateway_client)'
+        -E 'package(fedimint-gateway-server) & not test(gateway_client)'
     fi
 
     >&2 echo "### Testing against bitcoind for ln-gateway - complete"

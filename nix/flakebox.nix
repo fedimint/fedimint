@@ -734,8 +734,8 @@ in
       pname = "gateway-pkgs";
 
       packages = [
-        "fedimint-ln-gateway"
-        "fedimint-gateway-cli"
+        "fedimint-gateway-server"
+        "fedimint-gateway-client"
       ];
     };
 
