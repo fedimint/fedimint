@@ -12,7 +12,7 @@ repository = { workspace = true }
 publish = false
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["fedimint-api-client", "fedimint-core"]
+normal = ["fedimint-api-client"]
 
 [lib]
 name = "fedimint_workspace"
@@ -23,4 +23,3 @@ path = "src/lib.rs"
 # so I made a whole crate just for it.
 [dependencies]
 fedimint-api-client = { workspace = true, features = ["iroh"] }
-fedimint-core = { workspace = true, features = ["iroh"] }

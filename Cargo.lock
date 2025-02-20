@@ -2750,7 +2750,7 @@ dependencies = [
  "hex",
  "hex-conservative 0.3.0",
  "imbl",
- "iroh",
+ "iroh-base",
  "itertools 0.13.0",
  "js-sys",
  "jsonrpsee-core",
@@ -4064,7 +4064,6 @@ name = "fedimint-workspace"
 version = "0.7.0-alpha"
 dependencies = [
  "fedimint-api-client",
- "fedimint-core",
 ]
 
 [[package]]
@@ -5497,6 +5496,7 @@ dependencies = [
  "derive_more 1.0.0",
  "ed25519-dalek",
  "getrandom 0.2.15",
+ "postcard",
  "rand_core 0.6.4",
  "serde",
  "thiserror 2.0.11",
@@ -5514,6 +5514,7 @@ dependencies = [
  "hyper 1.6.0",
  "hyper-util",
  "once_cell",
+ "prometheus-client",
  "reqwest 0.12.9",
  "serde",
  "struct_iterable",
