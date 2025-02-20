@@ -103,8 +103,14 @@ impl ServerConfig {
 pub struct ServerConfigPrivate {
     /// Secret API auth string
     pub api_auth: ApiAuth,
-    /// Secret key for TLS communication, required for peer authentication
-    pub tls_key: String,
+    /// Optional secret key for our websocket p2p endpoint
+    pub tls_key: Option<String>,
+    /// Optional secret key for our iroh api endpoint
+    #[serde(default)]
+    pub iroh_api_sk: Option<iroh::SecretKey>,
+    /// Optional secret key for our iroh p2p endpoint
+    #[serde(default)]
+    pub iroh_p2p_sk: Option<iroh::SecretKey>,
     /// Secret key for the atomic broadcast to sign messages
     pub broadcast_secret_key: SecretKey,
     /// Secret material from modules
@@ -124,12 +130,25 @@ pub struct ServerConfigConsensus {
     pub broadcast_rounds_per_session: u16,
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
+    /// Public keys for all iroh api and p2p endpoints
+    #[serde(default)]
+    pub iroh_endpoints: BTreeMap<PeerId, PeerIrohEndpoints>,
     /// Certs for TLS communication, required for peer authentication
     pub tls_certs: BTreeMap<PeerId, String>,
     /// All configuration that needs to be the same for modules
     pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
+pub struct PeerIrohEndpoints {
+    /// The peer's name
+    pub name: String,
+    /// Public key for our iroh api endpoint
+    pub api_pk: iroh::PublicKey,
+    /// Public key for our iroh p2p endpoint
+    pub p2p_pk: iroh::PublicKey,
 }
 
 pub fn legacy_consensus_config_hash(cfg: &ServerConfigConsensus) -> sha256::Hash {
@@ -328,6 +347,7 @@ impl ServerConfig {
                 DEFAULT_BROADCAST_ROUNDS_PER_SESSION
             },
             api_endpoints: params.api_urls(),
+            iroh_endpoints: BTreeMap::new(),
             tls_certs: params.tls_certs(),
             modules: modules
                 .iter()
@@ -353,7 +373,9 @@ impl ServerConfig {
 
         let private = ServerConfigPrivate {
             api_auth: params.local.api_auth.clone(),
-            tls_key: params.local.our_private_key.0.encode_hex(),
+            tls_key: Some(params.local.our_private_key.0.encode_hex()),
+            iroh_api_sk: None,
+            iroh_p2p_sk: None,
             broadcast_secret_key,
             modules: modules
                 .iter()
@@ -662,7 +684,9 @@ impl ServerConfig {
 impl ServerConfig {
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            private_key: rustls::PrivateKey(Vec::from_hex(&self.private.tls_key).unwrap()),
+            private_key: rustls::PrivateKey(
+                Vec::from_hex(self.private.tls_key.clone().unwrap()).unwrap(),
+            ),
             certificates: self
                 .consensus
                 .tls_certs
