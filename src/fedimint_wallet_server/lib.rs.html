@@ -2347,7 +2347,30 @@
 <a href="#2346" id="2346">2346</a>
 <a href="#2347" id="2347">2347</a>
 <a href="#2348" id="2348">2348</a>
-<a href="#2349" id="2349">2349</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2349" id="2349">2349</a>
+<a href="#2350" id="2350">2350</a>
+<a href="#2351" id="2351">2351</a>
+<a href="#2352" id="2352">2352</a>
+<a href="#2353" id="2353">2353</a>
+<a href="#2354" id="2354">2354</a>
+<a href="#2355" id="2355">2355</a>
+<a href="#2356" id="2356">2356</a>
+<a href="#2357" id="2357">2357</a>
+<a href="#2358" id="2358">2358</a>
+<a href="#2359" id="2359">2359</a>
+<a href="#2360" id="2360">2360</a>
+<a href="#2361" id="2361">2361</a>
+<a href="#2362" id="2362">2362</a>
+<a href="#2363" id="2363">2363</a>
+<a href="#2364" id="2364">2364</a>
+<a href="#2365" id="2365">2365</a>
+<a href="#2366" id="2366">2366</a>
+<a href="#2367" id="2367">2367</a>
+<a href="#2368" id="2368">2368</a>
+<a href="#2369" id="2369">2369</a>
+<a href="#2370" id="2370">2370</a>
+<a href="#2371" id="2371">2371</a>
+<a href="#2372" id="2372">2372</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
@@ -2409,7 +2432,7 @@
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, FmtCompactAnyhow <span class="kw">as _</span>};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, FmtCompact, FmtCompactAnyhow <span class="kw">as _</span>};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
     Feerate, InPoint, NumPeersExt, OutPoint, PeerId,
@@ -3290,7 +3313,8 @@
                 <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; () {
                     check_auth(context)<span class="question-mark">?</span>;
 
-                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.dbtx();
+                    <span class="comment">// api_endpoint! calls dbtx.commit_tx_result
+                    </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.dbtx();
                     dbtx.insert_entry(<span class="kw-2">&amp;</span>ConsensusVersionVotingActivationKey, <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
                     <span class="prelude-val">Ok</span>(())
                 }
@@ -3405,7 +3429,7 @@
         <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>btc_rpc, db, broadcast_pending.clone());
 
         <span class="kw">let </span>peer_supported_consensus_version =
-            <span class="self">Self</span>::spawn_peer_supported_consensus_version_task(module_api, task_group);
+            <span class="self">Self</span>::spawn_peer_supported_consensus_version_task(module_api, task_group, our_peer_id);
 
         <span class="kw">let </span>bitcoind_net = NetworkLegacyEncodingWrapper(
             retry(<span class="string">"verify network"</span>, backoff_util::aggressive_backoff(), || {
@@ -4051,13 +4075,18 @@
     <span class="kw">fn </span>spawn_peer_supported_consensus_version_task(
         api_client: DynModuleApi,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
+        our_peer_id: PeerId,
     ) -&gt; watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;ModuleConsensusVersion&gt;&gt; {
         <span class="kw">let </span>(sender, receiver) = watch::channel(<span class="prelude-val">None</span>);
         task_group.spawn_cancellable(<span class="string">"fetch-peer-consensus-versions"</span>, <span class="kw">async move </span>{
             <span class="kw">loop </span>{
-                <span class="kw">let </span>request_futures = api_client.all_peers().iter().map(|<span class="kw-2">&amp;</span>peer| {
+                <span class="kw">let </span>request_futures = api_client.all_peers().iter().filter_map(|<span class="kw-2">&amp;</span>peer| {
+                    <span class="kw">if </span>peer == our_peer_id {
+                        <span class="kw">return </span><span class="prelude-val">None</span>;
+                    }
+
                     <span class="kw">let </span>api_client_inner = api_client.clone();
-                    <span class="kw">async move </span>{
+                    <span class="prelude-val">Some</span>(<span class="kw">async move </span>{
                         api_client_inner
                             .request_single_peer::&lt;ModuleConsensusVersion&gt;(
                                 SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT.to_owned(),
@@ -4065,8 +4094,21 @@
                                 peer,
                             )
                             .<span class="kw">await
-                            </span>.ok()
-                    }
+                            </span>.inspect(|res| <span class="macro">debug!</span>(
+                                target: LOG_MODULE_WALLET,
+                                %peer,
+                                %our_peer_id,
+                                <span class="question-mark">?</span>res,
+                                <span class="string">"Fetched supported module consensus version from peer"
+                            </span>))
+                            .inspect_err(|err| <span class="macro">warn!</span>(
+                                target: LOG_MODULE_WALLET,
+                                 %peer,
+                                 err=%err.fmt_compact(),
+                                <span class="string">"Failed to fetch consensus version from peer"
+                            </span>))
+                            .ok()
+                    })
                 });
 
                 <span class="kw">let </span>peer_consensus_versions = join_all(request_futures)
@@ -4094,6 +4136,10 @@
 
                         <span class="prelude-val">Some</span>(min_supported_version)
                     } <span class="kw">else </span>{
+                        <span class="macro">assert!</span>(
+                            sorted_consensus_versions.len() &lt;= api_client.all_peers().len(),
+                            <span class="string">"Too many peer responses"</span>,
+                        );
                         <span class="macro">trace!</span>(
                             target: LOG_MODULE_WALLET,
                             <span class="question-mark">?</span>sorted_consensus_versions,
@@ -4109,9 +4155,9 @@
 
                 <span class="kw">if </span>is_running_in_test_env() {
                     <span class="comment">// Even in tests we don't want to spam the federation with requests about it
-                    </span>sleep(Duration::from_secs(<span class="number">30</span>)).<span class="kw">await</span>;
+                    </span>sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
                 } <span class="kw">else </span>{
-                    sleep(Duration::from_secs(<span class="number">3600</span>)).<span class="kw">await</span>;
+                    sleep(Duration::from_secs(<span class="number">600</span>)).<span class="kw">await</span>;
                 }
             }
         });

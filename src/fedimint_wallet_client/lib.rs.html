@@ -1513,7 +1513,21 @@
 <a href="#1512" id="1512">1512</a>
 <a href="#1513" id="1513">1513</a>
 <a href="#1514" id="1514">1514</a>
-<a href="#1515" id="1515">1515</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -2777,6 +2791,20 @@
                     }
                 }
             }))
+    }
+
+    <span class="kw">fn </span>admin_auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ApiAuth&gt; {
+        <span class="self">self</span>.admin_auth
+            .clone()
+            .ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">"Admin auth not set"</span>))
+    }
+
+    <span class="kw">pub async fn </span>activate_consensus_version_voting(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="self">self</span>.module_api
+            .activate_consensus_version_voting(<span class="self">self</span>.admin_auth()<span class="question-mark">?</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
     }
 }
 

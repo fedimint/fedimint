@@ -260,7 +260,13 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -404,19 +410,25 @@
         <span class="self">self
     </span>}
 
-    <span class="doccomment">/// Starts a new federation with default number of peers for testing
-    </span><span class="kw">pub async fn </span>new_default_fed(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTest {
-        <span class="self">self</span>.new_fed_builder().build().<span class="kw">await
+    <span class="doccomment">/// Starts a new federation with 3/4 peers online
+    </span><span class="kw">pub async fn </span>new_fed_degraded(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTest {
+        <span class="self">self</span>.new_fed_builder(<span class="number">1</span>).build().<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Starts a new federation with 4/4 peers online
+    </span><span class="kw">pub async fn </span>new_fed_not_degraded(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTest {
+        <span class="self">self</span>.new_fed_builder(<span class="number">0</span>).build().<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Creates a new `FederationTestBuilder` that can be used to build up a
     /// `FederationTest` for module tests.
-    </span><span class="kw">pub fn </span>new_fed_builder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTestBuilder {
+    </span><span class="kw">pub fn </span>new_fed_builder(<span class="kw-2">&amp;</span><span class="self">self</span>, num_offline: u16) -&gt; FederationTestBuilder {
         FederationTestBuilder::new(
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
             <span class="self">self</span>.primary_module_kind.clone(),
+            num_offline,
         )
     }
 

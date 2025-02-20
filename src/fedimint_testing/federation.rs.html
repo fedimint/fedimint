@@ -373,8 +373,37 @@
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
 <a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
-<span class="kw">use </span>std::sync::Arc;
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span class="kw">use </span>std::sync::{Arc, LazyLock};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
@@ -410,6 +439,8 @@
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
 
+<span class="kw">pub static </span>API_AUTH: LazyLock&lt;ApiAuth&gt; = LazyLock::new(|| ApiAuth(<span class="string">"pass"</span>.to_string()));
+
 <span class="doccomment">/// Test fixture for a running fedimint federation
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>FederationTest {
@@ -418,6 +449,8 @@
     client_init: ClientModuleInitRegistry,
     primary_module_kind: ModuleKind,
     _task: TaskGroup,
+    num_peers: u16,
+    num_offline: u16,
 }
 
 <span class="kw">impl </span>FederationTest {
@@ -453,6 +486,17 @@
         )
         .<span class="kw">await
     </span>}
+
+    <span class="doccomment">/// Create a new admin api for the given PeerId
+    </span><span class="kw">pub fn </span>new_admin_api(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; DynGlobalApi {
+        <span class="kw">let </span>config = <span class="self">self</span>.configs.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"peer to have config"</span>);
+        DynGlobalApi::new_admin(
+            peer_id,
+            config.consensus.api_endpoints[<span class="kw-2">&amp;</span>peer_id].url.clone(),
+            <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
+            <span class="kw-2">&amp;</span>Connector::default(),
+        )
+    }
 
     <span class="doccomment">/// Create a new admin client connected to this fed
     </span><span class="kw">pub async fn </span>new_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId, auth: ApiAuth) -&gt; ClientHandleArc {
@@ -520,6 +564,17 @@
         .<span class="kw">await
         </span>.expect(<span class="string">"Failed to connect federation"</span>);
     }
+
+    <span class="doccomment">/// Return all online PeerIds
+    </span><span class="kw">pub fn </span>online_peer_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; {
+        <span class="comment">// we can assume this ordering since peers are started in ascending order
+        </span>(<span class="number">0</span>..(<span class="self">self</span>.num_peers - <span class="self">self</span>.num_offline)).map(PeerId::from)
+    }
+
+    <span class="doccomment">/// Returns true if the federation is running in a degraded state
+    </span><span class="kw">pub fn </span>is_degraded(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.num_offline &gt; <span class="number">0
+    </span>}
 }
 
 <span class="doccomment">/// Builder struct for creating a `FederationTest`.
@@ -541,11 +596,12 @@
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
         primary_module_kind: ModuleKind,
+        num_offline: u16,
     ) -&gt; FederationTestBuilder {
         <span class="kw">let </span>num_peers = <span class="number">4</span>;
         <span class="self">Self </span>{
             num_peers,
-            num_offline: <span class="number">1</span>,
+            num_offline,
             base_port: block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))
                 .expect(<span class="string">"Failed to allocate a port range"</span>),
             primary_module_kind,
@@ -679,6 +735,8 @@
             client_init: <span class="self">self</span>.client_init,
             primary_module_kind: <span class="self">self</span>.primary_module_kind,
             _task: task_group,
+            num_peers: <span class="self">self</span>.num_peers,
+            num_offline: <span class="self">self</span>.num_offline,
         }
     }
 }
@@ -731,7 +789,7 @@
                 local: ConfigGenParamsLocal {
                     our_id: <span class="kw-2">*</span>peer,
                     our_private_key: tls_keys[peer].<span class="number">1</span>.clone(),
-                    api_auth: ApiAuth(<span class="string">"pass"</span>.to_string()),
+                    api_auth: API_AUTH.clone(),
                     p2p_bind: p2p_bind.parse().expect(<span class="string">"Valid address"</span>),
                     api_bind: api_bind.parse().expect(<span class="string">"Valid address"</span>),
                 },

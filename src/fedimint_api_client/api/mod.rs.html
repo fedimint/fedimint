@@ -2507,7 +2507,7 @@
         <span class="kw">let </span>res = <span class="self">self
             </span>.connections
             .get(<span class="kw-2">&amp;</span>peer)
-            .expect(<span class="string">"Could not find client connection for peer {peer}"</span>)
+            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"Could not find client connection for peer {peer}"</span>))
             .connection()
             .<span class="kw">await
             </span>.context(<span class="string">"Failed to connect to peer"</span>)

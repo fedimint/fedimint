@@ -117,16 +117,27 @@
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
 <a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, PeerId};
 <span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{
-    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
-    MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
-    WALLET_SUMMARY_ENDPOINT,
+    ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
+    BLOCK_COUNT_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+    UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_wallet_common::{PegOutFees, WalletSummary};
 
@@ -149,6 +160,8 @@
     <span class="kw">async fn </span>fetch_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;WalletSummary&gt;;
 
     <span class="kw">async fn </span>is_utxo_confirmed(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: bitcoin::OutPoint) -&gt; FederationResult&lt;bool&gt;;
+
+    <span class="kw">async fn </span>activate_consensus_version_voting(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -232,6 +245,15 @@
         <span class="self">self</span>.request_current_consensus(
             WALLET_SUMMARY_ENDPOINT.to_string(),
             ApiRequestErased::default(),
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>activate_consensus_version_voting(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
+        <span class="self">self</span>.request_admin(
+            ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
         )
         .<span class="kw">await
     </span>}
