@@ -92,17 +92,17 @@ $ fedimint-cli reissue BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
 
 ### Using the Gateway
 
-The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The mprocs setup scripts also give it some ecash. To check its balance, we use the [`gateway-cli`](../gateway/cli) utility. In the mprocs environment there are 2 lightning gateways -- one for Core Lightning and one for LND -- so we add `gateway-cln` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the Core Lightinng gateway, run `gateway-cln info`, copy the federation id and then:
+The [lightning gateway](../gateway/fedimint-gateway-server) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The mprocs setup scripts also give it some ecash. To check its balance, we use the [`gateway-cli`](../gateway/fedimint-gateway-client) utility. In the mprocs environment there are 2 lightning gateways -- one for LDK and one for LND -- so we add `gateway-ldk` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the LDK gateway, run `gateway-ldk info`, copy the federation id and then:
 
 ```shell
-$ gateway-cln balance --federation-id <FEDERATION-ID>
+$ gateway-ldk balance --federation-id <FEDERATION-ID>
 
 {
   30000000
 }
 ```
 
-Mprocs has 2 lightning nodes running. [Core Lightning](https://github.com/ElementsProject/lightning) which is running a gateway, and [LND](https://github.com/lightningnetwork/lnd) which represents an external node that doesn't know about Fedimint. With these two nodes, you can simulate sending into and out of Fedimint via Lightning.
+Mprocs has 3 lightning nodes running. LDK, which is running in a gateway, [Core Lightning](https://github.com/ElementsProject/lightning), and [LND](https://github.com/lightningnetwork/lnd). With these three nodes, you can simulate sending into and out of Fedimint via Lightning.
 
 To make an outgoing payment we generate a Lightning invoice from LND, our non-gateway lightning node:
 

@@ -1,22 +1,22 @@
 [package]
-name = "fedimint-ln-gateway"
+name = "fedimint-gateway-server"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
-description = "fedimint-ln-gateway sends/receives Lightning Network payments on behalf of Fedimint clients"
+description = "fedimint-gateway-server sends/receives Lightning Network payments on behalf of Fedimint clients"
 license = { workspace = true }
 readme = { workspace = true }
 repository = { workspace = true }
 
 [features]
-tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
+tor = ["fedimint-client/tor", "fedimint-api-client/tor", "fedimint-gateway-common/tor"]
 
 [[bin]]
 name = "gatewayd"
 path = "src/bin/gatewayd.rs"
 
 [lib]
-name = "ln_gateway"
+name = "fedimint_gateway_server"
 path = "src/lib.rs"
 
 [[test]]
@@ -41,6 +41,7 @@ fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-gateway-common = { workspace = true }
 fedimint-gw-client = { workspace = true }
 fedimint-gwv2-client = { workspace = true }
 fedimint-lightning = { path = "../fedimint-lightning", version = "=0.7.0-alpha" }

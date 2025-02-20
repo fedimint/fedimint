@@ -1,0 +1,29 @@
+[package]
+name = "fedimint-gateway-common"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+description = "Contains common structs and logic between the gateway client and server"
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
+
+[features]
+tor = ["fedimint-api-client/tor"]
+
+[lib]
+name = "fedimint_gateway_common"
+path = "src/lib.rs"
+
+[dependencies]
+bitcoin = { workspace = true }
+clap = { workspace = true }
+fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.7.0-alpha" }
+fedimint-core = { workspace = true }
+fedimint-eventlog = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
+fedimint-mint-client = { workspace = true }
+fedimint-wallet-client = { workspace = true }
+lightning-invoice = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -10,11 +10,11 @@ use clap::{CommandFactory, Parser, Subcommand};
 use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
 use fedimint_core::util::SafeUrl;
+use fedimint_gateway_client::GatewayRpcClient;
+use fedimint_gateway_common::V1_API_ENDPOINT;
 use fedimint_logging::TracingSetup;
 use general_commands::GeneralCommands;
 use lightning_commands::LightningCommands;
-use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::V1_API_ENDPOINT;
 use onchain_commands::OnchainCommands;
 use serde::Serialize;
 

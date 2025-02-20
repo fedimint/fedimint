@@ -19,7 +19,7 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
-pub mod rpc;
+pub mod rpc_server;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -36,8 +36,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
 use clap::Parser;
 use client::GatewayClientBuilder;
+use config::GatewayOpts;
 pub use config::GatewayParameters;
-use config::{GatewayOpts, LightningMode};
 use db::GatewayDbtxNcExt;
 use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
@@ -66,6 +66,16 @@ use fedimint_core::{
     fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
+use fedimint_gateway_common::{
+    BackupPayload, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
+    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
+    FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
+    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningMode,
+    MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentLogPayload,
+    PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse, V1_API_ENDPOINT,
+};
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
@@ -74,10 +84,9 @@ use fedimint_gwv2_client::{GatewayClientModuleV2, IGatewayClientV2, EXPIRATION_D
 use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    GetInvoiceRequest, GetInvoiceResponse, ILnRpcClient, InterceptPaymentRequest,
-    InterceptPaymentResponse, InvoiceDescription, LightningContext, LightningRpcError,
-    OpenChannelRequest, PayInvoiceResponse, PaymentAction, RouteHtlcStream, SendOnchainRequest,
+    CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
+    InvoiceDescription, LightningContext, LightningRpcError, PayInvoiceResponse, PaymentAction,
+    RouteHtlcStream,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -99,26 +108,15 @@ use fedimint_wallet_client::{
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::thread_rng;
-use rpc::{
-    CreateInvoiceForOperatorPayload, DepositAddressRecheckPayload, FederationInfo,
-    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, WithdrawResponse, V1_API_ENDPOINT,
-};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn};
 
 use crate::config::LightningModuleMode;
-use crate::db::{get_gatewayd_database_migrations, FederationConfig};
+use crate::db::get_gatewayd_database_migrations;
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
-use crate::rpc::rpc_server::run_webserver;
-use crate::rpc::{
-    BackupPayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, WithdrawPayload,
-};
+use crate::rpc_server::run_webserver;
 use crate::types::PrettyInterceptPaymentRequest;
 
 /// How long a gateway announcement stays valid
@@ -1354,7 +1352,7 @@ impl Gateway {
     /// Lightning node.
     pub async fn handle_list_active_channels_msg(
         &self,
-    ) -> AdminResult<Vec<fedimint_lightning::ChannelInfo>> {
+    ) -> AdminResult<Vec<fedimint_gateway_common::ChannelInfo>> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.list_active_channels().await?;
         Ok(response.channels)

@@ -16,13 +16,14 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
+use fedimint_gateway_common::LightningMode;
+use fedimint_gateway_server::client::GatewayClientBuilder;
+use fedimint_gateway_server::config::LightningModuleMode;
+use fedimint_gateway_server::Gateway;
 use fedimint_lightning::{ILnRpcClient, LightningContext};
 use fedimint_logging::TracingSetup;
 use fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
 use fedimint_testing_core::test_dir;
-use ln_gateway::client::GatewayClientBuilder;
-use ln_gateway::config::{LightningMode, LightningModuleMode};
-use ln_gateway::Gateway;
 
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
@@ -220,7 +221,7 @@ impl Fixtures {
             // Manually set the gateway's state to `Running`. In tests, we do don't run the
             // webserver or intercept HTLCs, so this is necessary for instructing the
             // gateway that it is connected to the mock Lightning node.
-            ln_gateway::GatewayState::Running { lightning_context },
+            fedimint_gateway_server::GatewayState::Running { lightning_context },
             lightning_module_mode,
         )
         .await

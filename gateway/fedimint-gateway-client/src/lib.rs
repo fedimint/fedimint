@@ -1,24 +1,15 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
-use fedimint_lightning::{
-    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
-};
-use lightning_invoice::Bolt11Invoice;
-use reqwest::{Method, StatusCode};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use thiserror::Error;
-
-use super::{
-    BackupPayload, ConfigPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload,
-    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GatewayBalances,
-    GatewayFedConfig, GatewayInfo, LeaveFedPayload, MnemonicResponse, PayInvoiceForOperatorPayload,
-    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WithdrawPayload, WithdrawResponse, ADDRESS_ENDPOINT,
-    ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+use fedimint_gateway_common::{
+    BackupPayload, ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
+    ConfigPayload, ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
+    DepositAddressRecheckPayload, FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo,
+    GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, MnemonicResponse, OpenChannelRequest,
+    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload,
+    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest,
+    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse,
+    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
     GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
@@ -26,6 +17,11 @@ use super::{
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
+use lightning_invoice::Bolt11Invoice;
+use reqwest::{Method, StatusCode};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use thiserror::Error;
 
 pub struct GatewayRpcClient {
     /// Base URL to gateway web server

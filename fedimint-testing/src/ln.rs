@@ -12,13 +12,15 @@ use bitcoin::secp256k1::{self, PublicKey, SecretKey};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::Amount;
+use fedimint_gateway_common::{
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
+    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+};
 use fedimint_lightning::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
-    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, ILnRpcClient,
-    InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
-    ListActiveChannelsResponse, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
-    RouteHtlcStream, SendOnchainRequest, SendOnchainResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, ILnRpcClient, InterceptPaymentRequest,
+    InterceptPaymentResponse, LightningRpcError, ListActiveChannelsResponse, OpenChannelResponse,
+    PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
@@ -68,7 +70,7 @@ impl FakeLightningTest {
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
-    ) -> ln_gateway::Result<Bolt11Invoice> {
+    ) -> fedimint_gateway_server::Result<Bolt11Invoice> {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 

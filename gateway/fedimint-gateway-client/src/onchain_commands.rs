@@ -1,10 +1,9 @@
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::BitcoinAmountOrAll;
-use fedimint_lightning::SendOnchainRequest;
-use ln_gateway::rpc::rpc_client::GatewayRpcClient;
+use fedimint_gateway_common::SendOnchainRequest;
 
-use crate::print_response;
+use crate::{print_response, GatewayRpcClient};
 
 #[derive(Subcommand)]
 pub enum OnchainCommands {

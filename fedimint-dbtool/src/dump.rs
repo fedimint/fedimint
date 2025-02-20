@@ -15,6 +15,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::push_db_pair_items;
+use fedimint_gateway_server::Gateway;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
@@ -22,7 +23,6 @@ use fedimint_server::consensus::db as ConsensusRange;
 use fedimint_server::core::{ServerModuleInitRegistry, ServerModuleInitRegistryExt};
 use fedimint_server::net::api::announcement::ApiAnnouncementPrefix;
 use futures::StreamExt;
-use ln_gateway::Gateway;
 use strum::IntoEnumIterator;
 
 macro_rules! push_db_pair_items_no_serde {

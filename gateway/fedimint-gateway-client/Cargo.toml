@@ -1,5 +1,5 @@
 [package]
-name = "fedimint-gateway-cli"
+name = "fedimint-gateway-client"
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = { workspace = true }
@@ -7,18 +7,22 @@ license = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
 readme = { workspace = true }
-description = "CLI tool to control lightning gateway"
+description = "Client for interacting with the gateway"
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 default = ["tor"]
-tor = ["ln-gateway/tor"]
+tor = ["fedimint-gateway-common/tor"]
 
 [[bin]]
 name = "gateway-cli"
 path = "src/main.rs"
+
+[lib]
+name = "fedimint_gateway_client"
+path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -28,13 +32,14 @@ clap = { workspace = true }
 clap_complete = "4.5.44"
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
-fedimint-lightning = { package = "fedimint-lightning", path = "../fedimint-lightning", version = "=0.7.0-alpha" }
+fedimint-gateway-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
 lightning-invoice = { workspace = true }
-ln-gateway = { package = "fedimint-ln-gateway", path = "../ln-gateway", version = "=0.7.0-alpha" }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [build-dependencies]

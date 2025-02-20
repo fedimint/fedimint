@@ -13,6 +13,7 @@ use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
 use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse};
 use fedimint_ln_common::contracts::Preimage;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
@@ -31,10 +32,9 @@ use super::{
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
-    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelRequest,
-    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+    OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
     SendOnchainResponse,
 };
 
@@ -671,9 +671,9 @@ impl ILnRpcClient for GatewayLdkClient {
             .map(|details| {
                 let (preimage, payment_hash) = get_preimage_and_payment_hash(&details.kind);
                 let status = match details.status {
-                    PaymentStatus::Failed => crate::PaymentStatus::Failed,
-                    PaymentStatus::Succeeded => crate::PaymentStatus::Succeeded,
-                    PaymentStatus::Pending => crate::PaymentStatus::Pending,
+                    PaymentStatus::Failed => fedimint_gateway_common::PaymentStatus::Failed,
+                    PaymentStatus::Succeeded => fedimint_gateway_common::PaymentStatus::Succeeded,
+                    PaymentStatus::Pending => fedimint_gateway_common::PaymentStatus::Pending,
                 };
                 GetInvoiceResponse {
                     preimage: preimage.map(|p| p.0.consensus_encode_to_hex()),

@@ -3,12 +3,12 @@ use bitcoin::Address;
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
-use fedimint_mint_client::OOBNotes;
-use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{
+use fedimint_gateway_client::GatewayRpcClient;
+use fedimint_gateway_common::{
     BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, ReceiveEcashPayload,
     SpendEcashPayload, WithdrawPayload,
 };
+use fedimint_mint_client::OOBNotes;
 
 use crate::print_response;
 

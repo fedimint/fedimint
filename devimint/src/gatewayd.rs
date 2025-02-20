@@ -10,12 +10,13 @@ use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
-use fedimint_lightning::{ChannelInfo, GetInvoiceResponse, PaymentStatus};
+use fedimint_gateway_common::{
+    ChannelInfo, GatewayBalances, GetInvoiceResponse, MnemonicResponse, PaymentStatus,
+    PaymentSummaryResponse, V1_API_ENDPOINT,
+};
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
-use ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-use ln_gateway::rpc::{GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::cmd;
@@ -67,7 +68,7 @@ impl Gatewayd {
         if !supports_lnv2() {
             tracing::info!("LNv2 is not supported, running gatewayd in LNv1 mode");
             gateway_env.insert(
-                FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
+                "FM_GATEWAY_LIGHTNING_MODULE_MODE".to_owned(),
                 "LNv1".to_string(),
             );
         }
@@ -140,7 +141,7 @@ impl Gatewayd {
 
         if supports_lnv2() {
             tracing::info!("LNv2 is now supported, running in All mode");
-            std::env::set_var(FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, "All");
+            std::env::set_var("FM_GATEWAY_LIGHTNING_MODULE_MODE", "All");
         }
 
         let new_ln = ln;

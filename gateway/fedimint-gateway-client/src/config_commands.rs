@@ -1,8 +1,8 @@
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::Amount;
-use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{ConfigPayload, SetFeesPayload};
+use fedimint_gateway_client::GatewayRpcClient;
+use fedimint_gateway_common::{ConfigPayload, SetFeesPayload};
 
 use crate::print_response;
 
