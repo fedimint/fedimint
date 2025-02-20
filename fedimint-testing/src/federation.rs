@@ -25,8 +25,7 @@ use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::{
-    gen_cert_and_key, ConfigGenParams, ConfigGenParamsConsensus, ConfigGenParamsLocal,
-    PeerConnectionInfo, ServerConfig,
+    gen_cert_and_key, ConfigGenParams, PeerConnectionInfo, ServerConfig,
 };
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
@@ -248,8 +247,8 @@ impl FederationTestBuilder {
 
         let task_group = TaskGroup::new();
         for (peer_id, cfg) in configs.clone() {
-            let p2p_bind_addr = params.get(&peer_id).expect("Must exist").local.p2p_bind;
-            let api_bind_addr = params.get(&peer_id).expect("Must exist").local.api_bind;
+            let p2p_bind_addr = params.get(&peer_id).expect("Must exist").p2p_bind;
+            let api_bind_addr = params.get(&peer_id).expect("Must exist").api_bind;
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
@@ -382,21 +381,17 @@ pub fn local_config_gen_params(
             let api_bind = parse_host_port(&connections[peer].clone().api_url)?;
 
             let params = ConfigGenParams {
-                local: ConfigGenParamsLocal {
-                    our_id: *peer,
-                    our_private_key: tls_keys[peer].1.clone(),
-                    api_auth: API_AUTH.clone(),
-                    p2p_bind: p2p_bind.parse().expect("Valid address"),
-                    api_bind: api_bind.parse().expect("Valid address"),
-                },
-                consensus: ConfigGenParamsConsensus {
-                    peers: connections.clone(),
-                    meta: BTreeMap::from([(
-                        META_FEDERATION_NAME_KEY.to_owned(),
-                        "\"federation_name\"".to_string(),
-                    )]),
-                    modules: server_config_gen.clone(),
-                },
+                identity: *peer,
+                tls_key: tls_keys[peer].1.clone(),
+                api_auth: API_AUTH.clone(),
+                p2p_bind: p2p_bind.parse().expect("Valid address"),
+                api_bind: api_bind.parse().expect("Valid address"),
+                peers: connections.clone(),
+                meta: BTreeMap::from([(
+                    META_FEDERATION_NAME_KEY.to_owned(),
+                    "\"federation_name\"".to_string(),
+                )]),
+                modules: server_config_gen.clone(),
             };
             Ok((*peer, params))
         })

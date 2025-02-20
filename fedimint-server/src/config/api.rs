@@ -20,10 +20,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
 
-use crate::config::{
-    gen_cert_and_key, ConfigGenParams, ConfigGenParamsConsensus, ConfigGenParamsLocal,
-    ConfigGenSettings, PeerConnectionInfo,
-};
+use crate::config::{gen_cert_and_key, ConfigGenParams, ConfigGenSettings, PeerConnectionInfo};
 use crate::net::api::{check_auth, ApiResult, HasApiContext};
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -41,7 +38,7 @@ pub struct LocalParams {
     /// Our auth string
     auth: ApiAuth,
     /// Our TLS private key
-    tls_private: rustls::PrivateKey,
+    tls_key: rustls::PrivateKey,
     /// Our TLS public cert
     tls_cert: rustls::Certificate,
     /// Name of the peer, used in TLS auth
@@ -131,13 +128,13 @@ impl ConfigGenApi {
             return Ok(info);
         }
 
-        let (tls_cert, tls_private) = gen_cert_and_key(&request.name)
+        let (tls_cert, tls_key) = gen_cert_and_key(&request.name)
             .expect("Failed to generate TLS for given guardian name");
 
         let lp = LocalParams {
             auth,
             tls_cert,
-            tls_private,
+            tls_key,
             name: request.name,
             federation_name: request.federation_name,
         };
@@ -209,21 +206,17 @@ impl ConfigGenApi {
             .expect("We inserted the key above.");
 
         let params = ConfigGenParams {
-            local: ConfigGenParamsLocal {
-                our_id: PeerId::from(our_id as u16),
-                our_private_key: local_params.tls_private,
-                api_auth: local_params.auth,
-                p2p_bind: self.settings.p2p_bind,
-                api_bind: self.settings.api_bind,
-            },
-            consensus: ConfigGenParamsConsensus {
-                peers: (0..)
-                    .map(|i| PeerId::from(i as u16))
-                    .zip(state.connection_info.clone().into_iter())
-                    .collect(),
-                meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
-                modules: self.settings.modules.clone(),
-            },
+            identity: PeerId::from(our_id as u16),
+            tls_key: local_params.tls_key,
+            api_auth: local_params.auth,
+            p2p_bind: self.settings.p2p_bind,
+            api_bind: self.settings.api_bind,
+            peers: (0..)
+                .map(|i| PeerId::from(i as u16))
+                .zip(state.connection_info.clone().into_iter())
+                .collect(),
+            meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
+            modules: self.settings.modules.clone(),
         };
 
         self.sender

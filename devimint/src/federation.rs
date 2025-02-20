@@ -1050,7 +1050,7 @@ pub async fn run_cli_dkg(
     params: HashMap<PeerId, ConfigGenParams>,
     endpoints: BTreeMap<PeerId, String>,
 ) -> Result<()> {
-    let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].local.api_auth };
+    let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].api_auth };
 
     debug!(target: LOG_DEVIMINT, "Running DKG");
     for endpoint in endpoints.values() {
@@ -1093,7 +1093,7 @@ pub async fn run_cli_dkg(
         .set_config_gen_connections(auth_for(leader_id), leader_endpoint, &leader_name, None)
         .await?;
 
-    let server_gen_params = &params[leader_id].consensus.modules;
+    let server_gen_params = &params[leader_id].modules;
 
     debug!(target: LOG_DEVIMINT, "calling set_config_gen_params for leader");
     cli_set_config_gen_params(
@@ -1207,7 +1207,7 @@ pub async fn run_cli_dkg_v2(
     params: HashMap<PeerId, ConfigGenParams>,
     endpoints: BTreeMap<PeerId, String>,
 ) -> Result<()> {
-    let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].local.api_auth };
+    let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].api_auth };
 
     for (peer, endpoint) in &endpoints {
         let status = poll("awaiting-server-status", || async {

@@ -220,29 +220,16 @@ pub struct ConfigGenSettings {
 /// * Guardians can create the parameters using a setup UI or CLI tool
 /// * Used for distributed or trusted config generation
 pub struct ConfigGenParams {
-    pub local: ConfigGenParamsLocal,
-    pub consensus: ConfigGenParamsConsensus,
-}
-
-/// Config gen params that are only used locally, shouldn't be shared
-#[derive(Debug, Clone)]
-pub struct ConfigGenParamsLocal {
-    /// Our peer id
-    pub our_id: PeerId,
-    /// Our TLS private key
-    pub our_private_key: rustls::PrivateKey,
+    /// Our own peer id
+    pub identity: PeerId,
+    /// Our TLS certificate private key
+    pub tls_key: rustls::PrivateKey,
     /// Secret API auth string
     pub api_auth: ApiAuth,
     /// Bind address for P2P communication
     pub p2p_bind: SocketAddr,
     /// Bind address for API communication
     pub api_bind: SocketAddr,
-}
-
-/// The config gen params that need to be in consensus, sent by the config gen
-/// leader to all the other guardians
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ConfigGenParamsConsensus {
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
     /// Guardian-defined key-value pairs that will be passed to the client
@@ -354,7 +341,7 @@ impl ServerConfig {
                 .iter()
                 .map(|(peer, cfg)| (*peer, cfg.consensus.clone()))
                 .collect(),
-            meta: params.consensus.meta.clone(),
+            meta: params.meta.clone(),
         };
 
         let local = ServerConfigLocal {
@@ -373,8 +360,8 @@ impl ServerConfig {
         };
 
         let private = ServerConfigPrivate {
-            api_auth: params.local.api_auth.clone(),
-            tls_key: Some(params.local.our_private_key.0.encode_hex()),
+            api_auth: params.api_auth.clone(),
+            tls_key: Some(params.tls_key.0.encode_hex()),
             iroh_api_sk: None,
             iroh_p2p_sk: None,
             broadcast_secret_key,
@@ -513,7 +500,7 @@ impl ServerConfig {
             broadcast_sks.insert(peer_id, broadcast_sk);
         }
 
-        let modules = peer0.consensus.modules.iter_modules();
+        let modules = peer0.modules.iter_modules();
         let module_configs: BTreeMap<_, _> = modules
             .map(|(module_id, kind, module_params)| {
                 (
@@ -561,11 +548,11 @@ impl ServerConfig {
         // in case we are running by ourselves, avoid DKG
         if params.peer_ids().len() == 1 {
             let server = Self::trusted_dealer_gen(
-                &HashMap::from([(params.local.our_id, params.clone())]),
+                &HashMap::from([(params.identity, params.clone())]),
                 &registry,
                 &code_version_str,
             );
-            return Ok(server[&params.local.our_id].clone());
+            return Ok(server[&params.identity].clone());
         }
 
         while p2p_status_receivers
@@ -585,7 +572,7 @@ impl ServerConfig {
             "Comparing peer connection info checksum..."
         );
 
-        let checksum = params.consensus.peers.consensus_hash_sha256();
+        let checksum = params.peers.consensus_hash_sha256();
 
         connections
             .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
@@ -594,7 +581,7 @@ impl ServerConfig {
         for peer in params
             .peer_ids()
             .into_iter()
-            .filter(|p| *p != params.local.our_id)
+            .filter(|p| *p != params.identity)
         {
             ensure!(
                 connections
@@ -613,7 +600,7 @@ impl ServerConfig {
 
         let handle = PeerHandle::new(
             params.peer_ids().to_num_peers(),
-            params.local.our_id,
+            params.identity,
             &connections,
         );
 
@@ -623,7 +610,7 @@ impl ServerConfig {
 
         let mut module_cfgs = BTreeMap::new();
 
-        for (module_id, kind, module_params) in params.consensus.modules.iter_modules() {
+        for (module_id, kind, module_params) in params.modules.iter_modules() {
             info!(
                 target: LOG_NET_PEER_DKG,
                 "Running distributed key generation for module of kind {kind}..."
@@ -640,7 +627,7 @@ impl ServerConfig {
 
         let cfg = ServerConfig::from(
             params.clone(),
-            params.local.our_id,
+            params.identity,
             broadcast_public_keys,
             broadcast_sk,
             module_cfgs,
@@ -661,7 +648,7 @@ impl ServerConfig {
         for peer in params
             .peer_ids()
             .into_iter()
-            .filter(|p| *p != params.local.our_id)
+            .filter(|p| *p != params.identity)
         {
             ensure!(
                 connections
@@ -706,12 +693,12 @@ impl ServerConfig {
 
 impl ConfigGenParams {
     pub fn peer_ids(&self) -> Vec<PeerId> {
-        self.consensus.peers.keys().copied().collect()
+        self.peers.keys().copied().collect()
     }
 
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            private_key: self.local.our_private_key.clone(),
+            private_key: self.tls_key.clone(),
             certificates: self
                 .tls_certs()
                 .iter()
@@ -726,16 +713,14 @@ impl ConfigGenParams {
     }
 
     pub fn tls_certs(&self) -> BTreeMap<PeerId, String> {
-        self.consensus
-            .peers
+        self.peers
             .iter()
             .map(|(peer, info)| (*peer, info.cert.encode_hex()))
             .collect()
     }
 
     pub fn p2p_urls(&self) -> BTreeMap<PeerId, PeerUrl> {
-        self.consensus
-            .peers
+        self.peers
             .iter()
             .map(|(id, peer)| {
                 (
@@ -750,8 +735,7 @@ impl ConfigGenParams {
     }
 
     pub fn api_urls(&self) -> BTreeMap<PeerId, PeerUrl> {
-        self.consensus
-            .peers
+        self.peers
             .iter()
             .map(|(id, peer)| {
                 (

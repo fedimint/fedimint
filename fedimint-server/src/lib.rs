@@ -230,7 +230,7 @@ pub async fn run_config_gen(
         cg_params.tls_config(),
         settings.p2p_bind,
         cg_params.p2p_urls(),
-        cg_params.local.our_id,
+        cg_params.identity,
     )
     .await
     .into_dyn();
@@ -238,7 +238,7 @@ pub async fn run_config_gen(
     let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
 
     let connections = ReconnectP2PConnections::new(
-        cg_params.local.our_id,
+        cg_params.identity,
         connector,
         task_group,
         p2p_status_senders,
