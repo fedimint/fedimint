@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
 
-use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::encoding::{Decodable, Encodable};
 
 /// The state of the server returned via APIs
@@ -72,13 +70,4 @@ pub struct SetLocalParamsRequest {
     pub name: String,
     /// Federation name set by the leader
     pub federation_name: Option<String>,
-}
-
-/// Config gen params that can be configured from the UI
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
-pub struct ConfigGenParamsRequest {
-    /// Guardian-defined key-value pairs that will be passed to the client
-    pub meta: BTreeMap<String, String>,
-    /// Set the params (if leader) or just the local params (if follower)
-    pub modules: ServerModuleConfigGenParamsRegistry,
 }

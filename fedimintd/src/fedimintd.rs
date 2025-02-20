@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use anyhow::{format_err, Context};
 use clap::{Parser, Subcommand};
-use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry,
 };
@@ -521,17 +520,15 @@ async fn run(
     if let Some(password) = opts.password {
         write_overwrite(data_dir.join(PLAINTEXT_PASSWORD), password)?;
     };
-    let default_params = ConfigGenParamsRequest {
-        meta: opts.extra_dkg_meta.clone(),
-        modules: module_inits_params.clone(),
-    };
+
     // TODO: meh, move, refactor
     let settings = ConfigGenSettings {
         p2p_bind: opts.bind_p2p,
         api_bind: opts.bind_api,
         p2p_url: opts.p2p_url,
         api_url: opts.api_url,
-        default_params,
+        meta: opts.extra_dkg_meta.clone(),
+        modules: module_inits_params.clone(),
         registry: module_inits.clone(),
     };
 

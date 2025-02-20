@@ -222,7 +222,7 @@ impl ConfigGenApi {
                     .zip(state.connection_info.clone().into_iter())
                     .collect(),
                 meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
-                modules: self.settings.default_params.modules.clone(),
+                modules: self.settings.modules.clone(),
             },
         };
 

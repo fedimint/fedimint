@@ -5,7 +5,6 @@ use std::time::Duration;
 use anyhow::{bail, ensure, format_err, Context};
 use bitcoin::hashes::sha256;
 use fedimint_api_client::api::P2PConnectionStatus;
-use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, FederationId, GlobalClientConfig, JsonWithKind,
@@ -207,8 +206,10 @@ pub struct ConfigGenSettings {
     pub p2p_url: SafeUrl,
     /// URL for our API connection
     pub api_url: SafeUrl,
-    /// The default params for the modules
-    pub default_params: ConfigGenParamsRequest,
+    /// Guardian-defined key-value pairs that will be passed to the client
+    pub meta: BTreeMap<String, String>,
+    /// Set the params (if leader) or just the local params (if follower)
+    pub modules: ServerModuleConfigGenParamsRegistry,
     /// Registry for config gen
     pub registry: ServerModuleInitRegistry,
 }

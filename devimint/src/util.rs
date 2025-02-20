@@ -10,7 +10,7 @@ use std::{env, unreachable};
 
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use fedimint_api_client::api::StatusResponse;
-use fedimint_core::admin_client::{ConfigGenParamsRequest, PeerServerParams, ServerStatus};
+use fedimint_core::admin_client::{PeerServerParams, ServerStatus};
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
 use fedimint_core::module::ApiAuth;
@@ -825,27 +825,6 @@ impl FedimintCli {
         .out_json()
         .await
         .context("non-json returned for consensus_config_gen_params")?;
-        Ok(serde_json::from_value(result)?)
-    }
-
-    pub async fn get_default_config_gen_params(
-        self,
-        auth: &ApiAuth,
-        endpoint: &str,
-    ) -> Result<ConfigGenParamsRequest> {
-        let result = cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "get-default-config-gen-params"
-        )
-        .out_json()
-        .await
-        .context("non-json returned for get_default_config_gen_params")?;
         Ok(serde_json::from_value(result)?)
     }
 

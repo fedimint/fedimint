@@ -1093,10 +1093,6 @@ pub async fn run_cli_dkg(
         .set_config_gen_connections(auth_for(leader_id), leader_endpoint, &leader_name, None)
         .await?;
 
-    crate::util::FedimintCli
-        .get_default_config_gen_params(auth_for(leader_id), leader_endpoint)
-        .await?; // sanity check
-
     let server_gen_params = &params[leader_id].consensus.modules;
 
     debug!(target: LOG_DEVIMINT, "calling set_config_gen_params for leader");
