@@ -24,6 +24,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
+use hex::{FromHex, ToHex};
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -100,8 +101,7 @@ pub struct ServerConfigPrivate {
     /// Secret API auth string
     pub api_auth: ApiAuth,
     /// Secret key for TLS communication, required for peer authentication
-    #[serde(with = "serde_tls_key")]
-    pub tls_key: rustls::PrivateKey,
+    pub tls_key: String,
     /// Secret key for the atomic broadcast to sign messages
     pub broadcast_secret_key: SecretKey,
     /// Secret material from modules
@@ -122,8 +122,7 @@ pub struct ServerConfigConsensus {
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Certs for TLS communication, required for peer authentication
-    #[serde(with = "serde_tls_cert_map")]
-    pub tls_certs: BTreeMap<PeerId, rustls::Certificate>,
+    pub tls_certs: BTreeMap<PeerId, String>,
     /// All configuration that needs to be the same for modules
     pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
     /// Additional config the federation wants to transmit to the clients
@@ -138,7 +137,7 @@ pub fn legacy_consensus_config_hash(cfg: &ServerConfigConsensus) -> sha256::Hash
         broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
         broadcast_rounds_per_session: u16,
         api_endpoints: BTreeMap<PeerId, PeerUrl>,
-        tls_certs: BTreeMap<PeerId, rustls::Certificate>,
+        tls_certs: BTreeMap<PeerId, String>,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
         meta: BTreeMap<String, String>,
     }
@@ -304,7 +303,7 @@ impl ServerConfig {
 
         let private = ServerConfigPrivate {
             api_auth: params.local.api_auth.clone(),
-            tls_key: params.local.our_private_key.clone(),
+            tls_key: params.local.our_private_key.0.encode_hex(),
             broadcast_secret_key,
             modules: modules
                 .iter()
@@ -613,8 +612,13 @@ impl ServerConfig {
 impl ServerConfig {
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            private_key: self.private.tls_key.clone(),
-            certificates: self.consensus.tls_certs.clone(),
+            private_key: rustls::PrivateKey(Vec::from_hex(&self.private.tls_key).unwrap()),
+            certificates: self
+                .consensus
+                .tls_certs
+                .iter()
+                .map(|(peer, cert)| (*peer, rustls::Certificate(Vec::from_hex(cert).unwrap())))
+                .collect(),
             peer_names: self
                 .local
                 .p2p_endpoints
@@ -633,7 +637,11 @@ impl ConfigGenParams {
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
             private_key: self.local.our_private_key.clone(),
-            certificates: self.tls_certs(),
+            certificates: self
+                .tls_certs()
+                .iter()
+                .map(|(peer, cert)| (*peer, rustls::Certificate(Vec::from_hex(cert).unwrap())))
+                .collect(),
             peer_names: self
                 .p2p_urls()
                 .into_iter()
@@ -642,12 +650,12 @@ impl ConfigGenParams {
         }
     }
 
-    pub fn tls_certs(&self) -> BTreeMap<PeerId, rustls::Certificate> {
+    pub fn tls_certs(&self) -> BTreeMap<PeerId, String> {
         self.consensus
             .peers
             .iter()
-            .map(|(id, peer)| (*id, rustls::Certificate(peer.cert.clone())))
-            .collect::<BTreeMap<_, _>>()
+            .map(|(peer, info)| (*peer, info.cert.encode_hex()))
+            .collect()
     }
 
     pub fn p2p_urls(&self) -> BTreeMap<PeerId, PeerUrl> {
@@ -701,74 +709,4 @@ pub fn gen_cert_and_key(
         rustls::Certificate(cert.der().to_vec()),
         rustls::PrivateKey(keypair_ser),
     ))
-}
-
-mod serde_tls_cert_map {
-    use std::borrow::Cow;
-    use std::collections::BTreeMap;
-
-    use fedimint_core::PeerId;
-    use hex::{FromHex, ToHex};
-    use serde::de::Error;
-    use serde::ser::SerializeMap;
-    use serde::{Deserialize, Deserializer, Serializer};
-    use tokio_rustls::rustls;
-
-    pub fn serialize<S>(
-        certs: &BTreeMap<PeerId, rustls::Certificate>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut serializer = serializer.serialize_map(Some(certs.len()))?;
-        for (key, value) in certs {
-            serializer.serialize_key(key)?;
-            let hex_str = value.0.encode_hex::<String>();
-            serializer.serialize_value(&hex_str)?;
-        }
-        serializer.end()
-    }
-
-    pub fn deserialize<'de, D>(
-        deserializer: D,
-    ) -> Result<BTreeMap<PeerId, rustls::Certificate>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let map: BTreeMap<PeerId, Cow<str>> = Deserialize::deserialize(deserializer)?;
-        let mut certs = BTreeMap::new();
-
-        for (key, value) in map {
-            let cert =
-                rustls::Certificate(Vec::from_hex(value.as_ref()).map_err(D::Error::custom)?);
-            certs.insert(key, cert);
-        }
-        Ok(certs)
-    }
-}
-
-mod serde_tls_key {
-    use std::borrow::Cow;
-
-    use hex::{FromHex, ToHex};
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use tokio_rustls::rustls;
-
-    pub fn serialize<S>(key: &rustls::PrivateKey, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let hex_str = key.0.encode_hex::<String>();
-        Serialize::serialize(&hex_str, serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<rustls::PrivateKey, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
-        let bytes = Vec::from_hex(hex_str.as_ref()).map_err(serde::de::Error::custom)?;
-        Ok(rustls::PrivateKey(bytes))
-    }
 }

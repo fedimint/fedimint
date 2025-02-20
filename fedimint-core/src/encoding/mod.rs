@@ -18,8 +18,6 @@ mod threshold_crypto;
 
 #[cfg(all(feature = "iroh", not(target_family = "wasm")))]
 mod iroh;
-#[cfg(not(target_family = "wasm"))]
-mod tls;
 
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};

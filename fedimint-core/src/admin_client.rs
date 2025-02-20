@@ -60,7 +60,7 @@ pub struct ConfigGenConnectionsRequest {
     pub leader_api_url: Option<SafeUrl>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Encodable)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Connection information sent between peers in order to start config gen
 pub struct PeerServerParams {
     /// TLS cert is necessary for P2P auth during DKG and  consensus
