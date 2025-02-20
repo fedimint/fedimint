@@ -396,6 +396,8 @@
 <span class="kw">use </span>fedimint_core::net::peers::IP2PConnections;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 <span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_gateway_common::ConnectFedPayload;
+<span class="kw">use </span>fedimint_gateway_server::Gateway;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
 <span class="kw">use </span>fedimint_server::config::{
@@ -405,8 +407,6 @@
 <span class="kw">use </span>fedimint_server::core::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
 <span class="kw">use </span>fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
-<span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
-<span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
 

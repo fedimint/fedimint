@@ -654,7 +654,8 @@
 <a href="#653" id="653">653</a>
 <a href="#654" id="654">654</a>
 <a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -666,12 +667,13 @@
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
-<span class="kw">use </span>fedimint_lightning::{ChannelInfo, GetInvoiceResponse, PaymentStatus};
+<span class="kw">use </span>fedimint_gateway_common::{
+    ChannelInfo, GatewayBalances, GetInvoiceResponse, MnemonicResponse, PaymentStatus,
+    PaymentSummaryResponse, V1_API_ENDPOINT,
+};
 <span class="kw">use </span>fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>fedimint_lnv2_common::gateway_api::PaymentFee;
 <span class="kw">use </span>fedimint_testing::ln::LightningNodeType;
-<span class="kw">use </span>ln_gateway::envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV;
-<span class="kw">use </span>ln_gateway::rpc::{GatewayBalances, MnemonicResponse, PaymentSummaryResponse, V1_API_ENDPOINT};
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::cmd;
@@ -723,7 +725,7 @@
         <span class="kw">if </span>!supports_lnv2() {
             <span class="macro">tracing::info!</span>(<span class="string">"LNv2 is not supported, running gatewayd in LNv1 mode"</span>);
             gateway_env.insert(
-                FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
+                <span class="string">"FM_GATEWAY_LIGHTNING_MODULE_MODE"</span>.to_owned(),
                 <span class="string">"LNv1"</span>.to_string(),
             );
         }
@@ -796,7 +798,7 @@
 
         <span class="kw">if </span>supports_lnv2() {
             <span class="macro">tracing::info!</span>(<span class="string">"LNv2 is now supported, running in All mode"</span>);
-            std::env::set_var(FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, <span class="string">"All"</span>);
+            std::env::set_var(<span class="string">"FM_GATEWAY_LIGHTNING_MODULE_MODE"</span>, <span class="string">"All"</span>);
         }
 
         <span class="kw">let </span>new_ln = ln;

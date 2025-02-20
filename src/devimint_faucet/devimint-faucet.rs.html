@@ -188,8 +188,8 @@
 };
 <span class="kw">use </span>fedimint_core::fedimint_build_code_version_env;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
+<span class="kw">use </span>fedimint_gateway_common::V1_API_ENDPOINT;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
 <span class="kw">use </span>tokio::net::TcpListener;
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tower_http::cors::CorsLayer;

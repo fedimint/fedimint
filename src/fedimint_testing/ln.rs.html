@@ -335,7 +335,9 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -349,13 +351,15 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_gateway_common::{
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
+    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+};
 <span class="kw">use </span>fedimint_lightning::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
-    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, ILnRpcClient,
-    InterceptPaymentRequest, InterceptPaymentResponse, LightningRpcError,
-    ListActiveChannelsResponse, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
-    RouteHtlcStream, SendOnchainRequest, SendOnchainResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, ILnRpcClient, InterceptPaymentRequest,
+    InterceptPaymentResponse, LightningRpcError, ListActiveChannelsResponse, OpenChannelResponse,
+    PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
 };
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
@@ -405,7 +409,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-    ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
+    ) -&gt; fedimint_gateway_server::Result&lt;Bolt11Invoice&gt; {
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
         <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>MOCK_INVOICE_PREIMAGE);
 

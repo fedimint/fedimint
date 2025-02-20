@@ -2223,11 +2223,11 @@
 <span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::task::block_in_place;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
+<span class="kw">use </span>fedimint_gateway_common::GatewayInfo;
 <span class="kw">use </span>fedimint_ln_client::cli::LnInvoiceResponse;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>futures::future::try_join_all;
 <span class="kw">use </span>hex::ToHex;
-<span class="kw">use </span>ln_gateway::rpc::GatewayInfo;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>tokio::net::TcpStream;
 <span class="kw">use </span>tokio::{fs, try_join};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("fedimint_gateway_client", 0, "Contains the error value\nContains the success value\nBase URL to gateway web server This should include an …\nA request client\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nOptional gateway password")

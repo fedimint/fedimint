@@ -372,76 +372,25 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
-<a href="#414" id="414">414</a>
-<a href="#415" id="415">415</a>
-<a href="#416" id="416">416</a>
-<a href="#417" id="417">417</a>
-<a href="#418" id="418">418</a>
-<a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>ldk;
+<a href="#374" id="374">374</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::hashes::sha256;
-<span class="kw">use </span>bitcoin::{Address, Network};
+<span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
-<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_gateway_common::{
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
+    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+};
 <span class="kw">pub use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
@@ -708,15 +657,6 @@
     }
 }
 
-<span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
-</span><span class="kw">pub struct </span>ChannelInfo {
-    <span class="kw">pub </span>remote_pubkey: secp256k1::PublicKey,
-    <span class="kw">pub </span>channel_size_sats: u64,
-    <span class="kw">pub </span>outbound_liquidity_sats: u64,
-    <span class="kw">pub </span>inbound_liquidity_sats: u64,
-    <span class="kw">pub </span>short_channel_id: u64,
-}
-
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>GetNodeInfoResponse {
     <span class="kw">pub </span>pub_key: PublicKey,
@@ -796,11 +736,6 @@
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>CloseChannelsWithPeerResponse {
-    <span class="kw">pub </span>num_channels_closed: u32,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ListActiveChannelsResponse {
     <span class="kw">pub </span>channels: Vec&lt;ChannelInfo&gt;,
 }
@@ -810,46 +745,5 @@
     <span class="kw">pub </span>onchain_balance_sats: u64,
     <span class="kw">pub </span>lightning_balance_msats: u64,
     <span class="kw">pub </span>inbound_lightning_liquidity_msats: u64,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>OpenChannelRequest {
-    <span class="kw">pub </span>pubkey: secp256k1::PublicKey,
-    <span class="kw">pub </span>host: String,
-    <span class="kw">pub </span>channel_size_sats: u64,
-    <span class="kw">pub </span>push_amount_sats: u64,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>SendOnchainRequest {
-    <span class="kw">pub </span>address: Address&lt;NetworkUnchecked&gt;,
-    <span class="kw">pub </span>amount: BitcoinAmountOrAll,
-    <span class="kw">pub </span>fee_rate_sats_per_vbyte: u64,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>CloseChannelsWithPeerRequest {
-    <span class="kw">pub </span>pubkey: secp256k1::PublicKey,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>GetInvoiceRequest {
-    <span class="kw">pub </span>payment_hash: sha256::Hash,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>GetInvoiceResponse {
-    <span class="kw">pub </span>preimage: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="kw">pub </span>payment_hash: <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;,
-    <span class="kw">pub </span>amount: Amount,
-    <span class="kw">pub </span>created_at: SystemTime,
-    <span class="kw">pub </span>status: PaymentStatus,
-}
-
-<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>PaymentStatus {
-    Pending,
-    Succeeded,
-    Failed,
 }
 </code></pre></div></section></main></body></html>

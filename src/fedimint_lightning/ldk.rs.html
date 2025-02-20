@@ -757,6 +757,7 @@
 <span class="kw">use </span>fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>ldk_node::lightning::ln::msgs::SocketAddress;
 <span class="kw">use </span>ldk_node::lightning::ln::PaymentHash;
@@ -775,10 +776,9 @@
 };
 <span class="kw">use crate</span>::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
-    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, OpenChannelRequest,
-    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+    OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
     SendOnchainResponse,
 };
 
@@ -1415,9 +1415,9 @@
             .map(|details| {
                 <span class="kw">let </span>(preimage, payment_hash) = get_preimage_and_payment_hash(<span class="kw-2">&amp;</span>details.kind);
                 <span class="kw">let </span>status = <span class="kw">match </span>details.status {
-                    PaymentStatus::Failed =&gt; <span class="kw">crate</span>::PaymentStatus::Failed,
-                    PaymentStatus::Succeeded =&gt; <span class="kw">crate</span>::PaymentStatus::Succeeded,
-                    PaymentStatus::Pending =&gt; <span class="kw">crate</span>::PaymentStatus::Pending,
+                    PaymentStatus::Failed =&gt; fedimint_gateway_common::PaymentStatus::Failed,
+                    PaymentStatus::Succeeded =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
+                    PaymentStatus::Pending =&gt; fedimint_gateway_common::PaymentStatus::Pending,
                 };
                 GetInvoiceResponse {
                     preimage: preimage.map(|p| p.<span class="number">0</span>.consensus_encode_to_hex()),

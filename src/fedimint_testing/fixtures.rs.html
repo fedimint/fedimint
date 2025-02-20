@@ -259,7 +259,8 @@
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -277,13 +278,14 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
+<span class="kw">use </span>fedimint_gateway_common::LightningMode;
+<span class="kw">use </span>fedimint_gateway_server::client::GatewayClientBuilder;
+<span class="kw">use </span>fedimint_gateway_server::config::LightningModuleMode;
+<span class="kw">use </span>fedimint_gateway_server::Gateway;
 <span class="kw">use </span>fedimint_lightning::{ILnRpcClient, LightningContext};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
 <span class="kw">use </span>fedimint_testing_core::test_dir;
-<span class="kw">use </span>ln_gateway::client::GatewayClientBuilder;
-<span class="kw">use </span>ln_gateway::config::{LightningMode, LightningModuleMode};
-<span class="kw">use </span>ln_gateway::Gateway;
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::mock::FakeBitcoinFactory;
 <span class="kw">use </span><span class="kw">crate</span>::btc::real::RealBitcoinTest;
@@ -481,7 +483,7 @@
             <span class="comment">// Manually set the gateway's state to `Running`. In tests, we do don't run the
             // webserver or intercept HTLCs, so this is necessary for instructing the
             // gateway that it is connected to the mock Lightning node.
-            </span>ln_gateway::GatewayState::Running { lightning_context },
+            </span>fedimint_gateway_server::GatewayState::Running { lightning_context },
             lightning_module_mode,
         )
         .<span class="kw">await

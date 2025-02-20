@@ -1579,6 +1579,7 @@
 <span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
+<span class="kw">use </span>fedimint_gateway_common::WithdrawResponse;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_portalloc::port_alloc;
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
@@ -1589,7 +1590,6 @@
 <span class="kw">use </span>fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 <span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::{join_all, try_join_all};
-<span class="kw">use </span>ln_gateway::rpc::WithdrawResponse;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::task::{spawn_blocking, JoinSet};
 <span class="kw">use </span>tokio::time::Instant;

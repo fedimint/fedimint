@@ -647,9 +647,9 @@
 <span class="kw">use </span>fedimint_core::util::backoff_util::aggressive_backoff_long;
 <span class="kw">use </span>fedimint_core::util::retry;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_gateway_common::{GatewayBalances, GatewayFedConfig, GatewayInfo};
 <span class="kw">use </span>fedimint_testing::ln::LightningNodeType;
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>ln_gateway::rpc::{GatewayBalances, GatewayFedConfig, GatewayInfo};
 <span class="kw">use </span>tracing::{debug, info, warn};
 
 <span class="attr">#[derive(Parser)]

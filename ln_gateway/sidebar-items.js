@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["DB_FILE","DEFAULT_MODULE_KINDS","DEFAULT_NETWORK","DEFAULT_NUM_ROUTE_HINTS","GW_ANNOUNCEMENT_TTL","LDK_NODE_DB_FOLDER"],"enum":["GatewayState","ReceivePaymentStreamAction"],"mod":["client","config","db","envs","error","events","federation_manager","rpc","types"],"struct":["Gateway"],"type":["AdminResult","Result"]};
