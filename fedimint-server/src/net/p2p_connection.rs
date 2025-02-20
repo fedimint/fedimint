@@ -3,8 +3,6 @@ use std::io::Cursor;
 use anyhow::Context;
 use async_trait::async_trait;
 use bytes::Bytes;
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::{SinkExt, StreamExt};
 use iroh::endpoint::Connection;
 use serde::de::DeserializeOwned;
@@ -54,12 +52,16 @@ where
 #[async_trait]
 impl<M> IP2PConnection<M> for Connection
 where
-    M: Encodable + Decodable + Send + 'static,
+    M: Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
+        let mut bytes = Vec::new();
+
+        bincode::serialize_into(&mut bytes, &message)?;
+
         let mut sink = self.open_uni().await?;
 
-        sink.write_all(&message.consensus_encode_to_vec()).await?;
+        sink.write_all(&bytes).await?;
 
         sink.finish()?;
 
@@ -67,11 +69,8 @@ where
     }
 
     async fn receive(&mut self) -> anyhow::Result<M> {
-        let bytes = self.accept_uni().await?.read_to_end(1_000_000_000).await?;
-
-        Ok(Decodable::consensus_decode_whole(
-            &bytes,
-            &ModuleDecoderRegistry::default(),
-        )?)
+        Ok(bincode::deserialize_from(Cursor::new(
+            &self.accept_uni().await?.read_to_end(1_000_000_000).await?,
+        ))?)
     }
 }
