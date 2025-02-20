@@ -231,7 +231,7 @@ pub struct ConfigGenParamsConsensus {
     pub modules: ServerModuleConfigGenParamsRegistry,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 /// Connection information sent between peers in order to start config gen
 pub struct PeerConnectionInfo {
     /// TLS cert is necessary for P2P auth during DKG and consensus

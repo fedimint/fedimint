@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{ensure, Context};
 use async_trait::async_trait;
@@ -14,7 +14,6 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
-use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
@@ -33,7 +32,7 @@ pub struct ConfigGenState {
     /// Our local connection
     local_params: Option<LocalParams>,
     /// Connection info received from other guardians
-    connection_info: BTreeMap<SafeUrl, PeerConnectionInfo>,
+    connection_info: BTreeSet<PeerConnectionInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -81,7 +80,7 @@ impl ConfigGenApi {
                 state
                     .connection_info
                     .clone()
-                    .into_values()
+                    .into_iter()
                     .map(|info| info.name)
                     .collect(),
             ),
@@ -157,16 +156,15 @@ impl ConfigGenApi {
     }
 
     pub async fn add_peer_connection_info(&self, info: PeerConnectionInfo) -> anyhow::Result<()> {
-        ensure!(
-            info.api_url != self.settings.api_url,
-            "You cannot add your own connection info"
-        );
-
         let mut state = self.state.lock().await;
+
+        if state.connection_info.contains(&info) {
+            return Ok(());
+        }
 
         if let Some(federation_name) = state
             .connection_info
-            .values()
+            .iter()
             .find_map(|info| info.federation_name.clone())
         {
             ensure!(
@@ -175,7 +173,7 @@ impl ConfigGenApi {
             );
         }
 
-        state.connection_info.insert(info.api_url.clone(), info);
+        state.connection_info.insert(info);
 
         Ok(())
     }
@@ -196,20 +194,18 @@ impl ConfigGenApi {
             federation_name: local_params.federation_name,
         };
 
-        state
-            .connection_info
-            .insert(our_peer_info.api_url.clone(), our_peer_info);
+        state.connection_info.insert(our_peer_info.clone());
 
         let federation_name = state
             .connection_info
-            .values()
+            .iter()
             .find_map(|info| info.federation_name.clone())
             .context("We need one leader to configure the federation name")?;
 
         let our_id = state
             .connection_info
-            .keys()
-            .position(|url| *url == self.settings.api_url)
+            .iter()
+            .position(|info| info == &our_peer_info)
             .expect("We inserted the key above.");
 
         let params = ConfigGenParams {
@@ -223,7 +219,7 @@ impl ConfigGenApi {
             consensus: ConfigGenParamsConsensus {
                 peers: (0..)
                     .map(|i| PeerId::from(i as u16))
-                    .zip(state.connection_info.values().cloned())
+                    .zip(state.connection_info.clone().into_iter())
                     .collect(),
                 meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
                 modules: self.settings.default_params.modules.clone(),
