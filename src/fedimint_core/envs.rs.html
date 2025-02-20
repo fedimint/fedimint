@@ -127,11 +127,7 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
+<a href="#129" id="129">129</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -146,10 +142,6 @@
 </span><span class="kw">pub const </span>FM_USE_UNKNOWN_MODULE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_USE_UNKNOWN_MODULE"</span>;
 
 <span class="kw">pub const </span>FM_ENABLE_MODULE_LNV2_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ENABLE_MODULE_LNV2"</span>;
-<span class="doccomment">/// In certain devimint cases (e.g. upgrade tests), we'd like to test things
-/// without enabling lnv2. This should make deviming stop setting
-/// `FM_ENABLE_MODULE_LNV2_ENV`
-</span><span class="kw">pub const </span>FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEVIMINT_DISABLE_MODULE_LNV2"</span>;
 
 <span class="doccomment">/// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.

@@ -663,7 +663,6 @@
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>esplora_client::Txid;
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV};
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
@@ -679,7 +678,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{Bitcoind, LightningNode};
 <span class="kw">use </span><span class="kw">crate</span>::federation::Federation;
-<span class="kw">use </span><span class="kw">crate</span>::util::{poll, Command, ProcessHandle, ProcessManager};
+<span class="kw">use </span><span class="kw">crate</span>::util::{poll, supports_lnv2, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
 <span class="kw">use </span><span class="kw">crate</span>::version_constants::{
     VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA,
@@ -721,12 +720,8 @@
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
         ]);
-        <span class="comment">// TODO(support:v0.4.0): Run the gateway in LNv1 mode only before v0.5.0 because
-        // that is the only module it supported.
-        </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-        <span class="kw">if </span>fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA
-            || is_env_var_set(FM_DEVIMINT_DISABLE_MODULE_LNV2_ENV)
-        {
+        <span class="kw">if </span>!supports_lnv2() {
+            <span class="macro">tracing::info!</span>(<span class="string">"LNv2 is not supported, running gatewayd in LNv1 mode"</span>);
             gateway_env.insert(
                 FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV.to_owned(),
                 <span class="string">"LNv1"</span>.to_string(),
@@ -798,6 +793,11 @@
         <span class="self">self</span>.process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
         std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, gatewayd_path);
         std::env::set_var(<span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>, gateway_cli_path);
+
+        <span class="kw">if </span>supports_lnv2() {
+            <span class="macro">tracing::info!</span>(<span class="string">"LNv2 is now supported, running in All mode"</span>);
+            std::env::set_var(FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, <span class="string">"All"</span>);
+        }
 
         <span class="kw">let </span>new_ln = ln;
         <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, new_ln.clone()).<span class="kw">await</span><span class="question-mark">?</span>;

@@ -2203,7 +2203,10 @@
 <a href="#2202" id="2202">2202</a>
 <a href="#2203" id="2203">2203</a>
 <a href="#2204" id="2204">2204</a>
-<a href="#2205" id="2205">2205</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<a href="#2205" id="2205">2205</a>
+<a href="#2206" id="2206">2206</a>
+<a href="#2207" id="2207">2207</a>
+<a href="#2208" id="2208">2208</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2215,7 +2218,7 @@
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
-<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::task::block_in_place;
@@ -4311,6 +4314,8 @@
     </span>UpgradeTests {
         <span class="attr">#[clap(subcommand)]
         </span>binary: UpgradeTest,
+        <span class="attr">#[arg(long)]
+        </span>lnv2: String,
     },
 }
 
@@ -4401,7 +4406,8 @@
             <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
             cannot_replay_tx_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
         }
-        TestCmd::UpgradeTests { binary } =&gt; {
+        TestCmd::UpgradeTests { binary, lnv2 } =&gt; {
+            std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2);
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
             Box::pin(upgrade_tests(<span class="kw-2">&amp;</span>process_mgr, binary)).<span class="kw">await</span><span class="question-mark">?</span>;
         }

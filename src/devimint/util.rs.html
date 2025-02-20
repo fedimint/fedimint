@@ -1288,7 +1288,11 @@
 <a href="#1287" id="1287">1287</a>
 <a href="#1288" id="1288">1288</a>
 <a href="#1289" id="1289">1289</a>
-<a href="#1290" id="1290">1290</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1304,7 +1308,7 @@
     ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams, ServerStatus,
 };
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
-<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
+<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
 <span class="kw">use </span>fedimint_core::module::ApiAuth;
 <span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>, block_in_place, block_on};
 <span class="kw">use </span>fedimint_core::time::now;
@@ -2466,6 +2470,10 @@
         cmd,
         args_debug: cli,
     }
+}
+
+<span class="kw">pub fn </span>supports_lnv2() -&gt; bool {
+    is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV)
 }
 
 <span class="doccomment">/// Returns true if running backwards-compatibility tests
