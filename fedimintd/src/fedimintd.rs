@@ -537,7 +537,7 @@ async fn run(
         ModuleRegistry::default(),
     );
 
-    fedimint_server::run(
+    Box::pin(fedimint_server::run(
         data_dir,
         opts.force_api_secrets,
         settings,
@@ -545,8 +545,6 @@ async fn run(
         code_version_str,
         &module_inits,
         task_group.clone(),
-    )
-    .await?;
-
-    Ok(())
+    ))
+    .await
 }
