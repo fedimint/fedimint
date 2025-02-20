@@ -47,8 +47,5 @@ tokio = { workspace = true, features = ["time", "macros", "rt"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
-[dev-dependencies]
-tracing-test = "0.2.5"
-
 [build-dependencies]
 fedimint-build = { workspace = true }

@@ -11,13 +11,12 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::type_complexity)]
 
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::ops::{self};
 use std::sync::Arc;
 
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
-use fedimint_core::config::{ClientConfig, ModuleInitRegistry};
+use fedimint_core::config::ClientConfig;
 pub use fedimint_core::core::{IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -38,7 +37,6 @@ use transaction::{
     ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputSM, TxSubmissionStatesSM,
 };
 
-use crate::module::init::{DynClientModuleInit, IClientModuleInit};
 pub use crate::module::{ClientModule, StateGenerator};
 use crate::sm::executor::ContextGen;
 use crate::sm::{ClientSMDatabaseTransaction, DynState, IState, State};
@@ -474,25 +472,4 @@ pub struct AdminCreds {
     pub peer_id: PeerId,
     /// Authentication details
     pub auth: ApiAuth,
-}
-pub fn client_decoders<'a>(
-    registry: &ModuleInitRegistry<DynClientModuleInit>,
-    module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-) -> ModuleDecoderRegistry {
-    let mut modules = BTreeMap::new();
-    for (id, kind) in module_kinds {
-        let Some(init) = registry.get(kind) else {
-            debug!("Detected configuration for unsupported module id: {id}, kind: {kind}");
-            continue;
-        };
-
-        modules.insert(
-            id,
-            (
-                kind.clone(),
-                IClientModuleInit::decoder(AsRef::<dyn IClientModuleInit + 'static>::as_ref(init)),
-            ),
-        );
-    }
-    ModuleDecoderRegistry::from(modules)
 }

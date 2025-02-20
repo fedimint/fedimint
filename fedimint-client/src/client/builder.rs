@@ -13,15 +13,14 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, ReconnectFederationApi};
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
-use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitRegistry};
+use fedimint_client_module::module::init::ClientModuleInit;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
 use fedimint_client_module::secret::DeriveableSecretClientExt as _;
-use fedimint_client_module::sm::{Executor, Notifier};
 use fedimint_client_module::transaction::{
     tx_submission_sm_decoder, TxSubmissionContext, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
-use fedimint_client_module::{client_decoders, AdminCreds, ModuleRecoveryStarted};
+use fedimint_client_module::{AdminCreds, ModuleRecoveryStarted};
 use fedimint_core::config::{ClientConfig, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
@@ -39,7 +38,7 @@ use tokio::sync::{broadcast, watch};
 use tracing::{debug, warn};
 
 use super::handle::ClientHandle;
-use super::Client;
+use super::{client_decoders, Client};
 use crate::api_announcements::{get_api_urls, run_api_announcement_sync};
 use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
@@ -48,7 +47,10 @@ use crate::db::{
     InitState,
 };
 use crate::meta::MetaService;
+use crate::module_init::ClientModuleInitRegistry;
 use crate::oplog::OperationLog;
+use crate::sm::executor::Executor;
+use crate::sm::notifier::Notifier;
 
 /// Used to configure, assemble and build [`Client`]
 pub struct ClientBuilder {
@@ -559,7 +561,7 @@ impl ClientBuilder {
             })
             .ok_or(anyhow!("No primary module set or found"))?;
 
-        let notifier = Notifier::new(db.clone());
+        let notifier = Notifier::new();
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
             &config,
@@ -787,6 +789,7 @@ impl ClientBuilder {
             watch::channel(recovery_receiver_init_val);
 
         let client_inner = Arc::new(Client {
+            final_client: final_client.clone(),
             config: tokio::sync::RwLock::new(config.clone()),
             api_secret,
             decoders,

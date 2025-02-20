@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use erased_serde::Serialize;
 use fedimint_client::db::{ClientConfigKey, OperationLogKeyPrefix};
-use fedimint_client_module::module::init::ClientModuleInitRegistry;
+use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry};
 use fedimint_core::core::ModuleKind;

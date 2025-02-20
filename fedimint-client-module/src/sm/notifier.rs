@@ -2,91 +2,16 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::util::broadcaststream::BroadcastStream;
 use fedimint_core::util::BoxStream;
 use fedimint_logging::LOG_CLIENT;
-use futures::StreamExt;
+use futures::StreamExt as _;
 use tracing::{debug, error, trace};
 
-use crate::sm::executor::{
-    ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
-    InactiveStateKey,
-};
-use crate::sm::{ActiveStateMeta, DynState, InactiveStateMeta, State};
-
-/// State transition notifier owned by the modularized client used to inform
-/// modules of state transitions.
-///
-/// To not lose any state transitions that happen before a module subscribes to
-/// the operation the notifier loads all belonging past state transitions from
-/// the DB. State transitions may be reported multiple times and out of order.
-#[derive(Clone)]
-pub struct Notifier {
-    /// Broadcast channel used to send state transitions to all subscribers
-    broadcast: tokio::sync::broadcast::Sender<DynState>,
-    /// Database used to load all states that happened before subscribing
-    db: Database,
-}
-
-impl Notifier {
-    pub fn new(db: Database) -> Self {
-        let (sender, _receiver) = tokio::sync::broadcast::channel(10_000);
-        Self {
-            broadcast: sender,
-            db,
-        }
-    }
-
-    /// Notify all subscribers of a state transition
-    pub fn notify(&self, state: DynState) {
-        let queue_len = self.broadcast.len();
-        trace!(?state, %queue_len, "Sending notification about state transition");
-        // FIXME: use more robust notification mechanism
-        if let Err(e) = self.broadcast.send(state) {
-            debug!(
-                ?e,
-                %queue_len,
-                receivers=self.broadcast.receiver_count(),
-                "Could not send state transition notification, no active receivers"
-            );
-        }
-    }
-
-    /// Create a new notifier for a specific module instance that can only
-    /// subscribe to the instance's state transitions
-    pub fn module_notifier<S>(&self, module_instance: ModuleInstanceId) -> ModuleNotifier<S> {
-        ModuleNotifier {
-            broadcast: self.broadcast.clone(),
-            module_instance,
-            db: self.db.clone(),
-            _pd: PhantomData,
-        }
-    }
-
-    /// Create a [`NotifierSender`] handle that lets the owner trigger
-    /// notifications without having to hold a full `Notifier`.
-    pub fn sender(&self) -> NotifierSender {
-        NotifierSender {
-            sender: self.broadcast.clone(),
-        }
-    }
-}
-
-/// Notifier send handle that can be shared to places where we don't need an
-/// entire [`Notifier`] but still need to trigger notifications. The main use
-/// case is triggering notifications when a DB transaction was committed
-/// successfully.
-pub struct NotifierSender {
-    sender: tokio::sync::broadcast::Sender<DynState>,
-}
-
-impl NotifierSender {
-    /// Notify all subscribers of a state transition
-    pub fn notify(&self, state: DynState) {
-        let _res = self.sender.send(state);
-    }
-}
+use super::{DynState, State};
+use crate::module::FinalClientIface;
+use crate::sm::executor::{ActiveStateKey, InactiveStateKey};
+use crate::sm::{ActiveStateMeta, InactiveStateMeta};
 
 /// State transition notifier for a specific module instance that can only
 /// subscribe to transitions belonging to that module
@@ -94,9 +19,7 @@ impl NotifierSender {
 pub struct ModuleNotifier<S> {
     broadcast: tokio::sync::broadcast::Sender<DynState>,
     module_instance: ModuleInstanceId,
-    /// Database used to load all states that happened before subscribing, see
-    /// [`Notifier`]
-    db: Database,
+    client: FinalClientIface,
     /// `S` limits the type of state that can be subscribed to the one
     /// associated with the module instance
     _pd: PhantomData<S>,
@@ -106,6 +29,19 @@ impl<S> ModuleNotifier<S>
 where
     S: State,
 {
+    pub fn new(
+        broadcast: tokio::sync::broadcast::Sender<DynState>,
+        module_instance: ModuleInstanceId,
+        client: FinalClientIface,
+    ) -> Self {
+        Self {
+            broadcast,
+            module_instance,
+            client,
+            _pd: PhantomData,
+        }
+    }
+
     // TODO: remove duplicates and order old transitions
     /// Subscribe to state transitions belonging to an operation and module
     /// (module context contained in struct).
@@ -128,13 +64,11 @@ where
         // not lose any transitions in the meantime.
         let new_transitions = self.subscribe_all_operations();
 
+        let client_strong = self.client.get();
         let db_states = {
-            let mut dbtx = self.db.begin_transaction_nc().await;
-            let active_states = dbtx
-                .find_by_prefix(&ActiveModuleOperationStateKeyPrefix {
-                    operation_id,
-                    module_instance: self.module_instance,
-                })
+            let mut dbtx = client_strong.db().begin_transaction_nc().await;
+            let active_states = client_strong
+                .read_operation_active_states(operation_id, self.module_instance, &mut dbtx)
                 .await
                 .map(|(key, val): (ActiveStateKey, ActiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)
@@ -142,11 +76,10 @@ where
                 .collect::<Vec<(S, _)>>()
                 .await;
 
-            let inactive_states = dbtx
-                .find_by_prefix(&InactiveModuleOperationStateKeyPrefix {
-                    operation_id,
-                    module_instance: self.module_instance,
-                })
+            let inactive_states = self
+                .client
+                .get()
+                .read_operation_inactive_states(operation_id, self.module_instance, &mut dbtx)
                 .await
                 .map(|(key, val): (InactiveStateKey, InactiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)

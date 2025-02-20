@@ -2646,6 +2646,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-test",
 ]
 
 [[package]]
@@ -2675,7 +2676,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-test",
 ]
 
 [[package]]

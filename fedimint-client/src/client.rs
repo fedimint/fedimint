@@ -16,16 +16,15 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, FederationApiExt as _, IGlobalFederationApi,
 };
-use fedimint_client_module::module::init::ClientModuleInitRegistry;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
-    ClientContextIface, ClientModule, ClientModuleRegistry, DynClientModule, IClientModule,
-    IdxRange, OutPointRange,
+    ClientContextIface, ClientModule, ClientModuleRegistry, DynClientModule, FinalClientIface,
+    IClientModule, IdxRange, OutPointRange,
 };
 use fedimint_client_module::oplog::IOperationLog;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy as _};
-use fedimint_client_module::sm::executor::ActiveOperationStateKeyPrefix;
-use fedimint_client_module::sm::{DynState, Executor};
+use fedimint_client_module::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
+use fedimint_client_module::sm::{ActiveStateMeta, DynState, InactiveStateMeta};
 use fedimint_client_module::transaction::{
     TransactionBuilder, TxSubmissionStates, TxSubmissionStatesSM,
     TRANSACTION_SUBMISSION_MODULE_INSTANCE,
@@ -34,7 +33,9 @@ use fedimint_client_module::{
     AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
     ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
 };
-use fedimint_core::config::{ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig};
+use fedimint_core::config::{
+    ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
+};
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseKey, DatabaseRecord, DatabaseTransaction,
@@ -79,7 +80,12 @@ use crate::db::{
     PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
 use crate::meta::MetaService;
+use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
 use crate::oplog::OperationLog;
+use crate::sm::executor::{
+    ActiveModuleOperationStateKeyPrefix, ActiveOperationStateKeyPrefix, Executor,
+    InactiveModuleOperationStateKeyPrefix, InactiveOperationStateKeyPrefix,
+};
 use crate::ClientBuilder;
 
 pub(crate) mod builder;
@@ -106,6 +112,7 @@ const SUPPORTED_CORE_API_VERSIONS: &[fedimint_core::module::ApiVersion] =
 /// [`crate::ClientHandle`] is responsible for external lifecycle management
 /// and resource freeing of the [`Client`].
 pub struct Client {
+    final_client: FinalClientIface,
     config: tokio::sync::RwLock<ClientConfig>,
     api_secret: Option<String>,
     decoders: ModuleDecoderRegistry,
@@ -560,7 +567,10 @@ impl Client {
     ) -> BoxStream<'static, TxSubmissionStatesSM> {
         self.executor
             .notifier()
-            .module_notifier::<TxSubmissionStatesSM>(TRANSACTION_SUBMISSION_MODULE_INSTANCE)
+            .module_notifier::<TxSubmissionStatesSM>(
+                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+                self.final_client.clone(),
+            )
             .subscribe(operation_id)
             .await
     }
@@ -576,22 +586,14 @@ impl Client {
         operation_id: OperationId,
     ) -> bool {
         let active_state_exists = dbtx
-            .find_by_prefix(
-                &fedimint_client_module::sm::executor::ActiveOperationStateKeyPrefix {
-                    operation_id,
-                },
-            )
+            .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
             .await
             .next()
             .await
             .is_some();
 
         let inactive_state_exists = dbtx
-            .find_by_prefix(
-                &fedimint_client_module::sm::executor::InactiveOperationStateKeyPrefix {
-                    operation_id,
-                },
-            )
+            .find_by_prefix(&InactiveOperationStateKeyPrefix { operation_id })
             .await
             .next()
             .await
@@ -1560,7 +1562,7 @@ impl ClientContextIface for Client {
         Client::db(self)
     }
 
-    fn executor(&self) -> &Executor {
+    fn executor(&self) -> &(maybe_add_send_sync!(dyn IExecutor + 'static)) {
         Client::executor(self)
     }
 
@@ -1592,6 +1594,39 @@ impl ClientContextIface for Client {
         )
         .await;
     }
+
+    async fn read_operation_active_states<'dbtx>(
+        &self,
+        operation_id: OperationId,
+        module_id: ModuleInstanceId,
+        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (ActiveStateKey, ActiveStateMeta)> + 'dbtx)>>
+    {
+        Box::pin(
+            dbtx.find_by_prefix(&ActiveModuleOperationStateKeyPrefix {
+                operation_id,
+                module_instance: module_id,
+            })
+            .await
+            .map(move |(k, v)| (k.0, v)),
+        )
+    }
+    async fn read_operation_inactive_states<'dbtx>(
+        &self,
+        operation_id: OperationId,
+        module_id: ModuleInstanceId,
+        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (InactiveStateKey, InactiveStateMeta)> + 'dbtx)>>
+    {
+        Box::pin(
+            dbtx.find_by_prefix(&InactiveModuleOperationStateKeyPrefix {
+                operation_id,
+                module_instance: module_id,
+            })
+            .await
+            .map(move |(k, v)| (k.0, v)),
+        )
+    }
 }
 
 // TODO: impl `Debug` for `Client` and derive here
@@ -1599,4 +1634,26 @@ impl fmt::Debug for Client {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Client")
     }
+}
+
+pub fn client_decoders<'a>(
+    registry: &ModuleInitRegistry<DynClientModuleInit>,
+    module_kinds: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
+) -> ModuleDecoderRegistry {
+    let mut modules = BTreeMap::new();
+    for (id, kind) in module_kinds {
+        let Some(init) = registry.get(kind) else {
+            debug!("Detected configuration for unsupported module id: {id}, kind: {kind}");
+            continue;
+        };
+
+        modules.insert(
+            id,
+            (
+                kind.clone(),
+                IClientModuleInit::decoder(AsRef::<dyn IClientModuleInit + 'static>::as_ref(init)),
+            ),
+        );
+    }
+    ModuleDecoderRegistry::from(modules)
 }
