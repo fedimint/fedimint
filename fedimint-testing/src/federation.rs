@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use fedimint_api_client::api::net::Connector;
@@ -35,6 +35,8 @@ use fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcp
 use tokio_rustls::rustls;
 use tracing::info;
 
+pub static API_AUTH: LazyLock<ApiAuth> = LazyLock::new(|| ApiAuth("pass".to_string()));
+
 /// Test fixture for a running fedimint federation
 #[derive(Clone)]
 pub struct FederationTest {
@@ -43,6 +45,8 @@ pub struct FederationTest {
     client_init: ClientModuleInitRegistry,
     primary_module_kind: ModuleKind,
     _task: TaskGroup,
+    num_peers: u16,
+    num_offline: u16,
 }
 
 impl FederationTest {
@@ -77,6 +81,17 @@ impl FederationTest {
             None,
         )
         .await
+    }
+
+    /// Create a new admin api for the given PeerId
+    pub fn new_admin_api(&self, peer_id: PeerId) -> DynGlobalApi {
+        let config = self.configs.get(&peer_id).expect("peer to have config");
+        DynGlobalApi::new_admin(
+            peer_id,
+            config.consensus.api_endpoints[&peer_id].url.clone(),
+            &None,
+            &Connector::default(),
+        )
     }
 
     /// Create a new admin client connected to this fed
@@ -145,6 +160,17 @@ impl FederationTest {
         .await
         .expect("Failed to connect federation");
     }
+
+    /// Return all online PeerIds
+    pub fn online_peer_ids(&self) -> impl Iterator<Item = PeerId> {
+        // we can assume this ordering since peers are started in ascending order
+        (0..(self.num_peers - self.num_offline)).map(PeerId::from)
+    }
+
+    /// Returns true if the federation is running in a degraded state
+    pub fn is_degraded(&self) -> bool {
+        self.num_offline > 0
+    }
 }
 
 /// Builder struct for creating a `FederationTest`.
@@ -166,11 +192,12 @@ impl FederationTestBuilder {
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
         primary_module_kind: ModuleKind,
+        num_offline: u16,
     ) -> FederationTestBuilder {
         let num_peers = 4;
         Self {
             num_peers,
-            num_offline: 1,
+            num_offline,
             base_port: block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
                 .expect("Failed to allocate a port range"),
             primary_module_kind,
@@ -304,6 +331,8 @@ impl FederationTestBuilder {
             client_init: self.client_init,
             primary_module_kind: self.primary_module_kind,
             _task: task_group,
+            num_peers: self.num_peers,
+            num_offline: self.num_offline,
         }
     }
 }
@@ -356,7 +385,7 @@ pub fn local_config_gen_params(
                 local: ConfigGenParamsLocal {
                     our_id: *peer,
                     our_private_key: tls_keys[peer].1.clone(),
-                    api_auth: ApiAuth("pass".to_string()),
+                    api_auth: API_AUTH.clone(),
                     p2p_bind: p2p_bind.parse().expect("Valid address"),
                     api_bind: api_bind.parse().expect("Valid address"),
                 },

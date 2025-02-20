@@ -41,7 +41,7 @@ fn fixtures() -> Fixtures {
 #[tokio::test(flavor = "multi_thread")]
 async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
     // Print money for client
@@ -92,7 +92,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn refund_failed_payment() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
     // Print money for client
@@ -129,7 +129,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
     // Print money for client
@@ -165,7 +165,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
     // Print money for client
@@ -234,7 +234,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_operation_expires() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
     let op = client
@@ -264,7 +264,7 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
 
     assert_eq!(
