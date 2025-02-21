@@ -388,7 +388,7 @@ impl Gatewayd {
         .await?;
         let txid: bitcoin::Txid = serde_json::from_value(value)?;
         bitcoind.mine_blocks(21).await?;
-        let block_height = bitcoind.get_block_count().await? - 1;
+        let block_height = bitcoind.get_block_height().await?;
         bitcoind.poll_get_transaction(txid).await?;
         self.wait_for_block_height(block_height).await?;
         Ok(())
@@ -409,7 +409,7 @@ impl Gatewayd {
             .await?;
         }
         bitcoind.mine_blocks(50).await?;
-        let block_height = bitcoind.get_block_count().await? - 1;
+        let block_height = bitcoind.get_block_height().await?;
         self.wait_for_block_height(block_height).await?;
 
         Ok(())
