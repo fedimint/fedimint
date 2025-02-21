@@ -1071,7 +1071,7 @@ mod fedimint_migration_tests {
         secp256k1, Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
         WPubkeyHash,
     };
-    use fedimint_client_module::module::init::DynClientModuleInit;
+    use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,

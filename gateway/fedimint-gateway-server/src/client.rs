@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ClientConfigKey;
+use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientBuilder};
-use fedimint_client_module::module::init::ClientModuleInitRegistry;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;

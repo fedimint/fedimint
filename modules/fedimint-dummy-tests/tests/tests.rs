@@ -149,7 +149,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
 
 mod fedimint_migration_tests {
     use anyhow::ensure;
-    use fedimint_client_module::module::init::DynClientModuleInit;
+    use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,

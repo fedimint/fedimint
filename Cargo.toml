@@ -222,6 +222,7 @@ tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.7.0-alpha" }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+tracing-test = "0.2.5"
 url = "2.5.4"
 
 [profile.dev]

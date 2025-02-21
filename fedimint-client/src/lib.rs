@@ -15,13 +15,13 @@
 //! [`fedimint_client_module::module::ClientModule`] trait and a factory struct
 //! implementing [`fedimint_client_module::module::init::ClientModuleInit`]. The
 //! `ClientModule` trait defines the module types (tx inputs, outputs, etc.) as
-//! well as the module's [state machines](sm::State).
+//! well as the module's [state machines](module::sm::State).
 //!
 //! ### State machines
 //! State machines are spawned when starting operations and drive them
 //! forward in the background. All module state machines are run by a central
-//! [`sm::Executor`]. This means typically starting an operation shall return
-//! instantly.
+//! [`crate::sm::executor::Executor`]. This means typically starting an
+//! operation shall return instantly.
 //!
 //! For example when doing a deposit the function starting it would immediately
 //! return a deposit address and a [`fedimint_client_module::OperationId`]
@@ -92,6 +92,9 @@ pub mod meta;
 
 pub mod oplog;
 
+pub mod module_init;
+
+pub mod sm;
 pub use client::builder::ClientBuilder;
 pub use client::handle::{ClientHandle, ClientHandleArc};
 pub use client::Client;

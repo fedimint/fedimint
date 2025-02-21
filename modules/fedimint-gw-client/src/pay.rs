@@ -111,7 +111,7 @@ impl State for GatewayPayStateMachine {
         &self,
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
-    ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
+    ) -> Vec<StateTransition<Self>> {
         match &self.state {
             GatewayPayStates::PayInvoice(gateway_pay_invoice) => {
                 gateway_pay_invoice.transitions(global_context.clone(), context, &self.common)

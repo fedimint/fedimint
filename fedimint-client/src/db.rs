@@ -6,9 +6,7 @@ use fedimint_api_client::api::ApiVersionSet;
 use fedimint_client_module::db::ClientMigrationFn;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::oplog::{JsonStringed, OperationLogEntry, OperationOutcome};
-use fedimint_client_module::sm::executor::{
-    ActiveStateKeyPrefixBytes, InactiveStateKeyPrefixBytes,
-};
+use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -27,8 +25,10 @@ use strum_macros::EnumIter;
 use tracing::{debug, info, trace, warn};
 
 use crate::backup::{ClientBackup, Metadata};
-use crate::sm::executor::{ActiveStateKeyBytes, InactiveStateKeyBytes};
-use crate::sm::{ActiveStateMeta, InactiveStateMeta};
+use crate::sm::executor::{
+    ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, InactiveStateKeyBytes,
+    InactiveStateKeyPrefixBytes,
+};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]

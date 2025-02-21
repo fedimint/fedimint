@@ -506,10 +506,10 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bls12_381::Scalar;
+    use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_client_module::module::init::recovery::{
         RecoveryFromHistory, RecoveryFromHistoryCommon,
     };
-    use fedimint_client_module::module::init::DynClientModuleInit;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,

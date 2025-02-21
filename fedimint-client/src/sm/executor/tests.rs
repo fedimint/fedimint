@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
+use fedimint_client_module::sm::{Context, DynContext, DynState, State, StateTransition};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
@@ -13,8 +14,8 @@ use fedimint_logging::LOG_CLIENT_REACTOR;
 use tokio::sync::broadcast::Sender;
 use tracing::{info, trace};
 
-use crate::sm::state::{Context, DynContext, DynState};
-use crate::sm::{Executor, Notifier, State, StateTransition};
+use super::Executor;
+use crate::sm::notifier::Notifier;
 use crate::DynGlobalClientContext;
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Hash)]
@@ -135,7 +136,7 @@ fn get_executor() -> (Executor, Sender<u64>, Database) {
             broadcast: broadcast.clone(),
         },
     );
-    let executor = executor_builder.build(db.clone(), Notifier::new(db.clone()), TaskGroup::new());
+    let executor = executor_builder.build(db.clone(), Notifier::new(), TaskGroup::new());
     executor.start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()));
 
     info!(

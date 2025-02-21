@@ -106,7 +106,7 @@ where
 type TriggerFuture = Pin<Box<maybe_add_send!(dyn Future<Output = serde_json::Value> + 'static)>>;
 
 // TODO: remove Arc, maybe make it a fn pointer?
-pub(super) type StateTransitionFunction<S> = Arc<
+pub type StateTransitionFunction<S> = Arc<
     maybe_add_send_sync!(
         dyn for<'a> Fn(
             &'a mut ClientSMDatabaseTransaction<'_, '_>,

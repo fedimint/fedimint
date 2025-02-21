@@ -626,7 +626,7 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash as BitcoinHash};
-    use fedimint_client_module::module::init::DynClientModuleInit;
+    use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{

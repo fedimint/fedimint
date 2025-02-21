@@ -7,12 +7,12 @@ use anyhow::{bail, format_err, Context};
 use fedimint_client::db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
 };
-use fedimint_client::sm::{
-    ActiveStateKeyBytes, ActiveStateKeyPrefix, ActiveStateMeta, InactiveStateKeyBytes,
-    InactiveStateKeyPrefix, InactiveStateMeta,
+use fedimint_client::module_init::DynClientModuleInit;
+use fedimint_client::sm::executor::{
+    ActiveStateKeyBytes, ActiveStateKeyPrefix, InactiveStateKeyBytes, InactiveStateKeyPrefix,
 };
-use fedimint_client_module::module::init::DynClientModuleInit;
 use fedimint_client_module::module::ClientModule;
+use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     apply_migrations, apply_migrations_server, CoreMigrationFn, Database, DatabaseVersion,
@@ -399,7 +399,7 @@ where
         .find_by_prefix(&ActiveStateKeyPrefix)
         .await
         .filter_map(|(state, _)| async move {
-            state.state.as_any().downcast_ref::<T::States>().cloned()
+            state.0.state.as_any().downcast_ref::<T::States>().cloned()
         })
         .collect::<Vec<_>>()
         .await;
@@ -408,7 +408,7 @@ where
         .find_by_prefix(&InactiveStateKeyPrefix)
         .await
         .filter_map(|(state, _)| async move {
-            state.state.as_any().downcast_ref::<T::States>().cloned()
+            state.0.state.as_any().downcast_ref::<T::States>().cloned()
         })
         .collect::<Vec<_>>()
         .await;

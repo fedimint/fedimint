@@ -1,7 +1,7 @@
 use std::fmt;
 
-use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
+use fedimint_client_module::sm::{ClientSMDatabaseTransaction, StateTransition};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
@@ -82,14 +82,14 @@ impl fmt::Display for GatewayCompleteStateMachine {
     }
 }
 
-impl State for GatewayCompleteStateMachine {
+impl fedimint_client_module::sm::State for GatewayCompleteStateMachine {
     type ModuleContext = GatewayClientContext;
 
     fn transitions(
         &self,
         context: &Self::ModuleContext,
         _global_context: &DynGlobalClientContext,
-    ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
+    ) -> Vec<StateTransition<Self>> {
         match &self.state {
             GatewayCompleteStates::WaitForPreimage(_state) => {
                 WaitForPreimageState::transitions(context.clone(), self.common.clone())

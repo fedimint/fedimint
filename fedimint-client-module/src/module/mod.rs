@@ -2,6 +2,7 @@ use core::fmt;
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::Range;
+use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::{ffi, marker, ops};
 
@@ -21,8 +22,8 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
-    PeerId, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
+    OutPoint, PeerId, TransactionId,
 };
 use fedimint_eventlog::{Event, EventKind};
 use fedimint_logging::LOG_CLIENT;
@@ -34,7 +35,8 @@ use tracing::warn;
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
-use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, Executor, State};
+use crate::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
+use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, InactiveStateMeta, State};
 use crate::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
 use crate::{oplog, AddStateMachinesResult, InstancelessDynClientInputBundle, TransactionUpdates};
 
@@ -91,7 +93,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     fn db(&self) -> &Database;
 
-    fn executor(&self) -> &Executor;
+    fn executor(&self) -> &(maybe_add_send_sync!(dyn IExecutor + 'static));
 
     async fn invite_code(&self, peer: PeerId) -> Option<InviteCode>;
 
@@ -106,6 +108,20 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         payload: serde_json::Value,
         persist: bool,
     );
+
+    async fn read_operation_active_states<'dbtx>(
+        &self,
+        operation_id: OperationId,
+        module_id: ModuleInstanceId,
+        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (ActiveStateKey, ActiveStateMeta)> + 'dbtx)>>;
+
+    async fn read_operation_inactive_states<'dbtx>(
+        &self,
+        operation_id: OperationId,
+        module_id: ModuleInstanceId,
+        dbtx: &'dbtx mut DatabaseTransaction<'_>,
+    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (InactiveStateKey, InactiveStateMeta)> + 'dbtx)>>;
 }
 
 /// A final, fully initialized client
@@ -135,6 +151,11 @@ impl FinalClientIface {
     }
 }
 
+impl fmt::Debug for FinalClientIface {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FinalClientIface")
+    }
+}
 /// A Client context for a [`ClientModule`] `M`
 ///
 /// Client modules can interact with the whole
@@ -194,6 +215,21 @@ impl<M> ClientContext<M>
 where
     M: ClientModule,
 {
+    pub fn new(
+        client: FinalClientIface,
+        module_instance_id: ModuleInstanceId,
+        global_dbtx_access_token: GlobalDBTxAccessToken,
+        module_db: Database,
+    ) -> Self {
+        Self {
+            client,
+            module_instance_id,
+            global_dbtx_access_token,
+            module_db,
+            _marker: marker::PhantomData,
+        }
+    }
+
     /// Get a reference back to client module from the [`Self`]
     ///
     /// It's often necessary for a client module to "move self"

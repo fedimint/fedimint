@@ -22,7 +22,7 @@ use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::util::MapStateTransitions;
-use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State};
+use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
@@ -785,7 +785,7 @@ impl State for GatewayClientStateMachines {
         &self,
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
-    ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
+    ) -> Vec<StateTransition<Self>> {
         match self {
             GatewayClientStateMachines::Pay(pay_state) => {
                 sm_enum_variant_translation!(

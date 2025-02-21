@@ -45,5 +45,8 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+tracing-test = { workspace = true }
+
 [build-dependencies]
 fedimint-build = { workspace = true }
