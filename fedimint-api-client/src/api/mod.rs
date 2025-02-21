@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 use std::iter::once;
 use std::pin::Pin;
 use std::result;
@@ -23,7 +23,9 @@ use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOut
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
+use fedimint_core::module::{
+    ApiAuth, ApiMethod, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
+};
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -921,21 +923,6 @@ impl IClientConnection for WsClient {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ApiMethod {
-    Core(String),
-    Module(ModuleInstanceId, String),
-}
-
-impl fmt::Display for ApiMethod {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ApiMethod::Core(s) => f.write_str(s),
-            ApiMethod::Module(module_id, s) => f.write_fmt(format_args!("{module_id}-{s}")),
-        }
-    }
-}
-
 pub type DynClientConnector = Arc<dyn IClientConnector>;
 
 /// Allows to connect to peers. Connections are request based and should be
@@ -1182,18 +1169,15 @@ mod iroh {
 
     use async_trait::async_trait;
     use bitcoin::key::rand::rngs::OsRng;
-    use fedimint_core::module::{ApiError, ApiRequestErased};
+    use fedimint_core::module::{
+        ApiError, ApiMethod, ApiRequestErased, IrohApiRequest, FEDIMINT_API_ALPN,
+    };
     use fedimint_core::PeerId;
     use iroh::endpoint::Connection;
     use iroh::{Endpoint, NodeId, SecretKey};
-    use serde::{Deserialize, Serialize};
     use serde_json::Value;
 
-    use super::{
-        ApiMethod, DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult,
-    };
-
-    const FEDIMINT_ALPN: &[u8] = "FEDIMINT_ALPN".as_bytes();
+    use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
 
     #[derive(Debug, Clone)]
     pub struct IrohConnector {
@@ -1209,7 +1193,7 @@ mod iroh {
                 endpoint: Endpoint::builder()
                     .discovery_n0()
                     .secret_key(SecretKey::generate(&mut OsRng))
-                    .alpns(vec![FEDIMINT_ALPN.to_vec()])
+                    .alpns(vec![FEDIMINT_API_ALPN.to_vec()])
                     .bind()
                     .await?,
             })
@@ -1230,7 +1214,7 @@ mod iroh {
 
             let connection = self
                 .endpoint
-                .connect(node_id, FEDIMINT_ALPN)
+                .connect(node_id, FEDIMINT_API_ALPN)
                 .await
                 .map_err(PeerError::Connection)?;
 
@@ -1238,16 +1222,10 @@ mod iroh {
         }
     }
 
-    #[derive(Debug, Clone, Serialize, Deserialize)]
-    struct IrohRequest {
-        method: ApiMethod,
-        request: ApiRequestErased,
-    }
-
     #[async_trait]
     impl IClientConnection for Connection {
         async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
-            let json = serde_json::to_vec(&IrohRequest { method, request })
+            let json = serde_json::to_vec(&IrohApiRequest { method, request })
                 .expect("Serialization to vec can't fail");
 
             let (mut sink, mut stream) = self

@@ -140,7 +140,7 @@ pub async fn run(
 
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await;
 
-    consensus::run(
+    Box::pin(consensus::run(
         connections,
         p2p_status_receivers,
         settings.api_bind,
@@ -151,7 +151,7 @@ pub async fn run(
         force_api_secrets,
         data_dir,
         code_version_str,
-    )
+    ))
     .await?;
 
     info!(target: LOG_CONSENSUS, "Shutting down tasks");

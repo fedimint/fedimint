@@ -124,6 +124,29 @@ impl ApiRequestErased {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ApiMethod {
+    Core(String),
+    Module(ModuleInstanceId, String),
+}
+
+impl fmt::Display for ApiMethod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Core(s) => f.write_str(s),
+            Self::Module(module_id, s) => f.write_fmt(format_args!("{module_id}-{s}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohApiRequest {
+    pub method: ApiMethod,
+    pub request: ApiRequestErased,
+}
+
+pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
+
 /// Authentication uses the hashed user password in PHC format
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiAuth(pub String);

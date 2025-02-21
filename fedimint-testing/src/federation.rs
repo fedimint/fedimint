@@ -281,7 +281,7 @@ impl FederationTestBuilder {
             .into_dyn();
 
             task_group.spawn("fedimintd", move |_| async move {
-                consensus::run(
+                Box::pin(consensus::run(
                     connections,
                     p2p_status_receivers,
                     api_bind_addr,
@@ -292,7 +292,7 @@ impl FederationTestBuilder {
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
-                )
+                ))
                 .await
                 .expect("Could not initialise consensus");
             });

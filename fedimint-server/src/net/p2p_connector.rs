@@ -235,7 +235,7 @@ pub struct IrohConnector {
     pub endpoint: Endpoint,
 }
 
-const FEDIMINT_P2P_ALPN: &[u8] = "FEDIMINT_P2P_ALPN".as_bytes();
+const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";
 
 impl IrohConnector {
     pub async fn new(secret_key: SecretKey, node_ids: BTreeMap<PeerId, NodeId>) -> Self {
