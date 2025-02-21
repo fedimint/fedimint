@@ -622,7 +622,7 @@
 <span class="kw">type </span>TriggerFuture = Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = serde_json::Value&gt; + <span class="lifetime">'static</span>)&gt;&gt;;
 
 <span class="comment">// TODO: remove Arc, maybe make it a fn pointer?
-</span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>StateTransitionFunction&lt;S&gt; = Arc&lt;
+</span><span class="kw">pub type </span>StateTransitionFunction&lt;S&gt; = Arc&lt;
     <span class="macro">maybe_add_send_sync!</span>(
         <span class="kw">dyn for</span>&lt;<span class="lifetime">'a</span>&gt; Fn(
             <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,

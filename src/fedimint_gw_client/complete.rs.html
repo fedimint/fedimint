@@ -289,8 +289,8 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
-<span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_client_module::sm::{ClientSMDatabaseTransaction, StateTransition};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_lightning::{InterceptPaymentResponse, PaymentAction};
@@ -371,14 +371,14 @@
     }
 }
 
-<span class="kw">impl </span>State <span class="kw">for </span>GatewayCompleteStateMachine {
+<span class="kw">impl </span>fedimint_client_module::sm::State <span class="kw">for </span>GatewayCompleteStateMachine {
     <span class="kw">type </span>ModuleContext = GatewayClientContext;
 
     <span class="kw">fn </span>transitions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         _global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-    ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             GatewayCompleteStates::WaitForPreimage(_state) =&gt; {
                 WaitForPreimageState::transitions(context.clone(), <span class="self">self</span>.common.clone())

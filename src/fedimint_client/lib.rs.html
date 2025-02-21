@@ -101,7 +101,10 @@
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a></pre></div><pre class="rust"><code><span class="doccomment">//! Client library
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a></pre></div><pre class="rust"><code><span class="doccomment">//! Client library
 //!
 //! Notably previous [`crate`] became [`fedimint_client_module`] and the
 //! project is gradually moving things, that are irrelevant to the interface
@@ -118,13 +121,13 @@
 //! [`fedimint_client_module::module::ClientModule`] trait and a factory struct
 //! implementing [`fedimint_client_module::module::init::ClientModuleInit`]. The
 //! `ClientModule` trait defines the module types (tx inputs, outputs, etc.) as
-//! well as the module's [state machines](sm::State).
+//! well as the module's [state machines](module::sm::State).
 //!
 //! ### State machines
 //! State machines are spawned when starting operations and drive them
 //! forward in the background. All module state machines are run by a central
-//! [`sm::Executor`]. This means typically starting an operation shall return
-//! instantly.
+//! [`crate::sm::executor::Executor`]. This means typically starting an
+//! operation shall return instantly.
 //!
 //! For example when doing a deposit the function starting it would immediately
 //! return a deposit address and a [`fedimint_client_module::OperationId`]
@@ -195,6 +198,9 @@
 
 <span class="kw">pub mod </span>oplog;
 
+<span class="kw">pub mod </span>module_init;
+
+<span class="kw">pub mod </span>sm;
 <span class="kw">pub use </span>client::builder::ClientBuilder;
 <span class="kw">pub use </span>client::handle::{ClientHandle, ClientHandleArc};
 <span class="kw">pub use </span>client::Client;

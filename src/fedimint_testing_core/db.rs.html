@@ -541,12 +541,12 @@
 <span class="kw">use </span>fedimint_client::db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
 };
-<span class="kw">use </span>fedimint_client::sm::{
-    ActiveStateKeyBytes, ActiveStateKeyPrefix, ActiveStateMeta, InactiveStateKeyBytes,
-    InactiveStateKeyPrefix, InactiveStateMeta,
+<span class="kw">use </span>fedimint_client::module_init::DynClientModuleInit;
+<span class="kw">use </span>fedimint_client::sm::executor::{
+    ActiveStateKeyBytes, ActiveStateKeyPrefix, InactiveStateKeyBytes, InactiveStateKeyPrefix,
 };
-<span class="kw">use </span>fedimint_client_module::module::init::DynClientModuleInit;
 <span class="kw">use </span>fedimint_client_module::module::ClientModule;
+<span class="kw">use </span>fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations, apply_migrations_server, CoreMigrationFn, Database, DatabaseVersion,
@@ -933,7 +933,7 @@
         .find_by_prefix(<span class="kw-2">&amp;</span>ActiveStateKeyPrefix)
         .<span class="kw">await
         </span>.filter_map(|(state, <span class="kw">_</span>)| <span class="kw">async move </span>{
-            state.state.as_any().downcast_ref::&lt;T::States&gt;().cloned()
+            state.<span class="number">0</span>.state.as_any().downcast_ref::&lt;T::States&gt;().cloned()
         })
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         .<span class="kw">await</span>;
@@ -942,7 +942,7 @@
         .find_by_prefix(<span class="kw-2">&amp;</span>InactiveStateKeyPrefix)
         .<span class="kw">await
         </span>.filter_map(|(state, <span class="kw">_</span>)| <span class="kw">async move </span>{
-            state.state.as_any().downcast_ref::&lt;T::States&gt;().cloned()
+            state.<span class="number">0</span>.state.as_any().downcast_ref::&lt;T::States&gt;().cloned()
         })
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         .<span class="kw">await</span>;

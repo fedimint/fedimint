@@ -993,7 +993,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-    ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             GatewayPayStates::PayInvoice(gateway_pay_invoice) =&gt; {
                 gateway_pay_invoice.transitions(global_context.clone(), context, <span class="kw-2">&amp;</span><span class="self">self</span>.common)

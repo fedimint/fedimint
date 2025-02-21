@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["dbtx","executor","notifier","state","util"],"struct":["ClientSMDatabaseTransaction","DynContext","DynState","ModuleNotifier","Notifier","NotifierSender","OperationState","StateTransition"],"trait":["Context","IState","State"]};
+window.SIDEBAR_ITEMS = {"mod":["dbtx","executor","notifier","state","util"],"struct":["ClientSMDatabaseTransaction","DynContext","DynState","ModuleNotifier","OperationState","StateTransition"],"trait":["Context","IState","State"],"type":["StateTransitionFunction"]};

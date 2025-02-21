@@ -1185,10 +1185,47 @@
 <a href="#1184" id="1184">1184</a>
 <a href="#1185" id="1185">1185</a>
 <a href="#1186" id="1186">1186</a>
-<a href="#1187" id="1187">1187</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
+<a href="#1211" id="1211">1211</a>
+<a href="#1212" id="1212">1212</a>
+<a href="#1213" id="1213">1213</a>
+<a href="#1214" id="1214">1214</a>
+<a href="#1215" id="1215">1215</a>
+<a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a></pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::ops::Range;
+<span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::{ffi, marker, ops};
 
@@ -1208,8 +1245,8 @@
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
-    PeerId, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
+    OutPoint, PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_eventlog::{Event, EventKind};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT;
@@ -1221,7 +1258,8 @@
 <span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span><span class="kw">crate</span>::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
-<span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveStateMeta, Context, DynContext, DynState, Executor, State};
+<span class="kw">use </span><span class="kw">crate</span>::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{<span class="self">self</span>, ActiveStateMeta, Context, DynContext, DynState, InactiveStateMeta, State};
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
 <span class="kw">use crate</span>::{oplog, AddStateMachinesResult, InstancelessDynClientInputBundle, TransactionUpdates};
 
@@ -1278,7 +1316,7 @@
 
     <span class="kw">fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database;
 
-    <span class="kw">fn </span>executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Executor;
+    <span class="kw">fn </span>executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IExecutor + <span class="lifetime">'static</span>));
 
     <span class="kw">async fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt;;
 
@@ -1293,6 +1331,20 @@
         payload: serde_json::Value,
         persist: bool,
     );
+
+    <span class="kw">async fn </span>read_operation_active_states&lt;<span class="lifetime">'dbtx</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        module_id: ModuleInstanceId,
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+    ) -&gt; Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (ActiveStateKey, ActiveStateMeta)&gt; + <span class="lifetime">'dbtx</span>)&gt;&gt;;
+
+    <span class="kw">async fn </span>read_operation_inactive_states&lt;<span class="lifetime">'dbtx</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        operation_id: OperationId,
+        module_id: ModuleInstanceId,
+        dbtx: <span class="kw-2">&amp;</span><span class="lifetime">'dbtx </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+    ) -&gt; Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Stream&lt;Item = (InactiveStateKey, InactiveStateMeta)&gt; + <span class="lifetime">'dbtx</span>)&gt;&gt;;
 }
 
 <span class="doccomment">/// A final, fully initialized client
@@ -1322,6 +1374,11 @@
     }
 }
 
+<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>FinalClientIface {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        f.write_str(<span class="string">"FinalClientIface"</span>)
+    }
+}
 <span class="doccomment">/// A Client context for a [`ClientModule`] `M`
 ///
 /// Client modules can interact with the whole
@@ -1381,6 +1438,21 @@
 <span class="kw">where
     </span>M: ClientModule,
 {
+    <span class="kw">pub fn </span>new(
+        client: FinalClientIface,
+        module_instance_id: ModuleInstanceId,
+        global_dbtx_access_token: GlobalDBTxAccessToken,
+        module_db: Database,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            client,
+            module_instance_id,
+            global_dbtx_access_token,
+            module_db,
+            _marker: marker::PhantomData,
+        }
+    }
+
     <span class="doccomment">/// Get a reference back to client module from the [`Self`]
     ///
     /// It's often necessary for a client module to "move self"

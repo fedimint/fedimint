@@ -952,7 +952,7 @@
 <span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 <span class="kw">use </span>fedimint_client_module::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client_module::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State};
+<span class="kw">use </span>fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
@@ -1715,7 +1715,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-    ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             GatewayClientStateMachines::Pay(pay_state) =&gt; {
                 <span class="macro">sm_enum_variant_translation!</span>(

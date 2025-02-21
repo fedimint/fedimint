@@ -164,162 +164,20 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
-<a href="#193" id="193">193</a>
-<a href="#194" id="194">194</a>
-<a href="#195" id="195">195</a>
-<a href="#196" id="196">196</a>
-<a href="#197" id="197">197</a>
-<a href="#198" id="198">198</a>
-<a href="#199" id="199">199</a>
-<a href="#200" id="200">200</a>
-<a href="#201" id="201">201</a>
-<a href="#202" id="202">202</a>
-<a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a>
-<a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
-<a href="#209" id="209">209</a>
-<a href="#210" id="210">210</a>
-<a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
-<a href="#215" id="215">215</a>
-<a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
+<a href="#166" id="166">166</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
-<span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::util::broadcaststream::BroadcastStream;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT;
-<span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
 <span class="kw">use </span>tracing::{debug, error, trace};
 
-<span class="kw">use </span><span class="kw">crate</span>::sm::executor::{
-    ActiveModuleOperationStateKeyPrefix, ActiveStateKey, InactiveModuleOperationStateKeyPrefix,
-    InactiveStateKey,
-};
-<span class="kw">use </span><span class="kw">crate</span>::sm::{ActiveStateMeta, DynState, InactiveStateMeta, State};
-
-<span class="doccomment">/// State transition notifier owned by the modularized client used to inform
-/// modules of state transitions.
-///
-/// To not lose any state transitions that happen before a module subscribes to
-/// the operation the notifier loads all belonging past state transitions from
-/// the DB. State transitions may be reported multiple times and out of order.
-</span><span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>Notifier {
-    <span class="doccomment">/// Broadcast channel used to send state transitions to all subscribers
-    </span>broadcast: tokio::sync::broadcast::Sender&lt;DynState&gt;,
-    <span class="doccomment">/// Database used to load all states that happened before subscribing
-    </span>db: Database,
-}
-
-<span class="kw">impl </span>Notifier {
-    <span class="kw">pub fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>(sender, _receiver) = tokio::sync::broadcast::channel(<span class="number">10_000</span>);
-        <span class="self">Self </span>{
-            broadcast: sender,
-            db,
-        }
-    }
-
-    <span class="doccomment">/// Notify all subscribers of a state transition
-    </span><span class="kw">pub fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState) {
-        <span class="kw">let </span>queue_len = <span class="self">self</span>.broadcast.len();
-        <span class="macro">trace!</span>(<span class="question-mark">?</span>state, %queue_len, <span class="string">"Sending notification about state transition"</span>);
-        <span class="comment">// FIXME: use more robust notification mechanism
-        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.broadcast.send(state) {
-            <span class="macro">debug!</span>(
-                <span class="question-mark">?</span>e,
-                %queue_len,
-                receivers=<span class="self">self</span>.broadcast.receiver_count(),
-                <span class="string">"Could not send state transition notification, no active receivers"
-            </span>);
-        }
-    }
-
-    <span class="doccomment">/// Create a new notifier for a specific module instance that can only
-    /// subscribe to the instance's state transitions
-    </span><span class="kw">pub fn </span>module_notifier&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance: ModuleInstanceId) -&gt; ModuleNotifier&lt;S&gt; {
-        ModuleNotifier {
-            broadcast: <span class="self">self</span>.broadcast.clone(),
-            module_instance,
-            db: <span class="self">self</span>.db.clone(),
-            _pd: PhantomData,
-        }
-    }
-
-    <span class="doccomment">/// Create a [`NotifierSender`] handle that lets the owner trigger
-    /// notifications without having to hold a full `Notifier`.
-    </span><span class="kw">pub fn </span>sender(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NotifierSender {
-        NotifierSender {
-            sender: <span class="self">self</span>.broadcast.clone(),
-        }
-    }
-}
-
-<span class="doccomment">/// Notifier send handle that can be shared to places where we don't need an
-/// entire [`Notifier`] but still need to trigger notifications. The main use
-/// case is triggering notifications when a DB transaction was committed
-/// successfully.
-</span><span class="kw">pub struct </span>NotifierSender {
-    sender: tokio::sync::broadcast::Sender&lt;DynState&gt;,
-}
-
-<span class="kw">impl </span>NotifierSender {
-    <span class="doccomment">/// Notify all subscribers of a state transition
-    </span><span class="kw">pub fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, state: DynState) {
-        <span class="kw">let </span>_res = <span class="self">self</span>.sender.send(state);
-    }
-}
+<span class="kw">use super</span>::{DynState, State};
+<span class="kw">use </span><span class="kw">crate</span>::module::FinalClientIface;
+<span class="kw">use </span><span class="kw">crate</span>::sm::executor::{ActiveStateKey, InactiveStateKey};
+<span class="kw">use </span><span class="kw">crate</span>::sm::{ActiveStateMeta, InactiveStateMeta};
 
 <span class="doccomment">/// State transition notifier for a specific module instance that can only
 /// subscribe to transitions belonging to that module
@@ -327,9 +185,7 @@
 </span><span class="kw">pub struct </span>ModuleNotifier&lt;S&gt; {
     broadcast: tokio::sync::broadcast::Sender&lt;DynState&gt;,
     module_instance: ModuleInstanceId,
-    <span class="doccomment">/// Database used to load all states that happened before subscribing, see
-    /// [`Notifier`]
-    </span>db: Database,
+    client: FinalClientIface,
     <span class="doccomment">/// `S` limits the type of state that can be subscribed to the one
     /// associated with the module instance
     </span>_pd: PhantomData&lt;S&gt;,
@@ -339,6 +195,19 @@
 <span class="kw">where
     </span>S: State,
 {
+    <span class="kw">pub fn </span>new(
+        broadcast: tokio::sync::broadcast::Sender&lt;DynState&gt;,
+        module_instance: ModuleInstanceId,
+        client: FinalClientIface,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            broadcast,
+            module_instance,
+            client,
+            _pd: PhantomData,
+        }
+    }
+
     <span class="comment">// TODO: remove duplicates and order old transitions
     </span><span class="doccomment">/// Subscribe to state transitions belonging to an operation and module
     /// (module context contained in struct).
@@ -361,13 +230,11 @@
         // not lose any transitions in the meantime.
         </span><span class="kw">let </span>new_transitions = <span class="self">self</span>.subscribe_all_operations();
 
+        <span class="kw">let </span>client_strong = <span class="self">self</span>.client.get();
         <span class="kw">let </span>db_states = {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
-            <span class="kw">let </span>active_states = dbtx
-                .find_by_prefix(<span class="kw-2">&amp;</span>ActiveModuleOperationStateKeyPrefix {
-                    operation_id,
-                    module_instance: <span class="self">self</span>.module_instance,
-                })
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client_strong.db().begin_transaction_nc().<span class="kw">await</span>;
+            <span class="kw">let </span>active_states = client_strong
+                .read_operation_active_states(operation_id, <span class="self">self</span>.module_instance, <span class="kw-2">&amp;mut </span>dbtx)
                 .<span class="kw">await
                 </span>.map(|(key, val): (ActiveStateKey, ActiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)
@@ -375,11 +242,10 @@
                 .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;()
                 .<span class="kw">await</span>;
 
-            <span class="kw">let </span>inactive_states = dbtx
-                .find_by_prefix(<span class="kw-2">&amp;</span>InactiveModuleOperationStateKeyPrefix {
-                    operation_id,
-                    module_instance: <span class="self">self</span>.module_instance,
-                })
+            <span class="kw">let </span>inactive_states = <span class="self">self
+                </span>.client
+                .get()
+                .read_operation_inactive_states(operation_id, <span class="self">self</span>.module_instance, <span class="kw-2">&amp;mut </span>dbtx)
                 .<span class="kw">await
                 </span>.map(|(key, val): (InactiveStateKey, InactiveStateMeta)| {
                     (to_typed_state(key.state), val.created_at)

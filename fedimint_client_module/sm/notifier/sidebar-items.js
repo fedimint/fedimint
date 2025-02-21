@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ModuleNotifier","Notifier","NotifierSender"]};
+window.SIDEBAR_ITEMS = {"struct":["ModuleNotifier"]};
