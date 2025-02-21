@@ -1,4 +1,4 @@
-# Lightning Module Protocol
+# Lightning Module V1 Protocol
 On a high-level, we simply extend the LN network into the federation. The LN
 Gateway acts as a translation layer between the trustless LN network and the
 trusted federation. To do so, the LN gateway holds both e-cash (federation
@@ -8,6 +8,8 @@ or receiving payments on behalf of users it exchanges one for the other.
 See the diagrams below for details on incoming and outgoing flows.
 
 ## Receive
+
+In the V1 Lightning protocol, the gateway uses HTLC interception to determine if an incoming payment is destined for a Fedimint.
 
 ```mermaid
 sequenceDiagram;
