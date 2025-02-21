@@ -22,6 +22,7 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_server::core::ServerModule;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
+use fedimint_testing::federation::{FederationTest, API_AUTH};
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModule, WithdrawState};
@@ -53,11 +54,12 @@ async fn peg_in<'a>(
     client: &'a ClientHandleArc,
     bitcoin: &dyn BitcoinTest,
     finality_delay: u64,
+    fed: &FederationTest,
 ) -> anyhow::Result<(BoxStream<'a, Amount>, bitcoin::Transaction)> {
     let mut balance_sub = client.subscribe_balance_changes().await;
     let initial_balance = balance_sub.ok().await?;
 
-    await_consensus_upgrade(client).await;
+    await_consensus_upgrade(client, fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let (op, address, _) = wallet_module
@@ -116,27 +118,60 @@ async fn await_consensus_to_catch_up(
     }
 }
 
-async fn await_consensus_upgrade(client: &ClientHandleArc) {
+async fn activate_manual_voting_for_online_peers(
+    client: &ClientHandleArc,
+    fed: &FederationTest,
+) -> anyhow::Result<()> {
+    let wallet_module_client_id = client.get_first_module::<WalletClientModule>()?.id;
+    let activation_futures = fed.online_peer_ids().map(|peer_id| {
+        info!("activating consensus version voting for peer {peer_id}");
+
+        async move {
+            fed.new_admin_api(peer_id)
+                .with_module(wallet_module_client_id)
+                .activate_consensus_version_voting(API_AUTH.clone())
+                .await
+        }
+    });
+
+    futures::future::try_join_all(activation_futures).await?;
+
+    Ok(())
+}
+
+async fn await_consensus_upgrade(
+    client: &ClientHandleArc,
+    fed: &FederationTest,
+) -> anyhow::Result<()> {
+    // we need all peers to be online for automatic consensus version voting, so we
+    // activate manual voting if the federation is degraded
+    if fed.is_degraded() {
+        activate_manual_voting_for_online_peers(client, fed).await?;
+    }
+
     retry(
         "waiting for consensus upgrade",
         fedimint_core::util::backoff_util::aggressive_backoff(),
         || async {
-            client
+            let is_upgraded = client
                 .get_first_module::<WalletClientModule>()?
                 .btc_tx_has_no_size_limit()
                 .await?;
 
+            anyhow::ensure!(is_upgraded);
             Ok(())
         },
     )
     .await
     .expect("Consensus upgrade didn't happen in time");
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // Avoid other tests from interfering here
@@ -178,7 +213,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let bitcoin = fixtures.bitcoin();
@@ -188,7 +223,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
-    await_consensus_upgrade(&client).await;
+    await_consensus_upgrade(&client, &fed).await?;
 
     assert_eq!(client.get_balance().await, sats(0));
     let (op, address, _) = wallet_module
@@ -328,7 +363,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
@@ -341,7 +376,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     let starting_balance = client.get_balance().await;
     info!(?starting_balance, "Starting balance");
 
-    await_consensus_upgrade(&client).await;
+    await_consensus_upgrade(&client, &fed).await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let (op, address, tweak_idx) = wallet_module
@@ -405,7 +440,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
@@ -415,7 +450,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay, &fed).await?;
 
     info!("Peg-in finished for test peg_out_fail_refund");
     // Peg-out test, requires block to recognize change UTXOs
@@ -450,7 +485,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // Need lock to keep tx in mempool from getting mined
@@ -461,7 +496,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay, &fed).await?;
 
     info!("Peg-in finished for test rbf_withdrawals_are_rejected");
     let address = bitcoin.get_new_address().await;
@@ -542,7 +577,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // This test has many assumptions about bitcoin L1 blocks
@@ -555,7 +590,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let (mut balance_sub, _) = peg_in(&client, bitcoin.as_ref(), finality_delay, &fed).await?;
 
     info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
     let address = bitcoin.get_new_address().await;
@@ -760,7 +795,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn construct_wallet_summary() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
+    let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
@@ -779,7 +814,7 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
 
     // generate 3 peg-ins, verifying wallet summary after each
     for _ in 0..3 {
-        let (_, tx) = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+        let (_, tx) = peg_in(&client, bitcoin.as_ref(), finality_delay, &fed).await?;
         let expected_peg_in_amount =
             PEG_IN_AMOUNT_SATS + (wallet_module.get_fee_consensus().peg_in_abs.msats / 1000);
 
@@ -957,6 +992,16 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     assert_eq!(wallet_summary_after_mining.pending_peg_out_txos(), vec![]);
 
     assert_eq!(wallet_summary_after_mining.pending_change_utxos(), vec![]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn verify_auto_consensus_voting() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    await_consensus_upgrade(&client, &fed).await?;
 
     Ok(())
 }
