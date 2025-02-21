@@ -222,7 +222,7 @@ impl MultiApiVersion {
             .fold((None, true), |(prev, is_sorted), next| {
                 (
                     Some(*next),
-                    is_sorted && prev.map_or(true, |prev| prev.major < next.major),
+                    is_sorted && prev.is_none_or(|prev| prev.major < next.major),
                 )
             })
             .1

@@ -2264,7 +2264,7 @@ pub async fn apply_migrations_dbtx(
         .await?
         .filter(|(key, _v)| {
             std::future::ready(
-                external_prefixes_above.map_or(true, |external_prefixes_above| {
+                external_prefixes_above.is_none_or(|external_prefixes_above| {
                     !key.is_empty() && key[0] < external_prefixes_above
                 }),
             )

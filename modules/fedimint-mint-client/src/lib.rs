@@ -2013,7 +2013,7 @@ async fn select_notes_from_stream<Note>(
     loop {
         if let Some((note_amount, note)) = stream.next().await {
             assert!(
-                previous_amount.map_or(true, |previous| previous >= note_amount),
+                previous_amount.is_none_or(|previous| previous >= note_amount),
                 "notes are not sorted in descending order"
             );
             previous_amount = Some(note_amount);

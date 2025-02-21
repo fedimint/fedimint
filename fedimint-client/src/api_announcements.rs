@@ -80,8 +80,7 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
                             for (peer, new_announcement) in announcements_inner {
                                 let replace_current_announcement = dbtx
                                     .get_value(&ApiAnnouncementKey(peer))
-                                    .await
-                                    .map_or(true, |current_announcement| {
+                                    .await.is_none_or(|current_announcement| {
                                         current_announcement.api_announcement.nonce
                                             < new_announcement.api_announcement.nonce
                                     });

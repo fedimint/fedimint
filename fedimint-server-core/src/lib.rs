@@ -385,7 +385,6 @@ where
             in_point,
         )
         .await
-        .map(Into::into)
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
 
@@ -430,7 +429,6 @@ where
                 .expect("incorrect input type passed to module plugin"),
         )
         .await
-        .map(Into::into)
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
 
