@@ -25,6 +25,6 @@ fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
-tempfile = "3.16.0"
+tempfile = "3.17.1"
 tokio = { workspace = true }
 tracing = { workspace = true }
