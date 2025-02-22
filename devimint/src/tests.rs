@@ -672,12 +672,54 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     fed.pegin_gateways(10_000_000, vec![&gw_lnd]).await?;
 
     let fed_id = fed.calculate_federation_id();
+    let invite = fed.invite_code()?;
 
     // LNv1 expects no gateway routing fees
     gw_lnd
         .set_federation_routing_fee(fed_id.clone(), 0, 0)
         .await?;
     cmd!(client, "list-gateways").run().await?;
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+
+    let invite_code = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
+        cmd!(client, "dev", "decode", "invite-code", invite.clone())
+    } else {
+        cmd!(client, "dev", "decode-invite-code", invite.clone())
+    }
+    .out_json()
+    .await?;
+
+    let encode_invite_output = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
+        cmd!(
+            client,
+            "dev",
+            "encode",
+            "invite-code",
+            format!("--url={}", invite_code["url"].as_str().unwrap()),
+            "--federation_id={fed_id}",
+            "--peer=0"
+        )
+    } else {
+        cmd!(
+            client,
+            "dev",
+            "encode-invite-code",
+            format!("--url={}", invite_code["url"].as_str().unwrap()),
+            "--federation_id={fed_id}",
+            "--peer=0"
+        )
+    }
+    .out_json()
+    .await?;
+
+    anyhow::ensure!(
+        encode_invite_output["invite_code"]
+            .as_str()
+            .expect("invite_code must be a string")
+            == invite,
+        "failed to decode and encode the client invite code",
+    );
 
     // Test that LND and CLN can still send directly to each other
 
