@@ -42,6 +42,7 @@ use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
 use net::api::ApiSecrets;
+use net::p2p_connector::IrohConnector;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -79,14 +80,27 @@ pub async fn run(
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
-            let connector = TlsTcpConnector::new(
-                cfg.tls_config(),
-                settings.p2p_bind,
-                cfg.local.p2p_endpoints.clone(),
-                cfg.local.identity,
-            )
-            .await
-            .into_dyn();
+            let connector = if cfg.consensus.iroh_endpoints.is_empty() {
+                TlsTcpConnector::new(
+                    cfg.tls_config(),
+                    settings.p2p_bind,
+                    cfg.local.p2p_endpoints.clone(),
+                    cfg.local.identity,
+                )
+                .await
+                .into_dyn()
+            } else {
+                IrohConnector::new(
+                    cfg.private.iroh_p2p_sk.clone().unwrap(),
+                    cfg.consensus
+                        .iroh_endpoints
+                        .iter()
+                        .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
+                        .collect(),
+                )
+                .await
+                .into_dyn()
+            };
 
             let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
 
@@ -126,7 +140,7 @@ pub async fn run(
 
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await;
 
-    consensus::run(
+    Box::pin(consensus::run(
         connections,
         p2p_status_receivers,
         settings.api_bind,
@@ -137,7 +151,7 @@ pub async fn run(
         force_api_secrets,
         data_dir,
         code_version_str,
-    )
+    ))
     .await?;
 
     info!(target: LOG_CONSENSUS, "Shutting down tasks");
@@ -226,19 +240,32 @@ pub async fn run_config_gen(
 
     api_handler.stopped().await;
 
-    let connector = TlsTcpConnector::new(
-        cg_params.tls_config(),
-        settings.p2p_bind,
-        cg_params.p2p_urls(),
-        cg_params.local.our_id,
-    )
-    .await
-    .into_dyn();
+    let connector = if cg_params.iroh_endpoints().is_empty() {
+        TlsTcpConnector::new(
+            cg_params.tls_config(),
+            settings.p2p_bind,
+            cg_params.p2p_urls(),
+            cg_params.identity,
+        )
+        .await
+        .into_dyn()
+    } else {
+        IrohConnector::new(
+            cg_params.iroh_p2p_sk.clone().unwrap(),
+            cg_params
+                .iroh_endpoints()
+                .iter()
+                .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
+                .collect(),
+        )
+        .await
+        .into_dyn()
+    };
 
     let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
 
     let connections = ReconnectP2PConnections::new(
-        cg_params.local.our_id,
+        cg_params.identity,
         connector,
         task_group,
         p2p_status_senders,
@@ -253,6 +280,11 @@ pub async fn run_config_gen(
         p2p_status_receivers.clone(),
     )
     .await?;
+
+    assert_ne!(
+        cfg.consensus.iroh_endpoints.is_empty(),
+        cfg.consensus.api_endpoints.is_empty(),
+    );
 
     // TODO: Make writing password optional
     write_new(data_dir.join(PLAINTEXT_PASSWORD), &cfg.private.api_auth.0)?;

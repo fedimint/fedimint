@@ -33,7 +33,6 @@ bitcoin-io = "0.1.2"
 bitcoin-units = "0.1.2"
 bitvec = "1.0.1"
 bls12_381 = { workspace = true }
-bs58 = "0.5.1"
 erased-serde = { workspace = true }
 fedimint-derive = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -41,7 +40,7 @@ futures = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
 imbl = "5.0.0"
-iroh = { workspace = true, optional = true }
+iroh-base = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.8", features = ["client"] }
 lightning = { workspace = true }

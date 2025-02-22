@@ -1,11 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::mem::discriminant;
 
 use anyhow::{ensure, Context};
 use async_trait::async_trait;
 use fedimint_bitcoind::create_bitcoind;
-use fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, PeerConnectionInfo, ServerStatus, SetLocalParamsRequest,
-};
+use fedimint_core::admin_client::{ServerStatus, SetLocalParamsRequest};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
@@ -16,14 +15,16 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
-use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
+use iroh::SecretKey;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_rustls::rustls;
 
-use crate::config::{gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ConfigGenSettings};
+use super::PeerEndpoints;
+use crate::config::{gen_cert_and_key, ConfigGenParams, ConfigGenSettings, PeerConnectionInfo};
 use crate::net::api::{check_auth, ApiResult, HasApiContext};
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -32,7 +33,7 @@ pub struct ConfigGenState {
     /// Our local connection
     local_params: Option<LocalParams>,
     /// Connection info received from other guardians
-    connection_info: BTreeMap<SafeUrl, PeerConnectionInfo>,
+    connection_info: BTreeSet<PeerConnectionInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -41,9 +42,13 @@ pub struct LocalParams {
     /// Our auth string
     auth: ApiAuth,
     /// Our TLS private key
-    tls_private: rustls::PrivateKey,
-    /// Our TLS public cert
-    tls_cert: rustls::Certificate,
+    tls_key: Option<rustls::PrivateKey>,
+    /// Optional secret key for our iroh api endpoint
+    iroh_api_sk: Option<iroh::SecretKey>,
+    /// Optional secret key for our iroh p2p endpoint
+    iroh_p2p_sk: Option<iroh::SecretKey>,
+    /// Our api and p2p endpoint
+    endpoints: PeerEndpoints,
     /// Name of the peer, used in TLS auth
     name: String,
     /// Federation name set by the leader
@@ -80,7 +85,7 @@ impl ConfigGenApi {
                 state
                     .connection_info
                     .clone()
-                    .into_values()
+                    .into_iter()
                     .map(|info| info.name)
                     .collect(),
             ),
@@ -121,34 +126,54 @@ impl ConfigGenApi {
             );
 
             let info = PeerConnectionInfo {
-                cert: lp.tls_cert.clone().0,
-                p2p_url: self.settings.p2p_url.clone(),
-                api_url: self.settings.api_url.clone(),
                 name: lp.name,
+                endpoints: lp.endpoints,
                 federation_name: lp.federation_name,
             };
 
             return Ok(info);
         }
 
-        let (tls_cert, tls_private) = gen_cert_and_key(&request.name)
-            .expect("Failed to generate TLS for given guardian name");
+        let lp = if true {
+            let (tls_cert, tls_key) = gen_cert_and_key(&request.name)
+                .expect("Failed to generate TLS for given guardian name");
 
-        let lp = LocalParams {
-            auth,
-            tls_cert,
-            tls_private,
-            name: request.name,
-            federation_name: request.federation_name,
+            LocalParams {
+                auth,
+                tls_key: Some(tls_key),
+                iroh_api_sk: None,
+                iroh_p2p_sk: None,
+                endpoints: PeerEndpoints::Tcp {
+                    api_url: self.settings.api_url.clone(),
+                    p2p_url: self.settings.p2p_url.clone(),
+                    cert: tls_cert.0,
+                },
+                name: request.name,
+                federation_name: request.federation_name,
+            }
+        } else {
+            let iroh_api_sk = SecretKey::generate(&mut OsRng);
+            let iroh_p2p_sk = SecretKey::generate(&mut OsRng);
+
+            LocalParams {
+                auth,
+                tls_key: None,
+                iroh_api_sk: Some(iroh_api_sk.clone()),
+                iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
+                endpoints: PeerEndpoints::Iroh {
+                    api_pk: iroh_api_sk.public(),
+                    p2p_pk: iroh_p2p_sk.public(),
+                },
+                name: request.name,
+                federation_name: request.federation_name,
+            }
         };
 
         state.local_params = Some(lp.clone());
 
         let info = PeerConnectionInfo {
-            cert: lp.tls_cert.clone().0,
-            p2p_url: self.settings.p2p_url.clone(),
-            api_url: self.settings.api_url.clone(),
             name: lp.name,
+            endpoints: lp.endpoints,
             federation_name: lp.federation_name,
         };
 
@@ -156,16 +181,25 @@ impl ConfigGenApi {
     }
 
     pub async fn add_peer_connection_info(&self, info: PeerConnectionInfo) -> anyhow::Result<()> {
-        ensure!(
-            info.api_url != self.settings.api_url,
-            "You cannot add your own connection info"
-        );
-
         let mut state = self.state.lock().await;
+
+        if state.connection_info.contains(&info) {
+            return Ok(());
+        }
+
+        let local_params = state
+            .local_params
+            .clone()
+            .expect("The endpoint is authenticated.");
+
+        ensure!(
+            discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
+            "Guardian has different endpoint variant (TCP/Iroh) than us.",
+        );
 
         if let Some(federation_name) = state
             .connection_info
-            .values()
+            .iter()
             .find_map(|info| info.federation_name.clone())
         {
             ensure!(
@@ -174,7 +208,7 @@ impl ConfigGenApi {
             );
         }
 
-        state.connection_info.insert(info.api_url.clone(), info);
+        state.connection_info.insert(info);
 
         Ok(())
     }
@@ -188,45 +222,39 @@ impl ConfigGenApi {
             .expect("The endpoint is authenticated.");
 
         let our_peer_info = PeerConnectionInfo {
-            cert: local_params.tls_cert.0,
-            p2p_url: self.settings.p2p_url.clone(),
-            api_url: self.settings.api_url.clone(),
             name: local_params.name,
+            endpoints: local_params.endpoints,
             federation_name: local_params.federation_name,
         };
 
-        state
-            .connection_info
-            .insert(our_peer_info.api_url.clone(), our_peer_info);
+        state.connection_info.insert(our_peer_info.clone());
 
         let federation_name = state
             .connection_info
-            .values()
+            .iter()
             .find_map(|info| info.federation_name.clone())
             .context("We need one leader to configure the federation name")?;
 
         let our_id = state
             .connection_info
-            .keys()
-            .position(|url| *url == self.settings.api_url)
+            .iter()
+            .position(|info| info == &our_peer_info)
             .expect("We inserted the key above.");
 
         let params = ConfigGenParams {
-            local: ConfigGenParamsLocal {
-                our_id: PeerId::from(our_id as u16),
-                our_private_key: local_params.tls_private,
-                api_auth: local_params.auth,
-                p2p_bind: self.settings.p2p_bind,
-                api_bind: self.settings.api_bind,
-            },
-            consensus: ConfigGenParamsConsensus {
-                peers: (0..)
-                    .map(|i| PeerId::from(i as u16))
-                    .zip(state.connection_info.values().cloned())
-                    .collect(),
-                meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
-                modules: self.settings.default_params.modules.clone(),
-            },
+            identity: PeerId::from(our_id as u16),
+            tls_key: local_params.tls_key,
+            iroh_api_sk: local_params.iroh_api_sk,
+            iroh_p2p_sk: local_params.iroh_p2p_sk,
+            api_auth: local_params.auth,
+            p2p_bind: self.settings.p2p_bind,
+            api_bind: self.settings.api_bind,
+            peers: (0..)
+                .map(|i| PeerId::from(i as u16))
+                .zip(state.connection_info.clone().into_iter())
+                .collect(),
+            meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
+            modules: self.settings.modules.clone(),
         };
 
         self.sender

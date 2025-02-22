@@ -104,7 +104,9 @@ async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &Serv
     }
 
     let api_announcement = ApiAnnouncement::new(
-        cfg.consensus.api_endpoints[&cfg.local.identity].url.clone(),
+        cfg.consensus.api_endpoints()[&cfg.local.identity]
+            .url
+            .clone(),
         0,
     );
     let ctx = secp256k1::Secp256k1::new();
@@ -125,7 +127,7 @@ async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &Serv
 pub async fn get_api_urls(db: &Database, cfg: &ServerConfigConsensus) -> BTreeMap<PeerId, SafeUrl> {
     override_api_urls(
         db,
-        cfg.api_endpoints
+        cfg.api_endpoints()
             .iter()
             .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
         &ApiAnnouncementPrefix,

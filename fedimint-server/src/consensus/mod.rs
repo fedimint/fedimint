@@ -23,21 +23,26 @@ use fedimint_core::db::{apply_migrations, apply_migrations_server_dbtx, Database
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, IrohApiRequest, FEDIMINT_API_ALPN};
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId};
-use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
+use futures::FutureExt;
+use iroh::endpoint::{ConnectionError, Incoming, RecvStream, SendStream};
+use iroh::Endpoint;
 use jsonrpsee::server::ServerHandle;
+use serde_json::Value;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
-use crate::consensus::api::ConsensusApi;
+use crate::consensus::api::{server_endpoints, ConsensusApi};
 use crate::consensus::engine::ConsensusEngine;
 use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net::api::announcement::get_api_urls;
-use crate::net::api::{ApiSecrets, RpcHandlerCtx};
+use crate::net::api::{ApiSecrets, HasApiContext, RpcHandlerCtx};
 use crate::{net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
@@ -74,7 +79,7 @@ pub async fn run(
     // TODO: make it work with all transports and federation secrets
     let global_api = DynGlobalApi::from_endpoints(
         cfg.consensus
-            .api_endpoints
+            .api_endpoints()
             .iter()
             .map(|(&peer_id, url)| (peer_id, url.url.clone())),
         &None,
@@ -98,7 +103,7 @@ pub async fn run(
 
                 let module = module_init
                     .init(
-                        NumPeers::from(cfg.consensus.api_endpoints.len()),
+                        NumPeers::from(cfg.consensus.api_endpoints().len()),
                         cfg.get_module_config(*module_id)?,
                         db.with_prefix_module_id(*module_id).0,
                         task_group,
@@ -153,11 +158,15 @@ pub async fn run(
 
     let api_handler = start_consensus_api(
         &cfg.local,
-        consensus_api,
+        consensus_api.clone(),
         force_api_secrets.clone(),
         api_bind_addr,
     )
     .await;
+
+    if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
+        start_iroh_api(iroh_api_sk, consensus_api, task_group).await;
+    }
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
 
@@ -192,7 +201,7 @@ pub async fn run(
             &Connector::default(),
         ),
         self_id_str: cfg.local.identity.to_string(),
-        peer_id_str: (0..cfg.consensus.api_endpoints.len())
+        peer_id_str: (0..cfg.consensus.api_endpoints().len())
             .map(|x| x.to_string())
             .collect(),
         cfg: cfg.clone(),
@@ -305,4 +314,153 @@ fn submit_module_ci_proposals(
             }
         },
     );
+}
+
+async fn start_iroh_api(
+    secret_key: iroh::SecretKey,
+    consensus_api: ConsensusApi,
+    task_group: &TaskGroup,
+) {
+    let endpoint = Endpoint::builder()
+        .discovery_n0()
+        .secret_key(secret_key)
+        .alpns(vec![FEDIMINT_API_ALPN.to_vec()])
+        .bind()
+        .await
+        .expect("Failed to bind iroh api");
+
+    task_group.spawn_cancellable(
+        "iroh-api",
+        run_iroh_api(consensus_api, endpoint, task_group.clone()),
+    );
+}
+
+async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_group: TaskGroup) {
+    let core_api = server_endpoints()
+        .into_iter()
+        .map(|endpoint| (endpoint.path.to_string(), endpoint))
+        .collect::<BTreeMap<String, ApiEndpoint<ConsensusApi>>>();
+
+    let module_api = consensus_api
+        .modules
+        .iter_modules()
+        .map(|(id, _, module)| {
+            let api_endpoints = module
+                .api_endpoints()
+                .into_iter()
+                .map(|endpoint| (endpoint.path.to_string(), endpoint))
+                .collect::<BTreeMap<String, ApiEndpoint<DynServerModule>>>();
+
+            (id, api_endpoints)
+        })
+        .collect::<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>();
+
+    let consensus_api = Arc::new(consensus_api);
+    let core_api = Arc::new(core_api);
+    let module_api = Arc::new(module_api);
+
+    loop {
+        match endpoint.accept().await {
+            Some(incoming) => {
+                task_group.spawn_cancellable(
+                    "handle-iroh-connection",
+                    handle_incoming(
+                        consensus_api.clone(),
+                        core_api.clone(),
+                        module_api.clone(),
+                        task_group.clone(),
+                        incoming,
+                    )
+                    .then(|result| async {
+                        if let Err(e) = result {
+                            warn!(target: LOG_NET_API, "Failed to handle iroh connection {e}");
+                        }
+                    }),
+                );
+            }
+            None => return,
+        }
+    }
+}
+
+async fn handle_incoming(
+    consensus_api: Arc<ConsensusApi>,
+    core_api: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
+    task_group: TaskGroup,
+    incoming: Incoming,
+) -> anyhow::Result<()> {
+    let connection = incoming.accept()?.await?;
+
+    loop {
+        let connection_result = connection.accept_bi().await;
+
+        task_group.spawn_cancellable(
+            "handle-iroh-request",
+            handle_request(
+                consensus_api.clone(),
+                core_api.clone(),
+                module_api.clone(),
+                connection_result,
+            )
+            .then(|result| async {
+                if let Err(e) = result {
+                    warn!(target: LOG_NET_API, "Failed to handle iroh request {e}");
+                }
+            }),
+        );
+    }
+}
+
+async fn handle_request(
+    consensus_api: Arc<ConsensusApi>,
+    core_api: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
+    connection_result: Result<(SendStream, RecvStream), ConnectionError>,
+) -> anyhow::Result<()> {
+    let (mut send_stream, mut receive_stream) = connection_result?;
+
+    let request = receive_stream.read_to_end(100_000).await?;
+
+    let request = serde_json::from_slice::<IrohApiRequest>(&request)?;
+
+    let response = await_response(consensus_api, core_api, module_api, request).await;
+
+    let response = serde_json::to_vec(&response)?;
+
+    send_stream.write_all(&response).await?;
+
+    send_stream.finish()?;
+
+    Ok(())
+}
+
+async fn await_response(
+    consensus_api: Arc<ConsensusApi>,
+    core_api: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
+    module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
+    request: IrohApiRequest,
+) -> Result<Value, ApiError> {
+    match request.method {
+        ApiMethod::Core(method) => {
+            let endpoint = core_api.get(&method).ok_or(ApiError::not_found(method))?;
+
+            let (state, context) = consensus_api.context(&request.request, None).await;
+
+            (endpoint.handler)(state, context, request.request).await
+        }
+        ApiMethod::Module(module_id, method) => {
+            let endpoint = module_api
+                .get(&module_id)
+                .ok_or(ApiError::not_found(module_id.to_string()))?
+                .get(&method)
+                .ok_or(ApiError::not_found(method))?;
+
+            let (state, context) = consensus_api
+                .context(&request.request, Some(module_id))
+                .await;
+
+            (endpoint.handler)(state, context, request.request).await
+        }
+    }
 }

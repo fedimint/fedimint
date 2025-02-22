@@ -10,9 +10,7 @@ use std::{env, unreachable};
 
 use anyhow::{anyhow, bail, format_err, Context, Result};
 use fedimint_api_client::api::StatusResponse;
-use fedimint_core::admin_client::{
-    ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams, ServerStatus,
-};
+use fedimint_core::admin_client::{PeerServerParams, ServerStatus};
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
 use fedimint_core::module::ApiAuth;
@@ -696,7 +694,12 @@ impl FedimintCli {
         .await
     }
 
-    pub async fn set_local_params_leader(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+    pub async fn set_local_params_leader(
+        self,
+        peer: &PeerId,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<String> {
         let json = cmd!(
             self,
             "--password",
@@ -706,7 +709,7 @@ impl FedimintCli {
             "--ws",
             endpoint,
             "set-local-params",
-            "Devimint Leader",
+            format!("Devimint Guardian {peer}"),
             "--federation-name",
             "Devimint Federation"
         )
@@ -716,7 +719,12 @@ impl FedimintCli {
         Ok(serde_json::from_value(json)?)
     }
 
-    pub async fn set_local_params_follower(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+    pub async fn set_local_params_follower(
+        self,
+        peer: &PeerId,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<String> {
         let json = cmd!(
             self,
             "--password",
@@ -726,7 +734,7 @@ impl FedimintCli {
             "--ws",
             endpoint,
             "set-local-params",
-            "Devimint Follower"
+            format!("Devimint Guardian {peer}")
         )
         .out_json()
         .await?;
@@ -812,24 +820,6 @@ impl FedimintCli {
         .await
     }
 
-    pub async fn consensus_config_gen_params(
-        self,
-        endpoint: &str,
-    ) -> Result<ConfigGenParamsResponse> {
-        let result = cmd!(
-            self,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "consensus-config-gen-params"
-        )
-        .out_json()
-        .await
-        .context("non-json returned for consensus_config_gen_params")?;
-        Ok(serde_json::from_value(result)?)
-    }
-
     pub async fn consensus_config_gen_params_legacy(
         self,
         endpoint: &str,
@@ -845,27 +835,6 @@ impl FedimintCli {
         .out_json()
         .await
         .context("non-json returned for consensus_config_gen_params")?;
-        Ok(serde_json::from_value(result)?)
-    }
-
-    pub async fn get_default_config_gen_params(
-        self,
-        auth: &ApiAuth,
-        endpoint: &str,
-    ) -> Result<ConfigGenParamsRequest> {
-        let result = cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "get-default-config-gen-params"
-        )
-        .out_json()
-        .await
-        .context("non-json returned for get_default_config_gen_params")?;
         Ok(serde_json::from_value(result)?)
     }
 

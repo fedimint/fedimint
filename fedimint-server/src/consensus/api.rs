@@ -59,11 +59,10 @@ use tracing::{debug, info, warn};
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
-use crate::config::ServerConfig;
+use crate::config::{legacy_consensus_config_hash, ServerConfig};
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
-use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 use crate::net::api::{check_auth, ApiResult, GuardianAuthToken, HasApiContext};
@@ -78,7 +77,6 @@ pub struct ConsensusApi {
     pub modules: ServerModuleRegistry,
     /// Cached client config
     pub client_cfg: ClientConfig,
-
     pub force_api_secret: Option<String>,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
@@ -633,7 +631,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
-                Ok(fedimint.cfg.consensus.consensus_hash())
+                Ok(legacy_consensus_config_hash(&fedimint.cfg.consensus))
             }
         },
         api_endpoint! {

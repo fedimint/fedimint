@@ -13,13 +13,9 @@ pub mod as_hex;
 mod bls12_381;
 pub mod btc;
 mod collections;
+mod iroh;
 mod secp256k1;
 mod threshold_crypto;
-
-#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
-mod iroh;
-#[cfg(not(target_family = "wasm"))]
-mod tls;
 
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};

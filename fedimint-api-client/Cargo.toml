@@ -19,7 +19,7 @@ tor = [
     "arti-client/rustls",
     "arti-client/onion-service-client",
 ]
-iroh = ["dep:iroh", "fedimint-core/iroh"]
+iroh = ["dep:iroh"]
 
 [lib]
 name = "fedimint_api_client"

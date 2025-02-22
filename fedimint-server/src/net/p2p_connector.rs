@@ -9,7 +9,6 @@ use std::sync::Arc;
 use anyhow::{ensure, format_err, Context};
 use async_trait::async_trait;
 use fedimint_core::config::PeerUrl;
-use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use iroh::{Endpoint, NodeId, SecretKey};
@@ -236,7 +235,7 @@ pub struct IrohConnector {
     pub endpoint: Endpoint,
 }
 
-const FEDIMINT_P2P_ALPN: &[u8] = "FEDIMINT_P2P_ALPN".as_bytes();
+const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";
 
 impl IrohConnector {
     pub async fn new(secret_key: SecretKey, node_ids: BTreeMap<PeerId, NodeId>) -> Self {
@@ -265,7 +264,7 @@ impl IrohConnector {
 #[async_trait]
 impl<M> IP2PConnector<M> for IrohConnector
 where
-    M: Encodable + Decodable + Send + 'static,
+    M: Serialize + DeserializeOwned + Send + 'static,
 {
     fn peers(&self) -> Vec<PeerId> {
         self.node_ids.keys().copied().collect()

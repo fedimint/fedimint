@@ -8,7 +8,6 @@ use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client_module::AdminCreds;
-use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerConnectionInfo};
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
@@ -26,12 +25,12 @@ use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::{
-    gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ServerConfig,
+    gen_cert_and_key, ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig,
 };
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
-use fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
+use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use tokio_rustls::rustls;
 use tracing::info;
 
@@ -88,7 +87,7 @@ impl FederationTest {
         let config = self.configs.get(&peer_id).expect("peer to have config");
         DynGlobalApi::new_admin(
             peer_id,
-            config.consensus.api_endpoints[&peer_id].url.clone(),
+            config.consensus.api_endpoints()[&peer_id].url.clone(),
             &None,
             &Connector::default(),
         )
@@ -248,8 +247,8 @@ impl FederationTestBuilder {
 
         let task_group = TaskGroup::new();
         for (peer_id, cfg) in configs.clone() {
-            let p2p_bind_addr = params.get(&peer_id).expect("Must exist").local.p2p_bind;
-            let api_bind_addr = params.get(&peer_id).expect("Must exist").local.api_bind;
+            let p2p_bind_addr = params.get(&peer_id).expect("Must exist").p2p_bind;
+            let api_bind_addr = params.get(&peer_id).expect("Must exist").api_bind;
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
@@ -282,7 +281,7 @@ impl FederationTestBuilder {
             .into_dyn();
 
             task_group.spawn("fedimintd", move |_| async move {
-                consensus::run(
+                Box::pin(consensus::run(
                     connections,
                     p2p_status_receivers,
                     api_bind_addr,
@@ -293,7 +292,7 @@ impl FederationTestBuilder {
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
-                )
+                ))
                 .await
                 .expect("Could not initialise consensus");
             });
@@ -308,7 +307,7 @@ impl FederationTestBuilder {
             // defaulting to Tcp variant.
             let api = DynGlobalApi::new_admin(
                 peer_id,
-                config.consensus.api_endpoints[&peer_id].url.clone(),
+                config.consensus.api_endpoints()[&peer_id].url.clone(),
                 &None,
                 &Connector::default(),
             );
@@ -361,14 +360,17 @@ pub fn local_config_gen_params(
         .iter()
         .map(|peer| {
             let peer_port = base_port + u16::from(*peer) * 2;
+
             let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
             let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
             let params = PeerConnectionInfo {
-                cert: tls_keys[peer].0.clone().0,
-                p2p_url: p2p_url.parse().expect("Should parse"),
-                api_url: api_url.parse().expect("Should parse"),
                 name: format!("peer-{}", peer.to_usize()),
+                endpoints: PeerEndpoints::Tcp {
+                    api_url: api_url.parse().expect("Should parse"),
+                    p2p_url: p2p_url.parse().expect("Should parse"),
+                    cert: tls_keys[peer].0.clone().0,
+                },
                 federation_name: None,
             };
             (*peer, params)
@@ -378,27 +380,27 @@ pub fn local_config_gen_params(
     peers
         .iter()
         .map(|peer| {
-            let p2p_bind = parse_host_port(&connections[peer].clone().p2p_url)?;
-            let api_bind = parse_host_port(&connections[peer].clone().api_url)?;
+            let peer_port = base_port + u16::from(*peer) * 2;
+
+            let p2p_bind = format!("127.0.0.1:{peer_port}");
+            let api_bind = format!("127.0.0.1:{}", peer_port + 1);
 
             let params = ConfigGenParams {
-                local: ConfigGenParamsLocal {
-                    our_id: *peer,
-                    our_private_key: tls_keys[peer].1.clone(),
-                    api_auth: API_AUTH.clone(),
-                    p2p_bind: p2p_bind.parse().expect("Valid address"),
-                    api_bind: api_bind.parse().expect("Valid address"),
-                },
-                consensus: ConfigGenParamsConsensus {
-                    peers: connections.clone(),
-                    meta: BTreeMap::from([(
-                        META_FEDERATION_NAME_KEY.to_owned(),
-                        "\"federation_name\"".to_string(),
-                    )]),
-                    modules: server_config_gen.clone(),
-                },
+                identity: *peer,
+                api_auth: API_AUTH.clone(),
+                tls_key: Some(tls_keys[peer].1.clone()),
+                iroh_api_sk: None,
+                iroh_p2p_sk: None,
+                p2p_bind: p2p_bind.parse().expect("Valid address"),
+                api_bind: api_bind.parse().expect("Valid address"),
+                peers: connections.clone(),
+                meta: BTreeMap::from([(
+                    META_FEDERATION_NAME_KEY.to_owned(),
+                    "\"federation_name\"".to_string(),
+                )]),
+                modules: server_config_gen.clone(),
             };
             Ok((*peer, params))
         })
-        .collect::<anyhow::Result<HashMap<_, _>>>()
+        .collect()
 }
