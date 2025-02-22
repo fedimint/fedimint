@@ -1261,38 +1261,7 @@
 <a href="#1260" id="1260">1260</a>
 <a href="#1261" id="1261">1261</a>
 <a href="#1262" id="1262">1262</a>
-<a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a>
-<a href="#1265" id="1265">1265</a>
-<a href="#1266" id="1266">1266</a>
-<a href="#1267" id="1267">1267</a>
-<a href="#1268" id="1268">1268</a>
-<a href="#1269" id="1269">1269</a>
-<a href="#1270" id="1270">1270</a>
-<a href="#1271" id="1271">1271</a>
-<a href="#1272" id="1272">1272</a>
-<a href="#1273" id="1273">1273</a>
-<a href="#1274" id="1274">1274</a>
-<a href="#1275" id="1275">1275</a>
-<a href="#1276" id="1276">1276</a>
-<a href="#1277" id="1277">1277</a>
-<a href="#1278" id="1278">1278</a>
-<a href="#1279" id="1279">1279</a>
-<a href="#1280" id="1280">1280</a>
-<a href="#1281" id="1281">1281</a>
-<a href="#1282" id="1282">1282</a>
-<a href="#1283" id="1283">1283</a>
-<a href="#1284" id="1284">1284</a>
-<a href="#1285" id="1285">1285</a>
-<a href="#1286" id="1286">1286</a>
-<a href="#1287" id="1287">1287</a>
-<a href="#1288" id="1288">1288</a>
-<a href="#1289" id="1289">1289</a>
-<a href="#1290" id="1290">1290</a>
-<a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
-<a href="#1293" id="1293">1293</a>
-<a href="#1294" id="1294">1294</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#1263" id="1263">1263</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -1304,9 +1273,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail, format_err, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_api_client::api::StatusResponse;
-<span class="kw">use </span>fedimint_core::admin_client::{
-    ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams, ServerStatus,
-};
+<span class="kw">use </span>fedimint_core::admin_client::{PeerServerParams, ServerStatus};
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
 <span class="kw">use </span>fedimint_core::module::ApiAuth;
@@ -1990,7 +1957,12 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>set_local_params_leader(<span class="self">self</span>, auth: <span class="kw-2">&amp;</span>ApiAuth, endpoint: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">pub async fn </span>set_local_params_leader(
+        <span class="self">self</span>,
+        peer: <span class="kw-2">&amp;</span>PeerId,
+        auth: <span class="kw-2">&amp;</span>ApiAuth,
+        endpoint: <span class="kw-2">&amp;</span>str,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>json = <span class="macro">cmd!</span>(
             <span class="self">self</span>,
             <span class="string">"--password"</span>,
@@ -2000,7 +1972,7 @@
             <span class="string">"--ws"</span>,
             endpoint,
             <span class="string">"set-local-params"</span>,
-            <span class="string">"Devimint Leader"</span>,
+            <span class="macro">format!</span>(<span class="string">"Devimint Guardian {peer}"</span>),
             <span class="string">"--federation-name"</span>,
             <span class="string">"Devimint Federation"
         </span>)
@@ -2010,7 +1982,12 @@
         <span class="prelude-val">Ok</span>(serde_json::from_value(json)<span class="question-mark">?</span>)
     }
 
-    <span class="kw">pub async fn </span>set_local_params_follower(<span class="self">self</span>, auth: <span class="kw-2">&amp;</span>ApiAuth, endpoint: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">pub async fn </span>set_local_params_follower(
+        <span class="self">self</span>,
+        peer: <span class="kw-2">&amp;</span>PeerId,
+        auth: <span class="kw-2">&amp;</span>ApiAuth,
+        endpoint: <span class="kw-2">&amp;</span>str,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>json = <span class="macro">cmd!</span>(
             <span class="self">self</span>,
             <span class="string">"--password"</span>,
@@ -2020,8 +1997,8 @@
             <span class="string">"--ws"</span>,
             endpoint,
             <span class="string">"set-local-params"</span>,
-            <span class="string">"Devimint Follower"
-        </span>)
+            <span class="macro">format!</span>(<span class="string">"Devimint Guardian {peer}"</span>)
+        )
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2106,24 +2083,6 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>consensus_config_gen_params(
-        <span class="self">self</span>,
-        endpoint: <span class="kw-2">&amp;</span>str,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfigGenParamsResponse&gt; {
-        <span class="kw">let </span>result = <span class="macro">cmd!</span>(
-            <span class="self">self</span>,
-            <span class="string">"admin"</span>,
-            <span class="string">"dkg"</span>,
-            <span class="string">"--ws"</span>,
-            endpoint,
-            <span class="string">"consensus-config-gen-params"
-        </span>)
-        .out_json()
-        .<span class="kw">await
-        </span>.context(<span class="string">"non-json returned for consensus_config_gen_params"</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(serde_json::from_value(result)<span class="question-mark">?</span>)
-    }
-
     <span class="kw">pub async fn </span>consensus_config_gen_params_legacy(
         <span class="self">self</span>,
         endpoint: <span class="kw-2">&amp;</span>str,
@@ -2139,27 +2098,6 @@
         .out_json()
         .<span class="kw">await
         </span>.context(<span class="string">"non-json returned for consensus_config_gen_params"</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(serde_json::from_value(result)<span class="question-mark">?</span>)
-    }
-
-    <span class="kw">pub async fn </span>get_default_config_gen_params(
-        <span class="self">self</span>,
-        auth: <span class="kw-2">&amp;</span>ApiAuth,
-        endpoint: <span class="kw-2">&amp;</span>str,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfigGenParamsRequest&gt; {
-        <span class="kw">let </span>result = <span class="macro">cmd!</span>(
-            <span class="self">self</span>,
-            <span class="string">"--password"</span>,
-            <span class="kw-2">&amp;</span>auth.<span class="number">0</span>,
-            <span class="string">"admin"</span>,
-            <span class="string">"dkg"</span>,
-            <span class="string">"--ws"</span>,
-            endpoint,
-            <span class="string">"get-default-config-gen-params"
-        </span>)
-        .out_json()
-        .<span class="kw">await
-        </span>.context(<span class="string">"non-json returned for get_default_config_gen_params"</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(serde_json::from_value(result)<span class="question-mark">?</span>)
     }
 

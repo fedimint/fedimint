@@ -777,9 +777,7 @@
 <a href="#776" id="776">776</a>
 <a href="#777" id="777">777</a>
 <a href="#778" id="778">778</a>
-<a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
+<a href="#779" id="779">779</a></pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -840,11 +838,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
-<span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::config::{legacy_consensus_config_hash, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::engine::get_finished_session_count_static;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{check_auth, ApiResult, GuardianAuthToken, HasApiContext};
@@ -859,7 +856,6 @@
     </span><span class="kw">pub </span>modules: ServerModuleRegistry,
     <span class="doccomment">/// Cached client config
     </span><span class="kw">pub </span>client_cfg: ClientConfig,
-
     <span class="kw">pub </span>force_api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// For sending API events to consensus such as transactions
     </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;ConsensusItem&gt;,
@@ -1414,7 +1410,7 @@
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; sha256::Hash {
-                <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.consensus_hash())
+                <span class="prelude-val">Ok</span>(legacy_consensus_config_hash(<span class="kw-2">&amp;</span>fedimint.cfg.consensus))
             }
         },
         <span class="macro">api_endpoint!</span> {

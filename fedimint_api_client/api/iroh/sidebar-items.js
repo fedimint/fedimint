@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_ALPN"],"struct":["IrohConnector","IrohRequest"]};
+window.SIDEBAR_ITEMS = {"struct":["IrohConnector"]};

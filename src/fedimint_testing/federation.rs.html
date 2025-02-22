@@ -402,7 +402,9 @@
 <a href="#401" id="401">401</a>
 <a href="#402" id="402">402</a>
 <a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::{Arc, LazyLock};
 <span class="kw">use </span>std::time::Duration;
 
@@ -412,7 +414,6 @@
 <span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
 <span class="kw">use </span>fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client_module::AdminCreds;
-<span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerConnectionInfo};
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
 };
@@ -430,12 +431,12 @@
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
 <span class="kw">use </span>fedimint_server::config::{
-    gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ServerConfig,
+    gen_cert_and_key, ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig,
 };
 <span class="kw">use </span>fedimint_server::consensus;
 <span class="kw">use </span>fedimint_server::core::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
-<span class="kw">use </span>fedimint_server::net::p2p_connector::{parse_host_port, IP2PConnector, TlsTcpConnector};
+<span class="kw">use </span>fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
 
@@ -492,7 +493,7 @@
         <span class="kw">let </span>config = <span class="self">self</span>.configs.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"peer to have config"</span>);
         DynGlobalApi::new_admin(
             peer_id,
-            config.consensus.api_endpoints[<span class="kw-2">&amp;</span>peer_id].url.clone(),
+            config.consensus.api_endpoints()[<span class="kw-2">&amp;</span>peer_id].url.clone(),
             <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
             <span class="kw-2">&amp;</span>Connector::default(),
         )
@@ -652,8 +653,8 @@
 
         <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">for </span>(peer_id, cfg) <span class="kw">in </span>configs.clone() {
-            <span class="kw">let </span>p2p_bind_addr = params.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"Must exist"</span>).local.p2p_bind;
-            <span class="kw">let </span>api_bind_addr = params.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"Must exist"</span>).local.api_bind;
+            <span class="kw">let </span>p2p_bind_addr = params.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"Must exist"</span>).p2p_bind;
+            <span class="kw">let </span>api_bind_addr = params.get(<span class="kw-2">&amp;</span>peer_id).expect(<span class="string">"Must exist"</span>).api_bind;
             <span class="kw">if </span>u16::from(peer_id) &gt;= <span class="self">self</span>.num_peers - <span class="self">self</span>.num_offline {
                 <span class="kw">continue</span>;
             }
@@ -686,7 +687,7 @@
             .into_dyn();
 
             task_group.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                consensus::run(
+                Box::pin(consensus::run(
                     connections,
                     p2p_status_receivers,
                     api_bind_addr,
@@ -697,7 +698,7 @@
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
-                )
+                ))
                 .<span class="kw">await
                 </span>.expect(<span class="string">"Could not initialise consensus"</span>);
             });
@@ -712,7 +713,7 @@
             // defaulting to Tcp variant.
             </span><span class="kw">let </span>api = DynGlobalApi::new_admin(
                 peer_id,
-                config.consensus.api_endpoints[<span class="kw-2">&amp;</span>peer_id].url.clone(),
+                config.consensus.api_endpoints()[<span class="kw-2">&amp;</span>peer_id].url.clone(),
                 <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
                 <span class="kw-2">&amp;</span>Connector::default(),
             );
@@ -765,14 +766,17 @@
         .iter()
         .map(|peer| {
             <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">2</span>;
+
             <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{peer_port}"</span>);
             <span class="kw">let </span>api_url = <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{}"</span>, peer_port + <span class="number">1</span>);
 
             <span class="kw">let </span>params = PeerConnectionInfo {
-                cert: tls_keys[peer].<span class="number">0</span>.clone().<span class="number">0</span>,
-                p2p_url: p2p_url.parse().expect(<span class="string">"Should parse"</span>),
-                api_url: api_url.parse().expect(<span class="string">"Should parse"</span>),
                 name: <span class="macro">format!</span>(<span class="string">"peer-{}"</span>, peer.to_usize()),
+                endpoints: PeerEndpoints::Tcp {
+                    api_url: api_url.parse().expect(<span class="string">"Should parse"</span>),
+                    p2p_url: p2p_url.parse().expect(<span class="string">"Should parse"</span>),
+                    cert: tls_keys[peer].<span class="number">0</span>.clone().<span class="number">0</span>,
+                },
                 federation_name: <span class="prelude-val">None</span>,
             };
             (<span class="kw-2">*</span>peer, params)
@@ -782,28 +786,28 @@
     peers
         .iter()
         .map(|peer| {
-            <span class="kw">let </span>p2p_bind = parse_host_port(<span class="kw-2">&amp;</span>connections[peer].clone().p2p_url)<span class="question-mark">?</span>;
-            <span class="kw">let </span>api_bind = parse_host_port(<span class="kw-2">&amp;</span>connections[peer].clone().api_url)<span class="question-mark">?</span>;
+            <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">2</span>;
+
+            <span class="kw">let </span>p2p_bind = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{peer_port}"</span>);
+            <span class="kw">let </span>api_bind = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, peer_port + <span class="number">1</span>);
 
             <span class="kw">let </span>params = ConfigGenParams {
-                local: ConfigGenParamsLocal {
-                    our_id: <span class="kw-2">*</span>peer,
-                    our_private_key: tls_keys[peer].<span class="number">1</span>.clone(),
-                    api_auth: API_AUTH.clone(),
-                    p2p_bind: p2p_bind.parse().expect(<span class="string">"Valid address"</span>),
-                    api_bind: api_bind.parse().expect(<span class="string">"Valid address"</span>),
-                },
-                consensus: ConfigGenParamsConsensus {
-                    peers: connections.clone(),
-                    meta: BTreeMap::from([(
-                        META_FEDERATION_NAME_KEY.to_owned(),
-                        <span class="string">"\"federation_name\""</span>.to_string(),
-                    )]),
-                    modules: server_config_gen.clone(),
-                },
+                identity: <span class="kw-2">*</span>peer,
+                api_auth: API_AUTH.clone(),
+                tls_key: <span class="prelude-val">Some</span>(tls_keys[peer].<span class="number">1</span>.clone()),
+                iroh_api_sk: <span class="prelude-val">None</span>,
+                iroh_p2p_sk: <span class="prelude-val">None</span>,
+                p2p_bind: p2p_bind.parse().expect(<span class="string">"Valid address"</span>),
+                api_bind: api_bind.parse().expect(<span class="string">"Valid address"</span>),
+                peers: connections.clone(),
+                meta: BTreeMap::from([(
+                    META_FEDERATION_NAME_KEY.to_owned(),
+                    <span class="string">"\"federation_name\""</span>.to_string(),
+                )]),
+                modules: server_config_gen.clone(),
             };
             <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))
         })
-        .collect::&lt;anyhow::Result&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;&gt;()
+        .collect()
 }
 </code></pre></div></section></main></body></html>

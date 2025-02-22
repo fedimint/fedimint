@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CONSENSUS_PROPOSAL_TIMEOUT","TRANSACTION_BUFFER"],"fn":["run","start_consensus_api","submit_module_ci_proposals"],"mod":["aleph_bft","api","db","debug","engine","transaction"]};
+window.SIDEBAR_ITEMS = {"constant":["CONSENSUS_PROPOSAL_TIMEOUT","TRANSACTION_BUFFER"],"fn":["await_response","handle_incoming","handle_request","run","run_iroh_api","start_consensus_api","start_iroh_api","submit_module_ci_proposals"],"mod":["aleph_bft","api","db","debug","engine","transaction"]};

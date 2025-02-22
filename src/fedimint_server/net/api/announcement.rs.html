@@ -133,7 +133,9 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
@@ -239,7 +241,9 @@
     }
 
     <span class="kw">let </span>api_announcement = ApiAnnouncement::new(
-        cfg.consensus.api_endpoints[<span class="kw-2">&amp;</span>cfg.local.identity].url.clone(),
+        cfg.consensus.api_endpoints()[<span class="kw-2">&amp;</span>cfg.local.identity]
+            .url
+            .clone(),
         <span class="number">0</span>,
     );
     <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
@@ -260,7 +264,7 @@
 </span><span class="kw">pub async fn </span>get_api_urls(db: <span class="kw-2">&amp;</span>Database, cfg: <span class="kw-2">&amp;</span>ServerConfigConsensus) -&gt; BTreeMap&lt;PeerId, SafeUrl&gt; {
     override_api_urls(
         db,
-        cfg.api_endpoints
+        cfg.api_endpoints()
             .iter()
             .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
         <span class="kw-2">&amp;</span>ApiAnnouncementPrefix,

@@ -393,14 +393,41 @@
 <a href="#392" id="392">392</a>
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<span class="kw">use </span>std::mem::discriminant;
 
 <span class="kw">use </span>anyhow::{ensure, Context};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_bitcoind::create_bitcoind;
-<span class="kw">use </span>fedimint_core::admin_client::{
-    ConfigGenParamsConsensus, PeerConnectionInfo, ServerStatus, SetLocalParamsRequest,
-};
+<span class="kw">use </span>fedimint_core::admin_client::{ServerStatus, SetLocalParamsRequest};
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
@@ -411,14 +438,16 @@
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>iroh::SecretKey;
+<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::mpsc::Sender;
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tokio_rustls::rustls;
 
-<span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ConfigGenParamsLocal, ConfigGenSettings};
+<span class="kw">use </span><span class="kw">super</span>::PeerEndpoints;
+<span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ConfigGenSettings, PeerConnectionInfo};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{check_auth, ApiResult, HasApiContext};
 
 <span class="doccomment">/// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -427,7 +456,7 @@
     <span class="doccomment">/// Our local connection
     </span>local_params: <span class="prelude-ty">Option</span>&lt;LocalParams&gt;,
     <span class="doccomment">/// Connection info received from other guardians
-    </span>connection_info: BTreeMap&lt;SafeUrl, PeerConnectionInfo&gt;,
+    </span>connection_info: BTreeSet&lt;PeerConnectionInfo&gt;,
 }
 
 <span class="attr">#[derive(Clone, Debug)]
@@ -436,9 +465,13 @@
     <span class="doccomment">/// Our auth string
     </span>auth: ApiAuth,
     <span class="doccomment">/// Our TLS private key
-    </span>tls_private: rustls::PrivateKey,
-    <span class="doccomment">/// Our TLS public cert
-    </span>tls_cert: rustls::Certificate,
+    </span>tls_key: <span class="prelude-ty">Option</span>&lt;rustls::PrivateKey&gt;,
+    <span class="doccomment">/// Optional secret key for our iroh api endpoint
+    </span>iroh_api_sk: <span class="prelude-ty">Option</span>&lt;iroh::SecretKey&gt;,
+    <span class="doccomment">/// Optional secret key for our iroh p2p endpoint
+    </span>iroh_p2p_sk: <span class="prelude-ty">Option</span>&lt;iroh::SecretKey&gt;,
+    <span class="doccomment">/// Our api and p2p endpoint
+    </span>endpoints: PeerEndpoints,
     <span class="doccomment">/// Name of the peer, used in TLS auth
     </span>name: String,
     <span class="doccomment">/// Federation name set by the leader
@@ -475,7 +508,7 @@
                 state
                     .connection_info
                     .clone()
-                    .into_values()
+                    .into_iter()
                     .map(|info| info.name)
                     .collect(),
             ),
@@ -516,34 +549,54 @@
             </span>);
 
             <span class="kw">let </span>info = PeerConnectionInfo {
-                cert: lp.tls_cert.clone().<span class="number">0</span>,
-                p2p_url: <span class="self">self</span>.settings.p2p_url.clone(),
-                api_url: <span class="self">self</span>.settings.api_url.clone(),
                 name: lp.name,
+                endpoints: lp.endpoints,
                 federation_name: lp.federation_name,
             };
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(info);
         }
 
-        <span class="kw">let </span>(tls_cert, tls_private) = gen_cert_and_key(<span class="kw-2">&amp;</span>request.name)
-            .expect(<span class="string">"Failed to generate TLS for given guardian name"</span>);
+        <span class="kw">let </span>lp = <span class="kw">if </span><span class="bool-val">true </span>{
+            <span class="kw">let </span>(tls_cert, tls_key) = gen_cert_and_key(<span class="kw-2">&amp;</span>request.name)
+                .expect(<span class="string">"Failed to generate TLS for given guardian name"</span>);
 
-        <span class="kw">let </span>lp = LocalParams {
-            auth,
-            tls_cert,
-            tls_private,
-            name: request.name,
-            federation_name: request.federation_name,
+            LocalParams {
+                auth,
+                tls_key: <span class="prelude-val">Some</span>(tls_key),
+                iroh_api_sk: <span class="prelude-val">None</span>,
+                iroh_p2p_sk: <span class="prelude-val">None</span>,
+                endpoints: PeerEndpoints::Tcp {
+                    api_url: <span class="self">self</span>.settings.api_url.clone(),
+                    p2p_url: <span class="self">self</span>.settings.p2p_url.clone(),
+                    cert: tls_cert.<span class="number">0</span>,
+                },
+                name: request.name,
+                federation_name: request.federation_name,
+            }
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>iroh_api_sk = SecretKey::generate(<span class="kw-2">&amp;mut </span>OsRng);
+            <span class="kw">let </span>iroh_p2p_sk = SecretKey::generate(<span class="kw-2">&amp;mut </span>OsRng);
+
+            LocalParams {
+                auth,
+                tls_key: <span class="prelude-val">None</span>,
+                iroh_api_sk: <span class="prelude-val">Some</span>(iroh_api_sk.clone()),
+                iroh_p2p_sk: <span class="prelude-val">Some</span>(iroh_p2p_sk.clone()),
+                endpoints: PeerEndpoints::Iroh {
+                    api_pk: iroh_api_sk.public(),
+                    p2p_pk: iroh_p2p_sk.public(),
+                },
+                name: request.name,
+                federation_name: request.federation_name,
+            }
         };
 
         state.local_params = <span class="prelude-val">Some</span>(lp.clone());
 
         <span class="kw">let </span>info = PeerConnectionInfo {
-            cert: lp.tls_cert.clone().<span class="number">0</span>,
-            p2p_url: <span class="self">self</span>.settings.p2p_url.clone(),
-            api_url: <span class="self">self</span>.settings.api_url.clone(),
             name: lp.name,
+            endpoints: lp.endpoints,
             federation_name: lp.federation_name,
         };
 
@@ -551,16 +604,25 @@
     }
 
     <span class="kw">pub async fn </span>add_peer_connection_info(<span class="kw-2">&amp;</span><span class="self">self</span>, info: PeerConnectionInfo) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">ensure!</span>(
-            info.api_url != <span class="self">self</span>.settings.api_url,
-            <span class="string">"You cannot add your own connection info"
-        </span>);
-
         <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().<span class="kw">await</span>;
+
+        <span class="kw">if </span>state.connection_info.contains(<span class="kw-2">&amp;</span>info) {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
+        <span class="kw">let </span>local_params = state
+            .local_params
+            .clone()
+            .expect(<span class="string">"The endpoint is authenticated."</span>);
+
+        <span class="macro">ensure!</span>(
+            discriminant(<span class="kw-2">&amp;</span>info.endpoints) == discriminant(<span class="kw-2">&amp;</span>local_params.endpoints),
+            <span class="string">"Guardian has different endpoint variant (TCP/Iroh) than us."</span>,
+        );
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(federation_name) = state
             .connection_info
-            .values()
+            .iter()
             .find_map(|info| info.federation_name.clone())
         {
             <span class="macro">ensure!</span>(
@@ -569,7 +631,7 @@
             </span>);
         }
 
-        state.connection_info.insert(info.api_url.clone(), info);
+        state.connection_info.insert(info);
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -583,45 +645,39 @@
             .expect(<span class="string">"The endpoint is authenticated."</span>);
 
         <span class="kw">let </span>our_peer_info = PeerConnectionInfo {
-            cert: local_params.tls_cert.<span class="number">0</span>,
-            p2p_url: <span class="self">self</span>.settings.p2p_url.clone(),
-            api_url: <span class="self">self</span>.settings.api_url.clone(),
             name: local_params.name,
+            endpoints: local_params.endpoints,
             federation_name: local_params.federation_name,
         };
 
-        state
-            .connection_info
-            .insert(our_peer_info.api_url.clone(), our_peer_info);
+        state.connection_info.insert(our_peer_info.clone());
 
         <span class="kw">let </span>federation_name = state
             .connection_info
-            .values()
+            .iter()
             .find_map(|info| info.federation_name.clone())
             .context(<span class="string">"We need one leader to configure the federation name"</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>our_id = state
             .connection_info
-            .keys()
-            .position(|url| <span class="kw-2">*</span>url == <span class="self">self</span>.settings.api_url)
+            .iter()
+            .position(|info| info == <span class="kw-2">&amp;</span>our_peer_info)
             .expect(<span class="string">"We inserted the key above."</span>);
 
         <span class="kw">let </span>params = ConfigGenParams {
-            local: ConfigGenParamsLocal {
-                our_id: PeerId::from(our_id <span class="kw">as </span>u16),
-                our_private_key: local_params.tls_private,
-                api_auth: local_params.auth,
-                p2p_bind: <span class="self">self</span>.settings.p2p_bind,
-                api_bind: <span class="self">self</span>.settings.api_bind,
-            },
-            consensus: ConfigGenParamsConsensus {
-                peers: (<span class="number">0</span>..)
-                    .map(|i| PeerId::from(i <span class="kw">as </span>u16))
-                    .zip(state.connection_info.values().cloned())
-                    .collect(),
-                meta: BTreeMap::from_iter(<span class="macro">vec!</span>[(<span class="string">"federation_name"</span>.to_string(), federation_name)]),
-                modules: <span class="self">self</span>.settings.default_params.modules.clone(),
-            },
+            identity: PeerId::from(our_id <span class="kw">as </span>u16),
+            tls_key: local_params.tls_key,
+            iroh_api_sk: local_params.iroh_api_sk,
+            iroh_p2p_sk: local_params.iroh_p2p_sk,
+            api_auth: local_params.auth,
+            p2p_bind: <span class="self">self</span>.settings.p2p_bind,
+            api_bind: <span class="self">self</span>.settings.api_bind,
+            peers: (<span class="number">0</span>..)
+                .map(|i| PeerId::from(i <span class="kw">as </span>u16))
+                .zip(state.connection_info.clone().into_iter())
+                .collect(),
+            meta: BTreeMap::from_iter(<span class="macro">vec!</span>[(<span class="string">"federation_name"</span>.to_string(), federation_name)]),
+            modules: <span class="self">self</span>.settings.modules.clone(),
         };
 
         <span class="self">self</span>.sender

@@ -1349,55 +1349,8 @@
 <a href="#1348" id="1348">1348</a>
 <a href="#1349" id="1349">1349</a>
 <a href="#1350" id="1350">1350</a>
-<a href="#1351" id="1351">1351</a>
-<a href="#1352" id="1352">1352</a>
-<a href="#1353" id="1353">1353</a>
-<a href="#1354" id="1354">1354</a>
-<a href="#1355" id="1355">1355</a>
-<a href="#1356" id="1356">1356</a>
-<a href="#1357" id="1357">1357</a>
-<a href="#1358" id="1358">1358</a>
-<a href="#1359" id="1359">1359</a>
-<a href="#1360" id="1360">1360</a>
-<a href="#1361" id="1361">1361</a>
-<a href="#1362" id="1362">1362</a>
-<a href="#1363" id="1363">1363</a>
-<a href="#1364" id="1364">1364</a>
-<a href="#1365" id="1365">1365</a>
-<a href="#1366" id="1366">1366</a>
-<a href="#1367" id="1367">1367</a>
-<a href="#1368" id="1368">1368</a>
-<a href="#1369" id="1369">1369</a>
-<a href="#1370" id="1370">1370</a>
-<a href="#1371" id="1371">1371</a>
-<a href="#1372" id="1372">1372</a>
-<a href="#1373" id="1373">1373</a>
-<a href="#1374" id="1374">1374</a>
-<a href="#1375" id="1375">1375</a>
-<a href="#1376" id="1376">1376</a>
-<a href="#1377" id="1377">1377</a>
-<a href="#1378" id="1378">1378</a>
-<a href="#1379" id="1379">1379</a>
-<a href="#1380" id="1380">1380</a>
-<a href="#1381" id="1381">1381</a>
-<a href="#1382" id="1382">1382</a>
-<a href="#1383" id="1383">1383</a>
-<a href="#1384" id="1384">1384</a>
-<a href="#1385" id="1385">1385</a>
-<a href="#1386" id="1386">1386</a>
-<a href="#1387" id="1387">1387</a>
-<a href="#1388" id="1388">1388</a>
-<a href="#1389" id="1389">1389</a>
-<a href="#1390" id="1390">1390</a>
-<a href="#1391" id="1391">1391</a>
-<a href="#1392" id="1392">1392</a>
-<a href="#1393" id="1393">1393</a>
-<a href="#1394" id="1394">1394</a>
-<a href="#1395" id="1395">1395</a>
-<a href="#1396" id="1396">1396</a>
-<a href="#1397" id="1397">1397</a>
-<a href="#1398" id="1398">1398</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
+<a href="#1351" id="1351">1351</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::iter::once;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::result;
@@ -1413,8 +1366,7 @@
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">pub use </span>error::{FederationError, OutputOutcomeError, PeerError};
 <span class="kw">use </span>fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
-    ServerStatus, ServerStatusLegacy,
+    ConfigGenConnectionsRequest, PeerServerParams, ServerStatus, ServerStatusLegacy,
 };
 <span class="kw">use </span>fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
@@ -1422,7 +1374,9 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
+<span class="kw">use </span>fedimint_core::module::{
+    ApiAuth, ApiMethod, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
+};
 <span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
@@ -1875,9 +1829,6 @@
 
     <span class="kw">async fn </span>await_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: TransactionId) -&gt; TransactionId;
 
-    <span class="doccomment">/// Fetches the server consensus hash if enough peers agree on it
-    </span><span class="kw">async fn </span>server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;sha256::Hash&gt;;
-
     <span class="kw">async fn </span>upload_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, request: <span class="kw-2">&amp;</span>SignedBackupRequest) -&gt; FederationResult&lt;()&gt;;
 
     <span class="kw">async fn </span>download_backup(
@@ -1929,27 +1880,6 @@
     ///
     /// Could be called on the leader, so it's not authenticated
     </span><span class="kw">async fn </span>get_config_gen_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;PeerServerParams&gt;&gt;;
-
-    <span class="doccomment">/// Gets the default config gen params which can be configured by the
-    /// leader, gives them a template to modify
-    </span><span class="kw">async fn </span>get_default_config_gen_params(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        auth: ApiAuth,
-    ) -&gt; FederationResult&lt;ConfigGenParamsRequest&gt;;
-
-    <span class="doccomment">/// Leader sets the consensus params, everyone sets the local params
-    ///
-    /// After calling this `ConfigGenParams` can be created for DKG
-    </span><span class="kw">async fn </span>set_config_gen_params(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        requested: ConfigGenParamsRequest,
-        auth: ApiAuth,
-    ) -&gt; FederationResult&lt;()&gt;;
-
-    <span class="doccomment">/// Returns the consensus config gen params, followers will delegate this
-    /// call to the leader.  Once this endpoint returns successfully we can run
-    /// DKG.
-    </span><span class="kw">async fn </span>consensus_config_gen_params(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;ConfigGenParamsResponse&gt;;
 
     <span class="doccomment">/// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500
@@ -2344,21 +2274,6 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-</span><span class="kw">pub enum </span>ApiMethod {
-    Core(String),
-    Module(ModuleInstanceId, String),
-}
-
-<span class="kw">impl </span>fmt::Display <span class="kw">for </span>ApiMethod {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-        <span class="kw">match </span><span class="self">self </span>{
-            ApiMethod::Core(s) =&gt; f.write_str(s),
-            ApiMethod::Module(module_id, s) =&gt; f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{module_id}-{s}"</span>)),
-        }
-    }
-}
-
 <span class="kw">pub type </span>DynClientConnector = Arc&lt;<span class="kw">dyn </span>IClientConnector&gt;;
 
 <span class="doccomment">/// Allows to connect to peers. Connections are request based and should be
@@ -2605,18 +2520,15 @@
 
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::key::rand::rngs::OsRng;
-    <span class="kw">use </span>fedimint_core::module::{ApiError, ApiRequestErased};
+    <span class="kw">use </span>fedimint_core::module::{
+        ApiError, ApiMethod, ApiRequestErased, IrohApiRequest, FEDIMINT_API_ALPN,
+    };
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>iroh::endpoint::Connection;
     <span class="kw">use </span>iroh::{Endpoint, NodeId, SecretKey};
-    <span class="kw">use </span>serde::{Deserialize, Serialize};
     <span class="kw">use </span>serde_json::Value;
 
-    <span class="kw">use super</span>::{
-        ApiMethod, DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult,
-    };
-
-    <span class="kw">const </span>FEDIMINT_ALPN: <span class="kw-2">&amp;</span>[u8] = <span class="string">"FEDIMINT_ALPN"</span>.as_bytes();
+    <span class="kw">use super</span>::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
 
     <span class="attr">#[derive(Debug, Clone)]
     </span><span class="kw">pub struct </span>IrohConnector {
@@ -2632,7 +2544,7 @@
                 endpoint: Endpoint::builder()
                     .discovery_n0()
                     .secret_key(SecretKey::generate(<span class="kw-2">&amp;mut </span>OsRng))
-                    .alpns(<span class="macro">vec!</span>[FEDIMINT_ALPN.to_vec()])
+                    .alpns(<span class="macro">vec!</span>[FEDIMINT_API_ALPN.to_vec()])
                     .bind()
                     .<span class="kw">await</span><span class="question-mark">?</span>,
             })
@@ -2653,7 +2565,7 @@
 
             <span class="kw">let </span>connection = <span class="self">self
                 </span>.endpoint
-                .connect(node_id, FEDIMINT_ALPN)
+                .connect(node_id, FEDIMINT_API_ALPN)
                 .<span class="kw">await
                 </span>.map_err(PeerError::Connection)<span class="question-mark">?</span>;
 
@@ -2661,16 +2573,10 @@
         }
     }
 
-    <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-    </span><span class="kw">struct </span>IrohRequest {
-        method: ApiMethod,
-        request: ApiRequestErased,
-    }
-
     <span class="attr">#[async_trait]
     </span><span class="kw">impl </span>IClientConnection <span class="kw">for </span>Connection {
         <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: ApiMethod, request: ApiRequestErased) -&gt; PeerResult&lt;Value&gt; {
-            <span class="kw">let </span>json = serde_json::to_vec(<span class="kw-2">&amp;</span>IrohRequest { method, request })
+            <span class="kw">let </span>json = serde_json::to_vec(<span class="kw-2">&amp;</span>IrohApiRequest { method, request })
                 .expect(<span class="string">"Serialization to vec can't fail"</span>);
 
             <span class="kw">let </span>(<span class="kw-2">mut </span>sink, <span class="kw-2">mut </span>stream) = <span class="self">self

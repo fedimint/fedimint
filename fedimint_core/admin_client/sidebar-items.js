@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ServerStatus","ServerStatusLegacy"],"mod":["serde_tls_cert"],"struct":["ConfigGenConnectionsRequest","ConfigGenParamsConsensus","ConfigGenParamsRequest","ConfigGenParamsResponse","PeerConnectionInfo","PeerServerParams","SetLocalParamsRequest"]};
+window.SIDEBAR_ITEMS = {"enum":["ServerStatus","ServerStatusLegacy"],"struct":["ConfigGenConnectionsRequest","PeerServerParams","SetLocalParamsRequest"]};

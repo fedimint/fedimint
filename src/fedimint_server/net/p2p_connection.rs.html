@@ -74,14 +74,11 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+<a href="#76" id="76">76</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bytes::Bytes;
-<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>futures::{SinkExt, StreamExt};
 <span class="kw">use </span>iroh::endpoint::Connection;
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -131,12 +128,16 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;M&gt; IP2PConnection&lt;M&gt; <span class="kw">for </span>Connection
 <span class="kw">where
-    </span>M: Encodable + Decodable + Send + <span class="lifetime">'static</span>,
+    </span>M: Serialize + DeserializeOwned + Send + <span class="lifetime">'static</span>,
 {
     <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, message: M) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+
+        bincode::serialize_into(<span class="kw-2">&amp;mut </span>bytes, <span class="kw-2">&amp;</span>message)<span class="question-mark">?</span>;
+
         <span class="kw">let </span><span class="kw-2">mut </span>sink = <span class="self">self</span>.open_uni().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        sink.write_all(<span class="kw-2">&amp;</span>message.consensus_encode_to_vec()).<span class="kw">await</span><span class="question-mark">?</span>;
+        sink.write_all(<span class="kw-2">&amp;</span>bytes).<span class="kw">await</span><span class="question-mark">?</span>;
 
         sink.finish()<span class="question-mark">?</span>;
 
@@ -144,12 +145,9 @@
     }
 
     <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;M&gt; {
-        <span class="kw">let </span>bytes = <span class="self">self</span>.accept_uni().<span class="kw">await</span><span class="question-mark">?</span>.read_to_end(<span class="number">1_000_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(Decodable::consensus_decode_whole(
-            <span class="kw-2">&amp;</span>bytes,
-            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-        )<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(bincode::deserialize_from(Cursor::new(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.accept_uni().<span class="kw">await</span><span class="question-mark">?</span>.read_to_end(<span class="number">1_000_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+        ))<span class="question-mark">?</span>)
     }
 }
 </code></pre></div></section></main></body></html>

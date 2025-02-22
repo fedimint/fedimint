@@ -302,8 +302,7 @@
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a></pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connector interface and multiple
+<a href="#304" id="304">304</a></pre></div><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connector interface and multiple
 //! implementations
 
 </span><span class="kw">use </span>std::collections::BTreeMap;
@@ -314,7 +313,6 @@
 <span class="kw">use </span>anyhow::{ensure, format_err, Context};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::config::PeerUrl;
-<span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>iroh::{Endpoint, NodeId, SecretKey};
@@ -541,7 +539,7 @@
     </span><span class="kw">pub </span>endpoint: Endpoint,
 }
 
-<span class="kw">const </span>FEDIMINT_P2P_ALPN: <span class="kw-2">&amp;</span>[u8] = <span class="string">"FEDIMINT_P2P_ALPN"</span>.as_bytes();
+<span class="kw">const </span>FEDIMINT_P2P_ALPN: <span class="kw-2">&amp;</span>[u8] = <span class="string">b"FEDIMINT_P2P_ALPN"</span>;
 
 <span class="kw">impl </span>IrohConnector {
     <span class="kw">pub async fn </span>new(secret_key: SecretKey, node_ids: BTreeMap&lt;PeerId, NodeId&gt;) -&gt; <span class="self">Self </span>{
@@ -570,7 +568,7 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl</span>&lt;M&gt; IP2PConnector&lt;M&gt; <span class="kw">for </span>IrohConnector
 <span class="kw">where
-    </span>M: Encodable + Decodable + Send + <span class="lifetime">'static</span>,
+    </span>M: Serialize + DeserializeOwned + Send + <span class="lifetime">'static</span>,
 {
     <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
         <span class="self">self</span>.node_ids.keys().copied().collect()

@@ -40,13 +40,13 @@
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>iroh::SecretKey {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>iroh_base::SecretKey {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.to_bytes().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>iroh::SecretKey {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>iroh_base::SecretKey {
     <span class="kw">fn </span>consensus_decode_partial&lt;D: Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
@@ -57,13 +57,13 @@
     }
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>iroh::PublicKey {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>iroh_base::PublicKey {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="self">self</span>.as_bytes().consensus_encode(writer)
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>iroh::PublicKey {
+<span class="kw">impl </span>Decodable <span class="kw">for </span>iroh_base::PublicKey {
     <span class="kw">fn </span>consensus_decode_partial&lt;D: Read&gt;(
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,

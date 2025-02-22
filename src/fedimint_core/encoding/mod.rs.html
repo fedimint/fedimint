@@ -1061,11 +1061,7 @@
 <a href="#1060" id="1060">1060</a>
 <a href="#1061" id="1061">1061</a>
 <a href="#1062" id="1062">1062</a>
-<a href="#1063" id="1063">1063</a>
-<a href="#1064" id="1064">1064</a>
-<a href="#1065" id="1065">1065</a>
-<a href="#1066" id="1066">1066</a>
-<a href="#1067" id="1067">1067</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
+<a href="#1063" id="1063">1063</a></pre></div><pre class="rust"><code><span class="doccomment">//! Binary encoding interface suitable for
 //! consensus critical encoding.
 //!
 //! Over time all structs that ! need to be encoded to binary will be migrated
@@ -1080,13 +1076,9 @@
 <span class="kw">mod </span>bls12_381;
 <span class="kw">pub mod </span>btc;
 <span class="kw">mod </span>collections;
+<span class="kw">mod </span>iroh;
 <span class="kw">mod </span>secp256k1;
 <span class="kw">mod </span>threshold_crypto;
-
-<span class="attr">#[cfg(all(feature = <span class="string">"iroh"</span>, not(target_family = <span class="string">"wasm"</span>)))]
-</span><span class="kw">mod </span>iroh;
-<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-</span><span class="kw">mod </span>tls;
 
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
