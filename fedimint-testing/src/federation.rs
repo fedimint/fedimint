@@ -365,12 +365,12 @@ pub fn local_config_gen_params(
             let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
 
             let params = PeerConnectionInfo {
-                endpoints: PeerEndpoints::Tcp {
-                    cert: tls_keys[peer].0.clone().0,
-                    p2p_url: p2p_url.parse().expect("Should parse"),
-                    api_url: api_url.parse().expect("Should parse"),
-                },
                 name: format!("peer-{}", peer.to_usize()),
+                endpoints: PeerEndpoints::Tcp {
+                    api_url: api_url.parse().expect("Should parse"),
+                    p2p_url: p2p_url.parse().expect("Should parse"),
+                    cert: tls_keys[peer].0.clone().0,
+                },
                 federation_name: None,
             };
             (*peer, params)

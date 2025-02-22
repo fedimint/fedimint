@@ -276,12 +276,12 @@ impl PeerConnectionInfo {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 pub enum PeerEndpoints {
     Tcp {
-        /// TLS certificate for our websocket p2p endpoint       
-        cert: Vec<u8>,
-        /// Url for our websocket p2p endpoint
-        p2p_url: SafeUrl,
         /// Url for our websocket api endpoint
         api_url: SafeUrl,
+        /// Url for our websocket p2p endpoint
+        p2p_url: SafeUrl,
+        /// TLS certificate for our websocket p2p endpoint       
+        cert: Vec<u8>,
     },
     Iroh {
         /// Public key for our iroh api endpoint

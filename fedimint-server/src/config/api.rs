@@ -126,8 +126,8 @@ impl ConfigGenApi {
             );
 
             let info = PeerConnectionInfo {
-                endpoints: lp.endpoints,
                 name: lp.name,
+                endpoints: lp.endpoints,
                 federation_name: lp.federation_name,
             };
 
@@ -144,9 +144,9 @@ impl ConfigGenApi {
                 iroh_api_sk: None,
                 iroh_p2p_sk: None,
                 endpoints: PeerEndpoints::Tcp {
-                    cert: tls_cert.0,
-                    p2p_url: self.settings.p2p_url.clone(),
                     api_url: self.settings.api_url.clone(),
+                    p2p_url: self.settings.p2p_url.clone(),
+                    cert: tls_cert.0,
                 },
                 name: request.name,
                 federation_name: request.federation_name,
@@ -172,8 +172,8 @@ impl ConfigGenApi {
         state.local_params = Some(lp.clone());
 
         let info = PeerConnectionInfo {
-            endpoints: lp.endpoints,
             name: lp.name,
+            endpoints: lp.endpoints,
             federation_name: lp.federation_name,
         };
 
@@ -222,8 +222,8 @@ impl ConfigGenApi {
             .expect("The endpoint is authenticated.");
 
         let our_peer_info = PeerConnectionInfo {
-            endpoints: local_params.endpoints,
             name: local_params.name,
+            endpoints: local_params.endpoints,
             federation_name: local_params.federation_name,
         };
 

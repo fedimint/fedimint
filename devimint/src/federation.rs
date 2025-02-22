@@ -1229,11 +1229,11 @@ pub async fn run_cli_dkg_v2(
     for (peer, endpoint) in &endpoints {
         let info = if peer.to_usize() == 0 {
             crate::util::FedimintCli
-                .set_local_params_leader(auth_for(peer), endpoint)
+                .set_local_params_leader(peer, auth_for(peer), endpoint)
                 .await?
         } else {
             crate::util::FedimintCli
-                .set_local_params_follower(auth_for(peer), endpoint)
+                .set_local_params_follower(peer, auth_for(peer), endpoint)
                 .await?
         };
 

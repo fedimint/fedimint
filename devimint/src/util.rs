@@ -694,7 +694,12 @@ impl FedimintCli {
         .await
     }
 
-    pub async fn set_local_params_leader(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+    pub async fn set_local_params_leader(
+        self,
+        peer: &PeerId,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<String> {
         let json = cmd!(
             self,
             "--password",
@@ -704,7 +709,7 @@ impl FedimintCli {
             "--ws",
             endpoint,
             "set-local-params",
-            "Devimint Leader",
+            format!("Devimint Guardian {peer}"),
             "--federation-name",
             "Devimint Federation"
         )
@@ -714,7 +719,12 @@ impl FedimintCli {
         Ok(serde_json::from_value(json)?)
     }
 
-    pub async fn set_local_params_follower(self, auth: &ApiAuth, endpoint: &str) -> Result<String> {
+    pub async fn set_local_params_follower(
+        self,
+        peer: &PeerId,
+        auth: &ApiAuth,
+        endpoint: &str,
+    ) -> Result<String> {
         let json = cmd!(
             self,
             "--password",
@@ -724,7 +734,7 @@ impl FedimintCli {
             "--ws",
             endpoint,
             "set-local-params",
-            "Devimint Follower"
+            format!("Devimint Guardian {peer}")
         )
         .out_json()
         .await?;
