@@ -17,7 +17,7 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, IDynCommonModuleInit, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, NumPeers};
+use fedimint_core::{NumPeers, apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_derive_secret::DerivableSecret;
 use tokio::sync::watch;
 

@@ -1,11 +1,11 @@
 use std::time::SystemTime;
 
+use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::Amount;
 use fedimint_eventlog::{
-    filter_events_by_kind, join_events, Event, EventKind, PersistedLogEntry,
-    StructuredPaymentEvents,
+    Event, EventKind, PersistedLogEntry, StructuredPaymentEvents, filter_events_by_kind,
+    join_events,
 };
 use fedimint_lnv2_common::contracts::{Commitment, OutgoingContract, PaymentImage};
 use serde::{Deserialize, Serialize};

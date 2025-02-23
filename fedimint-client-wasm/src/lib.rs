@@ -7,15 +7,15 @@ use std::sync::Arc;
 
 use async_stream::try_stream;
 use db::MemAndIndexedDb;
-use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client_module::module::IClientModule;
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_mint_client::MintClientInit;
-use futures::future::{AbortHandle, Abortable};
 use futures::StreamExt;
+use futures::future::{AbortHandle, Abortable};
 use serde_json::json;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};

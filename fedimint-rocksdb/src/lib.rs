@@ -10,7 +10,7 @@ use std::ops::Range;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use fedimint_core::db::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
@@ -27,7 +27,7 @@ use crate::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
 
 // turn an `iter` into a `Stream` where every `next` is ran inside
 // `block_in_place` to offload the blocking calls
-fn convert_to_async_stream<'i, I>(iter: I) -> impl futures::Stream<Item = I::Item>
+fn convert_to_async_stream<'i, I>(iter: I) -> impl futures::Stream<Item = I::Item> + use<I>
 where
     I: Iterator + Send + 'i,
     I::Item: Send,

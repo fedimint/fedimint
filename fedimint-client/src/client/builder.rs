@@ -3,7 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail, ensure, Context as _};
+use anyhow::{Context as _, anyhow, bail, ensure};
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt as _;
 use fedimint_api_client::api::global_api::with_request_hook::{
@@ -18,33 +18,33 @@ use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
 use fedimint_client_module::secret::DeriveableSecretClientExt as _;
 use fedimint_client_module::transaction::{
-    tx_submission_sm_decoder, TxSubmissionContext, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext, tx_submission_sm_decoder,
 };
 use fedimint_client_module::{AdminCreds, ModuleRecoveryStarted};
 use fedimint_core::config::{ClientConfig, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
-use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::ApiVersion;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{maybe_add_send, NumPeers};
+use fedimint_core::{NumPeers, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
-    run_event_log_ordering_task, DBTransactionEventLogExt as _, EventLogEntry,
+    DBTransactionEventLogExt as _, EventLogEntry, run_event_log_ordering_task,
 };
 use fedimint_logging::LOG_CLIENT;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, warn};
 
 use super::handle::ClientHandle;
-use super::{client_decoders, Client};
+use super::{Client, client_decoders};
 use crate::api_announcements::{get_api_urls, run_api_announcement_sync};
 use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
-    self, apply_migrations_client, ApiSecretKey, ClientInitStateKey, ClientMetadataKey,
-    ClientModuleRecovery, ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode,
-    InitState,
+    self, ApiSecretKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
+    ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
+    apply_migrations_client,
 };
 use crate::meta::MetaService;
 use crate::module_init::ClientModuleInitRegistry;
@@ -430,27 +430,30 @@ impl ClientBuilder {
             bail!("Client database not initialized")
         };
 
-        if let Some(secret_hash) = self
+        match self
             .db_no_decoders()
             .begin_transaction_nc()
             .await
             .get_value(&ClientPreRootSecretHashKey)
             .await
         {
-            ensure!(
-                pre_root_secret.derive_pre_root_secret_hash() == secret_hash,
-                "Secret hash does not match. Incorrect secret"
-            );
-        } else {
-            debug!(target: LOG_CLIENT, "Backfilling secret hash");
-            // Note: no need for dbtx autocommit, we are the only writer ATM
-            let mut dbtx = self.db_no_decoders.begin_transaction().await;
-            dbtx.insert_entry(
-                &ClientPreRootSecretHashKey,
-                &pre_root_secret.derive_pre_root_secret_hash(),
-            )
-            .await;
-            dbtx.commit_tx().await;
+            Some(secret_hash) => {
+                ensure!(
+                    pre_root_secret.derive_pre_root_secret_hash() == secret_hash,
+                    "Secret hash does not match. Incorrect secret"
+                );
+            }
+            _ => {
+                debug!(target: LOG_CLIENT, "Backfilling secret hash");
+                // Note: no need for dbtx autocommit, we are the only writer ATM
+                let mut dbtx = self.db_no_decoders.begin_transaction().await;
+                dbtx.insert_entry(
+                    &ClientPreRootSecretHashKey,
+                    &pre_root_secret.derive_pre_root_secret_hash(),
+                )
+                .await;
+                dbtx.commit_tx().await;
+            }
         }
 
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
@@ -518,8 +521,8 @@ impl ClientBuilder {
         let db = self.db_no_decoders.with_decoders(decoders.clone());
         let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
-        let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            ReconnectFederationApi::new_admin(
+        let api = match self.admin_creds.as_ref() {
+            Some(admin_creds) => ReconnectFederationApi::new_admin(
                 admin_creds.peer_id,
                 peer_urls
                     .into_iter()
@@ -531,13 +534,12 @@ impl ClientBuilder {
             .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
             .with_request_hook(&request_hook)
             .with_cache()
-            .into()
-        } else {
-            ReconnectFederationApi::from_endpoints(peer_urls, &api_secret, &connector, None)
+            .into(),
+            _ => ReconnectFederationApi::from_endpoints(peer_urls, &api_secret, &connector, None)
                 .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
                 .with_request_hook(&request_hook)
                 .with_cache()
-                .into()
+                .into(),
         };
         let task_group = TaskGroup::new();
 
@@ -667,92 +669,103 @@ impl ClientBuilder {
                         )
                     };
 
-                let recovery = if let Some(snapshot) = init_state.does_require_recovery() {
-                    if let Some(module_recovery_state) = db
-                        .begin_transaction_nc()
-                        .await
-                        .get_value(&ClientModuleRecovery { module_instance_id })
-                        .await
-                    {
-                        if module_recovery_state.is_done() {
-                            debug!(
-                                id = %module_instance_id,
-                                %kind, "Module recovery already complete"
-                            );
-                            None
-                        } else {
-                            debug!(
-                                id = %module_instance_id,
-                                %kind,
-                                progress = %module_recovery_state.progress,
-                                "Starting module recovery with an existing progress"
-                            );
-                            Some(start_module_recover_fn(
-                                snapshot,
-                                module_recovery_state.progress,
-                            ))
+                let recovery = match init_state.does_require_recovery() {
+                    Some(snapshot) => {
+                        match db
+                            .begin_transaction_nc()
+                            .await
+                            .get_value(&ClientModuleRecovery { module_instance_id })
+                            .await
+                        {
+                            Some(module_recovery_state) => {
+                                if module_recovery_state.is_done() {
+                                    debug!(
+                                        id = %module_instance_id,
+                                        %kind, "Module recovery already complete"
+                                    );
+                                    None
+                                } else {
+                                    debug!(
+                                        id = %module_instance_id,
+                                        %kind,
+                                        progress = %module_recovery_state.progress,
+                                        "Starting module recovery with an existing progress"
+                                    );
+                                    Some(start_module_recover_fn(
+                                        snapshot,
+                                        module_recovery_state.progress,
+                                    ))
+                                }
+                            }
+                            _ => {
+                                let progress = RecoveryProgress::none();
+                                let mut dbtx = db.begin_transaction().await;
+                                dbtx.log_event(
+                                    log_ordering_wakeup_tx.clone(),
+                                    None,
+                                    ModuleRecoveryStarted::new(module_instance_id),
+                                )
+                                .await;
+                                dbtx.insert_entry(
+                                    &ClientModuleRecovery { module_instance_id },
+                                    &ClientModuleRecoveryState { progress },
+                                )
+                                .await;
+
+                                dbtx.commit_tx().await;
+
+                                debug!(
+                                    id = %module_instance_id,
+                                    %kind, "Starting new module recovery"
+                                );
+                                Some(start_module_recover_fn(snapshot, progress))
+                            }
                         }
-                    } else {
-                        let progress = RecoveryProgress::none();
-                        let mut dbtx = db.begin_transaction().await;
-                        dbtx.log_event(
-                            log_ordering_wakeup_tx.clone(),
-                            None,
-                            ModuleRecoveryStarted::new(module_instance_id),
-                        )
-                        .await;
-                        dbtx.insert_entry(
-                            &ClientModuleRecovery { module_instance_id },
-                            &ClientModuleRecoveryState { progress },
-                        )
-                        .await;
-
-                        dbtx.commit_tx().await;
-
-                        debug!(
-                            id = %module_instance_id,
-                            %kind, "Starting new module recovery"
-                        );
-                        Some(start_module_recover_fn(snapshot, progress))
                     }
-                } else {
-                    None
+                    _ => None,
                 };
 
-                if let Some((recovery, recovery_progress_rx)) = recovery {
-                    module_recoveries.insert(module_instance_id, recovery);
-                    module_recovery_progress_receivers
-                        .insert(module_instance_id, recovery_progress_rx);
-                } else {
-                    let module = module_init
-                        .init(
-                            final_client.clone(),
-                            fed_id,
-                            config.global.api_endpoints.len(),
-                            module_config,
-                            db.clone(),
-                            module_instance_id,
-                            common_api_versions.core,
-                            api_version,
-                            // This is a divergence from the legacy client, where the child secret
-                            // keys were derived using *module kind*-specific derivation paths.
-                            // Since the new client has to support multiple, segregated modules of
-                            // the same kind we have to use the instance id instead.
-                            root_secret.derive_module_secret(module_instance_id),
-                            notifier.clone(),
-                            api.clone(),
-                            self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
-                            task_group.clone(),
-                        )
-                        .await?;
-
-                    if primary_module_instance == module_instance_id
-                        && !module.supports_being_primary()
-                    {
-                        bail!("Module instance {primary_module_instance} of kind {kind} does not support being a primary module");
+                match recovery {
+                    Some((recovery, recovery_progress_rx)) => {
+                        module_recoveries.insert(module_instance_id, recovery);
+                        module_recovery_progress_receivers
+                            .insert(module_instance_id, recovery_progress_rx);
                     }
+                    _ => {
+                        let module = module_init
+                            .init(
+                                final_client.clone(),
+                                fed_id,
+                                config.global.api_endpoints.len(),
+                                module_config,
+                                db.clone(),
+                                module_instance_id,
+                                common_api_versions.core,
+                                api_version,
+                                // This is a divergence from the legacy client, where the child
+                                // secret keys were derived using
+                                // *module kind*-specific derivation paths.
+                                // Since the new client has to support multiple, segregated modules
+                                // of the same kind we have to use
+                                // the instance id instead.
+                                root_secret.derive_module_secret(module_instance_id),
+                                notifier.clone(),
+                                api.clone(),
+                                self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
+                                task_group.clone(),
+                            )
+                            .await?;
 
-                    modules.register_module(module_instance_id, kind, module);
+                        if primary_module_instance == module_instance_id
+                            && !module.supports_being_primary()
+                        {
+                            bail!(
+                                "Module instance {primary_module_instance} of kind {kind} does not support being a primary module"
+                            );
+                        }
+
+                        modules.register_module(module_instance_id, kind, module);
+                    }
                 }
             }
             modules

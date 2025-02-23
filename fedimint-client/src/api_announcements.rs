@@ -2,21 +2,21 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::net::api_announcement::{override_api_urls, SignedApiAnnouncement};
+use fedimint_core::net::api_announcement::{SignedApiAnnouncement, override_api_urls};
 use fedimint_core::runtime::sleep;
 use fedimint_core::secp256k1::SECP256K1;
-use fedimint_core::util::{backoff_util, retry, SafeUrl};
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use fedimint_core::util::{SafeUrl, backoff_util, retry};
+use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::future::join_all;
 use tracing::{debug, warn};
 
-use crate::db::DbKeyPrefix;
 use crate::Client;
+use crate::db::DbKeyPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct ApiAnnouncementKey(pub PeerId);
@@ -80,8 +80,7 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
                             for (peer, new_announcement) in announcements_inner {
                                 let replace_current_announcement = dbtx
                                     .get_value(&ApiAnnouncementKey(peer))
-                                    .await
-                                    .map_or(true, |current_announcement| {
+                                    .await.is_none_or(|current_announcement| {
                                         current_announcement.api_announcement.nonce
                                             < new_announcement.api_announcement.nonce
                                     });

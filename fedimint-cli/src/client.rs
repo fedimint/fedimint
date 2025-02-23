@@ -3,9 +3,9 @@ use std::ffi;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::{secp256k1, Network};
+use bitcoin::{Network, secp256k1};
 use clap::Subcommand;
 use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
@@ -28,8 +28,8 @@ use itertools::Itertools;
 use lightning_invoice::{Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use time::format_description::well_known::iso8601;
 use time::OffsetDateTime;
+use time::format_description::well_known::iso8601;
 use tracing::{debug, info, warn};
 
 use crate::metadata_from_clap_cli;

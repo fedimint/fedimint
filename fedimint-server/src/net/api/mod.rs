@@ -8,16 +8,16 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use async_trait::async_trait;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_logging::LOG_NET_API;
 use futures::FutureExt;
+use jsonrpsee::RpcModule;
 use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObject;
-use jsonrpsee::RpcModule;
 use tracing::{error, info};
 
 use crate::metrics;

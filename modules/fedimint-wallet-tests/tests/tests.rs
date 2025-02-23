@@ -2,28 +2,28 @@ use std::collections::HashSet;
 use std::env;
 use std::time::Duration;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1;
-use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::net::Connector;
 use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
-use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::serde_json;
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::{retry, BoxStream, NextOrPending};
-use fedimint_core::{sats, Amount, BitcoinHash, Feerate, InPoint, PeerId, TransactionId};
+use fedimint_core::util::{BoxStream, NextOrPending, retry};
+use fedimint_core::{Amount, BitcoinHash, Feerate, InPoint, PeerId, TransactionId, sats};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_server::core::{ServerModule, ServerModuleShared as _};
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
-use fedimint_testing::federation::{FederationTest, API_AUTH};
+use fedimint_testing::federation::{API_AUTH, FederationTest};
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModule, WithdrawState};
@@ -110,7 +110,9 @@ async fn await_consensus_to_catch_up(
             .fetch_consensus_block_count()
             .await?;
         if current_consensus < block_count {
-            info!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}");
+            info!(
+                "Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}"
+            );
             sleep_in_test(format!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}"), Duration::from_millis(100)).await;
         } else {
             info!("Current consensus block count is {current_consensus}, consensus caught up");
@@ -1068,8 +1070,8 @@ mod fedimint_migration_tests {
     use bitcoin::hashes::Hash;
     use bitcoin::psbt::{Input, Psbt};
     use bitcoin::{
-        secp256k1, Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
-        WPubkeyHash,
+        Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
+        secp256k1,
     };
     use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -1082,8 +1084,8 @@ mod fedimint_migration_tests {
     use fedimint_logging::TracingSetup;
     use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
-        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
-        validate_migrations_server, BYTE_20, BYTE_32, BYTE_33,
+        BYTE_20, BYTE_32, BYTE_33, snapshot_db_migrations, snapshot_db_migrations_client,
+        validate_migrations_client, validate_migrations_server,
     };
     use fedimint_wallet_client::client_db::{self, NextPegInTweakIndexKey, TweakIdx};
     use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
@@ -1326,182 +1328,176 @@ mod fedimint_migration_tests {
         let _ = TracingSetup::default().init();
 
         let module = DynServerModuleInit::from(WalletInit);
-        validate_migrations_server(
-            module,
-            "wallet-server",
-            |db| async move {
-                let mut dbtx = db.begin_transaction_nc().await;
+        validate_migrations_server(module, "wallet-server", |db| async move {
+            let mut dbtx = db.begin_transaction_nc().await;
 
-                for prefix in DbKeyPrefix::iter() {
-                    match prefix {
-                        DbKeyPrefix::BlockHash => {
-                            let blocks = dbtx
-                                .find_by_prefix(&BlockHashKeyPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_blocks = blocks.len();
-                            ensure!(
-                                num_blocks > 0,
-                                "validate_migrations was not able to read any BlockHashes"
-                            );
-                            info!("Validated BlockHash");
-                        }
-                        DbKeyPrefix::PegOutBitcoinOutPoint => {
-                            let outpoints = dbtx
-                                .find_by_prefix(&PegOutBitcoinTransactionPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_outpoints = outpoints.len();
-                            ensure!(
-                                num_outpoints > 0,
-                                "validate_migrations was not able to read any PegOutBitcoinTransactions"
-                            );
-                            info!("Validated PegOutBitcoinOutPoint");
-                        }
-                        DbKeyPrefix::PegOutTxSigCi => {
-                            let sigs = dbtx
-                                .find_by_prefix(&PegOutTxSignatureCIPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_sigs = sigs.len();
-                            ensure!(
-                                num_sigs > 0,
-                                "validate_migrations was not able to read any PegOutTxSigCi"
-                            );
-                            info!("Validated PegOutTxSigCi");
-                        }
-                        DbKeyPrefix::PendingTransaction => {
-                            let pending_txs = dbtx
-                                .find_by_prefix(&PendingTransactionPrefixKey)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_txs = pending_txs.len();
-                            ensure!(
-                                num_txs > 0,
-                                "validate_migrations was not able to read any PendingTransactions"
-                            );
-                            info!("Validated PendingTransaction");
-                        }
-                        DbKeyPrefix::PegOutNonce => {
-                            ensure!(dbtx
-                                .get_value(&PegOutNonceKey)
-                                .await
-                                .is_some());
-                            info!("Validated PegOutNonce");
-                        }
-                        DbKeyPrefix::UnsignedTransaction => {
-                            let unsigned_txs = dbtx
-                                .find_by_prefix(&UnsignedTransactionPrefixKey)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_txs = unsigned_txs.len();
-                            ensure!(
-                                num_txs > 0,
-                                "validate_migrations was not able to read any UnsignedTransactions"
-                            );
-                            info!("Validated UnsignedTransaction");
-                        }
-                        DbKeyPrefix::Utxo => {
-                            let utxos = dbtx
-                                .find_by_prefix(&UTXOPrefixKey)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_utxos = utxos.len();
-                            ensure!(
-                                num_utxos > 0,
-                                "validate_migrations was not able to read any UTXOs"
-                            );
-                            info!("Validated Utxo");
-                        }
-                        DbKeyPrefix::BlockCountVote => {
-                            let heights = dbtx
-                                .find_by_prefix(&BlockCountVotePrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_heights = heights.len();
-                            ensure!(
-                                num_heights > 0,
-                                "validate_migrations was not able to read any block height votes"
-                            );
-                            info!("Validated BlockCountVote");
-                        }
-                        DbKeyPrefix::FeeRateVote => {
-                            let rates = dbtx
-                                .find_by_prefix(&FeeRateVotePrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_rates = rates.len();
-                            ensure!(
-                                num_rates > 0,
-                                "validate_migrations was not able to read any fee rate votes"
-                            );
-                            info!("Validated FeeRateVote");
-                        }
-                        DbKeyPrefix::ClaimedPegInOutpoint => {
-                            let claimed_peg_ins = dbtx
-                                .find_by_prefix(&ClaimedPegInOutpointPrefixKey)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_peg_ins = claimed_peg_ins.len();
-                            ensure!(
-                                num_peg_ins > 0,
-                                "validate_migrations was not able to read any claimed peg-in outpoints"
-                            );
-                            info!("Validated PeggedInOutpoint");
-                        }
-                        DbKeyPrefix::ConsensusVersionVote => {
-                            let votes = dbtx
-                                .find_by_prefix(&ConsensusVersionVotePrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_votes = votes.len();
-                            ensure!(
-                                num_votes > 0,
-                                "validate_migrations was not able to read any consensus version votes"
-                            );
-                            info!("Validated ConsensusVersionVote");
-                        }
-                        DbKeyPrefix::UnspentTxOut => {
-                            let utxos = dbtx
-                                .find_by_prefix(&UnspentTxOutPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_utxos = utxos.len();
-                            ensure!(
-                                num_utxos > 0,
-                                "validate_migrations was not able to read any utxos"
-                            );
-                            info!("Validated UnspendTxOut");
-                        }
-                        DbKeyPrefix::ConsensusVersionVotingActivation => {
-                            let activations = dbtx
-                                .find_by_prefix(&ConsensusVersionVotingActivationPrefix)
-                                .await
-                                .collect::<Vec<_>>()
-                                .await;
-                            let num_activations = activations.len();
-                            ensure!(
-                                num_activations > 0,
-                                "validate_migrations was not able to read any version voting activation"
-                            );
-                            info!("Validated ConsensusVersionVotingActivation");
-                        }
+            for prefix in DbKeyPrefix::iter() {
+                match prefix {
+                    DbKeyPrefix::BlockHash => {
+                        let blocks = dbtx
+                            .find_by_prefix(&BlockHashKeyPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_blocks = blocks.len();
+                        ensure!(
+                            num_blocks > 0,
+                            "validate_migrations was not able to read any BlockHashes"
+                        );
+                        info!("Validated BlockHash");
+                    }
+                    DbKeyPrefix::PegOutBitcoinOutPoint => {
+                        let outpoints = dbtx
+                            .find_by_prefix(&PegOutBitcoinTransactionPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_outpoints = outpoints.len();
+                        ensure!(
+                            num_outpoints > 0,
+                            "validate_migrations was not able to read any PegOutBitcoinTransactions"
+                        );
+                        info!("Validated PegOutBitcoinOutPoint");
+                    }
+                    DbKeyPrefix::PegOutTxSigCi => {
+                        let sigs = dbtx
+                            .find_by_prefix(&PegOutTxSignatureCIPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_sigs = sigs.len();
+                        ensure!(
+                            num_sigs > 0,
+                            "validate_migrations was not able to read any PegOutTxSigCi"
+                        );
+                        info!("Validated PegOutTxSigCi");
+                    }
+                    DbKeyPrefix::PendingTransaction => {
+                        let pending_txs = dbtx
+                            .find_by_prefix(&PendingTransactionPrefixKey)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_txs = pending_txs.len();
+                        ensure!(
+                            num_txs > 0,
+                            "validate_migrations was not able to read any PendingTransactions"
+                        );
+                        info!("Validated PendingTransaction");
+                    }
+                    DbKeyPrefix::PegOutNonce => {
+                        ensure!(dbtx.get_value(&PegOutNonceKey).await.is_some());
+                        info!("Validated PegOutNonce");
+                    }
+                    DbKeyPrefix::UnsignedTransaction => {
+                        let unsigned_txs = dbtx
+                            .find_by_prefix(&UnsignedTransactionPrefixKey)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_txs = unsigned_txs.len();
+                        ensure!(
+                            num_txs > 0,
+                            "validate_migrations was not able to read any UnsignedTransactions"
+                        );
+                        info!("Validated UnsignedTransaction");
+                    }
+                    DbKeyPrefix::Utxo => {
+                        let utxos = dbtx
+                            .find_by_prefix(&UTXOPrefixKey)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_utxos = utxos.len();
+                        ensure!(
+                            num_utxos > 0,
+                            "validate_migrations was not able to read any UTXOs"
+                        );
+                        info!("Validated Utxo");
+                    }
+                    DbKeyPrefix::BlockCountVote => {
+                        let heights = dbtx
+                            .find_by_prefix(&BlockCountVotePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_heights = heights.len();
+                        ensure!(
+                            num_heights > 0,
+                            "validate_migrations was not able to read any block height votes"
+                        );
+                        info!("Validated BlockCountVote");
+                    }
+                    DbKeyPrefix::FeeRateVote => {
+                        let rates = dbtx
+                            .find_by_prefix(&FeeRateVotePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_rates = rates.len();
+                        ensure!(
+                            num_rates > 0,
+                            "validate_migrations was not able to read any fee rate votes"
+                        );
+                        info!("Validated FeeRateVote");
+                    }
+                    DbKeyPrefix::ClaimedPegInOutpoint => {
+                        let claimed_peg_ins = dbtx
+                            .find_by_prefix(&ClaimedPegInOutpointPrefixKey)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_peg_ins = claimed_peg_ins.len();
+                        ensure!(
+                            num_peg_ins > 0,
+                            "validate_migrations was not able to read any claimed peg-in outpoints"
+                        );
+                        info!("Validated PeggedInOutpoint");
+                    }
+                    DbKeyPrefix::ConsensusVersionVote => {
+                        let votes = dbtx
+                            .find_by_prefix(&ConsensusVersionVotePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_votes = votes.len();
+                        ensure!(
+                            num_votes > 0,
+                            "validate_migrations was not able to read any consensus version votes"
+                        );
+                        info!("Validated ConsensusVersionVote");
+                    }
+                    DbKeyPrefix::UnspentTxOut => {
+                        let utxos = dbtx
+                            .find_by_prefix(&UnspentTxOutPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_utxos = utxos.len();
+                        ensure!(
+                            num_utxos > 0,
+                            "validate_migrations was not able to read any utxos"
+                        );
+                        info!("Validated UnspendTxOut");
+                    }
+                    DbKeyPrefix::ConsensusVersionVotingActivation => {
+                        let activations = dbtx
+                            .find_by_prefix(&ConsensusVersionVotingActivationPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_activations = activations.len();
+                        ensure!(
+                            num_activations > 0,
+                            "validate_migrations was not able to read any version voting activation"
+                        );
+                        info!("Validated ConsensusVersionVotingActivation");
                     }
                 }
-                Ok(())
             }
-        ).await
+            Ok(())
+        })
+        .await
     }
 
     #[tokio::test(flavor = "multi_thread")]

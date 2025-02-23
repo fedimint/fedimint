@@ -29,7 +29,7 @@ use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::select;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, info, trace, warn, Instrument};
+use tracing::{Instrument, debug, error, info, trace, warn};
 
 use super::notifier::Notifier;
 use crate::{AddStateMachinesError, AddStateMachinesResult, DynGlobalClientContext};
@@ -98,14 +98,15 @@ impl ExecutorState {
             },
         );
 
-        if let ExecutorState::Unstarted { sm_update_rx } = previous_state {
-            Some((shutdown_receiver, sm_update_rx))
-        } else {
-            // Replace the previous state, undoing the `mem::replace` above.
-            *self = previous_state;
+        match previous_state {
+            ExecutorState::Unstarted { sm_update_rx } => Some((shutdown_receiver, sm_update_rx)),
+            _ => {
+                // Replace the previous state, undoing the `mem::replace` above.
+                *self = previous_state;
 
-            debug!(target: LOG_CLIENT_REACTOR, "Executor already started, ignoring start request");
-            None
+                debug!(target: LOG_CLIENT_REACTOR, "Executor already started, ignoring start request");
+                None
+            }
         }
     }
 
@@ -114,20 +115,22 @@ impl ExecutorState {
     fn stop(&mut self) -> Option<()> {
         let previous_state = mem::replace(self, ExecutorState::Stopped);
 
-        if let ExecutorState::Running {
-            shutdown_sender, ..
-        } = previous_state
-        {
-            if shutdown_sender.send(()).is_err() {
-                warn!(target: LOG_CLIENT_REACTOR, "Failed to send shutdown signal to executor, already dead?");
+        match previous_state {
+            ExecutorState::Running {
+                shutdown_sender, ..
+            } => {
+                if shutdown_sender.send(()).is_err() {
+                    warn!(target: LOG_CLIENT_REACTOR, "Failed to send shutdown signal to executor, already dead?");
+                }
+                Some(())
             }
-            Some(())
-        } else {
-            // Replace the previous state, undoing the `mem::replace` above.
-            *self = previous_state;
+            _ => {
+                // Replace the previous state, undoing the `mem::replace` above.
+                *self = previous_state;
 
-            debug!(target: LOG_CLIENT_REACTOR, "Executor not running, ignoring stop request");
-            None
+                debug!(target: LOG_CLIENT_REACTOR, "Executor not running, ignoring stop request");
+                None
+            }
         }
     }
 
@@ -230,20 +233,23 @@ impl Executor {
             if let Some(module_context) =
                 self.inner.module_contexts.get(&state.module_instance_id())
             {
-                if let Some(context) = self
+                match self
                     .inner
                     .state
                     .read()
                     .expect("locking failed")
                     .gen_context(&state)
                 {
-                    if state.is_terminal(module_context, &context) {
-                        return Err(AddStateMachinesError::Other(anyhow!(
-                        "State is already terminal, adding it to the executor doesn't make sense."
-                    )));
+                    Some(context) => {
+                        if state.is_terminal(module_context, &context) {
+                            return Err(AddStateMachinesError::Other(anyhow!(
+                                "State is already terminal, adding it to the executor doesn't make sense."
+                            )));
+                        }
                     }
-                } else {
-                    warn!(target: LOG_CLIENT_REACTOR, "Executor should be running at this point");
+                    _ => {
+                        warn!(target: LOG_CLIENT_REACTOR, "Executor should be running at this point");
+                    }
                 }
             }
 
@@ -561,13 +567,13 @@ impl ExecutorInner {
         loop {
             let event = tokio::select! {
                 new = sm_update_rx.recv() => {
-                    if let Some(new) = new {
+                    match new { Some(new) => {
                         ExecutorLoopEvent::New {
                             state: new,
                         }
-                    } else {
+                    } _ => {
                         ExecutorLoopEvent::Disconnected
-                    }
+                    }}
                 },
 
                 event = futures.next(), if !futures.is_empty() => event.expect("we only .next() if there are pending futures"),

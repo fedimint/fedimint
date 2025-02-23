@@ -1,17 +1,17 @@
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_stream::stream;
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use bitcoin::key::Keypair;
 use bitcoin::secp256k1::{self, PublicKey, SecretKey};
+use fedimint_core::Amount;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
-use fedimint_core::Amount;
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
     GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
@@ -22,12 +22,12 @@ use fedimint_lightning::{
     InterceptPaymentResponse, LightningRpcError, ListActiveChannelsResponse, OpenChannelResponse,
     PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
 };
+use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_ln_common::PrunedInvoice;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
-    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
+    Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentSecret,
 };
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;

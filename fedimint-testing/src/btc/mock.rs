@@ -3,7 +3,7 @@ use std::iter::repeat;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{format_err, Context, Result};
+use anyhow::{Context, Result, format_err};
 use async_trait::async_trait;
 use bitcoin::absolute::LockTime;
 use bitcoin::block::{Header as BlockHeader, Version};
@@ -14,7 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
+use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, register_bitcoind};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;

@@ -3,7 +3,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use anyhow::Result;
-use futures::{stream, StreamExt};
+use futures::{StreamExt, stream};
 use hex::ToHex;
 use imbl::OrdMap;
 use macro_rules_attribute::apply;

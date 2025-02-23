@@ -1,6 +1,6 @@
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{CoreConsensusVersion, TransactionItemAmount};
-use fedimint_core::transaction::{Transaction, TransactionError, TRANSACTION_OVERFLOW_ERROR};
+use fedimint_core::transaction::{TRANSACTION_OVERFLOW_ERROR, Transaction, TransactionError};
 use fedimint_core::{Amount, InPoint, OutPoint};
 use fedimint_server_core::ServerModuleRegistry;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};

@@ -4,7 +4,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{impl_db_record, Amount, TransactionId};
+use fedimint_core::{Amount, TransactionId, impl_db_record};
 use strum_macros::EnumIter;
 use tracing::warn;
 

@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use arti_client::{TorAddr, TorClient, TorClientConfig};
 use async_channel::bounded;
@@ -33,7 +33,7 @@ use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, util, NumPeersExt, PeerId, TransactionId,
+    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
 use futures::channel::oneshot;
@@ -41,9 +41,9 @@ use futures::future::pending;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
+use jsonrpsee_core::DeserializeOwned;
 use jsonrpsee_core::client::ClientT;
 pub use jsonrpsee_core::client::Error as JsonRpcClientError;
-use jsonrpsee_core::DeserializeOwned;
 use jsonrpsee_types::ErrorCode;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
@@ -57,8 +57,8 @@ use serde_json::Value;
 #[cfg(not(target_family = "wasm"))]
 use tokio_rustls::rustls::RootCertStore;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
-use tracing::{debug, instrument, trace, trace_span, warn, Instrument};
+use tokio_rustls::{TlsConnector, rustls::ClientConfig as TlsClientConfig};
+use tracing::{Instrument, debug, instrument, trace, trace_span, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 mod error;
@@ -564,7 +564,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     /// Download the guardian config to back it up
     async fn guardian_config_backup(&self, auth: ApiAuth)
-        -> FederationResult<GuardianConfigBackup>;
+    -> FederationResult<GuardianConfigBackup>;
 
     /// Check auth credentials
     async fn auth(&self, auth: ApiAuth) -> FederationResult<()>;
@@ -786,7 +786,10 @@ impl IClientConnector for TorConnector {
                 .await
                 .map_err(|e| PeerError::Connection(e.into()))?;
 
-            debug!(?tor_addr_clone, "Successfully connected to `Hostname`or `Ip` `TorAddr`, and established an anonymized `DataStream`");
+            debug!(
+                ?tor_addr_clone,
+                "Successfully connected to `Hostname`or `Ip` `TorAddr`, and established an anonymized `DataStream`"
+            );
             anonymized_stream
         };
 
@@ -1169,10 +1172,10 @@ mod iroh {
 
     use async_trait::async_trait;
     use bitcoin::key::rand::rngs::OsRng;
-    use fedimint_core::module::{
-        ApiError, ApiMethod, ApiRequestErased, IrohApiRequest, FEDIMINT_API_ALPN,
-    };
     use fedimint_core::PeerId;
+    use fedimint_core::module::{
+        ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
+    };
     use iroh::endpoint::Connection;
     use iroh::{Endpoint, NodeId, SecretKey};
     use serde_json::Value;

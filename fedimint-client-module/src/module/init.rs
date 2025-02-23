@@ -8,13 +8,13 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, CommonModuleInit, ModuleInit, MultiApiVersion};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{apply, async_trait_maybe_send, NumPeers};
+use fedimint_core::{NumPeers, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::LOG_CLIENT;
 use tracing::warn;
 
-use super::recovery::RecoveryProgress;
 use super::ClientContext;
+use super::recovery::RecoveryProgress;
 use crate::db::ClientMigrationFn;
 use crate::module::ClientModule;
 use crate::sm::ModuleNotifier;

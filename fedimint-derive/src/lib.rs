@@ -8,8 +8,8 @@ use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, Attribute, Data, DataEnum, DataStruct, DeriveInput, Fields, Index, Lit,
-    Token, Variant,
+    Attribute, Data, DataEnum, DataStruct, DeriveInput, Fields, Index, Lit, Token, Variant,
+    parse_macro_input,
 };
 
 fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
@@ -33,7 +33,10 @@ fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
             .collect::<Vec<_>>();
         let correct_fields = field_names == vec!["bytes".to_string(), "variant".to_string()];
 
-        assert!(two_fields && correct_fields, "The default variant should have exactly two field: `variant: u64` and `bytes: Vec<u8>`");
+        assert!(
+            two_fields && correct_fields,
+            "The default variant should have exactly two field: `variant: u64` and `bytes: Vec<u8>`"
+        );
     }
 
     is_default

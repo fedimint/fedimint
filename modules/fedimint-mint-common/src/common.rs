@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::{Hash, sha256};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1;
-use secp256k1::{Keypair, Message, PublicKey, Secp256k1, Signing, Verification, SECP256K1};
+use secp256k1::{Keypair, Message, PublicKey, SECP256K1, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]

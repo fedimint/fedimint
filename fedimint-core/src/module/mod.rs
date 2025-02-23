@@ -22,8 +22,8 @@ pub mod registry;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use fedimint_logging::LOG_NET_API;
 use futures::Future;
@@ -48,7 +48,7 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::net::peers::DynP2PConnections;
 use crate::task::MaybeSend;
-use crate::{apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, Amount, PeerId};
+use crate::{Amount, PeerId, apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InputMeta {
@@ -236,7 +236,7 @@ impl<'a> ApiEndpointContext<'a> {
     }
 
     /// Waits for key to be present in database.
-    pub fn wait_key_exists<K>(&self, key: K) -> impl Future<Output = K::Value>
+    pub fn wait_key_exists<K>(&self, key: K) -> impl Future<Output = K::Value> + use<K>
     where
         K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
     {
@@ -315,10 +315,10 @@ pub use serde_json;
 #[macro_export]
 macro_rules! __api_endpoint {
     (
-        $path:expr,
+        $path:expr_2021,
         // Api Version this endpoint was introduced in, at the current consensus level
         // Currently for documentation purposes only.
-        $version_introduced:expr,
+        $version_introduced:expr_2021,
         async |$state:ident: &$state_ty:ty, $context:ident, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
     ) => {{
         struct Endpoint;
@@ -398,10 +398,13 @@ impl ApiEndpoint<()> {
         {
             tracing::debug!(target: LOG_NET_API, path = E::PATH, ?request, "received api request");
             let result = E::handle(state, context, request.params).await;
-            if let Err(error) = &result {
-                tracing::warn!(target: LOG_NET_API, path = E::PATH, ?error, "api request error");
-            } else {
-                tracing::trace!(target: LOG_NET_API, path = E::PATH, "api request complete");
+            match &result {
+                Err(error) => {
+                    tracing::warn!(target: LOG_NET_API, path = E::PATH, ?error, "api request error");
+                }
+                _ => {
+                    tracing::trace!(target: LOG_NET_API, path = E::PATH, "api request complete");
+                }
             }
             result
         }

@@ -3,8 +3,9 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_meta_common::endpoint::{
-    GetConsensusRequest, GetSubmissionResponse, GetSubmissionsRequest, SubmitRequest,
-    GET_CONSENSUS_ENDPOINT, GET_CONSENSUS_REV_ENDPOINT, GET_SUBMISSIONS_ENDPOINT, SUBMIT_ENDPOINT,
+    GET_CONSENSUS_ENDPOINT, GET_CONSENSUS_REV_ENDPOINT, GET_SUBMISSIONS_ENDPOINT,
+    GetConsensusRequest, GetSubmissionResponse, GetSubmissionsRequest, SUBMIT_ENDPOINT,
+    SubmitRequest,
 };
 use fedimint_meta_common::{MetaConsensusValue, MetaKey, MetaValue};
 

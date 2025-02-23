@@ -1,13 +1,13 @@
 use std::time::Duration;
 
-use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1::{SecretKey, SECP256K1};
+use bitcoin::hashes::{Hash, sha256};
+use bitcoin::secp256k1::{SECP256K1, SecretKey};
 use fedimint_core::config::FederationId;
+use fedimint_core::secp256k1::Keypair;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1::Keypair;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Amount};
+use fedimint_core::{Amount, apply, async_trait_maybe_send};
 use fedimint_ln_common::bitcoin;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
@@ -15,7 +15,7 @@ use fedimint_lnv2_common::gateway_api::{
 };
 use fedimint_lnv2_common::{Bolt11InvoiceDescription, LightningInvoice};
 use lightning_invoice::{
-    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
+    Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentSecret,
 };
 
 const GATEWAY_SECRET: [u8; 32] = [1; 32];

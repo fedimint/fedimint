@@ -6,30 +6,30 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientHandleArc};
-use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client_module::AdminCreds;
+use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_core::PeerId;
 use fedimint_core::config::{
-    ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, META_FEDERATION_NAME_KEY,
+    ClientConfig, FederationId, META_FEDERATION_NAME_KEY, ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
+use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::net::peers::IP2PConnections;
-use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
-use fedimint_core::PeerId;
+use fedimint_core::task::{TaskGroup, block_in_place, sleep_in_test};
 use fedimint_gateway_common::ConnectFedPayload;
 use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::{
-    gen_cert_and_key, ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig,
+    ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig, gen_cert_and_key,
 };
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
-use fedimint_server::net::p2p::{p2p_status_channels, ReconnectP2PConnections};
+use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use tokio_rustls::rustls;
 use tracing::info;
@@ -161,7 +161,7 @@ impl FederationTest {
     }
 
     /// Return all online PeerIds
-    pub fn online_peer_ids(&self) -> impl Iterator<Item = PeerId> {
+    pub fn online_peer_ids(&self) -> impl Iterator<Item = PeerId> + use<> {
         // we can assume this ordering since peers are started in ascending order
         (0..(self.num_peers - self.num_offline)).map(PeerId::from)
     }

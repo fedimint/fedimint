@@ -1,11 +1,11 @@
 use std::sync::LazyLock;
 
 use fedimint_metrics::prometheus::{
-    register_histogram_vec_with_registry, register_int_gauge_with_registry, IntGauge,
+    IntGauge, register_histogram_vec_with_registry, register_int_gauge_with_registry,
 };
 use fedimint_metrics::{
-    histogram_opts, opts, register_histogram_with_registry, Histogram, HistogramVec,
-    AMOUNTS_BUCKETS_SATS, REGISTRY,
+    AMOUNTS_BUCKETS_SATS, Histogram, HistogramVec, REGISTRY, histogram_opts, opts,
+    register_histogram_with_registry,
 };
 
 pub(crate) static WALLET_INOUT_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {

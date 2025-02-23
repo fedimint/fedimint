@@ -20,16 +20,16 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure, format_err, Context};
+use anyhow::{Context, anyhow, bail, ensure, format_err};
 use api::LnFederationApi;
 use async_stream::{stream, try_stream};
-use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use bitcoin::Network;
+use bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_client_module::db::{migrate_state, ClientMigrationFn};
+use fedimint_client_module::db::{ClientMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -40,7 +40,7 @@ use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM,
     TransactionBuilder,
 };
-use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -51,11 +51,11 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
-use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
+use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{backoff_util, retry, BoxStream};
+use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
+    Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
 use fedimint_derive_secret::ChildId;
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
@@ -71,9 +71,9 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
 use fedimint_ln_common::{
-    ContractOutput, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
+    ContractOutput, KIND, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
     LightningGatewayRegistration, LightningInput, LightningModuleTypes, LightningOutput,
-    LightningOutputV0, KIND,
+    LightningOutputV0,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, StreamExt};
@@ -100,8 +100,8 @@ use crate::pay::{
     LightningPayStateMachine,
 };
 use crate::receive::{
-    get_incoming_contract, LightningReceiveError, LightningReceiveStateMachine,
-    LightningReceiveStates, LightningReceiveSubmittedOffer,
+    LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
+    LightningReceiveSubmittedOffer, get_incoming_contract,
 };
 
 /// Number of blocks until outgoing lightning contracts times out and user
@@ -935,7 +935,7 @@ impl LightningClientModule {
             .amount_milli_satoshis(amount.msats)
             .invoice_description(description)
             .payment_hash(payment_hash)
-            .payment_secret(PaymentSecret(rng.gen()))
+            .payment_secret(PaymentSecret(rng.r#gen()))
             .duration_since_epoch(duration_since_epoch)
             .min_final_cltv_expiry_delta(18)
             .payee_pub_key(node_public_key)
@@ -1303,7 +1303,7 @@ impl LightningClientModule {
                 yield InternalPayState::Funding;
 
                 let state = loop {
-                    if let Some(LightningClientStateMachines::InternalPay(state)) = stream.next().await {
+                    match stream.next().await { Some(LightningClientStateMachines::InternalPay(state)) => {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) => break InternalPayState::Preimage(preimage),
                             IncomingSmStates::RefundSubmitted{ out_points, error } => {
@@ -1315,9 +1315,9 @@ impl LightningClientModule {
                             IncomingSmStates::FundingFailed { error } => break InternalPayState::FundingFailed{ error },
                             _ => {}
                         }
-                    } else {
+                    } _ => {
                         break InternalPayState::UnexpectedError("Unexpected State! Expected an InternalPay state".to_string())
-                    }
+                    }}
                 };
                 yield state;
             }
@@ -1832,9 +1832,8 @@ impl LightningClientModule {
                         }
                         InternalPayState::RefundSuccess { out_points, error } => {
                             let e = format!(
-                            "Internal payment failed. A refund was issued to {out_points:?} Error: {error}"
-
-                        );
+                                "Internal payment failed. A refund was issued to {out_points:?} Error: {error}"
+                            );
                             bail!("{e}");
                         }
                         InternalPayState::UnexpectedError(e) => {
@@ -1878,7 +1877,7 @@ impl LightningClientModule {
                             }));
                         }
                         LnPayState::Funded { block_height: _ } if return_on_funding => {
-                            return Ok(None)
+                            return Ok(None);
                         }
                         LnPayState::Created
                         | LnPayState::AwaitingChange
@@ -2117,7 +2116,8 @@ pub async fn get_invoice(
                         .await?;
                     let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
                     let invoice_amount = invoice.amount_milli_satoshis();
-                    ensure!(invoice_amount == Some(amount.msats),
+                    ensure!(
+                        invoice_amount == Some(amount.msats),
                         "the amount generated by the lnurl ({invoice_amount:?}) is different from the requested amount ({amount}), try again using a different amount"
                     );
                     Ok(invoice)

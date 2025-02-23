@@ -3,8 +3,8 @@ pub mod real;
 
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
-use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::Amount;
+use fedimint_core::txoproof::TxOutProof;
 
 #[async_trait]
 pub trait BitcoinTest {

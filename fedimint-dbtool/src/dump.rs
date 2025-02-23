@@ -17,8 +17,8 @@ use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::push_db_pair_items;
 use fedimint_gateway_server::Gateway;
 use fedimint_rocksdb::RocksDbReadOnly;
-use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
+use fedimint_server::config::io::read_server_config;
 use fedimint_server::consensus::db as ConsensusRange;
 use fedimint_server::core::{ServerModuleInitRegistry, ServerModuleInitRegistryExt};
 use fedimint_server::net::api::announcement::ApiAnnouncementPrefix;
@@ -26,7 +26,7 @@ use futures::StreamExt;
 use strum::IntoEnumIterator;
 
 macro_rules! push_db_pair_items_no_serde {
-    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
+    ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
         let db_items = IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
             .await
             .map(|(key, val)| {
@@ -97,17 +97,18 @@ impl DatabaseDump {
             let mut dbtx = read_only_db.begin_transaction_nc().await;
             let client_cfg_or = dbtx.get_value(&ClientConfigKey).await;
 
-            if let Some(client_cfg) = client_cfg_or {
-                // Successfully read the client config, that means this database is a client db
-                let kinds = client_cfg.modules.iter().map(|(k, v)| (*k, &v.kind));
-                let decoders = client_module_inits
-                    .available_decoders(kinds)
-                    .unwrap()
-                    .with_fallback();
-                let client_cfg = client_cfg.redecode_raw(&decoders)?;
-                (None, Some(client_cfg), decoders)
-            } else {
-                (None, None, ModuleDecoderRegistry::default())
+            match client_cfg_or {
+                Some(client_cfg) => {
+                    // Successfully read the client config, that means this database is a client db
+                    let kinds = client_cfg.modules.iter().map(|(k, v)| (*k, &v.kind));
+                    let decoders = client_module_inits
+                        .available_decoders(kinds)
+                        .unwrap()
+                        .with_fallback();
+                    let client_cfg = client_cfg.redecode_raw(&decoders)?;
+                    (None, Some(client_cfg), decoders)
+                }
+                _ => (None, None, ModuleDecoderRegistry::default()),
             }
         };
 

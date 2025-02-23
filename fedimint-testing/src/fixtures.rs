@@ -4,30 +4,30 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
 use fedimint_core::config::{ModuleInitParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
+use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::LightningMode;
+use fedimint_gateway_server::Gateway;
 use fedimint_gateway_server::client::GatewayClientBuilder;
 use fedimint_gateway_server::config::LightningModuleMode;
-use fedimint_gateway_server::Gateway;
 use fedimint_lightning::{ILnRpcClient, LightningContext};
 use fedimint_logging::TracingSetup;
 use fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
 use fedimint_testing_core::test_dir;
 
+use crate::btc::BitcoinTest;
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
-use crate::btc::BitcoinTest;
 use crate::envs::{
     FM_PORT_ESPLORA_ENV, FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV,
     FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,

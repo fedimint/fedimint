@@ -4,18 +4,18 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::hashes::Hash;
+use bitcoincore_rpc::RpcApi;
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 use bitcoincore_rpc::jsonrpc::error::RpcError;
-use bitcoincore_rpc::RpcApi;
-use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
+use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
-use fedimint_core::util::{write_overwrite_async, FmtCompact as _};
+use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::ln::LightningNodeType;
 use futures::StreamExt;
@@ -25,14 +25,14 @@ use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::task::spawn_blocking;
 use tokio::time::Instant;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
+use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tracing::{debug, error, info, trace, warn};
 
-use crate::util::{poll, poll_with_timeout, ProcessHandle, ProcessManager};
+use crate::util::{ProcessHandle, ProcessManager, poll, poll_with_timeout};
 use crate::vars::utf8;
 use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
-use crate::{cmd, poll_eq, Gatewayd};
+use crate::{Gatewayd, cmd, poll_eq};
 
 #[derive(Clone)]
 pub struct Bitcoind {

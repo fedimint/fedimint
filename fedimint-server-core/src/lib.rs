@@ -21,7 +21,7 @@ use fedimint_core::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
     ModuleInit, TransactionItemAmount,
 };
-use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, InPoint, OutPoint, PeerId};
+use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 pub use init::*;
 
 #[apply(async_trait_maybe_send!)]
@@ -385,7 +385,6 @@ where
             in_point,
         )
         .await
-        .map(Into::into)
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
 
@@ -430,7 +429,6 @@ where
                 .expect("incorrect input type passed to module plugin"),
         )
         .await
-        .map(Into::into)
         .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
 

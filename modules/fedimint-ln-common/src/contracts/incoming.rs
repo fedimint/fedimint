@@ -1,14 +1,14 @@
 use std::io::Error;
 
 use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::hashes::{hash_newtype, Hash as BitcoinHash};
+use bitcoin::hashes::{Hash as BitcoinHash, hash_newtype};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{secp256k1, Amount, OutPoint};
+use fedimint_core::{Amount, OutPoint, secp256k1};
 use serde::{Deserialize, Serialize};
 
-use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract};
 use crate::LightningInput;
+use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContractOffer {

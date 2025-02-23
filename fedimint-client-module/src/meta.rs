@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::encoding::{Decodable, Encodable};

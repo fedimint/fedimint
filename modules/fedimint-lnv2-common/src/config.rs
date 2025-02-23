@@ -4,7 +4,7 @@ pub use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
+use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config};
 use group::Curve;
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
@@ -181,7 +181,7 @@ fn migrate_config_consensus(
                             .threshold_pub_keys
                             .public_key_share(peer as usize)
                             .0
-                             .0
+                            .0
                             .to_affine(),
                     ),
                 )
@@ -197,7 +197,7 @@ fn migrate_config_private(
     config: &fedimint_ln_common::config::LightningConfigPrivate,
 ) -> LightningConfigPrivate {
     LightningConfigPrivate {
-        sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
+        sk: SecretKeyShare(config.threshold_sec_key.0.0.0),
     }
 }
 

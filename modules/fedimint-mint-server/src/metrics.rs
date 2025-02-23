@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
 };
-use fedimint_metrics::{histogram_opts, Histogram, HistogramVec, AMOUNTS_BUCKETS_SATS, REGISTRY};
+use fedimint_metrics::{AMOUNTS_BUCKETS_SATS, Histogram, HistogramVec, REGISTRY, histogram_opts};
 
 pub(crate) static MINT_INOUT_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec_with_registry!(

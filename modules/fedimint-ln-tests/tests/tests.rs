@@ -8,7 +8,7 @@ use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::OperationId;
 use fedimint_core::module::CommonModuleInit as _;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, secp256k1, Amount};
+use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -16,8 +16,8 @@ use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
     LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::LightningCommonInit;
+use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
@@ -625,7 +625,7 @@ mod fedimint_migration_tests {
     use std::time::Duration;
 
     use anyhow::ensure;
-    use bitcoin_hashes::{sha256, Hash as BitcoinHash};
+    use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
@@ -634,7 +634,7 @@ mod fedimint_migration_tests {
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{Amount, OutPoint, PeerId, TransactionId, secp256k1};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
     use fedimint_ln_client::pay::{
         LightningPayCommon, LightningPayStates, PayInvoicePayload, PaymentData,
@@ -651,8 +651,8 @@ mod fedimint_migration_tests {
         OutgoingContract, OutgoingContractAccount, OutgoingContractData,
     };
     use fedimint_ln_common::contracts::{
-        outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract,
-        IdentifiableContract, PreimageDecryptionShare, PreimageKey,
+        ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract, IdentifiableContract,
+        PreimageDecryptionShare, PreimageKey, outgoing,
     };
     use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
     use fedimint_ln_common::{
@@ -670,8 +670,8 @@ mod fedimint_migration_tests {
     use fedimint_logging::TracingSetup;
     use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
-        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
-        validate_migrations_server, BYTE_32, BYTE_33, BYTE_8, STRING_64, TEST_MODULE_INSTANCE_ID,
+        BYTE_8, BYTE_32, BYTE_33, STRING_64, TEST_MODULE_INSTANCE_ID, snapshot_db_migrations,
+        snapshot_db_migrations_client, validate_migrations_client, validate_migrations_server,
     };
     use futures::StreamExt;
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret, RoutingFees};

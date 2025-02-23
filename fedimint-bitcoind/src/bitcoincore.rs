@@ -11,7 +11,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Feerate};
+use fedimint_core::{Feerate, apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_BITCOIND_CORE, LOG_CORE};
 use tracing::{info, warn};
 
@@ -76,8 +76,8 @@ impl IBitcoindRpc for BitcoindClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        use bitcoincore_rpc::jsonrpc::Error::Rpc;
         use bitcoincore_rpc::Error::JsonRpc;
+        use bitcoincore_rpc::jsonrpc::Error::Rpc;
         match block_in_place(|| self.client.send_raw_transaction(&transaction)) {
             // Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
             // This is considered a success case, so we don't surface the error log.

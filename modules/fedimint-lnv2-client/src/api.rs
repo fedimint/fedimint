@@ -7,12 +7,12 @@ use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
+use fedimint_core::{NumPeersExt, PeerId, apply, async_trait_maybe_send};
+use fedimint_lnv2_common::ContractId;
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
-use fedimint_lnv2_common::ContractId;
 use rand::seq::SliceRandom;
 
 #[apply(async_trait_maybe_send!)]

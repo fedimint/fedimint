@@ -23,19 +23,20 @@ use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
 };
-use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
+use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::FmtCompact as _;
-use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
+use fedimint_core::{NumPeers, NumPeersExt, PeerId, timing};
 use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::watch;
-use tracing::{debug, info, instrument, trace, warn, Level};
+use tracing::{Level, debug, info, instrument, trace, warn};
 
+use crate::LOG_CONSENSUS;
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
-use crate::consensus::aleph_bft::data_provider::{get_citem_bytes_chsum, DataProvider, UnitData};
+use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData, get_citem_bytes_chsum};
 use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
@@ -46,13 +47,13 @@ use crate::consensus::db::{
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
-use crate::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
+use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{
-    CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
-    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
-    CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
+    CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ITEMS_PROCESSED_TOTAL,
+    CONSENSUS_ORDERING_LATENCY_SECONDS, CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX,
+    CONSENSUS_SESSION_COUNT,
 };
-use crate::LOG_CONSENSUS;
 
 // The name of the directory where the database checkpoints are stored.
 const DB_CHECKPOINTS_DIR: &str = "db_checkpoints";
@@ -629,7 +630,10 @@ impl ConsensusEngine {
                 return Ok(());
             }
 
-            bail!("Item was discarded previously: existing: {existing_item:?} {}, current: {item:?}, {peer}", existing_item.peer);
+            bail!(
+                "Item was discarded previously: existing: {existing_item:?} {}, current: {item:?}, {peer}",
+                existing_item.peer
+            );
         }
 
         self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
@@ -823,5 +827,5 @@ pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_
         .await
         .next()
         .await
-        .map_or(0, |entry| (entry.0 .0) + 1)
+        .map_or(0, |entry| (entry.0.0) + 1)
 }

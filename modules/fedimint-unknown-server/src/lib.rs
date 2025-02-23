@@ -14,8 +14,8 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{CoreMigrationFn, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId};
 use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
@@ -25,8 +25,8 @@ use fedimint_unknown_common::config::{
     UnknownConfigPrivate, UnknownGenParams,
 };
 use fedimint_unknown_common::{
-    UnknownCommonInit, UnknownConsensusItem, UnknownInput, UnknownInputError, UnknownModuleTypes,
-    UnknownOutput, UnknownOutputError, UnknownOutputOutcome, MODULE_CONSENSUS_VERSION,
+    MODULE_CONSENSUS_VERSION, UnknownCommonInit, UnknownConsensusItem, UnknownInput,
+    UnknownInputError, UnknownModuleTypes, UnknownOutput, UnknownOutputError, UnknownOutputOutcome,
 };
 pub mod db;
 

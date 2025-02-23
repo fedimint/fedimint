@@ -18,26 +18,26 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
 };
-use fedimint_core::{push_db_pair_items, Amount, InPoint, OutPoint, PeerId};
+use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_dummy_common::config::{
     DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
     DummyGenParams,
 };
 use fedimint_dummy_common::{
-    broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyInput,
-    DummyInputError, DummyModuleTypes, DummyOutput, DummyOutputError, DummyOutputOutcome,
-    MODULE_CONSENSUS_VERSION,
+    DummyCommonInit, DummyConsensusItem, DummyInput, DummyInputError, DummyModuleTypes,
+    DummyOutput, DummyOutputError, DummyOutputOutcome, MODULE_CONSENSUS_VERSION,
+    broken_fed_public_key, fed_public_key,
 };
 use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::{FutureExt, StreamExt};
 use strum::IntoEnumIterator;
 
 use crate::db::{
-    migrate_to_v1, DbKeyPrefix, DummyFundsKeyV1, DummyFundsPrefixV1, DummyOutcomeKey,
-    DummyOutcomePrefix,
+    DbKeyPrefix, DummyFundsKeyV1, DummyFundsPrefixV1, DummyOutcomeKey, DummyOutcomePrefix,
+    migrate_to_v1,
 };
 
 pub mod db;

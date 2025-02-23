@@ -426,11 +426,11 @@ mod tests {
     use bitcoin::hashes::Hash as BitcoinHash;
     use hex::FromHex;
 
+    use crate::ModuleDecoderRegistry;
     use crate::db::DatabaseValue;
     use crate::encoding::btc::NetworkLegacyEncodingWrapper;
     use crate::encoding::tests::{test_roundtrip, test_roundtrip_expected};
     use crate::encoding::{Decodable, Encodable};
-    use crate::ModuleDecoderRegistry;
 
     #[test_log::test]
     fn block_hash_roundtrip() {

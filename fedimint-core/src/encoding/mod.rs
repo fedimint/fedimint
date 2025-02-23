@@ -958,11 +958,13 @@ mod tests {
         let vec = vec![42u8];
         let mut cursor = Cursor::new(vec);
 
-        assert!(NotConstructable::consensus_decode_partial(
-            &mut cursor,
-            &ModuleDecoderRegistry::default()
-        )
-        .is_err());
+        assert!(
+            NotConstructable::consensus_decode_partial(
+                &mut cursor,
+                &ModuleDecoderRegistry::default()
+            )
+            .is_err()
+        );
     }
 
     #[test]

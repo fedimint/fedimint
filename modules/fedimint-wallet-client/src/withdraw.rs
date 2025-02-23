@@ -1,19 +1,19 @@
 use bitcoin::Txid;
-use fedimint_api_client::api::{deserialize_outcome, FederationApiExt};
-use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+use fedimint_api_client::api::{FederationApiExt, deserialize_outcome};
 use fedimint_client_module::DynGlobalClientContext;
+use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+use fedimint_core::OutPoint;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::OutPoint;
 use fedimint_wallet_common::WalletOutputOutcome;
 use futures::future::pending;
 use tracing::warn;
 
-use crate::events::WithdrawRequest;
 use crate::WalletClientContext;
+use crate::events::WithdrawRequest;
 
 // TODO: track tx confirmations
 #[aquamarine::aquamarine]

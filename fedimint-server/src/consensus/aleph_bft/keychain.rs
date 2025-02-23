@@ -5,9 +5,9 @@ use aleph_bft::Keychain as KeychainTrait;
 use bitcoin::hashes::Hash;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::session_outcome::SchnorrSignature;
-use fedimint_core::{secp256k1, NumPeersExt, PeerId};
+use fedimint_core::{NumPeersExt, PeerId, secp256k1};
 use secp256k1::hashes::sha256;
-use secp256k1::{schnorr, Keypair, Message, PublicKey};
+use secp256k1::{Keypair, Message, PublicKey, schnorr};
 
 use crate::config::ServerConfig;
 

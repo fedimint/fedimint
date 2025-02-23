@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -12,9 +12,9 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TieredCounts};
+use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::{Amount, OutPoint, PeerId, TieredCounts, secp256k1};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };

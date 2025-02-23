@@ -8,10 +8,10 @@ use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::secp256k1::Secp256k1;
-use fedimint_core::{sats, Amount, OutPoint};
+use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
-use fedimint_dummy_common::{broken_fed_key_pair, DummyInput, DummyOutput, KIND};
+use fedimint_dummy_common::{DummyInput, DummyOutput, KIND, broken_fed_key_pair};
 use fedimint_dummy_server::DummyInit;
 use fedimint_testing::fixtures::Fixtures;
 
@@ -155,22 +155,22 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::{secp256k1, Amount, BitcoinHash, OutPoint, TransactionId};
+    use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId, secp256k1};
     use fedimint_dummy_client::db::{
         DummyClientFundsKeyV0, DummyClientFundsKeyV1, DummyClientNameKey,
     };
     use fedimint_dummy_client::states::DummyStateMachine;
     use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
     use fedimint_dummy_common::{DummyCommonInit, DummyOutputOutcome};
+    use fedimint_dummy_server::DummyInit;
     use fedimint_dummy_server::db::{
         DbKeyPrefix, DummyFundsKeyV0, DummyFundsPrefixV1, DummyOutcomeKey, DummyOutcomePrefix,
     };
-    use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
     use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
-        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
-        validate_migrations_server, BYTE_32, TEST_MODULE_INSTANCE_ID,
+        BYTE_32, TEST_MODULE_INSTANCE_ID, snapshot_db_migrations, snapshot_db_migrations_client,
+        validate_migrations_client, validate_migrations_server,
     };
     use futures::StreamExt;
     use rand::rngs::OsRng;

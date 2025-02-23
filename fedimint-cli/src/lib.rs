@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, result};
 
-use anyhow::{format_err, Context};
+use anyhow::{Context, format_err};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use client::ModuleSelector;
 use db_locked::LockedBuilder;
@@ -38,18 +38,18 @@ use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::module::init::ClientModuleInit;
 use fedimint_client::module_init::ClientModuleInitRegistry;
-use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
+use fedimint_client::secret::{RootSecretStrategy, get_default_client_secret};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::util::{backoff_util, handle_version_hash_command, retry, SafeUrl};
-use fedimint_core::{fedimint_build_code_version_env, runtime, Amount, PeerId, TieredMulti};
+use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, retry};
+use fedimint_core::{Amount, PeerId, TieredMulti, fedimint_build_code_version_env, runtime};
 use fedimint_eventlog::EventLogId;
 use fedimint_ln_client::LightningClientInit;
-use fedimint_logging::{TracingSetup, LOG_CLIENT};
+use fedimint_logging::{LOG_CLIENT, TracingSetup};
 use fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, SpendableNote};
 use fedimint_wallet_client::api::WalletFederationApi;
@@ -58,7 +58,7 @@ use futures::future::pending;
 use itertools::Itertools;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use thiserror::Error;
 use tracing::{debug, info, warn};
 use utils::parse_peer_id;
@@ -137,7 +137,7 @@ trait CliResultExt<O, E> {
     fn map_err_cli(self) -> Result<O, CliError>;
     /// Map error into `CliError` using custom error message `msg`
     fn map_err_cli_msg(self, msg: impl fmt::Display + Send + Sync + 'static)
-        -> Result<O, CliError>;
+    -> Result<O, CliError>;
 }
 
 impl<O, E> CliResultExt<O, E> for result::Result<O, E>
@@ -608,11 +608,11 @@ impl FedimintCli {
         })
     }
 
-    pub fn with_module<T>(mut self, gen: T) -> Self
+    pub fn with_module<T>(mut self, r#gen: T) -> Self
     where
         T: ClientModuleInit + 'static + Send + Sync,
     {
-        self.module_inits.attach(gen);
+        self.module_inits.attach(r#gen);
         self
     }
 

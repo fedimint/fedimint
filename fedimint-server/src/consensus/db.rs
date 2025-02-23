@@ -3,15 +3,15 @@ use std::fmt::Debug;
 
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationContext,
-    MODULE_GLOBAL_PREFIX,
+    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    MigrationContext,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{apply, async_trait_maybe_send, impl_db_lookup, impl_db_record, TransactionId};
+use fedimint_core::{TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;

@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use fedimint_client_module::sm::{Context, DynContext, DynState, State, StateTransition};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
+use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime;
@@ -15,8 +15,8 @@ use tokio::sync::broadcast::Sender;
 use tracing::{info, trace};
 
 use super::Executor;
-use crate::sm::notifier::Notifier;
 use crate::DynGlobalClientContext;
+use crate::sm::notifier::Notifier;
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Hash)]
 enum MockStateMachine {

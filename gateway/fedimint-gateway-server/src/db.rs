@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
@@ -11,15 +11,15 @@ use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
+use fedimint_core::{Amount, impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1};
 use fedimint_gateway_common::FederationConfig;
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use futures::{FutureExt, StreamExt};
 use lightning_invoice::RoutingFees;
-use rand::rngs::OsRng;
 use rand::Rng;
+use rand::rngs::OsRng;
 use secp256k1::{Keypair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -429,7 +429,7 @@ async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
 
     // If there is no old gateway configuration, there is nothing to do.
     if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV0).await {
-        let password_salt: [u8; 16] = rand::thread_rng().gen();
+        let password_salt: [u8; 16] = rand::thread_rng().r#gen();
         let hashed_password = hash_password(&old_gateway_config.password, password_salt);
         let new_gateway_config = GatewayConfigurationV1 {
             hashed_password,
@@ -615,15 +615,15 @@ mod fedimint_migration_tests {
 
     use anyhow::ensure;
     use bitcoin::hashes::Hash;
-    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::PeerId;
     use fedimint_core::db::Database;
+    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::util::SafeUrl;
-    use fedimint_core::PeerId;
     use fedimint_lnv2_common::gateway_api::PaymentFee;
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
-        snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
+        BYTE_32, snapshot_db_migrations_with_decoders, validate_migrations_global,
     };
     use strum::IntoEnumIterator;
     use tracing::info;

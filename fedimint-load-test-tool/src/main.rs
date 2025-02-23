@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::vec;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use common::{
     cln_create_invoice, cln_pay_invoice, cln_wait_invoice_payment, gateway_pay_invoice,
@@ -20,12 +20,12 @@ use common::{
 use devimint::cmd;
 use devimint::util::GatewayLndCli;
 use fedimint_client::ClientHandleArc;
+use fedimint_core::Amount;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::runtime::spawn;
 use fedimint_core::util::{BoxFuture, SafeUrl};
-use fedimint_core::Amount;
 use fedimint_ln_client::{LightningClientModule, LnReceiveState};
 use fedimint_ln_common::LightningGateway;
 use fedimint_mint_client::OOBNotes;
@@ -346,7 +346,9 @@ async fn main() -> anyhow::Result<()> {
                 vec![]
             };
             if args.generate_invoice_with.is_none() && invoices.is_empty() {
-                info!("No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run");
+                info!(
+                    "No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run"
+                );
             }
             run_load_test(
                 opts.archive_dir,
@@ -409,7 +411,9 @@ async fn invite_code_or_fallback(invite_code: Option<InviteCode>) -> Option<Invi
         match get_invite_code_cli(0.into()).await {
             Ok(invite_code) => Some(invite_code),
             Err(e) => {
-                info!("No invite code provided and failed to get one with '{e}' error, will try to proceed without one...");
+                info!(
+                    "No invite code provided and failed to get one with '{e}' error, will try to proceed without one..."
+                );
                 None
             }
         }
@@ -440,7 +444,9 @@ async fn run_load_test(
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
     get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
     print_coordinator_notes(&coordinator).await?;
-    info!("Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
+    info!(
+        "Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)"
+    );
     remint_denomination(&coordinator, note_denomination, minimum_notes).await?;
     print_coordinator_notes(&coordinator).await?;
 
@@ -557,7 +563,9 @@ async fn get_required_notes(
     let current_balance = coordinator.get_balance().await;
     if current_balance < minimum_amount_required {
         let diff = minimum_amount_required.saturating_sub(current_balance);
-        info!("Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli");
+        info!(
+            "Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli"
+        );
         match try_get_notes_cli(&diff, 5).await {
             Ok(notes) => {
                 info!("Got {} more notes, reissuing them", notes.total_amount());
@@ -568,7 +576,9 @@ async fn get_required_notes(
             }
         };
     } else {
-        info!("Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}");
+        info!(
+            "Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}"
+        );
     }
     Ok(())
 }
@@ -674,7 +684,9 @@ async fn do_load_test_user_task(
                     cln_wait_invoice_payment(&label).await?;
                 }
                 None if additional_invoices.is_empty() => {
-                    debug!("No method given to generate an invoice and no invoices on file, will not test the gateway");
+                    debug!(
+                        "No method given to generate an invoice and no invoices on file, will not test the gateway"
+                    );
                     break;
                 }
                 None => {
@@ -737,7 +749,9 @@ async fn run_ln_circular_load_test(
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
     get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
 
-    info!("Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
+    info!(
+        "Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)"
+    );
     remint_denomination(&coordinator, note_denomination, minimum_notes).await?;
 
     print_coordinator_notes(&coordinator).await?;
@@ -998,7 +1012,9 @@ async fn wait_invoice_payment(
             }
             LnReceiveState::Canceled { reason } => {
                 let elapsed: Duration = pay_invoice_time.elapsed()?;
-                info!("{prefix} Invoice payment receive was canceled on {gateway_name}: {reason} in {elapsed:?}");
+                info!(
+                    "{prefix} Invoice payment receive was canceled on {gateway_name}: {reason} in {elapsed:?}"
+                );
                 event_sender.send(MetricEvent {
                     name: "gateway_payment_received_canceled".into(),
                     duration: elapsed,
@@ -1268,14 +1284,19 @@ async fn handle_metrics_summary(
                 }
                 Some(comparison)
             } else {
-                info!("Skipping comparison for {k} because previous metric has different n ({} vs {})", previous_metric.n, metric_summary.n);
+                info!(
+                    "Skipping comparison for {k} because previous metric has different n ({} vs {})",
+                    previous_metric.n, metric_summary.n
+                );
                 None
             }
         } else {
             None
         };
         if let Some(comparison) = comparison {
-            println!("{n} {k}: avg {avg:?}, median {median:?}, max {max:?}, min {min:?} (compared to previous: {comparison})");
+            println!(
+                "{n} {k}: avg {avg:?}, median {median:?}, max {max:?}, min {min:?} (compared to previous: {comparison})"
+            );
         } else {
             println!("{n} {k}: avg {avg:?}, median {median:?}, max {max:?}, min {min:?}");
         }

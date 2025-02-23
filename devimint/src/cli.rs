@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{env, ffi};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, ensure};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{write_overwrite_async, FmtCompactAnyhow as _};
+use fedimint_core::util::{FmtCompactAnyhow as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
-use rand::distributions::Alphanumeric;
 use rand::Rng as _;
+use rand::distributions::Alphanumeric;
 use tokio::fs;
 use tokio::net::TcpStream;
 use tokio::time::Instant;
@@ -22,9 +22,9 @@ use crate::envs::{
     FM_OFFLINE_NODES_ENV, FM_TEST_DIR_ENV,
 };
 use crate::federation::Fedimintd;
-use crate::util::{poll, ProcessManager};
+use crate::util::{ProcessManager, poll};
 use crate::vars::mkdir;
-use crate::{external_daemons, vars, ExternalDaemons};
+use crate::{ExternalDaemons, external_daemons, vars};
 
 fn random_test_dir_suffix() -> String {
     rand::thread_rng()
@@ -149,7 +149,8 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     for (var, value) in globals.vars() {
         debug!(var, value, "Env variable set");
         writeln!(env_string, r#"export {var}="{value}""#)?; // hope that value doesn't contain a "
-        std::env::set_var(var, value);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(var, value) };
     }
     write_overwrite_async(globals.FM_TEST_DIR.join("env"), env_string).await?;
     let process_mgr = ProcessManager::new(globals);
@@ -162,22 +163,23 @@ pub async fn update_test_dir_link(
     link_test_dir: &Path,
     test_dir: &Path,
 ) -> Result<(), anyhow::Error> {
-    let make_link = if let Ok(existing) = fs::read_link(link_test_dir).await {
-        if existing == test_dir {
-            false
-        } else {
-            debug!(
-                old = %existing.display(),
-                new = %test_dir.display(),
-                link = %link_test_dir.display(),
-                "Updating exinst test dir link"
-            );
+    let make_link = match fs::read_link(link_test_dir).await {
+        Ok(existing) => {
+            if existing == test_dir {
+                false
+            } else {
+                debug!(
+                    old = %existing.display(),
+                    new = %test_dir.display(),
+                    link = %link_test_dir.display(),
+                    "Updating exinst test dir link"
+                );
 
-            fs::remove_file(link_test_dir).await?;
-            true
+                fs::remove_file(link_test_dir).await?;
+                true
+            }
         }
-    } else {
-        true
+        _ => true,
     };
     if make_link {
         debug!(src = %test_dir.display(), dst = %link_test_dir.display(), "Linking test dir");
@@ -279,20 +281,21 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     .map(|_| ())
                             },
                             async {
-                                if let Some(gw_ldk) = dev_fed.gw_ldk_connected().await? {
-                                    let pegin_addr = gw_ldk
-                                        .get_pegin_addr(
-                                            &dev_fed.fed().await?.calculate_federation_id(),
-                                        )
-                                        .await?;
-                                    dev_fed
-                                        .bitcoind()
-                                        .await?
-                                        .send_to(pegin_addr, GW_PEGIN_AMOUNT)
-                                        .await
-                                        .map(|_| ())
-                                } else {
-                                    Ok(())
+                                match dev_fed.gw_ldk_connected().await? {
+                                    Some(gw_ldk) => {
+                                        let pegin_addr = gw_ldk
+                                            .get_pegin_addr(
+                                                &dev_fed.fed().await?.calculate_federation_id(),
+                                            )
+                                            .await?;
+                                        dev_fed
+                                            .bitcoind()
+                                            .await?
+                                            .send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                            .await
+                                            .map(|_| ())
+                                    }
+                                    _ => Ok(()),
                                 }
                             },
                         )?;
@@ -309,7 +312,10 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         "Pegins completed");
                     }
 
-                    std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().await?.invite_code()?);
+                    // TODO: Audit that the environment access only happens in single-threaded code.
+                    unsafe {
+                        std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().await?.invite_code()?);
+                    };
 
                     dev_fed.finalize(&process_mgr).await?;
 
@@ -442,7 +448,8 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
                 let invite = fs::read_to_string(&invite_file).await?;
                 let mut env_string = fs::read_to_string(&env_file).await?;
                 writeln!(env_string, r#"export FM_INVITE_CODE="{invite}""#)?;
-                std::env::set_var(FM_INVITE_CODE_ENV, invite);
+                // TODO: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var(FM_INVITE_CODE_ENV, invite) };
                 write_overwrite_async(env_file, env_string).await?;
             }
 

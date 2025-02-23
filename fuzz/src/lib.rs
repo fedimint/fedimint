@@ -5,8 +5,8 @@
 use std::fmt;
 
 use fedimint_core::encoding::{self, Decodable, Encodable};
-use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_meta_common::MetaCommonInit;
 use fedimint_mint_common::MintCommonInit;
 use fedimint_wallet_common::WalletCommonInit;

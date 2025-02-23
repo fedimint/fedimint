@@ -7,19 +7,19 @@
 
 use std::collections::BTreeMap;
 
-use async_channel::{bounded, Receiver, Sender};
+use async_channel::{Receiver, Sender, bounded};
 use async_trait::async_trait;
 use fedimint_api_client::api::P2PConnectionStatus;
-use fedimint_core::net::peers::{IP2PConnections, Recipient};
-use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::util::backoff_util::{api_networking_backoff, FibonacciBackoff};
-use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::PeerId;
+use fedimint_core::net::peers::{IP2PConnections, Recipient};
+use fedimint_core::task::{TaskGroup, sleep};
+use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff};
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
-use futures::future::select_all;
 use futures::FutureExt;
+use futures::future::select_all;
 use tokio::sync::watch;
-use tracing::{info, info_span, warn, Instrument};
+use tracing::{Instrument, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::p2p_connection::DynP2PConnection;
@@ -116,13 +116,14 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M
                     connection.send(message.clone()).await;
                 }
             }
-            Recipient::Peer(peer) => {
-                if let Some(connection) = self.connections.get(&peer) {
+            Recipient::Peer(peer) => match self.connections.get(&peer) {
+                Some(connection) => {
                     connection.send(message).await;
-                } else {
+                }
+                _ => {
                     warn!(target: LOG_NET_PEER, "No connection for peer {peer}");
                 }
-            }
+            },
         }
     }
 
@@ -133,13 +134,14 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M
                     connection.try_send(message.clone());
                 }
             }
-            Recipient::Peer(peer) => {
-                if let Some(connection) = self.connections.get(&peer) {
+            Recipient::Peer(peer) => match self.connections.get(&peer) {
+                Some(connection) => {
                     connection.try_send(message);
-                } else {
+                }
+                _ => {
                     warn!(target: LOG_NET_PEER, "No connection for peer {peer}");
                 }
-            }
+            },
         }
     }
 

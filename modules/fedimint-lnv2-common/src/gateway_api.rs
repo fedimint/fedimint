@@ -1,11 +1,11 @@
 use std::ops::Add;
 
-use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::schnorr::Signature;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Amount};
+use fedimint_core::{Amount, apply, async_trait_maybe_send};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

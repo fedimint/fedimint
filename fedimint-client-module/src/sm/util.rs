@@ -53,7 +53,7 @@ where
 
 #[macro_export]
 macro_rules! sm_enum_variant_translation {
-    ($sm:expr, $enum_variant:path) => {
+    ($sm:expr_2021, $enum_variant:path) => {
         $sm.map(
             |sm| $enum_variant(sm),
             |sm| match sm {

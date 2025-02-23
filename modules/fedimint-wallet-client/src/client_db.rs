@@ -6,7 +6,7 @@ use std::time::SystemTime;
 use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
+use fedimint_core::{TransactionId, impl_db_lookup, impl_db_record};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 

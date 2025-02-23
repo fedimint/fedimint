@@ -19,11 +19,11 @@ use std::sync::Arc;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
-use anyhow::{bail, ensure, format_err, Context};
+use anyhow::{Context, bail, ensure, format_err};
 use bitcoin::absolute::LockTime;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::ecdsa::Signature as EcdsaSig;
-use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
+use bitcoin::hashes::{Hash as BitcoinHash, HashEngine, Hmac, HmacEngine, sha256};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::psbt::{Input, Psbt};
 use bitcoin::secp256k1::{self, All, Message, Scalar, Secp256k1, Verification};
@@ -31,14 +31,14 @@ use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
 use common::config::WalletConfigConsensus;
 use common::{
-    proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
+    DEPRECATED_RBF_ERROR, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
-    WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, DEPRECATED_RBF_ERROR,
+    WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, proprietary_tweak_key,
 };
 use envs::get_feerate_multiplier;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -50,20 +50,20 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
+use fedimint_core::envs::{BitcoinRpcConfig, is_rbf_withdrawal_enabled, is_running_in_test_env};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
+    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
+    SupportedModuleApiVersions, TransactionItemAmount, api_endpoint,
 };
+use fedimint_core::task::TaskGroup;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
-use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{backoff_util, retry, FmtCompact, FmtCompactAnyhow as _};
+use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
-    apply, async_trait_maybe_send, get_network_for_address, push_db_key_items, push_db_pair_items,
-    Feerate, InPoint, NumPeersExt, OutPoint, PeerId,
+    Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    get_network_for_address, push_db_key_items, push_db_pair_items,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
@@ -82,8 +82,8 @@ use fedimint_wallet_common::endpoint_constants::{
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
-    Rbf, UnknownWalletInputVariantError, WalletInputError, WalletOutputError, WalletOutputV0,
-    MODULE_CONSENSUS_VERSION,
+    MODULE_CONSENSUS_VERSION, Rbf, UnknownWalletInputVariantError, WalletInputError,
+    WalletOutputError, WalletOutputV0,
 };
 use futures::future::join_all;
 use futures::{FutureExt, StreamExt};
@@ -93,22 +93,22 @@ use metrics::{
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
 use miniscript::psbt::PsbtExt;
-use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
+use miniscript::{Descriptor, TranslatePk, translate_hash_fail};
 use rand::rngs::OsRng;
 use serde::Serialize;
 use strum::IntoEnumIterator;
-use tokio::sync::{watch, Notify};
+use tokio::sync::{Notify, watch};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::db::{
-    migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
+    BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
     ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
     ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
     ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
     PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
     PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
     UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
-    UnspentTxOutPrefix,
+    UnspentTxOutPrefix, migrate_to_v1,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
@@ -1318,12 +1318,11 @@ impl Wallet {
 
             // TODO: use batching for mainnet syncing
             trace!(block = height, "Fetching block hash");
-            let block_hash =
-                retry("get_block_hash", backoff_util::background_backoff(), || {
-                    self.btc_rpc.get_block_hash(u64::from(height)) // TODO: use u64 for height everywhere
-                })
-                .await
-                .expect("bitcoind rpc to get block hash");
+            let block_hash = retry("get_block_hash", backoff_util::background_backoff(), || {
+                self.btc_rpc.get_block_hash(u64::from(height)) // TODO: use u64 for height everywhere
+            })
+            .await
+            .expect("bitcoind rpc to get block hash");
 
             if self.consensus_module_consensus_version(dbtx).await
                 >= ModuleConsensusVersion::new(2, 2)
@@ -1938,7 +1937,7 @@ impl<'a> StatelessWallet<'a> {
             12 + // up to 2**16-1 outputs
             out_weight + // weight of all outputs
             16; // lock time
-                // https://github.com/fedimint/fedimint/issues/4590
+        // https://github.com/fedimint/fedimint/issues/4590
         #[allow(deprecated)]
         let max_input_weight = (self
             .descriptor
@@ -2245,11 +2244,11 @@ mod tests {
 
     use std::str::FromStr;
 
-    use bitcoin::hashes::Hash;
     use bitcoin::Network::{Bitcoin, Testnet};
-    use bitcoin::{secp256k1, Address, Amount, OutPoint, Txid};
-    use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{Address, Amount, OutPoint, Txid, secp256k1};
     use fedimint_core::Feerate;
+    use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
 

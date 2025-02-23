@@ -1,15 +1,15 @@
 use std::fmt::{self, Display};
 
 use fedimint_client::ClientHandleArc;
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle,
 };
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
 use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
@@ -22,11 +22,11 @@ use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_stream::StreamExt;
-use tracing::{debug, error, info, warn, Instrument};
+use tracing::{Instrument, debug, error, info, warn};
 
 use super::{GatewayClientContext, GatewayExtReceiveStates};
-use crate::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 use crate::GatewayClientModule;
+use crate::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
 
 const TIMELOCK_DELTA: u64 = 10;
 
@@ -294,29 +294,32 @@ impl GatewayPayInvoice {
             };
         }
 
-        if let Some(client) = context
+        match context
             .lightning_manager
             .get_client_for_invoice(payment_parameters.payment_data.clone())
             .await
         {
-            client
-                .with(|client| {
-                    Self::buy_preimage_via_direct_swap(
-                        client,
-                        payment_parameters.payment_data.clone(),
-                        contract.clone(),
-                        common.clone(),
-                    )
-                })
+            Some(client) => {
+                client
+                    .with(|client| {
+                        Self::buy_preimage_via_direct_swap(
+                            client,
+                            payment_parameters.payment_data.clone(),
+                            contract.clone(),
+                            common.clone(),
+                        )
+                    })
+                    .await
+            }
+            _ => {
+                Self::buy_preimage_over_lightning(
+                    context,
+                    payment_parameters,
+                    contract.clone(),
+                    common.clone(),
+                )
                 .await
-        } else {
-            Self::buy_preimage_over_lightning(
-                context,
-                payment_parameters,
-                contract.clone(),
-                common.clone(),
-            )
-            .await
+            }
         }
     }
 
@@ -351,7 +354,9 @@ impl GatewayPayInvoice {
                     },
                 })?;
 
-            debug!("Consensus block count: {consensus_block_count:?} for outgoing contract {contract_id:?}");
+            debug!(
+                "Consensus block count: {consensus_block_count:?} for outgoing contract {contract_id:?}"
+            );
             if consensus_block_count.is_none() {
                 return Err(OutgoingPaymentError {
                     contract_id,

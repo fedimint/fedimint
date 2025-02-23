@@ -6,12 +6,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{env, fs, iter};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{ServerStatus, ServerStatusLegacy};
-use fedimint_core::config::{load_from_file, ClientConfig, ServerModuleConfigGenParamsRegistry};
+use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -27,21 +27,21 @@ use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_testing::ln::LightningNodeType;
-use fedimint_wallet_client::config::WalletClientConfig;
 use fedimint_wallet_client::WalletClientModule;
+use fedimint_wallet_client::config::WalletClientConfig;
 use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::{join_all, try_join_all};
 use rand::Rng;
-use tokio::task::{spawn_blocking, JoinSet};
+use tokio::task::{JoinSet, spawn_blocking};
 use tokio::time::Instant;
 use tracing::{debug, info};
 
 use super::external::Bitcoind;
-use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
+use super::util::{Command, ProcessHandle, ProcessManager, cmd, parse_map};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
-use crate::util::{poll, poll_with_timeout, FedimintdCmd};
+use crate::util::{FedimintdCmd, poll, poll_with_timeout};
 use crate::version_constants::{
     VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_7_0_ALPHA,
 };
@@ -570,7 +570,8 @@ impl Federation {
             }
         }
 
-        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path) };
 
         // staggered restart
         for peer_id in 0..fed_size {
@@ -598,7 +599,8 @@ impl Federation {
     ) -> Result<()> {
         // devimint defines `FM_SKIP_REL_NOTES_ACK` during setup, so we need to remove
         // to verify the logic for `FM_REL_NOTES_ACK` works
-        std::env::remove_var("FM_SKIP_REL_NOTES_ACK");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var("FM_SKIP_REL_NOTES_ACK") };
         let fed_size = process_mgr.globals.FM_FED_SIZE;
 
         // ensure all peers are online, which must happen for a coordinated shutdown
@@ -644,8 +646,10 @@ impl Federation {
             self.terminate_server(peer_id).await?;
         }
 
-        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
-        std::env::set_var("FM_REL_NOTES_ACK", "0_4_xyz");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path) };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_REL_NOTES_ACK", "0_4_xyz") };
 
         // staggered restart
         for peer_id in 0..fed_size {
@@ -675,9 +679,11 @@ impl Federation {
 
         // get the version we're upgrading to, temporarily updating the fedimintd path
         let current_fedimintd_path = std::env::var("FM_FEDIMINTD_BASE_EXECUTABLE")?;
-        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path) };
         let new_fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", current_fedimintd_path);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", current_fedimintd_path) };
 
         if Self::version_requires_coordinated_shutdown(
             &current_fedimintd_version,

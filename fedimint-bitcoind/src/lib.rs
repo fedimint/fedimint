@@ -16,14 +16,14 @@ use std::{env, iter};
 use anyhow::{Context, Result};
 use bitcoin::{Block, BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
-    is_running_in_test_env, BitcoinRpcConfig, FM_BITCOIN_POLLING_INTERVAL_SECS_ENV,
-    FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV, FM_WALLET_FEERATE_SOURCES_ENV,
+    BitcoinRpcConfig, FM_BITCOIN_POLLING_INTERVAL_SECS_ENV, FM_FORCE_BITCOIN_RPC_KIND_ENV,
+    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_WALLET_FEERATE_SOURCES_ENV, is_running_in_test_env,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::{get_median, FmtCompact as _, FmtCompactAnyhow, SafeUrl};
-use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow, SafeUrl, get_median};
+use fedimint_core::{Feerate, apply, async_trait_maybe_send, dyn_newtype_define};
 use fedimint_logging::{LOG_BITCOIND, LOG_CORE};
 use feerate_source::{FeeRateSource, FetchJson};
 use tokio::time::Interval;

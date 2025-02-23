@@ -11,23 +11,23 @@ use core::fmt;
 use std::time::Duration;
 
 use bitcoin::hashes::sha256;
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::runtime::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
+use fedimint_ln_common::LightningInput;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
-use fedimint_ln_common::LightningInput;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
 
 use crate::api::LnFederationApi;
-use crate::{set_payment_result, LightningClientContext, PayType};
+use crate::{LightningClientContext, PayType, set_payment_result};
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes a transaction between two users
@@ -255,7 +255,9 @@ impl DecryptingPreimageState {
                     });
                 }
                 Err(error) => {
-                    warn!("Incoming contract {contract_id:?} error waiting for preimage decryption: {error:?}, will keep retrying...");
+                    warn!(
+                        "Incoming contract {contract_id:?} error waiting for preimage decryption: {error:?}, will keep retrying..."
+                    );
                 }
             }
 

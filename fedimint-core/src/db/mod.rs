@@ -113,7 +113,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
 use futures::{Stream, StreamExt};
@@ -1269,7 +1269,7 @@ pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug
     /// not call it directly.
     #[doc(hidden)]
     fn global_dbtx(&mut self, access_token: GlobalDBTxAccessToken)
-        -> &mut dyn IDatabaseTransaction;
+    -> &mut dyn IDatabaseTransaction;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -2028,7 +2028,7 @@ where
 /// ```
 #[macro_export]
 macro_rules! impl_db_record {
-    (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr $(, notify_on_modify = $notify:tt)? $(,)?) => {
+    (key = $key:ty, value = $val:ty, db_prefix = $db_prefix:expr_2021 $(, notify_on_modify = $notify:tt)? $(,)?) => {
         impl $crate::db::DatabaseRecord for $key {
             const DB_PREFIX: u8 = $db_prefix as u8;
             $(const NOTIFY_ON_MODIFY: bool = $notify;)?
@@ -2133,7 +2133,7 @@ impl DecodingError {
 
 #[macro_export]
 macro_rules! push_db_pair_items {
-    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
+    ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
             $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
@@ -2152,7 +2152,7 @@ macro_rules! push_db_pair_items {
 
 #[macro_export]
 macro_rules! push_db_key_items {
-    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $map:ident, $key_literal:literal) => {
+    ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
             $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
@@ -2264,7 +2264,7 @@ pub async fn apply_migrations_dbtx(
         .await?
         .filter(|(key, _v)| {
             std::future::ready(
-                external_prefixes_above.map_or(true, |external_prefixes_above| {
+                external_prefixes_above.is_none_or(|external_prefixes_above| {
                     !key.is_empty() && key[0] < external_prefixes_above
                 }),
             )
@@ -2478,8 +2478,8 @@ mod test_utils {
     use tokio::join;
 
     use super::{
-        apply_migrations, CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
-        DatabaseVersionKey, DatabaseVersionKeyV0,
+        CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+        DatabaseVersionKeyV0, apply_migrations,
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
@@ -3240,10 +3240,11 @@ mod test_utils {
 
         // Verify that the old `DatabaseVersion` under `DatabaseVersionKeyV0` migrated
         // to `DatabaseVersionKey`
-        assert!(dbtx
-            .get_value(&DatabaseVersionKey(MODULE_GLOBAL_PREFIX.into()))
-            .await
-            .is_some());
+        assert!(
+            dbtx.get_value(&DatabaseVersionKey(MODULE_GLOBAL_PREFIX.into()))
+                .await
+                .is_some()
+        );
 
         // Verify Dummy module migration
         let test_keys = dbtx
@@ -3284,12 +3285,12 @@ mod test_utils {
         use anyhow::anyhow;
         use async_trait::async_trait;
 
+        use crate::ModuleDecoderRegistry;
         use crate::db::{
             AutocommitError, BaseDatabaseTransaction, IDatabaseTransaction,
             IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase,
             IRawDatabaseTransaction,
         };
-        use crate::ModuleDecoderRegistry;
 
         #[derive(Debug)]
         struct FakeDatabase;
@@ -3398,7 +3399,9 @@ pub async fn find_by_prefix_sorted_descending<'r, 'inner, KP>(
         KP::Record,
         <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
     ),
-> + 'r
+>
++ 'r
++ use<'r, KP>
 where
     'inner: 'r,
     KP: DatabaseLookup,

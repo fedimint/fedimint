@@ -1,4 +1,4 @@
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::config::P2PMessage;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};

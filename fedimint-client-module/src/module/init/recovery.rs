@@ -16,10 +16,10 @@ use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
+use fedimint_core::{OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_RECOVERY;
 use futures::{Stream, StreamExt as _};
-use rand::{thread_rng, Rng as _};
+use rand::{Rng as _, thread_rng};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
@@ -326,8 +326,9 @@ where
             client_ctx: &ClientContext<<Init as ClientModuleInit>::Module>,
             common_state: &mut RecoveryFromHistoryCommon,
             state: &mut Recovery,
-            block_stream: &mut (impl Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>>
-                      + Unpin),
+            block_stream: &mut (
+                     impl Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>> + Unpin
+                 ),
         ) -> anyhow::Result<()>
         where
             Init: ClientModuleInit,

@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use api::MetaFederationApi;
-use common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
+use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_client_module::db::ClientMigrationFn;
@@ -27,10 +27,10 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 use fedimint_core::util::backoff_util::FibonacciBackoff;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
+use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_MODULE_META;
 pub use fedimint_meta_common as common;
-use fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
+use fedimint_meta_common::{DEFAULT_META_KEY, MetaCommonInit, MetaModuleTypes};
 use states::MetaStateMachine;
 use strum::IntoEnumIterator;
 use tracing::{debug, warn};
@@ -261,26 +261,27 @@ async fn get_meta_module_value(
     api: &DynGlobalApi,
     backoff: FibonacciBackoff,
 ) -> Option<MetaConsensusValue> {
-    if let Ok((instance_id, _)) = client_config.get_first_module_by_kind_cfg(KIND) {
-        let meta_api = api.with_module(instance_id);
+    match client_config.get_first_module_by_kind_cfg(KIND) {
+        Ok((instance_id, _)) => {
+            let meta_api = api.with_module(instance_id);
 
-        let overrides_res = retry("fetch_meta_values", backoff, || async {
-            Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
-        })
-        .await;
+            let overrides_res = retry("fetch_meta_values", backoff, || async {
+                Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
+            })
+            .await;
 
-        match overrides_res {
-            Ok(Some(consensus)) => Some(consensus),
-            Ok(None) => {
-                debug!(target: LOG_CLIENT_MODULE_META, "Meta module returned no consensus value");
-                None
-            }
-            Err(e) => {
-                warn!(target: LOG_CLIENT_MODULE_META, "Failed to fetch meta module consensus value: {}", e);
-                None
+            match overrides_res {
+                Ok(Some(consensus)) => Some(consensus),
+                Ok(None) => {
+                    debug!(target: LOG_CLIENT_MODULE_META, "Meta module returned no consensus value");
+                    None
+                }
+                Err(e) => {
+                    warn!(target: LOG_CLIENT_MODULE_META, "Failed to fetch meta module consensus value: {}", e);
+                    None
+                }
             }
         }
-    } else {
-        None
+        _ => None,
     }
 }

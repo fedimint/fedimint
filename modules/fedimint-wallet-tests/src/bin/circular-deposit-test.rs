@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use bitcoin::Transaction;
-use bitcoincore_rpc::bitcoin::address::Address;
 use bitcoincore_rpc::bitcoin::Txid;
+use bitcoincore_rpc::bitcoin::address::Address;
 use devimint::cmd;
 use devimint::federation::Client;
 use fedimint_core::encoding::Decodable;

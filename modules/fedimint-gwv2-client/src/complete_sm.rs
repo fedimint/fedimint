@@ -7,8 +7,8 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_lightning::{InterceptPaymentResponse, PaymentAction, Preimage};
 use fedimint_lnv2_common::contracts::PaymentImage;
 
-use super::events::CompleteLightningPaymentSucceeded;
 use super::FinalReceiveState;
+use super::events::CompleteLightningPaymentSucceeded;
 use crate::GatewayClientContextV2;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use devimint::federation::Client;
 use devimint::util::poll_simple;
 use devimint::version_constants::{VERSION_0_4_0, VERSION_0_5_0_ALPHA};

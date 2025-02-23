@@ -7,7 +7,7 @@ use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, secp256k1, Amount, TieredMulti};
+use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -88,12 +88,14 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
         .expect("Failed to finalize transaction")
         .txid();
 
-    assert!(client
-        .transaction_updates(operation_id)
-        .await
-        .await_tx_accepted(txid)
-        .await
-        .is_err());
+    assert!(
+        client
+            .transaction_updates(operation_id)
+            .await
+            .await_tx_accepted(txid)
+            .await
+            .is_err()
+    );
 
     Ok(())
 }
@@ -515,7 +517,7 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::{
-        secp256k1, Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId,
+        Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId, secp256k1,
     };
     use fedimint_derive_secret::{ChildId, DerivableSecret};
     use fedimint_logging::TracingSetup;
@@ -537,8 +539,8 @@ mod fedimint_migration_tests {
     };
     use fedimint_server::core::DynServerModuleInit;
     use fedimint_testing::db::{
-        snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,
-        validate_migrations_server, BYTE_32, BYTE_8,
+        BYTE_8, BYTE_32, snapshot_db_migrations, snapshot_db_migrations_client,
+        validate_migrations_client, validate_migrations_server,
     };
     use ff::Field;
     use futures::StreamExt;
@@ -546,8 +548,8 @@ mod fedimint_migration_tests {
     use secp256k1::Keypair;
     use strum::IntoEnumIterator;
     use tbs::{
-        blind_message, sign_message, AggregatePublicKey, BlindingKey, Message, PublicKeyShare,
-        SecretKeyShare, Signature,
+        AggregatePublicKey, BlindingKey, Message, PublicKeyShare, SecretKeyShare, Signature,
+        blind_message, sign_message,
     };
     use threshold_crypto::{G1Affine, G2Affine};
     use tracing::info;
@@ -826,9 +828,9 @@ mod fedimint_migration_tests {
                                 .await;
                             let num_cancel_spends = canceled_spend.len();
                             ensure!(
-                            num_cancel_spends > 0,
-                            "validate_migrations was not able to read any CancelledOOBSpendKeys"
-                        );
+                                num_cancel_spends > 0,
+                                "validate_migrations was not able to read any CancelledOOBSpendKeys"
+                            );
                             info!("Validated CancelledOOBSpendKey");
                         }
                         fedimint_mint_client::client_db::DbKeyPrefix::RecoveryState => {

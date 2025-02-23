@@ -8,8 +8,8 @@ pub mod db;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::{bail, format_err, Context};
-use bitcoin_hashes::{sha256, Hash as BitcoinHash};
+use anyhow::{Context, bail, format_err};
+use bitcoin_hashes::{Hash as BitcoinHash, sha256};
 use fedimint_bitcoind::create_bitcoind;
 use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_core::config::{
@@ -18,19 +18,19 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, api_endpoint,
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::task::sleep;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, InPoint, NumPeersExt, OutPoint,
-    PeerId,
+    Amount, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    push_db_pair_items,
 };
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
@@ -50,11 +50,11 @@ use fedimint_ln_common::federation_endpoint_constants::{
     REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_ln_common::{
-    create_gateway_remove_message, ContractAccount, LightningCommonInit, LightningConsensusItem,
-    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
-    LightningInputError, LightningModuleTypes, LightningOutput, LightningOutputError,
-    LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
-    MODULE_CONSENSUS_VERSION,
+    ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
+    LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
+    LightningOutput, LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0,
+    LightningOutputV0, MODULE_CONSENSUS_VERSION, RemoveGatewayRequest,
+    create_gateway_remove_message,
 };
 use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server::config::distributedgen::PeerHandleOps;
@@ -1126,13 +1126,7 @@ impl Lightning {
     ) -> Vec<LightningGatewayAnnouncement> {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
-            .filter_map(|(_, gw)| async {
-                if gw.is_expired() {
-                    None
-                } else {
-                    Some(gw)
-                }
-            })
+            .filter_map(|(_, gw)| async { if gw.is_expired() { None } else { Some(gw) } })
             .collect::<Vec<LightningGatewayRegistration>>()
             .await
             .into_iter()
@@ -1163,13 +1157,7 @@ impl Lightning {
         let expired_gateway_keys = dbtx
             .find_by_prefix(&LightningGatewayKeyPrefix)
             .await
-            .filter_map(|(key, gw)| async move {
-                if gw.is_expired() {
-                    Some(key)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(key, gw)| async move { if gw.is_expired() { Some(key) } else { None } })
             .collect::<Vec<LightningGatewayKey>>()
             .await;
 
@@ -1189,13 +1177,14 @@ impl Lightning {
         gateway_id: PublicKey,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Option<sha256::Hash> {
-        if let Some(gateway) = dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
-            let mut valid_until_bytes = gateway.valid_until.to_bytes();
-            let mut challenge_bytes = gateway_id.to_bytes();
-            challenge_bytes.append(&mut valid_until_bytes);
-            Some(sha256::Hash::hash(&challenge_bytes))
-        } else {
-            None
+        match dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
+            Some(gateway) => {
+                let mut valid_until_bytes = gateway.valid_until.to_bytes();
+                let mut challenge_bytes = gateway_id.to_bytes();
+                challenge_bytes.append(&mut valid_until_bytes);
+                Some(sha256::Hash::hash(&challenge_bytes))
+            }
+            _ => None,
         }
     }
 
@@ -1249,7 +1238,7 @@ fn record_funded_contract_metric(updated_contract_account: &ContractAccount) {
 #[cfg(test)]
 mod tests {
     use assert_matches::assert_matches;
-    use bitcoin_hashes::{sha256, Hash as BitcoinHash};
+    use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
     use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
@@ -1258,7 +1247,7 @@ mod tests {
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{InputMeta, TransactionItemAmount};
-    use fedimint_core::secp256k1::{generate_keypair, PublicKey};
+    use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{

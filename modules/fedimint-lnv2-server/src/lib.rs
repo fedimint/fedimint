@@ -7,7 +7,7 @@ mod db;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::{anyhow, ensure, format_err, Context};
+use anyhow::{Context, anyhow, ensure, format_err};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::create_bitcoind;
 use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
@@ -21,16 +21,16 @@ use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCo
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    TransactionItemAmount, api_endpoint,
 };
 use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, BitcoinHash, InPoint, NumPeers, NumPeersExt,
-    OutPoint, PeerId,
+    BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    push_db_pair_items,
 };
 use fedimint_lnv2_common::config::{
     LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
@@ -45,23 +45,23 @@ use fedimint_lnv2_common::endpoint_constants::{
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
     LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
-    LightningOutputOutcome, LightningOutputV0, OutgoingWitness, MODULE_CONSENSUS_VERSION,
+    LightningOutputOutcome, LightningOutputV0, MODULE_CONSENSUS_VERSION, OutgoingWitness,
 };
 use fedimint_logging::LOG_MODULE_LNV2;
-use fedimint_server::config::distributedgen::{eval_poly_g1, PeerHandleOps};
+use fedimint_server::config::distributedgen::{PeerHandleOps, eval_poly_g1};
 use fedimint_server::core::{
     DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 use fedimint_server::net::api::check_auth;
 use futures::StreamExt;
-use group::ff::Field;
 use group::Curve;
+use group::ff::Field;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
 use tpe::{
-    derive_pk_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare,
+    AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare, derive_pk_share,
 };
 use tracing::trace;
 
@@ -797,7 +797,7 @@ impl Lightning {
             .await
             .find_by_prefix(&GatewayPrefix)
             .await
-            .map(|entry| entry.0 .0)
+            .map(|entry| entry.0.0)
             .collect()
             .await
     }

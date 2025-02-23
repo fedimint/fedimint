@@ -4,8 +4,8 @@ use std::time::{Duration, SystemTime};
 
 use fedimint_core::time::now;
 use fedimint_logging::LOG_TASK;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio::sync::{watch, Mutex};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::{Mutex, watch};
 use tracing::{debug, error, info, warn};
 
 use super::{TaskGroup, TaskShutdownToken};

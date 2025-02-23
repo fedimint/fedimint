@@ -1,7 +1,7 @@
 use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
+use fedimint_core::{Amount, OutPoint, impl_db_lookup, impl_db_record};
 use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;

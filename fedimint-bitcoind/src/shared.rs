@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use fedimint_core::Feerate;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::Feerate;
 use fedimint_logging::LOG_BITCOIN;
 use fedimint_server_core::ServerModuleShared;
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{Mutex, watch};
 use tracing::debug;
 
 /// Used for estimating a feerate that will confirm within a target number of

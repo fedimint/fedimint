@@ -1,6 +1,6 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, PeerId};
+use fedimint_core::{Amount, OutPoint, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{
     ContractId, FundedContract, IdentifiableContract, PreimageDecryptionShare,

@@ -11,7 +11,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, sleep_in_test};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{task, Amount};
+use fedimint_core::{Amount, task};
 use fedimint_logging::LOG_TEST;
 use tracing::{debug, trace};
 

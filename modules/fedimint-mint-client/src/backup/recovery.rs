@@ -2,16 +2,16 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt;
 
+use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
     RecoveryFromHistory, RecoveryFromHistoryCommon,
 };
-use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{
-    apply, async_trait_maybe_send, Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
+    Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply, async_trait_maybe_send,
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY, LOG_CLIENT_RECOVERY_MINT};
@@ -422,13 +422,14 @@ impl MintRecoveryStateV2 {
             fedimint_core::secp256k1::SECP256K1,
             &MintClientModule::new_note_secret_static(secret, amount, *note_idx_ref),
         );
-        assert!(self
-            .pending_nonces
-            .insert(
-                blind_nonce.0.into(),
-                (note_issuance_request, *note_idx_ref, amount)
-            )
-            .is_none());
+        assert!(
+            self.pending_nonces
+                .insert(
+                    blind_nonce.0.into(),
+                    (note_issuance_request, *note_idx_ref, amount)
+                )
+                .is_none()
+        );
 
         note_idx_ref.advance();
     }

@@ -3,9 +3,9 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures::{ready, Stream};
-use tokio::sync::broadcast::error::RecvError;
+use futures::{Stream, ready};
 use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::error::RecvError;
 
 use crate::task::MaybeSend;
 use crate::util::BoxFuture;

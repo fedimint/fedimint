@@ -30,7 +30,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::{anyhow, ensure, Context};
+use anyhow::{Context, anyhow, ensure};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
@@ -50,20 +50,20 @@ use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET, ModuleInstanceId,
+    ModuleKind,
 };
-use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
+use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations_server};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
+use fedimint_core::secp256k1::schnorr::Signature;
+use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{
-    fedimint_build_code_version_env, get_network_for_address, Amount, BitcoinAmountOrAll,
+    Amount, BitcoinAmountOrAll, fedimint_build_code_version_env, get_network_for_address,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
@@ -74,13 +74,13 @@ use fedimint_gateway_common::{
     MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentLogPayload,
     PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
     ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, WithdrawPayload, WithdrawResponse, V1_API_ENDPOINT,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
 use fedimint_gwv2_client::events::compute_lnv2_stats;
-use fedimint_gwv2_client::{GatewayClientModuleV2, IGatewayClientV2, EXPIRATION_DELTA_MINIMUM_V2};
+use fedimint_gwv2_client::{EXPIRATION_DELTA_MINIMUM_V2, GatewayClientModuleV2, IGatewayClientV2};
 use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
@@ -89,15 +89,15 @@ use fedimint_lightning::{
     RouteHtlcStream,
 };
 use fedimint_ln_client::pay::PaymentData;
+use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
-use fedimint_ln_common::LightningCommonInit;
+use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
     CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
 };
-use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,
@@ -500,7 +500,11 @@ impl Gateway {
                 }
             };
 
-        assert!(self.network == lightning_network, "Lightning node network does not match Gateway's network. LN: {lightning_network} Gateway: {}", self.network);
+        assert!(
+            self.network == lightning_network,
+            "Lightning node network does not match Gateway's network. LN: {lightning_network} Gateway: {}",
+            self.network
+        );
 
         if synced_to_chain || is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
             info!("Gateway is already synced to chain");
@@ -685,22 +689,23 @@ impl Gateway {
             .borrow()
             .with(|client| async {
                 let htlc = htlc_request.clone().try_into();
-                if let Ok(htlc) = htlc {
-                    match client
-                        .get_first_module::<GatewayClientModule>()
-                        .expect("Must have client module")
-                        .gateway_handle_intercepted_htlc(htlc)
-                        .await
-                    {
-                        Ok(_) => Ok(()),
-                        Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
-                            format!("Error intercepting lightning payment {e:?}"),
-                        ))),
+                match htlc {
+                    Ok(htlc) => {
+                        match client
+                            .get_first_module::<GatewayClientModule>()
+                            .expect("Must have client module")
+                            .gateway_handle_intercepted_htlc(htlc)
+                            .await
+                        {
+                            Ok(_) => Ok(()),
+                            Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                                format!("Error intercepting lightning payment {e:?}"),
+                            ))),
+                        }
                     }
-                } else {
-                    Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                    _ => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
                         "Could not convert InterceptHtlcResult into an HTLC".to_string(),
-                    )))
+                    ))),
                 }
             })
             .await
@@ -851,7 +856,9 @@ impl Gateway {
         let gateway_network = self.network;
         let Ok(address) = address.require_network(gateway_network) else {
             return Err(AdminGatewayError::WithdrawError {
-                failure_reason: format!("Gateway is running on network {gateway_network}, but provided withdraw address is for network {address_network}")
+                failure_reason: format!(
+                    "Gateway is running on network {gateway_network}, but provided withdraw address is for network {address_network}"
+                ),
             });
         };
 
@@ -1018,7 +1025,12 @@ impl Gateway {
                     }));
                 }
                 GatewayExtPayStates::Canceled { error } => {
-                    return Err(PublicGatewayError::LNv1(LNv1Error::OutgoingContract { error: Box::new(error.clone()), message: format!("Cancelled with {error} while paying invoice with contract id {contract_id}") }));
+                    return Err(PublicGatewayError::LNv1(LNv1Error::OutgoingContract {
+                        error: Box::new(error.clone()),
+                        message: format!(
+                            "Cancelled with {error} while paying invoice with contract id {contract_id}"
+                        ),
+                    }));
                 }
                 GatewayExtPayStates::Created => {
                     debug!("Got initial state Created while paying invoice: {contract_id}");
@@ -1156,7 +1168,9 @@ impl Gateway {
         let mut dbtx = self.gateway_db.begin_transaction().await;
         dbtx.save_federation_config(&federation_config).await;
         dbtx.commit_tx().await;
-        debug!("Federation with ID: {federation_id} connected and assigned federation index: {federation_index}");
+        debug!(
+            "Federation with ID: {federation_id} connected and assigned federation index: {federation_index}"
+        );
 
         Ok(federation_info)
     }
@@ -1775,16 +1789,19 @@ impl Gateway {
 
         for (federation_id, config) in configs {
             let federation_index = config.federation_index;
-            if let Ok(client) = Box::pin(Spanned::try_new(
+            match Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
                 self.client_builder
                     .build(config, Arc::new(self.clone()), &self.mnemonic),
             ))
             .await
             {
-                federation_manager.add_client(federation_index, client);
-            } else {
-                warn!("Failed to load client for federation: {federation_id}");
+                Ok(client) => {
+                    federation_manager.add_client(federation_index, client);
+                }
+                _ => {
+                    warn!("Failed to load client for federation: {federation_id}");
+                }
             }
         }
 
@@ -1949,7 +1966,9 @@ impl Gateway {
                             panic!("Either esplora or bitcoind chain info source must be provided")
                         }
                         (Some(_), Some(_)) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided, but not both")
+                            panic!(
+                                "Either esplora or bitcoind chain info source must be provided, but not both"
+                            )
                         }
                     }
                 };

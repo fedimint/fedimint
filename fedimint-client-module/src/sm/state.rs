@@ -13,8 +13,8 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{maybe_add_send, maybe_add_send_sync, module_plugin_dyn_newtype_define};
 
-use crate::sm::ClientSMDatabaseTransaction;
 use crate::DynGlobalClientContext;
+use crate::sm::ClientSMDatabaseTransaction;
 
 /// Implementors act as state machines that can be executed
 pub trait State:

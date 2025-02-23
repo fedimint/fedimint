@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1::Message;
+use fedimint_core::PeerId;
 use fedimint_core::db::DatabaseLookup;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::MaybeSend;
-use fedimint_core::PeerId;
 use futures::StreamExt;
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;

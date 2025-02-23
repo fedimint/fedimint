@@ -6,7 +6,7 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBu
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::util::NextOrPending as _;
-use fedimint_core::{sats, Amount};
+use fedimint_core::{Amount, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -22,7 +22,7 @@ use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::fixtures::Fixtures;
 use serde_json::Value;
 
-use crate::mock::{MockGatewayConnection, MOCK_INVOICE_PREIMAGE};
+use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());

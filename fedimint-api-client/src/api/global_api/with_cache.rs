@@ -10,8 +10,8 @@ use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, PeerServerParams, ServerStatus, SetLocalParamsRequest,
 };
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
-use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, ADD_PEER_CONNECTION_INFO_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT,
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT,
@@ -38,7 +38,7 @@ use fedimint_core::session_outcome::{
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
+use fedimint_core::{NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::join_all;
 use itertools::Itertools;

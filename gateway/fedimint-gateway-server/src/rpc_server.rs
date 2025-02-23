@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::Request;
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -9,18 +9,19 @@ use axum::{Extension, Json, Router};
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_gateway_common::{
-    BackupPayload, CloseChannelsWithPeerRequest, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    GetInvoiceRequest, InfoPayload, LeaveFedPayload, OpenChannelRequest,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentSummaryPayload, ReceiveEcashPayload,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, WithdrawPayload, ADDRESS_ENDPOINT,
-    ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, RECEIVE_ECASH_ENDPOINT, SEND_ONCHAIN_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
+    CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
+    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CloseChannelsWithPeerRequest, ConfigPayload,
+    ConnectFedPayload, CreateInvoiceForOperatorPayload, DepositAddressPayload,
+    DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+    GetInvoiceRequest, InfoPayload, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    LeaveFedPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, OpenChannelRequest,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT,
+    ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
+    STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload, V1_API_ENDPOINT,
+    WITHDRAW_ENDPOINT, WithdrawPayload,
 };
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -36,8 +37,8 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
 
-use crate::error::{AdminGatewayError, PublicGatewayError};
 use crate::Gateway;
+use crate::error::{AdminGatewayError, PublicGatewayError};
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
 pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
@@ -57,10 +58,13 @@ pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
             shutdown_rx.await;
         });
 
-        if let Err(e) = graceful.await {
-            error!("Error shutting down gatewayd webserver: {:?}", e);
-        } else {
-            info!("Successfully shutdown webserver");
+        match graceful.await {
+            Err(e) => {
+                error!("Error shutting down gatewayd webserver: {:?}", e);
+            }
+            _ => {
+                info!("Successfully shutdown webserver");
+            }
         }
     });
 

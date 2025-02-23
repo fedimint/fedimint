@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
@@ -12,9 +12,9 @@ use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::GatewayClientModuleV2;
 use tracing::info;
 
+use crate::AdminResult;
 use crate::db::GatewayDbtxNcExt;
 use crate::error::{AdminGatewayError, FederationNotConnected};
-use crate::AdminResult;
 
 /// The first index that the gateway will assign to a federation.
 /// Note: This starts at 1 because LNv1 uses the `federation_index` as an SCID.
@@ -83,13 +83,14 @@ impl FederationManager {
         self.index_to_federation
             .retain(|_, fid| *fid != federation_id);
 
-        if let Some(client) = Arc::into_inner(client) {
-            client.shutdown().await;
-            Ok(())
-        } else {
-            Err(AdminGatewayError::ClientRemovalError(format!(
+        match Arc::into_inner(client) {
+            Some(client) => {
+                client.shutdown().await;
+                Ok(())
+            }
+            _ => Err(AdminGatewayError::ClientRemovalError(format!(
                 "Federation client {federation_id} is not unique, failed to shutdown client"
-            )))
+            ))),
         }
     }
 
@@ -167,10 +168,13 @@ impl FederationManager {
         // TODO(tvolk131): Cloning the client here could cause issues with client
         // shutdown (see `remove_client` above). Perhaps this function should take a
         // lambda and pass it into `client.with_sync`.
-        if let Some(client) = self.clients.get(federation_id).cloned() {
-            Some(client)
-        } else {
-            panic!("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
+        match self.clients.get(federation_id).cloned() {
+            Some(client) => Some(client),
+            _ => {
+                panic!(
+                    "`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug."
+                );
+            }
         }
     }
 

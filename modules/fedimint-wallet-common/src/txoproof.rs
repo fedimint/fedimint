@@ -7,7 +7,7 @@ use bitcoin::{Amount, BlockHash, OutPoint, Transaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
-use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
+use miniscript::{Descriptor, TranslatePk, translate_hash_fail};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -261,10 +261,12 @@ mod tests {
                 .unwrap()
         );
 
-        assert!(txoutproof.contains_tx(
-            "efa0daf2b6a985bb78a2546b0d51ca878949e3baff106b8bed892284138b2acd"
-                .parse()
-                .unwrap()
-        ));
+        assert!(
+            txoutproof.contains_tx(
+                "efa0daf2b6a985bb78a2546b0d51ca878949e3baff106b8bed892284138b2acd"
+                    .parse()
+                    .unwrap()
+            )
+        );
     }
 }
