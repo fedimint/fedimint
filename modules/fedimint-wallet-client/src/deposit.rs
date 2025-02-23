@@ -1,9 +1,9 @@
 use std::cmp;
 use std::time::{Duration, SystemTime};
 
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
@@ -12,14 +12,14 @@ use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
+use fedimint_wallet_common::WalletInput;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
-use fedimint_wallet_common::WalletInput;
 use tracing::{debug, instrument, trace, warn};
 
+use crate::WalletClientContext;
 use crate::api::WalletFederationApi;
 use crate::pegin_monitor::filter_onchain_deposit_outputs;
-use crate::WalletClientContext;
 
 const TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -124,7 +124,9 @@ async fn await_created_btc_transaction_submitted(
             Ok(received) => {
                 // TODO: fix
                 if received.len() > 1 {
-                    warn!("More than one transaction was sent to deposit address, only considering the first one");
+                    warn!(
+                        "More than one transaction was sent to deposit address, only considering the first one"
+                    );
                 }
 
                 if let Some((transaction, out_idx)) =
@@ -230,7 +232,9 @@ async fn await_btc_transaction_confirmed(
         if !confirmation_block_count.is_some_and(|confirmation_block_count| {
             consensus_block_count >= confirmation_block_count
         }) {
-            trace!("Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}");
+            trace!(
+                "Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}"
+            );
             sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
             continue;
         }

@@ -10,14 +10,14 @@ use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    apply_migrations, create_database_version, get_current_database_version, CoreMigrationFn,
-    Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
     IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    apply_migrations, create_database_version, get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::SupportedApiVersionsSummary;
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_DB;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -585,8 +585,7 @@ pub async fn apply_migrations_client(
         if target_version < current_version {
             return Err(anyhow!(format!(
                 "On disk database version for module {kind} was higher ({}) than the target database version ({}).",
-                current_version,
-                target_version,
+                current_version, target_version,
             )));
         }
 

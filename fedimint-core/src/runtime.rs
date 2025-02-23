@@ -78,8 +78,8 @@ mod r#impl {
     use std::task::{Context, Poll};
 
     use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
-    use futures_util::future::RemoteHandle;
     use futures_util::FutureExt;
+    use futures_util::future::RemoteHandle;
 
     use super::*;
 

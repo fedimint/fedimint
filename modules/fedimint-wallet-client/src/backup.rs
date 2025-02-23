@@ -3,20 +3,20 @@ mod recovery_history_tracker;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
+use fedimint_client_module::module::ClientContext;
+use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
     RecoveryFromHistory, RecoveryFromHistoryCommon,
 };
-use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
-use fedimint_client_module::module::ClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_MODULE_WALLET, LOG_CLIENT_RECOVERY};
-use fedimint_wallet_common::{WalletInput, WalletInputV0, KIND};
+use fedimint_wallet_common::{KIND, WalletInput, WalletInputV0};
 use futures::Future;
 use tracing::{debug, trace, warn};
 
@@ -284,7 +284,7 @@ impl RecoveryFromHistory for WalletRecovery {
         session_idx: u64,
     ) -> anyhow::Result<()> {
         let script_pubkey = match input {
-            WalletInput::V0(WalletInputV0(ref input)) => &input.tx_output().script_pubkey,
+            WalletInput::V0(WalletInputV0(input)) => &input.tx_output().script_pubkey,
             WalletInput::V1(input) => &input.tx_out.script_pubkey,
             WalletInput::Default {
                 variant: _,

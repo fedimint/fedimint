@@ -1,8 +1,8 @@
 use async_channel::bounded;
 /// Fake (channel-based) implementation of [`super::DynP2PConnections`].
 use async_trait::async_trait;
-use fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
 use fedimint_core::PeerId;
+use fedimint_core::net::peers::{DynP2PConnections, IP2PConnections};
 
 use crate::net::peers::Recipient;
 

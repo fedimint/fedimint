@@ -3,9 +3,9 @@ use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 
 use bitcoin::key::Secp256k1;
+use fedimint_core::Amount;
 use fedimint_core::core::{Input, IntoDynInstance, ModuleKind, Output};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::Amount;
 
 use super::{
     ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,

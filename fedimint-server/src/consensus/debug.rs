@@ -1,6 +1,6 @@
 use std::fmt;
 
-use bitcoin::hashes::{sha256, Hash as _};
+use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_core::encoding::{CountWrite, Encodable as _};
 use fedimint_core::session_outcome::AcceptedItem;
 
@@ -67,7 +67,7 @@ impl<'a> fmt::Display for DebugConsensusItemCompact<'a> {
         ))?;
 
         match &self.0.item {
-            ConsensusItem::Transaction(ref tx) => {
+            ConsensusItem::Transaction(tx) => {
                 f.write_fmt(format_args!("txid={}; ", tx.tx_hash()))?;
                 f.write_str("inputs_module_ids=")?;
                 for (i, input) in tx.inputs.iter().enumerate() {

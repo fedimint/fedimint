@@ -5,7 +5,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1::{Keypair, PublicKey};
-use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, TransactionId};
+use fedimint_core::{OutPoint, TransactionId, impl_db_lookup, impl_db_record};
 use fedimint_ln_common::{LightningGateway, LightningGatewayRegistration};
 use lightning_invoice::Bolt11Invoice;
 use serde::Serialize;

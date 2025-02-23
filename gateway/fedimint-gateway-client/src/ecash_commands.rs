@@ -1,5 +1,5 @@
-use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
+use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::{Amount, BitcoinAmountOrAll};

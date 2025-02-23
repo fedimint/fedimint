@@ -1,6 +1,6 @@
 use bitcoin::Txid;
-use fedimint_core::core::ModuleKind;
 use fedimint_core::Amount;
+use fedimint_core::core::ModuleKind;
 use fedimint_eventlog::{Event, EventKind};
 use serde::{Deserialize, Serialize};
 

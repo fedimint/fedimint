@@ -24,7 +24,7 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -34,7 +34,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::now;
-use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
+use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -555,7 +555,7 @@ impl GatewayClientModuleV2 {
                     ReceiveSMState::Funding => {}
                     ReceiveSMState::Rejected(..) => return FinalReceiveState::Rejected,
                     ReceiveSMState::Success(preimage) => {
-                        return FinalReceiveState::Success(preimage)
+                        return FinalReceiveState::Success(preimage);
                     }
                     ReceiveSMState::Refunding(out_points) => {
                         if self

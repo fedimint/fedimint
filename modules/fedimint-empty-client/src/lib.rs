@@ -12,7 +12,7 @@ use fedimint_client_module::sm::Context;
 use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
-use fedimint_core::{apply, async_trait_maybe_send, Amount};
+use fedimint_core::{Amount, apply, async_trait_maybe_send};
 pub use fedimint_empty_common as common;
 use fedimint_empty_common::config::EmptyClientConfig;
 use fedimint_empty_common::{EmptyCommonInit, EmptyModuleTypes};

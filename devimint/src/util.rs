@@ -8,17 +8,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{env, unreachable};
 
-use anyhow::{anyhow, bail, format_err, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, format_err};
 use fedimint_api_client::api::StatusResponse;
+use fedimint_core::PeerId;
 use fedimint_core::admin_client::{PeerServerParams, ServerStatus};
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
-use fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
+use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self, block_in_place, block_on};
 use fedimint_core::time::now;
-use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::PeerId;
+use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_logging::LOG_DEVIMINT;
 use legacy_types::ConfigGenParamsResponseLegacy;
 use semver::Version;
@@ -29,14 +29,14 @@ use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
 use crate::envs::{
-    FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIND_BASE_EXECUTABLE_ENV,
-    FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_CLIENT_DIR_ENV,
+    FM_BACKWARDS_COMPATIBILITY_TEST_ENV, FM_BITCOIN_CLI_BASE_EXECUTABLE_ENV,
+    FM_BITCOIND_BASE_EXECUTABLE_ENV, FM_BTC_CLIENT_ENV, FM_CLIENT_DIR_ENV,
     FM_DEVIMINT_CMD_INHERIT_STDERR_ENV, FM_ELECTRS_BASE_EXECUTABLE_ENV,
     FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
-    FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
-    FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
-    FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_LND_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
-    FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_ENV, FM_LNCLI_BASE_EXECUTABLE_ENV,
+    FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV,
+    FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV,
+    FM_GATEWAYD_BASE_EXECUTABLE_ENV, FM_GWCLI_LND_ENV, FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV,
+    FM_LIGHTNING_CLI_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV, FM_LNCLI_BASE_EXECUTABLE_ENV,
     FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV, FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV,
     FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV, FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
 };
@@ -381,7 +381,7 @@ macro_rules! cmd {
             $($($tail)*)?
         }
     };
-    ($(@head ($($head:tt)* ))? $curr:expr $(, $($tail:tt)*)?) => {
+    ($(@head ($($head:tt)* ))? $curr:expr_2021 $(, $($tail:tt)*)?) => {
         cmd! {
             @head ($($($head)*)? $curr,)
             $($($tail)*)?
@@ -394,7 +394,7 @@ macro_rules! cmd {
         }
     };
     // last matcher
-    (@last $this:expr, $($arg:expr),* $(,)?) => {
+    (@last $this:expr_2021, $($arg:expr_2021),* $(,)?) => {
         {
             #[allow(unused)]
             use $crate::util::ToCmdExt;
@@ -408,7 +408,7 @@ macro_rules! cmd {
 
 #[macro_export]
 macro_rules! poll_eq {
-    ($left:expr, $right:expr) => {
+    ($left:expr_2021, $right:expr_2021) => {
         match ($left, $right) {
             (left, right) => {
                 if left == right {
@@ -1168,14 +1168,16 @@ pub async fn use_matching_fedimint_cli_for_dkg() -> Result<(String, String)> {
         // we're on the current version if the fedimintd version is the same as the
         // package version. to use the current version of `fedimint-cli` built by cargo,
         // we need to unset FM_FEDIMINT_CLI_BASE_EXECUTABLE
-        std::env::remove_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::remove_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV) };
     } else {
         let parsed_fedimintd_version = fedimintd_version.to_string().replace(['-', '.'], "_");
 
         // matches format defined by nix_binary_version_var_name in scripts/_common.sh
         let fedimint_cli_path_var = format!("fm_bin_fedimint_cli_v{parsed_fedimintd_version}");
         let fedimint_cli_path = std::env::var(fedimint_cli_path_var)?;
-        std::env::set_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, fedimint_cli_path);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var(FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, fedimint_cli_path) };
     }
 
     let original_fm_mint_client = std::env::var(FM_MINT_CLIENT_ENV)?;
@@ -1187,19 +1189,24 @@ pub async fn use_matching_fedimint_cli_for_dkg() -> Result<(String, String)> {
         fedimint_cli = crate::util::get_fedimint_cli_path().join(" "),
         datadir = crate::vars::utf8(&fm_client_dir_path_buf)
     );
-    std::env::set_var(FM_MINT_CLIENT_ENV, fm_mint_client);
+    // TODO: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(FM_MINT_CLIENT_ENV, fm_mint_client) };
 
     Ok((original_fedimint_cli_path, original_fm_mint_client))
 }
 
 /// Sets the fedimint-cli and mint client alias
 pub fn use_fedimint_cli(original_fedimint_cli_path: String, original_fm_mint_client: String) {
-    std::env::set_var(
-        FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
-        original_fedimint_cli_path,
-    );
+    // TODO: Audit that the environment access only happens in single-threaded code.
+    unsafe {
+        std::env::set_var(
+            FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
+            original_fedimint_cli_path,
+        );
+    };
 
-    std::env::set_var(FM_MINT_CLIENT_ENV, original_fm_mint_client);
+    // TODO: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var(FM_MINT_CLIENT_ENV, original_fm_mint_client) };
 }
 
 /// Parses a version string returned from clap
@@ -1235,9 +1242,9 @@ fn test_parse_clap_version() -> Result<()> {
 mod legacy_types {
     use std::collections::BTreeMap;
 
+    use fedimint_core::PeerId;
     use fedimint_core::admin_client::PeerServerParams;
     use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
-    use fedimint_core::PeerId;
     use serde::{Deserialize, Serialize};
 
     /// The config gen params that need to be in consensus, sent by the config

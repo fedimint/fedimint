@@ -6,7 +6,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, PeerId};
+use fedimint_core::{PeerId, apply, async_trait_maybe_send};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::watch;

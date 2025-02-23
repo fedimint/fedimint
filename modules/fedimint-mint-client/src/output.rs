@@ -3,12 +3,12 @@ use std::hash;
 
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{
-    deserialize_outcome, FederationApiExt, PeerError, SerdeOutputOutcome,
+    FederationApiExt, PeerError, SerdeOutputOutcome, deserialize_outcome,
 };
 use fedimint_api_client::query::FilterMapThreshold;
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -23,8 +23,8 @@ use futures::future::join_all;
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator as _, ParallelIterator as _};
 use serde::{Deserialize, Serialize};
 use tbs::{
-    aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
-    BlindedMessage, BlindedSignature, BlindedSignatureShare, BlindingKey, PublicKeyShare,
+    AggregatePublicKey, BlindedMessage, BlindedSignature, BlindedSignatureShare, BlindingKey,
+    PublicKeyShare, aggregate_signature_shares, blind_message, unblind_signature,
 };
 use tracing::{debug, error};
 

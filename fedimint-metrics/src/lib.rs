@@ -4,15 +4,15 @@
 use std::net::SocketAddr;
 use std::sync::LazyLock;
 
+use axum::Router;
 use axum::http::StatusCode;
 use axum::routing::get;
-use axum::Router;
 use fedimint_core::task::{TaskGroup, TaskShutdownToken};
 use prometheus::Registry;
 pub use prometheus::{
-    self, histogram_opts, opts, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, Encoder, Gauge, GaugeVec, Histogram, HistogramVec,
-    IntCounter, IntCounterVec, TextEncoder,
+    self, Encoder, Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec,
+    TextEncoder, histogram_opts, opts, register_histogram_with_registry,
+    register_int_counter_vec_with_registry,
 };
 use tokio::net::TcpListener;
 use tracing::error;

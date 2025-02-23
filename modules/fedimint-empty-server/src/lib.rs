@@ -14,10 +14,10 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{CoreMigrationFn, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
 };
-use fedimint_core::{push_db_pair_items, InPoint, OutPoint, PeerId};
+use fedimint_core::{InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_empty_common::config::{
     EmptyClientConfig, EmptyConfig, EmptyConfigConsensus, EmptyConfigLocal, EmptyConfigPrivate,
     EmptyGenParams,

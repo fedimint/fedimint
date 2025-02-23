@@ -1,16 +1,16 @@
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
-use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
+use fedimint_core::envs::{BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set};
+use fedimint_ln_server::LightningInit;
 use fedimint_ln_server::common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
-use fedimint_ln_server::LightningInit;
 use fedimint_meta_server::{MetaGenParams, MetaInit};
-use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
+use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_server::core::ServerModuleInit as _;
-use fedimint_unknown_server::common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
+use fedimint_unknown_server::common::config::UnknownGenParams;
 use fedimint_wallet_client::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };

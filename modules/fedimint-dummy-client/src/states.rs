@@ -1,5 +1,5 @@
-use fedimint_client_module::sm::{DynState, State, StateTransition};
 use fedimint_client_module::DynGlobalClientContext;
+use fedimint_client_module::sm::{DynState, State, StateTransition};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::db::DummyClientFundsKeyV1;
-use crate::{get_funds, DummyClientContext};
+use crate::{DummyClientContext, get_funds};
 
 /// Tracks a transaction
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

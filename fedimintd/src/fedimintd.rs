@@ -5,39 +5,39 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{format_err, Context};
+use anyhow::{Context, format_err};
 use clap::{Parser, Subcommand};
 use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::{get_current_database_version, Database};
+use fedimint_core::db::{Database, get_current_database_version};
 use fedimint_core::envs::{
-    is_env_var_set, BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV,
+    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
-use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
+use fedimint_core::util::{SafeUrl, handle_version_hash_command, write_overwrite};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
 use fedimint_meta_server::{MetaGenParams, MetaInit};
-use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_server::MintInit;
+use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::config::{ConfigGenSettings, ServerConfig};
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
+use fedimint_wallet_server::WalletInit;
 use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
-use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
 use tracing::{debug, error, info};
 
@@ -271,11 +271,11 @@ impl Fedimintd {
     /// Attach a server module kind to the Fedimintd instance
     ///
     /// This makes `fedimintd` support additional module types (aka. kinds)
-    pub fn with_module_kind<T>(mut self, gen: T) -> Self
+    pub fn with_module_kind<T>(mut self, r#gen: T) -> Self
     where
         T: ServerModuleInit + 'static + Send + Sync,
     {
-        self.server_gens.attach(gen);
+        self.server_gens.attach(r#gen);
         self
     }
 

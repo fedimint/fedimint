@@ -7,16 +7,16 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
-use bitcoin::network::Network;
-use bitcoin::secp256k1::{PublicKey, SecretKey, SECP256K1};
 use bitcoin::OutPoint;
+use bitcoin::network::Network;
+use bitcoin::secp256k1::{PublicKey, SECP256K1, SecretKey};
 use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fedimint_build_code_version_env;
-use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::handle_version_hash_command;
@@ -32,7 +32,7 @@ use fedimint_wallet_server::common::{
     PegInDescriptor, SpendableUTXO, WalletCommonInit, WalletInput,
 };
 use fedimint_wallet_server::db::{UTXOKey, UTXOPrefixKey};
-use fedimint_wallet_server::{nonce_from_idx, Wallet};
+use fedimint_wallet_server::{Wallet, nonce_from_idx};
 use futures::stream::StreamExt;
 use hex::FromHex;
 use miniscript::{Descriptor, MiniscriptKey, TranslatePk, Translator};

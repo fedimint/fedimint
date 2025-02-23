@@ -3,7 +3,7 @@ use clap::Subcommand;
 use fedimint_core::BitcoinAmountOrAll;
 use fedimint_gateway_common::SendOnchainRequest;
 
-use crate::{print_response, GatewayRpcClient};
+use crate::{GatewayRpcClient, print_response};
 
 #[derive(Subcommand)]
 pub enum OnchainCommands {

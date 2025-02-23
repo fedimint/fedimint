@@ -11,9 +11,9 @@ use std::task::Poll;
 
 use fedimint_metrics::prometheus::HistogramTimer;
 use futures::Future;
+use jsonrpsee::MethodResponse;
 use jsonrpsee::server::middleware::rpc::RpcServiceT;
 use jsonrpsee::types::Request;
-use jsonrpsee::MethodResponse;
 use pin_project::pin_project;
 
 use super::{JSONRPC_API_REQUEST_DURATION_SECONDS, JSONRPC_API_REQUEST_RESPONSE_CODE};

@@ -3,7 +3,7 @@ mod dto;
 use std::fs;
 use std::path::PathBuf;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use fs2::FileExt;
 use tracing::{debug, info, warn};
 

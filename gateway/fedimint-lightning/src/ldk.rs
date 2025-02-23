@@ -4,23 +4,23 @@ use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use bitcoin::{Network, OutPoint};
 use fedimint_bip39::Mnemonic;
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig};
-use fedimint_core::task::{block_in_place, TaskGroup, TaskHandle};
+use fedimint_core::envs::{BitcoinRpcConfig, is_env_var_set};
+use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse};
 use fedimint_ln_common::contracts::Preimage;
-use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
+use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
-use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::PaymentPreimage;
+use lightning::ln::channelmanager::PaymentId;
 use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc::Sender;
@@ -253,10 +253,13 @@ impl Drop for GatewayLdkClient {
         self.task_group.shutdown();
 
         info!("Stopping LDK Node...");
-        if let Err(e) = self.node.stop() {
-            error!(?e, "Failed to stop LDK Node");
-        } else {
-            info!("LDK Node stopped.");
+        match self.node.stop() {
+            Err(e) => {
+                error!(?e, "Failed to stop LDK Node");
+            }
+            _ => {
+                info!("LDK Node stopped.");
+            }
         }
     }
 }

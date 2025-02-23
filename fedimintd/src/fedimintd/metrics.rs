@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
-use fedimint_metrics::prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec};
-use fedimint_metrics::{opts, REGISTRY};
+use fedimint_metrics::prometheus::{IntGaugeVec, register_int_gauge_vec_with_registry};
+use fedimint_metrics::{REGISTRY, opts};
 
 // Note: we can't really use a counter for monitoring restarts of the
 // application because such timer would always equal 1, and Prometheus would

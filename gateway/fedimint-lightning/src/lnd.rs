@@ -5,13 +5,13 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
+use fedimint_core::task::{TaskGroup, sleep};
+use fedimint_core::{Amount, BitcoinAmountOrAll, secp256k1};
+use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
-use fedimint_ln_common::PrunedInvoice;
 use hex::ToHex;
 use secp256k1::PublicKey;
 use tokio::sync::mpsc;
@@ -37,12 +37,12 @@ use tonic_lnd::routerrpc::{
 };
 use tonic_lnd::tonic::Code;
 use tonic_lnd::walletrpc::AddrRequest;
-use tonic_lnd::{connect, Client as LndClient};
+use tonic_lnd::{Client as LndClient, connect};
 use tracing::{debug, error, info, trace, warn};
 
 use super::{
-    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
-    MAX_LIGHTNING_RETRIES,
+    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse,
+    MAX_LIGHTNING_RETRIES, RouteHtlcStream,
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
@@ -501,7 +501,9 @@ impl GatewayLndClient {
                         return Ok(None);
                     }
 
-                    warn!("Could not get the status of payment {payment_hash:?} Error: {e:?}. Trying again in 5 seconds");
+                    warn!(
+                        "Could not get the status of payment {payment_hash:?} Error: {e:?}. Trying again in 5 seconds"
+                    );
                     sleep(Duration::from_secs(5)).await;
                 }
             }
@@ -580,7 +582,11 @@ impl GatewayLndClient {
 
         let state = invoice.state();
         if state != InvoiceState::Open {
-            warn!(?state, "Trying to cancel HOLD invoice with {} that is not OPEN, gateway likely encountered an issue", PrettyPaymentHash(&payment_hash));
+            warn!(
+                ?state,
+                "Trying to cancel HOLD invoice with {} that is not OPEN, gateway likely encountered an issue",
+                PrettyPaymentHash(&payment_hash)
+            );
         }
 
         client
@@ -739,144 +745,148 @@ impl ILnRpcClient for GatewayLndClient {
         );
 
         // If the payment exists, that means we've already tried to pay the invoice
-        let preimage: Vec<u8> = if let Some(preimage) = self
+        let preimage: Vec<u8> = match self
             .lookup_payment(invoice.payment_hash.to_byte_array().to_vec(), &mut client)
             .await?
         {
-            info!(
-                "LND payment already exists for invoice with {}",
-                PrettyPaymentHash(&payment_hash)
-            );
-            hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
-                LightningRpcError::FailedPayment {
-                    failure_reason: format!("Failed to convert preimage {error:?}"),
-                }
-            })?
-        } else {
-            // LND API allows fee limits in the `i64` range, but we use `u64` for
-            // max_fee_msat. This means we can only set an enforceable fee limit
-            // between 0 and i64::MAX
-            let fee_limit_msat: i64 =
-                max_fee
-                    .msats
-                    .try_into()
-                    .map_err(|error| LightningRpcError::FailedPayment {
-                        failure_reason: format!(
-                            "max_fee_msat exceeds valid LND fee limit ranges {error:?}"
-                        ),
-                    })?;
-
-            let amt_msat = invoice.amount.msats.try_into().map_err(|error| {
-                LightningRpcError::FailedPayment {
-                    failure_reason: format!("amount exceeds valid LND amount ranges {error:?}"),
-                }
-            })?;
-            let final_cltv_delta = invoice.min_final_cltv_delta.try_into().map_err(|error| {
-                LightningRpcError::FailedPayment {
-                    failure_reason: format!("final cltv delta exceeds valid LND range {error:?}"),
-                }
-            })?;
-            let cltv_limit =
-                max_delay
-                    .try_into()
-                    .map_err(|error| LightningRpcError::FailedPayment {
-                        failure_reason: format!("max delay exceeds valid LND range {error:?}"),
-                    })?;
-
-            let dest_features = wire_features_to_lnd_feature_vec(&invoice.destination_features)
-                .map_err(|e| LightningRpcError::FailedPayment {
-                    failure_reason: e.to_string(),
-                })?;
-
-            debug!(
-                "LND payment does not exist for invoice with {}, will attempt to pay",
-                PrettyPaymentHash(&payment_hash)
-            );
-            let payments = client
-                .router()
-                .send_payment_v2(SendPaymentRequest {
-                    amt_msat,
-                    dest: invoice.destination.serialize().to_vec(),
-                    dest_features,
-                    payment_hash: invoice.payment_hash.to_byte_array().to_vec(),
-                    payment_addr: invoice.payment_secret.to_vec(),
-                    route_hints: route_hints_to_lnd(&invoice.route_hints),
-                    final_cltv_delta,
-                    cltv_limit,
-                    no_inflight_updates: false,
-                    timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
-                    fee_limit_msat,
-                    ..Default::default()
-                })
-                .await
-                .map_err(|status| {
-                    error!(
-                        "LND payment request failed for invoice with {} with {status:?}",
-                        PrettyPaymentHash(&payment_hash)
-                    );
+            Some(preimage) => {
+                info!(
+                    "LND payment already exists for invoice with {}",
+                    PrettyPaymentHash(&payment_hash)
+                );
+                hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
                     LightningRpcError::FailedPayment {
-                        failure_reason: format!("Failed to make outgoing payment {status:?}"),
+                        failure_reason: format!("Failed to convert preimage {error:?}"),
+                    }
+                })?
+            }
+            _ => {
+                // LND API allows fee limits in the `i64` range, but we use `u64` for
+                // max_fee_msat. This means we can only set an enforceable fee limit
+                // between 0 and i64::MAX
+                let fee_limit_msat: i64 =
+                    max_fee
+                        .msats
+                        .try_into()
+                        .map_err(|error| LightningRpcError::FailedPayment {
+                            failure_reason: format!(
+                                "max_fee_msat exceeds valid LND fee limit ranges {error:?}"
+                            ),
+                        })?;
+
+                let amt_msat = invoice.amount.msats.try_into().map_err(|error| {
+                    LightningRpcError::FailedPayment {
+                        failure_reason: format!("amount exceeds valid LND amount ranges {error:?}"),
                     }
                 })?;
-
-            debug!(
-                "LND payment request sent for invoice with {}, waiting for payment status...",
-                PrettyPaymentHash(&payment_hash),
-            );
-            let mut messages = payments.into_inner();
-            loop {
-                match messages
-                    .message()
-                    .await
-                    .map_err(|error| LightningRpcError::FailedPayment {
-                        failure_reason: format!("Failed to get payment status {error:?}"),
-                    }) {
-                    Ok(Some(payment)) if payment.status() == PaymentStatus::Succeeded => {
-                        info!(
-                            "LND payment succeeded for invoice with {}",
-                            PrettyPaymentHash(&payment_hash)
-                        );
-                        break hex::FromHex::from_hex(payment.payment_preimage.as_str()).map_err(
-                            |error| LightningRpcError::FailedPayment {
-                                failure_reason: format!("Failed to convert preimage {error:?}"),
-                            },
-                        )?;
-                    }
-                    Ok(Some(payment)) if payment.status() == PaymentStatus::InFlight => {
-                        debug!(
-                            "LND payment for invoice with {} is inflight",
-                            PrettyPaymentHash(&payment_hash)
-                        );
-                        continue;
-                    }
-                    Ok(Some(payment)) => {
-                        error!(
-                            "LND payment failed for invoice with {} with {payment:?}",
-                            PrettyPaymentHash(&payment_hash)
-                        );
-                        let failure_reason = payment.failure_reason();
-                        return Err(LightningRpcError::FailedPayment {
-                            failure_reason: format!("{failure_reason:?}"),
-                        });
-                    }
-                    Ok(None) => {
-                        error!(
-                            "LND payment failed for invoice with {} with no payment status",
-                            PrettyPaymentHash(&payment_hash)
-                        );
-                        return Err(LightningRpcError::FailedPayment {
+                let final_cltv_delta =
+                    invoice.min_final_cltv_delta.try_into().map_err(|error| {
+                        LightningRpcError::FailedPayment {
                             failure_reason: format!(
-                                "Failed to get payment status for payment hash {:?}",
-                                invoice.payment_hash
+                                "final cltv delta exceeds valid LND range {error:?}"
                             ),
-                        });
-                    }
-                    Err(e) => {
+                        }
+                    })?;
+                let cltv_limit =
+                    max_delay
+                        .try_into()
+                        .map_err(|error| LightningRpcError::FailedPayment {
+                            failure_reason: format!("max delay exceeds valid LND range {error:?}"),
+                        })?;
+
+                let dest_features = wire_features_to_lnd_feature_vec(&invoice.destination_features)
+                    .map_err(|e| LightningRpcError::FailedPayment {
+                        failure_reason: e.to_string(),
+                    })?;
+
+                debug!(
+                    "LND payment does not exist for invoice with {}, will attempt to pay",
+                    PrettyPaymentHash(&payment_hash)
+                );
+                let payments = client
+                    .router()
+                    .send_payment_v2(SendPaymentRequest {
+                        amt_msat,
+                        dest: invoice.destination.serialize().to_vec(),
+                        dest_features,
+                        payment_hash: invoice.payment_hash.to_byte_array().to_vec(),
+                        payment_addr: invoice.payment_secret.to_vec(),
+                        route_hints: route_hints_to_lnd(&invoice.route_hints),
+                        final_cltv_delta,
+                        cltv_limit,
+                        no_inflight_updates: false,
+                        timeout_seconds: LND_PAYMENT_TIMEOUT_SECONDS,
+                        fee_limit_msat,
+                        ..Default::default()
+                    })
+                    .await
+                    .map_err(|status| {
                         error!(
-                            "LND payment failed for invoice with {} with {e:?}",
+                            "LND payment request failed for invoice with {} with {status:?}",
                             PrettyPaymentHash(&payment_hash)
                         );
-                        return Err(e);
+                        LightningRpcError::FailedPayment {
+                            failure_reason: format!("Failed to make outgoing payment {status:?}"),
+                        }
+                    })?;
+
+                debug!(
+                    "LND payment request sent for invoice with {}, waiting for payment status...",
+                    PrettyPaymentHash(&payment_hash),
+                );
+                let mut messages = payments.into_inner();
+                loop {
+                    match messages.message().await.map_err(|error| {
+                        LightningRpcError::FailedPayment {
+                            failure_reason: format!("Failed to get payment status {error:?}"),
+                        }
+                    }) {
+                        Ok(Some(payment)) if payment.status() == PaymentStatus::Succeeded => {
+                            info!(
+                                "LND payment succeeded for invoice with {}",
+                                PrettyPaymentHash(&payment_hash)
+                            );
+                            break hex::FromHex::from_hex(payment.payment_preimage.as_str())
+                                .map_err(|error| LightningRpcError::FailedPayment {
+                                    failure_reason: format!("Failed to convert preimage {error:?}"),
+                                })?;
+                        }
+                        Ok(Some(payment)) if payment.status() == PaymentStatus::InFlight => {
+                            debug!(
+                                "LND payment for invoice with {} is inflight",
+                                PrettyPaymentHash(&payment_hash)
+                            );
+                            continue;
+                        }
+                        Ok(Some(payment)) => {
+                            error!(
+                                "LND payment failed for invoice with {} with {payment:?}",
+                                PrettyPaymentHash(&payment_hash)
+                            );
+                            let failure_reason = payment.failure_reason();
+                            return Err(LightningRpcError::FailedPayment {
+                                failure_reason: format!("{failure_reason:?}"),
+                            });
+                        }
+                        Ok(None) => {
+                            error!(
+                                "LND payment failed for invoice with {} with no payment status",
+                                PrettyPaymentHash(&payment_hash)
+                            );
+                            return Err(LightningRpcError::FailedPayment {
+                                failure_reason: format!(
+                                    "Failed to get payment status for payment hash {:?}",
+                                    invoice.payment_hash
+                                ),
+                            });
+                        }
+                        Err(e) => {
+                            error!(
+                                "LND payment failed for invoice with {} with {e:?}",
+                                PrettyPaymentHash(&payment_hash)
+                            );
+                            return Err(e);
+                        }
                     }
                 }
             }

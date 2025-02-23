@@ -1,20 +1,20 @@
 use anyhow::ensure;
 use bitcoin::hashes::sha256;
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, util, OutPoint, TransactionId};
+use fedimint_core::util::backoff_util::api_networking_backoff;
+use fedimint_core::{OutPoint, TransactionId, secp256k1, util};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::future::pending;
-use secp256k1::schnorr::Signature;
 use secp256k1::Keypair;
+use secp256k1::schnorr::Signature;
 use tracing::{error, instrument};
 
 use crate::api::LightningFederationApi;

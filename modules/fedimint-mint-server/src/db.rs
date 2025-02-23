@@ -1,5 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
+use fedimint_core::{Amount, OutPoint, impl_db_lookup, impl_db_record};
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
 use serde::Serialize;
 use strum_macros::EnumIter;

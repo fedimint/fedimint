@@ -1,12 +1,12 @@
 use bitcoin::hashes::Hash as BitcoinHash;
+use fedimint_core::Amount;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::Amount;
 use serde::{Deserialize, Serialize};
 
 use super::Preimage;
-use crate::contracts::{ContractId, IdentifiableContract};
 use crate::LightningInput;
+use crate::contracts::{ContractId, IdentifiableContract};
 
 const CANCELLATION_TAG: &str = "outgoing contract cancellation";
 

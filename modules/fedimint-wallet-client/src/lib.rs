@@ -25,15 +25,15 @@ use std::future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
+use anyhow::{Context as AnyhowContext, anyhow, bail, ensure};
 use async_stream::stream;
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
+use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -44,23 +44,23 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{is_running_in_test_env, BitcoinRpcConfig};
+use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit,
     MultiApiVersion,
 };
-use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1, Amount, OutPoint,
-    TransactionId,
+    Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items, runtime,
+    secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -68,7 +68,7 @@ use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -514,16 +514,17 @@ impl WalletClientModule {
     }
 
     fn get_rpc_config(cfg: &WalletClientConfig) -> BitcoinRpcConfig {
-        if let Ok(rpc_config) = BitcoinRpcConfig::get_defaults_from_env_vars() {
-            // TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
-            // updated to 0.30
-            if rpc_config.kind == "bitcoind" {
-                cfg.default_bitcoin_rpc.clone()
-            } else {
-                rpc_config
+        match BitcoinRpcConfig::get_defaults_from_env_vars() {
+            Ok(rpc_config) => {
+                // TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
+                // updated to 0.30
+                if rpc_config.kind == "bitcoind" {
+                    cfg.default_bitcoin_rpc.clone()
+                } else {
+                    rpc_config
+                }
             }
-        } else {
-            cfg.default_bitcoin_rpc.clone()
+            _ => cfg.default_bitcoin_rpc.clone(),
         }
     }
 
@@ -943,7 +944,7 @@ impl WalletClientModule {
             .await
             .ok_or_else(|| anyhow::format_err!("OperationId not found"))?
             .0
-             .0)
+            .0)
     }
 
     pub async fn get_pegin_tweak_idx(
@@ -1129,7 +1130,7 @@ impl WalletClientModule {
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
         {
-            let operation_id = OperationId(thread_rng().gen());
+            let operation_id = OperationId(thread_rng().r#gen());
 
             let withdraw_output =
                 self.create_withdraw_output(operation_id, address.clone(), amount, fee)?;
@@ -1175,7 +1176,7 @@ impl WalletClientModule {
         rbf: Rbf,
         extra_meta: M,
     ) -> anyhow::Result<OperationId> {
-        let operation_id = OperationId(thread_rng().gen());
+        let operation_id = OperationId(thread_rng().r#gen());
 
         let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf)?;
         let tx_builder = TransactionBuilder::new()
@@ -1372,7 +1373,7 @@ mod tests {
 
     use super::*;
     use crate::backup::{
-        recover_scan_idxes_for_activity, RecoverScanOutcome, RECOVER_NUM_IDX_ADD_TO_LAST_USED,
+        RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome, recover_scan_idxes_for_activity,
     };
 
     #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test

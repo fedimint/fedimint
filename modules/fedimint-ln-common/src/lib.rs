@@ -24,7 +24,7 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as AnyhowContext;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -33,8 +33,8 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersi
 use fedimint_core::secp256k1::Message;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    encode_bolt11_invoice_features_without_length, extensible_associated_module_type,
-    plugin_types_trait_impl_common, secp256k1, Amount, PeerId,
+    Amount, PeerId, encode_bolt11_invoice_features_without_length,
+    extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1,
 };
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use secp256k1::schnorr::Signature;

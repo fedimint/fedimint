@@ -4,7 +4,7 @@ use fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_int_counter_with_registry,
 };
 use fedimint_metrics::{
-    histogram_opts, opts, HistogramVec, IntCounter, AMOUNTS_BUCKETS_SATS, REGISTRY,
+    AMOUNTS_BUCKETS_SATS, HistogramVec, IntCounter, REGISTRY, histogram_opts, opts,
 };
 
 pub static LN_INCOMING_OFFER: LazyLock<IntCounter> = LazyLock::new(|| {

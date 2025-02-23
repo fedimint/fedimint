@@ -2,7 +2,7 @@ use anyhow::ensure;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_7_0_ALPHA;
-use devimint::{cmd, util, Gatewayd};
+use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
@@ -73,14 +73,16 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     info!("Testing selection of gateways...");
 
-    assert!(gateways.contains(
-        &cmd!(client, "module", "lnv2", "gateways", "select")
-            .out_json()
-            .await?
-            .as_str()
-            .expect("JSON Value is not a string")
-            .to_string()
-    ));
+    assert!(
+        gateways.contains(
+            &cmd!(client, "module", "lnv2", "gateways", "select")
+                .out_json()
+                .await?
+                .as_str()
+                .expect("JSON Value is not a string")
+                .to_string()
+        )
+    );
 
     cmd!(client, "module", "lnv2", "gateways", "map")
         .out_json()
@@ -117,12 +119,14 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         }
     }
 
-    assert!(cmd!(client, "module", "lnv2", "gateways", "list")
-        .out_json()
-        .await?
-        .as_array()
-        .expect("JSON Value is not an array")
-        .is_empty(),);
+    assert!(
+        cmd!(client, "module", "lnv2", "gateways", "list")
+            .out_json()
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .is_empty(),
+    );
 
     assert!(
         cmd!(client, "module", "lnv2", "gateways", "list", "--peer", "0")

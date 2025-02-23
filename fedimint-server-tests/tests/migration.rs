@@ -9,28 +9,28 @@ use fedimint_core::db::{
     Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
+use fedimint_core::secp256k1::Message;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::rand::thread_rng;
-use fedimint_core::secp256k1::Message;
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
-use fedimint_core::{anyhow, Amount, BitcoinHash, PeerId, TransactionId};
+use fedimint_core::{Amount, BitcoinHash, PeerId, TransactionId, anyhow};
 use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
 use fedimint_dummy_server::Dummy;
-use fedimint_logging::{TracingSetup, LOG_DB};
+use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
-    get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix,
-    SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AcceptedTransactionKeyPrefix,
+    AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedSessionOutcomeKey,
+    SignedSessionOutcomePrefix, get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
 use fedimint_server::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 use fedimint_testing_core::db::{
-    snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
-    TEST_MODULE_INSTANCE_ID,
+    BYTE_32, TEST_MODULE_INSTANCE_ID, snapshot_db_migrations_with_decoders,
+    validate_migrations_global,
 };
 use futures::StreamExt;
 use strum::IntoEnumIterator;

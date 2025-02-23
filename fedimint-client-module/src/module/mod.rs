@@ -22,14 +22,14 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send, maybe_add_send_sync, Amount,
-    OutPoint, PeerId, TransactionId,
+    Amount, OutPoint, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define,
+    maybe_add_send, maybe_add_send_sync,
 };
 use fedimint_eventlog::{Event, EventKind};
 use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use tracing::warn;
 
 use self::init::ClientModuleInit;
@@ -38,7 +38,7 @@ use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, InactiveStateMeta, State};
 use crate::transaction::{ClientInputBundle, ClientOutputBundle, TransactionBuilder};
-use crate::{oplog, AddStateMachinesResult, InstancelessDynClientInputBundle, TransactionUpdates};
+use crate::{AddStateMachinesResult, InstancelessDynClientInputBundle, TransactionUpdates, oplog};
 
 pub mod init;
 pub mod recovery;
@@ -930,7 +930,7 @@ pub trait IClientModule: Debug {
     async fn start(&self);
 
     async fn handle_cli_command(&self, args: &[ffi::OsString])
-        -> anyhow::Result<serde_json::Value>;
+    -> anyhow::Result<serde_json::Value>;
 
     async fn handle_rpc(
         &self,
@@ -945,7 +945,7 @@ pub trait IClientModule: Debug {
     fn supports_backup(&self) -> bool;
 
     async fn backup(&self, module_instance_id: ModuleInstanceId)
-        -> anyhow::Result<DynModuleBackup>;
+    -> anyhow::Result<DynModuleBackup>;
 
     fn supports_being_primary(&self) -> bool;
 

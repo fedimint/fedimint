@@ -18,7 +18,7 @@ use fedimint_core::module::{
     ModuleInit, PeerHandle, SupportedModuleApiVersions,
 };
 use fedimint_core::task::TaskGroup;
-use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, NumPeers, PeerId};
+use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 
 use crate::DynServerModule;
 

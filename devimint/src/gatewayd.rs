@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use bitcoin::hashes::sha256;
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
@@ -23,7 +23,7 @@ use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
-use crate::util::{poll, supports_lnv2, Command, ProcessHandle, ProcessManager};
+use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
 use crate::version_constants::{
     VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA,
@@ -136,12 +136,15 @@ impl Gatewayd {
             .clone();
 
         self.process.terminate().await?;
-        std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", gatewayd_path);
-        std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", gatewayd_path) };
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path) };
 
         if supports_lnv2() {
             tracing::info!("LNv2 is now supported, running in All mode");
-            std::env::set_var("FM_GATEWAY_LIGHTNING_MODULE_MODE", "All");
+            // TODO: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var("FM_GATEWAY_LIGHTNING_MODULE_MODE", "All") };
         }
 
         let new_ln = ln;

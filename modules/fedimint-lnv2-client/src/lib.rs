@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_stream::stream;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::GatewayKey;
 use fedimint_api_client::api::DynModuleApi;
@@ -29,7 +29,7 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -40,23 +40,23 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, GatewayConnectionError, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, LightningCommonInit, LightningInvoice, LightningModuleTypes,
-    LightningOutput, LightningOutputV0, KIND,
+    Bolt11InvoiceDescription, KIND, LightningCommonInit, LightningInvoice, LightningModuleTypes,
+    LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
-use secp256k1::{ecdh, Keypair, PublicKey, Scalar, SecretKey};
+use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, ecdh};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tpe::{derive_agg_dk, AggregateDecryptionKey};
+use tpe::{AggregateDecryptionKey, derive_agg_dk};
 use tracing::warn;
 
 use crate::api::LightningFederationApi;
@@ -1021,7 +1021,9 @@ pub enum SendPaymentError {
     FederationError(String),
     #[error("We failed to finalize the funding transaction")]
     FinalizationError(String),
-    #[error("The invoice was for the wrong currency. Invoice currency={invoice_currency} Federation Currency={federation_currency}")]
+    #[error(
+        "The invoice was for the wrong currency. Invoice currency={invoice_currency} Federation Currency={federation_currency}"
+    )]
     WrongCurrency {
         invoice_currency: Currency,
         federation_currency: Currency,

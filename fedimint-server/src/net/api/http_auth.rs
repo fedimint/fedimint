@@ -4,13 +4,13 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use anyhow::bail;
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use fedimint_logging::LOG_NET_AUTH;
 use futures::{Future, FutureExt as _, TryFutureExt as _};
 use http::HeaderValue;
 use hyper::body::Body;
-use hyper::{http, Request, Response};
+use hyper::{Request, Response, http};
 use subtle::ConstantTimeEq as _;
 use tower::Service;
 use tracing::{debug, info};

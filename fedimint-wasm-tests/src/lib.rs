@@ -3,10 +3,10 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::Client;
-use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::db::Database;
+use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_mint_client::MintClientInit;
@@ -115,15 +115,15 @@ mod tests {
     use fedimint_ln_client::{
         LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
     };
-    use fedimint_ln_common::lightning_invoice::{Bolt11InvoiceDescription, Description};
     use fedimint_ln_common::LightningGateway;
+    use fedimint_ln_common::lightning_invoice::{Bolt11InvoiceDescription, Description};
     use fedimint_mint_client::{
         MintClientModule, ReissueExternalNotesState, SelectNotesWithAtleastAmount, SpendOOBState,
     };
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    use super::{client, faucet, Result};
+    use super::{Result, client, faucet};
 
     #[wasm_bindgen_test]
     async fn build_client() -> Result<()> {

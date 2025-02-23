@@ -3,8 +3,8 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use futures::StreamExt as _;
 use tracing::info;
 
-use crate::consensus::db::{AlephUnitsKey, AlephUnitsPrefix};
 use crate::LOG_CONSENSUS;
+use crate::consensus::db::{AlephUnitsKey, AlephUnitsPrefix};
 
 pub struct BackupReader {
     db: Database,
@@ -50,7 +50,7 @@ impl BackupWriter {
             .await
             .next()
             .await
-            .map_or(0, |entry| (entry.0 .0) + 1);
+            .map_or(0, |entry| (entry.0.0) + 1);
 
         Self { db, units_index }
     }

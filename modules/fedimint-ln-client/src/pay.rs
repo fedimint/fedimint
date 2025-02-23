@@ -1,15 +1,15 @@
 use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::sha256;
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract};
 use fedimint_ln_common::route_hints::RouteHint;
@@ -23,7 +23,7 @@ use tracing::{error, warn};
 
 pub use self::lightningpay::LightningPayStates;
 use crate::api::LnFederationApi;
-use crate::{set_payment_result, LightningClientContext, PayType};
+use crate::{LightningClientContext, PayType, set_payment_result};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -34,8 +34,8 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 /// in its own module.
 #[allow(deprecated)]
 pub(super) mod lightningpay {
-    use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::OutPoint;
+    use fedimint_core::encoding::{Decodable, Encodable};
 
     use super::{
         LightningPayCreatedOutgoingLnContract, LightningPayFunded, LightningPayRefund,
@@ -237,7 +237,9 @@ pub struct LightningPayFunded {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum GatewayPayError {
-    #[error("Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}")]
+    #[error(
+        "Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}"
+    )]
     GatewayInternalError {
         error_code: Option<u16>,
         error_message: String,
@@ -441,7 +443,9 @@ impl LightningPayRefundable {
                         timeout_common.clone(),
                         dbtx,
                         timeout_global_context.clone(),
-                        format!("Refundable: Outgoing contract timed out. ContractId: {contract_id} BlockHeight: {timelock}"),
+                        format!(
+                            "Refundable: Outgoing contract timed out. ContractId: {contract_id} BlockHeight: {timelock}"
+                        ),
                     ))
                 },
             ),

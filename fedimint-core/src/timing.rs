@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::time;
 
 use fedimint_logging::LOG_TIMING;
-use tracing::{debug, info, trace, warn, Level};
+use tracing::{Level, debug, info, trace, warn};
 
 use crate::util::FmtCompact as _;
 

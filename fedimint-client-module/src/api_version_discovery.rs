@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use anyhow::format_err;
 use fedimint_api_client::api::ApiVersionSet;
+use fedimint_core::PeerId;
 use fedimint_core::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
-use fedimint_core::PeerId;
 
 pub fn discover_common_core_api_version(
     client_versions: &SupportedCoreApiVersions,

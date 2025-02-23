@@ -3,14 +3,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::io::{Cursor, Write};
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::recovery::DynModuleBackup;
-use fedimint_core::core::backup::{
-    BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
-};
 use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::backup::{
+    BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, BackupRequest, SignedBackupRequest,
+};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -450,8 +450,8 @@ mod tests {
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_derive_secret::DerivableSecret;
 
-    use crate::backup::{ClientBackup, Metadata};
     use crate::Client;
+    use crate::backup::{ClientBackup, Metadata};
 
     #[test]
     fn sanity_ecash_backup_align() {

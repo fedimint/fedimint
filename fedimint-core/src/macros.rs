@@ -592,7 +592,7 @@ macro_rules! plugin_types_trait_impl_config {
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl_common {
-    ($kind:expr, $types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty, $input_error:ty, $output_error:ty) => {
+    ($kind:expr_2021, $types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty, $input_error:ty, $output_error:ty) => {
         impl fedimint_core::module::ModuleCommon for $types {
             type ClientConfig = $client_config;
             type Input = $input;

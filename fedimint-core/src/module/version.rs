@@ -222,7 +222,7 @@ impl MultiApiVersion {
             .fold((None, true), |(prev, is_sorted), next| {
                 (
                     Some(*next),
-                    is_sorted && prev.map_or(true, |prev| prev.major < next.major),
+                    is_sorted && prev.is_none_or(|prev| prev.major < next.major),
                 )
             })
             .1
@@ -367,17 +367,21 @@ fn api_version_multi_from_iter_sanity() {
         }])
         .is_ok()
     );
-    assert!(result::Result::<MultiApiVersion, ApiVersion>::from_iter([
-        ApiVersion { major: 0, minor: 1 },
-        ApiVersion { major: 1, minor: 2 }
-    ])
-    .is_ok());
-    assert!(result::Result::<MultiApiVersion, ApiVersion>::from_iter([
-        ApiVersion { major: 0, minor: 1 },
-        ApiVersion { major: 1, minor: 2 },
-        ApiVersion { major: 0, minor: 1 },
-    ])
-    .is_err());
+    assert!(
+        result::Result::<MultiApiVersion, ApiVersion>::from_iter([
+            ApiVersion { major: 0, minor: 1 },
+            ApiVersion { major: 1, minor: 2 }
+        ])
+        .is_ok()
+    );
+    assert!(
+        result::Result::<MultiApiVersion, ApiVersion>::from_iter([
+            ApiVersion { major: 0, minor: 1 },
+            ApiVersion { major: 1, minor: 2 },
+            ApiVersion { major: 0, minor: 1 },
+        ])
+        .is_err()
+    );
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]

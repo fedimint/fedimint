@@ -1,20 +1,20 @@
 use std::time::Duration;
 
 use fedimint_api_client::api::DynModuleApi;
+use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{OutPoint, TransactionId};
+use fedimint_ln_common::LightningInput;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
 use fedimint_ln_common::federation_endpoint_constants::ACCOUNT_ENDPOINT;
-use fedimint_ln_common::LightningInput;
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -217,7 +217,7 @@ impl LightningReceiveConfirmedInvoice {
                         }
                         DecryptedPreimage::Some(_) => return Ok(incoming_contract_account),
                         DecryptedPreimage::Invalid => {
-                            return Err(LightningReceiveError::InvalidPreimage)
+                            return Err(LightningReceiveError::InvalidPreimage);
                         }
                     }
                 }
@@ -398,7 +398,7 @@ impl LightningReceiveFunded {
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::hashes::{sha256, Hash};
+    use bitcoin::hashes::{Hash, sha256};
     use fedimint_core::secp256k1::{Secp256k1, SecretKey};
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 

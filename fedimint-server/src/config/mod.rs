@@ -2,14 +2,14 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use anyhow::{bail, ensure, format_err, Context};
+use anyhow::{Context, bail, ensure, format_err};
 use bitcoin::hashes::sha256;
 use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
-    serde_binary_human_readable, ClientConfig, FederationId, GlobalClientConfig, JsonWithKind,
-    ModuleInitRegistry, P2PMessage, PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig,
-    TypedServerModuleConfig,
+    ClientConfig, FederationId, GlobalClientConfig, JsonWithKind, ModuleInitRegistry, P2PMessage,
+    PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
+    serde_binary_human_readable,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::Decodable;
@@ -17,13 +17,13 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CoreConsensusVersion, MultiApiVersion, PeerHandle,
-    SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
+    ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion, PeerHandle,
+    SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, timing, NumPeersExt, PeerId};
+use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
 use hex::{FromHex, ToHex};
@@ -36,7 +36,7 @@ use tracing::info;
 
 use crate::config::distributedgen::PeerHandleOps;
 use crate::fedimint_core::encoding::Encodable;
-use crate::net::p2p_connector::{dns_sanitize, TlsConfig};
+use crate::net::p2p_connector::{TlsConfig, dns_sanitize};
 
 pub mod api;
 pub mod distributedgen;
@@ -333,10 +333,10 @@ impl ServerConfigConsensus {
                 .modules
                 .iter()
                 .map(|(k, v)| {
-                    let gen = module_config_gens
+                    let r#gen = module_config_gens
                         .get(&v.kind)
                         .ok_or_else(|| format_err!("Module gen kind={} not found", v.kind))?;
-                    Ok((*k, gen.get_client_config(*k, v)?))
+                    Ok((*k, r#gen.get_client_config(*k, v)?))
                 })
                 .collect::<anyhow::Result<BTreeMap<_, _>>>()?,
         };

@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use fedimint_core::core::ModuleKind;
 use fedimint_core::Amount;
+use fedimint_core::core::ModuleKind;
 use fedimint_eventlog::{Event, EventKind};
-use fedimint_mint_common::{Nonce, KIND};
+use fedimint_mint_common::{KIND, Nonce};
 use serde::{Deserialize, Serialize};
 
 /// Event that is emitted when a note is created.

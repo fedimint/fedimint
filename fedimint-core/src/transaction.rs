@@ -86,7 +86,7 @@ impl Transaction {
         let signatures = match &self.signatures {
             TransactionSignature::NaiveMultisig(sigs) => sigs,
             TransactionSignature::Default { variant, .. } => {
-                return Err(TransactionError::UnsupportedSignatureScheme { variant: *variant })
+                return Err(TransactionError::UnsupportedSignatureScheme { variant: *variant });
             }
         };
 

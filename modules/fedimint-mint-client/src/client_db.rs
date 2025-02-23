@@ -6,7 +6,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount};
+use fedimint_core::{Amount, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::Nonce;
 use serde::Serialize;

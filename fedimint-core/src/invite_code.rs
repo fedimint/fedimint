@@ -261,8 +261,8 @@ mod tests {
     use std::collections::BTreeMap;
     use std::str::FromStr;
 
-    use fedimint_core::util::SafeUrl;
     use fedimint_core::PeerId;
+    use fedimint_core::util::SafeUrl;
 
     use crate::config::FederationId;
     use crate::invite_code::{InviteCode, InviteCodeV2};

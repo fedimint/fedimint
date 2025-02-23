@@ -15,7 +15,7 @@ use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
 use fedimint_core::config::{ClientConfig, JsonClientConfig};
-use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
+use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
@@ -35,8 +35,8 @@ use fedimint_core::endpoint_constants::{
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
-    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary,
+    ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
+    SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
@@ -49,7 +49,7 @@ use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::{FmtCompact, SafeUrl};
-use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
+use fedimint_core::{OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
@@ -59,13 +59,13 @@ use tracing::{debug, info, warn};
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
-use crate::config::{legacy_consensus_config_hash, ServerConfig};
+use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::get_finished_session_count_static;
-use crate::consensus::transaction::{process_transaction_with_dbtx, TxProcessingMode};
+use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
-use crate::net::api::{check_auth, ApiResult, GuardianAuthToken, HasApiContext};
+use crate::net::api::{ApiResult, GuardianAuthToken, HasApiContext, check_auth};
 
 #[derive(Clone)]
 pub struct ConsensusApi {

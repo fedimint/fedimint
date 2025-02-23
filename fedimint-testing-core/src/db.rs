@@ -3,7 +3,7 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{Context, bail, format_err};
 use fedimint_client::db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
 };
@@ -15,18 +15,18 @@ use fedimint_client_module::module::ClientModule;
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    apply_migrations, apply_migrations_server, CoreMigrationFn, Database, DatabaseVersion,
-    IDatabaseTransactionOpsCoreTyped,
+    CoreMigrationFn, Database, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, apply_migrations,
+    apply_migrations_server,
 };
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::core::DynServerModuleInit;
 use futures::future::BoxFuture;
 use futures::{FutureExt, StreamExt};
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use tempfile::TempDir;
 use tracing::{debug, trace};
 
@@ -103,7 +103,10 @@ where
             prepare_fn(db).await;
         }
         (Some(_), true) => {
-            bail!("{FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV} set, but {} already exists already exists. Set to 'force' to overwrite.", snapshot_dir.display());
+            bail!(
+                "{FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV} set, but {} already exists already exists. Set to 'force' to overwrite.",
+                snapshot_dir.display()
+            );
         }
         (Some(_), false) => {
             debug!(dir = %snapshot_dir.display(), "Snapshot dir does not exist. Creating.");
@@ -466,8 +469,8 @@ mod fedimint_migration_tests {
     use fedimint_client::db::{ClientConfigKey, ClientConfigKeyV0};
     use fedimint_core::config::{ClientConfigV0, FederationId, GlobalClientConfigV0};
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
-    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CoreConsensusVersion;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_logging::TracingSetup;
 
     use crate::db::{snapshot_db_migrations_with_decoders, validate_migrations_core_client};

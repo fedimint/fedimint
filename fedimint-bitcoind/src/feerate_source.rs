@@ -1,9 +1,9 @@
 use std::str::FromStr;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Feerate};
+use fedimint_core::{Feerate, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_MODULE_WALLET;
 use jaq_core::load::{Arena, File, Loader};
 use jaq_core::{Ctx, Native, RcIter};

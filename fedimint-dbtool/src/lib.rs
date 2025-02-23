@@ -124,19 +124,19 @@ impl FedimintDBTool {
         })
     }
 
-    pub fn with_server_module_init<T>(mut self, gen: T) -> Self
+    pub fn with_server_module_init<T>(mut self, r#gen: T) -> Self
     where
         T: ServerModuleInit + 'static + Send + Sync,
     {
-        self.server_module_inits.attach(gen);
+        self.server_module_inits.attach(r#gen);
         self
     }
 
-    pub fn with_client_module_init<T>(mut self, gen: T) -> Self
+    pub fn with_client_module_init<T>(mut self, r#gen: T) -> Self
     where
         T: ClientModuleInit + 'static + Send + Sync,
     {
-        self.client_module_inits.attach(gen);
+        self.client_module_inits.attach(r#gen);
         self
     }
 

@@ -3,7 +3,7 @@ use std::{ffi, iter};
 
 use anyhow::Context as _;
 use clap::Parser;
-use fedimint_meta_common::{MetaConsensusValue, MetaKey, MetaValue, DEFAULT_META_KEY};
+use fedimint_meta_common::{DEFAULT_META_KEY, MetaConsensusValue, MetaKey, MetaValue};
 use serde::Serialize;
 use serde_json::json;
 
@@ -48,10 +48,8 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("meta")).chain(args.iter()));
 
     let res = match opts {
-        Opts::Get { key, hex } => {
-            if let Some(MetaConsensusValue { revision, value }) =
-                meta.module_api.get_consensus(key).await?
-            {
+        Opts::Get { key, hex } => match meta.module_api.get_consensus(key).await? {
+            Some(MetaConsensusValue { revision, value }) => {
                 let value = if hex {
                     serde_json::to_value(value).expect("can't fail")
                 } else {
@@ -63,19 +61,17 @@ pub(crate) async fn handle_cli_command(
                     "revision": revision,
                     "value": value
                 })
-            } else {
-                serde_json::Value::Null
             }
-        }
-        Opts::GetRev { key } => {
-            if let Some(rev) = meta.module_api.get_consensus_rev(key).await? {
+            _ => serde_json::Value::Null,
+        },
+        Opts::GetRev { key } => match meta.module_api.get_consensus_rev(key).await? {
+            Some(rev) => {
                 json!({
                     "revision": rev,
                 })
-            } else {
-                serde_json::Value::Null
             }
-        }
+            _ => serde_json::Value::Null,
+        },
         Opts::GetSubmissions { key, hex } => {
             let submissions = meta
                 .module_api

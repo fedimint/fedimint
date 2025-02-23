@@ -22,7 +22,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, impl_db_lookup, impl_db_record, Amount};
+use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
 use itertools::Itertools;
@@ -428,15 +428,20 @@ where
     loop {
         let mut dbtx = db.begin_transaction().await;
 
-        if let Some(event) = dbtx.get_value(&next_key).await {
-            (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
+        match dbtx.get_value(&next_key).await {
+            Some(event) => {
+                (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
 
-            next_key = next_key.next();
-            dbtx.insert_entry(pos_key, &next_key).await;
+                next_key = next_key.next();
+                dbtx.insert_entry(pos_key, &next_key).await;
 
-            dbtx.commit_tx().await;
-        } else if log_event_added.changed().await.is_err() {
-            break Ok(());
+                dbtx.commit_tx().await;
+            }
+            _ => {
+                if log_event_added.changed().await.is_err() {
+                    break Ok(());
+                }
+            }
         }
     }
 }
@@ -538,12 +543,12 @@ impl StructuredPaymentEvents {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU8;
     use std::sync::Arc;
+    use std::sync::atomic::AtomicU8;
 
     use anyhow::bail;
-    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::IRawDatabaseExt as _;
+    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::impl_db_record;
     use fedimint_core::task::TaskGroup;
@@ -552,7 +557,7 @@ mod tests {
     use tracing::info;
 
     use super::{
-        handle_events, run_event_log_ordering_task, DBTransactionEventLogExt as _, EventLogId,
+        DBTransactionEventLogExt as _, EventLogId, handle_events, run_event_log_ordering_task,
     };
     use crate::EventKind;
 

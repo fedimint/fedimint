@@ -21,14 +21,14 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
-    CORE_CONSENSUS_VERSION,
+    ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, api_endpoint,
 };
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, InPoint,
-    NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
+    Amount, InPoint, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply,
+    async_trait_maybe_send, push_db_key_items, push_db_pair_items,
 };
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
@@ -38,11 +38,11 @@ use fedimint_mint_common::config::{
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
-    MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
-    MintOutputError, MintOutputOutcome, DEFAULT_MAX_NOTES_PER_DENOMINATION,
-    MODULE_CONSENSUS_VERSION,
+    DEFAULT_MAX_NOTES_PER_DENOMINATION, MODULE_CONSENSUS_VERSION, MintCommonInit,
+    MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput, MintOutputError,
+    MintOutputOutcome,
 };
-use fedimint_server::config::distributedgen::{eval_poly_g2, PeerHandleOps};
+use fedimint_server::config::distributedgen::{PeerHandleOps, eval_poly_g2};
 use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
 use fedimint_server::core::{
     DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
@@ -56,8 +56,8 @@ use metrics::{
 use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use tbs::{
-    aggregate_public_key_shares, derive_pk_share, sign_message, AggregatePublicKey, PublicKeyShare,
-    SecretKeyShare,
+    AggregatePublicKey, PublicKeyShare, SecretKeyShare, aggregate_public_key_shares,
+    derive_pk_share, sign_message,
 };
 use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
@@ -677,11 +677,12 @@ impl Mint {
 
         // The amount tiers are implicitly provided by the key sets, make sure they are
         // internally consistent.
-        assert!(cfg
-            .consensus
-            .peer_tbs_pks
-            .values()
-            .all(|pk| pk.structural_eq(&cfg.private.tbs_sks)));
+        assert!(
+            cfg.consensus
+                .peer_tbs_pks
+                .values()
+                .all(|pk| pk.structural_eq(&cfg.private.tbs_sks))
+        );
 
         let ref_pub_key = cfg
             .private
@@ -743,11 +744,11 @@ mod test {
     use fedimint_core::config::{
         ClientModuleConfig, ConfigGenModuleParams, EmptyGenParams, ServerModuleConfig,
     };
-    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
-    use fedimint_core::module::registry::ModuleRegistry;
+    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::module::ModuleConsensusVersion;
-    use fedimint_core::{secp256k1, Amount, BitcoinHash, InPoint, PeerId, TransactionId};
+    use fedimint_core::module::registry::ModuleRegistry;
+    use fedimint_core::{Amount, BitcoinHash, InPoint, PeerId, TransactionId, secp256k1};
     use fedimint_mint_common::config::FeeConsensus;
     use fedimint_mint_common::{MintInput, Nonce, Note};
     use fedimint_server::core::{ServerModule, ServerModuleInit};

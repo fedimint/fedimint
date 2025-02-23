@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::mem;
 
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{maybe_add_send_sync, NumPeers, PeerId};
+use fedimint_core::{NumPeers, PeerId, maybe_add_send_sync};
 
 use crate::api::{PeerError, PeerResult};
 

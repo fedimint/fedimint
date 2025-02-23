@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{Context, bail, format_err};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Feerate};
+use fedimint_core::{Feerate, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_BITCOIND_ESPLORA;
 use tracing::info;
 

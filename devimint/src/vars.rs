@@ -9,7 +9,7 @@ pub trait ToEnvVar {
 macro_rules! declare_vars {
     ($struct:ident = ($($args:tt)*) =>
         {
-            $($name:ident : $ty:ty = $value:expr; env: $env:expr;)*
+            $($name:ident : $ty:ty = $value:expr_2021; env: $env:expr_2021;)*
         }
     ) => {
         #[derive(Clone, Debug)]
@@ -28,7 +28,7 @@ macro_rules! declare_vars {
                 })
             }
 
-            pub fn vars(&self) -> impl Iterator<Item = (&'static str, String)> {
+            pub fn vars(&self) -> impl Iterator<Item = (&'static str, String)> + use<> {
                 let mut env = ::std::vec::Vec::new();
                 $(
                     if let Some(value) = $crate::vars::ToEnvVar::to_env_value(&self.$name) {

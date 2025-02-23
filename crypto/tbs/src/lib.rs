@@ -5,14 +5,14 @@
 
 use std::collections::BTreeMap;
 
-use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
+use bls12_381::{G1Affine, G1Projective, G2Affine, G2Projective, Scalar, pairing};
 use fedimint_core::bls12_381_serde;
 use fedimint_core::encoding::{Decodable, Encodable};
 use group::ff::Field;
 use group::{Curve, Group};
 use hex::encode;
-use rand::rngs::OsRng;
 use rand::SeedableRng;
+use rand::rngs::OsRng;
 use rand_chacha::ChaChaRng;
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
@@ -241,17 +241,17 @@ mod tests {
     use std::collections::BTreeMap;
 
     use bls12_381::{G2Projective, Scalar};
-    use fedimint_core::bitcoin::hashes::sha256;
     use fedimint_core::BitcoinHash;
-    use group::ff::Field;
+    use fedimint_core::bitcoin::hashes::sha256;
     use group::Curve;
+    use group::ff::Field;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
 
     use crate::{
-        aggregate_signature_shares, blind_message, derive_pk_share, sign_message,
-        unblind_signature, verify, verify_signature_share, AggregatePublicKey,
-        BlindedSignatureShare, BlindingKey, Message, PublicKeyShare, SecretKeyShare,
+        AggregatePublicKey, BlindedSignatureShare, BlindingKey, Message, PublicKeyShare,
+        SecretKeyShare, aggregate_signature_shares, blind_message, derive_pk_share, sign_message,
+        unblind_signature, verify, verify_signature_share,
     };
 
     fn dealer_agg_pk() -> AggregatePublicKey {

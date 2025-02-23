@@ -8,14 +8,14 @@ use fedimint_logging::LOG_DEVIMINT;
 use tokio::join;
 use tracing::{debug, info};
 
+use crate::LightningNode;
 use crate::external::{
-    open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
-    NamedGateway,
+    Bitcoind, Electrs, Esplora, Lightningd, Lnd, NamedGateway, open_channel,
+    open_channels_between_gateways,
 };
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
-use crate::util::{supports_lnv2, ProcessManager};
-use crate::LightningNode;
+use crate::util::{ProcessManager, supports_lnv2};
 
 async fn spawn_drop<T>(t: T)
 where

@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::discriminant;
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_bitcoind::create_bitcoind;
+use fedimint_core::PeerId;
 use fedimint_core::admin_client::{ServerStatus, SetLocalParamsRequest};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
@@ -13,19 +14,18 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
-    api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
+    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
 };
-use fedimint_core::PeerId;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
 
 use super::PeerEndpoints;
-use crate::config::{gen_cert_and_key, ConfigGenParams, ConfigGenSettings, PeerConnectionInfo};
-use crate::net::api::{check_auth, ApiResult, HasApiContext};
+use crate::config::{ConfigGenParams, ConfigGenSettings, PeerConnectionInfo, gen_cert_and_key};
+use crate::net::api::{ApiResult, HasApiContext, check_auth};
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
 #[derive(Debug, Clone, Default)]

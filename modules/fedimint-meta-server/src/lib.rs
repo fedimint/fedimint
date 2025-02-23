@@ -22,30 +22,31 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiAuth, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    ApiAuth, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    TransactionItemAmount, api_endpoint,
 };
-use fedimint_core::{push_db_pair_items, InPoint, NumPeers, OutPoint, PeerId};
+use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
 use fedimint_meta_common::config::{
     MetaClientConfig, MetaConfig, MetaConfigConsensus, MetaConfigLocal, MetaConfigPrivate,
 };
 pub use fedimint_meta_common::config::{MetaGenParams, MetaGenParamsConsensus, MetaGenParamsLocal};
 use fedimint_meta_common::endpoint::{
-    GetConsensusRequest, GetSubmissionResponse, GetSubmissionsRequest, SubmitRequest,
-    GET_CONSENSUS_ENDPOINT, GET_CONSENSUS_REV_ENDPOINT, GET_SUBMISSIONS_ENDPOINT, SUBMIT_ENDPOINT,
+    GET_CONSENSUS_ENDPOINT, GET_CONSENSUS_REV_ENDPOINT, GET_SUBMISSIONS_ENDPOINT,
+    GetConsensusRequest, GetSubmissionResponse, GetSubmissionsRequest, SUBMIT_ENDPOINT,
+    SubmitRequest,
 };
 use fedimint_meta_common::{
-    MetaCommonInit, MetaConsensusItem, MetaConsensusValue, MetaInput, MetaInputError, MetaKey,
-    MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome, MetaValue,
-    MODULE_CONSENSUS_VERSION,
+    MODULE_CONSENSUS_VERSION, MetaCommonInit, MetaConsensusItem, MetaConsensusValue, MetaInput,
+    MetaInputError, MetaKey, MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome,
+    MetaValue,
 };
 use fedimint_server::core::{
     DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 use futures::StreamExt;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use strum::IntoEnumIterator;
 use tracing::{debug, info, trace};
 
@@ -472,7 +473,7 @@ impl Meta {
         _auth: &ApiAuth,
         req: &SubmitRequest,
     ) -> Result<(), ApiError> {
-        let salt = thread_rng().gen();
+        let salt = thread_rng().r#gen();
 
         info!(target: LOG_MODULE_META,
              key = %req.key,

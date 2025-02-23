@@ -2,15 +2,15 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::ops::Mul;
 
-use bitcoin_hashes::{sha256, Hash};
-use bls12_381::{pairing, G1Projective, G2Projective, Scalar};
+use bitcoin_hashes::{Hash, sha256};
 pub use bls12_381::{G1Affine, G2Affine};
+use bls12_381::{G1Projective, G2Projective, Scalar, pairing};
 use fedimint_core::bls12_381_serde;
 use fedimint_core::encoding::{Decodable, Encodable};
 use group::ff::Field;
 use group::{Curve, Group};
-use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
+use rand_chacha::rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
@@ -232,17 +232,17 @@ impl_hash_with_serialized_compressed!(PublicKeyShare);
 
 #[cfg(test)]
 mod tests {
-    use bitcoin_hashes::{sha256, Hash};
+    use bitcoin_hashes::{Hash, sha256};
     use bls12_381::{G1Projective, Scalar};
-    use group::ff::Field;
     use group::Curve;
+    use group::ff::Field;
     use rand::SeedableRng;
     use rand_chacha::ChaChaRng;
 
     use crate::{
-        aggregate_dk_shares, create_dk_share, decrypt_preimage, derive_agg_dk, derive_pk_share,
-        encrypt_preimage, verify_agg_dk, verify_ciphertext, verify_dk_share, AggregatePublicKey,
-        PublicKeyShare, SecretKeyShare,
+        AggregatePublicKey, PublicKeyShare, SecretKeyShare, aggregate_dk_shares, create_dk_share,
+        decrypt_preimage, derive_agg_dk, derive_pk_share, encrypt_preimage, verify_agg_dk,
+        verify_ciphertext, verify_dk_share,
     };
 
     fn dealer_agg_pk() -> AggregatePublicKey {

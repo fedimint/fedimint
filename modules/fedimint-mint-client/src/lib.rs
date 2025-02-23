@@ -25,7 +25,7 @@ pub mod event;
 /// API client impl for mint-specific requests
 pub mod api;
 
-use std::cmp::{min, Ordering};
+use std::cmp::{Ordering, min};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -34,17 +34,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure, Context as _};
+use anyhow::{Context as _, anyhow, bail, ensure};
 use async_stream::{stream, try_stream};
 use backup::recovery::MintRecovery;
 use base64::Engine as _;
-use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
+use bitcoin_hashes::{Hash, HashEngine as BitcoinHashEngine, sha256, sha256t};
 use client_db::{
-    migrate_state_to_v2, migrate_to_v1, DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey,
-    ReusedNoteIndices,
+    DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey, ReusedNoteIndices, migrate_state_to_v2,
+    migrate_to_v1,
 };
 use event::{NoteSpent, OOBNotesReissued, OOBNotesSpent};
-use fedimint_client_module::db::{migrate_state, ClientMigrationFn};
+use fedimint_client_module::db::{ClientMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -56,7 +56,7 @@ use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client_module::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -72,15 +72,15 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, PeerId, Tiered,
-    TieredCounts, TieredMulti, TransactionId,
+    Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
+    async_trait_maybe_send, push_db_pair_items,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
-use futures::{pin_mut, StreamExt};
+use futures::{StreamExt, pin_mut};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
 use itertools::Itertools as _;
@@ -2013,7 +2013,7 @@ async fn select_notes_from_stream<Note>(
     loop {
         if let Some((note_amount, note)) = stream.next().await {
             assert!(
-                previous_amount.map_or(true, |previous| previous >= note_amount),
+                previous_amount.is_none_or(|previous| previous >= note_amount),
                 "notes are not sorted in descending order"
             );
             previous_amount = Some(note_amount);
@@ -2443,18 +2443,18 @@ mod tests {
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{
-        secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
+        Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, secp256k1,
     };
     use fedimint_mint_common::config::FeeConsensus;
     use itertools::Itertools;
     use secp256k1::rand::rngs::OsRng;
-    use secp256k1::{SecretKey, SECP256K1};
+    use secp256k1::{SECP256K1, SecretKey};
     use serde_json::json;
     use tbs::Signature;
 
     use crate::{
-        represent_amount, select_notes_from_stream, MintOperationMetaVariant, OOBNoteV2, OOBNotes,
-        OOBNotesPart, OOBNotesV2, SpendableNote, SpendableNoteUndecoded,
+        MintOperationMetaVariant, OOBNoteV2, OOBNotes, OOBNotesPart, OOBNotesV2, SpendableNote,
+        SpendableNoteUndecoded, represent_amount, select_notes_from_stream,
     };
 
     #[test]
@@ -2734,14 +2734,17 @@ mod tests {
     fn spendable_note_undecoded_sanity() {
         // TODO: add more hex dumps to the loop
         #[allow(clippy::single_element_loop)]
-        for note_hex in ["a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"] {
-
-            let note = SpendableNote::consensus_decode_hex(note_hex, &ModuleRegistry::default()).unwrap();
-            let note_undecoded= SpendableNoteUndecoded::consensus_decode_hex(note_hex, &ModuleRegistry::default()).unwrap().decode().unwrap();
-            assert_eq!(
-                note,
-                note_undecoded,
-            );
+        for note_hex in [
+            "a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd",
+        ] {
+            let note =
+                SpendableNote::consensus_decode_hex(note_hex, &ModuleRegistry::default()).unwrap();
+            let note_undecoded =
+                SpendableNoteUndecoded::consensus_decode_hex(note_hex, &ModuleRegistry::default())
+                    .unwrap()
+                    .decode()
+                    .unwrap();
+            assert_eq!(note, note_undecoded,);
             assert_eq!(
                 serde_json::to_string(&note).unwrap(),
                 serde_json::to_string(&note_undecoded).unwrap(),

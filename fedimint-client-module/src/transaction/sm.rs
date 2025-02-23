@@ -2,12 +2,12 @@
 
 use std::time::Duration;
 
+use fedimint_core::TransactionId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::retry;
-use fedimint_core::TransactionId;
 use tokio::sync::watch;
 
 use crate::sm::{Context, DynContext, State, StateTransition};

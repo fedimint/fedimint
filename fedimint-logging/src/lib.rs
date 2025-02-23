@@ -129,10 +129,9 @@ impl TracingSetup {
             self.extra_directives.as_deref().unwrap_or(""),
         ))?;
 
-        let fmt_writer = if let Some(file) = self.with_file.take() {
-            BoxMakeWriter::new(Tee::new(io::stderr, file))
-        } else {
-            BoxMakeWriter::new(io::stderr)
+        let fmt_writer = match self.with_file.take() {
+            Some(file) => BoxMakeWriter::new(Tee::new(io::stderr, file)),
+            _ => BoxMakeWriter::new(io::stderr),
         };
 
         let fmt_layer = tracing_subscriber::fmt::layer()

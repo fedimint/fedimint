@@ -2,19 +2,19 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::io::Write;
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use async_trait::async_trait;
-use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin::hashes::Hash as BitcoinHash;
+use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
 use bls12_381::Scalar;
 use fedimint_core::config::{DkgGroup, DkgMessage, ISupportedDkgMessage, P2PMessage};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::PeerHandle;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::{NumPeers, PeerId};
-use rand::rngs::OsRng;
 use rand::SeedableRng;
+use rand::rngs::OsRng;
 use rand_chacha::ChaChaRng;
 use threshold_crypto::ff::Field;
 use threshold_crypto::group::Curve;
@@ -435,7 +435,7 @@ mod tests {
     use threshold_crypto::serde_impl::SerdeSecret;
     use threshold_crypto::{G1Projective, G2Projective, PublicKeySet, SecretKeyShare};
 
-    use crate::config::distributedgen::{eval_poly_g2, Dkg, DkgGroup, DkgStep};
+    use crate::config::distributedgen::{Dkg, DkgGroup, DkgStep, eval_poly_g2};
 
     #[test_log::test]
     fn test_dkg() {

@@ -10,13 +10,13 @@ use std::hash::Hasher;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::psbt::raw::ProprietaryKey;
-use bitcoin::{secp256k1, Address, Amount, BlockHash, TxOut, Txid};
+use bitcoin::{Address, Amount, BlockHash, TxOut, Txid, secp256k1};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, Feerate};
+use fedimint_core::{Feerate, extensible_associated_module_type, plugin_types_trait_impl_common};
 use impl_tools::autoimpl;
 use miniscript::Descriptor;
 use serde::{Deserialize, Serialize};

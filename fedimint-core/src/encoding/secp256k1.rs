@@ -93,8 +93,8 @@ impl Decodable for bitcoin::key::Keypair {
 
 #[cfg(test)]
 mod tests {
-    use secp256k1::hashes::Hash as BitcoinHash;
     use secp256k1::Message;
+    use secp256k1::hashes::Hash as BitcoinHash;
 
     use super::super::tests::test_roundtrip;
 

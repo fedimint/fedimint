@@ -14,7 +14,7 @@ use devimint::util::ProcessManager;
 use devimint::version_constants::{
     VERSION_0_3_0, VERSION_0_4_0, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA,
 };
-use devimint::{cmd, util, Gatewayd, LightningNode};
+use devimint::{Gatewayd, LightningNode, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
@@ -159,7 +159,8 @@ async fn stop_and_recover_gateway(
     }
 
     let seed = mnemonic.join(" ");
-    std::env::set_var("FM_GATEWAY_MNEMONIC", seed);
+    // TODO: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("FM_GATEWAY_MNEMONIC", seed) };
     let new_gw = Gatewayd::new(&process_mgr, new_ln).await?;
     let new_mnemonic = new_gw.get_mnemonic().await?.mnemonic;
     assert_eq!(mnemonic, new_mnemonic);
@@ -197,9 +198,12 @@ async fn mnemonic_upgrade_test(
     old_gateway_cli_path: PathBuf,
     new_gateway_cli_path: PathBuf,
 ) -> anyhow::Result<()> {
-    std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", old_gatewayd_path);
-    std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", old_gateway_cli_path);
-    std::env::set_var("FM_ENABLE_MODULE_LNV2", "0");
+    // TODO: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", old_gatewayd_path) };
+    // TODO: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", old_gateway_cli_path) };
+    // TODO: Audit that the environment access only happens in single-threaded code.
+    unsafe { std::env::set_var("FM_ENABLE_MODULE_LNV2", "0") };
 
     devimint::run_devfed_test(|dev_fed, process_mgr| async move {
         let gatewayd_version = util::Gatewayd::version_or_default().await;
@@ -227,9 +231,11 @@ async fn mnemonic_upgrade_test(
 
         // Verify that we have a legacy federation
         let mnemonic_response = gw_lnd.get_mnemonic().await?;
-        assert!(mnemonic_response
-            .legacy_federations
-            .contains(&federation_id));
+        assert!(
+            mnemonic_response
+                .legacy_federations
+                .contains(&federation_id)
+        );
 
         info!("Verified a legacy federation exists");
 
@@ -241,9 +247,11 @@ async fn mnemonic_upgrade_test(
 
         // Verify that the legacy federation is recognized
         let mnemonic_response = gw_lnd.get_mnemonic().await?;
-        assert!(mnemonic_response
-            .legacy_federations
-            .contains(&federation_id));
+        assert!(
+            mnemonic_response
+                .legacy_federations
+                .contains(&federation_id)
+        );
         assert_eq!(mnemonic_response.legacy_federations.len(), 1);
 
         info!("Verified leaving and re-joining preservers legacy federation");
@@ -262,9 +270,11 @@ async fn mnemonic_upgrade_test(
 
         // Verify that the re-connected federation is not a legacy federation
         let mnemonic_response = gw_lnd.get_mnemonic().await?;
-        assert!(!mnemonic_response
-            .legacy_federations
-            .contains(&federation_id));
+        assert!(
+            !mnemonic_response
+                .legacy_federations
+                .contains(&federation_id)
+        );
         assert_eq!(mnemonic_response.legacy_federations.len(), 0);
 
         info!("Verified deleting database will migrate the federation to use mnemonic");

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use async_stream::stream;
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::{All, PublicKey};
 use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
@@ -27,7 +27,7 @@ use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{
-    sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext,
+    AddStateMachinesError, DynGlobalClientContext, sm_enum_variant_translation,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -35,7 +35,7 @@ use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::util::{SafeUrl, Spanned};
-use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint};
+use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, secp256k1};
 use fedimint_derive_secret::ChildId;
 use fedimint_lightning::{
     InterceptPaymentRequest, InterceptPaymentResponse, LightningContext, LightningRpcError,
@@ -47,17 +47,17 @@ use fedimint_ln_client::incoming::{
 };
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
-    create_incoming_contract_output, LightningClientContext, LightningClientInit,
-    RealGatewayConnection,
+    LightningClientContext, LightningClientInit, RealGatewayConnection,
+    create_incoming_contract_output,
 };
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    create_gateway_remove_message, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    RemoveGatewayRequest, KIND,
+    KIND, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
+    LightningModuleTypes, LightningOutput, LightningOutputV0, RemoveGatewayRequest,
+    create_gateway_remove_message,
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
@@ -399,13 +399,18 @@ impl GatewayClientModule {
             .await
             .global
             .calculate_federation_id();
-        if let Err(e) = self.module_api.register_gateway(&registration_info).await {
-            warn!(
-                ?e,
-                "Failed to register gateway {gateway_id} with federation {federation_id}"
-            );
-        } else {
-            info!("Successfully registered gateway {gateway_id} with federation {federation_id}");
+        match self.module_api.register_gateway(&registration_info).await {
+            Err(e) => {
+                warn!(
+                    ?e,
+                    "Failed to register gateway {gateway_id} with federation {federation_id}"
+                );
+            }
+            _ => {
+                info!(
+                    "Successfully registered gateway {gateway_id} with federation {federation_id}"
+                );
+            }
         }
     }
 
@@ -691,7 +696,7 @@ impl GatewayClientModule {
 
                 loop {
                     debug!("Getting next ln pay state for {}", operation_id.fmt_short());
-                    if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
+                    match stream.next().await { Some(GatewayClientStateMachines::Pay(state)) => {
                         match state.state {
                             GatewayPayStates::Preimage(out_points, preimage) => {
                                 yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
@@ -738,9 +743,9 @@ impl GatewayClientModule {
                                 info!("Got state {other:?} while awaiting for output of {}", operation_id.fmt_short());
                             }
                         }
-                    } else {
+                    } _ => {
                         warn!("Got None while getting next ln pay state for {}", operation_id.fmt_short());
-                    }
+                    }}
                 }
             }
         }))

@@ -6,26 +6,26 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
+use fedimint_client::ClientHandleArc;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
-use fedimint_client::ClientHandleArc;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::time::now;
-use fedimint_core::util::{backoff_util, retry, NextOrPending};
-use fedimint_core::{msats, sats, secp256k1, Amount, OutPoint};
+use fedimint_core::util::{NextOrPending, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
-use fedimint_gateway_server::config::LightningModuleMode;
 use fedimint_gateway_server::Gateway;
+use fedimint_gateway_server::config::LightningModuleMode;
 use fedimint_gw_client::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -101,13 +101,13 @@ fn fixtures() -> Fixtures {
 
 async fn single_federation_test<B>(
     f: impl FnOnce(
-            Gateway,
-            FakeLightningTest,
-            FederationTest,
-            ClientHandleArc, // User Client
-            Arc<dyn BitcoinTest>,
-        ) -> B
-        + Copy,
+        Gateway,
+        FakeLightningTest,
+        FederationTest,
+        ClientHandleArc, // User Client
+        Arc<dyn BitcoinTest>,
+    ) -> B
+    + Copy,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = anyhow::Result<()>>,
@@ -210,12 +210,15 @@ async fn gateway_pay_valid_invoice(
             assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
 
             let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
-            if let GatewayExtPayStates::Success { out_points, .. } = gw_pay_sub.ok().await? {
-                for outpoint in out_points {
-                    dummy_module.receive_money(outpoint).await?;
+            match gw_pay_sub.ok().await? {
+                GatewayExtPayStates::Success { out_points, .. } => {
+                    for outpoint in out_points {
+                        dummy_module.receive_money(outpoint).await?;
+                    }
                 }
-            } else {
-                panic!("Gateway pay state machine was not successful");
+                _ => {
+                    panic!("Gateway pay state machine was not successful");
+                }
             }
         }
         _ => panic!("Expected Lightning payment!"),
@@ -417,10 +420,12 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 .txid();
 
             // Assert that we did not get paid for claiming a contract with a bogus preimage
-            assert!(dummy_module
-                .receive_money(OutPoint { txid, out_idx: 0 })
-                .await
-                .is_err());
+            assert!(
+                dummy_module
+                    .receive_money(OutPoint { txid, out_idx: 0 })
+                    .await
+                    .is_err()
+            );
             assert_eq!(gateway_client.get_balance().await, sats(0));
             Ok::<_, anyhow::Error>(())
         },
@@ -1258,11 +1263,13 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     assert_eq!(transactions.0.len(), 10);
 
     // Verify transactions are in descending order
-    assert!(transactions
-        .0
-        .iter()
-        .tuple_windows()
-        .all(|(e1, e2)| e1.timestamp > e2.timestamp));
+    assert!(
+        transactions
+            .0
+            .iter()
+            .tuple_windows()
+            .all(|(e1, e2)| e1.timestamp > e2.timestamp)
+    );
 
     // Verify that we retrieve the rest of the events
     let start_event = transactions

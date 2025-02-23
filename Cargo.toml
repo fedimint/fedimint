@@ -76,7 +76,7 @@ resolver = "2"
 [workspace.package]
 version = "0.7.0-alpha"
 authors = ["The Fedimint Developers"]
-edition = "2021"
+edition = "2024"
 description = "Fedimint is a Federated Chaumian E-Cash Mint, natively compatible with Bitcoin & the Lightning Network"
 documentation = "https://github.com/fedimint/fedimint/tree/master/docs"
 readme = "README.md"
@@ -88,7 +88,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 [workspace.metadata]
 name = "fedimint"
 authors = ["The Fedimint Developers"]
-edition = "2021"
+edition = "2024"
 description = "Fedimint is a Federated Chaumian E-Cash Mint, natively compatible with Bitcoin & the Lightning Network"
 documentation = "https://github.com/fedimint/fedimint/tree/master/docs"
 readme = "README.md"
@@ -179,7 +179,7 @@ hex = "0.4.3"
 hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.7.0-alpha" }
 hyper = "1.6"
-iroh =  "0.32.1"
+iroh = "0.32.1"
 iroh-base = "0.32.0"
 itertools = "0.13.0"
 jaq-core = "2.1.0"

@@ -1,5 +1,5 @@
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use itertools::Itertools;

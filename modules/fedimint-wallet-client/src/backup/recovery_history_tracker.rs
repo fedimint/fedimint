@@ -4,9 +4,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use tracing::debug;
 
+use crate::WalletClientModuleData;
 use crate::backup::FEDERATION_RECOVER_MAX_GAP;
 use crate::client_db::TweakIdx;
-use crate::WalletClientModuleData;
 
 /// Tracks addresses `TweakIdx`s/addresses that are expected to have been used
 /// against the stream of addresses that were actually used for peg-ins in the

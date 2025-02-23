@@ -5,7 +5,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use api::net::Connector;
 use api::{DynGlobalApi, FederationApiExt as _, PeerError};
 use fedimint_core::config::{ClientConfig, FederationId};

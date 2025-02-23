@@ -5,15 +5,15 @@ use std::ops::Mul;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{Context, bail, format_err};
 use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
-use bitcoin::hashes::{hex, sha256, Hash as BitcoinHash};
+use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{format_hex, ModuleDecoderRegistry};
+use fedimint_core::{ModuleDecoderRegistry, format_hex};
 use fedimint_logging::LOG_CORE;
 use hex::FromHex;
 use secp256k1::PublicKey;
@@ -30,7 +30,7 @@ use crate::encoding::Decodable;
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
 };
-use crate::{bls12_381_serde, maybe_add_send_sync, PeerId};
+use crate::{PeerId, bls12_381_serde, maybe_add_send_sync};
 
 // TODO: make configurable
 /// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
@@ -592,15 +592,15 @@ impl<M> ModuleInitRegistry<M> {
         Self::default()
     }
 
-    pub fn attach<T>(&mut self, gen: T)
+    pub fn attach<T>(&mut self, r#gen: T)
     where
         T: Into<M> + 'static + Send + Sync,
         M: AsRef<dyn IDynCommonModuleInit + 'static + Send + Sync>,
     {
-        let gen: M = gen.into();
-        let kind = gen.as_ref().module_kind();
+        let r#gen: M = r#gen.into();
+        let kind = r#gen.as_ref().module_kind();
         assert!(
-            self.0.insert(kind.clone(), gen).is_none(),
+            self.0.insert(kind.clone(), r#gen).is_none(),
             "Can't insert module of same kind twice: {kind}"
         );
     }
@@ -619,9 +619,9 @@ impl ModuleRegistry<ConfigGenModuleParams> {
         &mut self,
         id: ModuleInstanceId,
         kind: ModuleKind,
-        gen: T,
+        r#gen: T,
     ) -> &mut Self {
-        let params = ConfigGenModuleParams::from_typed(gen)
+        let params = ConfigGenModuleParams::from_typed(r#gen)
             .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
         self.register_module(id, kind, params);
         self
@@ -630,9 +630,9 @@ impl ModuleRegistry<ConfigGenModuleParams> {
     pub fn attach_config_gen_params<T: ModuleInitParams>(
         &mut self,
         kind: ModuleKind,
-        gen: T,
+        r#gen: T,
     ) -> &mut Self {
-        let params = ConfigGenModuleParams::from_typed(gen)
+        let params = ConfigGenModuleParams::from_typed(r#gen)
             .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
         self.append_module(kind, params);
         self

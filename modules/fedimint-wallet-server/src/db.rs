@@ -3,7 +3,7 @@ use bitcoin::{BlockHash, OutPoint, TxOut, Txid};
 use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
 use fedimint_wallet_common::WalletModuleTypes;
 use futures::StreamExt;

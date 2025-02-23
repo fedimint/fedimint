@@ -5,12 +5,12 @@ use std::sync::LazyLock;
 use fedimint_core::backup::ClientBackupKeyPrefix;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_metrics::prometheus::{
-    register_histogram_vec_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec,
+    HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, register_histogram_vec_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 use fedimint_metrics::{
-    histogram_opts, opts, register_histogram_with_registry, register_int_counter_vec_with_registry,
-    Histogram, REGISTRY,
+    Histogram, REGISTRY, histogram_opts, opts, register_histogram_with_registry,
+    register_int_counter_vec_with_registry,
 };
 use futures::StreamExt as _;
 
@@ -139,7 +139,9 @@ pub(crate) static BACKUP_WRITE_SIZE_BYTES: LazyLock<Histogram> = LazyLock::new(|
         histogram_opts!(
             "backup_write_size_bytes",
             "Size of every backup being written",
-            vec![1.0, 10., 100., 1_000., 5_000., 10_000., 50_000., 100_000., 1_000_000.]
+            vec![
+                1.0, 10., 100., 1_000., 5_000., 10_000., 50_000., 100_000., 1_000_000.
+            ]
         ),
         REGISTRY
     )

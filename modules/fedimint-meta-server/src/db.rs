@@ -1,5 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_meta_common::{MetaConsensusValue, MetaKey, MetaValue};
 use serde::Serialize;
 use strum_macros::EnumIter;

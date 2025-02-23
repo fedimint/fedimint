@@ -1,16 +1,16 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::net::Connector;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{
-    override_api_urls, ApiAnnouncement, SignedApiAnnouncement,
+    ApiAnnouncement, SignedApiAnnouncement, override_api_urls,
 };
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1, PeerId};
+use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use tokio::select;
 use tracing::debug;
@@ -68,8 +68,7 @@ pub async fn start_api_announcement_service(
 
             if let Err(e) = api_client
                 .submit_api_announcement(our_peer_id, announcement.clone())
-                .await
-            {
+                .await {
                 debug!(target: LOG_NET_API, ?e, "Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
                 sleep(Duration::from_secs(FAILURE_RETRY_SECONDS)).await;
             } else {

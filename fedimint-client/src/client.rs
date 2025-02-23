@@ -1,15 +1,15 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{self, Formatter};
-use std::future::{pending, Future};
+use std::future::{Future, pending};
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{anyhow, bail, format_err, Context as _};
+use anyhow::{Context as _, anyhow, bail, format_err};
 use async_stream::try_stream;
-use bitcoin::key::rand::thread_rng;
 use bitcoin::key::Secp256k1;
+use bitcoin::key::rand::thread_rng;
 use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::net::Connector;
@@ -26,8 +26,8 @@ use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy
 use fedimint_client_module::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
 use fedimint_client_module::sm::{ActiveStateMeta, DynState, InactiveStateMeta};
 use fedimint_client_module::transaction::{
-    TransactionBuilder, TxSubmissionStates, TxSubmissionStatesSM,
-    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    TRANSACTION_SUBMISSION_MODULE_INSTANCE, TransactionBuilder, TxSubmissionStates,
+    TxSubmissionStatesSM,
 };
 use fedimint_client_module::{
     AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
@@ -53,11 +53,11 @@ use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{
-    backoff_util, retry, BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl,
+    BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
 };
 use fedimint_core::{
-    apply, async_trait_maybe_send, fedimint_build_code_version_env, maybe_add_send,
-    maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
+    Amount, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send,
+    fedimint_build_code_version_env, maybe_add_send, maybe_add_send_sync, runtime,
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
@@ -71,13 +71,14 @@ use tokio::sync::{broadcast, watch};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, info, warn};
 
-use crate::api_announcements::{get_api_urls, ApiAnnouncementPrefix};
+use crate::ClientBuilder;
+use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
 use crate::db::{
-    apply_migrations_core_client, get_core_client_database_migrations, get_decoded_client_secret,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientMetadataKey,
     ClientModuleRecovery, ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey,
-    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
+    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, apply_migrations_core_client,
+    get_core_client_database_migrations, get_decoded_client_secret,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -86,7 +87,6 @@ use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveOperationStateKeyPrefix, Executor,
     InactiveModuleOperationStateKeyPrefix, InactiveOperationStateKeyPrefix,
 };
-use crate::ClientBuilder;
 
 pub(crate) mod builder;
 pub(crate) mod global_ctx;
@@ -229,16 +229,16 @@ impl Client {
     }
 
     pub async fn load_or_generate_client_secret(db: &Database) -> anyhow::Result<[u8; 64]> {
-        let client_secret =
-            if let Ok(secret) = Self::load_decodable_client_secret::<[u8; 64]>(db).await {
-                secret
-            } else {
+        let client_secret = match Self::load_decodable_client_secret::<[u8; 64]>(db).await {
+            Ok(secret) => secret,
+            _ => {
                 let secret = PlainRootSecretStrategy::random(&mut thread_rng());
                 Self::store_encodable_client_secret(db, secret)
                     .await
                     .expect("Storing client secret must work");
                 secret
-            };
+            }
+        };
         Ok(client_secret)
     }
 
@@ -1066,7 +1066,7 @@ impl Client {
     /// Don't use this stream for detecting completion of recovery.
     pub fn subscribe_to_recovery_progress(
         &self,
-    ) -> impl Stream<Item = (ModuleInstanceId, RecoveryProgress)> {
+    ) -> impl Stream<Item = (ModuleInstanceId, RecoveryProgress)> + use<> {
         WatchStream::new(self.client_recovery_progress_receiver.clone())
             .flat_map(futures::stream::iter)
     }
@@ -1301,7 +1301,7 @@ impl Client {
         self.db.autocommit(|dbtx, _| Box::pin(async move {
             let config = self.config().await;
 
-            let guardian_pub_keys = if let Some(guardian_pub_keys) = config.global.broadcast_public_keys {guardian_pub_keys}else{
+            let guardian_pub_keys = match config.global.broadcast_public_keys { Some(guardian_pub_keys) => {guardian_pub_keys} _ => {
                 let fetched_config = retry(
                     "Fetching guardian public keys",
                     backoff_util::background_backoff(),
@@ -1335,7 +1335,7 @@ impl Client {
                 dbtx.insert_entry(&ClientConfigKey, &new_config).await;
                 *(self.config.write().await) = new_config;
                 guardian_pub_keys
-            };
+            }};
 
             Result::<_, ()>::Ok(guardian_pub_keys)
         }), None).await.expect("Will retry forever")

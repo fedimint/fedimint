@@ -14,8 +14,8 @@ use fedimint_core::util::BoxStream;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use tokio::sync::OnceCell;
 use tracing::{error, instrument, warn};
 

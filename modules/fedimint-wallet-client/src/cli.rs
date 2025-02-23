@@ -71,7 +71,9 @@ pub(crate) async fn handle_cli_command(
                     .await?;
             } else if let Some(addr) = addr {
                 if addr.len() == 64 {
-                    eprintln!("Interpreting addr as an operation_id for backward compatibility. Use `--operation-id` from now on.");
+                    eprintln!(
+                        "Interpreting addr as an operation_id for backward compatibility. Use `--operation-id` from now on."
+                    );
                     let operation_id = OperationId::from_str(&addr)?;
                     module
                         .await_num_deposits_by_operation_id(operation_id, num)

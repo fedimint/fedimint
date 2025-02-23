@@ -1,15 +1,15 @@
 use std::collections::BTreeMap;
 
 use bls12_381::{G2Projective, Scalar};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use fedimint_core::encoding::{Decodable, Encodable};
-use group::ff::Field;
 use group::Curve;
+use group::ff::Field;
 use rand::rngs::OsRng;
 use tbs::{
-    aggregate_signature_shares, blind_message, sign_message, unblind_signature, verify,
     AggregatePublicKey, BlindedSignatureShare, BlindingKey, Message, PublicKeyShare,
-    SecretKeyShare, Signature,
+    SecretKeyShare, Signature, aggregate_signature_shares, blind_message, sign_message,
+    unblind_signature, verify,
 };
 
 fn dealer_keygen(

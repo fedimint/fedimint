@@ -6,19 +6,19 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use anyhow::{ensure, format_err, Context};
+use anyhow::{Context, ensure, format_err};
 use async_trait::async_trait;
+use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::PeerId;
 use iroh::{Endpoint, NodeId, SecretKey};
 use rustls::ServerName;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use tokio::net::{TcpListener, TcpStream};
-use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::rustls::RootCertStore;
-use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
+use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
+use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream, rustls};
 use tokio_util::codec::LengthDelimitedCodec;
 
 use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection};

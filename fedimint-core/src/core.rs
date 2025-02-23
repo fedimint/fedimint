@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use rand::RngCore;
@@ -82,16 +82,16 @@ impl OperationId {
 
 impl<'a> Display for OperationIdShortFmt<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fedimint_core::format_hex(&self.0 .0[0..4], f)?;
+        fedimint_core::format_hex(&self.0.0[0..4], f)?;
         f.write_str("_")?;
-        fedimint_core::format_hex(&self.0 .0[28..], f)?;
+        fedimint_core::format_hex(&self.0.0[28..], f)?;
         Ok(())
     }
 }
 
 impl<'a> Display for OperationIdFullFmt<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fedimint_core::format_hex(&self.0 .0, f)
+        fedimint_core::format_hex(&self.0.0, f)
     }
 }
 

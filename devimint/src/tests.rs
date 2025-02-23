@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{env, ffi};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::Txid;
 use clap::Subcommand;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
-use fedimint_core::envs::{is_env_var_set, FM_ENABLE_MODULE_LNV2_ENV};
+use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
@@ -25,14 +25,14 @@ use tokio::net::TcpStream;
 use tokio::{fs, try_join};
 use tracing::{debug, info};
 
-use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
+use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup, write_ready_file};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
-use crate::util::{poll, LoadTestTool, ProcessManager};
+use crate::util::{LoadTestTool, ProcessManager, poll};
 use crate::version_constants::{
     VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
 };
-use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
+use crate::{DevFed, Gatewayd, LightningNode, Lightningd, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
     pub min: Duration,
@@ -451,7 +451,8 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
     match binary {
         UpgradeTest::Fedimintd { paths } => {
             if let Some(oldest_fedimintd) = paths.first() {
-                std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", oldest_fedimintd);
+                // TODO: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", oldest_fedimintd) };
             } else {
                 bail!("Must provide at least 1 binary path");
             }
@@ -482,13 +483,15 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
         }
         UpgradeTest::FedimintCli { paths } => {
             let set_fedimint_cli_path = |path: &PathBuf| {
-                std::env::set_var("FM_FEDIMINT_CLI_BASE_EXECUTABLE", path);
+                // TODO: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var("FM_FEDIMINT_CLI_BASE_EXECUTABLE", path) };
                 let fm_mint_client: String = format!(
                     "{fedimint_cli} --data-dir {datadir}",
                     fedimint_cli = crate::util::get_fedimint_cli_path().join(" "),
                     datadir = crate::vars::utf8(&process_mgr.globals.FM_CLIENT_DIR)
                 );
-                std::env::set_var("FM_MINT_CLIENT", fm_mint_client);
+                // TODO: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var("FM_MINT_CLIENT", fm_mint_client) };
             };
 
             if let Some(oldest_fedimint_cli) = paths.first() {
@@ -538,13 +541,15 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
             gateway_cli_paths,
         } => {
             if let Some(oldest_gatewayd) = gatewayd_paths.first() {
-                std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", oldest_gatewayd);
+                // TODO: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", oldest_gatewayd) };
             } else {
                 bail!("Must provide at least 1 gatewayd path");
             }
 
             if let Some(oldest_gateway_cli) = gateway_cli_paths.first() {
-                std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", oldest_gateway_cli);
+                // TODO: Audit that the environment access only happens in single-threaded code.
+                unsafe { std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", oldest_gateway_cli) };
             } else {
                 bail!("Must provide at least 1 gateway-cli path");
             }
@@ -571,10 +576,13 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     .get(i)
                     .expect("Not enough gateway-cli paths");
 
-                let gateways = if let Some(gw_ldk) = &mut dev_fed.gw_ldk {
-                    vec![&mut dev_fed.gw_lnd, gw_ldk]
-                } else {
-                    vec![&mut dev_fed.gw_lnd]
+                let gateways = match &mut dev_fed.gw_ldk {
+                    Some(gw_ldk) => {
+                        vec![&mut dev_fed.gw_lnd, gw_ldk]
+                    }
+                    _ => {
+                        vec![&mut dev_fed.gw_lnd]
+                    }
                 };
 
                 try_join_all(gateways.into_iter().map(|gateway| {
@@ -942,10 +950,11 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let tx_hex = bitcoind.poll_get_transaction(txid).await?;
 
     let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default())?;
-    assert!(tx
-        .output
-        .iter()
-        .any(|o| o.script_pubkey == address.script_pubkey() && o.value.to_sat() == 50000));
+    assert!(
+        tx.output
+            .iter()
+            .any(|o| o.script_pubkey == address.script_pubkey() && o.value.to_sat() == 50000)
+    );
 
     let post_withdraw_walletng_balance = client.balance().await?;
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
@@ -1293,14 +1302,15 @@ pub async fn lightning_gw_reconnect_test(
                     return Err(e);
                 }
                 tracing::debug!(
-                        "Pay invoice for gateway {} failed with {e:?}, retrying in {} seconds (try {}/{MAX_RETRIES})",
-                        gw_lnd.ln
-                            .as_ref()
-                            .map(|ln| ln.name().to_string())
-                            .unwrap_or_default(),
-                        RETRY_INTERVAL.as_secs(),
-                        i + 1,
-                    );
+                    "Pay invoice for gateway {} failed with {e:?}, retrying in {} seconds (try {}/{MAX_RETRIES})",
+                    gw_lnd
+                        .ln
+                        .as_ref()
+                        .map(|ln| ln.name().to_string())
+                        .unwrap_or_default(),
+                    RETRY_INTERVAL.as_secs(),
+                    i + 1,
+                );
                 fedimint_core::task::sleep_in_test(
                     "paying invoice for gateway failed",
                     RETRY_INTERVAL,
@@ -1344,13 +1354,16 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // see: https://github.com/fedimint/fedimint/pull/4514
     if gatewayd_version >= *VERSION_0_4_0 {
         let block_height = bitcoind.get_block_count().await? - 1;
-        if let Some(gw_ldk) = &gw_ldk {
-            try_join!(
-                gw_lnd.wait_for_block_height(block_height),
-                gw_ldk.wait_for_block_height(block_height),
-            )?;
-        } else {
-            try_join!(gw_lnd.wait_for_block_height(block_height),)?;
+        match &gw_ldk {
+            Some(gw_ldk) => {
+                try_join!(
+                    gw_lnd.wait_for_block_height(block_height),
+                    gw_ldk.wait_for_block_height(block_height),
+                )?;
+            }
+            _ => {
+                try_join!(gw_lnd.wait_for_block_height(block_height),)?;
+            }
         }
     }
 
@@ -1632,7 +1645,9 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 
     // TODO(support:v0.3): remove
     if fedimintd_version < *VERSION_0_4_0_ALPHA {
-        info!("Recoverytool tests in fedmintd version that didn't have short session times when running in tests");
+        info!(
+            "Recoverytool tests in fedmintd version that didn't have short session times when running in tests"
+        );
         // And worst comes to worst, users that want to recover can just use a
         // recoverytool version corresponding to the version of fedimintd they were
         // using.
@@ -2199,7 +2214,8 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             cannot_replay_tx_test(dev_fed).await?;
         }
         TestCmd::UpgradeTests { binary, lnv2 } => {
-            std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2);
+            // TODO: Audit that the environment access only happens in single-threaded code.
+            unsafe { std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2) };
             let (process_mgr, _) = setup(common_args).await?;
             Box::pin(upgrade_tests(&process_mgr, binary)).await?;
         }

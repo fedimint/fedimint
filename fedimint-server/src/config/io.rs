@@ -3,10 +3,10 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key, LessSafeKey};
+use fedimint_aead::{LessSafeKey, encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_server_core::ServerModuleInitRegistry;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::config::ServerConfig;
 

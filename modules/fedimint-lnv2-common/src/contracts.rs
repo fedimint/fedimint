@@ -1,14 +1,14 @@
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
-use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;
+use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1::schnorr::Signature;
 use secp256k1::{Message, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 use tpe::{
-    create_dk_share, decrypt_preimage, encrypt_preimage, verify_agg_dk, verify_ciphertext,
-    verify_dk_share, AggregateDecryptionKey, AggregatePublicKey, CipherText, DecryptionKeyShare,
-    PublicKeyShare, SecretKeyShare,
+    AggregateDecryptionKey, AggregatePublicKey, CipherText, DecryptionKeyShare, PublicKeyShare,
+    SecretKeyShare, create_dk_share, decrypt_preimage, encrypt_preimage, verify_agg_dk,
+    verify_ciphertext, verify_dk_share,
 };
 
 use crate::ContractId;

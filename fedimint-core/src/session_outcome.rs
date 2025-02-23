@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 use std::io::Write as _;
 
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::hashes::{Hash, sha256};
 use parity_scale_codec::{Decode, Encode};
-use secp256k1::{schnorr, Message, PublicKey, SECP256K1};
+use secp256k1::{Message, PublicKey, SECP256K1, schnorr};
 
 use crate::encoding::{Decodable, Encodable};
 use crate::epoch::ConsensusItem;

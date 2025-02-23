@@ -21,7 +21,7 @@ use futures::StreamExt;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, warn, Instrument, Span};
+use tracing::{Instrument, Span, debug, warn};
 use url::{Host, ParseError, Url};
 
 use crate::net::STANDARD_FEDIMINT_P2P_PORT;

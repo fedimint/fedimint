@@ -13,10 +13,10 @@ use tokio::sync::Notify;
 use tokio_stream::{Stream, StreamExt as _};
 use tracing::{instrument, warn};
 
+use crate::Client;
 use crate::db::{
     MetaFieldKey, MetaFieldPrefix, MetaFieldValue, MetaServiceInfo, MetaServiceInfoKey,
 };
-use crate::Client;
 
 /// Service for managing the caching of meta fields.
 // a fancy DST to save one allocation.
@@ -47,14 +47,17 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         db: &Database,
         field: &str,
     ) -> Option<MetaValue<V>> {
-        if let Some(value) = self.get_field_from_db(db, field).await {
-            // might be from in old cache.
-            // TODO: maybe old cache should have a ttl?
-            Some(value)
-        } else {
-            // wait for initial value
-            self.initial_fetch_waiter.wait().await;
-            self.get_field_from_db(db, field).await
+        match self.get_field_from_db(db, field).await {
+            Some(value) => {
+                // might be from in old cache.
+                // TODO: maybe old cache should have a ttl?
+                Some(value)
+            }
+            _ => {
+                // wait for initial value
+                self.initial_fetch_waiter.wait().await;
+                self.get_field_from_db(db, field).await
+            }
         }
     }
 
@@ -70,7 +73,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
                 field.to_string(),
             )))
             .await
-            .and_then(|value| parse_meta_value_static::<V>(&value.0 .0).ok());
+            .and_then(|value| parse_meta_value_static::<V>(&value.0.0).ok());
         Some(MetaValue {
             fetch_time: info.last_updated,
             value,

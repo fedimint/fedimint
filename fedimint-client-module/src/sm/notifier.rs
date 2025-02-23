@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::util::broadcaststream::BroadcastStream;
 use fedimint_core::util::BoxStream;
+use fedimint_core::util::broadcaststream::BroadcastStream;
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
 use tracing::{debug, error, trace};

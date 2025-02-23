@@ -1,11 +1,11 @@
-use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::Amount;
+use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_eventlog::{
-    filter_events_by_kind, join_events, Event, EventKind, PersistedLogEntry,
-    StructuredPaymentEvents,
+    Event, EventKind, PersistedLogEntry, StructuredPaymentEvents, filter_events_by_kind,
+    join_events,
 };
-use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::ContractId;
+use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use serde::{Deserialize, Serialize};
 
 use super::pay::OutgoingPaymentError;

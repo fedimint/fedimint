@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use bitcoin::key::Keypair;
 use bitcoin::secp256k1;
+use fedimint_core::Amount;
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
-use fedimint_core::Amount;
 use fedimint_logging::LOG_CLIENT;
 use itertools::multiunzip;
 use rand::{CryptoRng, Rng, RngCore};
@@ -20,9 +20,9 @@ use tracing::warn;
 use crate::module::{IdxRange, OutPointRange, StateGenerator};
 use crate::sm::{self, DynState};
 use crate::{
-    states_add_instance, states_to_instanceless_dyn, InstancelessDynClientInput,
-    InstancelessDynClientInputBundle, InstancelessDynClientInputSM, InstancelessDynClientOutput,
-    InstancelessDynClientOutputBundle, InstancelessDynClientOutputSM,
+    InstancelessDynClientInput, InstancelessDynClientInputBundle, InstancelessDynClientInputSM,
+    InstancelessDynClientOutput, InstancelessDynClientOutputBundle, InstancelessDynClientOutputSM,
+    states_add_instance, states_to_instanceless_dyn,
 };
 
 #[derive(Clone, Debug)]
@@ -461,7 +461,7 @@ impl TransactionBuilder {
                         .map(move |output| (bundle_idx, output.output.clone()))
                 }),
         );
-        let nonce: [u8; 8] = rng.gen();
+        let nonce: [u8; 8] = rng.r#gen();
 
         let txid = Transaction::tx_hash_from_parts(&inputs, &outputs, nonce);
         let msg = secp256k1::Message::from_digest_slice(&txid[..]).expect("txid has right length");

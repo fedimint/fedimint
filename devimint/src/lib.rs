@@ -20,9 +20,9 @@ use std::ffi;
 use clap::Parser as _;
 use cli::cleanup_on_exit;
 use devfed::DevJitFed;
-pub use devfed::{dev_fed, DevFed};
+pub use devfed::{DevFed, dev_fed};
 pub use external::{
-    external_daemons, ExternalDaemons, LightningNode, Lightningd, LightningdProcessHandle, Lnd,
+    ExternalDaemons, LightningNode, Lightningd, LightningdProcessHandle, Lnd, external_daemons,
 };
 use futures::Future;
 pub use gatewayd::Gatewayd;

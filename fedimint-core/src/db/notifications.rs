@@ -2,8 +2,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use bitvec::vec::BitVec;
-use tokio::sync::futures::Notified;
 use tokio::sync::Notify;
+use tokio::sync::futures::Notified;
 
 /// Number of buckets used for `Notifications`.
 const NOTIFY_BUCKETS: usize = 32;
