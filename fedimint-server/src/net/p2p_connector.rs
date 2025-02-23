@@ -108,7 +108,7 @@ impl TlsTcpConnector {
 #[async_trait]
 impl<M> IP2PConnector<M> for TlsTcpConnector
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     fn peers(&self) -> Vec<PeerId> {
         self.peers
