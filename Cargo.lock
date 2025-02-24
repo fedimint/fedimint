@@ -4195,9 +4195,9 @@ dependencies = [
 
 [[package]]
 name = "fs-lock"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f3b89276279c4363ed0c3f846d05f5553a54b8dcbd8c739948a1cadd6fd5e44"
+checksum = "123aaa96c3b79df4454cdef6210a65eec781e3179595565691c91eb28e65eca7"
 dependencies = [
  "fs4",
 ]
@@ -6020,7 +6020,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
