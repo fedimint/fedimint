@@ -2142,7 +2142,10 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                         dev_fed.fed.pegin_gateways(20_000, vec![&dev_fed.gw_lnd]),
                         async {
                             let faucet = process_mgr
-                                .spawn_daemon("devimint-faucet", cmd!(crate::util::Faucet))
+                                .spawn_daemon(
+                                    "devimint-faucet",
+                                    cmd!(crate::util::DevimintFaucet, "faucet"),
+                                )
                                 .await?;
 
                             poll("waiting for faucet startup", || async {
