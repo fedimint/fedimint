@@ -8,8 +8,8 @@ license = { workspace = true }
 publish = false
 
 [[bin]]
-name = "circular-deposit-test"
-path = "src/bin/circular-deposit-test.rs"
+name = "wallet-module-tests"
+path = "src/bin/wallet-module-tests.rs"
 
 [[test]]
 name = "fedimint_wallet_tests"
@@ -19,6 +19,7 @@ path = "tests/tests.rs"
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
+clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }
