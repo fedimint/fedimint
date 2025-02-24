@@ -5,7 +5,7 @@ use std::time::Duration;
 use std::{env, ffi};
 
 use anyhow::{Context, Result, anyhow, ensure};
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
@@ -18,8 +18,9 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::devfed::DevJitFed;
 use crate::envs::{
-    FM_DEVIMINT_STATIC_DATA_DIR_ENV, FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV,
-    FM_OFFLINE_NODES_ENV, FM_TEST_DIR_ENV,
+    FM_BITCOIN_RPC_URL_ENV, FM_CLN_SOCKET_ENV, FM_DEVIMINT_STATIC_DATA_DIR_ENV,
+    FM_FAUCET_BIND_ADDR_ENV, FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV,
+    FM_OFFLINE_NODES_ENV, FM_PORT_GW_LND_ENV, FM_TEST_DIR_ENV,
 };
 use crate::federation::Fedimintd;
 use crate::util::{ProcessManager, poll};
@@ -109,6 +110,23 @@ pub enum Cmd {
     /// for devimint as a cli
     #[clap(flatten)]
     Rpc(RpcCmd),
+
+    /// Start devimint-faucet
+    Faucet(FaucetOpts),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct FaucetOpts {
+    #[clap(long, env = FM_FAUCET_BIND_ADDR_ENV)]
+    pub bind_addr: String,
+    #[clap(long, env = FM_BITCOIN_RPC_URL_ENV)]
+    pub bitcoind_rpc: String,
+    #[clap(long, env = FM_CLN_SOCKET_ENV)]
+    pub cln_socket: String,
+    #[clap(long, env = FM_PORT_GW_LND_ENV)]
+    pub gw_lnd_port: u16,
+    #[clap(long, env = FM_INVITE_CODE_ENV)]
+    pub invite_code: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -353,6 +371,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             };
             Box::pin(cleanup_on_exit(main, task_group)).await?;
         }
+        Cmd::Faucet(opts) => crate::faucet::run(opts).await?,
     }
     Ok(())
 }

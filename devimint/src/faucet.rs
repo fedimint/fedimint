@@ -6,13 +6,8 @@ use axum::Router;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
-use clap::Parser;
 use cln_rpc::ClnRpc;
 use cln_rpc::primitives::{Amount as ClnAmount, AmountOrAny};
-use devimint::envs::{
-    FM_BITCOIN_RPC_URL_ENV, FM_CLIENT_DIR_ENV, FM_CLN_SOCKET_ENV, FM_FAUCET_BIND_ADDR_ENV,
-    FM_INVITE_CODE_ENV, FM_PORT_GW_LND_ENV,
-};
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_gateway_common::V1_API_ENDPOINT;
@@ -21,36 +16,25 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
-#[derive(clap::Parser)]
-struct Cmd {
-    #[clap(long, env = FM_FAUCET_BIND_ADDR_ENV)]
-    bind_addr: String,
-    #[clap(long, env = FM_BITCOIN_RPC_URL_ENV)]
-    bitcoind_rpc: String,
-    #[clap(long, env = FM_CLN_SOCKET_ENV)]
-    cln_socket: String,
-    #[clap(long, env = FM_PORT_GW_LND_ENV)]
-    gw_lnd_port: u16,
-    #[clap(long, env = FM_INVITE_CODE_ENV)]
-    invite_code: Option<String>,
-}
+use crate::cli::FaucetOpts;
+use crate::envs::FM_CLIENT_DIR_ENV;
 
 #[derive(Clone)]
-struct Faucet {
+pub struct Faucet {
     #[allow(unused)]
     bitcoin: Arc<bitcoincore_rpc::Client>,
     ln_rpc: Arc<Mutex<ClnRpc>>,
 }
 
 impl Faucet {
-    async fn new(cmd: &Cmd) -> anyhow::Result<Self> {
-        let url = cmd.bitcoind_rpc.parse()?;
+    pub async fn new(opts: &FaucetOpts) -> anyhow::Result<Self> {
+        let url = opts.bitcoind_rpc.parse()?;
         let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
         let bitcoin = Arc::new(bitcoincore_rpc::Client::new(&host, auth)?);
         let ln_rpc = Arc::new(Mutex::new(
-            ClnRpc::new(&cmd.cln_socket)
+            ClnRpc::new(&opts.cln_socket)
                 .await
-                .with_context(|| format!("couldn't open CLN socket {}", &cmd.cln_socket))?,
+                .with_context(|| format!("couldn't open CLN socket {}", &opts.cln_socket))?,
         ));
         Ok(Faucet { bitcoin, ln_rpc })
     }
@@ -110,30 +94,27 @@ impl Faucet {
 }
 
 fn get_invite_code(invite_code: Option<String>) -> anyhow::Result<String> {
-    match invite_code {
-        Some(s) => Ok(s),
-        None => {
-            let data_dir = std::env::var(FM_CLIENT_DIR_ENV)?;
-            Ok(std::fs::read_to_string(
-                PathBuf::from(data_dir).join("invite-code"),
-            )?)
-        }
+    if let Some(s) = invite_code {
+        Ok(s)
+    } else {
+        let data_dir = std::env::var(FM_CLIENT_DIR_ENV)?;
+        Ok(std::fs::read_to_string(
+            PathBuf::from(data_dir).join("invite-code"),
+        )?)
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+pub async fn run(opts: FaucetOpts) -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
     handle_version_hash_command(fedimint_build_code_version_env!());
 
-    let cmd = Cmd::parse();
-    let faucet = Faucet::new(&cmd).await?;
+    let faucet = Faucet::new(&opts).await?;
     let router = Router::new()
         .route(
             "/connect-string",
             get(|| async {
-                get_invite_code(cmd.invite_code)
+                get_invite_code(opts.invite_code)
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")))
             }),
         )
@@ -161,13 +142,13 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/gateway-api",
             get(move || async move {
-                format!("http://127.0.0.1:{}/{V1_API_ENDPOINT}", cmd.gw_lnd_port)
+                format!("http://127.0.0.1:{}/{V1_API_ENDPOINT}", opts.gw_lnd_port)
             }),
         )
         .layer(CorsLayer::permissive())
         .with_state(faucet);
 
-    let listener = TcpListener::bind(&cmd.bind_addr).await?;
+    let listener = TcpListener::bind(&opts.bind_addr).await?;
     axum::serve(listener, router.into_make_service()).await?;
     Ok(())
 }
