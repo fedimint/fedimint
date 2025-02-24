@@ -4019,6 +4019,7 @@ dependencies = [
  "assert_matches",
  "bitcoin",
  "bitcoincore-rpc",
+ "clap",
  "devimint",
  "fedimint-api-client",
  "fedimint-bitcoind",

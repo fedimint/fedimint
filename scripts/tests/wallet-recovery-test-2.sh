@@ -9,4 +9,4 @@ build_workspace
 add_target_dir_to_path
 make_fm_test_marker
 
-wallet-recovery-test-2
+wallet-module-tests recovery2
