@@ -1,1 +1,0 @@
-searchState.loadedDescShard("mint_client_sanity", 0, "Test note consolidation, which at the time of writing …")
