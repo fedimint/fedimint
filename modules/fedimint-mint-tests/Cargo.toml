@@ -15,6 +15,7 @@ path = "tests/tests.rs"
 anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
+clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
