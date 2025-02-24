@@ -17,6 +17,7 @@ use fedimint_gateway_common::{
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
+use semver::Version;
 use tracing::info;
 
 use crate::cmd;
@@ -35,6 +36,7 @@ pub struct Gatewayd {
     pub ln: Option<LightningNode>,
     pub addr: String,
     pub(crate) lightning_node_addr: String,
+    pub gatewayd_version: Version,
 }
 
 impl Gatewayd {
@@ -72,10 +74,11 @@ impl Gatewayd {
                 "LNv1".to_string(),
             );
         }
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let process = process_mgr
             .spawn_daemon(
                 &format!("gatewayd-{ln_name}"),
-                cmd!(crate::util::Gatewayd, ln_name).envs(gateway_env),
+                Gatewayd::start_gatewayd(&ln_name, &gatewayd_version).envs(gateway_env),
             )
             .await?;
 
@@ -84,6 +87,7 @@ impl Gatewayd {
             process,
             addr,
             lightning_node_addr,
+            gatewayd_version,
         };
         poll(
             "waiting for gateway to be ready to respond to rpc",
@@ -91,6 +95,20 @@ impl Gatewayd {
         )
         .await?;
         Ok(gatewayd)
+    }
+
+    fn is_forced_current(&self) -> bool {
+        self.ln_type() == LightningNodeType::Ldk && self.gatewayd_version < *VERSION_0_6_0_ALPHA
+    }
+
+    fn start_gatewayd(ln_type: &LightningNodeType, gatewayd_version: &Version) -> Command {
+        // If an LDK gateway is trying to spawn prior to v0.6, just use most recent
+        // version
+        if *ln_type == LightningNodeType::Ldk && *gatewayd_version < *VERSION_0_6_0_ALPHA {
+            cmd!("gatewayd", ln_type)
+        } else {
+            cmd!(crate::util::Gatewayd, ln_type)
+        }
     }
 
     pub fn ln_type(&self) -> LightningNodeType {
@@ -162,12 +180,21 @@ impl Gatewayd {
     }
 
     pub fn cmd(&self) -> Command {
-        cmd!(
-            crate::util::get_gateway_cli_path(),
-            "--rpcpassword=theresnosecondbest",
-            "-a",
-            &self.addr
-        )
+        if self.is_forced_current() {
+            cmd!(
+                "gateway-cli",
+                "--rpcpassword=theresnosecondbest",
+                "-a",
+                &self.addr
+            )
+        } else {
+            cmd!(
+                crate::util::get_gateway_cli_path(),
+                "--rpcpassword=theresnosecondbest",
+                "-a",
+                &self.addr
+            )
+        }
     }
 
     pub async fn get_info(&self) -> Result<serde_json::Value> {
@@ -246,7 +273,7 @@ impl Gatewayd {
 
         // TODO(support:v0.4): `ecash pegin` was introduced in v0.5.0
         // see: https://github.com/fedimint/fedimint/pull/6270
-        let address = if gateway_cli_version < *VERSION_0_5_0_ALPHA {
+        let address = if !self.is_forced_current() && gateway_cli_version < *VERSION_0_5_0_ALPHA {
             cmd!(self, "address", "--federation-id={fed_id}")
                 .out_json()
                 .await?
@@ -266,7 +293,18 @@ impl Gatewayd {
 
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        let address = if gateway_cli_version < *VERSION_0_5_0_ALPHA {
+
+        // Onchain address RPC did not exist in gateway info prior to v0.4
+        if self.ln_type() == LightningNodeType::Lnd
+            && crate::util::Gatewayd::version_or_default().await < *VERSION_0_4_0_ALPHA
+        {
+            match &self.ln {
+                Some(LightningNode::Lnd(lnd)) => return lnd.get_address().await,
+                _ => panic!("Must be lnd"),
+            }
+        }
+
+        let address = if !self.is_forced_current() && gateway_cli_version < *VERSION_0_5_0_ALPHA {
             cmd!(self, "lightning", "get-funding-address")
                 .out_string()
                 .await?
@@ -349,7 +387,7 @@ impl Gatewayd {
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         // TODO(support:v0.4): `get_balances` was introduced in v0.5.0
         // see: https://github.com/fedimint/fedimint/pull/5823
-        if gateway_cli_version < *VERSION_0_5_0_ALPHA {
+        if !self.is_forced_current() && gateway_cli_version < *VERSION_0_5_0_ALPHA {
             let ecash_balance = cmd!(self, "balance", "--federation-id={federation_id}",)
                 .out_json()
                 .await?
@@ -413,6 +451,7 @@ impl Gatewayd {
         }
         bitcoind.mine_blocks(50).await?;
         let block_height = bitcoind.get_block_count().await? - 1;
+        info!(?block_height, "Waiting for block height...");
         self.wait_for_block_height(block_height).await?;
 
         Ok(())
@@ -496,6 +535,19 @@ impl Gatewayd {
     }
 
     pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
+        // Block height did not exist in gateway info prior to v0.4
+        if self.ln_type() == LightningNodeType::Lnd
+            && crate::util::Gatewayd::version_or_default().await < *VERSION_0_4_0_ALPHA
+        {
+            match &self.ln {
+                Some(LightningNode::Lnd(lnd)) => {
+                    lnd.await_block_processing().await?;
+                    return Ok(());
+                }
+                _ => panic!("Must be lnd"),
+            }
+        }
+
         poll("waiting for block height", || async {
             let info = self.get_info().await.map_err(ControlFlow::Continue)?;
             let value = info.get("block_height");
@@ -518,11 +570,12 @@ impl Gatewayd {
 
     pub async fn get_lightning_fee(&self, fed_id: String) -> Result<PaymentFee> {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        let (fee_key, base_key, ppm_key) = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
-            ("lightning_fee", "base", "parts_per_million")
-        } else {
-            ("routing_fees", "base_msat", "proportional_millionths")
-        };
+        let (fee_key, base_key, ppm_key) =
+            if gatewayd_version >= *VERSION_0_6_0_ALPHA || self.is_forced_current() {
+                ("lightning_fee", "base", "parts_per_million")
+            } else {
+                ("routing_fees", "base_msat", "proportional_millionths")
+            };
 
         let info_value = self.get_info().await?;
         let federations = info_value["federations"]
@@ -538,7 +591,8 @@ impl Gatewayd {
             })
             .ok_or_else(|| anyhow!("Federation not found"))?;
 
-        let lightning_fee = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+        let lightning_fee = if gatewayd_version >= *VERSION_0_6_0_ALPHA || self.is_forced_current()
+        {
             fed["config"][fee_key].clone()
         } else {
             fed[fee_key].clone()
@@ -562,12 +616,13 @@ impl Gatewayd {
         ppm: u64,
     ) -> Result<()> {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        if gatewayd_version < *VERSION_0_4_0_ALPHA {
+        if !self.is_forced_current() && gatewayd_version < *VERSION_0_4_0_ALPHA {
             let fees = format!("{base},{ppm}");
             cmd!(self, "set-configuration", "--routing-fees", fees)
                 .run()
                 .await?;
-        } else if gatewayd_version >= *VERSION_0_4_0_ALPHA
+        } else if !self.is_forced_current()
+            && gatewayd_version >= *VERSION_0_4_0_ALPHA
             && gatewayd_version < *VERSION_0_6_0_ALPHA
         {
             let new_fed_routing_fees = format!("{fed_id},{base},{ppm}");
@@ -605,7 +660,7 @@ impl Gatewayd {
         ppm: u64,
     ) -> Result<()> {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+        if gatewayd_version >= *VERSION_0_6_0_ALPHA || self.is_forced_current() {
             cmd!(
                 self,
                 "cfg",

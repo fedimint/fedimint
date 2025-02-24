@@ -246,7 +246,7 @@ impl Command {
         Ok(serde_json::from_str(&self.out_string().await?)?)
     }
 
-    fn command_debug(&self) -> String {
+    pub fn command_debug(&self) -> String {
         self.args_debug
             .iter()
             .map(|x| x.replace(' ', "␣"))

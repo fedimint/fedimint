@@ -26,7 +26,10 @@ use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tonic_lnd::Client as LndClient;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
+use tonic_lnd::lnrpc::{
+    ChanInfoRequest, GetInfoRequest, GetInfoRequest, ListChannelsRequest, ListChannelsRequest,
+};
+use tonic_lnd::walletrpc::AddrRequest;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::util::{ProcessHandle, ProcessManager, poll, poll_with_timeout};
@@ -656,6 +659,71 @@ impl Lnd {
         Ok(MutexGuard::map(guard, |client| client.invoices()))
     }
 
+    pub async fn wallet_client_lock(
+        &self,
+    ) -> Result<MappedMutexGuard<'_, tonic_lnd::WalletKitClient>> {
+        let guard = self.client.lock().await;
+        Ok(MutexGuard::map(guard, |client| client.wallet()))
+    }
+
+    pub async fn wait_for_channel(&self, pubkey: String) -> Result<()> {
+        poll("Wait for channel update", || async {
+            let mut lnd_client = self.client.lock().await;
+            let channels = lnd_client
+                .lightning()
+                .list_channels(ListChannelsRequest {
+                    active_only: true,
+                    ..Default::default()
+                })
+                .await
+                .context("lnd list channels")
+                .map_err(ControlFlow::Break)?
+                .into_inner();
+
+            if let Some(channel) = channels
+                .channels
+                .iter()
+                .find(|channel| channel.remote_pubkey == pubkey)
+            {
+                let chan_info = lnd_client
+                    .lightning()
+                    .get_chan_info(ChanInfoRequest {
+                        chan_id: channel.chan_id,
+                    })
+                    .await;
+
+                match chan_info {
+                    Ok(_) => {
+                        return Ok(());
+                    }
+                    Err(err) => {
+                        debug!(target: LOG_DEVIMINT, err = %err.fmt_compact(), "Getting chan info failed");
+                    }
+                }
+            }
+
+            Err(ControlFlow::Continue(anyhow!("channel not found")))
+        })
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_address(&self) -> Result<String> {
+        let address = self
+            .wallet_client_lock()
+            .await?
+            .next_addr(AddrRequest {
+                account: String::new(), // Default wallet account.
+                r#type: 4,              // Taproot address.
+                change: false,
+            })
+            .await?
+            .into_inner()
+            .addr;
+        Ok(address)
+    }
+
     pub async fn pub_key(&self) -> Result<String> {
         Ok(self
             .lightning_client_lock()
@@ -668,7 +736,7 @@ impl Lnd {
 
     // TODO: Remove this method once we drop backwards compatibility for versions
     // earlier than v0.4.0-alpha.
-    async fn await_block_processing(&self) -> Result<()> {
+    pub async fn await_block_processing(&self) -> Result<()> {
         poll("lnd block processing", || async {
             let synced = self
                 .lightning_client_lock()
@@ -898,46 +966,7 @@ pub async fn open_channel(
     .await?;
 
     bitcoind.mine_blocks(10).await?;
-
-    poll("Wait for channel update", || async {
-        let mut lnd_client = lnd.client.lock().await;
-        let channels = lnd_client
-            .lightning()
-            .list_channels(ListChannelsRequest {
-                active_only: true,
-                ..Default::default()
-            })
-            .await
-            .context("lnd list channels")
-            .map_err(ControlFlow::Break)?
-            .into_inner();
-
-        if let Some(channel) = channels
-            .channels
-            .iter()
-            .find(|channel| channel.remote_pubkey == cln_pubkey)
-        {
-            let chan_info = lnd_client
-                .lightning()
-                .get_chan_info(ChanInfoRequest {
-                    chan_id: channel.chan_id,
-                })
-                .await;
-
-            match chan_info {
-                Ok(_) => {
-                    return Ok(());
-                }
-                Err(err) => {
-                    debug!(target: LOG_DEVIMINT, err = %err.fmt_compact(), "Getting chan info failed");
-                }
-            }
-        }
-
-        Err(ControlFlow::Continue(anyhow!("channel not found")))
-    })
-    .await?;
-
+    lnd.wait_for_channel(cln_pubkey).await?;
     Ok(())
 }
 
@@ -1070,6 +1099,20 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
     counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
 ) -> anyhow::Result<()> {
+    // List active channels is not available before v0.4
+    if gw.ln_type() == LightningNodeType::Lnd
+        && crate::util::Gatewayd::version_or_default().await < *VERSION_0_4_0_ALPHA
+    {
+        match &gw.ln {
+            Some(LightningNode::Lnd(lnd)) => {
+                return lnd
+                    .wait_for_channel(counterparty_lightning_node_pubkey.to_string())
+                    .await;
+            }
+            _ => panic!("Must be lnd"),
+        }
+    }
+
     poll("Wait for channel update", || async {
         let channels = gw
             .list_active_channels()

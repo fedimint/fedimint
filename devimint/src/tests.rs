@@ -28,7 +28,7 @@ use tracing::{debug, info};
 use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup, write_ready_file};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
-use crate::util::{LoadTestTool, ProcessManager, poll};
+use crate::util::{LoadTestTool, ProcessManager, poll, supports_lnv2};
 use crate::version_constants::{
     VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
 };
@@ -576,13 +576,10 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     .get(i)
                     .expect("Not enough gateway-cli paths");
 
-                let gateways = match &mut dev_fed.gw_ldk {
-                    Some(gw_ldk) => {
-                        vec![&mut dev_fed.gw_lnd, gw_ldk]
-                    }
-                    _ => {
-                        vec![&mut dev_fed.gw_lnd]
-                    }
+                let gateways = if supports_lnv2() {
+                    vec![&mut dev_fed.gw_lnd, &mut dev_fed.gw_ldk]
+                } else {
+                    vec![&mut dev_fed.gw_lnd]
                 };
 
                 try_join_all(gateways.into_iter().map(|gateway| {
@@ -1354,36 +1351,19 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // see: https://github.com/fedimint/fedimint/pull/4514
     if gatewayd_version >= *VERSION_0_4_0 {
         let block_height = bitcoind.get_block_count().await? - 1;
-        match &gw_ldk {
-            Some(gw_ldk) => {
-                try_join!(
-                    gw_lnd.wait_for_block_height(block_height),
-                    gw_ldk.wait_for_block_height(block_height),
-                )?;
-            }
-            _ => {
-                try_join!(gw_lnd.wait_for_block_height(block_height),)?;
-            }
-        }
+        try_join!(
+            gw_lnd.wait_for_block_height(block_height),
+            gw_ldk.wait_for_block_height(block_height),
+        )?;
     }
 
     // Query current gateway infos
-    let (lnd_value, ldk_value_or) = if let Some(gw_ldk) = &gw_ldk {
-        let (lnd_value, ldk_value) = try_join!(gw_lnd.get_info(), gw_ldk.get_info())?;
-
-        (lnd_value, Some(ldk_value))
-    } else {
-        let lnd_value = gw_lnd.get_info().await?;
-
-        (lnd_value, None)
-    };
+    let (lnd_value, ldk_value) = try_join!(gw_lnd.get_info(), gw_ldk.get_info())?;
 
     // Drop references to gateways so the test can kill them
     let lnd_gateway_id = gw_lnd.gateway_id().await?;
     drop(gw_lnd);
-    if let Some(gw_ldk) = gw_ldk {
-        drop(gw_ldk);
-    }
+    drop(gw_ldk);
 
     // Verify that making a payment while the gateways are down does not result in
     // funds being stuck
@@ -1404,17 +1384,10 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
-    let (new_gw_lnd, new_gw_ldk_or) = if ldk_value_or.is_some() {
-        let (new_gw_lnd, new_gw_ldk) = try_join!(
-            Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-            Gatewayd::new(process_mgr, LightningNode::Ldk)
-        )?;
-
-        (new_gw_lnd, Some(new_gw_ldk))
-    } else {
-        let new_gw_lnd = Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())).await?;
-        (new_gw_lnd, None)
-    };
+    let (new_gw_lnd, new_gw_ldk) = try_join!(
+        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
+        Gatewayd::new(process_mgr, LightningNode::Ldk)
+    )?;
 
     let lnd_gateway_id: fedimint_core::secp256k1::PublicKey =
         serde_json::from_value(lnd_value["gateway_id"].clone())?;
@@ -1439,26 +1412,24 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )
     .await?;
 
-    if let (Some(new_gw_ldk), Some(ldk_value)) = (new_gw_ldk_or, ldk_value_or) {
-        let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
-        poll(
-            "Waiting for LDK Gateway Running state after reboot",
-            || async {
-                let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
-                let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-                let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+    let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
+    poll(
+        "Waiting for LDK Gateway Running state after reboot",
+        || async {
+            let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
+            let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+            let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
 
-                if reboot_info.gateway_state == "Running" {
-                    info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
-                    // Assert that the gateway info is the same as before the reboot
-                    assert_eq!(ldk_info, reboot_info);
-                    return Ok(());
-                }
-                Err(ControlFlow::Continue(anyhow!("gateway not running")))
-            },
-        )
-        .await?;
-    }
+            if reboot_info.gateway_state == "Running" {
+                info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
+                // Assert that the gateway info is the same as before the reboot
+                assert_eq!(ldk_info, reboot_info);
+                return Ok(());
+            }
+            Err(ControlFlow::Continue(anyhow!("gateway not running")))
+        },
+    )
+    .await?;
 
     info!(LOG_DEVIMINT, "gateway_reboot_test: success");
     Ok(())
