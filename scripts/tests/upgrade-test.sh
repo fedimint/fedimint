@@ -84,7 +84,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
 
     for enable_lnv2 in "${lnv2_flags[@]}"; do
       upgrade_tests+=(
-        "fm-run-test fedimintd-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
+        "fm-run-test fedimintd-${versions_str}-lnv2-${enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
       )
     done
   fi
@@ -102,7 +102,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
 
     for enable_lnv2 in "${lnv2_flags[@]}"; do
       upgrade_tests+=(
-        "fm-run-test fedimint-cli-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
+        "fm-run-test fedimint-cli-${versions_str}-lnv2-${enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
       )
     done
   fi
@@ -123,7 +123,7 @@ for upgrade_path in "${upgrade_paths[@]}"; do
 
     for enable_lnv2 in "${lnv2_flags[@]}"; do
       upgrade_tests+=(
-        "fm-run-test gateway-${versions_str}-lnv2-{$enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
+        "fm-run-test gateway-${versions_str}-lnv2-${enable_lnv2} devimint upgrade-tests --lnv2 $enable_lnv2 gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}")"
       )
     done
   fi
