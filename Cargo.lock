@@ -3579,6 +3579,7 @@ dependencies = [
  "anyhow",
  "bitcoin_hashes 0.14.0",
  "bls12_381",
+ "clap",
  "devimint",
  "fedimint-client",
  "fedimint-client-module",
