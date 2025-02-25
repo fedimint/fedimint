@@ -1,1 +1,0 @@
-searchState.loadedDescShard("wallet_recovery_test_2", 0, "")
