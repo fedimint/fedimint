@@ -8,7 +8,7 @@ use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
 use devimint::util::{FedimintCli, FedimintdCmd};
-use devimint::version_constants::{VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_6_0_ALPHA};
+use devimint::version_constants::{VERSION_0_4_0, VERSION_0_6_0_ALPHA};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_logging::LOG_TEST;
@@ -211,8 +211,31 @@ async fn wallet_recovery_test_2() -> anyhow::Result<()> {
         // Testing restore in different setups would require multiple clients,
         // which is a larger refactor.
         {
-            let post_balance = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-                let client = Client::create("restore-without-backup").await?;
+            let client = Client::create("restore-without-backup").await?;
+            let _ = cmd!(
+                client,
+                "restore",
+                "--mnemonic",
+                &secret,
+                "--invite-code",
+                fed.invite_code()?
+            )
+            .out_json()
+            .await?;
+
+            let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
+            let post_notes = cmd!(client, "info").out_json().await?;
+            let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
+            debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
+            assert_eq!(pre_balance, post_balance);
+        }
+
+        // with a backup
+        {
+            let _ = cmd!(reference_client, "backup",).out_json().await?;
+            let client = Client::create("restore-with-backup").await?;
+
+            {
                 let _ = cmd!(
                     client,
                     "restore",
@@ -224,108 +247,40 @@ async fn wallet_recovery_test_2() -> anyhow::Result<()> {
                 .out_json()
                 .await?;
 
-                // `wait-complete` was introduced in v0.3.0 (90f3082)
                 let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
                 let post_notes = cmd!(client, "info").out_json().await?;
                 let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
                 debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
 
-                post_balance
-            } else {
-                let client = reference_client
-                    .new_forked("restore-without-backup")
-                    .await?;
-                let _ = cmd!(client, "wipe", "--force",).out_json().await?;
+                assert_eq!(pre_balance, post_balance);
+            }
 
-                assert_eq!(
-                    0,
-                    cmd!(client, "info").out_json().await?["total_amount_msat"]
-                        .as_u64()
-                        .unwrap()
-                );
+            // Now make a backup using the just restored client, and confirm restoring again
+            // still works (no corruption was introduced)
+            let _ = cmd!(client, "backup",).out_json().await?;
 
-                let post_balance = cmd!(client, "restore", &secret,)
-                    .out_json()
-                    .await?
-                    .as_u64()
-                    .unwrap();
-                let post_notes = cmd!(client, "info").out_json().await?;
-                debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
+            const EXTRA_PEGIN_SATS: u64 = 1000;
+            fed.pegin_client(EXTRA_PEGIN_SATS, &client).await?;
 
-                post_balance
-            };
-            assert_eq!(pre_balance, post_balance);
-        }
+            {
+                let client = Client::create("restore-with-backup-again").await?;
+                let _ = cmd!(
+                    client,
+                    "restore",
+                    "--mnemonic",
+                    &secret,
+                    "--invite-code",
+                    fed.invite_code()?
+                )
+                .out_json()
+                .await?;
 
-        // with a backup
-        {
-            if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-                let _ = cmd!(reference_client, "backup",).out_json().await?;
-                let client = Client::create("restore-with-backup").await?;
-
-                {
-                    let _ = cmd!(
-                        client,
-                        "restore",
-                        "--mnemonic",
-                        &secret,
-                        "--invite-code",
-                        fed.invite_code()?
-                    )
-                    .out_json()
-                    .await?;
-
-                    let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
-                    let post_notes = cmd!(client, "info").out_json().await?;
-                    let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-                    debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
-
-                    assert_eq!(pre_balance, post_balance);
-                }
-
-                // Now make a backup using the just restored client, and confirm restoring again
-                // still works (no corruption was introduced)
-                let _ = cmd!(client, "backup",).out_json().await?;
-
-                const EXTRA_PEGIN_SATS: u64 = 1000;
-                fed.pegin_client(EXTRA_PEGIN_SATS, &client).await?;
-
-                {
-                    let client = Client::create("restore-with-backup-again").await?;
-                    let _ = cmd!(
-                        client,
-                        "restore",
-                        "--mnemonic",
-                        &secret,
-                        "--invite-code",
-                        fed.invite_code()?
-                    )
-                    .out_json()
-                    .await?;
-
-                    let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
-                    let post_notes = cmd!(client, "info").out_json().await?;
-                    let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-                    debug!(target: LOG_TEST, %post_notes, post_balance, "State after (subsequent) backup");
-
-                    assert_eq!(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance);
-                }
-            } else {
-                let client = reference_client.new_forked("restore-with-backup").await?;
-                let _ = cmd!(client, "backup",).out_json().await?;
-                let _ = cmd!(client, "wipe", "--force",).out_json().await?;
-                assert_eq!(
-                    0,
-                    cmd!(client, "info").out_json().await?["total_amount_msat"]
-                        .as_u64()
-                        .unwrap()
-                );
-                let _ = cmd!(client, "restore", &secret,).out_json().await?;
+                let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
                 let post_notes = cmd!(client, "info").out_json().await?;
                 let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-                debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
+                debug!(target: LOG_TEST, %post_notes, post_balance, "State after (subsequent) backup");
 
-                assert_eq!(pre_balance, post_balance);
+                assert_eq!(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance);
             }
         }
 

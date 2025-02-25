@@ -42,9 +42,7 @@ use super::util::{Command, ProcessHandle, ProcessManager, cmd, parse_map};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_with_timeout};
-use crate::version_constants::{
-    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_7_0_ALPHA,
-};
+use crate::version_constants::VERSION_0_7_0_ALPHA;
 use crate::{poll_eq, vars};
 
 #[derive(Clone)]
@@ -208,23 +206,6 @@ impl Client {
         Ok(cmd!(self, "info").out_json().await?["total_amount_msat"]
             .as_u64()
             .unwrap())
-    }
-
-    // TODO(support:v0.2): remove
-    pub async fn use_gateway(&self, gw: &super::gatewayd::Gatewayd) -> Result<()> {
-        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
-            let gateway_id = gw.gateway_id().await?;
-            cmd!(self, "switch-gateway", gateway_id.clone())
-                .run()
-                .await?;
-            info!(
-                "Using {name} gateway",
-                name = gw.ln.as_ref().unwrap().name()
-            );
-        }
-
-        Ok(())
     }
 
     pub async fn get_deposit_addr(&self) -> Result<(String, String)> {
@@ -593,126 +574,20 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn restart_all_with_bin_after_session(
-        &mut self,
-        process_mgr: &ProcessManager,
-        bin_path: &PathBuf,
-    ) -> Result<()> {
-        // devimint defines `FM_SKIP_REL_NOTES_ACK` during setup, so we need to remove
-        // to verify the logic for `FM_REL_NOTES_ACK` works
-        // TODO: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::remove_var("FM_SKIP_REL_NOTES_ACK") };
-        let fed_size = process_mgr.globals.FM_FED_SIZE;
-
-        // ensure all peers are online, which must happen for a coordinated shutdown
-        self.start_all_servers(process_mgr).await?;
-
-        let client = self.client.get_try().await?;
-
-        // shutdown after the current session finishes
-        let shutdown_after_session = client.get_session_count().await?;
-
-        // schedule shutdown for all peers
-        for peer_id in 0..self.num_members() {
-            let auth = ApiAuth("pass".to_string());
-            crate::util::FedimintCli
-                .shutdown(&auth, peer_id.try_into()?, shutdown_after_session)
-                .await?;
-        }
-
-        client.wait_session_outcome(shutdown_after_session).await?;
-
-        poll_with_timeout(
-            "waiting for all peers to finish scheduled shutdown",
-            // fedimintd will wait 60s to shutdown, so we include a buffer
-            Duration::from_secs(70),
-            || async {
-                for peer_id in 0..self.num_members() {
-                    let auth = ApiAuth("pass".to_string());
-                    if crate::util::FedimintCli
-                        .status(&auth, peer_id.try_into().expect("conversion to u64 works"))
-                        .await
-                        .is_ok()
-                    {
-                        return Err(ControlFlow::Continue(anyhow!("peer is still running")));
-                    }
-                }
-                Ok(())
-            },
-        )
-        .await?;
-
-        // we need to cleanup all the processes for the shutdown peers
-        for peer_id in 0..self.num_members() {
-            self.terminate_server(peer_id).await?;
-        }
-
-        // TODO: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path) };
-        // TODO: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("FM_REL_NOTES_ACK", "0_4_xyz") };
-
-        // staggered restart
-        for peer_id in 0..fed_size {
-            self.start_server(process_mgr, peer_id).await?;
-            if peer_id < fed_size - 1 {
-                fedimint_core::task::sleep_in_test(
-                    "waiting to restart remaining peers",
-                    Duration::from_secs(10),
-                )
-                .await;
-            }
-        }
-
-        self.await_all_peers().await?;
-
-        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-        info!("upgraded fedimintd to version: {}", fedimintd_version);
-        Ok(())
-    }
-
     pub async fn restart_all_with_bin(
         &mut self,
         process_mgr: &ProcessManager,
         bin_path: &PathBuf,
     ) -> Result<()> {
-        let current_fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-
         // get the version we're upgrading to, temporarily updating the fedimintd path
         let current_fedimintd_path = std::env::var("FM_FEDIMINTD_BASE_EXECUTABLE")?;
         // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path) };
-        let new_fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
         // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", current_fedimintd_path) };
 
-        if Self::version_requires_coordinated_shutdown(
-            &current_fedimintd_version,
-            &new_fedimintd_version,
-        ) {
-            self.restart_all_with_bin_after_session(process_mgr, bin_path)
-                .await
-        } else {
-            self.restart_all_staggered_with_bin(process_mgr, bin_path)
-                .await
-        }
-    }
-
-    /// Determines if the upgrade path requires a coordinated shutdown
-    ///
-    /// The only versions that require a coordinated shutdown for fedimintd are
-    /// v0.3.3 and v0.3.4-rc.1 to greater minor version (e.g. v0.4.0)
-    fn version_requires_coordinated_shutdown(
-        from_version: &semver::Version,
-        to_version: &semver::Version,
-    ) -> bool {
-        let from_version_requires_coordinated_shutdown =
-            from_version.major == 0 && from_version.minor == 3 && from_version.patch >= 3;
-
-        let to_version_requires_coordinated_shutdown =
-            to_version.major == 0 && to_version.minor >= 4;
-
-        from_version_requires_coordinated_shutdown && to_version_requires_coordinated_shutdown
+        self.restart_all_staggered_with_bin(process_mgr, bin_path)
+            .await
     }
 
     pub async fn degrade_federation(&mut self, process_mgr: &ProcessManager) -> Result<()> {
@@ -787,19 +662,14 @@ impl Federation {
         let bitcoind_block_height: u64 = self.bitcoind.get_block_count().await? - 1;
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
-                let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-                // TODO(support:v0.3): `block_height` was introduced in v0.4.0
-                // see: https://github.com/fedimint/fedimint/commit/20cb1b6c868ea7c1466ba6798bb0a2d511a3fd5a
-                if gatewayd_version >= *VERSION_0_4_0 {
-                    let gw_info = gw.get_info().await.map_err(ControlFlow::Continue)?;
-                    let block_height: u64 = gw_info["block_height"]
-                        .as_u64()
-                        .expect("Could not parse block height");
-                    if bitcoind_block_height != block_height {
-                        return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
-                            "gateway block height is not synced"
-                        )));
-                    }
+                let gw_info = gw.get_info().await.map_err(ControlFlow::Continue)?;
+                let block_height: u64 = gw_info["block_height"]
+                    .as_u64()
+                    .expect("Could not parse block height");
+                if bitcoind_block_height != block_height {
+                    return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
+                        "gateway block height is not synced"
+                    )));
                 }
 
                 let gateway_balance = gw
@@ -936,21 +806,13 @@ impl Federation {
     pub async fn await_gateways_registered(&self) -> Result<()> {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, "Awaiting LN gateways registration");
-        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        // TODO(support:v0.3.0): remove
-        // update-gateway-cache exists only for v0.3.0
-        let command = if fedimint_cli_version == *VERSION_0_3_0 {
-            "update-gateway-cache"
-        } else {
-            "list-gateways"
-        };
 
         poll("gateways registered", || async {
             let num_gateways = cmd!(
                 self.internal_client()
                     .await
                     .map_err(ControlFlow::Continue)?,
-                command
+                "list-gateways"
             )
             .out_json()
             .await
@@ -1290,8 +1152,6 @@ async fn cli_set_config_gen_params(
     auth: &ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
-    // TODO(support:v0.3): v0.4 introduced lnv2 modules, so we need to skip
-    // attaching the module for old fedimintd versions
     let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     self::config::attach_default_module_init_params(
         &BitcoinRpcConfig::get_defaults_from_env_vars()?,
