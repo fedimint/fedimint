@@ -34,12 +34,12 @@ bitcoin = { workspace = true }
 clap = { workspace = true }
 erased-serde = { workspace = true }
 esplora-client = { workspace = true }
-fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.6.0-rc.4" }
-fedimint-bip39 = { version = "=0.6.0-rc.4", path = "../../fedimint-bip39" }
-fedimint-client = { path = "../../fedimint-client", version = "=0.6.0-rc.4" }
+fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.6.0" }
+fedimint-bip39 = { version = "=0.6.0", path = "../../fedimint-bip39" }
+fedimint-client = { path = "../../fedimint-client", version = "=0.6.0" }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
-fedimint-lightning = { path = "../fedimint-lightning", version = "=0.6.0-rc.4" }
+fedimint-lightning = { path = "../fedimint-lightning", version = "=0.6.0" }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
