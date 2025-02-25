@@ -35,7 +35,7 @@ pub struct DevFed {
     pub lnd: Lnd,
     pub fed: Federation,
     pub gw_lnd: Gatewayd,
-    pub gw_ldk: Option<Gatewayd>,
+    pub gw_ldk: Gatewayd,
     pub electrs: Electrs,
     pub esplora: Esplora,
 }
@@ -80,7 +80,7 @@ pub struct DevJitFed {
     lnd: JitArc<Lnd>,
     fed: JitArc<Federation>,
     gw_lnd: JitArc<Gatewayd>,
-    gw_ldk: JitArc<Option<Gatewayd>>,
+    gw_ldk: JitArc<Gatewayd>,
     electrs: JitArc<Electrs>,
     esplora: JitArc<Esplora>,
     start_time: std::time::SystemTime,
@@ -217,15 +217,11 @@ impl DevJitFed {
         let gw_ldk = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             move || async move {
-                if supports_lnv2() {
-                    debug!(target: LOG_DEVIMINT, "Starting ldk gateway...");
-                    let start_time = fedimint_core::time::now();
-                    let ldk_gw = Gatewayd::new(&process_mgr, LightningNode::Ldk).await?;
-                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started ldk gateway");
-                    Ok(Arc::new(Some(ldk_gw)))
-                } else {
-                    Ok(Arc::new(None))
-                }
+                debug!(target: LOG_DEVIMINT, "Starting ldk gateway...");
+                let start_time = fedimint_core::time::now();
+                let ldk_gw = Gatewayd::new(&process_mgr, LightningNode::Ldk).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started ldk gateway");
+                Ok(Arc::new(ldk_gw))
             }
         });
         let gw_ldk_connected = JitTryAnyhow::new_try({
@@ -233,14 +229,14 @@ impl DevJitFed {
             let fed = fed.clone();
             move || async move {
                 let gw_ldk = gw_ldk.get_try().await?.deref();
-                if let Some(gw_ldk) = gw_ldk {
+                if supports_lnv2() {
                     let fed = fed.get_try().await?.deref();
                     debug!(target: LOG_DEVIMINT, "Registering ldk gateway...");
                     let start_time = fedimint_core::time::now();
                     if !skip_setup {
                         gw_ldk.connect_fed(fed).await?;
                     }
-                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Registered ldk gateway");
+                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Connected ldk gateway");
                 }
                 Ok(Arc::new(()))
             }
@@ -261,38 +257,28 @@ impl DevJitFed {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 let gw_ldk = gw_ldk.get_try().await?.deref();
 
-                if let Some(gw_ldk) = gw_ldk {
-                    tokio::try_join!(
-                        async {
-                            let gw_lnd = gw_lnd.get_try().await?.deref();
-                            let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
+                tokio::try_join!(
+                    async {
+                        let gw_lnd = gw_lnd.get_try().await?.deref();
+                        let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
-                            debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
-                            let start_time = fedimint_core::time::now();
-                            let res = open_channels_between_gateways(&bitcoind, gateways).await;
-                            info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
-                            res
-                        },
-                        async {
-                            let lnd = lnd.get_try().await?.deref().clone();
-                            let cln = cln.get_try().await?.deref().clone();
+                        debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
+                        let start_time = fedimint_core::time::now();
+                        let res = open_channels_between_gateways(&bitcoind, gateways).await;
+                        info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
+                        res
+                    },
+                    async {
+                        let lnd = lnd.get_try().await?.deref().clone();
+                        let cln = cln.get_try().await?.deref().clone();
 
-                            debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
-                            let start_time = fedimint_core::time::now();
-                            let res = open_channel(&process_mgr, &bitcoind, &cln, &lnd).await;
-                            info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
-                            res
-                        }
-                    )?;
-                } else {
-                    let lnd = lnd.get_try().await?.deref().clone();
-                    let cln = cln.get_try().await?.deref().clone();
-
-                    debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
-                    let start_time = fedimint_core::time::now();
-                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
-                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
-                }
+                        debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
+                        let start_time = fedimint_core::time::now();
+                        let res = open_channel(&process_mgr, &bitcoind, &cln, &lnd).await;
+                        info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
+                        res
+                    }
+                )?;
 
                 Ok(Arc::new(()))
             }
@@ -348,10 +334,10 @@ impl DevJitFed {
         self.gw_lnd_registered.get_try().await?;
         Ok(self.gw_lnd.get_try().await?.deref())
     }
-    pub async fn gw_ldk(&self) -> anyhow::Result<&Option<Gatewayd>> {
+    pub async fn gw_ldk(&self) -> anyhow::Result<&Gatewayd> {
         Ok(self.gw_ldk.get_try().await?.deref())
     }
-    pub async fn gw_ldk_connected(&self) -> anyhow::Result<&Option<Gatewayd>> {
+    pub async fn gw_ldk_connected(&self) -> anyhow::Result<&Gatewayd> {
         self.gw_ldk_connected.get_try().await?;
         Ok(self.gw_ldk.get_try().await?.deref())
     }

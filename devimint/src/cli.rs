@@ -299,21 +299,21 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     .map(|_| ())
                             },
                             async {
-                                match dev_fed.gw_ldk_connected().await? {
-                                    Some(gw_ldk) => {
-                                        let pegin_addr = gw_ldk
-                                            .get_pegin_addr(
-                                                &dev_fed.fed().await?.calculate_federation_id(),
-                                            )
-                                            .await?;
-                                        dev_fed
-                                            .bitcoind()
-                                            .await?
-                                            .send_to(pegin_addr, GW_PEGIN_AMOUNT)
-                                            .await
-                                            .map(|_| ())
-                                    }
-                                    _ => Ok(()),
+                                if crate::util::supports_lnv2() {
+                                    let gw_ldk = dev_fed.gw_ldk_connected().await?;
+                                    let pegin_addr = gw_ldk
+                                        .get_pegin_addr(
+                                            &dev_fed.fed().await?.calculate_federation_id(),
+                                        )
+                                        .await?;
+                                    dev_fed
+                                        .bitcoind()
+                                        .await?
+                                        .send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                        .await
+                                        .map(|_| ())
+                                } else {
+                                    Ok(())
                                 }
                             },
                         )?;
