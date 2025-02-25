@@ -7,8 +7,8 @@ use bitcoincore_rpc::bitcoin::address::Address;
 use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
-use devimint::util::{FedimintCli, FedimintdCmd};
-use devimint::version_constants::{VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_6_0_ALPHA};
+use devimint::util::FedimintCli;
+use devimint::version_constants::VERSION_0_6_0_ALPHA;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_logging::LOG_TEST;
@@ -36,19 +36,12 @@ async fn main() -> anyhow::Result<()> {
 async fn wallet_recovery_test_1() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let fedimint_cli_version = FedimintCli::version_or_default().await;
-        let fedimintd_version = FedimintdCmd::version_or_default().await;
-        // TODO(support:v0.4): recovery was introduced in v0.4.0
-        // see: https://github.com/fedimint/fedimint/pull/5546
-        if fedimint_cli_version < *VERSION_0_4_0 || fedimintd_version < *VERSION_0_4_0 {
-            info!("Skipping whole test on old fedimint-cli/fedimintd that is missing some irrelevant bolts");
-            return Ok(());
-        }
 
         let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
         let peg_in_amount_sats = 100_000;
 
-            // Start this client early, as we need to test waiting for session to close
+        // Start this client early, as we need to test waiting for session to close
         let client_slow = fed
             .new_joined_client("wallet-client-recovery-origin")
             .await?;
@@ -78,9 +71,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .run()
                     .await?;
             } else {
-                cmd!(restored, "module", "wallet", "await-deposit", "--operation-id", operation_id)
-                    .run()
-                    .await?;
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
             }
 
             info!("Check if claimed");
@@ -115,9 +115,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .run()
                     .await?;
             } else {
-                cmd!(restored, "module", "wallet", "await-deposit", "--operation-id", operation_id)
-                    .run()
-                    .await?;
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
             }
 
             info!("Check if claimed");
@@ -128,12 +135,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
         {
             let client = client_slow;
 
-            retry("wait for next session", backoff_util::aggressive_backoff(), || async {
-                if client_slow_pegin_session_count < client.get_session_count().await? {
-                    return Ok(());
-                }
-                bail!("Session didn't close")
-            })
+            retry(
+                "wait for next session",
+                backoff_util::aggressive_backoff(),
+                || async {
+                    if client_slow_pegin_session_count < client.get_session_count().await? {
+                        return Ok(());
+                    }
+                    bail!("Session didn't close")
+                },
+            )
             .await
             .expect("timeouted waiting for session to close");
 
@@ -151,9 +162,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .run()
                     .await?;
             } else {
-                cmd!(restored, "module", "wallet", "await-deposit", "--operation-id", operation_id)
-                    .run()
-                    .await?;
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
             }
 
             info!("Client slow: Check if claimed");
@@ -167,15 +185,6 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
 
 async fn wallet_recovery_test_2() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
-        let fedimint_cli_version = FedimintCli::version_or_default().await;
-        let fedimintd_version = FedimintdCmd::version_or_default().await;
-        // TODO(support:v0.4): recovery was introduced in v0.4.0
-        // see: https://github.com/fedimint/fedimint/pull/5546
-        if fedimint_cli_version < *VERSION_0_4_0 || fedimintd_version < *VERSION_0_4_0 {
-            info!(target: LOG_TEST, "Skipping whole test on old fedimint-cli/fedimintd that is missing some irrelevant bolts");
-            return Ok(());
-        }
-
         let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
         let peg_in_amount_sats = 100_000;
@@ -211,8 +220,31 @@ async fn wallet_recovery_test_2() -> anyhow::Result<()> {
         // Testing restore in different setups would require multiple clients,
         // which is a larger refactor.
         {
-            let post_balance = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-                let client = Client::create("restore-without-backup").await?;
+            let client = Client::create("restore-without-backup").await?;
+            let _ = cmd!(
+                client,
+                "restore",
+                "--mnemonic",
+                &secret,
+                "--invite-code",
+                fed.invite_code()?
+            )
+            .out_json()
+            .await?;
+
+            let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
+            let post_notes = cmd!(client, "info").out_json().await?;
+            let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
+            debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
+            assert_eq!(pre_balance, post_balance);
+        }
+
+        // with a backup
+        {
+            let _ = cmd!(reference_client, "backup",).out_json().await?;
+            let client = Client::create("restore-with-backup").await?;
+
+            {
                 let _ = cmd!(
                     client,
                     "restore",
@@ -224,108 +256,40 @@ async fn wallet_recovery_test_2() -> anyhow::Result<()> {
                 .out_json()
                 .await?;
 
-                // `wait-complete` was introduced in v0.3.0 (90f3082)
                 let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
                 let post_notes = cmd!(client, "info").out_json().await?;
                 let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
                 debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
 
-                post_balance
-            } else {
-                let client = reference_client
-                    .new_forked("restore-without-backup")
-                    .await?;
-                let _ = cmd!(client, "wipe", "--force",).out_json().await?;
+                assert_eq!(pre_balance, post_balance);
+            }
 
-                assert_eq!(
-                    0,
-                    cmd!(client, "info").out_json().await?["total_amount_msat"]
-                        .as_u64()
-                        .unwrap()
-                );
+            // Now make a backup using the just restored client, and confirm restoring again
+            // still works (no corruption was introduced)
+            let _ = cmd!(client, "backup",).out_json().await?;
 
-                let post_balance = cmd!(client, "restore", &secret,)
-                    .out_json()
-                    .await?
-                    .as_u64()
-                    .unwrap();
-                let post_notes = cmd!(client, "info").out_json().await?;
-                debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
+            const EXTRA_PEGIN_SATS: u64 = 1000;
+            fed.pegin_client(EXTRA_PEGIN_SATS, &client).await?;
 
-                post_balance
-            };
-            assert_eq!(pre_balance, post_balance);
-        }
+            {
+                let client = Client::create("restore-with-backup-again").await?;
+                let _ = cmd!(
+                    client,
+                    "restore",
+                    "--mnemonic",
+                    &secret,
+                    "--invite-code",
+                    fed.invite_code()?
+                )
+                .out_json()
+                .await?;
 
-        // with a backup
-        {
-            if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-                let _ = cmd!(reference_client, "backup",).out_json().await?;
-                let client = Client::create("restore-with-backup").await?;
-
-                {
-                    let _ = cmd!(
-                        client,
-                        "restore",
-                        "--mnemonic",
-                        &secret,
-                        "--invite-code",
-                        fed.invite_code()?
-                    )
-                    .out_json()
-                    .await?;
-
-                    let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
-                    let post_notes = cmd!(client, "info").out_json().await?;
-                    let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-                    debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
-
-                    assert_eq!(pre_balance, post_balance);
-                }
-
-                // Now make a backup using the just restored client, and confirm restoring again
-                // still works (no corruption was introduced)
-                let _ = cmd!(client, "backup",).out_json().await?;
-
-                const EXTRA_PEGIN_SATS: u64 = 1000;
-                fed.pegin_client(EXTRA_PEGIN_SATS, &client).await?;
-
-                {
-                    let client = Client::create("restore-with-backup-again").await?;
-                    let _ = cmd!(
-                        client,
-                        "restore",
-                        "--mnemonic",
-                        &secret,
-                        "--invite-code",
-                        fed.invite_code()?
-                    )
-                    .out_json()
-                    .await?;
-
-                    let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
-                    let post_notes = cmd!(client, "info").out_json().await?;
-                    let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-                    debug!(target: LOG_TEST, %post_notes, post_balance, "State after (subsequent) backup");
-
-                    assert_eq!(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance);
-                }
-            } else {
-                let client = reference_client.new_forked("restore-with-backup").await?;
-                let _ = cmd!(client, "backup",).out_json().await?;
-                let _ = cmd!(client, "wipe", "--force",).out_json().await?;
-                assert_eq!(
-                    0,
-                    cmd!(client, "info").out_json().await?["total_amount_msat"]
-                        .as_u64()
-                        .unwrap()
-                );
-                let _ = cmd!(client, "restore", &secret,).out_json().await?;
+                let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
                 let post_notes = cmd!(client, "info").out_json().await?;
                 let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-                debug!(target: LOG_TEST, %post_notes, post_balance, "State after backup");
+                debug!(target: LOG_TEST, %post_notes, post_balance, "State after (subsequent) backup");
 
-                assert_eq!(pre_balance, post_balance);
+                assert_eq!(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance);
             }
         }
 

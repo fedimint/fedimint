@@ -112,7 +112,6 @@ pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
         .out_json()
         .await?;
 
-        // `wait-complete` was introduced in v0.3.0 (90f3082)
         let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
         let post_notes = cmd!(client, "info").out_json().await?;
         let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
