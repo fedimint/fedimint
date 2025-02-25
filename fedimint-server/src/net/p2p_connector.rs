@@ -252,6 +252,7 @@ impl IrohConnector {
                 .collect(),
             endpoint: Endpoint::builder()
                 .discovery_n0()
+                .discovery_dht()
                 .secret_key(secret_key)
                 .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()])
                 .bind()

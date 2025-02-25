@@ -375,7 +375,6 @@ impl ClientBuilder {
         config: &ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<Option<ClientBackup>> {
-        let connector = self.connector;
         let api = DynGlobalApi::from_endpoints(
             // TODO: change join logic to use FederationId v2
             config
@@ -384,8 +383,9 @@ impl ClientBuilder {
                 .iter()
                 .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
             &api_secret,
-            &connector,
-        );
+        )
+        .await?;
+
         Client::download_backup_from_federation_static(
             &api,
             &Self::federation_root_secret(root_secret, config),
@@ -529,13 +529,14 @@ impl ClientBuilder {
                     .find_map(|(peer, api_url)| (admin_creds.peer_id == peer).then_some(api_url))
                     .context("Admin creds should match a peer")?,
                 &api_secret,
-                &connector,
             )
+            .await?
             .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
             .with_request_hook(&request_hook)
             .with_cache()
             .into(),
-            _ => ReconnectFederationApi::from_endpoints(peer_urls, &api_secret, &connector, None)
+            None => ReconnectFederationApi::from_endpoints(peer_urls, &api_secret, None)
+                .await?
                 .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
                 .with_request_hook(&request_hook)
                 .with_cache()

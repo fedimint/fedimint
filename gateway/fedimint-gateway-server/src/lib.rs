@@ -11,6 +11,7 @@
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::large_futures)]
 
 pub mod client;
 pub mod config;

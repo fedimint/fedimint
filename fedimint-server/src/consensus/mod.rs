@@ -15,7 +15,6 @@ use std::time::Duration;
 use anyhow::bail;
 use async_channel::Sender;
 use db::get_global_database_migrations;
-use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -83,14 +82,15 @@ pub async fn run(
             .iter()
             .map(|(&peer_id, url)| (peer_id, url.url.clone())),
         &None,
-        &Connector::Tcp,
-    );
+    )
+    .await?;
+
     let shared_anymap = Arc::new(RwLock::new(BTreeMap::default()));
 
     for (module_id, module_cfg) in &cfg.consensus.modules {
         match module_init_registry.get(&module_cfg.kind) {
             Some(module_init) => {
-                info!(target: LOG_CORE, "Initialise module {module_id}");
+                info!(target: LOG_CORE, "Initialise module {module_id}...");
 
                 apply_migrations(
                     &db,
@@ -154,7 +154,7 @@ pub async fn run(
         code_version_str,
     };
 
-    info!(target: LOG_CONSENSUS, "Starting Consensus Api");
+    info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
 
     let api_handler = start_consensus_api(
         &cfg.local,
@@ -168,7 +168,7 @@ pub async fn run(
         Box::pin(start_iroh_api(iroh_api_sk, consensus_api, task_group)).await;
     }
 
-    info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
+    info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
 
     for (module_id, kind, module) in module_registry.iter_modules() {
         submit_module_ci_proposals(
@@ -187,7 +187,7 @@ pub async fn run(
         panic!("FM_DB_CHECKPOINT_RETENTION_ENV var is invalid: {checkpoint_retention}")
     });
 
-    info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
+    info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
@@ -195,11 +195,8 @@ pub async fn run(
     // Using the `Connector::default()` for now!
     ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::from_endpoints(
-            api_urls,
-            &force_api_secrets.get_active(),
-            &Connector::default(),
-        ),
+        federation_api: DynGlobalApi::from_endpoints(api_urls, &force_api_secrets.get_active())
+            .await?,
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints().len())
             .map(|x| x.to_string())
@@ -323,6 +320,7 @@ async fn start_iroh_api(
 ) {
     let endpoint = Endpoint::builder()
         .discovery_n0()
+        .discovery_dht()
         .secret_key(secret_key)
         .alpns(vec![FEDIMINT_API_ALPN.to_vec()])
         .bind()

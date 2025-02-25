@@ -4,6 +4,7 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::ref_option)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::large_futures)]
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
