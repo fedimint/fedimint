@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_api_client::api::net::Connector;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{
@@ -40,7 +39,7 @@ pub async fn start_api_announcement_service(
     tg: &TaskGroup,
     cfg: &ServerConfig,
     api_secret: Option<String>,
-) {
+) -> anyhow::Result<()> {
     const INITIAL_DEALY_SECONDS: u64 = 5;
     const FAILURE_RETRY_SECONDS: u64 = 60;
     const SUCCESS_RETRY_SECONDS: u64 = 600;
@@ -49,11 +48,9 @@ pub async fn start_api_announcement_service(
 
     let db = db.clone();
     // FIXME: (@leonardo) how should we handle the connector here ?
-    let api_client = DynGlobalApi::from_endpoints(
-        get_api_urls(&db, &cfg.consensus).await,
-        &api_secret,
-        &Connector::default(),
-    );
+    let api_client =
+        DynGlobalApi::from_endpoints(get_api_urls(&db, &cfg.consensus).await, &api_secret).await?;
+
     let our_peer_id = cfg.local.identity;
     tg.spawn_cancellable("submit-api-url-announcement", async move {
         // Give other servers some time to start up in case they were just restarted
@@ -88,6 +85,8 @@ pub async fn start_api_announcement_service(
             }
         }
     });
+
+    Ok(())
 }
 
 /// Checks if we already have a signed API endpoint announcement for our own

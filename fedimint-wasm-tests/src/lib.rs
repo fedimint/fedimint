@@ -1,4 +1,5 @@
 #![deny(clippy::pedantic)]
+#![allow(clippy::large_futures)]
 
 use std::sync::Arc;
 

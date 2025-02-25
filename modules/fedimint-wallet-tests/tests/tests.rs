@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 use std::env;
+use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{Context, bail};
+use anyhow::{Context, anyhow, bail};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_api_client::api::net::Connector;
 use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -15,7 +15,7 @@ use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::serde_json;
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::{BoxStream, NextOrPending, retry};
+use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
 use fedimint_core::{Amount, BitcoinHash, Feerate, InPoint, PeerId, TransactionId, sats};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
@@ -126,15 +126,15 @@ async fn activate_manual_voting_for_online_peers(
     fed: &FederationTest,
 ) -> anyhow::Result<()> {
     let wallet_module_client_id = client.get_first_module::<WalletClientModule>()?.id;
-    let activation_futures = fed.online_peer_ids().map(|peer_id| {
+    let activation_futures = fed.online_peer_ids().map(|peer_id| async move {
         info!("activating consensus version voting for peer {peer_id}");
 
-        async move {
-            fed.new_admin_api(peer_id)
-                .with_module(wallet_module_client_id)
-                .activate_consensus_version_voting(API_AUTH.clone())
-                .await
-        }
+        fed.new_admin_api(peer_id)
+            .await?
+            .with_module(wallet_module_client_id)
+            .activate_consensus_version_voting(API_AUTH.clone())
+            .await
+            .map_err(|e| anyhow!("{e:?}"))
     });
 
     futures::future::try_join_all(activation_futures).await?;
@@ -695,7 +695,15 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         &task_group,
         PeerId::from(0),
         // FIXME: use proper mock
-        DynGlobalApi::from_endpoints([], &None, &Connector::Tcp).with_module(module_instance_id),
+        DynGlobalApi::from_endpoints(
+            [(
+                PeerId::from(0),
+                SafeUrl::from_str("ws://dummy.xyz").unwrap(),
+            )],
+            &None,
+        )
+        .await?
+        .with_module(module_instance_id),
         &ServerModuleSharedBitcoin::new(task_group.clone()),
     )
     .await?;

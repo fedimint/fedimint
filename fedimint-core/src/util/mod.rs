@@ -99,7 +99,12 @@ impl SafeUrl {
         if s.port_or_known_default().is_none() {
             return Err(ParseError::InvalidPort);
         }
+
         Ok(s)
+    }
+
+    pub fn parse_without_port(url_str: &str) -> Result<Self, ParseError> {
+        Url::parse(url_str).map(SafeUrl)
     }
 
     /// Warning: This removes the safety.

@@ -341,7 +341,8 @@ impl Federation {
             let admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
-            );
+            )
+            .await?;
             endpoints.insert(*peer, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(*peer, admin_client);
             peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);
@@ -1278,6 +1279,8 @@ pub async fn run_cli_dkg_v2(
 
         assert_eq!(status, ServerStatus::ConsensusRunning);
     }
+
+    debug!(target: LOG_DEVIMINT, "Consensus is running...");
 
     Ok(())
 }
