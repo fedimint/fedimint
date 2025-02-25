@@ -98,7 +98,7 @@ pub async fn run(
                         .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                         .collect(),
                 )
-                .await
+                .await?
                 .into_dyn()
             };
 
@@ -260,7 +260,7 @@ pub async fn run_config_gen(
                 .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
                 .collect(),
         )
-        .await
+        .await?
         .into_dyn()
     };
 

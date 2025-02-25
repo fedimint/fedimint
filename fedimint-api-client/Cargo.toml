@@ -13,13 +13,13 @@ development = ["tokio-test"]
 
 [features]
 tor = [
-    "dep:strum",
-    "dep:curve25519-dalek",
-    "arti-client/tokio",
-    "arti-client/rustls",
-    "arti-client/onion-service-client",
+  "dep:strum",
+  "dep:curve25519-dalek",
+  "arti-client/tokio",
+  "arti-client/rustls",
+  "arti-client/onion-service-client",
 ]
-iroh = ["dep:iroh"]
+iroh = ["dep:iroh", "dep:iroh-base"]
 
 [lib]
 name = "fedimint_api_client"
@@ -35,6 +35,7 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 iroh = { workspace = true, optional = true }
+iroh-base = { workspace = true, optional = true }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.8" }
 jsonrpsee-types = { version = "0.24.8" }
@@ -48,12 +49,12 @@ tracing = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.24.8", features = [
-    "tls",
+  "tls",
 ], default-features = false }
 tokio-rustls = { version = "0.26.0", default-features = false, features = [
-    "logging",
-    "tls12",
-    "ring",
+  "logging",
+  "tls12",
+  "ring",
 ] }
 webpki-roots = { version = "0.26.8" }
 rustls-pki-types = { version = "1.11.0" }

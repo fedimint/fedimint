@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
 anyhow = { workspace = true }
-async-channel = { workspace = true } 
+async-channel = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
@@ -38,6 +38,7 @@ futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
 iroh = { workspace = true, features = ["discovery-pkarr-dht"] }
+iroh-base = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { version = "0.24.8", features = ["server"] }
 parity-scale-codec = "3.7.4"
