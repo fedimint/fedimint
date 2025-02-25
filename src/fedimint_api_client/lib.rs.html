@@ -32,7 +32,7 @@
 <a href=#32 id=32 data-nosnippet>32</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, %invite, <span class="string">"Downloading client config via invite code"</span>);
 <a href=#33 id=33 data-nosnippet>33</a>
 <a href=#34 id=34 data-nosnippet>34</a>        <span class="kw">let </span>federation_id = invite.federation_id();
-<a href=#35 id=35 data-nosnippet>35</a>        <span class="kw">let </span>api = DynGlobalApi::from_endpoints(invite.peers(), <span class="kw-2">&amp;</span>invite.api_secret(), <span class="self">self</span>);
+<a href=#35 id=35 data-nosnippet>35</a>        <span class="kw">let </span>api = DynGlobalApi::from_endpoints(invite.peers(), <span class="kw-2">&amp;</span>invite.api_secret()).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#36 id=36 data-nosnippet>36</a>        <span class="kw">let </span>api_secret = invite.api_secret();
 <a href=#37 id=37 data-nosnippet>37</a>
 <a href=#38 id=38 data-nosnippet>38</a>        fedimint_core::util::retry(
@@ -76,17 +76,18 @@
 <a href=#76 id=76 data-nosnippet>76</a>
 <a href=#77 id=77 data-nosnippet>77</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Verifying client config with all peers"</span>);
 <a href=#78 id=78 data-nosnippet>78</a>
-<a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">let </span>client_config = DynGlobalApi::from_endpoints(api_endpoints, <span class="kw-2">&amp;</span>api_secret, <span class="self">self</span>)
-<a href=#80 id=80 data-nosnippet>80</a>            .request_current_consensus::&lt;ClientConfig&gt;(
-<a href=#81 id=81 data-nosnippet>81</a>                CLIENT_CONFIG_ENDPOINT.to_owned(),
-<a href=#82 id=82 data-nosnippet>82</a>                ApiRequestErased::default(),
-<a href=#83 id=83 data-nosnippet>83</a>            )
-<a href=#84 id=84 data-nosnippet>84</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#85 id=85 data-nosnippet>85</a>
-<a href=#86 id=86 data-nosnippet>86</a>        <span class="kw">if </span>client_config.calculate_federation_id() != federation_id {
-<a href=#87 id=87 data-nosnippet>87</a>            <span class="macro">bail!</span>(<span class="string">"Obtained client config has different federation id"</span>);
-<a href=#88 id=88 data-nosnippet>88</a>        }
-<a href=#89 id=89 data-nosnippet>89</a>
-<a href=#90 id=90 data-nosnippet>90</a>        <span class="prelude-val">Ok</span>(client_config)
-<a href=#91 id=91 data-nosnippet>91</a>    }
-<a href=#92 id=92 data-nosnippet>92</a>}</code></pre></div></section></main></body></html>
+<a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">let </span>client_config = DynGlobalApi::from_endpoints(api_endpoints, <span class="kw-2">&amp;</span>api_secret)
+<a href=#80 id=80 data-nosnippet>80</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#81 id=81 data-nosnippet>81</a>            </span>.request_current_consensus::&lt;ClientConfig&gt;(
+<a href=#82 id=82 data-nosnippet>82</a>                CLIENT_CONFIG_ENDPOINT.to_owned(),
+<a href=#83 id=83 data-nosnippet>83</a>                ApiRequestErased::default(),
+<a href=#84 id=84 data-nosnippet>84</a>            )
+<a href=#85 id=85 data-nosnippet>85</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">if </span>client_config.calculate_federation_id() != federation_id {
+<a href=#88 id=88 data-nosnippet>88</a>            <span class="macro">bail!</span>(<span class="string">"Obtained client config has different federation id"</span>);
+<a href=#89 id=89 data-nosnippet>89</a>        }
+<a href=#90 id=90 data-nosnippet>90</a>
+<a href=#91 id=91 data-nosnippet>91</a>        <span class="prelude-val">Ok</span>(client_config)
+<a href=#92 id=92 data-nosnippet>92</a>    }
+<a href=#93 id=93 data-nosnippet>93</a>}</code></pre></div></section></main></body></html>
