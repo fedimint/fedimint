@@ -19,6 +19,8 @@ services:
       - "letsencrypt_data:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     restart: unless-stopped
+    networks:
+      - fedimint_network
 
   bitcoin:
     image: "bitcoin/bitcoin:28.1"
@@ -29,8 +31,8 @@ services:
       - "8333:8333"
     command:
       -printtoconsole
-      -rpcallowip=0.0.0.0/0
-      -rpcbind=0.0.0.0
+      -rpcallowip=172.20.0.0/16
+      -rpcbind=172.20.0.10
       -rpcauth="${BITCOIND_RPC_AUTH}"
       -dbcache=2200
       -prune=550
@@ -40,6 +42,9 @@ services:
       -maxconnections=32
       -server=1
     restart: unless-stopped
+    networks:
+      fedimint_network:
+        ipv4_address: 172.20.0.10
 
   fedimintd:
     image: ${FEDIMINTD_IMAGE}
@@ -64,6 +69,8 @@ services:
       - "traefik.http.routers.fedimintd.entrypoints=websecure"
       - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
     restart: unless-stopped
+    networks:
+      - fedimint_network
 
   guardian-ui:
     image: fedimintui/guardian-ui:0.4.2
@@ -80,6 +87,16 @@ services:
       - "traefik.http.routers.guardian-ui.entrypoints=websecure"
       - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
     restart: unless-stopped
+    networks:
+      - fedimint_network
+
+networks:
+  fedimint_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
 
 volumes:
   bitcoind_data:

@@ -23,3 +23,4 @@
 .cargo/registry
 .cargo/.package-cache
 .cargo/.package-cache-mutate
+.aider*
