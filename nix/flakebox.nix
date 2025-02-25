@@ -765,11 +765,6 @@ in
       ];
     };
 
-    devimint-faucet = flakeboxLib.pickBinary {
-      pkg = devimint-pkgs;
-      bin = "devimint-faucet";
-    };
-
     fedimint-load-test-tool = fedimintBuildPackageGroup {
       pname = "fedimint-load-test-tool";
       packages = [ "fedimint-load-test-tool" ];

@@ -111,7 +111,7 @@ pub enum Cmd {
     #[clap(flatten)]
     Rpc(RpcCmd),
 
-    /// Start devimint-faucet
+    /// Start built-in faucet (in the past called `devimint-faucet`)
     Faucet(FaucetOpts),
 }
 

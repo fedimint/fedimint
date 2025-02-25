@@ -406,7 +406,7 @@ jobs:
             bins: gateway-cli,gatewayd
             deb: fedimint-gateway
           - flake-output: devimint
-            bins: devimint,devimint-faucet
+            bins: devimint
             deb: devimint
 
     runs-on: [self-hosted, linux]
