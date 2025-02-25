@@ -11,9 +11,7 @@ use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::util::ProcessManager;
-use devimint::version_constants::{
-    VERSION_0_3_0, VERSION_0_4_0, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA,
-};
+use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
@@ -296,12 +294,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            // TODO(support:v0.3): config tests were introduced in v0.4.0
-            // see: https://github.com/fedimint/fedimint/pull/5231
-            if gatewayd_version < *VERSION_0_4_0 {
-                return Ok(());
-            }
-
             let gw = match gw_type {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
                 LightningNodeType::Ldk => dev_fed
@@ -310,13 +302,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     .as_ref()
                     .expect("LDK Gateway should be available"),
             };
-
-            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-            let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-            if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
-                info!("fedmint-cli version that didn't support unknown modules");
-                return Ok(());
-            }
 
             // Try to connect to already connected federation
             let invite_code = dev_fed.fed().await?.invite_code()?;
@@ -329,170 +314,165 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
             );
             info!("Verified that gateway couldn't connect to already connected federation");
 
-            let fedimint_cli_version = util::FedimintCli::version_or_default().await;
             let gatewayd_version = util::Gatewayd::version_or_default().await;
 
-            if fedimint_cli_version >= *VERSION_0_3_0 && gatewayd_version >= *VERSION_0_3_0 {
-                // Change the routing fees for a specific federation
-                let fed_id = dev_fed.fed().await?.calculate_federation_id();
-                gw.set_federation_routing_fee(fed_id.clone(), 20, 20000)
-                    .await?;
-
-                let lightning_fee = gw.get_lightning_fee(fed_id.clone()).await?;
-                assert_eq!(
-                    lightning_fee.base.msats, 20,
-                    "Federation base msat is not 20"
-                );
-                assert_eq!(
-                    lightning_fee.parts_per_million, 20000,
-                    "Federation proportional millionths is not 20000"
-                );
-                info!("Verified per-federation routing fees changed");
-
-                let info_value = cmd!(gw, "info").out_json().await?;
-                let federations = info_value["federations"]
-                    .as_array()
-                    .expect("federations is an array");
-                assert_eq!(
-                    federations.len(),
-                    1,
-                    "Gateway did not have one connected federation"
-                );
-
-                // TODO(support:v0.4): a bug calling `gateway-cli config` was fixed in v0.5.0
-                // see: https://github.com/fedimint/fedimint/pull/5803
-                if gatewayd_version >= *VERSION_0_5_0_ALPHA
-                    && gatewayd_version < *VERSION_0_6_0_ALPHA
-                {
-                    // Get the federation's config and verify it parses correctly
-                    let config_val = cmd!(gw, "config", "--federation-id", fed_id)
-                        .out_json()
-                        .await?;
-                    serde_json::from_value::<GatewayFedConfig>(config_val)?;
-                } else if gatewayd_version >= *VERSION_0_6_0_ALPHA {
-                    // Get the federation's config and verify it parses correctly
-                    let config_val = cmd!(gw, "cfg", "client-config", "--federation-id", fed_id)
-                        .out_json()
-                        .await?;
-                    serde_json::from_value::<GatewayFedConfig>(config_val)?;
-                }
-
-                // Spawn new federation
-                let bitcoind = dev_fed.bitcoind().await?;
-                let new_fed = Federation::new(
-                    &process_mgr,
-                    bitcoind.clone(),
-                    4,
-                    false,
-                    "config-test".to_string(),
-                )
+            // Change the routing fees for a specific federation
+            let fed_id = dev_fed.fed().await?.calculate_federation_id();
+            gw.set_federation_routing_fee(fed_id.clone(), 20, 20000)
                 .await?;
-                let new_fed_id = new_fed.calculate_federation_id();
-                info!("Successfully spawned new federation");
 
-                let new_invite_code = new_fed.invite_code()?;
-                cmd!(gw, "connect-fed", new_invite_code.clone())
+            let lightning_fee = gw.get_lightning_fee(fed_id.clone()).await?;
+            assert_eq!(
+                lightning_fee.base.msats, 20,
+                "Federation base msat is not 20"
+            );
+            assert_eq!(
+                lightning_fee.parts_per_million, 20000,
+                "Federation proportional millionths is not 20000"
+            );
+            info!("Verified per-federation routing fees changed");
+
+            let info_value = cmd!(gw, "info").out_json().await?;
+            let federations = info_value["federations"]
+                .as_array()
+                .expect("federations is an array");
+            assert_eq!(
+                federations.len(),
+                1,
+                "Gateway did not have one connected federation"
+            );
+
+            // TODO(support:v0.4): a bug calling `gateway-cli config` was fixed in v0.5.0
+            // see: https://github.com/fedimint/fedimint/pull/5803
+            if gatewayd_version >= *VERSION_0_5_0_ALPHA && gatewayd_version < *VERSION_0_6_0_ALPHA {
+                // Get the federation's config and verify it parses correctly
+                let config_val = cmd!(gw, "config", "--federation-id", fed_id)
                     .out_json()
                     .await?;
-
-                let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
-                    (50000, 5000)
-                } else {
-                    (0, 10000)
-                };
-
-                let lightning_fee = gw.get_lightning_fee(new_fed_id.clone()).await?;
-                assert_eq!(
-                    lightning_fee.base.msats, default_base,
-                    "Default Base msat for new federation was not correct"
-                );
-                assert_eq!(
-                    lightning_fee.parts_per_million, default_ppm,
-                    "Default Base msat for new federation was not correct"
-                );
-
-                info!(?new_fed_id, "Verified new federation");
-
-                // Peg-in sats to gw for the new fed
-                let pegin_amount = Amount::from_msats(10_000_000);
-                new_fed
-                    .pegin_gateways(pegin_amount.sats_round_down(), vec![gw])
-                    .await?;
-
-                // Verify `info` returns multiple federations
-                let info_value = cmd!(gw, "info").out_json().await?;
-                let federations = info_value["federations"]
-                    .as_array()
-                    .expect("federations is an array");
-
-                assert_eq!(
-                    federations.len(),
-                    2,
-                    "Gateway did not have two connected federations"
-                );
-
-                let federation_fake_scids =
-                    serde_json::from_value::<Option<BTreeMap<u64, FederationId>>>(
-                        info_value
-                            .get("channels")
-                            .or_else(|| info_value.get("federation_fake_scids"))
-                            .expect("field  exists")
-                            .to_owned(),
-                    )
-                    .expect("cannot parse")
-                    .expect("should have scids");
-
-                assert_eq!(
-                    federation_fake_scids.keys().copied().collect::<Vec<u64>>(),
-                    vec![1, 2]
-                );
-
-                let first_fed_info = federations
-                    .iter()
-                    .find(|i| {
-                        *i["federation_id"]
-                            .as_str()
-                            .expect("should parse as str")
-                            .to_string()
-                            == fed_id
-                    })
-                    .expect("Could not find federation");
-
-                let second_fed_info = federations
-                    .iter()
-                    .find(|i| {
-                        *i["federation_id"]
-                            .as_str()
-                            .expect("should parse as str")
-                            .to_string()
-                            == new_fed_id
-                    })
-                    .expect("Could not find federation");
-
-                let first_fed_balance_msat =
-                    serde_json::from_value::<Amount>(first_fed_info["balance_msat"].clone())
-                        .expect("fed should have balance");
-
-                let second_fed_balance_msat =
-                    serde_json::from_value::<Amount>(second_fed_info["balance_msat"].clone())
-                        .expect("fed should have balance");
-
-                assert_eq!(first_fed_balance_msat, Amount::ZERO);
-                assert_eq!(second_fed_balance_msat, pegin_amount);
-
-                leave_federation(gw, fed_id, 1).await?;
-                leave_federation(gw, new_fed_id, 2).await?;
-
-                // Rejoin new federation, verify that the balance is the same
-                let output = cmd!(gw, "connect-fed", new_invite_code.clone())
+                serde_json::from_value::<GatewayFedConfig>(config_val)?;
+            } else if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+                // Get the federation's config and verify it parses correctly
+                let config_val = cmd!(gw, "cfg", "client-config", "--federation-id", fed_id)
                     .out_json()
                     .await?;
-                let rejoined_federation_balance_msat =
-                    serde_json::from_value::<Amount>(output["balance_msat"].clone())
-                        .expect("fed has balance");
-
-                assert_eq!(second_fed_balance_msat, rejoined_federation_balance_msat);
+                serde_json::from_value::<GatewayFedConfig>(config_val)?;
             }
+
+            // Spawn new federation
+            let bitcoind = dev_fed.bitcoind().await?;
+            let new_fed = Federation::new(
+                &process_mgr,
+                bitcoind.clone(),
+                4,
+                false,
+                "config-test".to_string(),
+            )
+            .await?;
+            let new_fed_id = new_fed.calculate_federation_id();
+            info!("Successfully spawned new federation");
+
+            let new_invite_code = new_fed.invite_code()?;
+            cmd!(gw, "connect-fed", new_invite_code.clone())
+                .out_json()
+                .await?;
+
+            let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+                (50000, 5000)
+            } else {
+                (0, 10000)
+            };
+
+            let lightning_fee = gw.get_lightning_fee(new_fed_id.clone()).await?;
+            assert_eq!(
+                lightning_fee.base.msats, default_base,
+                "Default Base msat for new federation was not correct"
+            );
+            assert_eq!(
+                lightning_fee.parts_per_million, default_ppm,
+                "Default Base msat for new federation was not correct"
+            );
+
+            info!(?new_fed_id, "Verified new federation");
+
+            // Peg-in sats to gw for the new fed
+            let pegin_amount = Amount::from_msats(10_000_000);
+            new_fed
+                .pegin_gateways(pegin_amount.sats_round_down(), vec![gw])
+                .await?;
+
+            // Verify `info` returns multiple federations
+            let info_value = cmd!(gw, "info").out_json().await?;
+            let federations = info_value["federations"]
+                .as_array()
+                .expect("federations is an array");
+
+            assert_eq!(
+                federations.len(),
+                2,
+                "Gateway did not have two connected federations"
+            );
+
+            let federation_fake_scids =
+                serde_json::from_value::<Option<BTreeMap<u64, FederationId>>>(
+                    info_value
+                        .get("channels")
+                        .or_else(|| info_value.get("federation_fake_scids"))
+                        .expect("field  exists")
+                        .to_owned(),
+                )
+                .expect("cannot parse")
+                .expect("should have scids");
+
+            assert_eq!(
+                federation_fake_scids.keys().copied().collect::<Vec<u64>>(),
+                vec![1, 2]
+            );
+
+            let first_fed_info = federations
+                .iter()
+                .find(|i| {
+                    *i["federation_id"]
+                        .as_str()
+                        .expect("should parse as str")
+                        .to_string()
+                        == fed_id
+                })
+                .expect("Could not find federation");
+
+            let second_fed_info = federations
+                .iter()
+                .find(|i| {
+                    *i["federation_id"]
+                        .as_str()
+                        .expect("should parse as str")
+                        .to_string()
+                        == new_fed_id
+                })
+                .expect("Could not find federation");
+
+            let first_fed_balance_msat =
+                serde_json::from_value::<Amount>(first_fed_info["balance_msat"].clone())
+                    .expect("fed should have balance");
+
+            let second_fed_balance_msat =
+                serde_json::from_value::<Amount>(second_fed_info["balance_msat"].clone())
+                    .expect("fed should have balance");
+
+            assert_eq!(first_fed_balance_msat, Amount::ZERO);
+            assert_eq!(second_fed_balance_msat, pegin_amount);
+
+            leave_federation(gw, fed_id, 1).await?;
+            leave_federation(gw, new_fed_id, 2).await?;
+
+            // Rejoin new federation, verify that the balance is the same
+            let output = cmd!(gw, "connect-fed", new_invite_code.clone())
+                .out_json()
+                .await?;
+            let rejoined_federation_balance_msat =
+                serde_json::from_value::<Amount>(output["balance_msat"].clone())
+                    .expect("fed has balance");
+
+            assert_eq!(second_fed_balance_msat, rejoined_federation_balance_msat);
 
             info!("Gateway configuration test successful");
             Ok(())
