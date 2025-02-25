@@ -165,7 +165,7 @@ pub async fn run(
     .await;
 
     if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
-        start_iroh_api(iroh_api_sk, consensus_api, task_group).await;
+        Box::pin(start_iroh_api(iroh_api_sk, consensus_api, task_group)).await;
     }
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");

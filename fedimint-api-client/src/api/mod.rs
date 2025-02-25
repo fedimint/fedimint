@@ -1166,7 +1166,7 @@ impl ClientConnection {
     }
 }
 
-#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
+#[cfg(feature = "iroh")]
 mod iroh {
     use std::collections::{BTreeMap, BTreeSet};
 
