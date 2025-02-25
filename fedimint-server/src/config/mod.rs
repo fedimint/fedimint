@@ -301,9 +301,11 @@ impl ServerConfigConsensus {
                 .map(|(peer, endpoints)| {
                     let url = PeerUrl {
                         name: endpoints.name.clone(),
-                        url: format!("iroh://{}", endpoints.api_pk)
-                            .parse()
-                            .expect("Failed to parse iroh url"),
+                        url: SafeUrl::parse_without_port(&format!(
+                            "iroh://{}.ed25519",
+                            endpoints.api_pk
+                        ))
+                        .expect("Failed to parse iroh url"),
                     };
 
                     (*peer, url)
@@ -491,7 +493,7 @@ impl ServerConfig {
         identity: &PeerId,
         module_config_gens: &ServerModuleInitRegistry,
     ) -> anyhow::Result<()> {
-        let peers = self.local.p2p_endpoints.clone();
+        let endpoints = self.consensus.api_endpoints().clone();
         let consensus = self.consensus.clone();
         let private = self.private.clone();
 
@@ -500,10 +502,10 @@ impl ServerConfig {
         if Some(&my_public_key) != consensus.broadcast_public_keys.get(identity) {
             bail!("Broadcast secret key doesn't match corresponding public key");
         }
-        if peers.keys().max().copied().map(PeerId::to_usize) != Some(peers.len() - 1) {
+        if endpoints.keys().max().copied().map(PeerId::to_usize) != Some(endpoints.len() - 1) {
             bail!("Peer ids are not indexed from 0");
         }
-        if peers.keys().min().copied() != Some(PeerId::from(0)) {
+        if endpoints.keys().min().copied() != Some(PeerId::from(0)) {
             bail!("Peer ids are not indexed from 0");
         }
 

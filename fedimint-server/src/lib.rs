@@ -138,7 +138,9 @@ pub async fn run(
 
     initialize_gauge_metrics(&db).await;
 
-    start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await;
+    start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
+
+    info!(target: LOG_CONSENSUS, "Starting consensus...");
 
     Box::pin(consensus::run(
         connections,
@@ -154,7 +156,7 @@ pub async fn run(
     ))
     .await?;
 
-    info!(target: LOG_CONSENSUS, "Shutting down tasks");
+    info!(target: LOG_CONSENSUS, "Shutting down tasks...");
 
     task_group.shutdown();
 

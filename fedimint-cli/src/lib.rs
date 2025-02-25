@@ -7,6 +7,7 @@
 #![allow(clippy::ref_option)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::large_futures)]
 
 mod client;
 mod db_locked;
@@ -248,15 +249,14 @@ impl Opts {
         Ok(dir)
     }
 
-    fn admin_client(
+    async fn admin_client(
         &self,
         peer_urls: &BTreeMap<PeerId, SafeUrl>,
         api_secret: &Option<String>,
     ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
-        let connector = self.connector();
 
-        Ok(DynGlobalApi::new_admin(
+        DynGlobalApi::new_admin(
             our_id,
             peer_urls
                 .get(&our_id)
@@ -264,8 +264,11 @@ impl Opts {
                 .context("Our peer URL not found in config")
                 .map_err_cli()?,
             api_secret,
-            &connector,
-        ))
+        )
+        .await
+        .map_err(|e| CliError {
+            error: e.to_string(),
+        })
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
@@ -837,7 +840,8 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let audit = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .await?
                     .audit(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -848,7 +852,8 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let status = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .await?
                     .status()
                     .await?;
                 Ok(CliOutput::Raw(
@@ -859,7 +864,8 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let guardian_config_backup = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .await?
                     .guardian_config_backup(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -893,7 +899,8 @@ impl FedimintCli {
                             .and_then(|url| Some(vec![(cli.our_id?, url)].into_iter().collect()))
                             .unwrap_or(client.get_peer_urls().await),
                         client.api_secret(),
-                    )?
+                    )
+                    .await?
                     .sign_api_announcement(api_url, cli.auth()?)
                     .await?;
 
@@ -904,7 +911,8 @@ impl FedimintCli {
             Command::Admin(AdminCmd::Shutdown { session_idx }) => {
                 let client = self.client_open(&cli).await?;
 
-                cli.admin_client(&client.get_peer_urls().await, client.api_secret())?
+                cli.admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .await?
                     .shutdown(Some(session_idx), cli.auth()?)
                     .await?;
 
@@ -914,7 +922,8 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let backup_statistics = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .await?
                     .backup_statistics(cli.auth()?)
                     .await?;
 
@@ -947,12 +956,13 @@ impl FedimintCli {
                 }
                 let client = self.client_open(&cli).await?;
 
-                let ws_api: Arc<_> = DynGlobalApi::from_endpoints(
-                    client.get_peer_urls().await,
-                    client.api_secret(),
-                    &cli.connector(),
-                )
-                .into();
+                let ws_api: Arc<_> =
+                    DynGlobalApi::from_endpoints(client.get_peer_urls().await, client.api_secret())
+                        .await
+                        .map_err(|e| CliError {
+                            error: e.to_string(),
+                        })?
+                        .into();
 
                 let method = match module {
                     Some(selector) => format!(
@@ -1253,7 +1263,8 @@ impl FedimintCli {
         let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
             config_gen_args.ws.clone(),
             &config_gen_args.api_secret,
-        );
+        )
+        .await?;
 
         match &config_gen_args.subcommand {
             ConfigGenAdminCmd::ServerStatus => {

@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
-use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientHandleArc};
@@ -83,14 +82,15 @@ impl FederationTest {
     }
 
     /// Create a new admin api for the given PeerId
-    pub fn new_admin_api(&self, peer_id: PeerId) -> DynGlobalApi {
+    pub async fn new_admin_api(&self, peer_id: PeerId) -> anyhow::Result<DynGlobalApi> {
         let config = self.configs.get(&peer_id).expect("peer to have config");
+
         DynGlobalApi::new_admin(
             peer_id,
             config.consensus.api_endpoints()[&peer_id].url.clone(),
             &None,
-            &Connector::default(),
         )
+        .await
     }
 
     /// Create a new admin client connected to this fed
@@ -309,8 +309,9 @@ impl FederationTestBuilder {
                 peer_id,
                 config.consensus.api_endpoints()[&peer_id].url.clone(),
                 &None,
-                &Connector::default(),
-            );
+            )
+            .await
+            .unwrap();
 
             while let Err(e) = api
                 .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())

@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::iter::once;
@@ -51,7 +52,6 @@ use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBui
 use jsonrpsee_ws_client::{CustomCertStore, HeaderMap, HeaderValue};
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
-use net::Connector;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(not(target_family = "wasm"))]
@@ -415,40 +415,39 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
-    pub fn new_admin(
+    pub async fn new_admin(
         peer: PeerId,
         url: SafeUrl,
         api_secret: &Option<String>,
-        connector: &Connector,
-    ) -> DynGlobalApi {
-        GlobalFederationApiWithCache::new(ReconnectFederationApi::from_endpoints(
-            once((peer, url)),
-            api_secret,
-            connector,
-            Some(peer),
-        ))
-        .into()
+    ) -> anyhow::Result<DynGlobalApi> {
+        Ok(GlobalFederationApiWithCache::new(
+            ReconnectFederationApi::from_endpoints(once((peer, url)), api_secret, Some(peer))
+                .await?,
+        )
+        .into())
     }
 
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
     // actions through Tor ? Should we add the `Connector` choice to
     // ConfigParams then ?
-    pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: &Option<String>) -> Self {
+    pub async fn from_pre_peer_id_admin_endpoint(
+        url: SafeUrl,
+        api_secret: &Option<String>,
+    ) -> anyhow::Result<Self> {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
 
-        Self::new_admin(PeerId::from(1024), url, api_secret, &Connector::default())
+        Self::new_admin(PeerId::from(1024), url, api_secret).await
     }
 
-    pub fn from_endpoints(
+    pub async fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
-        connector: &Connector,
-    ) -> Self {
-        GlobalFederationApiWithCache::new(ReconnectFederationApi::from_endpoints(
-            peers, api_secret, connector, None,
-        ))
-        .into()
+    ) -> anyhow::Result<Self> {
+        Ok(GlobalFederationApiWithCache::new(
+            ReconnectFederationApi::from_endpoints(peers, api_secret, None).await?,
+        )
+        .into())
     }
 }
 
@@ -978,34 +977,37 @@ impl ReconnectFederationApi {
         }
     }
 
-    pub fn new_admin(
+    pub async fn new_admin(
         peer: PeerId,
         url: SafeUrl,
         api_secret: &Option<String>,
-        connector: &Connector,
-    ) -> Self {
-        Self::from_endpoints(once((peer, url)), api_secret, connector, Some(peer))
+    ) -> anyhow::Result<Self> {
+        Self::from_endpoints(once((peer, url)), api_secret, Some(peer)).await
     }
 
-    pub fn from_endpoints(
+    pub async fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
-        connector: &Connector,
         admin_id: Option<PeerId>,
-    ) -> Self {
-        let connector = match connector {
-            Connector::Tcp => {
-                WebsocketConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
-            }
+    ) -> anyhow::Result<Self> {
+        let peers = peers.into_iter().collect::<BTreeMap<PeerId, SafeUrl>>();
+
+        let scheme = peers
+            .values()
+            .next()
+            .expect("Federation api has been initialized with no peers")
+            .scheme();
+
+        let connector = match scheme {
+            "ws" => WebsocketConnector::new(peers, api_secret.clone()).into_dyn(),
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-            Connector::Tor => {
-                TorConnector::new(peers.into_iter().collect(), api_secret.clone()).into_dyn()
-            }
-            #[cfg(all(feature = "tor", target_family = "wasm"))]
-            Connector::Tor => unimplemented!(),
+            "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
+            #[cfg(all(feature = "iroh", not(target_family = "wasm")))]
+            "iroh" => iroh::IrohConnector::new(peers).await?.into_dyn(),
+            scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
         };
 
-        ReconnectFederationApi::new(&connector, admin_id)
+        Ok(ReconnectFederationApi::new(&connector, admin_id))
     }
 }
 
@@ -1166,18 +1168,20 @@ impl ClientConnection {
     }
 }
 
-#[cfg(all(feature = "iroh", not(target_family = "wasm")))]
+#[cfg(feature = "iroh")]
 mod iroh {
     use std::collections::{BTreeMap, BTreeSet};
+    use std::str::FromStr;
 
+    use anyhow::Context;
     use async_trait::async_trait;
-    use bitcoin::key::rand::rngs::OsRng;
     use fedimint_core::PeerId;
     use fedimint_core::module::{
         ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
     };
+    use fedimint_core::util::SafeUrl;
     use iroh::endpoint::Connection;
-    use iroh::{Endpoint, NodeId, SecretKey};
+    use iroh::{Endpoint, NodeId, PublicKey};
     use serde_json::Value;
 
     use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
@@ -1190,13 +1194,27 @@ mod iroh {
 
     impl IrohConnector {
         #[allow(unused)]
-        pub async fn new(peers: BTreeMap<PeerId, NodeId>) -> anyhow::Result<Self> {
+        pub async fn new(peers: BTreeMap<PeerId, SafeUrl>) -> anyhow::Result<Self> {
+            let node_ids = peers
+                .into_iter()
+                .map(|(peer, url)| {
+                    let host = url
+                        .host_str()
+                        .context("Url is missing host")?
+                        .strip_suffix(".ed25519")
+                        .context("Host does not have the ed25519 suffix")?;
+
+                    let node_id = PublicKey::from_str(host).context("Failed to parse node id")?;
+
+                    Ok((peer, node_id))
+                })
+                .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
+
             Ok(Self {
-                node_ids: peers,
+                node_ids,
                 endpoint: Endpoint::builder()
                     .discovery_n0()
-                    .secret_key(SecretKey::generate(&mut OsRng))
-                    .alpns(vec![FEDIMINT_API_ALPN.to_vec()])
+                    .discovery_dht()
                     .bind()
                     .await?,
             })
