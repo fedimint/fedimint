@@ -7,8 +7,8 @@ use bitcoincore_rpc::bitcoin::address::Address;
 use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
-use devimint::util::{FedimintCli, FedimintdCmd};
-use devimint::version_constants::{VERSION_0_4_0, VERSION_0_6_0_ALPHA};
+use devimint::util::FedimintCli;
+use devimint::version_constants::VERSION_0_6_0_ALPHA;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_logging::LOG_TEST;
@@ -36,19 +36,12 @@ async fn main() -> anyhow::Result<()> {
 async fn wallet_recovery_test_1() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let fedimint_cli_version = FedimintCli::version_or_default().await;
-        let fedimintd_version = FedimintdCmd::version_or_default().await;
-        // TODO(support:v0.4): recovery was introduced in v0.4.0
-        // see: https://github.com/fedimint/fedimint/pull/5546
-        if fedimint_cli_version < *VERSION_0_4_0 || fedimintd_version < *VERSION_0_4_0 {
-            info!("Skipping whole test on old fedimint-cli/fedimintd that is missing some irrelevant bolts");
-            return Ok(());
-        }
 
         let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
         let peg_in_amount_sats = 100_000;
 
-            // Start this client early, as we need to test waiting for session to close
+        // Start this client early, as we need to test waiting for session to close
         let client_slow = fed
             .new_joined_client("wallet-client-recovery-origin")
             .await?;
@@ -78,9 +71,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .run()
                     .await?;
             } else {
-                cmd!(restored, "module", "wallet", "await-deposit", "--operation-id", operation_id)
-                    .run()
-                    .await?;
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
             }
 
             info!("Check if claimed");
@@ -115,9 +115,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .run()
                     .await?;
             } else {
-                cmd!(restored, "module", "wallet", "await-deposit", "--operation-id", operation_id)
-                    .run()
-                    .await?;
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
             }
 
             info!("Check if claimed");
@@ -128,12 +135,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
         {
             let client = client_slow;
 
-            retry("wait for next session", backoff_util::aggressive_backoff(), || async {
-                if client_slow_pegin_session_count < client.get_session_count().await? {
-                    return Ok(());
-                }
-                bail!("Session didn't close")
-            })
+            retry(
+                "wait for next session",
+                backoff_util::aggressive_backoff(),
+                || async {
+                    if client_slow_pegin_session_count < client.get_session_count().await? {
+                        return Ok(());
+                    }
+                    bail!("Session didn't close")
+                },
+            )
             .await
             .expect("timeouted waiting for session to close");
 
@@ -151,9 +162,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .run()
                     .await?;
             } else {
-                cmd!(restored, "module", "wallet", "await-deposit", "--operation-id", operation_id)
-                    .run()
-                    .await?;
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
             }
 
             info!("Client slow: Check if claimed");
@@ -167,15 +185,6 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
 
 async fn wallet_recovery_test_2() -> anyhow::Result<()> {
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
-        let fedimint_cli_version = FedimintCli::version_or_default().await;
-        let fedimintd_version = FedimintdCmd::version_or_default().await;
-        // TODO(support:v0.4): recovery was introduced in v0.4.0
-        // see: https://github.com/fedimint/fedimint/pull/5546
-        if fedimint_cli_version < *VERSION_0_4_0 || fedimintd_version < *VERSION_0_4_0 {
-            info!(target: LOG_TEST, "Skipping whole test on old fedimint-cli/fedimintd that is missing some irrelevant bolts");
-            return Ok(());
-        }
-
         let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
         let peg_in_amount_sats = 100_000;
