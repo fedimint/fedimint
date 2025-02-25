@@ -165,7 +165,7 @@
 <a href=#165 id=165 data-nosnippet>165</a>    .<span class="kw">await</span>;
 <a href=#166 id=166 data-nosnippet>166</a>
 <a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
-<a href=#168 id=168 data-nosnippet>168</a>        start_iroh_api(iroh_api_sk, consensus_api, task_group).<span class="kw">await</span>;
+<a href=#168 id=168 data-nosnippet>168</a>        Box::pin(start_iroh_api(iroh_api_sk, consensus_api, task_group)).<span class="kw">await</span>;
 <a href=#169 id=169 data-nosnippet>169</a>    }
 <a href=#170 id=170 data-nosnippet>170</a>
 <a href=#171 id=171 data-nosnippet>171</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Submission of Module CI proposals"</span>);
