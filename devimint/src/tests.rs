@@ -537,6 +537,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 }))
                 .await?;
 
+                dev_fed.fed.await_gateways_registered().await?;
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
