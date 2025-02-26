@@ -141,6 +141,8 @@ declare_vars! {
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
 
+        FM_FEDERATION_BASE_PORT: u16 =  port_alloc((3 * fed_size).try_into().unwrap())?; env: "FM_FEDERATION_BASE_PORT";
+
         FM_LDK_BITCOIND_RPC_URL: String = format!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_LDK_BITCOIND_RPC_URL";
 
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join("cln")).await?; env: "FM_CLN_DIR";

@@ -363,7 +363,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
             let new_fed = Federation::new(
                 &process_mgr,
                 bitcoind.clone(),
-                4,
                 false,
                 "config-test".to_string(),
             )

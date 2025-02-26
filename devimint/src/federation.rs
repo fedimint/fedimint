@@ -23,7 +23,6 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_testing::ln::LightningNodeType;
@@ -283,18 +282,17 @@ impl Federation {
     pub async fn new(
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
-        servers: usize,
         skip_setup: bool,
         federation_name: String,
     ) -> Result<Self> {
+        let num_peers = process_mgr.globals.FM_FED_SIZE;
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
 
-        let peers: Vec<_> = (0..servers).map(|id| PeerId::from(id as u16)).collect();
-        let base_port = port_alloc((3 * servers).try_into().unwrap())?;
+        let peers: Vec<_> = (0..num_peers).map(|id| PeerId::from(id as u16)).collect();
         let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
             &peers,
-            base_port,
+            process_mgr.globals.FM_FEDERATION_BASE_PORT,
             &ServerModuleConfigGenParamsRegistry::default(),
         )?;
 
@@ -305,7 +303,7 @@ impl Federation {
                 &process_mgr.globals,
                 peer_params.to_owned(),
                 federation_name.clone(),
-                base_port,
+                process_mgr.globals.FM_FEDERATION_BASE_PORT,
             )
             .await?;
             members.insert(
