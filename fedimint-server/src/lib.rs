@@ -92,6 +92,7 @@ pub async fn run(
             } else {
                 IrohConnector::new(
                     cfg.private.iroh_p2p_sk.clone().unwrap(),
+                    settings.p2p_bind,
                     cfg.consensus
                         .iroh_endpoints
                         .iter()
@@ -254,6 +255,7 @@ pub async fn run_config_gen(
     } else {
         IrohConnector::new(
             cg_params.iroh_p2p_sk.clone().unwrap(),
+            settings.p2p_bind,
             cg_params
                 .iroh_endpoints()
                 .iter()
