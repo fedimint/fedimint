@@ -31,7 +31,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::util::{ProcessHandle, ProcessManager, poll, poll_with_timeout};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
+use crate::version_constants::VERSION_0_5_0_ALPHA;
 use crate::{Gatewayd, cmd, poll_eq};
 
 #[derive(Clone)]
@@ -45,23 +45,13 @@ impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager, skip_setup: bool) -> Result<Self> {
         let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
 
-        // TODO(support:v0.3)
-        // we need to run with txindex for versions before 0.4.0-alpha to correctly
-        // process change outputs
-        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-        let tx_index = if fedimintd_version < *VERSION_0_4_0_ALPHA {
-            "1"
-        } else {
-            "0"
-        };
-
         let conf = format!(
             include_str!("cfg/bitcoin.conf"),
             rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
             p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
             zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
             zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
-            tx_index = tx_index,
+            tx_index = "0",
         );
         write_overwrite_async(processmgr.globals.FM_BTC_DIR.join("bitcoin.conf"), conf).await?;
         let process = processmgr

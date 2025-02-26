@@ -209,7 +209,7 @@ function generate_matrix() {
   done
 }
 
-export LNV2_STABLE_VERSION="v0.6.0-rc.1"
+export LNV2_STABLE_VERSION="v0.6.0"
 function version_lt() {
   if [ "$1" = "current" ]; then
     return 1

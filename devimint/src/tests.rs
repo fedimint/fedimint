@@ -19,7 +19,6 @@ use fedimint_gateway_common::GatewayInfo;
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use futures::future::try_join_all;
-use hex::ToHex;
 use serde_json::json;
 use tokio::net::TcpStream;
 use tokio::{fs, try_join};
@@ -29,9 +28,7 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup, write_re
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, poll};
-use crate::version_constants::{
-    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
-};
+use crate::version_constants::VERSION_0_5_0_ALPHA;
 use crate::{DevFed, Gatewayd, LightningNode, Lightningd, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
@@ -112,13 +109,6 @@ pub async fn latency_tests(
 ) -> Result<()> {
     log_binary_versions().await?;
 
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
-        info!("fedmint-cli version that didn't support unknown modules");
-        return Ok(());
-    }
-
     let DevFed {
         cln, fed, gw_lnd, ..
     } = dev_fed;
@@ -137,7 +127,6 @@ pub async fn latency_tests(
         None => fed.new_joined_client("latency-tests-client").await?,
     };
 
-    client.use_gateway(&gw_lnd).await?;
     let initial_balance_sats = 100_000_000;
     fed.pegin_client(initial_balance_sats, &client).await?;
 
@@ -247,31 +236,16 @@ pub async fn latency_tests(
             let mut fm_internal_pay = Vec::with_capacity(iterations);
             let sender = fed.new_joined_client("internal-swap-sender").await?;
             fed.pegin_client(10_000_000, &sender).await?;
-            // TODO(support:v0.2): 0.3 removed the active gateway concept and requires an
-            // explicit gateway or `force-internal`
-            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-            let default_internal = fedimint_cli_version <= *VERSION_0_3_0;
             for _ in 0..iterations {
-                let recv = if default_internal {
-                    cmd!(
-                        client,
-                        "ln-invoice",
-                        "--amount=1000000msat",
-                        "--description=internal-swap-invoice"
-                    )
-                    .out_json()
-                    .await?
-                } else {
-                    cmd!(
-                        client,
-                        "ln-invoice",
-                        "--amount=1000000msat",
-                        "--description=internal-swap-invoice",
-                        "--force-internal"
-                    )
-                    .out_json()
-                    .await?
-                };
+                let recv = cmd!(
+                    client,
+                    "ln-invoice",
+                    "--amount=1000000msat",
+                    "--description=internal-swap-invoice",
+                    "--force-internal"
+                )
+                .out_json()
+                .await?;
 
                 let invoice = recv["invoice"]
                     .as_str()
@@ -283,13 +257,9 @@ pub async fn latency_tests(
                     .to_owned();
 
                 let start_time = Instant::now();
-                if default_internal {
-                    cmd!(sender, "ln-pay", invoice).run().await?;
-                } else {
-                    cmd!(sender, "ln-pay", invoice, "--force-internal")
-                        .run()
-                        .await?;
-                }
+                cmd!(sender, "ln-pay", invoice, "--force-internal")
+                    .run()
+                    .await?;
 
                 cmd!(client, "await-invoice", recv_op).run().await?;
                 fm_internal_pay.push(start_time.elapsed());
@@ -313,46 +283,23 @@ pub async fn latency_tests(
                 .as_str()
                 .map(ToOwned::to_owned)
                 .unwrap();
-            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-            let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-            if !is_env_var_set(FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV)
-                && (fedimint_cli_version < *VERSION_0_3_0_ALPHA
-                    || fedimintd_version < *VERSION_0_3_0_ALPHA)
-            {
+            if !is_env_var_set(FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV) {
                 info!("Skipping tests, as in previous versions restore was very slow to test");
                 return Ok(());
             }
 
             let start_time = Instant::now();
-            if *VERSION_0_3_0_ALPHA <= fedimint_cli_version {
-                let restore_client = Client::create("restore").await?;
-                cmd!(
-                    restore_client,
-                    "restore",
-                    "--mnemonic",
-                    &backup_secret,
-                    "--invite-code",
-                    fed.invite_code()?
-                )
-                .run()
-                .await?;
-            } else {
-                let client = client.new_forked("restore-without-backup").await?;
-                let _ = cmd!(client, "wipe", "--force",).out_json().await?;
-
-                assert_eq!(
-                    0,
-                    cmd!(client, "info").out_json().await?["total_amount_msat"]
-                        .as_u64()
-                        .unwrap()
-                );
-
-                let _post_balance = cmd!(client, "restore", &backup_secret)
-                    .out_json()
-                    .await?
-                    .as_u64()
-                    .unwrap();
-            }
+            let restore_client = Client::create("restore").await?;
+            cmd!(
+                restore_client,
+                "restore",
+                "--mnemonic",
+                &backup_secret,
+                "--invite-code",
+                fed.invite_code()?
+            )
+            .run()
+            .await?;
             let restore_time = start_time.elapsed();
 
             println!("### LATENCY RESTORE: {restore_time:?}");
@@ -590,6 +537,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 }))
                 .await?;
 
+                dev_fed.fed.await_gateways_registered().await?;
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
@@ -619,16 +567,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         ..
     } = dev_fed;
 
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
     let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
-        info!("fedmint-cli version that didn't support unknown modules");
-        return Ok(());
-    }
 
     let client = fed.new_joined_client("cli-tests-client").await?;
-    client.use_gateway(&gw_lnd).await?;
     let lnd_gw_id = gw_lnd.gateway_id().await?;
 
     cmd!(
@@ -690,34 +631,19 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
-    let invite_code = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-        cmd!(client, "dev", "decode", "invite-code", invite.clone())
-    } else {
-        cmd!(client, "dev", "decode-invite-code", invite.clone())
-    }
-    .out_json()
-    .await?;
+    let invite_code = cmd!(client, "dev", "decode", "invite-code", invite.clone())
+        .out_json()
+        .await?;
 
-    let encode_invite_output = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-        cmd!(
-            client,
-            "dev",
-            "encode",
-            "invite-code",
-            format!("--url={}", invite_code["url"].as_str().unwrap()),
-            "--federation_id={fed_id}",
-            "--peer=0"
-        )
-    } else {
-        cmd!(
-            client,
-            "dev",
-            "encode-invite-code",
-            format!("--url={}", invite_code["url"].as_str().unwrap()),
-            "--federation_id={fed_id}",
-            "--peer=0"
-        )
-    }
+    let encode_invite_output = cmd!(
+        client,
+        "dev",
+        "encode",
+        "invite-code",
+        format!("--url={}", invite_code["url"].as_str().unwrap()),
+        "--federation_id={fed_id}",
+        "--peer=0"
+    )
     .out_json()
     .await?;
 
@@ -745,24 +671,19 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     cln.pay_bolt11_invoice(invoice).await?;
     gw_lnd.wait_bolt11_invoice(payment_hash).await?;
 
-    // fedimintd introduced wpkh for single guardian federations in v0.3.0 (9e35bdb)
-    // The code path is backwards-compatible, however this test will fail if we
-    // check against earlier fedimintd versions.
-    if fedimintd_version >= *VERSION_0_3_0_ALPHA {
-        // # Test the correct descriptor is used
-        let config = cmd!(client, "config").out_json().await?;
-        let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
-        let descriptor = config["modules"]["2"]["peg_in_descriptor"]
-            .as_str()
-            .unwrap()
-            .to_owned();
+    // # Test the correct descriptor is used
+    let config = cmd!(client, "config").out_json().await?;
+    let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
+    let descriptor = config["modules"]["2"]["peg_in_descriptor"]
+        .as_str()
+        .unwrap()
+        .to_owned();
 
-        info!("Testing generated descriptor for {guardian_count} guardian federation");
-        if guardian_count == 1 {
-            assert!(descriptor.contains("wpkh("));
-        } else {
-            assert!(descriptor.contains("wsh(sortedmulti("));
-        }
+    info!("Testing generated descriptor for {guardian_count} guardian federation");
+    if guardian_count == 1 {
+        assert!(descriptor.contains("wpkh("));
+    } else {
+        assert!(descriptor.contains("wsh(sortedmulti("));
     }
 
     // # Client tests
@@ -832,27 +753,15 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_str()
         .map(ToOwned::to_owned)
         .unwrap();
-    let client_reissue_amt = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-        cmd!(client, "module", "mint", "reissue", reissue_notes)
-    } else {
-        cmd!(
-            client,
-            "module",
-            "--module",
-            "mint",
-            "reissue",
-            reissue_notes
-        )
-    }
-    .out_json()
-    .await?
-    .as_u64()
-    .unwrap();
+    let client_reissue_amt = cmd!(client, "module", "mint", "reissue", reissue_notes)
+        .out_json()
+        .await?
+        .as_u64()
+        .unwrap();
     assert_eq!(client_reissue_amt, reissue_amount);
 
     // LND gateway tests
     info!("Testing LND gateway");
-    client.use_gateway(&gw_lnd).await?;
 
     // OUTGOING: fedimint-cli pays CLN via LND gateway
     info!("Testing outgoing payment from client to CLN via LND gateway");
@@ -981,116 +890,79 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     }
 
     // # API URL announcements
-    if fedimint_cli_version >= *VERSION_0_4_0_ALPHA && fedimintd_version >= *VERSION_0_4_0_ALPHA {
-        let initial_announcements =
+    let initial_announcements = serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
+        cmd!(client, "dev", "api-announcements",).out_json().await?,
+    )
+    .expect("failed to parse API announcements");
+
+    assert_eq!(
+        fed.members.len(),
+        initial_announcements.len(),
+        "Not all guardians made an announcement"
+    );
+    assert!(
+        initial_announcements
+            .values()
+            .all(|announcement| announcement.api_announcement.nonce == 0),
+        "Not all announcements have their initial value"
+    );
+
+    const NEW_API_URL: &str = "ws://127.0.0.1:4242";
+    let new_announcement = serde_json::from_value::<SignedApiAnnouncement>(
+        cmd!(
+            client,
+            "--our-id",
+            "0",
+            "--password",
+            "pass",
+            "admin",
+            "sign-api-announcement",
+            NEW_API_URL
+        )
+        .out_json()
+        .await?,
+    )
+    .expect("Couldn't parse signed announcement");
+
+    assert_eq!(
+        new_announcement.api_announcement.nonce, 1,
+        "Nonce did not increment correctly"
+    );
+
+    info!("Testing if the client syncs the announcement");
+    let announcement = poll("Waiting for the announcement to propagate", || async {
+        cmd!(client, "dev", "wait", "1")
+            .run()
+            .await
+            .map_err(ControlFlow::Break)?;
+
+        let new_announcements_peer2 =
             serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
-                cmd!(client, "dev", "api-announcements",).out_json().await?,
+                cmd!(client, "dev", "api-announcements",)
+                    .out_json()
+                    .await
+                    .map_err(ControlFlow::Break)?,
             )
             .expect("failed to parse API announcements");
 
-        assert_eq!(
-            fed.members.len(),
-            initial_announcements.len(),
-            "Not all guardians made an announcement"
-        );
-        assert!(
-            initial_announcements
-                .values()
-                .all(|announcement| announcement.api_announcement.nonce == 0),
-            "Not all announcements have their initial value"
-        );
+        let announcement = new_announcements_peer2[&PeerId::from(0)]
+            .api_announcement
+            .clone();
+        if announcement.nonce == 1 {
+            Ok(announcement)
+        } else {
+            Err(ControlFlow::Continue(anyhow!(
+                "Haven't received updated announcement yet"
+            )))
+        }
+    })
+    .await?;
 
-        const NEW_API_URL: &str = "ws://127.0.0.1:4242";
-        let new_announcement = serde_json::from_value::<SignedApiAnnouncement>(
-            cmd!(
-                client,
-                "--our-id",
-                "0",
-                "--password",
-                "pass",
-                "admin",
-                "sign-api-announcement",
-                NEW_API_URL
-            )
-            .out_json()
-            .await?,
-        )
-        .expect("Couldn't parse signed announcement");
-
-        assert_eq!(
-            new_announcement.api_announcement.nonce, 1,
-            "Nonce did not increment correctly"
-        );
-
-        info!("Testing if the client syncs the announcement");
-        let announcement = poll("Waiting for the announcement to propagate", || async {
-            cmd!(client, "dev", "wait", "1")
-                .run()
-                .await
-                .map_err(ControlFlow::Break)?;
-
-            let new_announcements_peer2 =
-                serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
-                    cmd!(client, "dev", "api-announcements",)
-                        .out_json()
-                        .await
-                        .map_err(ControlFlow::Break)?,
-                )
-                .expect("failed to parse API announcements");
-
-            let announcement = new_announcements_peer2[&PeerId::from(0)]
-                .api_announcement
-                .clone();
-            if announcement.nonce == 1 {
-                Ok(announcement)
-            } else {
-                Err(ControlFlow::Continue(anyhow!(
-                    "Haven't received updated announcement yet"
-                )))
-            }
-        })
-        .await?;
-
-        assert_eq!(
-            announcement.api_url,
-            NEW_API_URL.parse().expect("valid URL")
-        );
-    }
-
-    Ok(())
-}
-
-pub async fn start_hold_invoice_payment(
-    client: &Client,
-    gw_cln: &Gatewayd,
-    gw_cln_id: String,
-    lnd: &Lnd,
-) -> anyhow::Result<([u8; 32], cln_rpc::primitives::Sha256, String)> {
-    client.use_gateway(gw_cln).await?;
-    let (preimage, payment_request, hash) = lnd.create_hold_invoice(1000).await?;
-    let operation_id = ln_pay(client, payment_request, gw_cln_id, true).await?;
-    Ok((preimage, hash, operation_id))
-}
-
-pub async fn finish_hold_invoice_payment(
-    client: &Client,
-    hold_invoice_operation_id: String,
-    lnd: &Lnd,
-    hold_invoice_hash: cln_rpc::primitives::Sha256,
-    hold_invoice_preimage: [u8; 32],
-) -> anyhow::Result<()> {
-    lnd.settle_hold_invoice(hold_invoice_preimage, hold_invoice_hash)
-        .await?;
-    let received_preimage = cmd!(client, "await-ln-pay", hold_invoice_operation_id)
-        .out_json()
-        .await?["preimage"]
-        .as_str()
-        .context("missing preimage")?
-        .to_owned();
     assert_eq!(
-        received_preimage,
-        hold_invoice_preimage.encode_hex::<String>()
+        announcement.api_url,
+        NEW_API_URL.parse().expect("valid URL")
     );
+
     Ok(())
 }
 
@@ -1244,12 +1116,6 @@ pub async fn lightning_gw_reconnect_test(
     process_mgr: &ProcessManager,
 ) -> Result<()> {
     log_binary_versions().await?;
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
-        info!("fedmint-cli version that didn't support unknown modules");
-        return Ok(());
-    }
 
     let DevFed {
         bitcoind,
@@ -1263,7 +1129,6 @@ pub async fn lightning_gw_reconnect_test(
     let client = fed
         .new_joined_client("lightning-gw-reconnect-test-client")
         .await?;
-    client.use_gateway(&gw_lnd).await?;
 
     info!("Pegging-in both gateways");
     fed.pegin_gateways(99_999, vec![&gw_lnd]).await?;
@@ -1327,13 +1192,6 @@ pub async fn lightning_gw_reconnect_test(
 pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     log_binary_versions().await?;
 
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
-        info!("fedmint-cli version that didn't support unknown modules");
-        return Ok(());
-    }
-
     let DevFed {
         bitcoind,
         cln,
@@ -1345,25 +1203,19 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     } = dev_fed;
 
     let client = fed.new_joined_client("gw-reboot-test-client").await?;
-    client.use_gateway(&gw_lnd).await?;
     fed.pegin_client(10_000, &client).await?;
 
     // Wait for gateways to sync to chain
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    // TODO(support:v0.3): `block_height` field was introduced in v0.4.0
-    // see: https://github.com/fedimint/fedimint/pull/4514
-    if gatewayd_version >= *VERSION_0_4_0 {
-        let block_height = bitcoind.get_block_count().await? - 1;
-        match &gw_ldk {
-            Some(gw_ldk) => {
-                try_join!(
-                    gw_lnd.wait_for_block_height(block_height),
-                    gw_ldk.wait_for_block_height(block_height),
-                )?;
-            }
-            _ => {
-                try_join!(gw_lnd.wait_for_block_height(block_height),)?;
-            }
+    let block_height = bitcoind.get_block_count().await? - 1;
+    match &gw_ldk {
+        Some(gw_ldk) => {
+            try_join!(
+                gw_lnd.wait_for_block_height(block_height),
+                gw_ldk.wait_for_block_height(block_height),
+            )?;
+        }
+        _ => {
+            try_join!(gw_lnd.wait_for_block_height(block_height),)?;
         }
     }
 
@@ -1489,7 +1341,6 @@ pub async fn do_try_create_and_pay_invoice(
     .await?;
 
     tracing::info!("Creating invoice....");
-    client.use_gateway(gw).await?;
     let invoice = ln_invoice(
         client,
         Amount::from_msats(1000),
@@ -1520,19 +1371,7 @@ async fn ln_pay(
     gw_id: String,
     finish_in_background: bool,
 ) -> anyhow::Result<String> {
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-
-    // TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
-    // `gateway-id` parameter for lightning sends
-    let value = if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
-        if finish_in_background {
-            cmd!(client, "ln-pay", invoice, "--finish-in-background",)
-                .out_json()
-                .await?
-        } else {
-            cmd!(client, "ln-pay", invoice,).out_json().await?
-        }
-    } else if finish_in_background {
+    let value = if finish_in_background {
         cmd!(
             client,
             "ln-pay",
@@ -1562,32 +1401,17 @@ async fn ln_invoice(
     description: String,
     gw_id: String,
 ) -> anyhow::Result<LnInvoiceResponse> {
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    // TODO(support:v0.2): 0.3 removed the active gateway concept and requires a
-    // `gateway-id` parameter for lightning receives
-    let ln_response_val = if fedimint_cli_version < *VERSION_0_3_0_ALPHA {
-        cmd!(
-            client,
-            "ln-invoice",
-            "--amount",
-            amount.msats,
-            format!("--description='{description}'"),
-        )
-        .out_json()
-        .await?
-    } else {
-        cmd!(
-            client,
-            "ln-invoice",
-            "--amount",
-            amount.msats,
-            format!("--description='{description}'"),
-            "--gateway-id",
-            gw_id,
-        )
-        .out_json()
-        .await?
-    };
+    let ln_response_val = cmd!(
+        client,
+        "ln-invoice",
+        "--amount",
+        amount.msats,
+        format!("--description='{description}'"),
+        "--gateway-id",
+        gw_id,
+    )
+    .out_json()
+    .await?;
 
     let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
 
@@ -1596,13 +1420,6 @@ async fn ln_invoice(
 
 pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     log_binary_versions().await?;
-
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
-        info!("fedmint-cli version that didn't support unknown modules");
-        return Ok(());
-    }
 
     let DevFed {
         bitcoind, mut fed, ..
@@ -1640,26 +1457,6 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
 pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
-
-    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-
-    // TODO(support:v0.3): remove
-    if fedimintd_version < *VERSION_0_4_0_ALPHA {
-        info!(
-            "Recoverytool tests in fedmintd version that didn't have short session times when running in tests"
-        );
-        // And worst comes to worst, users that want to recover can just use a
-        // recoverytool version corresponding to the version of fedimintd they were
-        // using.
-        return Ok(());
-    }
-
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
-        info!("fedmint-cli version that didn't support unknown modules");
-        return Ok(());
-    }
 
     let DevFed { bitcoind, fed, .. } = dev_fed;
 
@@ -1835,15 +1632,6 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
 
     log_binary_versions().await?;
 
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-
-    // TODO(support:v0.2): remove
-    if fedimint_cli_version < *VERSION_0_3_0_ALPHA || fedimintd_version < *VERSION_0_3_0_ALPHA {
-        info!("Guardian backups didn't exist pre-0.3.0, so can't be tested, exiting");
-        return Ok(());
-    }
-
     let DevFed { mut fed, .. } = dev_fed;
 
     fed.await_all_peers()
@@ -1977,7 +1765,6 @@ async fn all_peer_block_count(
 
 pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
     let DevFed { fed, .. } = dev_fed;
 
@@ -2032,18 +1819,9 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
         CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
     );
 
-    // TODO(support:v0.2): remove
-    if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-        cmd!(double_spend_client, "reissue", double_spend_notes)
-            .assert_error_contains("The transaction had an invalid input")
-            .await?;
-    } else {
-        // v0.2 clients don't write json errors to stdout, so we can't parse
-        cmd!(double_spend_client, "reissue", double_spend_notes)
-            .run()
-            .await
-            .expect_err("double spend must fail");
-    }
+    cmd!(double_spend_client, "reissue", double_spend_notes)
+        .assert_error_contains("The transaction had an invalid input")
+        .await?;
 
     let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
     assert_eq!(

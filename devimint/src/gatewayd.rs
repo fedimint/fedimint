@@ -25,9 +25,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::{
-    VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA,
-};
+use crate::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -562,14 +560,7 @@ impl Gatewayd {
         ppm: u64,
     ) -> Result<()> {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        if gatewayd_version < *VERSION_0_4_0_ALPHA {
-            let fees = format!("{base},{ppm}");
-            cmd!(self, "set-configuration", "--routing-fees", fees)
-                .run()
-                .await?;
-        } else if gatewayd_version >= *VERSION_0_4_0_ALPHA
-            && gatewayd_version < *VERSION_0_6_0_ALPHA
-        {
+        if gatewayd_version < *VERSION_0_6_0_ALPHA {
             let new_fed_routing_fees = format!("{fed_id},{base},{ppm}");
             cmd!(
                 self,
