@@ -19,22 +19,23 @@ The release process evolves each cycle, so don't hesitate to make frequent edits
   - Start upgrade tests using the new tag
     - https://github.com/fedimint/fedimint/actions/workflows/upgrade-tests.yml
     - The upgrade paths and upgrade test kinds varies based on the release (coordinated shutdown vs staggered, etc)
+  - Publish to crates.io
 - For final releases
   - Bump the cargo version to a final release (e.g. `0.4.3`)
   - Create a new branch off of `releases/v*` with the final release tag (e.g. `releases/v0.4.3`)
     - This new branch isn't protected, so you can push directly to GH
   - Create a new signed tag and push to GH
-  - Publish to crates
-    - `just publish-release`
-    - `@elsirion`, `@dpc`, and `@bradleystachurski` are the only users with permissions
+  - Publish to crates.io
   - Sign binaries
     - `just sign-release <tag>`
     - ex: `just sign-release v0.5.0`
   - Bump the version on `releases/v0.*` to the next minor `-alpha`
     - example on `releases/v0.5`: `just bump-version 0.5.0-rc.5 0.5.1-alpha`
 - When a tag is pushed, the GH workflow will automatically publish a new release with this tag
-- Update backwards-compatibility versions to use the new tag
+- Update backwards-compatibility and upgrade test versions to use the new tag
   - `.github/workflows/ci-backwards-compatibility.yml`
+  - `.github/workflows/upgrade-tests.yml`
+  - `justfile.fedimint.just`
 
 ### Commands
 
@@ -52,6 +53,7 @@ cargo workspaces version --all --exact --no-git-commit --yes --force '*' --pre-i
 ```
 
 To create a new signed tag, run
+
 ```
 git tag -a -s <tag>
 git push <upstream> <tag>
@@ -59,4 +61,10 @@ git push <upstream> <tag>
 ex:
 git tag -a -s v0.5.0-rc.0
 git push upstream v0.5.0-rc.0
+```
+
+Publish to crates.io (`@elsirion`, `@dpc`, and `@bradleystachurski` are the only users with permissions)
+
+```
+just publish-release
 ```
