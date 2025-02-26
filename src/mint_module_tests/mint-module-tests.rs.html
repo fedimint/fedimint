@@ -112,90 +112,89 @@
 <a href=#112 id=112 data-nosnippet>112</a>        .out_json()
 <a href=#113 id=113 data-nosnippet>113</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#114 id=114 data-nosnippet>114</a>
-<a href=#115 id=115 data-nosnippet>115</a>        <span class="comment">// `wait-complete` was introduced in v0.3.0 (90f3082)
-<a href=#116 id=116 data-nosnippet>116</a>        </span><span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait-complete"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">let </span>post_balance = post_notes[<span class="string">"total_amount_msat"</span>].as_u64().unwrap();
-<a href=#119 id=119 data-nosnippet>119</a>        <span class="macro">info!</span>(target: LOG_DEVIMINT, %post_notes, post_balance, <span class="string">"State after backup"</span>);
-<a href=#120 id=120 data-nosnippet>120</a>        <span class="macro">assert_eq!</span>(pre_balance, post_balance);
-<a href=#121 id=121 data-nosnippet>121</a>        <span class="macro">assert_eq!</span>(pre_notes, post_notes);
-<a href=#122 id=122 data-nosnippet>122</a>    }
-<a href=#123 id=123 data-nosnippet>123</a>
-<a href=#124 id=124 data-nosnippet>124</a>    <span class="prelude-val">Ok</span>(())
-<a href=#125 id=125 data-nosnippet>125</a>}
-<a href=#126 id=126 data-nosnippet>126</a>
-<a href=#127 id=127 data-nosnippet>127</a><span class="kw">async fn </span>sanity() -&gt; anyhow::Result&lt;()&gt; {
-<a href=#128 id=128 data-nosnippet>128</a>    devimint::run_devfed_test(|fed, _process_mgr| <span class="kw">async move </span>{
-<a href=#129 id=129 data-nosnippet>129</a>        <span class="kw">let </span>fed = fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#130 id=130 data-nosnippet>130</a>
-<a href=#131 id=131 data-nosnippet>131</a>        test_note_consoliation(fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#132 id=132 data-nosnippet>132</a>        <span class="prelude-val">Ok</span>(())
-<a href=#133 id=133 data-nosnippet>133</a>    })
-<a href=#134 id=134 data-nosnippet>134</a>    .<span class="kw">await
-<a href=#135 id=135 data-nosnippet>135</a></span>}
-<a href=#136 id=136 data-nosnippet>136</a>
-<a href=#137 id=137 data-nosnippet>137</a><span class="doccomment">/// Test note consolidation, which at the time of writing basically means that
-<a href=#138 id=138 data-nosnippet>138</a>/// once client accumulates too many notes of certain denomination, any
-<a href=#139 id=139 data-nosnippet>139</a>/// transaction building will include excessive notes as extra inputs, to
-<a href=#140 id=140 data-nosnippet>140</a>/// consolidate them into higher denominations.
-<a href=#141 id=141 data-nosnippet>141</a>///
-<a href=#142 id=142 data-nosnippet>142</a>/// In the future we will probably change the whole thing and delete this thing.
-<a href=#143 id=143 data-nosnippet>143</a></span><span class="kw">async fn </span>test_note_consoliation(fed: <span class="kw-2">&amp;</span>devimint::federation::Federation) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">let </span>sender = fed.new_joined_client(<span class="string">"sender"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">let </span>receiver = fed.new_joined_client(<span class="string">"receiver"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">let </span>can_no_wait = <span class="macro">cmd!</span>(sender, <span class="string">"reissue"</span>, <span class="string">"--help"</span>)
-<a href=#148 id=148 data-nosnippet>148</a>        .out_string()
-<a href=#149 id=149 data-nosnippet>149</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#150 id=150 data-nosnippet>150</a>        </span>.contains(<span class="string">"no-wait"</span>);
-<a href=#151 id=151 data-nosnippet>151</a>
-<a href=#152 id=152 data-nosnippet>152</a>    <span class="kw">if </span>!can_no_wait {
-<a href=#153 id=153 data-nosnippet>153</a>        <span class="macro">info!</span>(<span class="string">"Version before `--no-wait` didn't have consolidation implemented"</span>);
-<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#155 id=155 data-nosnippet>155</a>    }
-<a href=#156 id=156 data-nosnippet>156</a>    fed.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>sender).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#157 id=157 data-nosnippet>157</a>
-<a href=#158 id=158 data-nosnippet>158</a>    <span class="kw">let </span><span class="kw-2">mut </span>all_notes = <span class="macro">vec!</span>[];
-<a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">20 </span>{
-<a href=#160 id=160 data-nosnippet>160</a>        <span class="kw">let </span>info = <span class="macro">cmd!</span>(sender, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#161 id=161 data-nosnippet>161</a>        <span class="macro">info!</span>(%info, <span class="string">"sender info"</span>);
-<a href=#162 id=162 data-nosnippet>162</a>        <span class="comment">// remint sender notes from time to time to make sure it have 1msat notes
-<a href=#163 id=163 data-nosnippet>163</a>        </span><span class="kw">if </span>i % <span class="number">2 </span>== <span class="number">1 </span>{
-<a href=#164 id=164 data-nosnippet>164</a>            <span class="kw">let </span>notes = <span class="macro">cmd!</span>(sender, <span class="string">"spend"</span>, <span class="string">"1sat"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
-<a href=#165 id=165 data-nosnippet>165</a>                .as_str()
-<a href=#166 id=166 data-nosnippet>166</a>                .context(<span class="string">"invoice must be string"</span>)<span class="question-mark">?
-<a href=#167 id=167 data-nosnippet>167</a>                </span>.to_owned();
-<a href=#168 id=168 data-nosnippet>168</a>
-<a href=#169 id=169 data-nosnippet>169</a>            <span class="macro">cmd!</span>(sender, <span class="string">"reissue"</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#170 id=170 data-nosnippet>170</a>        }
-<a href=#171 id=171 data-nosnippet>171</a>
-<a href=#172 id=172 data-nosnippet>172</a>        <span class="kw">let </span>notes = <span class="macro">cmd!</span>(sender, <span class="string">"spend"</span>, <span class="string">"1msat"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
-<a href=#173 id=173 data-nosnippet>173</a>            .as_str()
-<a href=#174 id=174 data-nosnippet>174</a>            .context(<span class="string">"invoice must be string"</span>)<span class="question-mark">?
-<a href=#175 id=175 data-nosnippet>175</a>            </span>.to_owned();
-<a href=#176 id=176 data-nosnippet>176</a>
-<a href=#177 id=177 data-nosnippet>177</a>        all_notes.push(notes);
-<a href=#178 id=178 data-nosnippet>178</a>    }
-<a href=#179 id=179 data-nosnippet>179</a>
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">for </span>notes <span class="kw">in </span><span class="kw-2">&amp;</span>all_notes[..all_notes.len() - <span class="number">1</span>] {
-<a href=#181 id=181 data-nosnippet>181</a>        <span class="macro">cmd!</span>(receiver, <span class="string">"reissue"</span>, <span class="string">"--no-wait"</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#182 id=182 data-nosnippet>182</a>    }
-<a href=#183 id=183 data-nosnippet>183</a>
-<a href=#184 id=184 data-nosnippet>184</a>    <span class="comment">// wait for all at the same time to make things go faster
-<a href=#185 id=185 data-nosnippet>185</a>    </span><span class="macro">cmd!</span>(receiver, <span class="string">"dev"</span>, <span class="string">"wait-complete"</span>).run().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#186 id=186 data-nosnippet>186</a>
-<a href=#187 id=187 data-nosnippet>187</a>    <span class="comment">// reissuance of last note will trigger consolidation
-<a href=#188 id=188 data-nosnippet>188</a>    </span><span class="macro">cmd!</span>(receiver, <span class="string">"reissue"</span>)
-<a href=#189 id=189 data-nosnippet>189</a>        .args(<span class="kw-2">&amp;</span>all_notes[all_notes.len() - <span class="number">1</span>..])
-<a href=#190 id=190 data-nosnippet>190</a>        .run()
-<a href=#191 id=191 data-nosnippet>191</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#192 id=192 data-nosnippet>192</a>
-<a href=#193 id=193 data-nosnippet>193</a>    <span class="kw">let </span>info = <span class="macro">cmd!</span>(receiver, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#194 id=194 data-nosnippet>194</a>    <span class="macro">info!</span>(%info, <span class="string">"receiver info"</span>);
-<a href=#195 id=195 data-nosnippet>195</a>    <span class="comment">// receiver has the balance
-<a href=#196 id=196 data-nosnippet>196</a>    </span><span class="macro">assert_eq!</span>(info[<span class="string">"total_amount_msat"</span>].as_i64().unwrap(), <span class="number">20</span>);
-<a href=#197 id=197 data-nosnippet>197</a>    <span class="comment">// without the consolidation, this would be 20 1msat notes
-<a href=#198 id=198 data-nosnippet>198</a>    </span><span class="macro">assert!</span>(info[<span class="string">"denominations_msat"</span>][<span class="string">"1"</span>].as_i64().unwrap() &lt; <span class="number">20</span>);
-<a href=#199 id=199 data-nosnippet>199</a>
-<a href=#200 id=200 data-nosnippet>200</a>    <span class="prelude-val">Ok</span>(())
-<a href=#201 id=201 data-nosnippet>201</a>}</code></pre></div></section></main></body></html>
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">let _ </span>= <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait-complete"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>post_notes = <span class="macro">cmd!</span>(client, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">let </span>post_balance = post_notes[<span class="string">"total_amount_msat"</span>].as_u64().unwrap();
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="macro">info!</span>(target: LOG_DEVIMINT, %post_notes, post_balance, <span class="string">"State after backup"</span>);
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="macro">assert_eq!</span>(pre_balance, post_balance);
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="macro">assert_eq!</span>(pre_notes, post_notes);
+<a href=#121 id=121 data-nosnippet>121</a>    }
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="prelude-val">Ok</span>(())
+<a href=#124 id=124 data-nosnippet>124</a>}
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a><span class="kw">async fn </span>sanity() -&gt; anyhow::Result&lt;()&gt; {
+<a href=#127 id=127 data-nosnippet>127</a>    devimint::run_devfed_test(|fed, _process_mgr| <span class="kw">async move </span>{
+<a href=#128 id=128 data-nosnippet>128</a>        <span class="kw">let </span>fed = fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a>        test_note_consoliation(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#131 id=131 data-nosnippet>131</a>        <span class="prelude-val">Ok</span>(())
+<a href=#132 id=132 data-nosnippet>132</a>    })
+<a href=#133 id=133 data-nosnippet>133</a>    .<span class="kw">await
+<a href=#134 id=134 data-nosnippet>134</a></span>}
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a><span class="doccomment">/// Test note consolidation, which at the time of writing basically means that
+<a href=#137 id=137 data-nosnippet>137</a>/// once client accumulates too many notes of certain denomination, any
+<a href=#138 id=138 data-nosnippet>138</a>/// transaction building will include excessive notes as extra inputs, to
+<a href=#139 id=139 data-nosnippet>139</a>/// consolidate them into higher denominations.
+<a href=#140 id=140 data-nosnippet>140</a>///
+<a href=#141 id=141 data-nosnippet>141</a>/// In the future we will probably change the whole thing and delete this thing.
+<a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">async fn </span>test_note_consoliation(fed: <span class="kw-2">&amp;</span>devimint::federation::Federation) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">let </span>sender = fed.new_joined_client(<span class="string">"sender"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">let </span>receiver = fed.new_joined_client(<span class="string">"receiver"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#145 id=145 data-nosnippet>145</a>
+<a href=#146 id=146 data-nosnippet>146</a>    <span class="kw">let </span>can_no_wait = <span class="macro">cmd!</span>(sender, <span class="string">"reissue"</span>, <span class="string">"--help"</span>)
+<a href=#147 id=147 data-nosnippet>147</a>        .out_string()
+<a href=#148 id=148 data-nosnippet>148</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#149 id=149 data-nosnippet>149</a>        </span>.contains(<span class="string">"no-wait"</span>);
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="kw">if </span>!can_no_wait {
+<a href=#152 id=152 data-nosnippet>152</a>        <span class="macro">info!</span>(<span class="string">"Version before `--no-wait` didn't have consolidation implemented"</span>);
+<a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#154 id=154 data-nosnippet>154</a>    }
+<a href=#155 id=155 data-nosnippet>155</a>    fed.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>sender).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">let </span><span class="kw-2">mut </span>all_notes = <span class="macro">vec!</span>[];
+<a href=#158 id=158 data-nosnippet>158</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">20 </span>{
+<a href=#159 id=159 data-nosnippet>159</a>        <span class="kw">let </span>info = <span class="macro">cmd!</span>(sender, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="macro">info!</span>(%info, <span class="string">"sender info"</span>);
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="comment">// remint sender notes from time to time to make sure it have 1msat notes
+<a href=#162 id=162 data-nosnippet>162</a>        </span><span class="kw">if </span>i % <span class="number">2 </span>== <span class="number">1 </span>{
+<a href=#163 id=163 data-nosnippet>163</a>            <span class="kw">let </span>notes = <span class="macro">cmd!</span>(sender, <span class="string">"spend"</span>, <span class="string">"1sat"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
+<a href=#164 id=164 data-nosnippet>164</a>                .as_str()
+<a href=#165 id=165 data-nosnippet>165</a>                .context(<span class="string">"invoice must be string"</span>)<span class="question-mark">?
+<a href=#166 id=166 data-nosnippet>166</a>                </span>.to_owned();
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>            <span class="macro">cmd!</span>(sender, <span class="string">"reissue"</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#169 id=169 data-nosnippet>169</a>        }
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a>        <span class="kw">let </span>notes = <span class="macro">cmd!</span>(sender, <span class="string">"spend"</span>, <span class="string">"1msat"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
+<a href=#172 id=172 data-nosnippet>172</a>            .as_str()
+<a href=#173 id=173 data-nosnippet>173</a>            .context(<span class="string">"invoice must be string"</span>)<span class="question-mark">?
+<a href=#174 id=174 data-nosnippet>174</a>            </span>.to_owned();
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>        all_notes.push(notes);
+<a href=#177 id=177 data-nosnippet>177</a>    }
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">for </span>notes <span class="kw">in </span><span class="kw-2">&amp;</span>all_notes[..all_notes.len() - <span class="number">1</span>] {
+<a href=#180 id=180 data-nosnippet>180</a>        <span class="macro">cmd!</span>(receiver, <span class="string">"reissue"</span>, <span class="string">"--no-wait"</span>, notes).run().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#181 id=181 data-nosnippet>181</a>    }
+<a href=#182 id=182 data-nosnippet>182</a>
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="comment">// wait for all at the same time to make things go faster
+<a href=#184 id=184 data-nosnippet>184</a>    </span><span class="macro">cmd!</span>(receiver, <span class="string">"dev"</span>, <span class="string">"wait-complete"</span>).run().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#185 id=185 data-nosnippet>185</a>
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="comment">// reissuance of last note will trigger consolidation
+<a href=#187 id=187 data-nosnippet>187</a>    </span><span class="macro">cmd!</span>(receiver, <span class="string">"reissue"</span>)
+<a href=#188 id=188 data-nosnippet>188</a>        .args(<span class="kw-2">&amp;</span>all_notes[all_notes.len() - <span class="number">1</span>..])
+<a href=#189 id=189 data-nosnippet>189</a>        .run()
+<a href=#190 id=190 data-nosnippet>190</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#191 id=191 data-nosnippet>191</a>
+<a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">let </span>info = <span class="macro">cmd!</span>(receiver, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="macro">info!</span>(%info, <span class="string">"receiver info"</span>);
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="comment">// receiver has the balance
+<a href=#195 id=195 data-nosnippet>195</a>    </span><span class="macro">assert_eq!</span>(info[<span class="string">"total_amount_msat"</span>].as_i64().unwrap(), <span class="number">20</span>);
+<a href=#196 id=196 data-nosnippet>196</a>    <span class="comment">// without the consolidation, this would be 20 1msat notes
+<a href=#197 id=197 data-nosnippet>197</a>    </span><span class="macro">assert!</span>(info[<span class="string">"denominations_msat"</span>][<span class="string">"1"</span>].as_i64().unwrap() &lt; <span class="number">20</span>);
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="prelude-val">Ok</span>(())
+<a href=#200 id=200 data-nosnippet>200</a>}</code></pre></div></section></main></body></html>
