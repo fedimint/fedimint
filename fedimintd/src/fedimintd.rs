@@ -29,8 +29,9 @@ use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::MintInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
-use fedimint_server::config::{ConfigGenSettings, ServerConfig};
+use fedimint_server::config::{ConfigGenSettings, NetworkingStack, ServerConfig};
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
+use fedimint_server::envs::FM_FORCE_IROH_ENV;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
@@ -520,6 +521,7 @@ async fn run(
     if let Some(password) = opts.password {
         write_overwrite(data_dir.join(PLAINTEXT_PASSWORD), password)?;
     };
+    let use_iroh = is_env_var_set(FM_FORCE_IROH_ENV);
 
     // TODO: meh, move, refactor
     let settings = ConfigGenSettings {
@@ -530,6 +532,11 @@ async fn run(
         meta: opts.extra_dkg_meta.clone(),
         modules: module_inits_params.clone(),
         registry: module_inits.clone(),
+        networking: if use_iroh {
+            NetworkingStack::Iroh
+        } else {
+            NetworkingStack::default()
+        },
     };
 
     let db = Database::new(
