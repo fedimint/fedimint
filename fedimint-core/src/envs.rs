@@ -1,4 +1,6 @@
-use std::env;
+use std::collections::BTreeMap;
+use std::str::FromStr;
+use std::{cmp, env};
 
 use anyhow::Context;
 use fedimint_core::util::SafeUrl;
@@ -7,6 +9,8 @@ use fedimint_logging::LOG_CORE;
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;
 use tracing::warn;
+
+use crate::util::FmtCompact as _;
 
 /// In tests we want to routinely enable an extra unknown module to ensure
 /// all client code handles correct modules that client doesn't know about.
@@ -63,6 +67,14 @@ pub const FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV: &str = "FM_FORCE_BITCOIND_RPC_BAD_K
 /// Env var for bitcoin URL (default, takes priority over config settings)
 pub const FM_FORCE_BITCOIN_RPC_URL_ENV: &str = "FM_FORCE_BITCOIN_RPC_URL";
 pub const FM_FORCE_BITCOIN_RPC_URL_BAD_ENV: &str = "FM_FORCE_BITCOIND_RPC_URL";
+
+/// Env var to override iroh connectivity
+///
+/// Comma separated key-value list (`<node_id>=<ticket>,<node_id>=<ticket>,...`)
+pub const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
+
+pub const FM_IROH_API_SECRET_KEY_OVERRIDE_ENV: &str = "FM_IROH_API_SECRET_KEY_OVERRIDE";
+pub const FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV: &str = "FM_IROH_P2P_SECRET_KEY_OVERRIDE";
 
 /// List of json api endpoint sources to use as a source of
 /// fee rate estimation.
@@ -126,4 +138,55 @@ impl BitcoinRpcConfig {
             })?,
     })
     }
+}
+
+pub fn parse_kv_list_from_env<K, V>(env: &str) -> anyhow::Result<BTreeMap<K, V>>
+where
+    K: FromStr + cmp::Ord,
+    <K as FromStr>::Err: std::error::Error,
+    V: FromStr,
+    <V as FromStr>::Err: std::error::Error,
+{
+    let mut map = BTreeMap::new();
+    let Ok(env_value) = std::env::var(env) else {
+        return Ok(BTreeMap::new());
+    };
+    for kv in env_value.split(',') {
+        let kv = kv.trim();
+
+        if kv.is_empty() {
+            continue;
+        }
+
+        if let Some((k, v)) = kv.split_once('=') {
+            let Some(k) = K::from_str(k)
+                .inspect_err(|err| {
+                    warn!(
+                        target: LOG_CORE,
+                        err = %err.fmt_compact(),
+                        "Error parsing value"
+                    );
+                })
+                .ok()
+            else {
+                continue;
+            };
+            let Some(v) = V::from_str(v)
+                .inspect_err(|err| {
+                    warn!(
+                        target: LOG_CORE,
+                        err = %err.fmt_compact(),
+                        "Error parsing value"
+                    );
+                })
+                .ok()
+            else {
+                continue;
+            };
+
+            map.insert(k, v);
+        };
+    }
+
+    Ok(map)
 }

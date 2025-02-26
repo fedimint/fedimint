@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::discriminant;
+use std::str::FromStr as _;
 
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
@@ -12,7 +13,9 @@ use fedimint_core::endpoint_constants::{
     ADD_PEER_CONNECTION_INFO_ENDPOINT, AUTH_ENDPOINT, CHECK_BITCOIN_STATUS_ENDPOINT,
     RESET_SETUP_ENDPOINT, SERVER_STATUS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, START_DKG_ENDPOINT,
 };
-use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::envs::{
+    BitcoinRpcConfig, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
+};
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
 };
@@ -152,8 +155,19 @@ impl ConfigGenApi {
                 federation_name: request.federation_name,
             }
         } else {
-            let iroh_api_sk = SecretKey::generate(&mut OsRng);
-            let iroh_p2p_sk = SecretKey::generate(&mut OsRng);
+            let iroh_api_sk = if let Ok(var) = std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV) {
+                SecretKey::from_str(&var)
+                    .with_context(|| format!("Parsing {FM_IROH_API_SECRET_KEY_OVERRIDE_ENV}"))?
+            } else {
+                SecretKey::generate(&mut OsRng)
+            };
+
+            let iroh_p2p_sk = if let Ok(var) = std::env::var(FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV) {
+                SecretKey::from_str(&var)
+                    .with_context(|| format!("Parsing {FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV}"))?
+            } else {
+                SecretKey::generate(&mut OsRng)
+            };
 
             LocalParams {
                 auth,

@@ -10,8 +10,11 @@ use anyhow::{Context, ensure, format_err};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
+use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
 use fedimint_core::util::SafeUrl;
-use iroh::{Endpoint, NodeId, SecretKey};
+use fedimint_logging::LOG_NET_IROH;
+use iroh::{Endpoint, NodeAddr, NodeId, SecretKey};
+use iroh_base::ticket::NodeTicket;
 use rustls::ServerName;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -20,6 +23,7 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream, rustls};
 use tokio_util::codec::LengthDelimitedCodec;
+use tracing::trace;
 
 use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection};
 
@@ -233,12 +237,33 @@ pub struct IrohConnector {
     pub node_ids: BTreeMap<PeerId, NodeId>,
     /// The Iroh endpoint
     pub endpoint: Endpoint,
+
+    /// List of overrides to use when attempting to connect to given `NodeId`
+    ///
+    /// This is useful for testing, or forcing non-default network connectivity.
+    pub connection_overrides: BTreeMap<NodeId, NodeAddr>,
 }
 
 const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";
 
 impl IrohConnector {
-    pub async fn new(secret_key: SecretKey, node_ids: BTreeMap<PeerId, NodeId>) -> Self {
+    pub async fn new(
+        secret_key: SecretKey,
+        node_ids: BTreeMap<PeerId, NodeId>,
+    ) -> anyhow::Result<Self> {
+        let mut s = Self::new_no_overrides(secret_key, node_ids).await;
+
+        for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
+            s = s.with_connection_override(k, v.into());
+        }
+
+        Ok(s)
+    }
+
+    pub async fn new_no_overrides(
+        secret_key: SecretKey,
+        node_ids: BTreeMap<PeerId, NodeId>,
+    ) -> Self {
         let identity = *node_ids
             .iter()
             .find(|entry| entry.1 == &secret_key.public())
@@ -258,7 +283,13 @@ impl IrohConnector {
                 .bind()
                 .await
                 .expect("Could not bind to port"),
+            connection_overrides: BTreeMap::default(),
         }
+    }
+
+    pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
+        self.connection_overrides.insert(node, addr);
+        self
     }
 }
 
@@ -277,7 +308,15 @@ where
             .get(&peer)
             .expect("No node id found for peer {peer}");
 
-        let connection = self.endpoint.connect(node_id, FEDIMINT_P2P_ALPN).await?;
+        let connection = match self.connection_overrides.get(&node_id) {
+            Some(node_addr) => {
+                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                self.endpoint
+                    .connect(node_addr.clone(), FEDIMINT_P2P_ALPN)
+                    .await?
+            }
+            None => self.endpoint.connect(node_id, FEDIMINT_P2P_ALPN).await?,
+        };
 
         Ok(connection.into_dyn())
     }
