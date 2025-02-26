@@ -1,9 +1,18 @@
 #![allow(non_snake_case)]
 
+mod iroh;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 pub trait ToEnvVar {
-    fn to_env_value(&self) -> Option<String>;
+    fn to_env_value(&self) -> Option<String> {
+        panic!("Must implement one of the two ToEnvVar methods");
+    }
+
+    fn to_env_values(&self, base: &str) -> impl Iterator<Item = (String, String)> {
+        self.to_env_value()
+            .into_iter()
+            .map(|v| (base.to_owned(), v))
+    }
 }
 
 macro_rules! declare_vars {
@@ -28,11 +37,11 @@ macro_rules! declare_vars {
                 })
             }
 
-            pub fn vars(&self) -> impl Iterator<Item = (&'static str, String)> + use<> {
+            pub fn vars(&self) -> impl Iterator<Item = (String, String)> + use<> {
                 let mut env = ::std::vec::Vec::new();
                 $(
-                    if let Some(value) = $crate::vars::ToEnvVar::to_env_value(&self.$name) {
-                        env.push(($env, value));
+                    for (env_name, value) in $crate::vars::ToEnvVar::to_env_values(&self.$name, $env) {
+                        env.push((env_name, value));
                     }
                 )*
                 env.into_iter()
@@ -89,13 +98,17 @@ pub async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
 
 use fedimint_core::envs::{
     FM_DEFAULT_BITCOIN_RPC_KIND_ENV, FM_DEFAULT_BITCOIN_RPC_URL_ENV, FM_FORCE_BITCOIN_RPC_KIND_ENV,
-    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_IN_DEVIMINT_ENV, FM_USE_UNKNOWN_MODULE_ENV,
+    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_IN_DEVIMINT_ENV, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV,
+    FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, FM_USE_UNKNOWN_MODULE_ENV,
 };
+use fedimint_core::{NumPeers, PeerId};
 use fedimint_portalloc::port_alloc;
-use fedimint_server::config::ConfigGenParams;
 use fedimint_server::net::api::ApiSecrets;
 use fedimintd::envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
+use iroh::{FedimintdOverrides, FedimintdPeerOverrides};
+
+use crate::federation::FEDIMINTD_METRICS_PORT_OFFSET;
 
 pub fn utf8(path: &Path) -> &str {
     path.as_os_str().to_str().expect("must be valid utf8")
@@ -142,6 +155,7 @@ declare_vars! {
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
 
         FM_FEDERATION_BASE_PORT: u16 =  port_alloc((3 * fed_size).try_into().unwrap())?; env: "FM_FEDERATION_BASE_PORT";
+        fedimintd_overrides: FedimintdOverrides = FedimintdOverrides::new(FM_FEDERATION_BASE_PORT, NumPeers::from(FM_FED_SIZE)); env: "NOT_USED_FOR_ANYTHING";
 
         FM_LDK_BITCOIND_RPC_URL: String = format!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_LDK_BITCOIND_RPC_URL";
 
@@ -216,13 +230,16 @@ impl Global {
 }
 
 declare_vars! {
-    Fedimintd = (globals: &Global, params: ConfigGenParams, federation_name: String, base_port: u16) => {
-        FM_BIND_P2P: String = params.p2p_bind.to_string(); env: "FM_BIND_P2P";
-        FM_BIND_API: String = params.api_bind.to_string(); env: "FM_BIND_API";
-        FM_P2P_URL: String =  format!("fedimint://{}", params.p2p_bind); env: "FM_P2P_URL";
-        FM_API_URL: String =  format!("ws://{}", params.api_bind); env: "FM_API_URL";
-        FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", base_port as usize + 2 * globals.FM_FED_SIZE + params.identity.to_usize()); env: "FM_BIND_METRICS_API";
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{}-{}", federation_name, params.identity.to_usize()))).await?; env: "FM_DATA_DIR";
+    Fedimintd = (globals: &Global, federation_name: String, peer_id: PeerId, overrides: &FedimintdPeerOverrides) => {
+        FM_BIND_P2P: String = format!("127.0.0.1:{}", overrides.p2p.port()); env: "FM_BIND_P2P";
+        FM_BIND_API: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API";
+        FM_P2P_URL: String =  format!("fedimint://127.0.0.1:{}", overrides.p2p.port()); env: "FM_P2P_URL";
+        FM_API_URL: String =  format!("ws://127.0.0.1:{}", overrides.api.port()); env: "FM_API_URL";
+        FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: "FM_BIND_METRICS_API";
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{federation_name}-{peer_id}"))).await?; env: "FM_DATA_DIR";
+
+        FM_IROH_P2P_SECRET_KEY_OVERRIDE : String = overrides.p2p.secret_key(); env: FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV;
+        FM_IROH_API_SECRET_KEY_OVERRIDE : String = overrides.api.secret_key(); env: FM_IROH_API_SECRET_KEY_OVERRIDE_ENV;
 
         // We only need to force the current bitcoind rpc on fedimintd, other daemons take their
         // rpc settings over command-line etc. so always will use the right ones.
