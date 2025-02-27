@@ -62,7 +62,7 @@ impl Gatewayd {
         let mut gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
                 FM_GATEWAY_DATA_DIR_ENV.to_owned(),
-                format!("{}/{ln_type}", utf8(test_dir)),
+                format!("{}/{gw_name}", utf8(test_dir)),
             ),
             (
                 FM_GATEWAY_LISTEN_ADDR_ENV.to_owned(),
@@ -77,6 +77,9 @@ impl Gatewayd {
                 "LNv1".to_string(),
             );
         }
+        if ln_type == LightningNodeType::Ldk {
+            gateway_env.insert("FM_LDK_ALIAS".to_owned(), gw_name.clone());
+        }
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let process = process_mgr
             .spawn_daemon(
@@ -86,8 +89,8 @@ impl Gatewayd {
             .await?;
 
         let gatewayd = Self {
-            ln,
             process,
+            ln,
             addr,
             lightning_node_addr,
             gatewayd_version,
@@ -639,11 +642,8 @@ impl Gatewayd {
     pub async fn wait_bolt11_invoice(&self, payment_hash: Vec<u8>) -> Result<()> {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         if gatewayd_version < *VERSION_0_7_0_ALPHA {
-            match &self.ln {
-                LightningNode::Lnd(lnd) => {
-                    return lnd.wait_bolt11_invoice(payment_hash).await;
-                }
-                _ => panic!("Cannot wait on invoice in LDK before v0.7.0"),
+            if let LightningNode::Lnd(lnd) = &self.ln {
+                return lnd.wait_bolt11_invoice(payment_hash).await;
             }
         }
 
