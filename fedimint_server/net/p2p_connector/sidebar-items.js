@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_P2P_ALPN"],"fn":["dns_sanitize","parse_host_port"],"struct":["IrohConnector","TlsConfig","TlsTcpConnector"],"trait":["IP2PConnector"],"type":["DynP2PConnector"]};
+window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_P2P_ALPN"],"fn":["dns_sanitize","parse_p2p"],"struct":["IrohConnector","TlsConfig","TlsTcpConnector"],"trait":["IP2PConnector"],"type":["DynP2PConnector"]};
