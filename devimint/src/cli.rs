@@ -279,6 +279,12 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
+                                debug!(
+                                    target: LOG_DEVIMINT,
+                                    %address,
+                                    %operation_id,
+                                    "Sending funds to client deposit addr"
+                                );
                                 dev_fed
                                     .bitcoind()
                                     .await?
@@ -287,30 +293,40 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 Ok(operation_id)
                             },
                             async {
-                                let pegin_addr = dev_fed
+                                let address = dev_fed
                                     .gw_lnd_registered()
                                     .await?
                                     .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
                                     .await?;
+                                debug!(
+                                    target: LOG_DEVIMINT,
+                                    %address,
+                                    "Sending funds to LND deposit addr"
+                                );
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                    .send_to(address, GW_PEGIN_AMOUNT)
                                     .await
                                     .map(|_| ())
                             },
                             async {
                                 if crate::util::supports_lnv2() {
                                     let gw_ldk = dev_fed.gw_ldk_connected().await?;
-                                    let pegin_addr = gw_ldk
+                                    let address = gw_ldk
                                         .get_pegin_addr(
                                             &dev_fed.fed().await?.calculate_federation_id(),
                                         )
                                         .await?;
+                                    debug!(
+                                        target: LOG_DEVIMINT,
+                                        %address,
+                                        "Sending funds to LDK deposit addr"
+                                    );
                                     dev_fed
                                         .bitcoind()
                                         .await?
-                                        .send_to(pegin_addr, GW_PEGIN_AMOUNT)
+                                        .send_to(address, GW_PEGIN_AMOUNT)
                                         .await
                                         .map(|_| ())
                                 } else {
@@ -326,9 +342,11 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             .await_deposit(&operation_id)
                             .await?;
 
-                        info!(target: LOG_DEVIMINT,
-                        elapsed_ms = %pegin_start_time.elapsed().as_millis(),
-                        "Pegins completed");
+                        info!(
+                            target: LOG_DEVIMINT,
+                            elapsed_ms = %pegin_start_time.elapsed().as_millis(),
+                            "Pegins completed"
+                        );
                     }
 
                     // TODO: Audit that the environment access only happens in single-threaded code.
