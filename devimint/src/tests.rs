@@ -15,7 +15,6 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::{Amount, PeerId};
-use fedimint_gateway_common::GatewayInfo;
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use futures::future::try_join_all;
@@ -1258,18 +1257,21 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )
     .await?;
 
-    let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
+    let ldk_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(ldk_value["gateway_id"].clone())?;
     poll(
         "Waiting for LDK Gateway Running state after reboot",
         || async {
             let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
             let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+            let reboot_gateway_state: String = serde_json::from_value(ldk_value["gateway_state"].clone()).context("invalid gateway state").map_err(ControlFlow::Break)?;
+            let reboot_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(ldk_value["gateway_id"].clone()).context("invalid gateway id").map_err(ControlFlow::Break)?;
 
-            if reboot_info.gateway_state == "Running" {
+            if reboot_gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
                 // Assert that the gateway info is the same as before the reboot
-                assert_eq!(ldk_info, reboot_info);
+                assert_eq!(ldk_gateway_id, reboot_gateway_id);
                 return Ok(());
             }
             Err(ControlFlow::Continue(anyhow!("gateway not running")))
