@@ -310,7 +310,7 @@ impl Federation {
         for peer_id in num_peers.peer_ids() {
             let peer_env_vars = vars::Fedimintd::init(
                 &process_mgr.globals,
-                "default".into(),
+                federation_name.clone(),
                 peer_id,
                 process_mgr.globals.fedimintd_overrides.peer_expect(peer_id),
             )
