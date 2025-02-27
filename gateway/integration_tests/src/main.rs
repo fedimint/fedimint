@@ -82,11 +82,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
             }
 
             let gw = if devimint::util::supports_lnv2() {
-                dev_fed
-                    .gw_ldk_connected()
-                    .await?
-                    .as_ref()
-                    .expect("LDK Gateway should be available")
+                dev_fed.gw_ldk_connected().await?
             } else {
                 dev_fed.gw_lnd_registered().await?
             };
@@ -296,11 +292,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
             let gw = match gw_type {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
-                LightningNodeType::Ldk => dev_fed
-                    .gw_ldk_connected()
-                    .await?
-                    .as_ref()
-                    .expect("LDK Gateway should be available"),
+                LightningNodeType::Ldk => dev_fed.gw_ldk_connected().await?,
             };
 
             // Try to connect to already connected federation
@@ -493,7 +485,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
         }
 
         let gw_lnd = dev_fed.gw_lnd_registered().await?;
-        let gw_ldk = dev_fed.gw_ldk_connected().await?.as_ref().expect("LDK Should be available");
+        let gw_ldk = dev_fed.gw_ldk_connected().await?;
         let gateways = [gw_lnd, gw_ldk].to_vec();
 
         let gateway_matrix = gateways
@@ -555,12 +547,12 @@ async fn liquidity_test() -> anyhow::Result<()> {
         info!("Testing closing all channels...");
         for gw in gateways.clone() {
             gw.close_all_channels(dev_fed.bitcoind().await?.clone()).await?;
-            let balances = gw.get_balances().await?;
 
             retry(
                 "Wait for balance update after sweeping all lightning funds",
                 aggressive_backoff_long(),
                 || async {
+                    let balances = gw.get_balances().await?;
                     let curr_lightning_balance = balances.lightning_balance_msats;
                     ensure!(curr_lightning_balance == 0, "Close channels did not sweep all lightning funds");
                     let inbound_lightning_balance = balances.inbound_lightning_liquidity_msats;
