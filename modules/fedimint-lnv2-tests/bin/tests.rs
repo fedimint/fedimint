@@ -168,8 +168,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     for (gw_send, gw_receive) in gateway_matrix {
         info!(
             "Testing refund of payment: client -> {} -> {} -> client",
-            gw_send.ln.as_ref().unwrap().name(),
-            gw_receive.ln.as_ref().unwrap().name()
+            gw_send.ln.ln_type(),
+            gw_receive.ln.ln_type()
         );
 
         let invoice = receive(&client, &gw_receive.addr, 1_000_000).await?.0;
@@ -194,8 +194,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     for (gw_send, gw_receive) in gateway_matrix {
         info!(
             "Testing payment: client -> {} -> {} -> client",
-            gw_send.ln_type(),
-            gw_receive.ln_type()
+            gw_send.ln.ln_type(),
+            gw_receive.ln.ln_type()
         );
 
         let (invoice, receive_op) = receive(&client, &gw_receive.addr, 1_000_000).await?;
@@ -216,8 +216,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     for (gw_send, gw_receive) in gateway_pairs {
         info!(
             "Testing payment: client -> {} -> {}",
-            gw_send.ln_type(),
-            gw_receive.ln_type()
+            gw_send.ln.ln_type(),
+            gw_receive.ln.ln_type()
         );
 
         let invoice = gw_receive.create_invoice(1_000_000).await?;
@@ -236,8 +236,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     for (gw_send, gw_receive) in gateway_pairs {
         info!(
             "Testing payment: {} -> {} -> client",
-            gw_send.ln_type(),
-            gw_receive.ln_type()
+            gw_send.ln.ln_type(),
+            gw_receive.ln.ln_type()
         );
 
         let (invoice, receive_op) = receive(&client, &gw_receive.addr, 1_000_000).await?;

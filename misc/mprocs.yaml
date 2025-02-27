@@ -13,7 +13,7 @@ procs:
   lnd-gw:
     shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-lnd.log
   ldk-gw:
-    shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-ldk.log
+    shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-ldk-0.log
   cln:
     shell: tail -n +0 -F $FM_LOGS_DIR/lightningd.log
   lnd:

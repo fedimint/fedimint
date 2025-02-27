@@ -94,10 +94,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
 
             // Recover without a backup
             info!("Wiping gateway and recovering without a backup...");
-            let ln = gw
-                .ln
-                .clone()
-                .expect("Gateway is not connected to Lightning Node");
+            let ln = gw.ln.clone();
             let new_gw = stop_and_recover_gateway(
                 process_mgr.clone(),
                 mnemonic.clone(),
@@ -132,7 +129,7 @@ async fn stop_and_recover_gateway(
     let before_onchain_balance = gateway_balances.onchain_balance_sats;
 
     // Stop the Gateway
-    let gw_type = old_gw.lightning_node_type();
+    let gw_type = old_gw.ln.ln_type();
     old_gw.terminate().await?;
     info!("Terminated Gateway");
 
@@ -496,7 +493,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
         let gateway_matrix = gateways
             .iter()
             .cartesian_product(gateways.iter())
-            .filter(|(a, b)| a.ln_type() != b.ln_type());
+            .filter(|(a, b)| a.ln.ln_type() != b.ln.ln_type());
 
         info!("Pegging-in gateways...");
 
@@ -508,8 +505,8 @@ async fn liquidity_test() -> anyhow::Result<()> {
         for (gw_send, gw_receive) in gateway_matrix.clone() {
             info!(
                 "Testing ecash payment: {} -> {}",
-                gw_send.ln_type(),
-                gw_receive.ln_type()
+                gw_send.ln.ln_type(),
+                gw_receive.ln.ln_type()
             );
 
             let fed_id = federation.calculate_federation_id();
@@ -528,8 +525,8 @@ async fn liquidity_test() -> anyhow::Result<()> {
         for (gw_send, gw_receive) in gateway_matrix.clone() {
             info!(
                 "Testing lightning payment: {} -> {}",
-                gw_send.ln_type(),
-                gw_receive.ln_type()
+                gw_send.ln.ln_type(),
+                gw_receive.ln.ln_type()
             );
 
             let invoice = gw_receive.create_invoice(1_000_000).await?;
