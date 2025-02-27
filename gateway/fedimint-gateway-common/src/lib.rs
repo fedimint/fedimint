@@ -6,8 +6,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network};
 use clap::Subcommand;
 use envs::{
-    FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
-    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_LDK_ALIAS_ENV, FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
+    FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::{FederationId, JsonClientConfig};
@@ -381,5 +381,9 @@ pub enum LightningMode {
         /// LDK lightning server port
         #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
         lightning_port: u16,
+
+        /// LDK's Alias
+        #[arg(long = "ldk-alias", env = FM_LDK_ALIAS_ENV)]
+        alias: String,
     },
 }

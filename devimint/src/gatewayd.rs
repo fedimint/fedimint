@@ -31,33 +31,38 @@ use crate::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION
 #[derive(Clone)]
 pub struct Gatewayd {
     pub(crate) process: ProcessHandle,
-    pub ln: Option<LightningNode>,
+    pub ln: LightningNode,
     pub addr: String,
     pub(crate) lightning_node_addr: String,
     pub gatewayd_version: Version,
+    pub gw_name: String,
 }
 
 impl Gatewayd {
     pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
-        let ln_name = ln.name();
+        let ln_type = ln.ln_type();
+        let gw_name = match &ln {
+            LightningNode::Lnd(_) => "gatewayd-lnd".to_string(),
+            LightningNode::Ldk { name } => name.to_owned(),
+        };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
 
         let port = match ln {
             LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_GW_LND,
-            LightningNode::Ldk => process_mgr.globals.FM_PORT_GW_LDK,
+            LightningNode::Ldk { name: _ } => process_mgr.globals.FM_PORT_GW_LDK,
         };
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
 
         let lightning_node_port = match ln {
             LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_LND_LISTEN,
-            LightningNode::Ldk => process_mgr.globals.FM_PORT_LDK,
+            LightningNode::Ldk { name: _ } => process_mgr.globals.FM_PORT_LDK,
         };
         let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
 
         let mut gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
                 FM_GATEWAY_DATA_DIR_ENV.to_owned(),
-                format!("{}/{ln_name}", utf8(test_dir)),
+                format!("{}/{gw_name}", utf8(test_dir)),
             ),
             (
                 FM_GATEWAY_LISTEN_ADDR_ENV.to_owned(),
@@ -72,20 +77,24 @@ impl Gatewayd {
                 "LNv1".to_string(),
             );
         }
+        if ln_type == LightningNodeType::Ldk {
+            gateway_env.insert("FM_LDK_ALIAS".to_owned(), gw_name.clone());
+        }
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let process = process_mgr
             .spawn_daemon(
-                &format!("gatewayd-{ln_name}"),
-                Gatewayd::start_gatewayd(&ln_name, &gatewayd_version).envs(gateway_env),
+                &gw_name,
+                Gatewayd::start_gatewayd(&ln_type, &gatewayd_version).envs(gateway_env),
             )
             .await?;
 
         let gatewayd = Self {
-            ln: Some(ln),
             process,
+            ln,
             addr,
             lightning_node_addr,
             gatewayd_version,
+            gw_name,
         };
         poll(
             "waiting for gateway to be ready to respond to rpc",
@@ -96,7 +105,7 @@ impl Gatewayd {
     }
 
     fn is_forced_current(&self) -> bool {
-        self.ln_type() == LightningNodeType::Ldk && self.gatewayd_version < *VERSION_0_6_0_ALPHA
+        self.ln.ln_type() == LightningNodeType::Ldk && self.gatewayd_version < *VERSION_0_6_0_ALPHA
     }
 
     fn start_gatewayd(ln_type: &LightningNodeType, gatewayd_version: &Version) -> Command {
@@ -109,31 +118,23 @@ impl Gatewayd {
         }
     }
 
-    pub fn ln_type(&self) -> LightningNodeType {
-        self.ln
-            .as_ref()
-            .expect("Gatewayd has no lightning node type")
-            .name()
-    }
-
     pub async fn terminate(self) -> Result<()> {
         self.process.terminate().await
     }
 
     pub fn set_lightning_node(&mut self, ln_node: LightningNode) {
-        self.ln = Some(ln_node);
+        self.ln = ln_node;
     }
 
     pub async fn stop_lightning_node(&mut self) -> Result<()> {
         info!("Stopping lightning node");
-        match self.ln.take() {
-            Some(LightningNode::Lnd(lnd)) => lnd.terminate().await,
-            Some(LightningNode::Ldk) => {
+        match self.ln.clone() {
+            LightningNode::Lnd(lnd) => lnd.terminate().await,
+            LightningNode::Ldk { name: _ } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
                 unimplemented!("LDK node termination not implemented")
             }
-            None => Err(anyhow!("Cannot stop an already stopped Lightning Node")),
         }
     }
 
@@ -145,11 +146,7 @@ impl Gatewayd {
         gatewayd_path: &PathBuf,
         gateway_cli_path: &PathBuf,
     ) -> Result<()> {
-        let ln = self
-            .ln
-            .as_ref()
-            .expect("Lightning Node should exist")
-            .clone();
+        let ln = self.ln.clone();
 
         self.process.terminate().await?;
         // TODO: Audit that the environment access only happens in single-threaded code.
@@ -257,13 +254,6 @@ impl Gatewayd {
             .run()
             .await?;
         Ok(())
-    }
-
-    pub fn lightning_node_type(&self) -> LightningNodeType {
-        self.ln
-            .as_ref()
-            .expect("Gateway has no lightning node")
-            .name()
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
@@ -652,11 +642,8 @@ impl Gatewayd {
     pub async fn wait_bolt11_invoice(&self, payment_hash: Vec<u8>) -> Result<()> {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         if gatewayd_version < *VERSION_0_7_0_ALPHA {
-            match &self.ln {
-                Some(LightningNode::Lnd(lnd)) => {
-                    return lnd.wait_bolt11_invoice(payment_hash).await;
-                }
-                _ => panic!("Cannot wait on invoice in LDK before v0.7.0"),
+            if let LightningNode::Lnd(lnd) = &self.ln {
+                return lnd.wait_bolt11_invoice(payment_hash).await;
             }
         }
 

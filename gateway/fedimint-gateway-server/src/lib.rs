@@ -1954,6 +1954,7 @@ impl Gateway {
                 bitcoind_rpc_url,
                 network,
                 lightning_port,
+                alias,
             } => {
                 let chain_source_config = {
                     match (esplora_server_url, bitcoind_rpc_url) {
@@ -1980,6 +1981,7 @@ impl Gateway {
                         chain_source_config,
                         network,
                         lightning_port,
+                        alias,
                         self.mnemonic.clone(),
                         runtime,
                     )

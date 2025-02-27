@@ -93,21 +93,13 @@ impl GatewayLdkClient {
         chain_source_config: GatewayLdkChainSourceConfig,
         network: Network,
         lightning_port: u16,
+        alias: String,
         mnemonic: Mnemonic,
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<Self> {
-        // In devimint, gateways must allow for other gateways to open channels to them.
-        // To ensure this works, we must set a node alias to signal to ldk-node that we
-        // should accept incoming public channels. However, on mainnet we can disable
-        // this for better privacy.
-        let node_alias = if network == Network::Bitcoin {
-            None
-        } else {
-            let alias = format!("{network} LDK Gateway");
-            let mut bytes = [0u8; 32];
-            bytes[..alias.len()].copy_from_slice(alias.as_bytes());
-            Some(NodeAlias(bytes))
-        };
+        let mut bytes = [0u8; 32];
+        bytes[..alias.len()].copy_from_slice(alias.as_bytes());
+        let node_alias = Some(NodeAlias(bytes));
 
         let mut node_builder = ldk_node::Builder::from_config(ldk_node::config::Config {
             network,

@@ -1082,14 +1082,14 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
 #[derive(Clone)]
 pub enum LightningNode {
     Lnd(Lnd),
-    Ldk,
+    Ldk { name: String },
 }
 
 impl LightningNode {
-    pub fn name(&self) -> LightningNodeType {
+    pub fn ln_type(&self) -> LightningNodeType {
         match self {
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
-            LightningNode::Ldk => LightningNodeType::Ldk,
+            LightningNode::Ldk { name: _ } => LightningNodeType::Ldk,
         }
     }
 }
