@@ -156,7 +156,8 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         .with_directive("jsonrpsee-client=off")
         .init()?;
 
-    let globals = vars::Global::new(test_dir, arg.fed_size, arg.offline_nodes).await?;
+    // TODO: allocate a single fed by default
+    let globals = vars::Global::new(test_dir, 2, arg.fed_size, arg.offline_nodes).await?;
 
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;

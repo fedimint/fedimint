@@ -292,6 +292,8 @@ impl Federation {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         skip_setup: bool,
+        // Which of the pre-allocated federations to use (most tests just use single `0` one)
+        fed_index: usize,
         federation_name: String,
     ) -> Result<Self> {
         let num_peers = NumPeers::from(process_mgr.globals.FM_FED_SIZE);
@@ -312,7 +314,10 @@ impl Federation {
                 &process_mgr.globals,
                 federation_name.clone(),
                 peer_id,
-                process_mgr.globals.fedimintd_overrides.peer_expect(peer_id),
+                process_mgr
+                    .globals
+                    .fedimintd_overrides
+                    .peer_expect(fed_index, peer_id),
             )
             .await?;
             members.insert(

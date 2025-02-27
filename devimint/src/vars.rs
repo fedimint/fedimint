@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-mod iroh;
+mod net_overrides;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 pub trait ToEnvVar {
@@ -106,16 +106,16 @@ use fedimint_portalloc::port_alloc;
 use fedimint_server::net::api::ApiSecrets;
 use fedimintd::envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
-use iroh::{FedimintdOverrides, FedimintdPeerOverrides};
+use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
 
-use crate::federation::FEDIMINTD_METRICS_PORT_OFFSET;
+use crate::federation::{FEDIMINTD_METRICS_PORT_OFFSET, PORTS_PER_FEDIMINTD};
 
 pub fn utf8(path: &Path) -> &str {
     path.as_os_str().to_str().expect("must be valid utf8")
 }
 
 declare_vars! {
-    Global = (test_dir: &Path, fed_size: usize, offline_nodes: usize) =>
+    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize) =>
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
 
@@ -129,6 +129,7 @@ declare_vars! {
         FM_SKIP_REL_NOTES_ACK: String = "1".to_string(); env: "FM_SKIP_REL_NOTES_ACK";
 
         FM_FED_SIZE: usize = fed_size; env: "FM_FED_SIZE";
+        FM_NUM_FEDS: usize = num_feds; env: "FM_NUM_FEDS";
         FM_OFFLINE_NODES: usize = offline_nodes; env: "FM_OFFLINE_NODES";
         FM_TMP_DIR: PathBuf = mkdir(test_dir.into()).await?; env: "FM_TMP_DIR";
         FM_TEST_DIR: PathBuf = FM_TMP_DIR.clone(); env: "FM_TEST_DIR";
@@ -154,8 +155,8 @@ declare_vars! {
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
 
-        FM_FEDERATION_BASE_PORT: u16 =  port_alloc((3 * fed_size).try_into().unwrap())?; env: "FM_FEDERATION_BASE_PORT";
-        fedimintd_overrides: FedimintdOverrides = FedimintdOverrides::new(FM_FEDERATION_BASE_PORT, NumPeers::from(FM_FED_SIZE)); env: "NOT_USED_FOR_ANYTHING";
+        FM_FEDERATION_BASE_PORT: u16 =  port_alloc((PORTS_PER_FEDIMINTD as usize * fed_size * num_feds).try_into().unwrap())?; env: "FM_FEDERATION_BASE_PORT";
+        fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";
 
         FM_LDK_BITCOIND_RPC_URL: String = format!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_LDK_BITCOIND_RPC_URL";
 
@@ -221,10 +222,11 @@ declare_vars! {
 impl Global {
     pub async fn new(
         test_dir: &Path,
+        num_feds: usize,
         fed_size: usize,
         offline_nodes: usize,
     ) -> anyhow::Result<Self> {
-        let this = Self::init(test_dir, fed_size, offline_nodes).await?;
+        let this = Self::init(test_dir, num_feds, fed_size, offline_nodes).await?;
         Ok(this)
     }
 }

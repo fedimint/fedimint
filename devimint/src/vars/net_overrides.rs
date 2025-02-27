@@ -72,13 +72,13 @@ impl FedimintdPeerOverrides {
 }
 
 #[derive(Debug, Clone)]
-pub struct FedimintdOverrides {
+pub struct FederationNetOverrides {
     pub base_port: u16,
     pub num_peers: NumPeers,
     pub peers: BTreeMap<PeerId, FedimintdPeerOverrides>,
 }
 
-impl FedimintdOverrides {
+impl FederationNetOverrides {
     pub fn new(base_port: u16, num_peers: NumPeers) -> Self {
         let peers = num_peers
             .peer_ids()
@@ -104,12 +104,46 @@ impl FedimintdOverrides {
     }
 }
 
-impl ToEnvVar for FedimintdOverrides {
+#[derive(Debug, Clone)]
+pub struct FederationsNetOverrides {
+    federations: Vec<FederationNetOverrides>,
+}
+
+impl FederationsNetOverrides {
+    pub fn new(base_port: u16, num_federations: usize, num_peers: NumPeers) -> Self {
+        Self {
+            federations: (0..num_federations)
+                .map(|fed_i| {
+                    FederationNetOverrides::new(
+                        base_port + fed_i as u16 * PORTS_PER_FEDIMINTD * num_peers.total() as u16,
+                        num_peers,
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    pub fn fed_expect(&self, fed_i: usize) -> &FederationNetOverrides {
+        self.federations.get(fed_i).expect("Wrong fed_i")
+    }
+
+    pub fn peer_expect(&self, fed_i: usize, peer_id: PeerId) -> &FedimintdPeerOverrides {
+        self.federations
+            .get(fed_i)
+            .expect("Wrong fed_i")
+            .peers
+            .get(&peer_id)
+            .expect("Wrong peer_id?")
+    }
+}
+
+impl ToEnvVar for FederationsNetOverrides {
     fn to_env_values(&self, _base_env: &str) -> impl Iterator<Item = (String, String)> {
         vec![(
             FM_IROH_CONNECT_OVERRIDES_ENV.to_string(),
-            self.peers
-                .values()
+            self.federations
+                .iter()
+                .flat_map(|f| f.peers.values())
                 .map(|peer| format!("{},{}", peer.p2p.to_override(), peer.api.to_override(),))
                 .collect::<Vec<String>>()
                 .join(","),

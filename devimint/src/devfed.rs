@@ -169,7 +169,7 @@ impl DevJitFed {
                 debug!(target: LOG_DEVIMINT, "Starting federation...");
                 let start_time = fedimint_core::time::now();
                 let mut fed =
-                    Federation::new(&process_mgr, bitcoind, skip_setup, "default".to_string())
+                    Federation::new(&process_mgr, bitcoind, skip_setup, 0, "default".to_string())
                         .await?;
 
                 // Create a degraded federation if there are offline nodes
