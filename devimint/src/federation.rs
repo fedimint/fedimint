@@ -719,7 +719,7 @@ impl Federation {
             .out_json()
             .await?;
             let response: WithdrawResponse = serde_json::from_value(value)?;
-            peg_outs.insert(gw.ln_type(), (prev_fed_ecash_balance, response));
+            peg_outs.insert(gw.ln.ln_type(), (prev_fed_ecash_balance, response));
         }
         self.bitcoind.mine_blocks(21).await?;
 
@@ -740,7 +740,7 @@ impl Federation {
                 .expect("Gateway has not joined federation")
                 .ecash_balance_msats;
 
-            let ln_type = gw.ln_type();
+            let ln_type = gw.ln.ln_type();
             let prev_balance = peg_outs
                 .get(&ln_type)
                 .expect("peg out does not exist")
