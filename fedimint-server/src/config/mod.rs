@@ -301,11 +301,8 @@ impl ServerConfigConsensus {
                 .map(|(peer, endpoints)| {
                     let url = PeerUrl {
                         name: endpoints.name.clone(),
-                        url: SafeUrl::parse_without_port(&format!(
-                            "iroh://{}.ed25519",
-                            endpoints.api_pk
-                        ))
-                        .expect("Failed to parse iroh url"),
+                        url: SafeUrl::parse(&format!("iroh://{}.ed25519", endpoints.api_pk))
+                            .expect("Failed to parse iroh url"),
                     };
 
                     (*peer, url)

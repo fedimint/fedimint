@@ -18,7 +18,7 @@ use anyhow::format_err;
 pub use error::*;
 use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tracing::{Instrument, Span, debug, warn};
@@ -82,7 +82,7 @@ where
 ///
 /// The output is not fully RFC1738 conformant but good enough for our current
 /// purposes.
-#[derive(Hash, Clone, Serialize, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Hash, Clone, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 // nosemgrep: ban-raw-url
 pub struct SafeUrl(Url);
 
@@ -94,16 +94,6 @@ pub enum SafeUrlError {
 
 impl SafeUrl {
     pub fn parse(url_str: &str) -> Result<Self, ParseError> {
-        let s = Url::parse(url_str).map(SafeUrl)?;
-
-        if s.port_or_known_default().is_none() {
-            return Err(ParseError::InvalidPort);
-        }
-
-        Ok(s)
-    }
-
-    pub fn parse_without_port(url_str: &str) -> Result<Self, ParseError> {
         Url::parse(url_str).map(SafeUrl)
     }
 
@@ -230,20 +220,6 @@ impl Display for SafeUrl {
     }
 }
 
-impl<'de> serde::de::Deserialize<'de> for SafeUrl {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = Self(Url::deserialize(deserializer)?);
-
-        if s.port_or_known_default().is_none() {
-            return Err(serde::de::Error::custom("Invalid port"));
-        }
-
-        Ok(s)
-    }
-}
 impl Debug for SafeUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SafeUrl(")?;
@@ -253,19 +229,9 @@ impl Debug for SafeUrl {
     }
 }
 
-/// Only ease conversions from unsafe into safe version.
-/// We want to protect leakage of sensitive credentials unless code explicitly
-/// calls `to_unsafe()`.
-impl TryFrom<Url> for SafeUrl {
-    type Error = anyhow::Error;
-    fn try_from(u: Url) -> anyhow::Result<Self> {
-        let s = Self(u);
-
-        if s.port_or_known_default().is_none() {
-            anyhow::bail!("Invalid port");
-        }
-
-        Ok(s)
+impl From<Url> for SafeUrl {
+    fn from(u: Url) -> Self {
+        Self(u)
     }
 }
 
@@ -582,10 +548,7 @@ mod tests {
         }
 
         // Exercise `From`-trait via `Into`
-        let _: SafeUrl = url::Url::parse("http://1.2.3.4:80/foo")
-            .unwrap()
-            .try_into()
-            .unwrap();
+        let _: SafeUrl = url::Url::parse("http://1.2.3.4:80/foo").unwrap().into();
     }
 
     #[tokio::test]
