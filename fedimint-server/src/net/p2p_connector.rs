@@ -6,11 +6,12 @@ use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use anyhow::{Context, ensure, format_err};
+use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
 use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
 use iroh::{Endpoint, NodeAddr, NodeId, SecretKey};
@@ -147,17 +148,10 @@ where
         let domain = ServerName::try_from(dns_sanitize(&self.cfg.peer_names[&peer]).as_str())
             .expect("Always a valid DNS name");
 
-        let destination = self
-            .peers
-            .get(&peer)
-            .expect("No url for peer {peer}")
-            .with_port_or_known_default();
+        let destination = self.peers.get(&peer).expect("No url for peer {peer}");
 
         let tls = TlsConnector::from(Arc::new(cfg))
-            .connect(
-                domain,
-                TcpStream::connect(parse_host_port(&destination)?).await?,
-            )
+            .connect(domain, TcpStream::connect(parse_p2p(destination)?).await?)
             .await?;
 
         let certificate = tls
@@ -220,13 +214,12 @@ pub fn dns_sanitize(name: &str) -> String {
 }
 
 /// Parses the host and port from a url
-pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
-    let host = url
-        .host_str()
-        .ok_or_else(|| format_err!("Missing host in {url}"))?;
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| format_err!("Missing port in {url}"))?;
+pub fn parse_p2p(url: &SafeUrl) -> anyhow::Result<String> {
+    ensure!(url.scheme() == "fedimint", "p2p url has invalid scheme");
+
+    let host = url.host_str().context("p2p url is missing host")?;
+
+    let port = url.port().unwrap_or(STANDARD_FEDIMINT_P2P_PORT);
 
     Ok(format!("{host}:{port}"))
 }
