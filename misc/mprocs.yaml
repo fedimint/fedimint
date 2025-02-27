@@ -19,7 +19,7 @@ procs:
   lnd:
     shell: tail -n +0 -F $FM_LOGS_DIR/lnd.log
   ldk:
-    shell: tail -n +0 -F $FM_DATA_DIR/ldk/ldk_node/logs/ldk_node_latest.log
+    shell: tail -n +0 -F $FM_DATA_DIR/gatewayd-ldk-0/ldk_node/logs/ldk_node_latest.log
   bitcoind:
     shell: tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
   devimint:
