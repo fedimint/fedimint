@@ -24,7 +24,6 @@ use tokio::io::AsyncWriteExt;
 use tracing::{Instrument, Span, debug, warn};
 use url::{Host, ParseError, Url};
 
-use crate::net::STANDARD_FEDIMINT_P2P_PORT;
 use crate::task::MaybeSend;
 use crate::{apply, async_trait_maybe_send, maybe_add_send, runtime};
 
@@ -134,29 +133,8 @@ impl SafeUrl {
         self.0.port()
     }
     pub fn port_or_known_default(&self) -> Option<u16> {
-        if let Some(port) = self.port() {
-            return Some(port);
-        }
-        match self.0.scheme() {
-            // p2p port scheme
-            "fedimint" => Some(STANDARD_FEDIMINT_P2P_PORT),
-            _ => self.0.port_or_known_default(),
-        }
+        self.0.port_or_known_default()
     }
-
-    /// `self` but with port explicitly set, if known from url
-    pub fn with_port_or_known_default(&self) -> Self {
-        if self.port().is_none() {
-            if let Some(default) = self.port_or_known_default() {
-                let mut url = self.clone();
-                url.0.set_port(Some(default)).expect("Can't fail");
-                return url;
-            }
-        }
-
-        self.clone()
-    }
-
     pub fn path(&self) -> &str {
         self.0.path()
     }
