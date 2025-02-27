@@ -139,7 +139,10 @@ pub async fn run(
 
     initialize_gauge_metrics(&db).await;
 
-    start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
+    if cfg.consensus.iroh_endpoints.is_empty() {
+        start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active())
+            .await?;
+    }
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
 
