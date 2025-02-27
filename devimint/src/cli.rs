@@ -156,7 +156,8 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         .with_directive("jsonrpsee-client=off")
         .init()?;
 
-    let globals = vars::Global::new(test_dir, arg.fed_size, arg.offline_nodes).await?;
+    // TODO: allocate a single fed by default
+    let globals = vars::Global::new(test_dir, 2, arg.fed_size, arg.offline_nodes).await?;
 
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
@@ -487,6 +488,16 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
             let api_port = peer_port + 1;
             let metrics_port = 3510 + peer;
 
+            // TODO: we should use this, and override ports that need to be fixed by an env
+            // var and/or just scap `run-ui` altogether
+            // let peer_id = PeerId::new(peer as u16);
+            // let peer_env_vars = vars::Fedimintd::init(
+            //     &process_mgr.globals,
+            //     "ui-test-federation".to_string(),
+            //     peer_id,
+            //     process_mgr.globals.fedimintd_overrides.peer_expect(peer_id),
+            // )
+            // .await?;
             let vars = vars::Fedimintd {
                 FM_BIND_P2P: format!("127.0.0.1:{peer_port}"),
                 FM_P2P_URL: format!("fedimint://127.0.0.1:{peer_port}"),
@@ -502,6 +513,8 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
                     process_mgr.globals.FM_PORT_BTC_RPC
                 ),
                 FM_FORCE_BITCOIN_RPC_KIND: "bitcoind".into(),
+                FM_IROH_P2P_SECRET_KEY_OVERRIDE: String::new(),
+                FM_IROH_API_SECRET_KEY_OVERRIDE: String::new(),
             };
             let fm = Fedimintd::new(
                 process_mgr,

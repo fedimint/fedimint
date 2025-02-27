@@ -242,9 +242,10 @@ const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";
 impl IrohConnector {
     pub async fn new(
         secret_key: SecretKey,
+        p2p_bind_addr: SocketAddr,
         node_ids: BTreeMap<PeerId, NodeId>,
     ) -> anyhow::Result<Self> {
-        let mut s = Self::new_no_overrides(secret_key, node_ids).await;
+        let mut s = Self::new_no_overrides(secret_key, p2p_bind_addr, node_ids).await;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -255,6 +256,7 @@ impl IrohConnector {
 
     pub async fn new_no_overrides(
         secret_key: SecretKey,
+        bind_addr: SocketAddr,
         node_ids: BTreeMap<PeerId, NodeId>,
     ) -> Self {
         let identity = *node_ids
@@ -263,19 +265,22 @@ impl IrohConnector {
             .expect("Our public key is not part of the keyset")
             .0;
 
+        let builder = Endpoint::builder()
+            .discovery_n0()
+            .discovery_dht()
+            .secret_key(secret_key)
+            .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()]);
+
+        let builder = match bind_addr {
+            SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
+            SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
+        };
         Self {
             node_ids: node_ids
                 .into_iter()
                 .filter(|entry| entry.0 != identity)
                 .collect(),
-            endpoint: Endpoint::builder()
-                .discovery_n0()
-                .discovery_dht()
-                .secret_key(secret_key)
-                .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()])
-                .bind()
-                .await
-                .expect("Could not bind to port"),
+            endpoint: builder.bind().await.expect("Could not bind to port"),
             connection_overrides: BTreeMap::default(),
         }
     }

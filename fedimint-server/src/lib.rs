@@ -92,6 +92,7 @@ pub async fn run(
             } else {
                 IrohConnector::new(
                     cfg.private.iroh_p2p_sk.clone().unwrap(),
+                    settings.p2p_bind,
                     cfg.consensus
                         .iroh_endpoints
                         .iter()
@@ -138,7 +139,10 @@ pub async fn run(
 
     initialize_gauge_metrics(&db).await;
 
-    start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await?;
+    if cfg.consensus.iroh_endpoints.is_empty() {
+        start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active())
+            .await?;
+    }
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
 
@@ -254,6 +258,7 @@ pub async fn run_config_gen(
     } else {
         IrohConnector::new(
             cg_params.iroh_p2p_sk.clone().unwrap(),
+            settings.p2p_bind,
             cg_params
                 .iroh_endpoints()
                 .iter()
