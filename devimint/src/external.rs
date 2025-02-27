@@ -1214,22 +1214,25 @@ impl Esplora {
 #[allow(unused)]
 pub struct ExternalDaemons {
     pub bitcoind: Bitcoind,
-    pub cln: Lightningd,
-    pub lnd: Lnd,
+    pub gw_ldk: Gatewayd,
+    pub gw_lnd: Gatewayd,
     pub electrs: Electrs,
     pub esplora: Esplora,
 }
 
 pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDaemons> {
-    let start_time = fedimint_core::time::now();
     let bitcoind = Bitcoind::new(process_mgr, false).await?;
-    let (cln, lnd, electrs, esplora) = tokio::try_join!(
-        Lightningd::new(process_mgr, bitcoind.clone()),
-        Lnd::new(process_mgr, bitcoind.clone()),
+    let lnd = Lnd::new(process_mgr, bitcoind.clone()).await?;
+    let (gw_ldk, gw_lnd, electrs, esplora) = tokio::try_join!(
+        Gatewayd::new(process_mgr, LightningNode::Ldk),
+        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd)),
         Electrs::new(process_mgr, bitcoind.clone()),
         Esplora::new(process_mgr, bitcoind.clone()),
     )?;
-    open_channel(process_mgr, &bitcoind, &cln, &lnd).await?;
+    let gateways: &[NamedGateway<'_>] = &[(&gw_lnd, "LND"), (&gw_ldk, "LDK")];
+    debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
+    let start_time = fedimint_core::time::now();
+    open_channels_between_gateways(&bitcoind, gateways).await?;
     // make sure the bitcoind wallet is ready
     let _ = bitcoind.wallet_client().await?;
     info!(
@@ -1239,8 +1242,8 @@ pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDa
     );
     Ok(ExternalDaemons {
         bitcoind,
-        cln,
-        lnd,
+        gw_ldk,
+        gw_lnd,
         electrs,
         esplora,
     })
