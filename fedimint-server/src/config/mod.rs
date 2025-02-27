@@ -176,6 +176,14 @@ pub fn legacy_consensus_config_hash(cfg: &ServerConfigConsensus) -> sha256::Hash
     .consensus_hash_sha256()
 }
 
+/// The type of networking `fedimintd` should use
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub enum NetworkingStack {
+    #[default]
+    Tcp,
+    Iroh,
+}
+
 // FIXME: (@leonardo) Should this have another field for the expected transport
 // ? (e.g. clearnet/tor/...)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -206,6 +214,10 @@ pub struct ConfigGenSettings {
     pub p2p_url: SafeUrl,
     /// URL for our API connection
     pub api_url: SafeUrl,
+    /// Networking stack to use
+    /// TODO: we might make it a part of the API  request when ready
+    /// (move to `SetLocalParamsRequest`).
+    pub networking: NetworkingStack,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
     /// Set the params (if leader) or just the local params (if follower)

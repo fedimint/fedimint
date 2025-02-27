@@ -165,7 +165,13 @@ pub async fn run(
     .await;
 
     if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
-        Box::pin(start_iroh_api(iroh_api_sk, consensus_api, task_group)).await;
+        Box::pin(start_iroh_api(
+            iroh_api_sk,
+            api_bind_addr,
+            consensus_api,
+            task_group,
+        ))
+        .await;
     }
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
@@ -315,17 +321,22 @@ fn submit_module_ci_proposals(
 
 async fn start_iroh_api(
     secret_key: iroh::SecretKey,
+    bind_addr: SocketAddr,
     consensus_api: ConsensusApi,
     task_group: &TaskGroup,
 ) {
-    let endpoint = Endpoint::builder()
+    let builder = Endpoint::builder()
         .discovery_n0()
         .discovery_dht()
         .secret_key(secret_key)
-        .alpns(vec![FEDIMINT_API_ALPN.to_vec()])
-        .bind()
-        .await
-        .expect("Failed to bind iroh api");
+        .alpns(vec![FEDIMINT_API_ALPN.to_vec()]);
+
+    let builder = match bind_addr {
+        SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
+        SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
+    };
+
+    let endpoint = builder.bind().await.expect("Failed to bind iroh api");
 
     task_group.spawn_cancellable(
         "iroh-api",

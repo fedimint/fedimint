@@ -2018,6 +2018,7 @@ dependencies = [
  "fs-lock",
  "futures",
  "hex",
+ "iroh-base",
  "itertools 0.13.0",
  "nix 0.29.0",
  "rand 0.8.5",

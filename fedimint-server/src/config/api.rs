@@ -27,7 +27,9 @@ use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
 
 use super::PeerEndpoints;
-use crate::config::{ConfigGenParams, ConfigGenSettings, PeerConnectionInfo, gen_cert_and_key};
+use crate::config::{
+    ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerConnectionInfo, gen_cert_and_key,
+};
 use crate::net::api::{ApiResult, HasApiContext, check_auth};
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -137,49 +139,56 @@ impl ConfigGenApi {
             return Ok(info);
         }
 
-        let lp = if true {
-            let (tls_cert, tls_key) = gen_cert_and_key(&request.name)
-                .expect("Failed to generate TLS for given guardian name");
+        let lp = match self.settings.networking {
+            NetworkingStack::Tcp => {
+                let (tls_cert, tls_key) = gen_cert_and_key(&request.name)
+                    .expect("Failed to generate TLS for given guardian name");
 
-            LocalParams {
-                auth,
-                tls_key: Some(tls_key),
-                iroh_api_sk: None,
-                iroh_p2p_sk: None,
-                endpoints: PeerEndpoints::Tcp {
-                    api_url: self.settings.api_url.clone(),
-                    p2p_url: self.settings.p2p_url.clone(),
-                    cert: tls_cert.0,
-                },
-                name: request.name,
-                federation_name: request.federation_name,
+                LocalParams {
+                    auth,
+                    tls_key: Some(tls_key),
+                    iroh_api_sk: None,
+                    iroh_p2p_sk: None,
+                    endpoints: PeerEndpoints::Tcp {
+                        api_url: self.settings.api_url.clone(),
+                        p2p_url: self.settings.p2p_url.clone(),
+                        cert: tls_cert.0,
+                    },
+                    name: request.name,
+                    federation_name: request.federation_name,
+                }
             }
-        } else {
-            let iroh_api_sk = if let Ok(var) = std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV) {
-                SecretKey::from_str(&var)
-                    .with_context(|| format!("Parsing {FM_IROH_API_SECRET_KEY_OVERRIDE_ENV}"))?
-            } else {
-                SecretKey::generate(&mut OsRng)
-            };
+            NetworkingStack::Iroh => {
+                let iroh_api_sk = if let Ok(var) =
+                    std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV)
+                {
+                    SecretKey::from_str(&var)
+                        .with_context(|| format!("Parsing {FM_IROH_API_SECRET_KEY_OVERRIDE_ENV}"))?
+                } else {
+                    SecretKey::generate(&mut OsRng)
+                };
 
-            let iroh_p2p_sk = if let Ok(var) = std::env::var(FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV) {
-                SecretKey::from_str(&var)
-                    .with_context(|| format!("Parsing {FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV}"))?
-            } else {
-                SecretKey::generate(&mut OsRng)
-            };
+                let iroh_p2p_sk = if let Ok(var) =
+                    std::env::var(FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV)
+                {
+                    SecretKey::from_str(&var)
+                        .with_context(|| format!("Parsing {FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV}"))?
+                } else {
+                    SecretKey::generate(&mut OsRng)
+                };
 
-            LocalParams {
-                auth,
-                tls_key: None,
-                iroh_api_sk: Some(iroh_api_sk.clone()),
-                iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
-                endpoints: PeerEndpoints::Iroh {
-                    api_pk: iroh_api_sk.public(),
-                    p2p_pk: iroh_p2p_sk.public(),
-                },
-                name: request.name,
-                federation_name: request.federation_name,
+                LocalParams {
+                    auth,
+                    tls_key: None,
+                    iroh_api_sk: Some(iroh_api_sk.clone()),
+                    iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
+                    endpoints: PeerEndpoints::Iroh {
+                        api_pk: iroh_api_sk.public(),
+                        p2p_pk: iroh_p2p_sk.public(),
+                    },
+                    name: request.name,
+                    federation_name: request.federation_name,
+                }
             }
         };
 

@@ -20,10 +20,9 @@ use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::block_on;
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, PeerId};
+use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_testing::ln::LightningNodeType;
@@ -45,6 +44,15 @@ use crate::util::{FedimintdCmd, poll, poll_with_timeout};
 use crate::version_constants::VERSION_0_7_0_ALPHA;
 use crate::{poll_eq, vars};
 
+// TODO: Are we still using the 3rd port for anything?
+/// Number of ports we allocate for every `fedimintd` instance
+pub const PORTS_PER_FEDIMINTD: u16 = 3;
+/// Which port is for p2p inside the range from [`PORTS_PER_FEDIMINTD`]
+pub const FEDIMINTD_P2P_PORT_OFFSET: u16 = 0;
+/// Which port is for api inside the range from [`PORTS_PER_FEDIMINTD`]
+pub const FEDIMINTD_API_PORT_OFFSET: u16 = 1;
+/// Which port is for prometheus inside the range from [`PORTS_PER_FEDIMINTD`]
+pub const FEDIMINTD_METRICS_PORT_OFFSET: u16 = 2;
 #[derive(Clone)]
 pub struct Federation {
     // client is only for internal use, use cli commands instead
@@ -283,37 +291,41 @@ impl Federation {
     pub async fn new(
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
-        servers: usize,
         skip_setup: bool,
+        // Which of the pre-allocated federations to use (most tests just use single `0` one)
+        fed_index: usize,
         federation_name: String,
     ) -> Result<Self> {
+        let num_peers = NumPeers::from(process_mgr.globals.FM_FED_SIZE);
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
 
-        let peers: Vec<_> = (0..servers).map(|id| PeerId::from(id as u16)).collect();
-        let base_port = port_alloc((3 * servers).try_into().unwrap())?;
+        let peers: Vec<_> = num_peers.peer_ids().collect();
         let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
             &peers,
-            base_port,
+            process_mgr.globals.FM_FEDERATION_BASE_PORT,
             &ServerModuleConfigGenParamsRegistry::default(),
         )?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
-        for (peer, peer_params) in &params {
+        for peer_id in num_peers.peer_ids() {
             let peer_env_vars = vars::Fedimintd::init(
                 &process_mgr.globals,
-                peer_params.to_owned(),
                 federation_name.clone(),
-                base_port,
+                peer_id,
+                process_mgr
+                    .globals
+                    .fedimintd_overrides
+                    .peer_expect(fed_index, peer_id),
             )
             .await?;
             members.insert(
-                peer.to_usize(),
+                peer_id.to_usize(),
                 Fedimintd::new(
                     process_mgr,
                     bitcoind.clone(),
-                    peer.to_usize(),
+                    peer_id.to_usize(),
                     &peer_env_vars,
                     federation_name.clone(),
                 )
@@ -324,9 +336,9 @@ impl Federation {
                 &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
             )
             .await?;
-            endpoints.insert(*peer, peer_env_vars.FM_API_URL.clone());
-            admin_clients.insert(*peer, admin_client);
-            peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);
+            endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
+            admin_clients.insert(peer_id, admin_client);
+            peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);
         }
 
         if !skip_setup {
