@@ -279,265 +279,283 @@
 <a href=#279 id=279 data-nosnippet>279</a>                            <span class="kw">async </span>{
 <a href=#280 id=280 data-nosnippet>280</a>                                <span class="kw">let </span>(address, operation_id) =
 <a href=#281 id=281 data-nosnippet>281</a>                                    dev_fed.internal_client().<span class="kw">await</span><span class="question-mark">?</span>.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#282 id=282 data-nosnippet>282</a>                                dev_fed
-<a href=#283 id=283 data-nosnippet>283</a>                                    .bitcoind()
-<a href=#284 id=284 data-nosnippet>284</a>                                    .<span class="kw">await</span><span class="question-mark">?
-<a href=#285 id=285 data-nosnippet>285</a>                                    </span>.send_to(address, CLIENT_PEGIN_AMOUNT)
-<a href=#286 id=286 data-nosnippet>286</a>                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#287 id=287 data-nosnippet>287</a>                                <span class="prelude-val">Ok</span>(operation_id)
-<a href=#288 id=288 data-nosnippet>288</a>                            },
-<a href=#289 id=289 data-nosnippet>289</a>                            <span class="kw">async </span>{
-<a href=#290 id=290 data-nosnippet>290</a>                                <span class="kw">let </span>pegin_addr = dev_fed
-<a href=#291 id=291 data-nosnippet>291</a>                                    .gw_lnd_registered()
-<a href=#292 id=292 data-nosnippet>292</a>                                    .<span class="kw">await</span><span class="question-mark">?
-<a href=#293 id=293 data-nosnippet>293</a>                                    </span>.get_pegin_addr(<span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id())
-<a href=#294 id=294 data-nosnippet>294</a>                                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#295 id=295 data-nosnippet>295</a>                                dev_fed
-<a href=#296 id=296 data-nosnippet>296</a>                                    .bitcoind()
-<a href=#297 id=297 data-nosnippet>297</a>                                    .<span class="kw">await</span><span class="question-mark">?
-<a href=#298 id=298 data-nosnippet>298</a>                                    </span>.send_to(pegin_addr, GW_PEGIN_AMOUNT)
-<a href=#299 id=299 data-nosnippet>299</a>                                    .<span class="kw">await
-<a href=#300 id=300 data-nosnippet>300</a>                                    </span>.map(|<span class="kw">_</span>| ())
-<a href=#301 id=301 data-nosnippet>301</a>                            },
-<a href=#302 id=302 data-nosnippet>302</a>                            <span class="kw">async </span>{
-<a href=#303 id=303 data-nosnippet>303</a>                                <span class="kw">if </span><span class="kw">crate</span>::util::supports_lnv2() {
-<a href=#304 id=304 data-nosnippet>304</a>                                    <span class="kw">let </span>gw_ldk = dev_fed.gw_ldk_connected().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#305 id=305 data-nosnippet>305</a>                                    <span class="kw">let </span>pegin_addr = gw_ldk
-<a href=#306 id=306 data-nosnippet>306</a>                                        .get_pegin_addr(
-<a href=#307 id=307 data-nosnippet>307</a>                                            <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id(),
-<a href=#308 id=308 data-nosnippet>308</a>                                        )
-<a href=#309 id=309 data-nosnippet>309</a>                                        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#310 id=310 data-nosnippet>310</a>                                    dev_fed
-<a href=#311 id=311 data-nosnippet>311</a>                                        .bitcoind()
-<a href=#312 id=312 data-nosnippet>312</a>                                        .<span class="kw">await</span><span class="question-mark">?
-<a href=#313 id=313 data-nosnippet>313</a>                                        </span>.send_to(pegin_addr, GW_PEGIN_AMOUNT)
-<a href=#314 id=314 data-nosnippet>314</a>                                        .<span class="kw">await
-<a href=#315 id=315 data-nosnippet>315</a>                                        </span>.map(|<span class="kw">_</span>| ())
-<a href=#316 id=316 data-nosnippet>316</a>                                } <span class="kw">else </span>{
-<a href=#317 id=317 data-nosnippet>317</a>                                    <span class="prelude-val">Ok</span>(())
-<a href=#318 id=318 data-nosnippet>318</a>                                }
-<a href=#319 id=319 data-nosnippet>319</a>                            },
-<a href=#320 id=320 data-nosnippet>320</a>                        )<span class="question-mark">?</span>;
-<a href=#321 id=321 data-nosnippet>321</a>
-<a href=#322 id=322 data-nosnippet>322</a>                        dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#323 id=323 data-nosnippet>323</a>                        dev_fed
-<a href=#324 id=324 data-nosnippet>324</a>                            .internal_client()
-<a href=#325 id=325 data-nosnippet>325</a>                            .<span class="kw">await</span><span class="question-mark">?
-<a href=#326 id=326 data-nosnippet>326</a>                            </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
-<a href=#327 id=327 data-nosnippet>327</a>                            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#328 id=328 data-nosnippet>328</a>
-<a href=#329 id=329 data-nosnippet>329</a>                        <span class="macro">info!</span>(target: LOG_DEVIMINT,
-<a href=#330 id=330 data-nosnippet>330</a>                        elapsed_ms = %pegin_start_time.elapsed().as_millis(),
-<a href=#331 id=331 data-nosnippet>331</a>                        <span class="string">"Pegins completed"</span>);
-<a href=#332 id=332 data-nosnippet>332</a>                    }
-<a href=#333 id=333 data-nosnippet>333</a>
-<a href=#334 id=334 data-nosnippet>334</a>                    <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
-<a href=#335 id=335 data-nosnippet>335</a>                    </span><span class="kw">unsafe </span>{
-<a href=#336 id=336 data-nosnippet>336</a>                        std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>);
-<a href=#337 id=337 data-nosnippet>337</a>                    };
-<a href=#338 id=338 data-nosnippet>338</a>
-<a href=#339 id=339 data-nosnippet>339</a>                    dev_fed.finalize(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#340 id=340 data-nosnippet>340</a>
-<a href=#341 id=341 data-nosnippet>341</a>                    <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#342 id=342 data-nosnippet>342</a>
-<a href=#343 id=343 data-nosnippet>343</a>                    <span class="macro">info!</span>(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), <span class="string">"Devfed ready"</span>);
-<a href=#344 id=344 data-nosnippet>344</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(exec) = exec {
-<a href=#345 id=345 data-nosnippet>345</a>                        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting exec command"</span>);
-<a href=#346 id=346 data-nosnippet>346</a>                        exec_user_command(exec).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#347 id=347 data-nosnippet>347</a>                        task_group.shutdown();
-<a href=#348 id=348 data-nosnippet>348</a>                    }
-<a href=#349 id=349 data-nosnippet>349</a>
-<a href=#350 id=350 data-nosnippet>350</a>                    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Waiting for group task shutdown"</span>);
-<a href=#351 id=351 data-nosnippet>351</a>                    task_group.make_handle().make_shutdown_rx().<span class="kw">await</span>;
-<a href=#352 id=352 data-nosnippet>352</a>
-<a href=#353 id=353 data-nosnippet>353</a>                    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(daemons)
-<a href=#354 id=354 data-nosnippet>354</a>                }
-<a href=#355 id=355 data-nosnippet>355</a>            };
-<a href=#356 id=356 data-nosnippet>356</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fed) = cleanup_on_exit(main, task_group).<span class="kw">await</span><span class="question-mark">? </span>{
-<a href=#357 id=357 data-nosnippet>357</a>                fed.fast_terminate().<span class="kw">await</span>;
-<a href=#358 id=358 data-nosnippet>358</a>            }
-<a href=#359 id=359 data-nosnippet>359</a>        }
-<a href=#360 id=360 data-nosnippet>360</a>        Cmd::Rpc(rpc_cmd) =&gt; rpc_command(rpc_cmd, common_args).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#361 id=361 data-nosnippet>361</a>        Cmd::RunUi =&gt; {
-<a href=#362 id=362 data-nosnippet>362</a>            <span class="kw">let </span>(process_mgr, task_group) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#363 id=363 data-nosnippet>363</a>            <span class="kw">let </span>task_group_clone = task_group.clone();
-<a href=#364 id=364 data-nosnippet>364</a>            <span class="kw">let </span>main = <span class="kw">async </span>{
-<a href=#365 id=365 data-nosnippet>365</a>                <span class="kw">let </span>result = run_ui(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span>;
-<a href=#366 id=366 data-nosnippet>366</a>                <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, result).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#282 id=282 data-nosnippet>282</a>                                <span class="macro">debug!</span>(
+<a href=#283 id=283 data-nosnippet>283</a>                                    target: LOG_DEVIMINT,
+<a href=#284 id=284 data-nosnippet>284</a>                                    %address,
+<a href=#285 id=285 data-nosnippet>285</a>                                    %operation_id,
+<a href=#286 id=286 data-nosnippet>286</a>                                    <span class="string">"Sending funds to client deposit addr"
+<a href=#287 id=287 data-nosnippet>287</a>                                </span>);
+<a href=#288 id=288 data-nosnippet>288</a>                                dev_fed
+<a href=#289 id=289 data-nosnippet>289</a>                                    .bitcoind()
+<a href=#290 id=290 data-nosnippet>290</a>                                    .<span class="kw">await</span><span class="question-mark">?
+<a href=#291 id=291 data-nosnippet>291</a>                                    </span>.send_to(address, CLIENT_PEGIN_AMOUNT)
+<a href=#292 id=292 data-nosnippet>292</a>                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#293 id=293 data-nosnippet>293</a>                                <span class="prelude-val">Ok</span>(operation_id)
+<a href=#294 id=294 data-nosnippet>294</a>                            },
+<a href=#295 id=295 data-nosnippet>295</a>                            <span class="kw">async </span>{
+<a href=#296 id=296 data-nosnippet>296</a>                                <span class="kw">let </span>address = dev_fed
+<a href=#297 id=297 data-nosnippet>297</a>                                    .gw_lnd_registered()
+<a href=#298 id=298 data-nosnippet>298</a>                                    .<span class="kw">await</span><span class="question-mark">?
+<a href=#299 id=299 data-nosnippet>299</a>                                    </span>.get_pegin_addr(<span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id())
+<a href=#300 id=300 data-nosnippet>300</a>                                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#301 id=301 data-nosnippet>301</a>                                <span class="macro">debug!</span>(
+<a href=#302 id=302 data-nosnippet>302</a>                                    target: LOG_DEVIMINT,
+<a href=#303 id=303 data-nosnippet>303</a>                                    %address,
+<a href=#304 id=304 data-nosnippet>304</a>                                    <span class="string">"Sending funds to LND deposit addr"
+<a href=#305 id=305 data-nosnippet>305</a>                                </span>);
+<a href=#306 id=306 data-nosnippet>306</a>                                dev_fed
+<a href=#307 id=307 data-nosnippet>307</a>                                    .bitcoind()
+<a href=#308 id=308 data-nosnippet>308</a>                                    .<span class="kw">await</span><span class="question-mark">?
+<a href=#309 id=309 data-nosnippet>309</a>                                    </span>.send_to(address, GW_PEGIN_AMOUNT)
+<a href=#310 id=310 data-nosnippet>310</a>                                    .<span class="kw">await
+<a href=#311 id=311 data-nosnippet>311</a>                                    </span>.map(|<span class="kw">_</span>| ())
+<a href=#312 id=312 data-nosnippet>312</a>                            },
+<a href=#313 id=313 data-nosnippet>313</a>                            <span class="kw">async </span>{
+<a href=#314 id=314 data-nosnippet>314</a>                                <span class="kw">if </span><span class="kw">crate</span>::util::supports_lnv2() {
+<a href=#315 id=315 data-nosnippet>315</a>                                    <span class="kw">let </span>gw_ldk = dev_fed.gw_ldk_connected().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#316 id=316 data-nosnippet>316</a>                                    <span class="kw">let </span>address = gw_ldk
+<a href=#317 id=317 data-nosnippet>317</a>                                        .get_pegin_addr(
+<a href=#318 id=318 data-nosnippet>318</a>                                            <span class="kw-2">&amp;</span>dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id(),
+<a href=#319 id=319 data-nosnippet>319</a>                                        )
+<a href=#320 id=320 data-nosnippet>320</a>                                        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#321 id=321 data-nosnippet>321</a>                                    <span class="macro">debug!</span>(
+<a href=#322 id=322 data-nosnippet>322</a>                                        target: LOG_DEVIMINT,
+<a href=#323 id=323 data-nosnippet>323</a>                                        %address,
+<a href=#324 id=324 data-nosnippet>324</a>                                        <span class="string">"Sending funds to LDK deposit addr"
+<a href=#325 id=325 data-nosnippet>325</a>                                    </span>);
+<a href=#326 id=326 data-nosnippet>326</a>                                    dev_fed
+<a href=#327 id=327 data-nosnippet>327</a>                                        .bitcoind()
+<a href=#328 id=328 data-nosnippet>328</a>                                        .<span class="kw">await</span><span class="question-mark">?
+<a href=#329 id=329 data-nosnippet>329</a>                                        </span>.send_to(address, GW_PEGIN_AMOUNT)
+<a href=#330 id=330 data-nosnippet>330</a>                                        .<span class="kw">await
+<a href=#331 id=331 data-nosnippet>331</a>                                        </span>.map(|<span class="kw">_</span>| ())
+<a href=#332 id=332 data-nosnippet>332</a>                                } <span class="kw">else </span>{
+<a href=#333 id=333 data-nosnippet>333</a>                                    <span class="prelude-val">Ok</span>(())
+<a href=#334 id=334 data-nosnippet>334</a>                                }
+<a href=#335 id=335 data-nosnippet>335</a>                            },
+<a href=#336 id=336 data-nosnippet>336</a>                        )<span class="question-mark">?</span>;
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>                        dev_fed.bitcoind().<span class="kw">await</span><span class="question-mark">?</span>.mine_blocks_no_wait(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#339 id=339 data-nosnippet>339</a>                        dev_fed
+<a href=#340 id=340 data-nosnippet>340</a>                            .internal_client()
+<a href=#341 id=341 data-nosnippet>341</a>                            .<span class="kw">await</span><span class="question-mark">?
+<a href=#342 id=342 data-nosnippet>342</a>                            </span>.await_deposit(<span class="kw-2">&amp;</span>operation_id)
+<a href=#343 id=343 data-nosnippet>343</a>                            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>                        <span class="macro">info!</span>(
+<a href=#346 id=346 data-nosnippet>346</a>                            target: LOG_DEVIMINT,
+<a href=#347 id=347 data-nosnippet>347</a>                            elapsed_ms = %pegin_start_time.elapsed().as_millis(),
+<a href=#348 id=348 data-nosnippet>348</a>                            <span class="string">"Pegins completed"
+<a href=#349 id=349 data-nosnippet>349</a>                        </span>);
+<a href=#350 id=350 data-nosnippet>350</a>                    }
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a>                    <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
+<a href=#353 id=353 data-nosnippet>353</a>                    </span><span class="kw">unsafe </span>{
+<a href=#354 id=354 data-nosnippet>354</a>                        std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.invite_code()<span class="question-mark">?</span>);
+<a href=#355 id=355 data-nosnippet>355</a>                    };
+<a href=#356 id=356 data-nosnippet>356</a>
+<a href=#357 id=357 data-nosnippet>357</a>                    dev_fed.finalize(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a>                    <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>                    <span class="macro">info!</span>(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), <span class="string">"Devfed ready"</span>);
+<a href=#362 id=362 data-nosnippet>362</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(exec) = exec {
+<a href=#363 id=363 data-nosnippet>363</a>                        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting exec command"</span>);
+<a href=#364 id=364 data-nosnippet>364</a>                        exec_user_command(exec).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#365 id=365 data-nosnippet>365</a>                        task_group.shutdown();
+<a href=#366 id=366 data-nosnippet>366</a>                    }
 <a href=#367 id=367 data-nosnippet>367</a>
-<a href=#368 id=368 data-nosnippet>368</a>                <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Waiting for group task shutdown"</span>);
-<a href=#369 id=369 data-nosnippet>369</a>                task_group_clone.make_handle().make_shutdown_rx().<span class="kw">await</span>;
+<a href=#368 id=368 data-nosnippet>368</a>                    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Waiting for group task shutdown"</span>);
+<a href=#369 id=369 data-nosnippet>369</a>                    task_group.make_handle().make_shutdown_rx().<span class="kw">await</span>;
 <a href=#370 id=370 data-nosnippet>370</a>
-<a href=#371 id=371 data-nosnippet>371</a>                <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(daemons)
-<a href=#372 id=372 data-nosnippet>372</a>            };
-<a href=#373 id=373 data-nosnippet>373</a>            Box::pin(cleanup_on_exit(main, task_group)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#374 id=374 data-nosnippet>374</a>        }
-<a href=#375 id=375 data-nosnippet>375</a>        Cmd::Faucet(opts) =&gt; <span class="kw">crate</span>::faucet::run(opts).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#376 id=376 data-nosnippet>376</a>    }
-<a href=#377 id=377 data-nosnippet>377</a>    <span class="prelude-val">Ok</span>(())
-<a href=#378 id=378 data-nosnippet>378</a>}
-<a href=#379 id=379 data-nosnippet>379</a>
-<a href=#380 id=380 data-nosnippet>380</a><span class="kw">pub async fn </span>exec_user_command(path: Vec&lt;ffi::OsString&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-<a href=#381 id=381 data-nosnippet>381</a>    <span class="kw">let </span>cmd_str = path
-<a href=#382 id=382 data-nosnippet>382</a>        .join(ffi::OsStr::new(<span class="string">" "</span>))
-<a href=#383 id=383 data-nosnippet>383</a>        .to_string_lossy()
-<a href=#384 id=384 data-nosnippet>384</a>        .to_string();
+<a href=#371 id=371 data-nosnippet>371</a>                    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(daemons)
+<a href=#372 id=372 data-nosnippet>372</a>                }
+<a href=#373 id=373 data-nosnippet>373</a>            };
+<a href=#374 id=374 data-nosnippet>374</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(fed) = cleanup_on_exit(main, task_group).<span class="kw">await</span><span class="question-mark">? </span>{
+<a href=#375 id=375 data-nosnippet>375</a>                fed.fast_terminate().<span class="kw">await</span>;
+<a href=#376 id=376 data-nosnippet>376</a>            }
+<a href=#377 id=377 data-nosnippet>377</a>        }
+<a href=#378 id=378 data-nosnippet>378</a>        Cmd::Rpc(rpc_cmd) =&gt; rpc_command(rpc_cmd, common_args).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#379 id=379 data-nosnippet>379</a>        Cmd::RunUi =&gt; {
+<a href=#380 id=380 data-nosnippet>380</a>            <span class="kw">let </span>(process_mgr, task_group) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#381 id=381 data-nosnippet>381</a>            <span class="kw">let </span>task_group_clone = task_group.clone();
+<a href=#382 id=382 data-nosnippet>382</a>            <span class="kw">let </span>main = <span class="kw">async </span>{
+<a href=#383 id=383 data-nosnippet>383</a>                <span class="kw">let </span>result = run_ui(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span>;
+<a href=#384 id=384 data-nosnippet>384</a>                <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, result).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#385 id=385 data-nosnippet>385</a>
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">let </span>path_with_aliases = <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_path) = env::var_os(<span class="string">"PATH"</span>) {
-<a href=#387 id=387 data-nosnippet>387</a>        <span class="kw">let </span><span class="kw-2">mut </span>path = devimint_static_data_dir();
-<a href=#388 id=388 data-nosnippet>388</a>        path.push(<span class="string">"/aliases:"</span>);
-<a href=#389 id=389 data-nosnippet>389</a>        path.push(existing_path);
-<a href=#390 id=390 data-nosnippet>390</a>        path
-<a href=#391 id=391 data-nosnippet>391</a>    } <span class="kw">else </span>{
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span><span class="kw-2">mut </span>path = devimint_static_data_dir();
-<a href=#393 id=393 data-nosnippet>393</a>        path.push(<span class="string">"/aliases"</span>);
-<a href=#394 id=394 data-nosnippet>394</a>        path
-<a href=#395 id=395 data-nosnippet>395</a>    };
-<a href=#396 id=396 data-nosnippet>396</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, cmd = %cmd_str, <span class="string">"Executing user command"</span>);
-<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">if </span>!tokio::process::Command::new(<span class="kw-2">&amp;</span>path[<span class="number">0</span>])
-<a href=#398 id=398 data-nosnippet>398</a>        .args(<span class="kw-2">&amp;</span>path[<span class="number">1</span>..])
-<a href=#399 id=399 data-nosnippet>399</a>        .env(<span class="string">"PATH"</span>, path_with_aliases)
-<a href=#400 id=400 data-nosnippet>400</a>        .kill_on_drop(<span class="bool-val">true</span>)
-<a href=#401 id=401 data-nosnippet>401</a>        .status()
-<a href=#402 id=402 data-nosnippet>402</a>        .<span class="kw">await
-<a href=#403 id=403 data-nosnippet>403</a>        </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"Executing user command failed: {cmd_str}"</span>))<span class="question-mark">?
-<a href=#404 id=404 data-nosnippet>404</a>        </span>.success()
-<a href=#405 id=405 data-nosnippet>405</a>    {
-<a href=#406 id=406 data-nosnippet>406</a>        <span class="macro">error!</span>(cmd = %cmd_str, <span class="string">"User command failed"</span>);
-<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"User command failed: {cmd_str}"</span>));
-<a href=#408 id=408 data-nosnippet>408</a>    }
-<a href=#409 id=409 data-nosnippet>409</a>    <span class="prelude-val">Ok</span>(())
-<a href=#410 id=410 data-nosnippet>410</a>}
-<a href=#411 id=411 data-nosnippet>411</a>
-<a href=#412 id=412 data-nosnippet>412</a><span class="kw">fn </span>devimint_static_data_dir() -&gt; ffi::OsString {
-<a href=#413 id=413 data-nosnippet>413</a>    <span class="comment">// If set, use the runtime, otherwise the compile time value
-<a href=#414 id=414 data-nosnippet>414</a>    </span>env::var_os(FM_DEVIMINT_STATIC_DATA_DIR_ENV).unwrap_or(
-<a href=#415 id=415 data-nosnippet>415</a>        <span class="macro">env!</span>(
-<a href=#416 id=416 data-nosnippet>416</a>            <span class="comment">// Note: consant expression, not allowed, so we can't use the constant :/
-<a href=#417 id=417 data-nosnippet>417</a>            </span><span class="string">"FM_DEVIMINT_STATIC_DATA_DIR"
-<a href=#418 id=418 data-nosnippet>418</a>        </span>)
-<a href=#419 id=419 data-nosnippet>419</a>        .into(),
-<a href=#420 id=420 data-nosnippet>420</a>    )
-<a href=#421 id=421 data-nosnippet>421</a>}
-<a href=#422 id=422 data-nosnippet>422</a>
-<a href=#423 id=423 data-nosnippet>423</a><span class="kw">pub async fn </span>rpc_command(rpc: RpcCmd, common: CommonArgs) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#424 id=424 data-nosnippet>424</a>    fedimint_logging::TracingSetup::default().init()<span class="question-mark">?</span>;
-<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">match </span>rpc {
-<a href=#426 id=426 data-nosnippet>426</a>        RpcCmd::Env =&gt; {
-<a href=#427 id=427 data-nosnippet>427</a>            <span class="kw">let </span>env_file = common.test_dir().join(<span class="string">"env"</span>);
-<a href=#428 id=428 data-nosnippet>428</a>            poll(<span class="string">"env file"</span>, || <span class="kw">async </span>{
-<a href=#429 id=429 data-nosnippet>429</a>                <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>env_file)
-<a href=#430 id=430 data-nosnippet>430</a>                    .<span class="kw">await
-<a href=#431 id=431 data-nosnippet>431</a>                    </span>.context(<span class="string">"env file"</span>)
-<a href=#432 id=432 data-nosnippet>432</a>                    .map_err(ControlFlow::Continue)<span class="question-mark">?
-<a href=#433 id=433 data-nosnippet>433</a>                </span>{
-<a href=#434 id=434 data-nosnippet>434</a>                    <span class="prelude-val">Ok</span>(())
-<a href=#435 id=435 data-nosnippet>435</a>                } <span class="kw">else </span>{
-<a href=#436 id=436 data-nosnippet>436</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"env file not found"</span>)))
-<a href=#437 id=437 data-nosnippet>437</a>                }
-<a href=#438 id=438 data-nosnippet>438</a>            })
-<a href=#439 id=439 data-nosnippet>439</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#440 id=440 data-nosnippet>440</a>            <span class="kw">let </span>env = fs::read_to_string(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#441 id=441 data-nosnippet>441</a>            <span class="macro">print!</span>(<span class="string">"{env}"</span>);
-<a href=#442 id=442 data-nosnippet>442</a>            <span class="prelude-val">Ok</span>(())
-<a href=#443 id=443 data-nosnippet>443</a>        }
-<a href=#444 id=444 data-nosnippet>444</a>        RpcCmd::Wait =&gt; {
-<a href=#445 id=445 data-nosnippet>445</a>            <span class="kw">let </span>ready_file = common.test_dir().join(<span class="string">"ready"</span>);
-<a href=#446 id=446 data-nosnippet>446</a>            poll(<span class="string">"ready file"</span>, || <span class="kw">async </span>{
-<a href=#447 id=447 data-nosnippet>447</a>                <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>ready_file)
+<a href=#386 id=386 data-nosnippet>386</a>                <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Waiting for group task shutdown"</span>);
+<a href=#387 id=387 data-nosnippet>387</a>                task_group_clone.make_handle().make_shutdown_rx().<span class="kw">await</span>;
+<a href=#388 id=388 data-nosnippet>388</a>
+<a href=#389 id=389 data-nosnippet>389</a>                <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(daemons)
+<a href=#390 id=390 data-nosnippet>390</a>            };
+<a href=#391 id=391 data-nosnippet>391</a>            Box::pin(cleanup_on_exit(main, task_group)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#392 id=392 data-nosnippet>392</a>        }
+<a href=#393 id=393 data-nosnippet>393</a>        Cmd::Faucet(opts) =&gt; <span class="kw">crate</span>::faucet::run(opts).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#394 id=394 data-nosnippet>394</a>    }
+<a href=#395 id=395 data-nosnippet>395</a>    <span class="prelude-val">Ok</span>(())
+<a href=#396 id=396 data-nosnippet>396</a>}
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a><span class="kw">pub async fn </span>exec_user_command(path: Vec&lt;ffi::OsString&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+<a href=#399 id=399 data-nosnippet>399</a>    <span class="kw">let </span>cmd_str = path
+<a href=#400 id=400 data-nosnippet>400</a>        .join(ffi::OsStr::new(<span class="string">" "</span>))
+<a href=#401 id=401 data-nosnippet>401</a>        .to_string_lossy()
+<a href=#402 id=402 data-nosnippet>402</a>        .to_string();
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">let </span>path_with_aliases = <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_path) = env::var_os(<span class="string">"PATH"</span>) {
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">let </span><span class="kw-2">mut </span>path = devimint_static_data_dir();
+<a href=#406 id=406 data-nosnippet>406</a>        path.push(<span class="string">"/aliases:"</span>);
+<a href=#407 id=407 data-nosnippet>407</a>        path.push(existing_path);
+<a href=#408 id=408 data-nosnippet>408</a>        path
+<a href=#409 id=409 data-nosnippet>409</a>    } <span class="kw">else </span>{
+<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw">let </span><span class="kw-2">mut </span>path = devimint_static_data_dir();
+<a href=#411 id=411 data-nosnippet>411</a>        path.push(<span class="string">"/aliases"</span>);
+<a href=#412 id=412 data-nosnippet>412</a>        path
+<a href=#413 id=413 data-nosnippet>413</a>    };
+<a href=#414 id=414 data-nosnippet>414</a>    <span class="macro">debug!</span>(target: LOG_DEVIMINT, cmd = %cmd_str, <span class="string">"Executing user command"</span>);
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="kw">if </span>!tokio::process::Command::new(<span class="kw-2">&amp;</span>path[<span class="number">0</span>])
+<a href=#416 id=416 data-nosnippet>416</a>        .args(<span class="kw-2">&amp;</span>path[<span class="number">1</span>..])
+<a href=#417 id=417 data-nosnippet>417</a>        .env(<span class="string">"PATH"</span>, path_with_aliases)
+<a href=#418 id=418 data-nosnippet>418</a>        .kill_on_drop(<span class="bool-val">true</span>)
+<a href=#419 id=419 data-nosnippet>419</a>        .status()
+<a href=#420 id=420 data-nosnippet>420</a>        .<span class="kw">await
+<a href=#421 id=421 data-nosnippet>421</a>        </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"Executing user command failed: {cmd_str}"</span>))<span class="question-mark">?
+<a href=#422 id=422 data-nosnippet>422</a>        </span>.success()
+<a href=#423 id=423 data-nosnippet>423</a>    {
+<a href=#424 id=424 data-nosnippet>424</a>        <span class="macro">error!</span>(cmd = %cmd_str, <span class="string">"User command failed"</span>);
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"User command failed: {cmd_str}"</span>));
+<a href=#426 id=426 data-nosnippet>426</a>    }
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="prelude-val">Ok</span>(())
+<a href=#428 id=428 data-nosnippet>428</a>}
+<a href=#429 id=429 data-nosnippet>429</a>
+<a href=#430 id=430 data-nosnippet>430</a><span class="kw">fn </span>devimint_static_data_dir() -&gt; ffi::OsString {
+<a href=#431 id=431 data-nosnippet>431</a>    <span class="comment">// If set, use the runtime, otherwise the compile time value
+<a href=#432 id=432 data-nosnippet>432</a>    </span>env::var_os(FM_DEVIMINT_STATIC_DATA_DIR_ENV).unwrap_or(
+<a href=#433 id=433 data-nosnippet>433</a>        <span class="macro">env!</span>(
+<a href=#434 id=434 data-nosnippet>434</a>            <span class="comment">// Note: consant expression, not allowed, so we can't use the constant :/
+<a href=#435 id=435 data-nosnippet>435</a>            </span><span class="string">"FM_DEVIMINT_STATIC_DATA_DIR"
+<a href=#436 id=436 data-nosnippet>436</a>        </span>)
+<a href=#437 id=437 data-nosnippet>437</a>        .into(),
+<a href=#438 id=438 data-nosnippet>438</a>    )
+<a href=#439 id=439 data-nosnippet>439</a>}
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a><span class="kw">pub async fn </span>rpc_command(rpc: RpcCmd, common: CommonArgs) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#442 id=442 data-nosnippet>442</a>    fedimint_logging::TracingSetup::default().init()<span class="question-mark">?</span>;
+<a href=#443 id=443 data-nosnippet>443</a>    <span class="kw">match </span>rpc {
+<a href=#444 id=444 data-nosnippet>444</a>        RpcCmd::Env =&gt; {
+<a href=#445 id=445 data-nosnippet>445</a>            <span class="kw">let </span>env_file = common.test_dir().join(<span class="string">"env"</span>);
+<a href=#446 id=446 data-nosnippet>446</a>            poll(<span class="string">"env file"</span>, || <span class="kw">async </span>{
+<a href=#447 id=447 data-nosnippet>447</a>                <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>env_file)
 <a href=#448 id=448 data-nosnippet>448</a>                    .<span class="kw">await
-<a href=#449 id=449 data-nosnippet>449</a>                    </span>.context(<span class="string">"ready file"</span>)
+<a href=#449 id=449 data-nosnippet>449</a>                    </span>.context(<span class="string">"env file"</span>)
 <a href=#450 id=450 data-nosnippet>450</a>                    .map_err(ControlFlow::Continue)<span class="question-mark">?
 <a href=#451 id=451 data-nosnippet>451</a>                </span>{
 <a href=#452 id=452 data-nosnippet>452</a>                    <span class="prelude-val">Ok</span>(())
 <a href=#453 id=453 data-nosnippet>453</a>                } <span class="kw">else </span>{
-<a href=#454 id=454 data-nosnippet>454</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"ready file not found"</span>)))
+<a href=#454 id=454 data-nosnippet>454</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"env file not found"</span>)))
 <a href=#455 id=455 data-nosnippet>455</a>                }
 <a href=#456 id=456 data-nosnippet>456</a>            })
 <a href=#457 id=457 data-nosnippet>457</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#458 id=458 data-nosnippet>458</a>            <span class="kw">let </span>env = fs::read_to_string(<span class="kw-2">&amp;</span>ready_file).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#458 id=458 data-nosnippet>458</a>            <span class="kw">let </span>env = fs::read_to_string(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#459 id=459 data-nosnippet>459</a>            <span class="macro">print!</span>(<span class="string">"{env}"</span>);
-<a href=#460 id=460 data-nosnippet>460</a>
-<a href=#461 id=461 data-nosnippet>461</a>            <span class="comment">// Append invite code to devimint env
-<a href=#462 id=462 data-nosnippet>462</a>            </span><span class="kw">let </span>test_dir = <span class="kw-2">&amp;</span>common.test_dir();
-<a href=#463 id=463 data-nosnippet>463</a>            <span class="kw">let </span>env_file = test_dir.join(<span class="string">"env"</span>);
-<a href=#464 id=464 data-nosnippet>464</a>            <span class="kw">let </span>invite_file = test_dir.join(<span class="string">"cfg/invite-code"</span>);
-<a href=#465 id=465 data-nosnippet>465</a>            <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span>.ok().unwrap_or(<span class="bool-val">false</span>)
-<a href=#466 id=466 data-nosnippet>466</a>                &amp;&amp; fs::try_exists(<span class="kw-2">&amp;</span>invite_file).<span class="kw">await</span>.ok().unwrap_or(<span class="bool-val">false</span>)
-<a href=#467 id=467 data-nosnippet>467</a>            {
-<a href=#468 id=468 data-nosnippet>468</a>                <span class="kw">let </span>invite = fs::read_to_string(<span class="kw-2">&amp;</span>invite_file).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#469 id=469 data-nosnippet>469</a>                <span class="kw">let </span><span class="kw-2">mut </span>env_string = fs::read_to_string(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#470 id=470 data-nosnippet>470</a>                <span class="macro">writeln!</span>(env_string, <span class="string">r#"export FM_INVITE_CODE="{invite}""#</span>)<span class="question-mark">?</span>;
-<a href=#471 id=471 data-nosnippet>471</a>                <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
-<a href=#472 id=472 data-nosnippet>472</a>                </span><span class="kw">unsafe </span>{ std::env::set_var(FM_INVITE_CODE_ENV, invite) };
-<a href=#473 id=473 data-nosnippet>473</a>                write_overwrite_async(env_file, env_string).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#474 id=474 data-nosnippet>474</a>            }
-<a href=#475 id=475 data-nosnippet>475</a>
-<a href=#476 id=476 data-nosnippet>476</a>            <span class="prelude-val">Ok</span>(())
-<a href=#477 id=477 data-nosnippet>477</a>        }
-<a href=#478 id=478 data-nosnippet>478</a>    }
-<a href=#479 id=479 data-nosnippet>479</a>}
-<a href=#480 id=480 data-nosnippet>480</a>
-<a href=#481 id=481 data-nosnippet>481</a><span class="kw">async fn </span>run_ui(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;Fedimintd&gt;, ExternalDaemons)&gt; {
-<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">let </span>externals = external_daemons(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#483 id=483 data-nosnippet>483</a>    <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
-<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">let </span>fedimintds = futures::future::try_join_all((<span class="number">0</span>..fed_size).map(|peer| {
-<a href=#485 id=485 data-nosnippet>485</a>        <span class="kw">let </span>bitcoind = externals.bitcoind.clone();
-<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw">async move </span>{
-<a href=#487 id=487 data-nosnippet>487</a>            <span class="kw">let </span>peer_port = <span class="number">10000 </span>+ <span class="number">8137 </span>+ peer * <span class="number">2</span>;
-<a href=#488 id=488 data-nosnippet>488</a>            <span class="kw">let </span>api_port = peer_port + <span class="number">1</span>;
-<a href=#489 id=489 data-nosnippet>489</a>            <span class="kw">let </span>metrics_port = <span class="number">3510 </span>+ peer;
-<a href=#490 id=490 data-nosnippet>490</a>
-<a href=#491 id=491 data-nosnippet>491</a>            <span class="comment">// TODO: we should use this, and override ports that need to be fixed by an env
-<a href=#492 id=492 data-nosnippet>492</a>            // var and/or just scap `run-ui` altogether
-<a href=#493 id=493 data-nosnippet>493</a>            // let peer_id = PeerId::new(peer as u16);
-<a href=#494 id=494 data-nosnippet>494</a>            // let peer_env_vars = vars::Fedimintd::init(
-<a href=#495 id=495 data-nosnippet>495</a>            //     &amp;process_mgr.globals,
-<a href=#496 id=496 data-nosnippet>496</a>            //     "ui-test-federation".to_string(),
-<a href=#497 id=497 data-nosnippet>497</a>            //     peer_id,
-<a href=#498 id=498 data-nosnippet>498</a>            //     process_mgr.globals.fedimintd_overrides.peer_expect(peer_id),
-<a href=#499 id=499 data-nosnippet>499</a>            // )
-<a href=#500 id=500 data-nosnippet>500</a>            // .await?;
-<a href=#501 id=501 data-nosnippet>501</a>            </span><span class="kw">let </span>vars = vars::Fedimintd {
-<a href=#502 id=502 data-nosnippet>502</a>                FM_BIND_P2P: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{peer_port}"</span>),
-<a href=#503 id=503 data-nosnippet>503</a>                FM_P2P_URL: <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{peer_port}"</span>),
-<a href=#504 id=504 data-nosnippet>504</a>                FM_BIND_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{api_port}"</span>),
-<a href=#505 id=505 data-nosnippet>505</a>                FM_API_URL: <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{api_port}"</span>),
-<a href=#506 id=506 data-nosnippet>506</a>                FM_DATA_DIR: process_mgr
-<a href=#507 id=507 data-nosnippet>507</a>                    .globals
-<a href=#508 id=508 data-nosnippet>508</a>                    .FM_DATA_DIR
-<a href=#509 id=509 data-nosnippet>509</a>                    .join(<span class="macro">format!</span>(<span class="string">"fedimintd-{peer}"</span>)),
-<a href=#510 id=510 data-nosnippet>510</a>                FM_BIND_METRICS_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{metrics_port}"</span>),
-<a href=#511 id=511 data-nosnippet>511</a>                FM_FORCE_BITCOIN_RPC_URL: <span class="macro">format!</span>(
-<a href=#512 id=512 data-nosnippet>512</a>                    <span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>,
-<a href=#513 id=513 data-nosnippet>513</a>                    process_mgr.globals.FM_PORT_BTC_RPC
-<a href=#514 id=514 data-nosnippet>514</a>                ),
-<a href=#515 id=515 data-nosnippet>515</a>                FM_FORCE_BITCOIN_RPC_KIND: <span class="string">"bitcoind"</span>.into(),
-<a href=#516 id=516 data-nosnippet>516</a>                FM_IROH_P2P_SECRET_KEY_OVERRIDE: String::new(),
-<a href=#517 id=517 data-nosnippet>517</a>                FM_IROH_API_SECRET_KEY_OVERRIDE: String::new(),
-<a href=#518 id=518 data-nosnippet>518</a>            };
-<a href=#519 id=519 data-nosnippet>519</a>            <span class="kw">let </span>fm = Fedimintd::new(
-<a href=#520 id=520 data-nosnippet>520</a>                process_mgr,
-<a href=#521 id=521 data-nosnippet>521</a>                bitcoind.clone(),
-<a href=#522 id=522 data-nosnippet>522</a>                peer,
-<a href=#523 id=523 data-nosnippet>523</a>                <span class="kw-2">&amp;</span>vars,
-<a href=#524 id=524 data-nosnippet>524</a>                <span class="string">"default"</span>.to_string(),
-<a href=#525 id=525 data-nosnippet>525</a>            )
-<a href=#526 id=526 data-nosnippet>526</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#527 id=527 data-nosnippet>527</a>            <span class="kw">let </span>server_addr = <span class="kw-2">&amp;</span>vars.FM_BIND_API;
-<a href=#528 id=528 data-nosnippet>528</a>
-<a href=#529 id=529 data-nosnippet>529</a>            poll(<span class="string">"waiting for api startup"</span>, || <span class="kw">async </span>{
-<a href=#530 id=530 data-nosnippet>530</a>                TcpStream::connect(server_addr)
-<a href=#531 id=531 data-nosnippet>531</a>                    .<span class="kw">await
-<a href=#532 id=532 data-nosnippet>532</a>                    </span>.context(<span class="string">"connect to api"</span>)
-<a href=#533 id=533 data-nosnippet>533</a>                    .map_err(ControlFlow::Continue)
-<a href=#534 id=534 data-nosnippet>534</a>            })
-<a href=#535 id=535 data-nosnippet>535</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#536 id=536 data-nosnippet>536</a>
-<a href=#537 id=537 data-nosnippet>537</a>            anyhow::Ok(fm)
-<a href=#538 id=538 data-nosnippet>538</a>        }
-<a href=#539 id=539 data-nosnippet>539</a>    }))
-<a href=#540 id=540 data-nosnippet>540</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#541 id=541 data-nosnippet>541</a>
-<a href=#542 id=542 data-nosnippet>542</a>    <span class="prelude-val">Ok</span>((fedimintds, externals))
-<a href=#543 id=543 data-nosnippet>543</a>}</code></pre></div></section></main></body></html>
+<a href=#460 id=460 data-nosnippet>460</a>            <span class="prelude-val">Ok</span>(())
+<a href=#461 id=461 data-nosnippet>461</a>        }
+<a href=#462 id=462 data-nosnippet>462</a>        RpcCmd::Wait =&gt; {
+<a href=#463 id=463 data-nosnippet>463</a>            <span class="kw">let </span>ready_file = common.test_dir().join(<span class="string">"ready"</span>);
+<a href=#464 id=464 data-nosnippet>464</a>            poll(<span class="string">"ready file"</span>, || <span class="kw">async </span>{
+<a href=#465 id=465 data-nosnippet>465</a>                <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>ready_file)
+<a href=#466 id=466 data-nosnippet>466</a>                    .<span class="kw">await
+<a href=#467 id=467 data-nosnippet>467</a>                    </span>.context(<span class="string">"ready file"</span>)
+<a href=#468 id=468 data-nosnippet>468</a>                    .map_err(ControlFlow::Continue)<span class="question-mark">?
+<a href=#469 id=469 data-nosnippet>469</a>                </span>{
+<a href=#470 id=470 data-nosnippet>470</a>                    <span class="prelude-val">Ok</span>(())
+<a href=#471 id=471 data-nosnippet>471</a>                } <span class="kw">else </span>{
+<a href=#472 id=472 data-nosnippet>472</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"ready file not found"</span>)))
+<a href=#473 id=473 data-nosnippet>473</a>                }
+<a href=#474 id=474 data-nosnippet>474</a>            })
+<a href=#475 id=475 data-nosnippet>475</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#476 id=476 data-nosnippet>476</a>            <span class="kw">let </span>env = fs::read_to_string(<span class="kw-2">&amp;</span>ready_file).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#477 id=477 data-nosnippet>477</a>            <span class="macro">print!</span>(<span class="string">"{env}"</span>);
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="comment">// Append invite code to devimint env
+<a href=#480 id=480 data-nosnippet>480</a>            </span><span class="kw">let </span>test_dir = <span class="kw-2">&amp;</span>common.test_dir();
+<a href=#481 id=481 data-nosnippet>481</a>            <span class="kw">let </span>env_file = test_dir.join(<span class="string">"env"</span>);
+<a href=#482 id=482 data-nosnippet>482</a>            <span class="kw">let </span>invite_file = test_dir.join(<span class="string">"cfg/invite-code"</span>);
+<a href=#483 id=483 data-nosnippet>483</a>            <span class="kw">if </span>fs::try_exists(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span>.ok().unwrap_or(<span class="bool-val">false</span>)
+<a href=#484 id=484 data-nosnippet>484</a>                &amp;&amp; fs::try_exists(<span class="kw-2">&amp;</span>invite_file).<span class="kw">await</span>.ok().unwrap_or(<span class="bool-val">false</span>)
+<a href=#485 id=485 data-nosnippet>485</a>            {
+<a href=#486 id=486 data-nosnippet>486</a>                <span class="kw">let </span>invite = fs::read_to_string(<span class="kw-2">&amp;</span>invite_file).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#487 id=487 data-nosnippet>487</a>                <span class="kw">let </span><span class="kw-2">mut </span>env_string = fs::read_to_string(<span class="kw-2">&amp;</span>env_file).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#488 id=488 data-nosnippet>488</a>                <span class="macro">writeln!</span>(env_string, <span class="string">r#"export FM_INVITE_CODE="{invite}""#</span>)<span class="question-mark">?</span>;
+<a href=#489 id=489 data-nosnippet>489</a>                <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
+<a href=#490 id=490 data-nosnippet>490</a>                </span><span class="kw">unsafe </span>{ std::env::set_var(FM_INVITE_CODE_ENV, invite) };
+<a href=#491 id=491 data-nosnippet>491</a>                write_overwrite_async(env_file, env_string).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#492 id=492 data-nosnippet>492</a>            }
+<a href=#493 id=493 data-nosnippet>493</a>
+<a href=#494 id=494 data-nosnippet>494</a>            <span class="prelude-val">Ok</span>(())
+<a href=#495 id=495 data-nosnippet>495</a>        }
+<a href=#496 id=496 data-nosnippet>496</a>    }
+<a href=#497 id=497 data-nosnippet>497</a>}
+<a href=#498 id=498 data-nosnippet>498</a>
+<a href=#499 id=499 data-nosnippet>499</a><span class="kw">async fn </span>run_ui(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;Fedimintd&gt;, ExternalDaemons)&gt; {
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">let </span>externals = external_daemons(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="kw">let </span>fed_size = process_mgr.globals.FM_FED_SIZE;
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="kw">let </span>fedimintds = futures::future::try_join_all((<span class="number">0</span>..fed_size).map(|peer| {
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="kw">let </span>bitcoind = externals.bitcoind.clone();
+<a href=#504 id=504 data-nosnippet>504</a>        <span class="kw">async move </span>{
+<a href=#505 id=505 data-nosnippet>505</a>            <span class="kw">let </span>peer_port = <span class="number">10000 </span>+ <span class="number">8137 </span>+ peer * <span class="number">2</span>;
+<a href=#506 id=506 data-nosnippet>506</a>            <span class="kw">let </span>api_port = peer_port + <span class="number">1</span>;
+<a href=#507 id=507 data-nosnippet>507</a>            <span class="kw">let </span>metrics_port = <span class="number">3510 </span>+ peer;
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a>            <span class="comment">// TODO: we should use this, and override ports that need to be fixed by an env
+<a href=#510 id=510 data-nosnippet>510</a>            // var and/or just scap `run-ui` altogether
+<a href=#511 id=511 data-nosnippet>511</a>            // let peer_id = PeerId::new(peer as u16);
+<a href=#512 id=512 data-nosnippet>512</a>            // let peer_env_vars = vars::Fedimintd::init(
+<a href=#513 id=513 data-nosnippet>513</a>            //     &amp;process_mgr.globals,
+<a href=#514 id=514 data-nosnippet>514</a>            //     "ui-test-federation".to_string(),
+<a href=#515 id=515 data-nosnippet>515</a>            //     peer_id,
+<a href=#516 id=516 data-nosnippet>516</a>            //     process_mgr.globals.fedimintd_overrides.peer_expect(peer_id),
+<a href=#517 id=517 data-nosnippet>517</a>            // )
+<a href=#518 id=518 data-nosnippet>518</a>            // .await?;
+<a href=#519 id=519 data-nosnippet>519</a>            </span><span class="kw">let </span>vars = vars::Fedimintd {
+<a href=#520 id=520 data-nosnippet>520</a>                FM_BIND_P2P: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{peer_port}"</span>),
+<a href=#521 id=521 data-nosnippet>521</a>                FM_P2P_URL: <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{peer_port}"</span>),
+<a href=#522 id=522 data-nosnippet>522</a>                FM_BIND_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{api_port}"</span>),
+<a href=#523 id=523 data-nosnippet>523</a>                FM_API_URL: <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{api_port}"</span>),
+<a href=#524 id=524 data-nosnippet>524</a>                FM_DATA_DIR: process_mgr
+<a href=#525 id=525 data-nosnippet>525</a>                    .globals
+<a href=#526 id=526 data-nosnippet>526</a>                    .FM_DATA_DIR
+<a href=#527 id=527 data-nosnippet>527</a>                    .join(<span class="macro">format!</span>(<span class="string">"fedimintd-{peer}"</span>)),
+<a href=#528 id=528 data-nosnippet>528</a>                FM_BIND_METRICS_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{metrics_port}"</span>),
+<a href=#529 id=529 data-nosnippet>529</a>                FM_FORCE_BITCOIN_RPC_URL: <span class="macro">format!</span>(
+<a href=#530 id=530 data-nosnippet>530</a>                    <span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>,
+<a href=#531 id=531 data-nosnippet>531</a>                    process_mgr.globals.FM_PORT_BTC_RPC
+<a href=#532 id=532 data-nosnippet>532</a>                ),
+<a href=#533 id=533 data-nosnippet>533</a>                FM_FORCE_BITCOIN_RPC_KIND: <span class="string">"bitcoind"</span>.into(),
+<a href=#534 id=534 data-nosnippet>534</a>                FM_IROH_P2P_SECRET_KEY_OVERRIDE: String::new(),
+<a href=#535 id=535 data-nosnippet>535</a>                FM_IROH_API_SECRET_KEY_OVERRIDE: String::new(),
+<a href=#536 id=536 data-nosnippet>536</a>            };
+<a href=#537 id=537 data-nosnippet>537</a>            <span class="kw">let </span>fm = Fedimintd::new(
+<a href=#538 id=538 data-nosnippet>538</a>                process_mgr,
+<a href=#539 id=539 data-nosnippet>539</a>                bitcoind.clone(),
+<a href=#540 id=540 data-nosnippet>540</a>                peer,
+<a href=#541 id=541 data-nosnippet>541</a>                <span class="kw-2">&amp;</span>vars,
+<a href=#542 id=542 data-nosnippet>542</a>                <span class="string">"default"</span>.to_string(),
+<a href=#543 id=543 data-nosnippet>543</a>            )
+<a href=#544 id=544 data-nosnippet>544</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#545 id=545 data-nosnippet>545</a>            <span class="kw">let </span>server_addr = <span class="kw-2">&amp;</span>vars.FM_BIND_API;
+<a href=#546 id=546 data-nosnippet>546</a>
+<a href=#547 id=547 data-nosnippet>547</a>            poll(<span class="string">"waiting for api startup"</span>, || <span class="kw">async </span>{
+<a href=#548 id=548 data-nosnippet>548</a>                TcpStream::connect(server_addr)
+<a href=#549 id=549 data-nosnippet>549</a>                    .<span class="kw">await
+<a href=#550 id=550 data-nosnippet>550</a>                    </span>.context(<span class="string">"connect to api"</span>)
+<a href=#551 id=551 data-nosnippet>551</a>                    .map_err(ControlFlow::Continue)
+<a href=#552 id=552 data-nosnippet>552</a>            })
+<a href=#553 id=553 data-nosnippet>553</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#554 id=554 data-nosnippet>554</a>
+<a href=#555 id=555 data-nosnippet>555</a>            anyhow::Ok(fm)
+<a href=#556 id=556 data-nosnippet>556</a>        }
+<a href=#557 id=557 data-nosnippet>557</a>    }))
+<a href=#558 id=558 data-nosnippet>558</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#559 id=559 data-nosnippet>559</a>
+<a href=#560 id=560 data-nosnippet>560</a>    <span class="prelude-val">Ok</span>((fedimintds, externals))
+<a href=#561 id=561 data-nosnippet>561</a>}</code></pre></div></section></main></body></html>
