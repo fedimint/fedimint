@@ -45,6 +45,9 @@ pub const FM_TEST_DIR_ENV: &str = "FM_TEST_DIR";
 // Env variable to set the size of the federation
 pub const FM_FED_SIZE_ENV: &str = "FM_FED_SIZE";
 
+// Env variable to set the number of federations to allocate for the test/run
+pub const FM_NUM_FEDS_ENV: &str = "FM_NUM_FEDS";
+
 // Env variable to create a link to the test dir under this path
 pub const FM_LINK_TEST_DIR_ENV: &str = "FM_LINK_TEST_DIR";
 

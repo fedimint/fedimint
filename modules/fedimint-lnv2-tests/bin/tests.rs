@@ -13,18 +13,19 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
-        if !devimint::util::supports_lnv2() {
-            info!("lnv2 is disabled, skipping");
-            return Ok(());
-        }
+    devimint::run_devfed_test()
+        .call(|dev_fed, _process_mgr| async move {
+            if !devimint::util::supports_lnv2() {
+                info!("lnv2 is disabled, skipping");
+                return Ok(());
+            }
 
-        test_gateway_registration(&dev_fed).await?;
-        test_payments(&dev_fed).await?;
+            test_gateway_registration(&dev_fed).await?;
+            test_payments(&dev_fed).await?;
 
-        Ok(())
-    })
-    .await
+            Ok(())
+        })
+        .await
 }
 
 async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {

@@ -34,157 +34,158 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn wallet_recovery_test_1() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
-        let fedimint_cli_version = FedimintCli::version_or_default().await;
+    devimint::run_devfed_test()
+        .call(|dev_fed, _process_mgr| async move {
+            let fedimint_cli_version = FedimintCli::version_or_default().await;
 
-        let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
+            let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
-        let peg_in_amount_sats = 100_000;
+            let peg_in_amount_sats = 100_000;
 
-        // Start this client early, as we need to test waiting for session to close
-        let client_slow = fed
-            .new_joined_client("wallet-client-recovery-origin")
-            .await?;
-        info!("Join and claim");
-        fed.pegin_client(peg_in_amount_sats, &client_slow).await?;
-
-        let client_slow_pegin_session_count = client_slow.get_session_count().await?;
-
-        info!("### Test wallet restore without a backup");
-        {
-            let client = fed
+            // Start this client early, as we need to test waiting for session to close
+            let client_slow = fed
                 .new_joined_client("wallet-client-recovery-origin")
                 .await?;
-
-            info!("Join, but not claim");
-            let operation_id = fed
-                .pegin_client_no_wait(peg_in_amount_sats, &client)
-                .await?;
-
-            info!("Restore without backup");
-            let restored = client
-                .new_restored("restored-without-backup", fed.invite_code()?)
-                .await?;
-
-            if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
-                cmd!(restored, "module", "wallet", "await-deposit", operation_id)
-                    .run()
-                    .await?;
-            } else {
-                cmd!(
-                    restored,
-                    "module",
-                    "wallet",
-                    "await-deposit",
-                    "--operation-id",
-                    operation_id
-                )
-                .run()
-                .await?;
-            }
-
-            info!("Check if claimed");
-            assert_eq!(peg_in_amount_sats * 1000, restored.balance().await?);
-        }
-
-        info!("### Test wallet restore with a backup");
-        {
-            let client = fed
-                .new_joined_client("wallet-client-recovery-origin")
-                .await?;
-            assert_eq!(0, client.balance().await?);
-
             info!("Join and claim");
-            fed.pegin_client(peg_in_amount_sats, &client).await?;
+            fed.pegin_client(peg_in_amount_sats, &client_slow).await?;
 
-            info!("Make a backup");
-            cmd!(client, "backup").run().await?;
+            let client_slow_pegin_session_count = client_slow.get_session_count().await?;
 
-            info!("Join more, but not claim");
-            let operation_id = fed
-                .pegin_client_no_wait(peg_in_amount_sats, &client)
-                .await?;
+            info!("### Test wallet restore without a backup");
+            {
+                let client = fed
+                    .new_joined_client("wallet-client-recovery-origin")
+                    .await?;
 
-            info!("Restore with backup");
-            let restored = client
-                .new_restored("restored-with-backup", fed.invite_code()?)
-                .await?;
+                info!("Join, but not claim");
+                let operation_id = fed
+                    .pegin_client_no_wait(peg_in_amount_sats, &client)
+                    .await?;
 
-            if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
-                cmd!(restored, "module", "wallet", "await-deposit", operation_id)
+                info!("Restore without backup");
+                let restored = client
+                    .new_restored("restored-without-backup", fed.invite_code()?)
+                    .await?;
+
+                if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
+                    cmd!(restored, "module", "wallet", "await-deposit", operation_id)
+                        .run()
+                        .await?;
+                } else {
+                    cmd!(
+                        restored,
+                        "module",
+                        "wallet",
+                        "await-deposit",
+                        "--operation-id",
+                        operation_id
+                    )
                     .run()
                     .await?;
-            } else {
-                cmd!(
-                    restored,
-                    "module",
-                    "wallet",
-                    "await-deposit",
-                    "--operation-id",
-                    operation_id
-                )
-                .run()
-                .await?;
+                }
+
+                info!("Check if claimed");
+                assert_eq!(peg_in_amount_sats * 1000, restored.balance().await?);
             }
 
-            info!("Check if claimed");
-            assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
-        }
+            info!("### Test wallet restore with a backup");
+            {
+                let client = fed
+                    .new_joined_client("wallet-client-recovery-origin")
+                    .await?;
+                assert_eq!(0, client.balance().await?);
 
-        info!("### Test wallet restore with a history and no backup");
-        {
-            let client = client_slow;
+                info!("Join and claim");
+                fed.pegin_client(peg_in_amount_sats, &client).await?;
 
-            retry(
-                "wait for next session",
-                backoff_util::aggressive_backoff(),
-                || async {
-                    if client_slow_pegin_session_count < client.get_session_count().await? {
-                        return Ok(());
-                    }
-                    bail!("Session didn't close")
-                },
-            )
-            .await
-            .expect("timeouted waiting for session to close");
+                info!("Make a backup");
+                cmd!(client, "backup").run().await?;
 
-            let operation_id = fed
-                .pegin_client_no_wait(peg_in_amount_sats, &client)
-                .await?;
+                info!("Join more, but not claim");
+                let operation_id = fed
+                    .pegin_client_no_wait(peg_in_amount_sats, &client)
+                    .await?;
 
-            info!("Client slow: Restore without backup");
-            let restored = client
-                .new_restored("client-slow-restored-without-backup", fed.invite_code()?)
-                .await?;
+                info!("Restore with backup");
+                let restored = client
+                    .new_restored("restored-with-backup", fed.invite_code()?)
+                    .await?;
 
-            if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
-                cmd!(restored, "module", "wallet", "await-deposit", operation_id)
+                if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
+                    cmd!(restored, "module", "wallet", "await-deposit", operation_id)
+                        .run()
+                        .await?;
+                } else {
+                    cmd!(
+                        restored,
+                        "module",
+                        "wallet",
+                        "await-deposit",
+                        "--operation-id",
+                        operation_id
+                    )
                     .run()
                     .await?;
-            } else {
-                cmd!(
-                    restored,
-                    "module",
-                    "wallet",
-                    "await-deposit",
-                    "--operation-id",
-                    operation_id
-                )
-                .run()
-                .await?;
+                }
+
+                info!("Check if claimed");
+                assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
             }
 
-            info!("Client slow: Check if claimed");
-            assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
-        }
+            info!("### Test wallet restore with a history and no backup");
+            {
+                let client = client_slow;
 
-        Ok(())
-    })
-    .await
+                retry(
+                    "wait for next session",
+                    backoff_util::aggressive_backoff(),
+                    || async {
+                        if client_slow_pegin_session_count < client.get_session_count().await? {
+                            return Ok(());
+                        }
+                        bail!("Session didn't close")
+                    },
+                )
+                .await
+                .expect("timeouted waiting for session to close");
+
+                let operation_id = fed
+                    .pegin_client_no_wait(peg_in_amount_sats, &client)
+                    .await?;
+
+                info!("Client slow: Restore without backup");
+                let restored = client
+                    .new_restored("client-slow-restored-without-backup", fed.invite_code()?)
+                    .await?;
+
+                if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
+                    cmd!(restored, "module", "wallet", "await-deposit", operation_id)
+                        .run()
+                        .await?;
+                } else {
+                    cmd!(
+                        restored,
+                        "module",
+                        "wallet",
+                        "await-deposit",
+                        "--operation-id",
+                        operation_id
+                    )
+                    .run()
+                    .await?;
+                }
+
+                info!("Client slow: Check if claimed");
+                assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
+            }
+
+            Ok(())
+        })
+        .await
 }
 
 async fn wallet_recovery_test_2() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
+    devimint::run_devfed_test().call(|dev_fed, _process_mgr| async move {
         let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
         let peg_in_amount_sats = 100_000;
@@ -367,23 +368,24 @@ async fn assert_withdrawal(
 }
 
 async fn circular_deposit_test() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
-        let (fed, bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
+    devimint::run_devfed_test()
+        .call(|dev_fed, _process_mgr| async move {
+            let (fed, bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
-        let send_client = fed
-            .new_joined_client("circular-deposit-send-client")
-            .await?;
+            let send_client = fed
+                .new_joined_client("circular-deposit-send-client")
+                .await?;
 
-        // Verify withdrawal to deposit address from same client
-        assert_withdrawal(&send_client, &send_client, bitcoind, fed).await?;
+            // Verify withdrawal to deposit address from same client
+            assert_withdrawal(&send_client, &send_client, bitcoind, fed).await?;
 
-        // Verify withdrawal to deposit address from different client in same federation
-        let receive_client = fed
-            .new_joined_client("circular-deposit-receive-client")
-            .await?;
-        assert_withdrawal(&send_client, &receive_client, bitcoind, fed).await?;
+            // Verify withdrawal to deposit address from different client in same federation
+            let receive_client = fed
+                .new_joined_client("circular-deposit-receive-client")
+                .await?;
+            assert_withdrawal(&send_client, &receive_client, bitcoind, fed).await?;
 
-        Ok(())
-    })
-    .await
+            Ok(())
+        })
+        .await
 }
