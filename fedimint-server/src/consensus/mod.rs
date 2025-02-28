@@ -25,12 +25,13 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
 use iroh::Endpoint;
-use iroh::endpoint::{ConnectionError, Incoming, RecvStream, SendStream};
+use iroh::endpoint::{Incoming, RecvStream, SendStream};
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
 use tokio::sync::watch;
@@ -402,7 +403,7 @@ async fn handle_incoming(
     let connection = incoming.accept()?.await?;
 
     loop {
-        let connection_result = connection.accept_bi().await;
+        let (send_stream, recv_stream) = connection.accept_bi().await?;
 
         task_group.spawn_cancellable(
             "handle-iroh-request",
@@ -410,11 +411,12 @@ async fn handle_incoming(
                 consensus_api.clone(),
                 core_api.clone(),
                 module_api.clone(),
-                connection_result,
+                send_stream,
+                recv_stream,
             )
             .then(|result| async {
-                if let Err(e) = result {
-                    warn!(target: LOG_NET_API, "Failed to handle iroh request {e}");
+                if let Err(err) = result {
+                    warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh request");
                 }
             }),
         );
@@ -425,11 +427,10 @@ async fn handle_request(
     consensus_api: Arc<ConsensusApi>,
     core_api: Arc<BTreeMap<String, ApiEndpoint<ConsensusApi>>>,
     module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
-    connection_result: Result<(SendStream, RecvStream), ConnectionError>,
+    mut send_stream: SendStream,
+    mut recv_stream: RecvStream,
 ) -> anyhow::Result<()> {
-    let (mut send_stream, mut receive_stream) = connection_result?;
-
-    let request = receive_stream.read_to_end(100_000).await?;
+    let request = recv_stream.read_to_end(100_000).await?;
 
     let request = serde_json::from_slice::<IrohApiRequest>(&request)?;
 

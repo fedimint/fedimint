@@ -19,12 +19,14 @@ use fedimint_core::envs::{
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
 };
+use fedimint_logging::LOG_SERVER;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
+use tracing::warn;
 
 use super::PeerEndpoints;
 use crate::config::{
@@ -159,6 +161,7 @@ impl ConfigGenApi {
                 }
             }
             NetworkingStack::Iroh => {
+                warn!(target: LOG_SERVER, "Iroh support is experimental");
                 let iroh_api_sk = if let Ok(var) =
                     std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV)
                 {

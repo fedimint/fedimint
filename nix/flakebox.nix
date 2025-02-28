@@ -626,7 +626,10 @@ in
     };
 
     ciTestAllBase =
-      { times }:
+      {
+        times,
+        useIroh ? false,
+      }:
       craneLibTests.mkCargoDerivation {
         pname = "${commonCliTestArgs.pname}-all";
         cargoArtifacts = craneMultiBuild.default.${craneLib.cargoProfile or "release"}.workspaceBuild;
@@ -655,6 +658,10 @@ in
           export CARGO_DENY_COMPILATION=1
           export FM_TEST_CI_ALL_TIMES=${builtins.toString times}
           export FM_TEST_CI_ALL_DISABLE_ETA=1
+          if [ "${builtins.toString useIroh}" == "1" ]; then
+            >&2 echo "Iroh enabled"
+            export FM_FORCE_IROH=1
+          fi
           ./scripts/tests/test-ci-all.sh || exit 1
           cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
           sed -i -e 's/exit 0/exit 1/g' scripts/tests/always-success-test.sh
@@ -665,6 +672,10 @@ in
       };
 
     ciTestAll = ciTestAllBase { times = 1; };
+    ciTestAllWithIroh = ciTestAllBase {
+      times = 1;
+      useIroh = true;
+    };
     ciTestAll5Times = ciTestAllBase { times = 5; };
 
     alwaysFailTest = craneLibTests.mkCargoDerivation {

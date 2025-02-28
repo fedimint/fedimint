@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::net::TcpListener;
+use std::net::{TcpListener, UdpSocket};
 
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
@@ -76,8 +76,11 @@ impl RootData {
             }
 
             for port in range.clone() {
-                match TcpListener::bind(("127.0.0.1", port)) {
-                    Err(error) => {
+                match (
+                    TcpListener::bind(("127.0.0.1", port)),
+                    UdpSocket::bind(("127.0.0.1", port)),
+                ) {
+                    (Err(error), _) | (_, Err(error)) => {
                         warn!(
                             ?error,
                             port, "Could not use a port. Will try a different range"
@@ -85,7 +88,7 @@ impl RootData {
                         base_port = port + 1;
                         continue 'retry;
                     }
-                    Ok(l) => l,
+                    (Ok(tcp), Ok(udp)) => (tcp, udp),
                 };
             }
 

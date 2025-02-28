@@ -1003,9 +1003,7 @@ impl ReconnectFederationApi {
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
             "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
             #[cfg(all(feature = "iroh", not(target_family = "wasm")))]
-            "iroh" => iroh::IrohConnector::new_no_overrides(peers)
-                .await?
-                .into_dyn(),
+            "iroh" => iroh::IrohConnector::new(peers).await?.into_dyn(),
             scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
         };
 
@@ -1188,7 +1186,7 @@ mod iroh {
     use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
     use iroh_base::ticket::NodeTicket;
     use serde_json::Value;
-    use tracing::trace;
+    use tracing::{trace, warn};
 
     use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
 
@@ -1206,9 +1204,9 @@ mod iroh {
     }
 
     impl IrohConnector {
-        #[allow(unused)]
         pub async fn new(peers: BTreeMap<PeerId, SafeUrl>) -> anyhow::Result<Self> {
             const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
+            warn!(target: LOG_NET_IROH, "Iroh support is experimental");
             let mut s = Self::new_no_overrides(peers).await?;
 
             for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
