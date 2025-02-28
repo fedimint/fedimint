@@ -32,6 +32,7 @@ use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
 use iroh::Endpoint;
 use iroh::endpoint::{Incoming, RecvStream, SendStream};
+use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
 use tokio::sync::watch;
@@ -42,7 +43,7 @@ use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
 use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net::api::announcement::get_api_urls;
-use crate::net::api::{ApiSecrets, HasApiContext, RpcHandlerCtx};
+use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::{net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
@@ -236,7 +237,7 @@ async fn start_consensus_api(
     force_api_secrets: ApiSecrets,
     api_bind: SocketAddr,
 ) -> ServerHandle {
-    let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
+    let mut rpc_module = RpcModule::new(api.clone());
 
     net::api::attach_endpoints(&mut rpc_module, api::server_endpoints(), None);
 
@@ -382,8 +383,8 @@ async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_grou
                         incoming,
                     )
                     .then(|result| async {
-                        if let Err(e) = result {
-                            warn!(target: LOG_NET_API, "Failed to handle iroh connection {e}");
+                        if let Err(err) = result {
+                            warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh connection");
                         }
                     }),
                 );
