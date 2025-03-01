@@ -25,7 +25,6 @@ bincode = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 bls12_381 = { workspace = true }
-bs58 = "0.5.1"
 bytes = { workspace = true }
 fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }

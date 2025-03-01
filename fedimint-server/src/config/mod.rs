@@ -23,7 +23,7 @@ use fedimint_core::module::{
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
+use fedimint_core::{NumPeersExt, PeerId, base32, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
 use hex::{FromHex, ToHex};
@@ -254,18 +254,18 @@ pub struct PeerConnectionInfo {
 }
 
 impl PeerConnectionInfo {
-    pub fn encode_base58(&self) -> String {
+    pub fn encode_base32(&self) -> String {
         format!(
             "fedimint{}",
-            bs58::encode(&self.consensus_encode_to_vec()).into_string()
+            base32::encode(&self.consensus_encode_to_vec())
         )
     }
 
-    pub fn decode_base58(s: &str) -> anyhow::Result<Self> {
+    pub fn decode_base32(s: &str) -> anyhow::Result<Self> {
         ensure!(s.starts_with("fedimint"), "Invalid Prefix");
 
         let params = Self::consensus_decode_whole(
-            &bs58::decode(&s[8..]).into_vec()?,
+            &base32::decode(&s[8..])?,
             &ModuleDecoderRegistry::default(),
         )?;
 
