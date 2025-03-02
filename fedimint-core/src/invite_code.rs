@@ -13,7 +13,7 @@ use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use crate::util::SafeUrl;
-use crate::{NumPeersExt, PeerId};
+use crate::{NumPeersExt, PeerId, base32};
 
 /// Information required for client to join Federation
 ///
@@ -170,6 +170,24 @@ impl InviteCode {
             })
             .expect("Ensured by constructor")
     }
+
+    pub fn encode_base32(&self) -> String {
+        format!(
+            "fedimint{}",
+            base32::encode(&self.consensus_encode_to_vec())
+        )
+    }
+
+    pub fn decode_base32(s: &str) -> anyhow::Result<Self> {
+        ensure!(s.starts_with("fedimint"), "Invalid Prefix");
+
+        let params = Self::consensus_decode_whole(
+            &base32::decode(&s[8..])?,
+            &ModuleDecoderRegistry::default(),
+        )?;
+
+        Ok(params)
+    }
 }
 
 /// For extendability [`InviteCode`] consists of parts, where client can ignore
@@ -214,8 +232,8 @@ impl FromStr for InviteCode {
     type Err = anyhow::Error;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
-        if let Ok(invite_code_v2) = InviteCodeV2::decode_base64(encoded) {
-            return invite_code_v2.into_v1();
+        if let Ok(invite_code) = Self::decode_base32(encoded) {
+            return Ok(invite_code);
         }
 
         let (hrp, data) = bech32::decode(encoded)?;
@@ -258,19 +276,20 @@ impl<'de> Deserialize<'de> for InviteCode {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
     use std::str::FromStr;
 
     use fedimint_core::PeerId;
-    use fedimint_core::util::SafeUrl;
 
     use crate::config::FederationId;
-    use crate::invite_code::{InviteCode, InviteCodeV2};
+    use crate::invite_code::InviteCode;
 
     #[test]
     fn test_invite_code_to_from_string() {
         let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
         let invite_code = InviteCode::from_str(invite_code_str).expect("valid invite code");
+
+        InviteCode::from_str(&invite_code.encode_base32())
+            .expect("Failed to parse base 32 invite code");
 
         assert_eq!(invite_code.to_string(), invite_code_str);
         assert_eq!(
@@ -288,56 +307,5 @@ mod tests {
                 ))
             ]
         );
-    }
-
-    #[test]
-    fn invite_code_v2_encode_base64_roundtrip() {
-        let invite_code = InviteCodeV2 {
-            id: FederationId::dummy(),
-            peers: BTreeMap::from_iter([(
-                PeerId::from(0),
-                SafeUrl::parse("https://mint.com").expect("Url is valid"),
-            )]),
-            api_secret: None,
-        };
-
-        let encoded = invite_code.encode_base64();
-        let decoded = InviteCodeV2::decode_base64(&encoded).expect("Failed to decode");
-
-        assert_eq!(invite_code, decoded);
-
-        InviteCode::from_str(&encoded).expect("Failed to decode to legacy");
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
-pub struct InviteCodeV2 {
-    pub id: FederationId,
-    pub peers: BTreeMap<PeerId, SafeUrl>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub api_secret: Option<String>,
-}
-
-impl InviteCodeV2 {
-    pub fn into_v1(self) -> anyhow::Result<InviteCode> {
-        Ok(InviteCode::from_map(&self.peers, self.id, self.api_secret))
-    }
-
-    pub fn encode_base64(&self) -> String {
-        let json = &serde_json::to_string(self).expect("Encoding to JSON cannot fail");
-        let base_64 = base64_url::encode(json);
-
-        format!("fedimintA{base_64}")
-    }
-
-    pub fn decode_base64(s: &str) -> anyhow::Result<Self> {
-        ensure!(s.starts_with("fedimintA"), "Invalid Prefix");
-
-        let invite_code: Self = serde_json::from_slice(&base64_url::decode(&s[9..])?)?;
-
-        ensure!(!invite_code.peers.is_empty(), "Invite code has no peer");
-
-        Ok(invite_code)
     }
 }
