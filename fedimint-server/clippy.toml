@@ -1,0 +1,2 @@
+# Note: this file symlinked from multiple crates
+disallowed-types = ["std::collections::HashMap", "std::collections::HashSet"]
