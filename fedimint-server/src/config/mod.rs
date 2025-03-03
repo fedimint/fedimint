@@ -36,7 +36,7 @@ use tracing::info;
 
 use crate::config::distributedgen::PeerHandleOps;
 use crate::fedimint_core::encoding::Encodable;
-use crate::net::p2p_connector::{TlsConfig, dns_sanitize};
+use crate::net::p2p_connector::TlsConfig;
 
 pub mod api;
 pub mod distributedgen;
@@ -822,24 +822,4 @@ impl ConfigGenParams {
             })
             .collect()
     }
-}
-
-pub fn gen_cert_and_key(
-    name: &str,
-) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
-    let keypair = rcgen::KeyPair::generate()?;
-    let keypair_ser = keypair.serialize_der();
-    let mut params = rcgen::CertificateParams::new(vec![dns_sanitize(name)])?;
-
-    params.is_ca = rcgen::IsCa::NoCa;
-    params
-        .distinguished_name
-        .push(rcgen::DnType::CommonName, dns_sanitize(name));
-
-    let cert = params.self_signed(&keypair)?;
-
-    Ok((
-        rustls::Certificate(cert.der().to_vec()),
-        rustls::PrivateKey(keypair_ser),
-    ))
 }

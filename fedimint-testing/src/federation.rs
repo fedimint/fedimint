@@ -23,13 +23,11 @@ use fedimint_gateway_common::ConnectFedPayload;
 use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
-use fedimint_server::config::{
-    ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig, gen_cert_and_key,
-};
+use fedimint_server::config::{ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig};
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
-use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
+use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector, gen_cert_and_key};
 use tokio_rustls::rustls;
 use tracing::info;
 
