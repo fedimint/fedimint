@@ -115,9 +115,6 @@ pub enum Cmd {
     /// for devimint as a cli
     #[clap(flatten)]
     Rpc(RpcCmd),
-
-    /// Start built-in faucet (in the past called `devimint-faucet`)
-    Faucet(FaucetOpts),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -393,11 +390,6 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
 
                 Ok::<_, anyhow::Error>(daemons)
             };
-            Box::pin(cleanup_on_exit(main, task_group)).await?;
-        }
-        Cmd::Faucet(opts) => {
-            let (process_mgr, task_group) = setup(common_args).await?;
-            let main = async { crate::faucet::run(&process_mgr, opts).await };
             Box::pin(cleanup_on_exit(main, task_group)).await?;
         }
     }
