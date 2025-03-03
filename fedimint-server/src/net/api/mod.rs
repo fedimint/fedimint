@@ -1,11 +1,10 @@
 pub mod announcement;
 mod http_auth;
 
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Formatter};
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
@@ -77,26 +76,6 @@ impl ApiSecrets {
     }
 }
 
-/// A state that has context for the API, passed to each rpc handler callback
-#[derive(Clone)]
-pub struct RpcHandlerCtx<M> {
-    pub rpc_context: Arc<M>,
-}
-
-impl<M> RpcHandlerCtx<M> {
-    pub fn new_module(state: M) -> RpcModule<RpcHandlerCtx<M>> {
-        RpcModule::new(Self {
-            rpc_context: Arc::new(state),
-        })
-    }
-}
-
-impl<M: Debug> Debug for RpcHandlerCtx<M> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("State { ... }")
-    }
-}
-
 /// How long to wait before timing out client connections
 const API_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -133,31 +112,30 @@ pub fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<GuardianAuthTok
 
 pub async fn spawn<T>(
     name: &'static str,
-    api_bind_addr: SocketAddr,
-    module: RpcModule<RpcHandlerCtx<T>>,
+    api_bind: SocketAddr,
+    module: RpcModule<T>,
     max_connections: u32,
-    force_api_secrets: ApiSecrets,
+    api_secrets: ApiSecrets,
 ) -> ServerHandle {
-    info!(target: LOG_NET_API, "Starting api on ws://{api_bind_addr}");
+    info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
 
-    let builder =
-        tower::ServiceBuilder::new().layer(HttpAuthLayer::new(force_api_secrets.get_all()));
+    let builder = tower::ServiceBuilder::new().layer(HttpAuthLayer::new(api_secrets.get_all()));
 
     ServerBuilder::new()
         .max_connections(max_connections)
         .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
         .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
         .set_http_middleware(builder)
-        .build(&api_bind_addr.to_string())
+        .build(&api_bind.to_string())
         .await
-        .context(format!("Bind address: {api_bind_addr}"))
+        .context(format!("Bind address: {api_bind}"))
         .context(format!("API name: {name}"))
         .expect("Could not build API server")
         .start(module)
 }
 
 pub fn attach_endpoints<State, T>(
-    rpc_module: &mut RpcModule<RpcHandlerCtx<T>>,
+    rpc_module: &mut RpcModule<T>,
     endpoints: Vec<ApiEndpoint<State>>,
     module_instance_id: Option<ModuleInstanceId>,
 ) where
@@ -185,7 +163,6 @@ pub fn attach_endpoints<State, T>(
         rpc_module
             .register_async_method(path, move |params, rpc_state, _extensions| async move {
                 let params = params.one::<serde_json::Value>()?;
-                let rpc_context = &rpc_state.rpc_context;
 
                 // Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
@@ -194,7 +171,8 @@ pub fn attach_endpoints<State, T>(
                 AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
                     let request = serde_json::from_value(params)
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
-                    let (state, context) = rpc_context.context(&request, module_instance_id).await;
+
+                    let (state, context) = rpc_state.context(&request, module_instance_id).await;
 
                     (handler)(state, context, request).await
                 }))

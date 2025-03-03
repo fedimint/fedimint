@@ -41,6 +41,7 @@ use fedimint_core::util::write_new;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
+use jsonrpsee::RpcModule;
 use net::api::ApiSecrets;
 use net::p2p_connector::IrohConnector;
 use tokio::sync::watch;
@@ -52,7 +53,6 @@ use crate::config::io::{SALT_FILE, write_server_config};
 use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::initialize_gauge_metrics;
-use crate::net::api::RpcHandlerCtx;
 use crate::net::api::announcement::start_api_announcement_service;
 use crate::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
@@ -208,7 +208,7 @@ pub async fn run_config_gen(
     db: Database,
     task_group: &TaskGroup,
     code_version_str: String,
-    force_api_secrets: ApiSecrets,
+    api_secrets: ApiSecrets,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -222,7 +222,7 @@ pub async fn run_config_gen(
 
     let config_gen = ConfigGenApi::new(settings.clone(), db.clone(), cgp_sender);
 
-    let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
+    let mut rpc_module = RpcModule::new(config_gen);
 
     net::api::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
 
@@ -231,7 +231,7 @@ pub async fn run_config_gen(
         settings.api_bind,
         rpc_module,
         10,
-        force_api_secrets.clone(),
+        api_secrets.clone(),
     )
     .await;
 
@@ -301,7 +301,7 @@ pub async fn run_config_gen(
         &data_dir,
         &cfg.private.api_auth.0,
         &settings.registry,
-        force_api_secrets.get_active(),
+        api_secrets.get_active(),
     )?;
 
     Ok((cfg, connections, p2p_status_receivers))
