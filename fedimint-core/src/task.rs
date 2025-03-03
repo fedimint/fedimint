@@ -16,6 +16,7 @@ use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
 use futures::future::{self, Either};
 use inner::TaskGroupInner;
+use scopeguard::defer;
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
 use tracing::{debug, error, info, trace};
@@ -173,27 +174,55 @@ impl TaskGroup {
         let handle = self.make_handle();
 
         let (tx, rx) = oneshot::channel();
-        let handle = crate::runtime::spawn(&name, {
-            let name = name.clone();
-            async move {
-                // Unfortunately log levels need to be static
-                if quiet {
-                    trace!(target: LOG_TASK, "Starting task {name}");
-                } else {
-                    debug!(target: LOG_TASK, "Starting task {name}");
-                }
-                // if receiver is not interested, just drop the message
-                let r = f(handle).await;
-                if quiet {
-                    trace!(target: LOG_TASK, "Finished task {name}");
-                } else {
-                    debug!(target: LOG_TASK, "Finished task {name}");
-                }
-                let _ = tx.send(r);
-            }
-        });
-        self.inner.add_join_handle(name, handle);
-        guard.completed = true;
+        self.inner
+            .active_tasks_join_handles
+            .lock()
+            .expect("Locking failed")
+            .insert_with_key(move |task_key| {
+                (
+                    name.clone(),
+                    crate::runtime::spawn(&name, {
+                        let name = name.clone();
+                        async move {
+                            defer! {
+                                // Panic or normal completion, it means the task
+                                // is complete, and does not need to be shutdown
+                                // via join handle. This prevents buildup of task
+                                // handles.
+                                if handle
+                                    .inner
+                                    .active_tasks_join_handles
+                                    .lock()
+                                    .expect("Locking failed")
+                                    .remove(task_key)
+                                    .is_none() {
+                                        trace!(target: LOG_TASK, %name, "Task already canceled");
+                                    }
+                            }
+                            // Unfortunately log levels need to be static
+                            if quiet {
+                                trace!(target: LOG_TASK, %name, "Starting task");
+                            } else {
+                                debug!(target: LOG_TASK, %name, "Starting task");
+                            }
+                            let r = f(handle.clone()).await;
+                            guard.completed = true;
+
+                            if quiet {
+                                trace!(target: LOG_TASK, %name, "Finished task");
+                            } else {
+                                debug!(target: LOG_TASK, %name, "Finished task");
+                            }
+                            // if receiver is not interested, just drop the message
+                            let _ = tx.send(r);
+
+                            // NOTE: Since this is a `async move` the guard will not get moved
+                            // if it's not moved inside the body. Weird.
+                            drop(guard);
+                        }
+                    }),
+                )
+            });
 
         rx
     }
@@ -248,10 +277,16 @@ struct TaskPanicGuard {
 
 impl Drop for TaskPanicGuard {
     fn drop(&mut self) {
+        trace!(
+            target: LOG_TASK,
+            name = %self.name,
+            "Task drop"
+        );
         if !self.completed {
             info!(
                 target: LOG_TASK,
-                "Task {} shut down uncleanly. Shutting down task group.", self.name
+                name = %self.name,
+                "Task shut down uncleanly"
             );
             self.inner.shutdown();
         }

@@ -24,7 +24,7 @@ use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningInit;
-use fedimint_logging::TracingSetup;
+use fedimint_logging::{LOG_CORE, TracingSetup};
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::MintInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
@@ -434,17 +434,17 @@ impl Fedimintd {
             .make_handle()
             .make_shutdown_rx()
             .then(|()| async {
-                info!("Shutdown called");
+                info!(target: LOG_CORE, "Shutdown called");
             });
 
         shutdown_future.await;
-        debug!("Terminating main task");
+        debug!(target: LOG_CORE, "Terminating main task");
 
         if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
-            error!(?err, "Error while shutting down task group");
+            error!(target: LOG_CORE, ?err, "Error while shutting down task group");
         }
 
-        info!("Shutdown complete");
+        debug!(target: LOG_CORE, "Shutdown complete");
 
         fedimint_logging::shutdown();
 
