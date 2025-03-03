@@ -23,13 +23,14 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn restore() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|fed, _process_mgr| async move {
-        let fed = fed.fed().await?;
+    devimint::run_devfed_test()
+        .call(|fed, _process_mgr| async move {
+            let fed = fed.fed().await?;
 
-        test_restore_gap_test(fed).await?;
-        Ok(())
-    })
-    .await
+            test_restore_gap_test(fed).await?;
+            Ok(())
+        })
+        .await
 }
 
 pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
@@ -124,13 +125,14 @@ pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
 }
 
 async fn sanity() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|fed, _process_mgr| async move {
-        let fed = fed.fed().await?;
+    devimint::run_devfed_test()
+        .call(|fed, _process_mgr| async move {
+            let fed = fed.fed().await?;
 
-        test_note_consoliation(fed).await?;
-        Ok(())
-    })
-    .await
+            test_note_consoliation(fed).await?;
+            Ok(())
+        })
+        .await
 }
 
 /// Test note consolidation, which at the time of writing basically means that

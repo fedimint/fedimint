@@ -17,6 +17,7 @@ anyhow = { workspace = true, features = ["backtrace"] }
 axum = { workspace = true, features = ["tracing"] }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
+bon = { workspace = true }
 clap = { workspace = true }
 cln-rpc = { workspace = true }
 esplora-client = { workspace = true }

@@ -20,7 +20,7 @@ use crate::devfed::DevJitFed;
 use crate::envs::{
     FM_BITCOIN_RPC_URL_ENV, FM_CLN_SOCKET_ENV, FM_DEVIMINT_STATIC_DATA_DIR_ENV,
     FM_FAUCET_BIND_ADDR_ENV, FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV,
-    FM_OFFLINE_NODES_ENV, FM_PORT_GW_LND_ENV, FM_TEST_DIR_ENV,
+    FM_NUM_FEDS_ENV, FM_OFFLINE_NODES_ENV, FM_PORT_GW_LND_ENV, FM_TEST_DIR_ENV,
 };
 use crate::federation::Fedimintd;
 use crate::util::{ProcessManager, poll};
@@ -46,8 +46,13 @@ pub struct CommonArgs {
     #[arg(long, env = "FM_SKIP_SETUP")]
     skip_setup: bool,
 
+    /// Number of peers to allocate in every federation
     #[clap(short = 'n', long, env = FM_FED_SIZE_ENV, default_value = "4")]
     pub fed_size: usize,
+
+    /// Number of federations to allocate for the test/run
+    #[clap(long, env = FM_NUM_FEDS_ENV, default_value = "1")]
+    pub num_feds: usize,
 
     #[clap(long, env = FM_LINK_TEST_DIR_ENV)]
     /// Create a link to the test dir under this path
@@ -156,8 +161,8 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         .with_directive("jsonrpsee-client=off")
         .init()?;
 
-    // TODO: allocate a single fed by default
-    let globals = vars::Global::new(test_dir, 2, arg.fed_size, arg.offline_nodes).await?;
+    let globals =
+        vars::Global::new(test_dir, arg.num_feds, arg.fed_size, arg.offline_nodes).await?;
 
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;

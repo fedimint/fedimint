@@ -41,12 +41,20 @@ pub mod util;
 pub mod vars;
 pub mod version_constants;
 
-pub async fn run_devfed_test<F, FF>(f: F) -> anyhow::Result<()>
+#[bon::builder]
+pub async fn run_devfed_test<F, FF>(
+    #[builder(finish_fn)] f: F,
+    num_feds: Option<usize>,
+) -> anyhow::Result<()>
 where
     F: FnOnce(DevJitFed, ProcessManager) -> FF,
     FF: Future<Output = anyhow::Result<()>>,
 {
-    let args = cli::CommonArgs::parse_from::<_, ffi::OsString>(vec![]);
+    let mut args = cli::CommonArgs::parse_from::<_, ffi::OsString>(vec![]);
+
+    if let Some(num_feds) = num_feds {
+        args.num_feds = num_feds;
+    }
 
     let (process_mgr, task_group) = cli::setup(args).await?;
     log_binary_versions().await?;

@@ -116,6 +116,7 @@ bitcoin = { version = "0.32.5", features = ["serde"] }
 bitcoincore-rpc = "0.19.0"
 bitcoin_hashes = "0.14.0"
 bls12_381 = "0.8.0"
+bon = "3.3.2"
 bytes = "1.10.0"
 clap = { version = "4.5.29", features = ["derive", "env"] }
 cln-rpc = { package = "fedimint-cln-rpc", version = "0.5.0" }
