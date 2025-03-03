@@ -168,8 +168,8 @@
 <a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">for </span>(gw_send, gw_receive) <span class="kw">in </span>gateway_matrix {
 <a href=#169 id=169 data-nosnippet>169</a>        <span class="macro">info!</span>(
 <a href=#170 id=170 data-nosnippet>170</a>            <span class="string">"Testing refund of payment: client -&gt; {} -&gt; {} -&gt; client"</span>,
-<a href=#171 id=171 data-nosnippet>171</a>            gw_send.ln.as_ref().unwrap().name(),
-<a href=#172 id=172 data-nosnippet>172</a>            gw_receive.ln.as_ref().unwrap().name()
+<a href=#171 id=171 data-nosnippet>171</a>            gw_send.ln.ln_type(),
+<a href=#172 id=172 data-nosnippet>172</a>            gw_receive.ln.ln_type()
 <a href=#173 id=173 data-nosnippet>173</a>        );
 <a href=#174 id=174 data-nosnippet>174</a>
 <a href=#175 id=175 data-nosnippet>175</a>        <span class="kw">let </span>invoice = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>;
@@ -194,8 +194,8 @@
 <a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">for </span>(gw_send, gw_receive) <span class="kw">in </span>gateway_matrix {
 <a href=#195 id=195 data-nosnippet>195</a>        <span class="macro">info!</span>(
 <a href=#196 id=196 data-nosnippet>196</a>            <span class="string">"Testing payment: client -&gt; {} -&gt; {} -&gt; client"</span>,
-<a href=#197 id=197 data-nosnippet>197</a>            gw_send.ln_type(),
-<a href=#198 id=198 data-nosnippet>198</a>            gw_receive.ln_type()
+<a href=#197 id=197 data-nosnippet>197</a>            gw_send.ln.ln_type(),
+<a href=#198 id=198 data-nosnippet>198</a>            gw_receive.ln.ln_type()
 <a href=#199 id=199 data-nosnippet>199</a>        );
 <a href=#200 id=200 data-nosnippet>200</a>
 <a href=#201 id=201 data-nosnippet>201</a>        <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -216,8 +216,8 @@
 <a href=#216 id=216 data-nosnippet>216</a>    <span class="kw">for </span>(gw_send, gw_receive) <span class="kw">in </span>gateway_pairs {
 <a href=#217 id=217 data-nosnippet>217</a>        <span class="macro">info!</span>(
 <a href=#218 id=218 data-nosnippet>218</a>            <span class="string">"Testing payment: client -&gt; {} -&gt; {}"</span>,
-<a href=#219 id=219 data-nosnippet>219</a>            gw_send.ln_type(),
-<a href=#220 id=220 data-nosnippet>220</a>            gw_receive.ln_type()
+<a href=#219 id=219 data-nosnippet>219</a>            gw_send.ln.ln_type(),
+<a href=#220 id=220 data-nosnippet>220</a>            gw_receive.ln.ln_type()
 <a href=#221 id=221 data-nosnippet>221</a>        );
 <a href=#222 id=222 data-nosnippet>222</a>
 <a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">let </span>invoice = gw_receive.create_invoice(<span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -236,8 +236,8 @@
 <a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">for </span>(gw_send, gw_receive) <span class="kw">in </span>gateway_pairs {
 <a href=#237 id=237 data-nosnippet>237</a>        <span class="macro">info!</span>(
 <a href=#238 id=238 data-nosnippet>238</a>            <span class="string">"Testing payment: {} -&gt; {} -&gt; client"</span>,
-<a href=#239 id=239 data-nosnippet>239</a>            gw_send.ln_type(),
-<a href=#240 id=240 data-nosnippet>240</a>            gw_receive.ln_type()
+<a href=#239 id=239 data-nosnippet>239</a>            gw_send.ln.ln_type(),
+<a href=#240 id=240 data-nosnippet>240</a>            gw_receive.ln.ln_type()
 <a href=#241 id=241 data-nosnippet>241</a>        );
 <a href=#242 id=242 data-nosnippet>242</a>
 <a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;

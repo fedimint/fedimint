@@ -731,7 +731,7 @@
 <a href=#731 id=731 data-nosnippet>731</a>            .out_json()
 <a href=#732 id=732 data-nosnippet>732</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#733 id=733 data-nosnippet>733</a>            <span class="kw">let </span>response: WithdrawResponse = serde_json::from_value(value)<span class="question-mark">?</span>;
-<a href=#734 id=734 data-nosnippet>734</a>            peg_outs.insert(gw.ln_type(), (prev_fed_ecash_balance, response));
+<a href=#734 id=734 data-nosnippet>734</a>            peg_outs.insert(gw.ln.ln_type(), (prev_fed_ecash_balance, response));
 <a href=#735 id=735 data-nosnippet>735</a>        }
 <a href=#736 id=736 data-nosnippet>736</a>        <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#737 id=737 data-nosnippet>737</a>
@@ -752,7 +752,7 @@
 <a href=#752 id=752 data-nosnippet>752</a>                .expect(<span class="string">"Gateway has not joined federation"</span>)
 <a href=#753 id=753 data-nosnippet>753</a>                .ecash_balance_msats;
 <a href=#754 id=754 data-nosnippet>754</a>
-<a href=#755 id=755 data-nosnippet>755</a>            <span class="kw">let </span>ln_type = gw.ln_type();
+<a href=#755 id=755 data-nosnippet>755</a>            <span class="kw">let </span>ln_type = gw.ln.ln_type();
 <a href=#756 id=756 data-nosnippet>756</a>            <span class="kw">let </span>prev_balance = peg_outs
 <a href=#757 id=757 data-nosnippet>757</a>                .get(<span class="kw-2">&amp;</span>ln_type)
 <a href=#758 id=758 data-nosnippet>758</a>                .expect(<span class="string">"peg out does not exist"</span>)
