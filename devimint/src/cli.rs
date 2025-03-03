@@ -395,7 +395,11 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             };
             Box::pin(cleanup_on_exit(main, task_group)).await?;
         }
-        Cmd::Faucet(opts) => crate::faucet::run(opts).await?,
+        Cmd::Faucet(opts) => {
+            let (process_mgr, task_group) = setup(common_args).await?;
+            let main = async { crate::faucet::run(&process_mgr, opts).await };
+            Box::pin(cleanup_on_exit(main, task_group)).await?;
+        }
     }
     Ok(())
 }
