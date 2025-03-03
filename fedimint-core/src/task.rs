@@ -247,6 +247,24 @@ impl TaskGroup {
         })
     }
 
+    pub fn spawn_cancellable_silent<R>(
+        &self,
+        name: impl Into<String>,
+        future: impl Future<Output = R> + MaybeSend + 'static,
+    ) -> oneshot::Receiver<Result<R, ShuttingDownError>>
+    where
+        R: MaybeSend + 'static,
+    {
+        self.spawn_silent(name, |handle| async move {
+            let value = handle.cancel_on_shutdown(future).await;
+            if value.is_err() {
+                // name will part of span
+                debug!(target: LOG_TASK, "task cancelled on shutdown");
+            }
+            value
+        })
+    }
+
     pub async fn join_all(self, timeout: Option<Duration>) -> Result<(), anyhow::Error> {
         let deadline = timeout.map(|timeout| now() + timeout);
         let mut errors = vec![];
