@@ -21,9 +21,9 @@ use futures::future::try_join_all;
 use serde_json::json;
 use tokio::net::TcpStream;
 use tokio::{fs, try_join};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
-use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup, write_ready_file};
+use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, poll};
@@ -1890,39 +1890,41 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
-                    dev_fed
-                        .gw_lnd
+                    let gw_lnd = dev_fed.gw_lnd.clone();
+                    let fed = dev_fed.fed.clone();
+                    gw_lnd
                         .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
                         .await?;
-                    let ((), faucet) = try_join!(
-                        dev_fed.fed.pegin_gateways(20_000, vec![&dev_fed.gw_lnd]),
-                        async {
-                            let faucet = process_mgr
-                                .spawn_daemon(
-                                    "devimint-faucet",
-                                    cmd!(crate::util::DevimintFaucet, "faucet"),
-                                )
-                                .await?;
-
-                            poll("waiting for faucet startup", || async {
-                                TcpStream::connect(format!(
-                                    "127.0.0.1:{}",
-                                    process_mgr.globals.FM_PORT_FAUCET
-                                ))
-                                .await
-                                .context("connect to faucet")
-                                .map_err(ControlFlow::Continue)
-                            })
-                            .await?;
-                            Ok(faucet)
-                        },
-                    )?;
-                    let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+                    task_group.spawn_cancellable("faucet", async move {
+                        if let Err(err) = crate::faucet::run(
+                            &dev_fed,
+                            format!("0.0.0.0:{}", process_mgr.globals.FM_PORT_FAUCET),
+                            process_mgr.globals.FM_PORT_GW_LND,
+                        )
+                        .await
+                        {
+                            error!("Error spawning faucet: {err}");
+                        }
+                    });
+                    try_join!(fed.pegin_gateways(20_000, vec![&gw_lnd]), async {
+                        poll("waiting for faucet startup", || async {
+                            TcpStream::connect(format!(
+                                "127.0.0.1:{}",
+                                process_mgr.globals.FM_PORT_FAUCET
+                            ))
+                            .await
+                            .context("connect to faucet")
+                            .map_err(ControlFlow::Continue)
+                        })
+                        .await?;
+                        Ok(())
+                    },)?;
+                    //let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
                     if let Some(exec) = exec {
                         exec_user_command(exec).await?;
                         task_group.shutdown();
                     }
-                    Ok::<_, anyhow::Error>((daemons, faucet))
+                    Ok::<_, anyhow::Error>(())
                 }
             };
             cleanup_on_exit(main, task_group).await?;
