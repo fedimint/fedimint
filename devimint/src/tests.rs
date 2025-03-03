@@ -15,7 +15,6 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::{Amount, PeerId};
-use fedimint_gateway_common::GatewayInfo;
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use futures::future::try_join_all;
@@ -1136,6 +1135,7 @@ pub async fn lightning_gw_reconnect_test(
 
     // Verify that after stopping the lightning node, info no longer returns the
     // node public key since the lightning node is unreachable.
+    let ln_type = gw_lnd.ln.ln_type().to_string();
     gw_lnd.stop_lightning_node().await?;
     let lightning_info = info_cmd.out_json().await?;
     let lightning_pub_key: Option<String> =
@@ -1161,11 +1161,7 @@ pub async fn lightning_gw_reconnect_test(
                 }
                 tracing::debug!(
                     "Pay invoice for gateway {} failed with {e:?}, retrying in {} seconds (try {}/{MAX_RETRIES})",
-                    gw_lnd
-                        .ln
-                        .as_ref()
-                        .map(|ln| ln.name().to_string())
-                        .unwrap_or_default(),
+                    ln_type,
                     RETRY_INTERVAL.as_secs(),
                     i + 1,
                 );
@@ -1210,6 +1206,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
     // Drop references to gateways so the test can kill them
     let lnd_gateway_id = gw_lnd.gateway_id().await?;
+    let gw_ldk_name = gw_ldk.gw_name.clone();
     drop(gw_lnd);
     drop(gw_ldk);
 
@@ -1234,7 +1231,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     info!("Rebooting gateways...");
     let (new_gw_lnd, new_gw_ldk) = try_join!(
         Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-        Gatewayd::new(process_mgr, LightningNode::Ldk)
+        Gatewayd::new(process_mgr, LightningNode::Ldk { name: gw_ldk_name })
     )?;
 
     let lnd_gateway_id: fedimint_core::secp256k1::PublicKey =
@@ -1260,18 +1257,21 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )
     .await?;
 
-    let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
+    let ldk_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(ldk_value["gateway_id"].clone())?;
     poll(
         "Waiting for LDK Gateway Running state after reboot",
         || async {
             let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
             let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
-            let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+            let reboot_gateway_state: String = serde_json::from_value(ldk_value["gateway_state"].clone()).context("invalid gateway state").map_err(ControlFlow::Break)?;
+            let reboot_gateway_id: fedimint_core::secp256k1::PublicKey =
+        serde_json::from_value(ldk_value["gateway_id"].clone()).context("invalid gateway id").map_err(ControlFlow::Break)?;
 
-            if reboot_info.gateway_state == "Running" {
+            if reboot_gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
                 // Assert that the gateway info is the same as before the reboot
-                assert_eq!(ldk_info, reboot_info);
+                assert_eq!(ldk_gateway_id, reboot_gateway_id);
                 return Ok(());
             }
             Err(ControlFlow::Continue(anyhow!("gateway not running")))
@@ -1317,16 +1317,13 @@ pub async fn do_try_create_and_pay_invoice(
     .await?
     .invoice;
 
-    match gw.ln.as_ref() {
-        Some(LightningNode::Lnd(_lnd)) => {
+    match &gw.ln {
+        LightningNode::Lnd(_lnd) => {
             // Pay the invoice using CLN
             cln.pay_bolt11_invoice(invoice).await?;
         }
-        Some(LightningNode::Ldk) => {
+        LightningNode::Ldk { name: _ } => {
             unimplemented!("do_try_create_and_pay_invoice not implemented for LDK yet");
-        }
-        None => {
-            panic!("Lightning node did not come back up correctly");
         }
     }
     Ok(())

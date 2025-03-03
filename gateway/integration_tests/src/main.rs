@@ -17,7 +17,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
-use fedimint_gateway_common::{GatewayBalances, GatewayFedConfig, GatewayInfo};
+use fedimint_gateway_common::{FederationInfo, GatewayBalances, GatewayFedConfig};
 use fedimint_testing::ln::LightningNodeType;
 use itertools::Itertools;
 use tracing::{debug, info, warn};
@@ -94,10 +94,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
 
             // Recover without a backup
             info!("Wiping gateway and recovering without a backup...");
-            let ln = gw
-                .ln
-                .clone()
-                .expect("Gateway is not connected to Lightning Node");
+            let ln = gw.ln.clone();
             let new_gw = stop_and_recover_gateway(
                 process_mgr.clone(),
                 mnemonic.clone(),
@@ -132,7 +129,8 @@ async fn stop_and_recover_gateway(
     let before_onchain_balance = gateway_balances.onchain_balance_sats;
 
     // Stop the Gateway
-    let gw_type = old_gw.lightning_node_type();
+    let gw_type = old_gw.ln.ln_type();
+    let gw_name = old_gw.gw_name.clone();
     old_gw.terminate().await?;
     info!("Terminated Gateway");
 
@@ -141,13 +139,13 @@ async fn stop_and_recover_gateway(
         .expect("Data dir is not set")
         .parse()
         .expect("Could not parse data dir");
-    let gw_db = data_dir.join(gw_type.to_string()).join("gatewayd.db");
+    let gw_db = data_dir.join(gw_name.clone()).join("gatewayd.db");
     remove_dir_all(gw_db)?;
     info!("Deleted the Gateway's database");
 
     if gw_type == LightningNodeType::Ldk {
         // Delete LDK's database as well
-        let ldk_data_dir = data_dir.join(gw_type.to_string()).join("ldk_node");
+        let ldk_data_dir = data_dir.join(gw_name).join("ldk_node");
         remove_dir_all(ldk_data_dir)?;
         info!("Deleted LDK's database");
     }
@@ -160,8 +158,10 @@ async fn stop_and_recover_gateway(
     assert_eq!(mnemonic, new_mnemonic);
     info!("Verified mnemonic is the same after creating new Gateway");
 
-    let info = serde_json::from_value::<GatewayInfo>(new_gw.get_info().await?)?;
-    assert_eq!(0, info.federations.len());
+    let federations = serde_json::from_value::<Vec<FederationInfo>>(
+        new_gw.get_info().await?["federations"].clone(),
+    )?;
+    assert_eq!(0, federations.len());
     info!("Verified new Gateway has no federations");
 
     new_gw.recover_fed(fed).await?;
@@ -258,7 +258,9 @@ async fn mnemonic_upgrade_test(
                 .expect("Data dir is not set")
                 .parse()
                 .expect("Could not parse data dir");
-            let gw_fed_db = data_dir.join("lnd").join(format!("{federation_id}.db"));
+            let gw_fed_db = data_dir
+                .join(gw_lnd.gw_name.clone())
+                .join(format!("{federation_id}.db"));
             remove_dir_all(gw_fed_db)?;
 
             gw_lnd.connect_fed(fed).await?;
@@ -496,7 +498,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
         let gateway_matrix = gateways
             .iter()
             .cartesian_product(gateways.iter())
-            .filter(|(a, b)| a.ln_type() != b.ln_type());
+            .filter(|(a, b)| a.ln.ln_type() != b.ln.ln_type());
 
         info!("Pegging-in gateways...");
 
@@ -508,8 +510,8 @@ async fn liquidity_test() -> anyhow::Result<()> {
         for (gw_send, gw_receive) in gateway_matrix.clone() {
             info!(
                 "Testing ecash payment: {} -> {}",
-                gw_send.ln_type(),
-                gw_receive.ln_type()
+                gw_send.ln.ln_type(),
+                gw_receive.ln.ln_type()
             );
 
             let fed_id = federation.calculate_federation_id();
@@ -528,8 +530,8 @@ async fn liquidity_test() -> anyhow::Result<()> {
         for (gw_send, gw_receive) in gateway_matrix.clone() {
             info!(
                 "Testing lightning payment: {} -> {}",
-                gw_send.ln_type(),
-                gw_receive.ln_type()
+                gw_send.ln.ln_type(),
+                gw_receive.ln.ln_type()
             );
 
             let invoice = gw_receive.create_invoice(1_000_000).await?;

@@ -214,7 +214,13 @@ impl DevJitFed {
             move || async move {
                 debug!(target: LOG_DEVIMINT, "Starting ldk gateway...");
                 let start_time = fedimint_core::time::now();
-                let ldk_gw = Gatewayd::new(&process_mgr, LightningNode::Ldk).await?;
+                let ldk_gw = Gatewayd::new(
+                    &process_mgr,
+                    LightningNode::Ldk {
+                        name: "gatewayd-ldk-0".to_string(),
+                    },
+                )
+                .await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started ldk gateway");
                 Ok(Arc::new(ldk_gw))
             }
