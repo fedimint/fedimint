@@ -38,8 +38,8 @@ use tracing::{debug, trace};
 /// so we use these constants to keep them in sync. Any other app that will
 /// want to store its own even log, will need to use the exact same prefixes,
 /// which in practice should not be a problem.
-pub const DB_KEY_PREFIX_UNORDERED_EVENT_LOG: u8 = 0x39;
-pub const DB_KEY_PREFIX_EVENT_LOG: u8 = 0x3a;
+pub const DB_KEY_PREFIX_UNORDERED_EVENT_LOG: u8 = 0x3a;
+pub const DB_KEY_PREFIX_EVENT_LOG: u8 = 0x39;
 
 pub trait Event: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE: Option<ModuleKind>;
