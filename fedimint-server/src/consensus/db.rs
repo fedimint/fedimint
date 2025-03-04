@@ -1,10 +1,11 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 
+use bitcoin::hex::DisplayHex as _;
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
-    MigrationContext,
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore as _,
+    IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX, MigrationContext,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
@@ -14,6 +15,7 @@ use fedimint_core::util::BoxStream;
 use fedimint_core::{TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use futures::StreamExt;
 use serde::Serialize;
+use strum::IntoEnumIterator as _;
 use strum_macros::EnumIter;
 
 #[repr(u8)]
@@ -27,6 +29,25 @@ pub enum DbKeyPrefix {
     ApiAnnouncements = 0x06,
     ServerInfo = 0x07,
     Module = MODULE_GLOBAL_PREFIX,
+}
+
+pub(crate) async fn verify_server_db_integrity_dbtx(dbtx: &mut DatabaseTransaction<'_>) {
+    let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
+
+    let mut records = dbtx.raw_find_by_prefix(&[]).await.expect("DB fail");
+    while let Some((k, v)) = records.next().await {
+        // We don't want to waste time checking these
+        if k[0] == DbKeyPrefix::Module as u8 {
+            break;
+        }
+
+        assert!(
+            prefixes.contains(&k[0]),
+            "Unexpected db record found: {}: {}",
+            k.as_hex(),
+            v.as_hex()
+        );
+    }
 }
 
 impl std::fmt::Display for DbKeyPrefix {

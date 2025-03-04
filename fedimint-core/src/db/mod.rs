@@ -103,7 +103,7 @@
 //! | Prevented           | Prevented      | Prevented   |
 
 use std::any;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{self, Debug};
 use std::marker::{self, PhantomData};
@@ -114,6 +114,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use bitcoin::hex::DisplayHex as _;
 use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
 use futures::{Stream, StreamExt};
@@ -3417,6 +3418,29 @@ where
             let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
             (key, value)
         })
+}
+
+pub async fn verify_module_db_integrity_dbtx(
+    dbtx: &mut DatabaseTransaction<'_>,
+    module_id: ModuleInstanceId,
+    prefixes: &BTreeSet<u8>,
+) {
+    let module_db_prefix = module_instance_id_to_byte_prefix(module_id);
+    if module_id < 250 {
+        assert_eq!(module_db_prefix.len(), 2);
+    }
+    let mut records = dbtx
+        .raw_find_by_prefix(&module_db_prefix)
+        .await
+        .expect("DB fail");
+    while let Some((k, v)) = records.next().await {
+        assert!(
+            prefixes.contains(&k[module_db_prefix.len()]),
+            "Unexpected db record found: {}: {}",
+            k.as_hex(),
+            v.as_hex()
+        );
+    }
 }
 
 #[cfg(test)]

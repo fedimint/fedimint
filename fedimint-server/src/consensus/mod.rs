@@ -14,11 +14,13 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::Sender;
-use db::get_global_database_migrations;
+use db::{get_global_database_migrations, verify_server_db_integrity_dbtx};
 use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, apply_migrations, apply_migrations_server_dbtx};
+use fedimint_core::db::{
+    Database, apply_migrations_dbtx, apply_migrations_server_dbtx, verify_module_db_integrity_dbtx,
+};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
@@ -73,6 +75,10 @@ pub async fn run(
     .await?;
 
     update_server_info_version_dbtx(&mut global_dbtx.to_ref_nc(), &code_version_str).await;
+
+    if is_running_in_test_env() {
+        verify_server_db_integrity_dbtx(&mut global_dbtx.to_ref_nc()).await;
+    }
     global_dbtx.commit_tx_result().await?;
 
     let mut modules = BTreeMap::new();
@@ -94,14 +100,27 @@ pub async fn run(
             Some(module_init) => {
                 info!(target: LOG_CORE, "Initialise module {module_id}...");
 
-                apply_migrations(
-                    &db,
+                let mut dbtx = db.begin_transaction().await;
+                apply_migrations_dbtx(
+                    &mut dbtx.to_ref_nc(),
                     module_init.module_kind().to_string(),
                     module_init.get_database_migrations(),
                     Some(*module_id),
                     None,
                 )
                 .await?;
+
+                if let Some(used_db_prefixes) = module_init.used_db_prefixes() {
+                    if is_running_in_test_env() {
+                        verify_module_db_integrity_dbtx(
+                            &mut dbtx.to_ref_nc(),
+                            *module_id,
+                            &used_db_prefixes,
+                        )
+                        .await;
+                    }
+                }
+                dbtx.commit_tx_result().await?;
 
                 let module = module_init
                     .init(

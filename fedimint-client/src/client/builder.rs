@@ -23,7 +23,10 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{AdminCreds, ModuleRecoveryStarted};
 use fedimint_core::config::{ClientConfig, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    Database, IDatabaseTransactionOpsCoreTyped as _, verify_module_db_integrity_dbtx,
+};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::ApiVersion;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::task::TaskGroup;
@@ -44,7 +47,7 @@ use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
     self, ApiSecretKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
-    apply_migrations_client,
+    apply_migrations_client_module_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::ClientModuleInitRegistry;
@@ -200,13 +203,25 @@ impl ClientBuilder {
                     continue;
                 };
 
-                apply_migrations_client(
-                    db,
+                let mut dbtx = db.begin_transaction().await;
+                apply_migrations_client_module_dbtx(
+                    &mut dbtx.to_ref_nc(),
                     kind.to_string(),
                     init.get_database_migrations(),
                     module_id,
                 )
                 .await?;
+                if let Some(used_db_prefixes) = init.used_db_prefixes() {
+                    if is_running_in_test_env() {
+                        verify_module_db_integrity_dbtx(
+                            &mut dbtx.to_ref_nc(),
+                            module_id,
+                            &used_db_prefixes,
+                        )
+                        .await;
+                    }
+                }
+                dbtx.commit_tx_result().await?;
             }
         }
 

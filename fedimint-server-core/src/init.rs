@@ -1,7 +1,7 @@
 // TODO: remove and fix nits
 #![allow(clippy::pedantic)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{any, marker};
@@ -76,6 +76,9 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn>;
+
+    /// See [`ServerModuleInit::used_db_prefixes`]
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>>;
 }
 
 /// A type that can be used as module-shared value inside
@@ -228,6 +231,19 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
         BTreeMap::new()
     }
+
+    /// Db prefixes used by the module
+    ///
+    /// If `Some` is returned, it should contain list of database
+    /// prefixes actually used by the module for it's keys.
+    ///
+    /// In (some subset of) non-production tests,
+    /// module database will be scanned for presence of keys
+    /// that do not belong to this list to verify integrity
+    /// of data and possibly catch any unforeseen bugs.
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        None
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -309,6 +325,10 @@ where
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
         <Self as ServerModuleInit>::get_database_migrations(self)
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        <Self as ServerModuleInit>::used_db_prefixes(self)
     }
 }
 
