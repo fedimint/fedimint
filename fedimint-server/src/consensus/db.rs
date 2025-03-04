@@ -1,11 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 
-use bitcoin::hex::DisplayHex as _;
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore as _,
-    IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX, MigrationContext,
+    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
@@ -15,49 +13,8 @@ use fedimint_core::util::BoxStream;
 use fedimint_core::{TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use futures::StreamExt;
 use serde::Serialize;
-use strum::IntoEnumIterator as _;
-use strum_macros::EnumIter;
 
-#[repr(u8)]
-#[derive(Clone, EnumIter, Debug)]
-pub enum DbKeyPrefix {
-    AcceptedItem = 0x01,
-    AcceptedTransaction = 0x02,
-    SignedSessionOutcome = 0x04,
-    AlephUnits = 0x05,
-    // TODO: do we want to split the server DB into consensus/non-consensus?
-    ApiAnnouncements = 0x06,
-    ServerInfo = 0x07,
-
-    DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
-    ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
-    Module = MODULE_GLOBAL_PREFIX,
-}
-
-pub(crate) async fn verify_server_db_integrity_dbtx(dbtx: &mut DatabaseTransaction<'_>) {
-    let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
-
-    let mut records = dbtx.raw_find_by_prefix(&[]).await.expect("DB fail");
-    while let Some((k, v)) = records.next().await {
-        // We don't want to waste time checking these
-        if k[0] == DbKeyPrefix::Module as u8 {
-            break;
-        }
-
-        assert!(
-            prefixes.contains(&k[0]),
-            "Unexpected db record found: {}: {}",
-            k.as_hex(),
-            v.as_hex()
-        );
-    }
-}
-
-impl std::fmt::Display for DbKeyPrefix {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
+use crate::db::DbKeyPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct AcceptedItemKey(pub u64);

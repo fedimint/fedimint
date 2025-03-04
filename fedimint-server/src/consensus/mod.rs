@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::Sender;
-use db::{get_global_database_migrations, verify_server_db_integrity_dbtx};
+use db::get_global_database_migrations;
 use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -43,6 +43,7 @@ use tracing::{info, warn};
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
+use crate::db::verify_server_db_integrity_dbtx;
 use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};

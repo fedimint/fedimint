@@ -23,17 +23,18 @@ use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AcceptedTransactionKeyPrefix,
-    AlephUnitsKey, AlephUnitsPrefix, DbKeyPrefix, SignedSessionOutcomeKey,
-    SignedSessionOutcomePrefix, get_global_database_migrations,
+    AlephUnitsKey, AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
+use fedimint_server::db::DbKeyPrefix;
 use fedimint_server::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 use fedimint_testing_core::db::{
     BYTE_32, TEST_MODULE_INSTANCE_ID, snapshot_db_migrations_with_decoders,
     validate_migrations_global,
 };
 use futures::StreamExt;
-use strum::IntoEnumIterator;
+use strum::IntoEnumIterator as _;
 use tracing::info;
 
 /// Create a database with version 0 data. The database produced is not
