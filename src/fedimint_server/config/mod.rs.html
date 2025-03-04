@@ -313,7 +313,7 @@
 <a href=#313 id=313 data-nosnippet>313</a>                .map(|(peer, endpoints)| {
 <a href=#314 id=314 data-nosnippet>314</a>                    <span class="kw">let </span>url = PeerUrl {
 <a href=#315 id=315 data-nosnippet>315</a>                        name: endpoints.name.clone(),
-<a href=#316 id=316 data-nosnippet>316</a>                        url: SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}.ed25519"</span>, endpoints.api_pk))
+<a href=#316 id=316 data-nosnippet>316</a>                        url: SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, endpoints.api_pk))
 <a href=#317 id=317 data-nosnippet>317</a>                            .expect(<span class="string">"Failed to parse iroh url"</span>),
 <a href=#318 id=318 data-nosnippet>318</a>                    };
 <a href=#319 id=319 data-nosnippet>319</a>
