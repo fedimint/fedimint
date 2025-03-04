@@ -31,7 +31,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::backup::{ClientBackup, Metadata};
 use crate::sm::executor::{
-    ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, InactiveStateKeyBytes,
+    ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, ExecutorDbPrefixes, InactiveStateKeyBytes,
     InactiveStateKeyPrefixBytes,
 };
 
@@ -56,6 +56,12 @@ pub enum DbKeyPrefix {
     ApiUrlAnnouncement = 0x38,
     EventLog = fedimint_eventlog::DB_KEY_PREFIX_EVENT_LOG,
     UnorderedEventLog = fedimint_eventlog::DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
+
+    DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
+    ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
+
+    ActiveStates = ExecutorDbPrefixes::ActiveStates as u8,
+    InactiveStates = ExecutorDbPrefixes::InactiveStates as u8,
 
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
