@@ -36,7 +36,7 @@
 <a href=#36 id=36 data-nosnippet>36</a>
 <a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span><span class="kw">crate</span>::config::distributedgen::PeerHandleOps;
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
-<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::{TlsConfig, dns_sanitize};
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span><span class="kw">crate</span>::net::p2p_connector::TlsConfig;
 <a href=#40 id=40 data-nosnippet>40</a>
 <a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub mod </span>api;
 <a href=#42 id=42 data-nosnippet>42</a><span class="kw">pub mod </span>distributedgen;
@@ -822,24 +822,4 @@
 <a href=#822 id=822 data-nosnippet>822</a>            })
 <a href=#823 id=823 data-nosnippet>823</a>            .collect()
 <a href=#824 id=824 data-nosnippet>824</a>    }
-<a href=#825 id=825 data-nosnippet>825</a>}
-<a href=#826 id=826 data-nosnippet>826</a>
-<a href=#827 id=827 data-nosnippet>827</a><span class="kw">pub fn </span>gen_cert_and_key(
-<a href=#828 id=828 data-nosnippet>828</a>    name: <span class="kw-2">&amp;</span>str,
-<a href=#829 id=829 data-nosnippet>829</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(rustls::Certificate, rustls::PrivateKey), anyhow::Error&gt; {
-<a href=#830 id=830 data-nosnippet>830</a>    <span class="kw">let </span>keypair = rcgen::KeyPair::generate()<span class="question-mark">?</span>;
-<a href=#831 id=831 data-nosnippet>831</a>    <span class="kw">let </span>keypair_ser = keypair.serialize_der();
-<a href=#832 id=832 data-nosnippet>832</a>    <span class="kw">let </span><span class="kw-2">mut </span>params = rcgen::CertificateParams::new(<span class="macro">vec!</span>[dns_sanitize(name)])<span class="question-mark">?</span>;
-<a href=#833 id=833 data-nosnippet>833</a>
-<a href=#834 id=834 data-nosnippet>834</a>    params.is_ca = rcgen::IsCa::NoCa;
-<a href=#835 id=835 data-nosnippet>835</a>    params
-<a href=#836 id=836 data-nosnippet>836</a>        .distinguished_name
-<a href=#837 id=837 data-nosnippet>837</a>        .push(rcgen::DnType::CommonName, dns_sanitize(name));
-<a href=#838 id=838 data-nosnippet>838</a>
-<a href=#839 id=839 data-nosnippet>839</a>    <span class="kw">let </span>cert = params.self_signed(<span class="kw-2">&amp;</span>keypair)<span class="question-mark">?</span>;
-<a href=#840 id=840 data-nosnippet>840</a>
-<a href=#841 id=841 data-nosnippet>841</a>    <span class="prelude-val">Ok</span>((
-<a href=#842 id=842 data-nosnippet>842</a>        rustls::Certificate(cert.der().to_vec()),
-<a href=#843 id=843 data-nosnippet>843</a>        rustls::PrivateKey(keypair_ser),
-<a href=#844 id=844 data-nosnippet>844</a>    ))
-<a href=#845 id=845 data-nosnippet>845</a>}</code></pre></div></section></main></body></html>
+<a href=#825 id=825 data-nosnippet>825</a>}</code></pre></div></section></main></body></html>
