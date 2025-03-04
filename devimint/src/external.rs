@@ -992,7 +992,9 @@ pub async fn open_channels_between_gateways(
                 .await;
 
                 if res.is_err() {
-                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Failed to open channel");
+                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, ?res, "Failed to open channel");
+                    gw_a.dump_logs()?;
+                    gw_b.dump_logs()?;
                 }
 
                 res

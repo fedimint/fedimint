@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -18,7 +20,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
 use semver::Version;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -36,6 +38,7 @@ pub struct Gatewayd {
     pub(crate) lightning_node_addr: String,
     pub gatewayd_version: Version,
     pub gw_name: String,
+    pub log_path: PathBuf,
 }
 
 impl Gatewayd {
@@ -88,6 +91,10 @@ impl Gatewayd {
             )
             .await?;
 
+        let log_path = process_mgr
+            .globals
+            .FM_LOGS_DIR
+            .join(format!("{gw_name}.log"));
         let gatewayd = Self {
             process,
             ln,
@@ -95,6 +102,7 @@ impl Gatewayd {
             lightning_node_addr,
             gatewayd_version,
             gw_name,
+            log_path,
         };
         poll(
             "waiting for gateway to be ready to respond to rpc",
@@ -116,6 +124,19 @@ impl Gatewayd {
         } else {
             cmd!(crate::util::Gatewayd, ln_type)
         }
+    }
+
+    pub fn dump_logs(&self) -> Result<()> {
+        let mut logs = File::open(self.log_path.clone())?;
+        let mut contents = String::new();
+        logs.read_to_string(&mut contents)?;
+        info!("================ {} LOGS ================", self.gw_name);
+        info!("{contents}");
+        info!(
+            "================ {} LOGS DONE ================",
+            self.gw_name
+        );
+        Ok(())
     }
 
     pub async fn terminate(self) -> Result<()> {
@@ -193,13 +214,18 @@ impl Gatewayd {
     }
 
     pub async fn get_info(&self) -> Result<serde_json::Value> {
-        retry(
+        let res = retry(
             "Getting gateway info via gateway-cli info",
             backoff_util::aggressive_backoff(),
             || async { cmd!(self, "info").out_json().await },
         )
         .await
-        .context("Getting gateway info via gateway-cli info")
+        .context("Getting gateway info via gateway-cli info");
+        if let Err(err) = &res {
+            error!(?err, "gateway-cli failed to get info");
+            self.dump_logs()?;
+        }
+        res
     }
 
     pub async fn gateway_id(&self) -> Result<String> {
