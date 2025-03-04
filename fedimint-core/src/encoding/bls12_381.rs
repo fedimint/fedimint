@@ -1,4 +1,5 @@
-use bls12_381::{G1Affine, G2Affine, Scalar};
+use bls12_381::{G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
+use group::Curve;
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
@@ -54,5 +55,35 @@ impl Decodable for G2Affine {
 
         Option::from(Self::from_compressed(&byte_array))
             .ok_or_else(|| DecodeError::from_str("Error decoding G2Affine"))
+    }
+}
+
+impl Encodable for G1Projective {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.to_affine().consensus_encode(writer)
+    }
+}
+
+impl Decodable for G1Projective {
+    fn consensus_decode_partial<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self::from(G1Affine::consensus_decode_partial(d, modules)?))
+    }
+}
+
+impl Encodable for G2Projective {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.to_affine().consensus_encode(writer)
+    }
+}
+
+impl Decodable for G2Projective {
+    fn consensus_decode_partial<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self::from(G2Affine::consensus_decode_partial(d, modules)?))
     }
 }

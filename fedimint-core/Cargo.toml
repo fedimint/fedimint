@@ -37,6 +37,7 @@ erased-serde = { workspace = true }
 fedimint-derive = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
+group = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
 imbl = "5.0.0"

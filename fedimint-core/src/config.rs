@@ -1,12 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::ops::Mul;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{Context, bail, format_err};
-use bitcoin::hashes::sha256::{Hash as Sha256, HashEngine};
+use anyhow::{Context, format_err};
+use bitcoin::hashes::sha256::HashEngine;
 use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -21,7 +20,6 @@ use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
-use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
 
@@ -30,7 +28,7 @@ use crate::encoding::Decodable;
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
 };
-use crate::{PeerId, bls12_381_serde, maybe_add_send_sync};
+use crate::{PeerId, maybe_add_send_sync};
 
 // TODO: make configurable
 /// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
@@ -865,131 +863,42 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
 pub enum P2PMessage {
     Aleph(Vec<u8>),
     Checksum(sha256::Hash),
-    DistributedGen(SupportedDkgMessage),
+    Dkg(DkgMessage),
     Encodable(Vec<u8>),
 }
 
-/// Supported (by Fedimint's code) `DkgMessage<T>` types
-///
-/// Since `DkgMessage` is an open-set, yet we only use a subset of it,
-/// we can make a subset-trait to convert it to an `enum` that we
-/// it's easier to handle.
-///
-/// Candidate for refactoring after modularization effort is complete.
-pub trait ISupportedDkgMessage: Sized + Serialize + DeserializeOwned {
-    fn to_msg(self) -> SupportedDkgMessage;
-    fn from_msg(msg: SupportedDkgMessage) -> anyhow::Result<Self>;
+#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
+pub enum DkgMessage {
+    Hash(sha256::Hash),
+    Commitment(Vec<(G1Projective, G2Projective)>),
+    Share(Scalar),
 }
 
-/// `enum` version of [`SupportedDkgMessage`]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum SupportedDkgMessage {
-    G1(DkgMessage<G1Projective>),
-    G2(DkgMessage<G2Projective>),
-}
-
-impl ISupportedDkgMessage for DkgMessage<G1Projective> {
-    fn to_msg(self) -> SupportedDkgMessage {
-        SupportedDkgMessage::G1(self)
-    }
-
-    fn from_msg(msg: SupportedDkgMessage) -> anyhow::Result<Self> {
-        match msg {
-            SupportedDkgMessage::G1(s) => Ok(s),
-            SupportedDkgMessage::G2(_) => bail!("Incorrect DkgGroup: G2"),
-        }
+// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
+// requirement
+impl Serialize for DkgMessage {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.consensus_encode_to_hex().serialize(serializer)
     }
 }
 
-impl ISupportedDkgMessage for DkgMessage<G2Projective> {
-    fn to_msg(self) -> SupportedDkgMessage {
-        SupportedDkgMessage::G2(self)
-    }
-
-    fn from_msg(msg: SupportedDkgMessage) -> anyhow::Result<Self> {
-        match msg {
-            SupportedDkgMessage::G1(_) => bail!("Incorrect DkgGroup: G1"),
-            SupportedDkgMessage::G2(s) => Ok(s),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum DkgMessage<G: DkgGroup> {
-    HashedCommit(Sha256),
-    Commit(#[serde(with = "serde_commit")] Vec<G>),
-    Share(
-        #[serde(with = "bls12_381_serde::scalar")] Scalar,
-        #[serde(with = "bls12_381_serde::scalar")] Scalar,
-    ),
-    Extract(#[serde(with = "serde_commit")] Vec<G>),
-}
-
-/// Defines a group (e.g. G1 or G2) that we can generate keys for
-pub trait DkgGroup:
-    Group + Mul<Scalar, Output = Self> + Curve + GroupEncoding + SGroup + Unpin
-{
-}
-
-impl<T: Group + Mul<Scalar, Output = T> + Curve + GroupEncoding + SGroup + Unpin> DkgGroup for T {}
-
-/// Handling the Group serialization with a wrapper
-mod serde_commit {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    use crate::config::DkgGroup;
-
-    pub fn serialize<S: Serializer, G: DkgGroup>(vec: &[G], s: S) -> Result<S::Ok, S::Error> {
-        let wrap_vec: Vec<Wrap<G>> = vec.iter().copied().map(Wrap).collect();
-        wrap_vec.serialize(s)
-    }
-
-    pub fn deserialize<'d, D: Deserializer<'d>, G: DkgGroup>(d: D) -> Result<Vec<G>, D::Error> {
-        let wrap_vec = <Vec<Wrap<G>>>::deserialize(d)?;
-        Ok(wrap_vec.into_iter().map(|wrap| wrap.0).collect())
-    }
-
-    struct Wrap<G: DkgGroup>(G);
-
-    impl<G: DkgGroup> Serialize for Wrap<G> {
-        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-            self.0.serialize2(s)
-        }
-    }
-
-    impl<'d, G: DkgGroup> Deserialize<'d> for Wrap<G> {
-        fn deserialize<D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-            G::deserialize2(d).map(Wrap)
-        }
-    }
-}
-
-pub trait SGroup: Sized {
-    fn serialize2<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error>;
-    fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error>;
-}
-
-impl SGroup for G2Projective {
-    fn serialize2<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        bls12_381_serde::g2::serialize(&self.to_affine(), s)
-    }
-
-    fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        bls12_381_serde::g2::deserialize(d).map(Self::from)
-    }
-}
-
-impl SGroup for G1Projective {
-    fn serialize2<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        bls12_381_serde::g1::serialize(&self.to_affine(), s)
-    }
-
-    fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        bls12_381_serde::g1::deserialize(d).map(Self::from)
+impl<'de> Deserialize<'de> for DkgMessage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::consensus_decode_hex(
+            &String::deserialize(deserializer)?,
+            &ModuleDecoderRegistry::default(),
+        )
+        .map_err(serde::de::Error::custom)
     }
 }
 
