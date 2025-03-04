@@ -29,10 +29,9 @@ use tokio_rustls::rustls;
 use tracing::warn;
 
 use super::PeerEndpoints;
-use crate::config::{
-    ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerConnectionInfo, gen_cert_and_key,
-};
+use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerConnectionInfo};
 use crate::net::api::{ApiResult, HasApiContext, check_auth};
+use crate::net::p2p_connector::gen_cert_and_key;
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
 #[derive(Debug, Clone, Default)]

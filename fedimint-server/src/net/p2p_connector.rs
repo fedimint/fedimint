@@ -207,10 +207,23 @@ where
     }
 }
 
+pub fn gen_cert_and_key(
+    name: &str,
+) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
+    let cert_key = rcgen::generate_simple_self_signed(vec![dns_sanitize(name)])?;
+
+    Ok((
+        rustls::Certificate(cert_key.cert.der().to_vec()),
+        rustls::PrivateKey(cert_key.key_pair.serialize_der()),
+    ))
+}
+
 /// Sanitizes name as valid domain name
 pub fn dns_sanitize(name: &str) -> String {
-    let sanitized = name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
-    format!("peer{sanitized}")
+    format!(
+        "peer{}",
+        name.replace(|c: char| !c.is_ascii_alphanumeric(), "_")
+    )
 }
 
 /// Parses the host and port from a url
@@ -230,7 +243,6 @@ pub struct IrohConnector {
     pub node_ids: BTreeMap<PeerId, NodeId>,
     /// The Iroh endpoint
     pub endpoint: Endpoint,
-
     /// List of overrides to use when attempting to connect to given `NodeId`
     ///
     /// This is useful for testing, or forcing non-default network connectivity.
