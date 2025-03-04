@@ -13,7 +13,7 @@
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span><span class="kw">crate</span>::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use crate</span>::{NumPeersExt, PeerId};
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use crate</span>::{NumPeersExt, PeerId, base32};
 <a href=#17 id=17 data-nosnippet>17</a>
 <a href=#18 id=18 data-nosnippet>18</a><span class="doccomment">/// Information required for client to join Federation
 <a href=#19 id=19 data-nosnippet>19</a>///
@@ -170,174 +170,142 @@
 <a href=#170 id=170 data-nosnippet>170</a>            })
 <a href=#171 id=171 data-nosnippet>171</a>            .expect(<span class="string">"Ensured by constructor"</span>)
 <a href=#172 id=172 data-nosnippet>172</a>    }
-<a href=#173 id=173 data-nosnippet>173</a>}
-<a href=#174 id=174 data-nosnippet>174</a>
-<a href=#175 id=175 data-nosnippet>175</a><span class="doccomment">/// For extendability [`InviteCode`] consists of parts, where client can ignore
-<a href=#176 id=176 data-nosnippet>176</a>/// ones they don't understand.
-<a href=#177 id=177 data-nosnippet>177</a>///
-<a href=#178 id=178 data-nosnippet>178</a>/// ones they don't understand Data that can be encoded in the invite code.
-<a href=#179 id=179 data-nosnippet>179</a>/// Currently we always just use one `Api` and one `FederationId` variant in an
-<a href=#180 id=180 data-nosnippet>180</a>/// invite code, but more can be added in the future while still keeping the
-<a href=#181 id=181 data-nosnippet>181</a>/// invite code readable for older clients, which will just ignore the new
-<a href=#182 id=182 data-nosnippet>182</a>/// fields.
-<a href=#183 id=183 data-nosnippet>183</a></span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Hash, Ord, PartialOrd)]
-<a href=#184 id=184 data-nosnippet>184</a></span><span class="kw">enum </span>InviteCodePart {
-<a href=#185 id=185 data-nosnippet>185</a>    <span class="doccomment">/// API endpoint of one of the guardians
-<a href=#186 id=186 data-nosnippet>186</a>    </span>Api {
-<a href=#187 id=187 data-nosnippet>187</a>        <span class="doccomment">/// URL to reach an API that we can download configs from
-<a href=#188 id=188 data-nosnippet>188</a>        </span>url: SafeUrl,
-<a href=#189 id=189 data-nosnippet>189</a>        <span class="doccomment">/// Peer id of the host from the Url
-<a href=#190 id=190 data-nosnippet>190</a>        </span>peer: PeerId,
-<a href=#191 id=191 data-nosnippet>191</a>    },
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">pub fn </span>encode_base32(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="macro">format!</span>(
+<a href=#176 id=176 data-nosnippet>176</a>            <span class="string">"fedimint{}"</span>,
+<a href=#177 id=177 data-nosnippet>177</a>            base32::encode(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_vec())
+<a href=#178 id=178 data-nosnippet>178</a>        )
+<a href=#179 id=179 data-nosnippet>179</a>    }
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">pub fn </span>decode_base32(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="macro">ensure!</span>(s.starts_with(<span class="string">"fedimint"</span>), <span class="string">"Invalid Prefix"</span>);
+<a href=#183 id=183 data-nosnippet>183</a>
+<a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">let </span>params = <span class="self">Self</span>::consensus_decode_whole(
+<a href=#185 id=185 data-nosnippet>185</a>            <span class="kw-2">&amp;</span>base32::decode(<span class="kw-2">&amp;</span>s[<span class="number">8</span>..])<span class="question-mark">?</span>,
+<a href=#186 id=186 data-nosnippet>186</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+<a href=#187 id=187 data-nosnippet>187</a>        )<span class="question-mark">?</span>;
+<a href=#188 id=188 data-nosnippet>188</a>
+<a href=#189 id=189 data-nosnippet>189</a>        <span class="prelude-val">Ok</span>(params)
+<a href=#190 id=190 data-nosnippet>190</a>    }
+<a href=#191 id=191 data-nosnippet>191</a>}
 <a href=#192 id=192 data-nosnippet>192</a>
-<a href=#193 id=193 data-nosnippet>193</a>    <span class="doccomment">/// Authentication id for the federation
-<a href=#194 id=194 data-nosnippet>194</a>    </span>FederationId(FederationId),
-<a href=#195 id=195 data-nosnippet>195</a>
-<a href=#196 id=196 data-nosnippet>196</a>    <span class="doccomment">/// Api secret to use
-<a href=#197 id=197 data-nosnippet>197</a>    </span>ApiSecret(String),
-<a href=#198 id=198 data-nosnippet>198</a>
-<a href=#199 id=199 data-nosnippet>199</a>    <span class="doccomment">/// Unknown invite code fields to be defined in the future
-<a href=#200 id=200 data-nosnippet>200</a>    </span><span class="attr">#[encodable_default]
-<a href=#201 id=201 data-nosnippet>201</a>    </span>Default { variant: u64, bytes: Vec&lt;u8&gt; },
-<a href=#202 id=202 data-nosnippet>202</a>}
-<a href=#203 id=203 data-nosnippet>203</a>
-<a href=#204 id=204 data-nosnippet>204</a><span class="doccomment">/// We can represent client invite code as a bech32 string for compactness and
-<a href=#205 id=205 data-nosnippet>205</a>/// error-checking
-<a href=#206 id=206 data-nosnippet>206</a>///
-<a href=#207 id=207 data-nosnippet>207</a>/// Human readable part (HRP) includes the version
-<a href=#208 id=208 data-nosnippet>208</a>/// ```txt
-<a href=#209 id=209 data-nosnippet>209</a>/// [ hrp (4 bytes) ] [ id (48 bytes) ] ([ url len (2 bytes) ] [ url bytes (url len bytes) ])+
-<a href=#210 id=210 data-nosnippet>210</a>/// ```
-<a href=#211 id=211 data-nosnippet>211</a></span><span class="kw">const </span>BECH32_HRP: Hrp = Hrp::parse_unchecked(<span class="string">"fed1"</span>);
-<a href=#212 id=212 data-nosnippet>212</a>
-<a href=#213 id=213 data-nosnippet>213</a><span class="kw">impl </span>FromStr <span class="kw">for </span>InviteCode {
-<a href=#214 id=214 data-nosnippet>214</a>    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
-<a href=#215 id=215 data-nosnippet>215</a>
-<a href=#216 id=216 data-nosnippet>216</a>    <span class="kw">fn </span>from_str(encoded: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
-<a href=#217 id=217 data-nosnippet>217</a>        <span class="kw">if let </span><span class="prelude-val">Ok</span>(invite_code_v2) = InviteCodeV2::decode_base64(encoded) {
-<a href=#218 id=218 data-nosnippet>218</a>            <span class="kw">return </span>invite_code_v2.into_v1();
-<a href=#219 id=219 data-nosnippet>219</a>        }
-<a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">let </span>(hrp, data) = bech32::decode(encoded)<span class="question-mark">?</span>;
-<a href=#222 id=222 data-nosnippet>222</a>
-<a href=#223 id=223 data-nosnippet>223</a>        <span class="macro">ensure!</span>(hrp == BECH32_HRP, <span class="string">"Invalid HRP in bech32 encoding"</span>);
-<a href=#224 id=224 data-nosnippet>224</a>
-<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">let </span>invite = <span class="self">Self</span>::consensus_decode_whole(<span class="kw-2">&amp;</span>data, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
-<a href=#226 id=226 data-nosnippet>226</a>
-<a href=#227 id=227 data-nosnippet>227</a>        <span class="prelude-val">Ok</span>(invite)
-<a href=#228 id=228 data-nosnippet>228</a>    }
-<a href=#229 id=229 data-nosnippet>229</a>}
+<a href=#193 id=193 data-nosnippet>193</a><span class="doccomment">/// For extendability [`InviteCode`] consists of parts, where client can ignore
+<a href=#194 id=194 data-nosnippet>194</a>/// ones they don't understand.
+<a href=#195 id=195 data-nosnippet>195</a>///
+<a href=#196 id=196 data-nosnippet>196</a>/// ones they don't understand Data that can be encoded in the invite code.
+<a href=#197 id=197 data-nosnippet>197</a>/// Currently we always just use one `Api` and one `FederationId` variant in an
+<a href=#198 id=198 data-nosnippet>198</a>/// invite code, but more can be added in the future while still keeping the
+<a href=#199 id=199 data-nosnippet>199</a>/// invite code readable for older clients, which will just ignore the new
+<a href=#200 id=200 data-nosnippet>200</a>/// fields.
+<a href=#201 id=201 data-nosnippet>201</a></span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Hash, Ord, PartialOrd)]
+<a href=#202 id=202 data-nosnippet>202</a></span><span class="kw">enum </span>InviteCodePart {
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="doccomment">/// API endpoint of one of the guardians
+<a href=#204 id=204 data-nosnippet>204</a>    </span>Api {
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="doccomment">/// URL to reach an API that we can download configs from
+<a href=#206 id=206 data-nosnippet>206</a>        </span>url: SafeUrl,
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="doccomment">/// Peer id of the host from the Url
+<a href=#208 id=208 data-nosnippet>208</a>        </span>peer: PeerId,
+<a href=#209 id=209 data-nosnippet>209</a>    },
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="doccomment">/// Authentication id for the federation
+<a href=#212 id=212 data-nosnippet>212</a>    </span>FederationId(FederationId),
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a>    <span class="doccomment">/// Api secret to use
+<a href=#215 id=215 data-nosnippet>215</a>    </span>ApiSecret(String),
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="doccomment">/// Unknown invite code fields to be defined in the future
+<a href=#218 id=218 data-nosnippet>218</a>    </span><span class="attr">#[encodable_default]
+<a href=#219 id=219 data-nosnippet>219</a>    </span>Default { variant: u64, bytes: Vec&lt;u8&gt; },
+<a href=#220 id=220 data-nosnippet>220</a>}
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a><span class="doccomment">/// We can represent client invite code as a bech32 string for compactness and
+<a href=#223 id=223 data-nosnippet>223</a>/// error-checking
+<a href=#224 id=224 data-nosnippet>224</a>///
+<a href=#225 id=225 data-nosnippet>225</a>/// Human readable part (HRP) includes the version
+<a href=#226 id=226 data-nosnippet>226</a>/// ```txt
+<a href=#227 id=227 data-nosnippet>227</a>/// [ hrp (4 bytes) ] [ id (48 bytes) ] ([ url len (2 bytes) ] [ url bytes (url len bytes) ])+
+<a href=#228 id=228 data-nosnippet>228</a>/// ```
+<a href=#229 id=229 data-nosnippet>229</a></span><span class="kw">const </span>BECH32_HRP: Hrp = Hrp::parse_unchecked(<span class="string">"fed1"</span>);
 <a href=#230 id=230 data-nosnippet>230</a>
-<a href=#231 id=231 data-nosnippet>231</a><span class="doccomment">/// Parses the invite code from a bech32 string
-<a href=#232 id=232 data-nosnippet>232</a></span><span class="kw">impl </span>Display <span class="kw">for </span>InviteCode {
-<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#234 id=234 data-nosnippet>234</a>        <span class="kw">let </span>data = <span class="self">self</span>.consensus_encode_to_vec();
-<a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">let </span>encode = bech32::encode::&lt;Bech32m&gt;(BECH32_HRP, <span class="kw-2">&amp;</span>data).map_err(|<span class="kw">_</span>| fmt::Error)<span class="question-mark">?</span>;
-<a href=#236 id=236 data-nosnippet>236</a>        formatter.write_str(<span class="kw-2">&amp;</span>encode)
-<a href=#237 id=237 data-nosnippet>237</a>    }
-<a href=#238 id=238 data-nosnippet>238</a>}
-<a href=#239 id=239 data-nosnippet>239</a>
-<a href=#240 id=240 data-nosnippet>240</a><span class="kw">impl </span>Serialize <span class="kw">for </span>InviteCode {
-<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">where
-<a href=#243 id=243 data-nosnippet>243</a>        </span>S: serde::Serializer,
-<a href=#244 id=244 data-nosnippet>244</a>    {
-<a href=#245 id=245 data-nosnippet>245</a>        String::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.to_string(), serializer)
+<a href=#231 id=231 data-nosnippet>231</a><span class="kw">impl </span>FromStr <span class="kw">for </span>InviteCode {
+<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
+<a href=#233 id=233 data-nosnippet>233</a>
+<a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">fn </span>from_str(encoded: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">if let </span><span class="prelude-val">Ok</span>(invite_code) = <span class="self">Self</span>::decode_base32(encoded) {
+<a href=#236 id=236 data-nosnippet>236</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(invite_code);
+<a href=#237 id=237 data-nosnippet>237</a>        }
+<a href=#238 id=238 data-nosnippet>238</a>
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="kw">let </span>(hrp, data) = bech32::decode(encoded)<span class="question-mark">?</span>;
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a>        <span class="macro">ensure!</span>(hrp == BECH32_HRP, <span class="string">"Invalid HRP in bech32 encoding"</span>);
+<a href=#242 id=242 data-nosnippet>242</a>
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">let </span>invite = <span class="self">Self</span>::consensus_decode_whole(<span class="kw-2">&amp;</span>data, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
+<a href=#244 id=244 data-nosnippet>244</a>
+<a href=#245 id=245 data-nosnippet>245</a>        <span class="prelude-val">Ok</span>(invite)
 <a href=#246 id=246 data-nosnippet>246</a>    }
 <a href=#247 id=247 data-nosnippet>247</a>}
 <a href=#248 id=248 data-nosnippet>248</a>
-<a href=#249 id=249 data-nosnippet>249</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>InviteCode {
-<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
-<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">where
-<a href=#252 id=252 data-nosnippet>252</a>        </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
-<a href=#253 id=253 data-nosnippet>253</a>    {
-<a href=#254 id=254 data-nosnippet>254</a>        <span class="kw">let </span>string = Cow::&lt;str&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
-<a href=#255 id=255 data-nosnippet>255</a>        <span class="self">Self</span>::from_str(<span class="kw-2">&amp;</span>string).map_err(serde::de::Error::custom)
-<a href=#256 id=256 data-nosnippet>256</a>    }
-<a href=#257 id=257 data-nosnippet>257</a>}
-<a href=#258 id=258 data-nosnippet>258</a>
-<a href=#259 id=259 data-nosnippet>259</a><span class="attr">#[cfg(test)]
-<a href=#260 id=260 data-nosnippet>260</a></span><span class="kw">mod </span>tests {
-<a href=#261 id=261 data-nosnippet>261</a>    <span class="kw">use </span>std::collections::BTreeMap;
-<a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">use </span>std::str::FromStr;
-<a href=#263 id=263 data-nosnippet>263</a>
-<a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">use </span>fedimint_core::PeerId;
-<a href=#265 id=265 data-nosnippet>265</a>    <span class="kw">use </span>fedimint_core::util::SafeUrl;
+<a href=#249 id=249 data-nosnippet>249</a><span class="doccomment">/// Parses the invite code from a bech32 string
+<a href=#250 id=250 data-nosnippet>250</a></span><span class="kw">impl </span>Display <span class="kw">for </span>InviteCode {
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="kw">let </span>data = <span class="self">self</span>.consensus_encode_to_vec();
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">let </span>encode = bech32::encode::&lt;Bech32m&gt;(BECH32_HRP, <span class="kw-2">&amp;</span>data).map_err(|<span class="kw">_</span>| fmt::Error)<span class="question-mark">?</span>;
+<a href=#254 id=254 data-nosnippet>254</a>        formatter.write_str(<span class="kw-2">&amp;</span>encode)
+<a href=#255 id=255 data-nosnippet>255</a>    }
+<a href=#256 id=256 data-nosnippet>256</a>}
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a><span class="kw">impl </span>Serialize <span class="kw">for </span>InviteCode {
+<a href=#259 id=259 data-nosnippet>259</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#260 id=260 data-nosnippet>260</a>    <span class="kw">where
+<a href=#261 id=261 data-nosnippet>261</a>        </span>S: serde::Serializer,
+<a href=#262 id=262 data-nosnippet>262</a>    {
+<a href=#263 id=263 data-nosnippet>263</a>        String::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.to_string(), serializer)
+<a href=#264 id=264 data-nosnippet>264</a>    }
+<a href=#265 id=265 data-nosnippet>265</a>}
 <a href=#266 id=266 data-nosnippet>266</a>
-<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">use </span><span class="kw">crate</span>::config::FederationId;
-<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">use </span><span class="kw">crate</span>::invite_code::{InviteCode, InviteCodeV2};
-<a href=#269 id=269 data-nosnippet>269</a>
-<a href=#270 id=270 data-nosnippet>270</a>    <span class="attr">#[test]
-<a href=#271 id=271 data-nosnippet>271</a>    </span><span class="kw">fn </span>test_invite_code_to_from_string() {
-<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">let </span>invite_code_str = <span class="string">"fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm"</span>;
-<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">let </span>invite_code = InviteCode::from_str(invite_code_str).expect(<span class="string">"valid invite code"</span>);
-<a href=#274 id=274 data-nosnippet>274</a>
-<a href=#275 id=275 data-nosnippet>275</a>        <span class="macro">assert_eq!</span>(invite_code.to_string(), invite_code_str);
-<a href=#276 id=276 data-nosnippet>276</a>        <span class="macro">assert_eq!</span>(
-<a href=#277 id=277 data-nosnippet>277</a>            invite_code.<span class="number">0</span>,
-<a href=#278 id=278 data-nosnippet>278</a>            [
-<a href=#279 id=279 data-nosnippet>279</a>                <span class="kw">crate</span>::invite_code::InviteCodePart::Api {
-<a href=#280 id=280 data-nosnippet>280</a>                    url: <span class="string">"wss://fedimintd.mplsfed.foo/"</span>.parse().expect(<span class="string">"valid url"</span>),
-<a href=#281 id=281 data-nosnippet>281</a>                    peer: PeerId::new(<span class="number">0</span>),
-<a href=#282 id=282 data-nosnippet>282</a>                },
-<a href=#283 id=283 data-nosnippet>283</a>                <span class="kw">crate</span>::invite_code::InviteCodePart::FederationId(FederationId(
-<a href=#284 id=284 data-nosnippet>284</a>                    bitcoin::hashes::sha256::Hash::from_str(
-<a href=#285 id=285 data-nosnippet>285</a>                        <span class="string">"bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
-<a href=#286 id=286 data-nosnippet>286</a>                    </span>)
-<a href=#287 id=287 data-nosnippet>287</a>                    .expect(<span class="string">"valid hash"</span>)
-<a href=#288 id=288 data-nosnippet>288</a>                ))
-<a href=#289 id=289 data-nosnippet>289</a>            ]
-<a href=#290 id=290 data-nosnippet>290</a>        );
-<a href=#291 id=291 data-nosnippet>291</a>    }
-<a href=#292 id=292 data-nosnippet>292</a>
-<a href=#293 id=293 data-nosnippet>293</a>    <span class="attr">#[test]
-<a href=#294 id=294 data-nosnippet>294</a>    </span><span class="kw">fn </span>invite_code_v2_encode_base64_roundtrip() {
-<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>invite_code = InviteCodeV2 {
-<a href=#296 id=296 data-nosnippet>296</a>            id: FederationId::dummy(),
-<a href=#297 id=297 data-nosnippet>297</a>            peers: BTreeMap::from_iter([(
-<a href=#298 id=298 data-nosnippet>298</a>                PeerId::from(<span class="number">0</span>),
-<a href=#299 id=299 data-nosnippet>299</a>                SafeUrl::parse(<span class="string">"https://mint.com"</span>).expect(<span class="string">"Url is valid"</span>),
-<a href=#300 id=300 data-nosnippet>300</a>            )]),
-<a href=#301 id=301 data-nosnippet>301</a>            api_secret: <span class="prelude-val">None</span>,
-<a href=#302 id=302 data-nosnippet>302</a>        };
-<a href=#303 id=303 data-nosnippet>303</a>
-<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw">let </span>encoded = invite_code.encode_base64();
-<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw">let </span>decoded = InviteCodeV2::decode_base64(<span class="kw-2">&amp;</span>encoded).expect(<span class="string">"Failed to decode"</span>);
-<a href=#306 id=306 data-nosnippet>306</a>
-<a href=#307 id=307 data-nosnippet>307</a>        <span class="macro">assert_eq!</span>(invite_code, decoded);
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a>        InviteCode::from_str(<span class="kw-2">&amp;</span>encoded).expect(<span class="string">"Failed to decode to legacy"</span>);
+<a href=#267 id=267 data-nosnippet>267</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>InviteCode {
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="kw">where
+<a href=#270 id=270 data-nosnippet>270</a>        </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#271 id=271 data-nosnippet>271</a>    {
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">let </span>string = Cow::&lt;str&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="self">Self</span>::from_str(<span class="kw-2">&amp;</span>string).map_err(serde::de::Error::custom)
+<a href=#274 id=274 data-nosnippet>274</a>    }
+<a href=#275 id=275 data-nosnippet>275</a>}
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a><span class="attr">#[cfg(test)]
+<a href=#278 id=278 data-nosnippet>278</a></span><span class="kw">mod </span>tests {
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="kw">use </span>std::str::FromStr;
+<a href=#280 id=280 data-nosnippet>280</a>
+<a href=#281 id=281 data-nosnippet>281</a>    <span class="kw">use </span>fedimint_core::PeerId;
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="kw">use </span><span class="kw">crate</span>::config::FederationId;
+<a href=#284 id=284 data-nosnippet>284</a>    <span class="kw">use </span><span class="kw">crate</span>::invite_code::InviteCode;
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a>    <span class="attr">#[test]
+<a href=#287 id=287 data-nosnippet>287</a>    </span><span class="kw">fn </span>test_invite_code_to_from_string() {
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="kw">let </span>invite_code_str = <span class="string">"fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm"</span>;
+<a href=#289 id=289 data-nosnippet>289</a>        <span class="kw">let </span>invite_code = InviteCode::from_str(invite_code_str).expect(<span class="string">"valid invite code"</span>);
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a>        InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code.encode_base32())
+<a href=#292 id=292 data-nosnippet>292</a>            .expect(<span class="string">"Failed to parse base 32 invite code"</span>);
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="macro">assert_eq!</span>(invite_code.to_string(), invite_code_str);
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="macro">assert_eq!</span>(
+<a href=#296 id=296 data-nosnippet>296</a>            invite_code.<span class="number">0</span>,
+<a href=#297 id=297 data-nosnippet>297</a>            [
+<a href=#298 id=298 data-nosnippet>298</a>                <span class="kw">crate</span>::invite_code::InviteCodePart::Api {
+<a href=#299 id=299 data-nosnippet>299</a>                    url: <span class="string">"wss://fedimintd.mplsfed.foo/"</span>.parse().expect(<span class="string">"valid url"</span>),
+<a href=#300 id=300 data-nosnippet>300</a>                    peer: PeerId::new(<span class="number">0</span>),
+<a href=#301 id=301 data-nosnippet>301</a>                },
+<a href=#302 id=302 data-nosnippet>302</a>                <span class="kw">crate</span>::invite_code::InviteCodePart::FederationId(FederationId(
+<a href=#303 id=303 data-nosnippet>303</a>                    bitcoin::hashes::sha256::Hash::from_str(
+<a href=#304 id=304 data-nosnippet>304</a>                        <span class="string">"bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
+<a href=#305 id=305 data-nosnippet>305</a>                    </span>)
+<a href=#306 id=306 data-nosnippet>306</a>                    .expect(<span class="string">"valid hash"</span>)
+<a href=#307 id=307 data-nosnippet>307</a>                ))
+<a href=#308 id=308 data-nosnippet>308</a>            ]
+<a href=#309 id=309 data-nosnippet>309</a>        );
 <a href=#310 id=310 data-nosnippet>310</a>    }
-<a href=#311 id=311 data-nosnippet>311</a>}
-<a href=#312 id=312 data-nosnippet>312</a>
-<a href=#313 id=313 data-nosnippet>313</a><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
-<a href=#314 id=314 data-nosnippet>314</a></span><span class="kw">pub struct </span>InviteCodeV2 {
-<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">pub </span>id: FederationId,
-<a href=#316 id=316 data-nosnippet>316</a>    <span class="kw">pub </span>peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
-<a href=#317 id=317 data-nosnippet>317</a>    <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
-<a href=#318 id=318 data-nosnippet>318</a>    #[serde(default)]
-<a href=#319 id=319 data-nosnippet>319</a>    </span><span class="kw">pub </span>api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#320 id=320 data-nosnippet>320</a>}
-<a href=#321 id=321 data-nosnippet>321</a>
-<a href=#322 id=322 data-nosnippet>322</a><span class="kw">impl </span>InviteCodeV2 {
-<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">pub fn </span>into_v1(<span class="self">self</span>) -&gt; anyhow::Result&lt;InviteCode&gt; {
-<a href=#324 id=324 data-nosnippet>324</a>        <span class="prelude-val">Ok</span>(InviteCode::from_map(<span class="kw-2">&amp;</span><span class="self">self</span>.peers, <span class="self">self</span>.id, <span class="self">self</span>.api_secret))
-<a href=#325 id=325 data-nosnippet>325</a>    }
-<a href=#326 id=326 data-nosnippet>326</a>
-<a href=#327 id=327 data-nosnippet>327</a>    <span class="kw">pub fn </span>encode_base64(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
-<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">let </span>json = <span class="kw-2">&amp;</span>serde_json::to_string(<span class="self">self</span>).expect(<span class="string">"Encoding to JSON cannot fail"</span>);
-<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">let </span>base_64 = base64_url::encode(json);
-<a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a>        <span class="macro">format!</span>(<span class="string">"fedimintA{base_64}"</span>)
-<a href=#332 id=332 data-nosnippet>332</a>    }
-<a href=#333 id=333 data-nosnippet>333</a>
-<a href=#334 id=334 data-nosnippet>334</a>    <span class="kw">pub fn </span>decode_base64(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-<a href=#335 id=335 data-nosnippet>335</a>        <span class="macro">ensure!</span>(s.starts_with(<span class="string">"fedimintA"</span>), <span class="string">"Invalid Prefix"</span>);
-<a href=#336 id=336 data-nosnippet>336</a>
-<a href=#337 id=337 data-nosnippet>337</a>        <span class="kw">let </span>invite_code: <span class="self">Self </span>= serde_json::from_slice(<span class="kw-2">&amp;</span>base64_url::decode(<span class="kw-2">&amp;</span>s[<span class="number">9</span>..])<span class="question-mark">?</span>)<span class="question-mark">?</span>;
-<a href=#338 id=338 data-nosnippet>338</a>
-<a href=#339 id=339 data-nosnippet>339</a>        <span class="macro">ensure!</span>(!invite_code.peers.is_empty(), <span class="string">"Invite code has no peer"</span>);
-<a href=#340 id=340 data-nosnippet>340</a>
-<a href=#341 id=341 data-nosnippet>341</a>        <span class="prelude-val">Ok</span>(invite_code)
-<a href=#342 id=342 data-nosnippet>342</a>    }
-<a href=#343 id=343 data-nosnippet>343</a>}</code></pre></div></section></main></body></html>
+<a href=#311 id=311 data-nosnippet>311</a>}</code></pre></div></section></main></body></html>

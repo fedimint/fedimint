@@ -23,7 +23,7 @@
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_core::net::peers::{DynP2PConnections, Recipient};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_core::task::sleep;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::{NumPeersExt, PeerId, base32, secp256k1, timing};
 <a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_logging::LOG_NET_PEER_DKG;
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>hex::{FromHex, ToHex};
@@ -266,18 +266,18 @@
 <a href=#266 id=266 data-nosnippet>266</a>}
 <a href=#267 id=267 data-nosnippet>267</a>
 <a href=#268 id=268 data-nosnippet>268</a><span class="kw">impl </span>PeerConnectionInfo {
-<a href=#269 id=269 data-nosnippet>269</a>    <span class="kw">pub fn </span>encode_base58(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="kw">pub fn </span>encode_base32(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
 <a href=#270 id=270 data-nosnippet>270</a>        <span class="macro">format!</span>(
 <a href=#271 id=271 data-nosnippet>271</a>            <span class="string">"fedimint{}"</span>,
-<a href=#272 id=272 data-nosnippet>272</a>            bs58::encode(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_vec()).into_string()
+<a href=#272 id=272 data-nosnippet>272</a>            base32::encode(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus_encode_to_vec())
 <a href=#273 id=273 data-nosnippet>273</a>        )
 <a href=#274 id=274 data-nosnippet>274</a>    }
 <a href=#275 id=275 data-nosnippet>275</a>
-<a href=#276 id=276 data-nosnippet>276</a>    <span class="kw">pub fn </span>decode_base58(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#276 id=276 data-nosnippet>276</a>    <span class="kw">pub fn </span>decode_base32(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
 <a href=#277 id=277 data-nosnippet>277</a>        <span class="macro">ensure!</span>(s.starts_with(<span class="string">"fedimint"</span>), <span class="string">"Invalid Prefix"</span>);
 <a href=#278 id=278 data-nosnippet>278</a>
 <a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">let </span>params = <span class="self">Self</span>::consensus_decode_whole(
-<a href=#280 id=280 data-nosnippet>280</a>            <span class="kw-2">&amp;</span>bs58::decode(<span class="kw-2">&amp;</span>s[<span class="number">8</span>..]).into_vec()<span class="question-mark">?</span>,
+<a href=#280 id=280 data-nosnippet>280</a>            <span class="kw-2">&amp;</span>base32::decode(<span class="kw-2">&amp;</span>s[<span class="number">8</span>..])<span class="question-mark">?</span>,
 <a href=#281 id=281 data-nosnippet>281</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
 <a href=#282 id=282 data-nosnippet>282</a>        )<span class="question-mark">?</span>;
 <a href=#283 id=283 data-nosnippet>283</a>

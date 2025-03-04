@@ -338,7 +338,7 @@
 <a href=#338 id=338 data-nosnippet>338</a>                    .<span class="kw">await
 <a href=#339 id=339 data-nosnippet>339</a>                    </span>.map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 <a href=#340 id=340 data-nosnippet>340</a>
-<a href=#341 id=341 data-nosnippet>341</a>                <span class="prelude-val">Ok</span>(info.encode_base58())
+<a href=#341 id=341 data-nosnippet>341</a>                <span class="prelude-val">Ok</span>(info.encode_base32())
 <a href=#342 id=342 data-nosnippet>342</a>            }
 <a href=#343 id=343 data-nosnippet>343</a>        },
 <a href=#344 id=344 data-nosnippet>344</a>        <span class="macro">api_endpoint!</span> {
@@ -347,7 +347,7 @@
 <a href=#347 id=347 data-nosnippet>347</a>            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>ConfigGenApi, context, info: String| -&gt; String {
 <a href=#348 id=348 data-nosnippet>348</a>                check_auth(context)<span class="question-mark">?</span>;
 <a href=#349 id=349 data-nosnippet>349</a>
-<a href=#350 id=350 data-nosnippet>350</a>                <span class="kw">let </span>info = PeerConnectionInfo::decode_base58(<span class="kw-2">&amp;</span>info)
+<a href=#350 id=350 data-nosnippet>350</a>                <span class="kw">let </span>info = PeerConnectionInfo::decode_base32(<span class="kw-2">&amp;</span>info)
 <a href=#351 id=351 data-nosnippet>351</a>                    .map_err(|e|ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 <a href=#352 id=352 data-nosnippet>352</a>
 <a href=#353 id=353 data-nosnippet>353</a>                config.add_peer_connection_info(info.clone()).<span class="kw">await

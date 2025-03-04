@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RFC4648"],"fn":["decode","encode"]};
