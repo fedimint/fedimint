@@ -1906,7 +1906,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                             error!("Error spawning faucet: {err}");
                         }
                     });
-                    try_join!(fed.pegin_gateways(20_000, vec![&gw_lnd]), async {
+                    try_join!(fed.pegin_gateways(30_000, vec![&gw_lnd]), async {
                         poll("waiting for faucet startup", || async {
                             TcpStream::connect(format!(
                                 "127.0.0.1:{}",
@@ -1919,7 +1919,6 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                         .await?;
                         Ok(())
                     },)?;
-                    //let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
                     if let Some(exec) = exec {
                         exec_user_command(exec).await?;
                         task_group.shutdown();
