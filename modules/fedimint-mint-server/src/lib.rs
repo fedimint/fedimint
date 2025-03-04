@@ -7,7 +7,7 @@
 pub mod db;
 mod metrics;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::bail;
 use fedimint_core::config::{
@@ -315,6 +315,10 @@ impl ServerModuleInit for MintInit {
         migrations.insert(DatabaseVersion(0), migrate_db_v0 as CoreMigrationFn);
         migrations.insert(DatabaseVersion(1), migrate_db_v1 as CoreMigrationFn);
         migrations
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(DbKeyPrefix::iter().map(|p| p as u8).collect())
     }
 }
 
