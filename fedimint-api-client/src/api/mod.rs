@@ -1220,11 +1220,7 @@ mod iroh {
             let node_ids = peers
                 .into_iter()
                 .map(|(peer, url)| {
-                    let host = url
-                        .host_str()
-                        .context("Url is missing host")?
-                        .strip_suffix(".ed25519")
-                        .context("Host does not have the ed25519 suffix")?;
+                    let host = url.host_str().context("Url is missing host")?;
 
                     let node_id = PublicKey::from_str(host).context("Failed to parse node id")?;
 
