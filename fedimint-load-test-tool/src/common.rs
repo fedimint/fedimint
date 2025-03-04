@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use devimint::cmd;
-use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
+use devimint::util::{FedimintCli, GatewayLdkCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientHandleArc};
@@ -293,41 +293,42 @@ pub async fn gateway_pay_invoice(
     Ok(())
 }
 
-pub async fn cln_create_invoice(amount: Amount) -> anyhow::Result<(Bolt11Invoice, String)> {
-    let now = fedimint_core::time::now();
-    let random_n: u128 = rand::random();
-    let label = format!("label-{now:?}-{random_n}");
-    let invoice_string = cmd!(ClnLightningCli, "invoice", amount.msats, &label, &label)
-        .out_json()
-        .await?["bolt11"]
-        .as_str()
-        .context("Missing bolt11 field")?
-        .to_owned();
-    Ok((Bolt11Invoice::from_str(&invoice_string)?, label))
+pub async fn ldk_create_invoice(amount: Amount) -> anyhow::Result<Bolt11Invoice> {
+    let invoice_string = cmd!(GatewayLdkCli, "lightning", "create-invoice", amount.msats)
+        .out_string()
+        .await?;
+    Ok(Bolt11Invoice::from_str(&invoice_string)?)
 }
 
-pub async fn cln_pay_invoice(invoice: Bolt11Invoice) -> anyhow::Result<()> {
-    let status = cmd!(ClnLightningCli, "pay", invoice.to_string())
-        .out_json()
-        .await?["status"]
-        .as_str()
-        .context("Missing status field")?
-        .to_owned();
-    anyhow::ensure!(status == "complete");
+pub async fn ldk_pay_invoice(invoice: Bolt11Invoice) -> anyhow::Result<()> {
+    cmd!(
+        GatewayLdkCli,
+        "lightning",
+        "pay-invoice",
+        invoice.to_string()
+    )
+    .run()
+    .await?;
     Ok(())
 }
 
-pub async fn cln_wait_invoice_payment(label: &str) -> anyhow::Result<()> {
-    let status = cmd!(ClnLightningCli, "waitinvoice", label)
-        .out_json()
-        .await?["status"]
+pub async fn ldk_wait_invoice_payment(invoice: &Bolt11Invoice) -> anyhow::Result<()> {
+    let status = cmd!(
+        GatewayLdkCli,
+        "lightning",
+        "get-invoice",
+        "--payment-hash",
+        invoice.payment_hash()
+    )
+    .out_json()
+    .await?["status"]
         .as_str()
         .context("Missing status field")?
         .to_owned();
-    if status == "paid" {
+    if status == "Succeeded" {
         Ok(())
     } else {
-        bail!("Got status {status} for invoice {label}")
+        bail!("Got status {status} for invoice {invoice}")
     }
 }
 
