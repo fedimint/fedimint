@@ -956,27 +956,29 @@ impl FedimintCli {
                 }
                 let client = self.client_open(&cli).await?;
 
-                let ws_api: Arc<_> =
-                    DynGlobalApi::from_endpoints(client.get_peer_urls().await, client.api_secret())
-                        .await
-                        .map_err(|e| CliError {
-                            error: e.to_string(),
-                        })?
-                        .into();
+                let api = client.api_clone();
 
-                let method = match module {
-                    Some(selector) => format!(
-                        "module_{}_{method}",
-                        selector.resolve(&client).map_err_cli()?,
-                    ),
-                    None => method,
+                let module_api = match module {
+                    Some(selector) => {
+                        Some(api.with_module(selector.resolve(&client).map_err_cli()?))
+                    }
+                    None => None,
                 };
-                let response: Value = match peer_id {
-                    Some(peer_id) => ws_api
+
+                let response: Value = match (peer_id, module_api) {
+                    (Some(peer_id), Some(module_api)) => module_api
                         .request_raw(peer_id.into(), &method, &params)
                         .await
                         .map_err_cli()?,
-                    None => ws_api
+                    (Some(peer_id), None) => api
+                        .request_raw(peer_id.into(), &method, &params)
+                        .await
+                        .map_err_cli()?,
+                    (None, Some(module_api)) => module_api
+                        .request_current_consensus(method, params)
+                        .await
+                        .map_err_cli()?,
+                    (None, None) => api
                         .request_current_consensus(method, params)
                         .await
                         .map_err_cli()?,
