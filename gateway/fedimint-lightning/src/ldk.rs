@@ -98,7 +98,14 @@ impl GatewayLdkClient {
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<Self> {
         let mut bytes = [0u8; 32];
-        bytes[..alias.len()].copy_from_slice(alias.as_bytes());
+        let alias = if alias.is_empty() {
+            "LDK Gateway".to_string()
+        } else {
+            alias
+        };
+        let alias_bytes = alias.as_bytes();
+        let truncated = &alias_bytes[..alias_bytes.len().min(32)];
+        bytes[..truncated.len()].copy_from_slice(truncated);
         let node_alias = Some(NodeAlias(bytes));
 
         let mut node_builder = ldk_node::Builder::from_config(ldk_node::config::Config {
