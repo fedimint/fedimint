@@ -88,6 +88,8 @@ pub mod invite_code;
 /// Common macros
 #[macro_use]
 pub mod macros;
+/// Base 32 encoding
+pub mod base32;
 /// Extendable module sysystem
 pub mod module;
 /// Peer networking

@@ -338,7 +338,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                     .await
                     .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
-                Ok(info.encode_base58())
+                Ok(info.encode_base32())
             }
         },
         api_endpoint! {
@@ -347,7 +347,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             async |config: &ConfigGenApi, context, info: String| -> String {
                 check_auth(context)?;
 
-                let info = PeerConnectionInfo::decode_base58(&info)
+                let info = PeerConnectionInfo::decode_base32(&info)
                     .map_err(|e|ApiError::bad_request(e.to_string()))?;
 
                 config.add_peer_connection_info(info.clone()).await
