@@ -567,7 +567,7 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
                 while let Some((k, _v)) = unordered_log_entries.next().await {
                     trace!(target: LOG_CLIENT_DB,
                         k=%k.as_hex(),
-                        "Checking ordered log key"
+                        "Checking unordered log key"
                     );
                     if UnordedEventLogId::consensus_decode_whole(&k[1..], &Default::default())
                         .is_err()
