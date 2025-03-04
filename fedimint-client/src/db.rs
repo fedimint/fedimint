@@ -540,10 +540,15 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
                         k=%k.as_hex(),
                         "Checking ordered log key"
                     );
-                    if EventLogId::consensus_decode_whole(&k[1..], &Default::default()).is_err() {
+                    if EventLogId::consensus_decode_whole(
+                        &k[1..],
+                        &ModuleDecoderRegistry::default(),
+                    )
+                    .is_err()
+                    {
                         assert!(UnordedEventLogId::consensus_decode_whole(
                             &k[1..],
-                            &Default::default()
+                            &ModuleDecoderRegistry::default()
                         )
                         .is_ok());
                         keys_to_migrate.push(k);
@@ -581,13 +586,17 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
                         k=%k.as_hex(),
                         "Checking ordered log key"
                     );
-                    if UnordedEventLogId::consensus_decode_whole(&k[1..], &Default::default())
-                        .is_err()
+                    if UnordedEventLogId::consensus_decode_whole(
+                        &k[1..],
+                        &ModuleDecoderRegistry::default(),
+                    )
+                    .is_err()
                     {
-                        assert!(
-                            EventLogId::consensus_decode_whole(&k[1..], &Default::default())
-                                .is_ok()
-                        );
+                        assert!(EventLogId::consensus_decode_whole(
+                            &k[1..],
+                            &ModuleDecoderRegistry::default()
+                        )
+                        .is_ok());
                         keys_to_migrate.push(k);
                     }
                 }
