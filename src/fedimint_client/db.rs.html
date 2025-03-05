@@ -567,7 +567,7 @@
 <a href=#567 id=567 data-nosnippet>567</a>                <span class="kw">while let </span><span class="prelude-val">Some</span>((k, _v)) = unordered_log_entries.next().<span class="kw">await </span>{
 <a href=#568 id=568 data-nosnippet>568</a>                    <span class="macro">trace!</span>(target: LOG_CLIENT_DB,
 <a href=#569 id=569 data-nosnippet>569</a>                        k=%k.as_hex(),
-<a href=#570 id=570 data-nosnippet>570</a>                        <span class="string">"Checking ordered log key"
+<a href=#570 id=570 data-nosnippet>570</a>                        <span class="string">"Checking unordered log key"
 <a href=#571 id=571 data-nosnippet>571</a>                    </span>);
 <a href=#572 id=572 data-nosnippet>572</a>                    <span class="kw">if </span>UnordedEventLogId::consensus_decode_whole(<span class="kw-2">&amp;</span>k[<span class="number">1</span>..], <span class="kw-2">&amp;</span>Default::default())
 <a href=#573 id=573 data-nosnippet>573</a>                        .is_err()
