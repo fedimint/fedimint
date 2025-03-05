@@ -4,8 +4,8 @@ use std::time::{Duration, SystemTime};
 
 use fedimint_core::time::now;
 use fedimint_logging::LOG_TASK;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use tokio::sync::{Mutex, watch};
+use slotmap::SlotMap;
+use tokio::sync::watch;
 use tracing::{debug, error, info, warn};
 
 use super::{TaskGroup, TaskShutdownToken};
@@ -18,8 +18,8 @@ pub struct TaskGroupInner {
     // It is necessary to keep at least one `Receiver` around,
     // otherwise shutdown writes are lost.
     on_shutdown_rx: watch::Receiver<bool>,
-    join_handle_sender: UnboundedSender<(String, JoinHandle<()>)>,
-    join_handle_receiver: Mutex<UnboundedReceiver<(String, JoinHandle<()>)>>,
+    pub(crate) active_tasks_join_handles:
+        std::sync::Mutex<slotmap::SlotMap<slotmap::DefaultKey, (String, JoinHandle<()>)>>,
     // using blocking Mutex to avoid `async` in `shutdown` and `add_subgroup`
     // it's OK as we don't ever need to yield
     subgroups: std::sync::Mutex<Vec<TaskGroup>>,
@@ -28,12 +28,10 @@ pub struct TaskGroupInner {
 impl Default for TaskGroupInner {
     fn default() -> Self {
         let (on_shutdown_tx, on_shutdown_rx) = watch::channel(false);
-        let (join_handle_sender, join_handle_receiver) = unbounded_channel();
         Self {
             on_shutdown_tx,
             on_shutdown_rx,
-            join_handle_sender,
-            join_handle_receiver: Mutex::new(join_handle_receiver),
+            active_tasks_join_handles: std::sync::Mutex::new(SlotMap::default()),
             subgroups: std::sync::Mutex::new(vec![]),
         }
     }
@@ -78,10 +76,13 @@ impl TaskGroupInner {
         }
 
         // drop lock early
-        while let Ok((name, join)) = {
-            let mut lock = self.join_handle_receiver.lock().await;
-            lock.try_recv()
-        } {
+        let tasks: Vec<_> = self
+            .active_tasks_join_handles
+            .lock()
+            .expect("Lock failed")
+            .drain()
+            .collect();
+        for (_, (name, join)) in tasks {
             debug!(target: LOG_TASK, task=%name, "Waiting for task to finish");
 
             let timeout = deadline.map(|deadline| {
@@ -121,12 +122,5 @@ impl TaskGroupInner {
                 }
             }
         }
-    }
-
-    #[inline]
-    pub fn add_join_handle(&self, name: String, handle: JoinHandle<()>) {
-        self.join_handle_sender
-            .send((name, handle))
-            .expect("We must have join_handle_receiver around so this never fails");
     }
 }

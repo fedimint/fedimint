@@ -51,10 +51,12 @@ macro_rules_attribute = "0.2.0"
 miniscript = { workspace = true, features = ["serde"] }
 parity-scale-codec = { version = "3.7.4", features = ["derive"] }
 rand = { workspace = true }
+scopeguard = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serdect = { workspace = true }
+slotmap = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
