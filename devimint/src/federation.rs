@@ -41,7 +41,7 @@ use super::util::{Command, ProcessHandle, ProcessManager, cmd, parse_map};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_with_timeout};
-use crate::version_constants::VERSION_0_7_0_ALPHA;
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 use crate::{poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
@@ -843,15 +843,29 @@ impl Federation {
     }
 
     pub async fn await_all_peers(&self) -> Result<()> {
+        let fedimin_cli_version = crate::util::FedimintCli::version_or_default().await;
         poll("Waiting for all peers to be online", || async {
-            cmd!(
-                self.internal_client()
-                    .await
-                    .map_err(ControlFlow::Continue)?,
-                "dev",
-                "api",
-                "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
-            )
+            if fedimin_cli_version < *VERSION_0_6_0_ALPHA {
+                cmd!(
+                    self.internal_client()
+                        .await
+                        .map_err(ControlFlow::Continue)?,
+                    "dev",
+                    "api",
+                    "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"
+                )
+            } else {
+                cmd!(
+                    self.internal_client()
+                        .await
+                        .map_err(ControlFlow::Continue)?,
+                    "dev",
+                    "api",
+                    "--module",
+                    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                    "block_count"
+                )
+            }
             .run()
             .await
             .map_err(ControlFlow::Continue)?;

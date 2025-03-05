@@ -27,7 +27,7 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup, write_re
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, poll};
-use crate::version_constants::VERSION_0_5_0_ALPHA;
+use crate::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lightningd, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
@@ -1592,6 +1592,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 }
 
 pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     const PEER_TO_TEST: u16 = 0;
 
     log_binary_versions().await?;
@@ -1603,14 +1604,27 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         .expect("Awaiting federation coming online failed");
 
     let client = fed.new_joined_client("guardian-client").await?;
-    let old_block_count = cmd!(
-        client,
-        "dev",
-        "api",
-        "--peer-id",
-        PEER_TO_TEST.to_string(),
-        "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count",
-    )
+    let old_block_count = if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
+        cmd!(
+            client,
+            "dev",
+            "api",
+            "--peer-id",
+            PEER_TO_TEST.to_string(),
+            "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count",
+        )
+    } else {
+        cmd!(
+            client,
+            "dev",
+            "api",
+            "--peer-id",
+            PEER_TO_TEST.to_string(),
+            "--module",
+            "wallet",
+            "block_count",
+        )
+    }
     .out_json()
     .await?["value"]
         .as_u64()
