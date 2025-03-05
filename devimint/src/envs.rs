@@ -82,9 +82,6 @@ pub const FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV: &str = "FM_LOAD_TEST_TOOL_BASE_
 // Env variable to override lightning-cli binary set:
 pub const FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV: &str = "FM_LIGHTNING_CLI_BASE_EXECUTABLE";
 
-// Env variable to override lightning-cli default command set:
-pub const FM_LIGHTNING_CLI_ENV: &str = "FM_LIGHTNING_CLI";
-
 // Env variable to override lncli binary set:
 pub const FM_LNCLI_BASE_EXECUTABLE_ENV: &str = "FM_LNCLI_BASE_EXECUTABLE";
 
@@ -127,8 +124,11 @@ pub const FM_LOGS_DIR_ENV: &str = "FM_LOGS_DIR";
 // Env variable to TODO
 pub const FM_BACKWARDS_COMPATIBILITY_TEST_ENV: &str = "FM_BACKWARDS_COMPATIBILITY_TEST";
 
-// Env variable to define command for the LND client
+// Env variable to define command for the Gateway LND client
 pub const FM_GWCLI_LND_ENV: &str = "FM_GWCLI_LND";
+
+// Env variable to define command for the Gateway LDK client
+pub const FM_GWCLI_LDK_ENV: &str = "FM_GWCLI_LDK";
 
 /// Make `devimint` print stderr of called commands directly on its own stderr
 pub const FM_DEVIMINT_CMD_INHERIT_STDERR_ENV: &str = "FM_DEVIMINT_CMD_INHERIT_STDERR";

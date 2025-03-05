@@ -990,7 +990,7 @@ pub async fn run_standard_load_test(
         "--notes-per-user",
         "1",
         "--generate-invoice-with",
-        "cln-lightning-cli",
+        "ldk-lightning-cli",
         "--invite-code",
         invite_code
     )
