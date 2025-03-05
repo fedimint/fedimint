@@ -1346,7 +1346,7 @@ impl Gateway {
         info!(?payload, "Opening Lightning channel...");
         let context = self.get_lightning_context().await?;
         let res = context.lnrpc.open_channel(payload).await?;
-        info!(?res, "Successfully opened channel");
+        info!(?res, "Successfully initiated channel open");
         Txid::from_str(&res.funding_txid).map_err(|e| {
             AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: format!("Received invalid channel funding txid string {e}"),
