@@ -26,11 +26,11 @@ on_error() {
   cat "$test_out_path"
   echo "## FAIL: $test_name$version_str"
   echo "## LOG FEDIMINTD-0:"
-  cat "$FM_RUN_TEST_TMPDIR/logs/fedimintd-default-0.log"
+  cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/fedimintd-default-0.log || true
   echo "## LOG LND GATEWAY:"
-  cat "$FM_RUN_TEST_TMPDIR/logs/gatewayd-lnd.log"
+  cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-lnd.log || true
   echo "## LOG LDK-0 GATEWAY:"
-  cat "$FM_RUN_TEST_TMPDIR/logs/gatewayd-ldk-0.log"
+  cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-ldk-0.log || true
   echo "## END."
 }
 
