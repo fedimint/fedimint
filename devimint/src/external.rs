@@ -1053,11 +1053,8 @@ pub async fn open_channels_between_gateways(
     .await?;
 
     for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
-        let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
-        let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
-
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b).await?;
     }
 
     Ok(())
@@ -1065,8 +1062,9 @@ pub async fn open_channels_between_gateways(
 
 async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
-    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+    counterparty: &Gatewayd,
 ) -> anyhow::Result<()> {
+    let counterparty_lightning_node_pubkey = counterparty.lightning_pubkey().await?;
     let res = poll("Wait for channel update", || async {
         let channels = gw
             .list_active_channels()
@@ -1088,6 +1086,7 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
     if let Err(err) = &res {
         error!(target: LOG_DEVIMINT, err=%err.fmt_compact_anyhow(), "Failed waiting on active channel with counterparty");
         gw.dump_logs()?;
+        counterparty.dump_logs()?;
     }
 
     res

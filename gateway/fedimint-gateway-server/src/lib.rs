@@ -1343,8 +1343,10 @@ impl Gateway {
     /// Instructs the Gateway's Lightning node to open a channel to a peer
     /// specified by `pubkey`.
     pub async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
+        info!(?payload, "Opening Lightning channel...");
         let context = self.get_lightning_context().await?;
         let res = context.lnrpc.open_channel(payload).await?;
+        info!(?res, "Successfully opened channel");
         Txid::from_str(&res.funding_txid).map_err(|e| {
             AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: format!("Received invalid channel funding txid string {e}"),
