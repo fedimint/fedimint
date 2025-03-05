@@ -999,7 +999,7 @@ impl ReconnectFederationApi {
             .scheme();
 
         let connector = match scheme {
-            "ws" => WebsocketConnector::new(peers, api_secret.clone()).into_dyn(),
+            "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone()).into_dyn(),
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
             "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
             #[cfg(all(feature = "iroh", not(target_family = "wasm")))]
