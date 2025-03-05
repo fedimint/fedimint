@@ -15,7 +15,7 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
-use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::ln::LightningNodeType;
 use futures::StreamExt;
@@ -889,7 +889,7 @@ pub async fn open_channel(
 
     bitcoind.mine_blocks(10).await?;
 
-    poll("Wait for channel update", || async {
+    let res = poll("Legacy Wait for channel update", || async {
         let mut lnd_client = lnd.client.lock().await;
         let channels = lnd_client
             .lightning()
@@ -926,7 +926,12 @@ pub async fn open_channel(
 
         Err(ControlFlow::Continue(anyhow!("channel not found")))
     })
-    .await?;
+    .await;
+
+    if let Err(err) = res {
+        error!(target: LOG_DEVIMINT, err=%err.fmt_compact_anyhow(), "Legacy failed waiting on LND active channel");
+        return Err(err);
+    }
 
     Ok(())
 }
@@ -991,8 +996,8 @@ pub async fn open_channels_between_gateways(
                 })
                 .await;
 
-                if res.is_err() {
-                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, ?res, "Failed to open channel");
+                if let Err(err) = &res {
+                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, err=%err.fmt_compact_anyhow(), "Failed to open channel");
                     gw_a.dump_logs()?;
                     gw_b.dump_logs()?;
                 }
@@ -1062,7 +1067,7 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
     counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
 ) -> anyhow::Result<()> {
-    poll("Wait for channel update", || async {
+    let res = poll("Wait for channel update", || async {
         let channels = gw
             .list_active_channels()
             .await
@@ -1078,7 +1083,14 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
 
         Err(ControlFlow::Continue(anyhow!("channel not found")))
     })
-    .await
+    .await;
+
+    if let Err(err) = &res {
+        error!(target: LOG_DEVIMINT, err=%err.fmt_compact_anyhow(), "Failed waiting on active channel with counterparty");
+        gw.dump_logs()?;
+    }
+
+    res
 }
 
 #[derive(Clone)]

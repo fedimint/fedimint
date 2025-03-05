@@ -265,9 +265,9 @@ impl DevJitFed {
 
                         debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
                         let start_time = fedimint_core::time::now();
-                        let res = open_channels_between_gateways(&bitcoind, gateways).await;
+                        open_channels_between_gateways(&bitcoind, gateways).await?;
                         info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
-                        res
+                        anyhow::Ok(())
                     },
                     async {
                         let lnd = lnd.get_try().await?.deref().clone();
@@ -275,9 +275,9 @@ impl DevJitFed {
 
                         debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
                         let start_time = fedimint_core::time::now();
-                        let res = open_channel(&process_mgr, &bitcoind, &cln, &lnd).await;
+                        open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                         info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
-                        res
+                        anyhow::Ok(())
                     }
                 )?;
 
