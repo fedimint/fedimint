@@ -2,9 +2,10 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record};
+use strum::EnumIter;
 
 #[repr(u8)]
-#[derive(Clone, Debug)]
+#[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     Gateway = 0x41,
     #[allow(dead_code)]

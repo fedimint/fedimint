@@ -4,9 +4,7 @@ use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
 use anyhow::{Context, bail, format_err};
-use fedimint_client::db::{
-    apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
-};
+use fedimint_client::db::{apply_migrations_client_module, apply_migrations_core_client_dbtx};
 use fedimint_client::module_init::DynClientModuleInit;
 use fedimint_client::sm::executor::{
     ActiveStateKeyBytes, ActiveStateKeyPrefix, InactiveStateKeyBytes, InactiveStateKeyPrefix,
@@ -352,13 +350,11 @@ where
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
     let (db, _tmp_dir) = get_temp_database(db_prefix, &ModuleDecoderRegistry::default())?;
-    apply_migrations_core_client(
-        &db,
-        db_prefix.to_string(),
-        get_core_client_database_migrations(),
-    )
-    .await
-    .context("Error applying core client migrations to temp database")?;
+    let mut dbtx = db.begin_transaction().await;
+    apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), db_prefix.to_string())
+        .await
+        .context("Error applying core client migrations to temp database")?;
+    dbtx.commit_tx_result().await?;
 
     validate(db)
         .await
@@ -388,7 +384,7 @@ where
         T::decoder(),
     )]);
     let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
-    apply_migrations_client(
+    apply_migrations_client_module(
         &db,
         module.as_common().module_kind().to_string(),
         module.get_database_migrations(),

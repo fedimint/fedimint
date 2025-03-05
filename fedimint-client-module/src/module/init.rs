@@ -1,6 +1,6 @@
 pub mod recovery;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
@@ -238,5 +238,18 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     /// is indexed on the "from" version.
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         BTreeMap::new()
+    }
+
+    /// Db prefixes used by the module
+    ///
+    /// If `Some` is returned, it should contain list of database
+    /// prefixes actually used by the module for it's keys.
+    ///
+    /// In (some subset of) non-production tests,
+    /// module database will be scanned for presence of keys
+    /// that do not belong to this list to verify integrity
+    /// of data and possibly catch any unforeseen bugs.
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        None
     }
 }

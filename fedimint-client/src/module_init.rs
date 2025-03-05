@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 
@@ -75,6 +75,9 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
     ) -> anyhow::Result<DynClientModule>;
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn>;
+
+    /// See [`ClientModuleInit::used_db_prefixes`]
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -202,6 +205,10 @@ where
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         <Self as ClientModuleInit>::get_database_migrations(self)
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        <Self as ClientModuleInit>::used_db_prefixes(self)
     }
 }
 

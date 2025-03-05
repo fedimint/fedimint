@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::SystemTime;
 
 use anyhow::{anyhow, bail};
@@ -13,7 +13,7 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
     IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
-    apply_migrations, create_database_version, get_current_database_version,
+    apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SupportedApiVersionsSummary;
@@ -25,12 +25,13 @@ use fedimint_eventlog::{
 use fedimint_logging::LOG_CLIENT_DB;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator as _;
 use strum_macros::EnumIter;
 use tracing::{debug, info, trace, warn};
 
 use crate::backup::{ClientBackup, Metadata};
 use crate::sm::executor::{
-    ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, InactiveStateKeyBytes,
+    ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, ExecutorDbPrefixes, InactiveStateKeyBytes,
     InactiveStateKeyPrefixBytes,
 };
 
@@ -56,6 +57,12 @@ pub enum DbKeyPrefix {
     EventLog = fedimint_eventlog::DB_KEY_PREFIX_EVENT_LOG,
     UnorderedEventLog = fedimint_eventlog::DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
 
+    DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
+    ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
+
+    ActiveStates = ExecutorDbPrefixes::ActiveStates as u8,
+    InactiveStates = ExecutorDbPrefixes::InactiveStates as u8,
+
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
     /// database.
@@ -76,6 +83,25 @@ pub enum DbKeyPrefix {
     InternalReservedStart = 0xd0,
     /// Per-module instance data
     ModuleGlobalPrefix = 0xff,
+}
+
+pub(crate) async fn verify_client_db_integrity_dbtx(dbtx: &mut DatabaseTransaction<'_>) {
+    let prefixes: BTreeSet<u8> = DbKeyPrefix::iter().map(|prefix| prefix as u8).collect();
+
+    let mut records = dbtx.raw_find_by_prefix(&[]).await.expect("DB fail");
+    while let Some((k, v)) = records.next().await {
+        // from here and above, we don't want to spend time verifying it
+        if DbKeyPrefix::UserData as u8 <= k[0] {
+            break;
+        }
+
+        assert!(
+            prefixes.contains(&k[0]),
+            "Unexpected client db record found: {}: {}",
+            k.as_hex(),
+            v.as_hex()
+        );
+    }
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -604,15 +630,14 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
     migrations
 }
 
-pub async fn apply_migrations_core_client(
-    db: &Database,
+pub async fn apply_migrations_core_client_dbtx(
+    dbtx: &mut DatabaseTransaction<'_>,
     kind: String,
-    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
-    apply_migrations(
-        db,
+    apply_migrations_dbtx(
+        dbtx,
         kind,
-        migrations,
+        get_core_client_database_migrations(),
         None,
         Some(DbKeyPrefix::UserData as u8),
     )
@@ -628,15 +653,31 @@ pub async fn apply_migrations_core_client(
 /// This function is called before the module is initialized and as long as the
 /// correct migrations are supplied in the migrations map, the module
 /// will be able to read and write from the database successfully.
-pub async fn apply_migrations_client(
+pub async fn apply_migrations_client_module(
     db: &Database,
+    kind: String,
+    migrations: BTreeMap<DatabaseVersion, ClientMigrationFn>,
+    module_instance_id: ModuleInstanceId,
+) -> Result<(), anyhow::Error> {
+    let mut dbtx = db.begin_transaction().await;
+    apply_migrations_client_module_dbtx(
+        &mut dbtx.to_ref_nc(),
+        kind,
+        migrations,
+        module_instance_id,
+    )
+    .await?;
+    dbtx.commit_tx_result().await
+}
+
+pub async fn apply_migrations_client_module_dbtx(
+    dbtx: &mut DatabaseTransaction<'_>,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, ClientMigrationFn>,
     module_instance_id: ModuleInstanceId,
 ) -> Result<(), anyhow::Error> {
     // Newly created databases will not have any data underneath the
     // `MODULE_GLOBAL_PREFIX` since they have just been instantiated.
-    let mut dbtx = db.begin_transaction_nc().await;
     let is_new_db = dbtx
         .raw_find_by_prefix(&[MODULE_GLOBAL_PREFIX])
         .await?
@@ -647,8 +688,8 @@ pub async fn apply_migrations_client(
     let target_version = get_current_database_version(&migrations);
 
     // First write the database version to disk if it does not exist.
-    create_database_version(
-        db,
+    create_database_version_dbtx(
+        dbtx,
         target_version,
         Some(module_instance_id),
         kind.clone(),
@@ -656,8 +697,7 @@ pub async fn apply_migrations_client(
     )
     .await?;
 
-    let mut global_dbtx = db.begin_transaction().await;
-    let current_version = global_dbtx
+    let current_version = dbtx
         .get_value(&DatabaseVersionKey(module_instance_id))
         .await;
 
@@ -671,7 +711,6 @@ pub async fn apply_migrations_client(
                 kind,
                 "Database version up to date"
             );
-            global_dbtx.ignore_uncommitted();
             return Ok(());
         }
 
@@ -690,10 +729,9 @@ pub async fn apply_migrations_client(
             kind,
             "Migrating client module database"
         );
-        let mut active_states =
-            get_active_states(&mut global_dbtx.to_ref_nc(), module_instance_id).await;
+        let mut active_states = get_active_states(&mut dbtx.to_ref_nc(), module_instance_id).await;
         let mut inactive_states =
-            get_inactive_states(&mut global_dbtx.to_ref_nc(), module_instance_id).await;
+            get_inactive_states(&mut dbtx.to_ref_nc(), module_instance_id).await;
 
         while current_version < target_version {
             let new_states = if let Some(migration) = migrations.get(&current_version) {
@@ -706,7 +744,7 @@ pub async fn apply_migrations_client(
                      "Running module db migration");
 
                 migration(
-                    &mut global_dbtx
+                    &mut dbtx
                         .to_ref_with_prefix_module_id(module_instance_id)
                         .0
                         .into_nc(),
@@ -725,14 +763,14 @@ pub async fn apply_migrations_client(
             // occurred, and the new states need to be persisted to the database.
             if let Some((new_active_states, new_inactive_states)) = new_states {
                 remove_old_and_persist_new_active_states(
-                    &mut global_dbtx.to_ref_nc(),
+                    &mut dbtx.to_ref_nc(),
                     new_active_states.clone(),
                     active_states.clone(),
                     module_instance_id,
                 )
                 .await;
                 remove_old_and_persist_new_inactive_states(
-                    &mut global_dbtx.to_ref_nc(),
+                    &mut dbtx.to_ref_nc(),
                     new_inactive_states.clone(),
                     inactive_states.clone(),
                     module_instance_id,
@@ -745,8 +783,7 @@ pub async fn apply_migrations_client(
             }
 
             current_version = current_version.increment();
-            global_dbtx
-                .insert_entry(&DatabaseVersionKey(module_instance_id), &current_version)
+            dbtx.insert_entry(&DatabaseVersionKey(module_instance_id), &current_version)
                 .await;
         }
 
@@ -755,7 +792,6 @@ pub async fn apply_migrations_client(
         target_version
     };
 
-    global_dbtx.commit_tx_result().await?;
     debug!(
         target: LOG_CLIENT_DB,
         ?kind, ?db_version, "Client DB Version");

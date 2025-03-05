@@ -20,7 +20,7 @@ pub mod events;
 mod pegin_monitor;
 mod withdraw;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -283,6 +283,18 @@ impl ClientModuleInit for WalletClientInit {
     ) -> anyhow::Result<()> {
         args.recover_from_history::<WalletRecovery>(self, snapshot)
             .await
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(
+            DbKeyPrefix::iter()
+                .map(|p| p as u8)
+                .chain(
+                    DbKeyPrefix::ExternalReservedStart as u8
+                        ..=DbKeyPrefix::CoreInternalReservedEnd as u8,
+                )
+                .collect(),
+        )
     }
 }
 

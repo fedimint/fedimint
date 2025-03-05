@@ -5,7 +5,7 @@
 #![allow(clippy::too_many_lines)]
 
 pub mod db;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use anyhow::{Context, bail, format_err};
@@ -313,6 +313,10 @@ impl ServerModuleInit for LightningInit {
             fee_consensus: config.fee_consensus,
             network: config.network,
         })
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(DbKeyPrefix::iter().map(|p| p as u8).collect())
     }
 }
 /// The lightning module implements an account system. It does not have the

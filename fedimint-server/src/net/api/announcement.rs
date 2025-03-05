@@ -15,7 +15,7 @@ use tokio::select;
 use tracing::debug;
 
 use crate::config::{ServerConfig, ServerConfigConsensus};
-use crate::consensus::db::DbKeyPrefix;
+use crate::db::DbKeyPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct ApiAnnouncementKey(pub PeerId);

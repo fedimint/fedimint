@@ -21,7 +21,7 @@
 //! Server side fedimint module traits
 
 extern crate fedimint_core;
-mod db;
+pub mod db;
 
 use std::collections::BTreeMap;
 use std::fs;

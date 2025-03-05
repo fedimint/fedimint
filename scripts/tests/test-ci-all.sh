@@ -387,7 +387,7 @@ parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc)))}")
 
 # --delay to let nix start extracting and bump the load
 # usually not needed, as '--jobs' will keep a cap on the load anyway
-parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-0}")
+parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-.5}")
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT

@@ -408,6 +408,10 @@ impl ServerModuleInit for WalletInit {
         migrations.insert(DatabaseVersion(0), |ctx| migrate_to_v1(ctx).boxed());
         migrations
     }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(DbKeyPrefix::iter().map(|p| p as u8).collect())
+    }
 }
 
 #[apply(async_trait_maybe_send!)]
