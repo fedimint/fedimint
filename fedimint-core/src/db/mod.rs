@@ -125,7 +125,7 @@ use strum_macros::EnumIter;
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
-use crate::core::ModuleInstanceId;
+use crate::core::{ModuleInstanceId, ModuleKind};
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::{MaybeSend, MaybeSync};
@@ -3423,6 +3423,7 @@ where
 pub async fn verify_module_db_integrity_dbtx(
     dbtx: &mut DatabaseTransaction<'_>,
     module_id: ModuleInstanceId,
+    module_kind: ModuleKind,
     prefixes: &BTreeSet<u8>,
 ) {
     let module_db_prefix = module_instance_id_to_byte_prefix(module_id);
@@ -3436,7 +3437,7 @@ pub async fn verify_module_db_integrity_dbtx(
     while let Some((k, v)) = records.next().await {
         assert!(
             prefixes.contains(&k[module_db_prefix.len()]),
-            "Unexpected db record found: {}: {}",
+            "Unexpected module {module_kind} {module_id} db record found: {}: {}",
             k.as_hex(),
             v.as_hex()
         );

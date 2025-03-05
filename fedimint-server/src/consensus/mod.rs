@@ -116,6 +116,7 @@ pub async fn run(
                         verify_module_db_integrity_dbtx(
                             &mut dbtx.to_ref_nc(),
                             *module_id,
+                            module_init.module_kind(),
                             &used_db_prefixes,
                         )
                         .await;

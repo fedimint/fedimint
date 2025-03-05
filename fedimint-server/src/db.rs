@@ -37,7 +37,7 @@ pub(crate) async fn verify_server_db_integrity_dbtx(dbtx: &mut DatabaseTransacti
 
         assert!(
             prefixes.contains(&k[0]),
-            "Unexpected db record found: {}: {}",
+            "Unexpected server db record found: {}: {}",
             k.as_hex(),
             v.as_hex()
         );

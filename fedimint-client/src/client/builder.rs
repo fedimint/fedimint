@@ -216,6 +216,7 @@ impl ClientBuilder {
                         verify_module_db_integrity_dbtx(
                             &mut dbtx.to_ref_nc(),
                             module_id,
+                            kind,
                             &used_db_prefixes,
                         )
                         .await;
