@@ -15,7 +15,7 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
-use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::ln::LightningNodeType;
 use futures::StreamExt;
@@ -889,7 +889,7 @@ pub async fn open_channel(
 
     bitcoind.mine_blocks(10).await?;
 
-    poll("Wait for channel update", || async {
+    let res = poll("Legacy Wait for channel update", || async {
         let mut lnd_client = lnd.client.lock().await;
         let channels = lnd_client
             .lightning()
@@ -926,7 +926,12 @@ pub async fn open_channel(
 
         Err(ControlFlow::Continue(anyhow!("channel not found")))
     })
-    .await?;
+    .await;
+
+    if let Err(err) = res {
+        error!(target: LOG_DEVIMINT, err=%err.fmt_compact_anyhow(), "Legacy failed waiting on LND active channel");
+        return Err(err);
+    }
 
     Ok(())
 }
@@ -948,8 +953,9 @@ pub async fn open_channels_between_gateways(
     .await?;
 
     debug!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
-    for (gw, _gw_name) in gateways {
+    for (gw, gw_name) in gateways {
         let funding_addr = gw.get_ln_onchain_address().await?;
+        info!(?funding_addr, "Funding {gw_name} onchain wallet...");
         bitcoind.send_to(funding_addr, 100_000_000).await?;
     }
 
@@ -983,16 +989,16 @@ pub async fn open_channels_between_gateways(
             let gw_b_name = (*gw_b_name).to_string();
 
             let sats_per_side = 5_000_000;
-            debug!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
                 let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
+                    info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
                     gw_a.open_channel(&gw_b, sats_per_side * 2, Some(sats_per_side)).await.map_err(ControlFlow::Continue)
                 })
                 .await;
 
-                if res.is_err() {
-                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, ?res, "Failed to open channel");
+                if let Err(err) = &res {
+                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, err=%err.fmt_compact_anyhow(), "Failed to open channel");
                     gw_a.dump_logs()?;
                     gw_b.dump_logs()?;
                 }
@@ -1033,7 +1039,7 @@ pub async fn open_channels_between_gateways(
     // immediately. Since it didn't return a funding txid, we need to wait for
     // it to get to the mempool.
     if is_missing_any_txids {
-        fedimint_core::runtime::sleep(Duration::from_secs(2)).await;
+        fedimint_core::runtime::sleep(Duration::from_secs(5)).await;
     }
 
     bitcoind.mine_blocks(10).await?;
@@ -1048,11 +1054,8 @@ pub async fn open_channels_between_gateways(
     .await?;
 
     for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
-        let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
-        let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
-
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b).await?;
     }
 
     Ok(())
@@ -1060,9 +1063,10 @@ pub async fn open_channels_between_gateways(
 
 async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
-    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+    counterparty: &Gatewayd,
 ) -> anyhow::Result<()> {
-    poll("Wait for channel update", || async {
+    let counterparty_lightning_node_pubkey = counterparty.lightning_pubkey().await?;
+    let res = poll("Wait for channel update", || async {
         let channels = gw
             .list_active_channels()
             .await
@@ -1078,7 +1082,15 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
 
         Err(ControlFlow::Continue(anyhow!("channel not found")))
     })
-    .await
+    .await;
+
+    if let Err(err) = &res {
+        error!(target: LOG_DEVIMINT, err=%err.fmt_compact_anyhow(), "Failed waiting on active channel with counterparty");
+        gw.dump_logs()?;
+        counterparty.dump_logs()?;
+    }
+
+    res
 }
 
 #[derive(Clone)]
