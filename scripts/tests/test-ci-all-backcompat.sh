@@ -4,6 +4,6 @@
 # disable devimint enabling it in Federations
 export FM_USE_UNKNOWN_MODULE=0
 
-export RUST_LOG=${RUST_LOG:-h2=off,debug}
+export RUST_LOG=${RUST_LOG:-h2=off,fm=debug,info}
 
 ./scripts/tests/test-ci-all.sh "$@"
