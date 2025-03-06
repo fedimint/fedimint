@@ -733,6 +733,7 @@ impl Federation {
             let response: WithdrawResponse = serde_json::from_value(value)?;
             peg_outs.insert(gw.ln.ln_type(), (prev_fed_ecash_balance, response));
         }
+        self.bitcoind.wait_mempool_size(gateways.len()).await?;
         self.bitcoind.mine_blocks(21).await?;
 
         try_join_all(
