@@ -45,10 +45,9 @@ trap on_error ERR
 trap on_exit EXIT
 
 FM_RUN_TEST_TIMEOUT_SOFT=${FM_RUN_TEST_TIMEOUT:-310}
-FM_RUN_TEST_TIMEOUT_HARD=$((FM_RUN_TEST_TIMEOUT_SOFT + 10))
 
 command time -q --format="$time_fmt" -o "$time_out_path" \
-    timeout -k "$FM_RUN_TEST_TIMEOUT_SOFT" "$FM_RUN_TEST_TIMEOUT_HARD" \
+    timeout -k 10 "$FM_RUN_TEST_TIMEOUT_SOFT" \
     "$@" 2>&1 | ts -i "%.S" | ts -s "%M:%S" > "$test_out_path"
 
 awk 'BEGIN {FS="\t"} {printf "## STAT: %8.2fs %8dB %8dW %8dc\n", $1, $2, $3, $4}' < "$time_out_path"
