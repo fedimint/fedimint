@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">const </span>MAX_DB_ATTEMPTS: <span class="prelude-ty">Option</span>&lt;usize&gt; = <span class="prelude-val">Some</span>(<span class="number">100</span>);
 <a href=#39 id=39 data-nosnippet>39</a>
 <a href=#40 id=40 data-nosnippet>40</a><span class="doccomment">/// Prefixes for executor DB entries
-<a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">enum </span>ExecutorDbPrefixes {
+<a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum </span>ExecutorDbPrefixes {
 <a href=#42 id=42 data-nosnippet>42</a>    <span class="doccomment">/// See [`ActiveStateKey`]
 <a href=#43 id=43 data-nosnippet>43</a>    </span>ActiveStates = <span class="number">0xa1</span>,
 <a href=#44 id=44 data-nosnippet>44</a>    <span class="doccomment">/// See [`InactiveStateKey`]

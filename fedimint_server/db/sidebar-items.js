@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ServerInfo","ServerInfoKey"]};
+window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"fn":["verify_server_db_integrity_dbtx"],"struct":["DbKeyPrefixIter","ServerInfo","ServerInfoKey"]};
