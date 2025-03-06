@@ -55,6 +55,7 @@ You can pick one of Fedimint-supporting applications:
 
 * [Fedi](https://www.fedi.xyz/) - for MacOS, Android and Web browsers
 * [Harbor Wallet](https://harbor.cash/) - desktop wallet
+* [Vipr Wallet](https://github.com/ngutech21/vipr-wallet) - Web (PWA) wallet
 * `fedimint-cli` - Fedimint's built in CLI wallet for developers and automation
 
 ## Running your own Fedimint federation
