@@ -889,7 +889,7 @@ pub async fn open_channel(
 
     bitcoind.mine_blocks(10).await?;
 
-    poll("Wait for channel update", || async {
+    poll("Wait LND for channel update", || async {
         let mut lnd_client = lnd.client.lock().await;
         let channels = lnd_client
             .lightning()
@@ -1062,22 +1062,27 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
     counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
 ) -> anyhow::Result<()> {
-    poll("Wait for channel update", || async {
-        let channels = gw
-            .list_active_channels()
-            .await
-            .context("list channels")
-            .map_err(ControlFlow::Break)?;
+    poll(
+        &format!("Wait for {} channel update", gw.gw_name),
+        || async {
+            let channels = gw
+                .list_active_channels()
+                .await
+                .context("list channels")
+                .map_err(ControlFlow::Break)?;
 
-        if channels
-            .iter()
-            .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey)
-        {
-            return Ok(());
-        }
+            if channels
+                .iter()
+                .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey)
+            {
+                return Ok(());
+            }
 
-        Err(ControlFlow::Continue(anyhow!("channel not found")))
-    })
+            debug!(target: LOG_DEVIMINT, ?channels, gw = gw.gw_name, "Counterparty channels not found open");
+
+            Err(ControlFlow::Continue(anyhow!("channel not found")))
+        },
+    )
     .await
 }
 
