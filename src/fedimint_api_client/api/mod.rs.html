@@ -999,7 +999,7 @@
 <a href=#999 id=999 data-nosnippet>999</a>            .scheme();
 <a href=#1000 id=1000 data-nosnippet>1000</a>
 <a href=#1001 id=1001 data-nosnippet>1001</a>        <span class="kw">let </span>connector = <span class="kw">match </span>scheme {
-<a href=#1002 id=1002 data-nosnippet>1002</a>            <span class="string">"ws" </span>=&gt; WebsocketConnector::new(peers, api_secret.clone()).into_dyn(),
+<a href=#1002 id=1002 data-nosnippet>1002</a>            <span class="string">"ws" </span>| <span class="string">"wss" </span>=&gt; WebsocketConnector::new(peers, api_secret.clone()).into_dyn(),
 <a href=#1003 id=1003 data-nosnippet>1003</a>            <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 <a href=#1004 id=1004 data-nosnippet>1004</a>            </span><span class="string">"tor" </span>=&gt; TorConnector::new(peers, api_secret.clone()).into_dyn(),
 <a href=#1005 id=1005 data-nosnippet>1005</a>            <span class="attr">#[cfg(all(feature = <span class="string">"iroh"</span>, not(target_family = <span class="string">"wasm"</span>)))]
