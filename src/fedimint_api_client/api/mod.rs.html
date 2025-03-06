@@ -1076,8 +1076,8 @@
 <a href=#1076 id=1076 data-nosnippet>1076</a>        <span class="kw">let </span>res = <span class="self">self
 <a href=#1077 id=1077 data-nosnippet>1077</a>            </span>.connections
 <a href=#1078 id=1078 data-nosnippet>1078</a>            .get(<span class="kw-2">&amp;</span>peer)
-<a href=#1079 id=1079 data-nosnippet>1079</a>            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"Could not find client connection for peer {peer}"</span>))
-<a href=#1080 id=1080 data-nosnippet>1080</a>            .connection()
+<a href=#1079 id=1079 data-nosnippet>1079</a>            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })<span class="question-mark">?
+<a href=#1080 id=1080 data-nosnippet>1080</a>            </span>.connection()
 <a href=#1081 id=1081 data-nosnippet>1081</a>            .<span class="kw">await
 <a href=#1082 id=1082 data-nosnippet>1082</a>            </span>.context(<span class="string">"Failed to connect to peer"</span>)
 <a href=#1083 id=1083 data-nosnippet>1083</a>            .map_err(PeerError::Connection)<span class="question-mark">?
