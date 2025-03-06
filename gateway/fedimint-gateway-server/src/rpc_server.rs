@@ -323,6 +323,7 @@ async fn open_channel(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<OpenChannelRequest>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
+    info!("Received open channel request");
     let funding_txid = gateway.handle_open_channel_msg(payload).await?;
     Ok(Json(json!(funding_txid)))
 }

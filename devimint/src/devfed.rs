@@ -254,13 +254,12 @@ impl DevJitFed {
                 // Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
-
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
-                let gw_ldk = gw_ldk.get_try().await?.deref();
 
                 tokio::try_join!(
                     async {
                         let gw_lnd = gw_lnd.get_try().await?.deref();
+                        let gw_ldk = gw_ldk.get_try().await?.deref();
                         let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
                         debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");

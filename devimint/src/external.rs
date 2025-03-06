@@ -953,8 +953,9 @@ pub async fn open_channels_between_gateways(
     .await?;
 
     debug!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
-    for (gw, _gw_name) in gateways {
+    for (gw, gw_name) in gateways {
         let funding_addr = gw.get_ln_onchain_address().await?;
+        info!(?funding_addr, "Funding {gw_name} onchain wallet...");
         bitcoind.send_to(funding_addr, 100_000_000).await?;
     }
 
@@ -988,10 +989,10 @@ pub async fn open_channels_between_gateways(
             let gw_b_name = (*gw_b_name).to_string();
 
             let sats_per_side = 5_000_000;
-            debug!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
             tokio::task::spawn(async move {
                 // Sometimes channel openings just after funding the lightning nodes don't work right away.
                 let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
+                    info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
                     gw_a.open_channel(&gw_b, sats_per_side * 2, Some(sats_per_side)).await.map_err(ControlFlow::Continue)
                 })
                 .await;
