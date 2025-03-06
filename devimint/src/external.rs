@@ -1039,7 +1039,7 @@ pub async fn open_channels_between_gateways(
     // immediately. Since it didn't return a funding txid, we need to wait for
     // it to get to the mempool.
     if is_missing_any_txids {
-        fedimint_core::runtime::sleep(Duration::from_secs(2)).await;
+        fedimint_core::runtime::sleep(Duration::from_secs(5)).await;
     }
 
     bitcoind.mine_blocks(10).await?;
