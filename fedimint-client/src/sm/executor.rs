@@ -38,7 +38,7 @@ use crate::{AddStateMachinesError, AddStateMachinesResult, DynGlobalClientContex
 const MAX_DB_ATTEMPTS: Option<usize> = Some(100);
 
 /// Prefixes for executor DB entries
-enum ExecutorDbPrefixes {
+pub(crate) enum ExecutorDbPrefixes {
     /// See [`ActiveStateKey`]
     ActiveStates = 0xa1,
     /// See [`InactiveStateKey`]

@@ -26,7 +26,7 @@ pub mod event;
 pub mod api;
 
 use std::cmp::{Ordering, min};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
@@ -564,6 +564,18 @@ impl ClientModuleInit for MintClientInit {
         });
 
         migrations
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(
+            DbKeyPrefix::iter()
+                .map(|p| p as u8)
+                .chain(
+                    DbKeyPrefix::ExternalReservedStart as u8
+                        ..=DbKeyPrefix::CoreInternalReservedEnd as u8,
+                )
+                .collect(),
+        )
     }
 }
 

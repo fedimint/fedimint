@@ -3,8 +3,7 @@ use std::fmt::Debug;
 
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
-    MigrationContext,
+    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationContext,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
@@ -14,26 +13,8 @@ use fedimint_core::util::BoxStream;
 use fedimint_core::{TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use futures::StreamExt;
 use serde::Serialize;
-use strum_macros::EnumIter;
 
-#[repr(u8)]
-#[derive(Clone, EnumIter, Debug)]
-pub enum DbKeyPrefix {
-    AcceptedItem = 0x01,
-    AcceptedTransaction = 0x02,
-    SignedSessionOutcome = 0x04,
-    AlephUnits = 0x05,
-    // TODO: do we want to split the server DB into consensus/non-consensus?
-    ApiAnnouncements = 0x06,
-    ServerInfo = 0x07,
-    Module = MODULE_GLOBAL_PREFIX,
-}
-
-impl std::fmt::Display for DbKeyPrefix {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
+use crate::db::DbKeyPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct AcceptedItemKey(pub u64);

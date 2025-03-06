@@ -14,7 +14,7 @@ pub mod incoming;
 pub mod pay;
 pub mod receive;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::iter::once;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -378,6 +378,18 @@ impl ClientModuleInit for LightningClientInit {
         });
 
         migrations
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(
+            DbKeyPrefix::iter()
+                .map(|p| p as u8)
+                .chain(
+                    DbKeyPrefix::ExternalReservedStart as u8
+                        ..=DbKeyPrefix::CoreInternalReservedEnd as u8,
+                )
+                .collect(),
+        )
     }
 }
 

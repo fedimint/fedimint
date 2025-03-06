@@ -19,8 +19,9 @@ use fedimint_gateway_server::Gateway;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::config::io::read_server_config;
-use fedimint_server::consensus::db as ConsensusRange;
+use fedimint_server::consensus::db as consensus_db;
 use fedimint_server::core::{ServerModuleInitRegistry, ServerModuleInitRegistryExt};
+use fedimint_server::db as server_db;
 use fedimint_server::net::api::announcement::ApiAnnouncementPrefix;
 use futures::StreamExt;
 use strum::IntoEnumIterator;
@@ -255,7 +256,7 @@ impl DatabaseDump {
     /// Iterates through each of the prefixes within the consensus range and
     /// retrieves the corresponding data.
     async fn retrieve_consensus_data(&mut self) {
-        let filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|prefix| {
+        let filtered_prefixes = server_db::DbKeyPrefix::iter().filter(|prefix| {
             self.prefixes.is_empty() || self.prefixes.contains(&prefix.to_string().to_lowercase())
         });
         let mut dbtx = self.read_only_db.begin_transaction_nc().await;
@@ -270,54 +271,57 @@ impl DatabaseDump {
     }
 
     async fn write_serialized_consensus_range(
-        table: ConsensusRange::DbKeyPrefix,
+        table: server_db::DbKeyPrefix,
         dbtx: &mut DatabaseTransaction<'_>,
         consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
     ) {
         match table {
-            ConsensusRange::DbKeyPrefix::AcceptedItem => {
+            server_db::DbKeyPrefix::AcceptedItem => {
                 push_db_pair_items_no_serde!(
                     dbtx,
-                    ConsensusRange::AcceptedItemPrefix,
-                    ConsensusRange::AcceptedItemKey,
+                    consensus_db::AcceptedItemPrefix,
+                    server_db::AcceptedItemKey,
                     fedimint_server::consensus::AcceptedItem,
                     consensus,
                     "Accepted Items"
                 );
             }
-            ConsensusRange::DbKeyPrefix::AcceptedTransaction => {
+            server_db::DbKeyPrefix::AcceptedTransaction => {
                 push_db_pair_items_no_serde!(
                     dbtx,
-                    ConsensusRange::AcceptedTransactionKeyPrefix,
-                    ConsensusRange::AcceptedTransactionKey,
+                    consensus_db::AcceptedTransactionKeyPrefix,
+                    server_db::AcceptedTransactionKey,
                     fedimint_server::consensus::AcceptedTransaction,
                     consensus,
                     "Accepted Transactions"
                 );
             }
-            ConsensusRange::DbKeyPrefix::SignedSessionOutcome => {
+            server_db::DbKeyPrefix::SignedSessionOutcome => {
                 push_db_pair_items_no_serde!(
                     dbtx,
-                    ConsensusRange::SignedSessionOutcomePrefix,
-                    ConsensusRange::SignedBlockKey,
+                    consensus_db::SignedSessionOutcomePrefix,
+                    server_db::SignedBlockKey,
                     fedimint_server::consensus::SignedBlock,
                     consensus,
                     "Signed Blocks"
                 );
             }
-            ConsensusRange::DbKeyPrefix::AlephUnits => {
+            server_db::DbKeyPrefix::AlephUnits => {
                 push_db_pair_items_no_serde!(
                     dbtx,
-                    ConsensusRange::AlephUnitsPrefix,
-                    ConsensusRange::AlephUnitsKey,
+                    consensus_db::AlephUnitsPrefix,
+                    server_db::AlephUnitsKey,
                     Vec<u8>,
                     consensus,
                     "Aleph Units"
                 );
             }
             // Module is a global prefix for all module data
-            ConsensusRange::DbKeyPrefix::Module | ConsensusRange::DbKeyPrefix::ServerInfo => {}
-            ConsensusRange::DbKeyPrefix::ApiAnnouncements => {
+            server_db::DbKeyPrefix::Module
+            | server_db::DbKeyPrefix::ServerInfo
+            | server_db::DbKeyPrefix::DatabaseVersion
+            | server_db::DbKeyPrefix::ClientBackup => {}
+            server_db::DbKeyPrefix::ApiAnnouncements => {
                 push_db_pair_items_no_serde!(
                     dbtx,
                     ApiAnnouncementPrefix,

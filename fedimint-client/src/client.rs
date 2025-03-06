@@ -43,6 +43,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
@@ -77,8 +78,8 @@ use crate::backup::Metadata;
 use crate::db::{
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientMetadataKey,
     ClientModuleRecovery, ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey,
-    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, apply_migrations_core_client,
-    get_core_client_database_migrations, get_decoded_client_secret,
+    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, apply_migrations_core_client_dbtx,
+    get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -149,12 +150,14 @@ impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
     pub async fn builder(db: Database) -> anyhow::Result<ClientBuilder> {
-        apply_migrations_core_client(
-            &db,
-            "fedimint-client".to_string(),
-            get_core_client_database_migrations(),
-        )
-        .await?;
+        let mut dbtx = db.begin_transaction().await;
+        apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
+            .await?;
+        if is_running_in_test_env() {
+            verify_client_db_integrity_dbtx(&mut dbtx.to_ref_nc()).await;
+        }
+        dbtx.commit_tx_result().await?;
+
         Ok(ClientBuilder::new(db))
     }
 
