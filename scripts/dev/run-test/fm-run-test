@@ -19,19 +19,29 @@ export FM_TEST_NAME="$test_name"
 TMPDIR="$(mktemp -d --tmpdir "fm-${FM_TEST_NAME:0:12}-XXXX")"
 FM_RUN_TEST_TMPDIR="$TMPDIR"
 
-echo "## RUN:  $test_name$version_str"
+echo
+echo "## RUN $test_name$version_str:"
 
 on_error() {
-  echo "## OUT:  $test_name$version_str"
+  echo
+  echo "## FAILED $test_name$version_str:"
+  echo "## OUT:"
   cat "$test_out_path"
-  echo "## FAIL: $test_name$version_str"
+  echo
+  echo
   echo "## LOG FEDIMINTD-0:"
   cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/fedimintd-default-0.log || true
+  echo
+  echo
   echo "## LOG LND GATEWAY:"
   cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-lnd.log || true
+  echo
+  echo
   echo "## LOG LDK-0 GATEWAY:"
   cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-ldk-0.log || true
-  echo "## END."
+  echo
+  echo
+  echo "## FAIL END $test_name$version_str."
 }
 
 on_exit() {
@@ -51,4 +61,4 @@ command time -q --format="$time_fmt" -o "$time_out_path" \
     "$@" 2>&1 | ts -i "%.S" | ts -s "%M:%S" > "$test_out_path"
 
 awk 'BEGIN {FS="\t"} {printf "## STAT: %8.2fs %8dB %8dW %8dc\n", $1, $2, $3, $4}' < "$time_out_path"
-echo "## DONE: $test_name$version_str"
+echo "## DONE $test_name$version_str."
