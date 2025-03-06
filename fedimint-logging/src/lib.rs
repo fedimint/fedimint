@@ -28,6 +28,7 @@ pub const LOG_DB: &str = "fm::db";
 pub const LOG_DEVIMINT: &str = "fm::devimint";
 pub const LOG_NET: &str = "fm::net";
 pub const LOG_NET_IROH: &str = "fm::net::iroh";
+pub const LOG_NET_WS: &str = "fm::net::ws";
 pub const LOG_NET_API: &str = "fm::net::api";
 pub const LOG_NET_PEER_DKG: &str = "fm::net::peer::dkg";
 pub const LOG_NET_PEER: &str = "fm::net::peer";

@@ -22,6 +22,7 @@ use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -36,7 +37,7 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
-use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
+use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API, LOG_NET_WS};
 use futures::channel::oneshot;
 use futures::future::pending;
 use futures::stream::FuturesUnordered;
@@ -622,11 +623,35 @@ where
 pub struct WebsocketConnector {
     peers: BTreeMap<PeerId, SafeUrl>,
     api_secret: Option<String>,
+
+    /// List of overrides to use when attempting to connect to given
+    /// `PeerId`
+    ///
+    /// This is useful for testing, or forcing non-default network
+    /// connectivity.
+    pub connection_overrides: BTreeMap<PeerId, SafeUrl>,
 }
 
 impl WebsocketConnector {
-    pub fn new(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> Self {
-        Self { peers, api_secret }
+    fn new(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> anyhow::Result<Self> {
+        let mut s = Self::new_no_overrides(peers, api_secret);
+
+        for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
+            s = s.with_connection_override(k, v);
+        }
+
+        Ok(s)
+    }
+    pub fn with_connection_override(mut self, peer_id: PeerId, url: SafeUrl) -> Self {
+        self.connection_overrides.insert(peer_id, url);
+        self
+    }
+    pub fn new_no_overrides(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> Self {
+        Self {
+            peers,
+            api_secret,
+            connection_overrides: BTreeMap::default(),
+        }
     }
 }
 
@@ -637,10 +662,15 @@ impl IClientConnector for WebsocketConnector {
     }
 
     async fn connect(&self, peer_id: PeerId) -> PeerResult<DynClientConnection> {
-        let api_endpoint = self
-            .peers
-            .get(&peer_id)
-            .ok_or_else(|| PeerError::InternalClientError(anyhow!("Invalid peer_id: {peer_id}")))?;
+        let api_endpoint = match self.connection_overrides.get(&peer_id) {
+            Some(url) => {
+                trace!(target: LOG_NET_WS, %peer_id, "Using a connectivity override for connection");
+                url
+            }
+            None => self.peers.get(&peer_id).ok_or_else(|| {
+                PeerError::InternalClientError(anyhow!("Invalid peer_id: {peer_id}"))
+            })?,
+        };
 
         #[cfg(not(target_family = "wasm"))]
         let mut client = {
@@ -999,7 +1029,7 @@ impl ReconnectFederationApi {
             .scheme();
 
         let connector = match scheme {
-            "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone()).into_dyn(),
+            "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone())?.into_dyn(),
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
             "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
             #[cfg(all(feature = "iroh", not(target_family = "wasm")))]
