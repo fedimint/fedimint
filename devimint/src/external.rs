@@ -256,6 +256,25 @@ impl Bitcoind {
         .await
     }
 
+    pub async fn wait_mempool_size(&self, size: usize) -> Result<()> {
+        poll("Waiting for mempool size", || async {
+            let mempool_info = self.client.get_mempool_info();
+            match mempool_info {
+                Ok(info) if info.size >= size => Ok(()),
+                Ok(info) => {
+                    let actual_size = info.size;
+                    Err(ControlFlow::Continue(anyhow::anyhow!(
+                        "Mempool is lower than requested size. Request: {size} Actual: {actual_size}"
+                    )))
+                },
+                Err(_) => {
+                    Err(ControlFlow::Break(anyhow::anyhow!("Error getting mempool info")))
+                }
+            }
+        })
+        .await
+    }
+
     /// Get a transaction by its txid. Checks the mempool and all blocks.
     async fn get_transaction(&self, txid: bitcoin::Txid) -> Result<Option<String>> {
         // Check the mempool.
@@ -845,6 +864,7 @@ pub async fn open_channel(
         .context("bech32 should be present")?;
 
     bitcoind.send_to(cln_addr, 100_000_000).await?;
+    bitcoind.wait_mempool_size(1).await?;
     bitcoind.mine_blocks(10).await?;
 
     let lnd_pubkey = lnd.pub_key().await?;
@@ -887,6 +907,7 @@ pub async fn open_channel(
     })
     .await?;
 
+    bitcoind.wait_mempool_size(1).await?;
     bitcoind.mine_blocks(10).await?;
 
     let res = poll("Legacy Wait for channel update", || async {
@@ -959,6 +980,7 @@ pub async fn open_channels_between_gateways(
         bitcoind.send_to(funding_addr, 100_000_000).await?;
     }
 
+    bitcoind.wait_mempool_size(gateways.len()).await?;
     bitcoind.mine_blocks(10).await?;
 
     let block_height = bitcoind.get_block_count().await? - 1;
@@ -1026,20 +1048,20 @@ pub async fn open_channels_between_gateways(
     }
 
     // Wait for all channel funding transaction to be known by bitcoind.
-    let mut is_missing_any_txids = false;
+    let mut num_mempool_transactions = 0;
     for txid_or in &channel_funding_txids {
         if let Some(txid) = txid_or {
             bitcoind.poll_get_transaction(*txid).await?;
         } else {
-            is_missing_any_txids = true;
+            num_mempool_transactions += 1;
         }
     }
 
     // `open_channel` may not have sent out the channel funding transaction
     // immediately. Since it didn't return a funding txid, we need to wait for
     // it to get to the mempool.
-    if is_missing_any_txids {
-        fedimint_core::runtime::sleep(Duration::from_secs(2)).await;
+    if num_mempool_transactions > 0 {
+        bitcoind.wait_mempool_size(num_mempool_transactions).await?;
     }
 
     bitcoind.mine_blocks(10).await?;
