@@ -1,6 +1,7 @@
 use std::future::Future;
 
 use anyhow::{Result, bail};
+use clap::Parser;
 use devimint::federation::Client;
 use devimint::util::poll_simple;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
@@ -9,8 +10,21 @@ use fedimint_core::PeerId;
 use serde_json::json;
 use tracing::{info, warn};
 
+#[derive(Parser, Debug)]
+pub enum TestCli {
+    Sanity,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let opts = TestCli::parse();
+
+    match opts {
+        TestCli::Sanity => sanity_tests().await,
+    }
+}
+
+async fn sanity_tests() -> anyhow::Result<()> {
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;

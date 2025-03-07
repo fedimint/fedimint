@@ -3481,6 +3481,7 @@ name = "fedimint-meta-tests"
 version = "0.7.0-alpha"
 dependencies = [
  "anyhow",
+ "clap",
  "devimint",
  "fedimint-core",
  "semver",
