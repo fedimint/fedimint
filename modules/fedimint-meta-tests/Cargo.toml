@@ -10,11 +10,12 @@ publish = false
 # workaround: cargo-deny in Nix needs to see at least one
 # artifact here
 [[bin]]
-name = "meta-sanity-test"
-path = "src/bin/meta-sanity-test.rs"
+name = "meta-module-tests"
+path = "src/bin/meta-module-tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-core = { workspace = true }
 semver = { workspace = true }
