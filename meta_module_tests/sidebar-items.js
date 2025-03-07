@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TestCli"],"fn":["main","sanity_tests"]};

@@ -1,1 +1,0 @@
-searchState.loadedDescShard("meta_sanity_test", 0, "")
