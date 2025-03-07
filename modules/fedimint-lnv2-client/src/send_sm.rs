@@ -8,14 +8,14 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::util::backoff_util::api_networking_backoff;
-use fedimint_core::{OutPoint, TransactionId, secp256k1, util};
+use fedimint_core::{OutPoint, TransactionId, crit, secp256k1, util};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::future::pending;
 use secp256k1::Keypair;
 use secp256k1::schnorr::Signature;
-use tracing::{error, instrument};
+use tracing::instrument;
 
 use crate::api::LightningFederationApi;
 use crate::{LightningClientContext, LightningInvoice};
@@ -231,7 +231,7 @@ impl SendStateMachine {
             return Some(preimage);
         }
 
-        error!("Federation returned invalid preimage {:?}", preimage);
+        crit!(target: LOG_CLIENT_MODULE_LNV2, "Federation returned invalid preimage {:?}", preimage);
 
         pending().await
     }

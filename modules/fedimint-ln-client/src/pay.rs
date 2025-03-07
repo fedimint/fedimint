@@ -9,17 +9,19 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
+use fedimint_core::util::FmtCompact as _;
+use fedimint_core::{Amount, OutPoint, TransactionId, crit, secp256k1};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{LightningGateway, LightningInput, PrunedInvoice};
+use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::future::pending;
 use lightning_invoice::Bolt11Invoice;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 pub use self::lightningpay::LightningPayStates;
 use crate::api::LnFederationApi;
@@ -177,7 +179,7 @@ impl LightningPayCreatedOutgoingLnContract {
         {
             FundedContract::Outgoing(contract) => Ok(contract.timelock),
             FundedContract::Incoming(..) => {
-                error!("Federation returned wrong account type");
+                crit!(target: LOG_CLIENT_MODULE_LN, "Federation returned wrong account type");
 
                 pending().await
             }
@@ -465,7 +467,7 @@ async fn await_contract_cancelled(contract_id: ContractId, global_context: DynGl
         {
             Ok(_) => return,
             Err(error) => {
-                error!("Error waiting for outgoing contract to be cancelled: {error:?}");
+                info!(target: LOG_CLIENT_MODULE_LN, err = %error.fmt_compact(), "Error waiting for outgoing contract to be cancelled");
             }
         }
 
