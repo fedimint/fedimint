@@ -37,9 +37,16 @@ on_error() {
   cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-lnd.log || true
   echo
   echo
+  echo "## LOG LND NODE:"
+  cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/lnd.log || true
+  echo
+  echo
   echo "## LOG LDK-0 GATEWAY:"
   cat "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-ldk-0.log || true
   echo
+  echo
+  echo "## LOG LDK-0 NODE:"
+  { cat  "$FM_RUN_TEST_TMPDIR"/devimint-*/gatewayd-ldk-0/ldk_node/logs/ldk_node_latest.log || true; } | grep -v "Failed to retrieve fee rate estimates" || true
   echo
   echo "## FAIL END $test_name$version_str."
 }
