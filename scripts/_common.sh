@@ -131,7 +131,11 @@ function nix_build_binary_for_version() {
   version="$2"
 
   >&2 echo "Compiling ${binary} for version ${version} ..."
-  echo "$(nix build 'github:fedimint/fedimint/'"$version"'#'"$binary" --no-link --print-out-paths)/bin/$binary"
+  output_path=$(nix build 'github:fedimint/fedimint/'"$version"'#'"$binary" --no-link --print-out-paths) || {
+    >&2 echo "Error: nix build failed for $binary $version"
+    exit 1
+  }
+  echo "${output_path}/bin/${binary}"
 }
 export -f nix_build_binary_for_version
 
