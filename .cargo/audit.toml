@@ -19,4 +19,6 @@ ignore = [
   "RUSTSEC-2025-0006",
   # `instant` unmaintained
   "RUSTSEC-2024-0384",
+  # ring has a panic that doesn't affect us
+  "RUSTSEC-2025-0009",
 ]
