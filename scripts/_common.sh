@@ -2,9 +2,10 @@
 
 export REPO_ROOT
 
-if [[ ! $- =~ e ]] || [[ ! $- =~ u ]] || ! shopt -p pipefail | grep -q "set -o pipefail" ; then
-  echo "Warning: 'set -euo pipefail' is not fully enabled."
+if [[ ! $- =~ e ]] || [[ ! $- =~ u ]] || ! (set -o | grep -q "pipefail[[:space:]]*on") ; then
+  >&2 echo "Warning: 'set -euo pipefail' is not fully enabled."
 fi
+
 if [ -z "${REPO_ROOT:-}" ]; then
   if command -v git &> /dev/null; then
     REPO_ROOT="$(git rev-parse --show-toplevel)"
