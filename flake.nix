@@ -6,6 +6,9 @@
     nixpkgs-old = {
       url = "github:nixos/nixpkgs/nixos-23.05";
     };
+    nixpkgs-unstable = {
+      url = "github:nixos/nixpkgs/nixos-unstable";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -35,6 +38,7 @@
       self,
       nixpkgs,
       nixpkgs-old,
+      nixpkgs-unstable,
       flake-utils,
       flakebox,
       cargo-deluxe,
@@ -88,6 +92,7 @@
               # resolves some python on darwin breakage
               # https://github.com/NixOS/nixpkgs/blob/470e6e641f412894086b6df2f204847bd3905f17/pkgs/development/python-modules/jaraco-path/default.nix#L34
               clightning = pkgs-old.clightning;
+              lnd = nixpkgs-unstable.legacyPackages.${system}.lnd;
             })
           ];
         };
