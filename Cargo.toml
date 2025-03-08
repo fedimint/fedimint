@@ -117,7 +117,7 @@ bitcoincore-rpc = "0.19.0"
 bitcoin_hashes = "0.14.0"
 bls12_381 = "0.8.0"
 bon = "3.3.2"
-bytes = "1.10.0"
+bytes = "1.10.1"
 clap = { version = "4.5.31", features = ["derive", "env"] }
 cln-rpc = { package = "fedimint-cln-rpc", version = "0.5.0" }
 criterion = "0.5.1"
@@ -172,7 +172,7 @@ fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version 
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.7.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.7.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.7.0-alpha" }
-fs-lock = "0.1.7"
+fs-lock = "0.1.9"
 futures = "0.3.31"
 futures-util = "0.3.30"
 group = "0.13.0"
@@ -198,10 +198,10 @@ reqwest = { version = "0.12.9", features = [
   "http2",
   "stream",
 ], default-features = false }
-ring = "0.17.11"
+ring = "0.17.13"
 scopeguard = "1.2.0"
 secp256k1 = { version = "0.29.0", default-features = false }
-semver = "1.0.25"
+semver = "1.0.26"
 serde = { version = "1.0.218", features = ["derive"] }
 serdect = "0.2.0"
 serde-big-array = "0.5.1"
