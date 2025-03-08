@@ -411,6 +411,7 @@ impl Lightningd {
             include_str!("cfg/lightningd.conf"),
             port = process_mgr.globals.FM_PORT_CLN,
             bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
+            log_path = process_mgr.globals.FM_CLN_DIR.join("cln.log").display(),
         );
         write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join("config"), conf).await?;
         let process = Lightningd::start(process_mgr, cln_dir).await?;
