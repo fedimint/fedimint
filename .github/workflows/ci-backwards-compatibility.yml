@@ -47,7 +47,6 @@ jobs:
       - name: Backwards-compatibility tests
         run: |
           export VERSIONS_TO_TEST="v0.4.4 v0.5.1 v0.6.1"
-          export FM_TEST_CI_ALL_JOBS="5"
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
