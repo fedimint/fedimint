@@ -18,13 +18,15 @@ use fedimint_core::envs::{
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::timing;
-use fedimint_core::util::{SafeUrl, handle_version_hash_command, write_overwrite};
+use fedimint_core::util::{
+    FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command, write_overwrite,
+};
+use fedimint_core::{crit, timing};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningInit;
-use fedimint_logging::{LOG_CORE, TracingSetup};
+use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::MintInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
@@ -424,7 +426,7 @@ impl Fedimintd {
             {
                 Ok(()) => {}
                 Err(error) => {
-                    error!(?error, "Main task returned error, shutting down");
+                    crit!(target: LOG_SERVER, err = %error.fmt_compact_anyhow(), "Main task returned error, shutting down");
                     task_group.shutdown();
                 }
             }

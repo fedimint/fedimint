@@ -15,8 +15,9 @@ use fedimint_core::{NumPeersExt, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
 use fedimint_lnv2_common::{ContractId, LightningInput, LightningInputV0};
+use fedimint_logging::LOG_CLIENT_MODULE_GW;
 use tpe::{AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, aggregate_dk_shares};
-use tracing::error;
+use tracing::warn;
 
 use super::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
 use crate::GatewayClientContextV2;
@@ -213,10 +214,7 @@ impl ReceiveStateMachine {
             .contract
             .verify_agg_decryption_key(&tpe_agg_pk, &agg_decryption_key)
         {
-            let error =
-                "Failed to obtain decryption key. Client config's public keys are inconsistent"
-                    .to_string();
-            error!(error);
+            warn!(target: LOG_CLIENT_MODULE_GW, "Failed to obtain decryption key. Client config's public keys are inconsistent");
 
             client_ctx
                 .module
@@ -225,7 +223,7 @@ impl ReceiveStateMachine {
                     &mut dbtx.module_tx(),
                     IncomingPaymentFailed {
                         payment_image: old_state.common.contract.commitment.payment_image.clone(),
-                        error,
+                        error: "Client config's public keys are inconsistent".to_string(),
                     },
                 )
                 .await;

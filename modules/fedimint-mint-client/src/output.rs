@@ -14,7 +14,7 @@ use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
-use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId};
+use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId, crit};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -26,7 +26,7 @@ use tbs::{
     AggregatePublicKey, BlindedMessage, BlindedSignature, BlindedSignatureShare, BlindingKey,
     PublicKeyShare, aggregate_signature_shares, blind_message, unblind_signature,
 };
-use tracing::{debug, error};
+use tracing::debug;
 
 use crate::client_db::NoteKey;
 use crate::event::NoteCreated;
@@ -295,7 +295,7 @@ impl MintOutputStatesCreated {
             )
             .await
         {
-            error!(?note, "E-cash note was replaced in DB");
+            crit!(target: LOG_CLIENT_MODULE_MINT, %note, "E-cash note was replaced in DB");
         }
 
         MintOutputStateMachine {
@@ -532,7 +532,7 @@ impl MintOutputStatesCreatedMulti {
                 )
                 .await
             {
-                error!(?note, "E-cash note was replaced in DB");
+                crit!(target: LOG_CLIENT_MODULE_MINT, %note, "E-cash note was replaced in DB");
             }
         }
         MintOutputStateMachine {
