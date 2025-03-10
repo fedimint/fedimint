@@ -35,10 +35,11 @@ use crate::envs::{
     FM_ELECTRS_BASE_EXECUTABLE_ENV, FM_ESPLORA_BASE_EXECUTABLE_ENV,
     FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV,
-    FM_GATEWAYD_BASE_EXECUTABLE_ENV, FM_GWCLI_LND_ENV, FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV,
-    FM_LIGHTNING_CLI_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV, FM_LNCLI_BASE_EXECUTABLE_ENV,
-    FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV, FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV,
-    FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV, FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
+    FM_GATEWAYD_BASE_EXECUTABLE_ENV, FM_GWCLI_LDK_ENV, FM_GWCLI_LND_ENV,
+    FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
+    FM_LNCLI_BASE_EXECUTABLE_ENV, FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV,
+    FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV, FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV,
+    FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
 };
 
 // If a binary doesn't provide a clap version, default to the first stable
@@ -1018,25 +1019,22 @@ impl GatewayLndCli {
     }
 }
 
+pub struct GatewayLdkCli;
+impl GatewayLdkCli {
+    pub fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[FM_GWCLI_LDK_ENV],
+            &["gateway-ldk"],
+        ))
+    }
+}
+
 pub struct LnCli;
 impl LnCli {
     pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_LNCLI_ENV],
             &get_lncli_path()
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
-        ))
-    }
-}
-
-pub struct ClnLightningCli;
-impl ClnLightningCli {
-    pub fn cmd(self) -> Command {
-        to_command(get_command_str_for_alias(
-            &[FM_LIGHTNING_CLI_ENV],
-            &get_lightning_cli_path()
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
