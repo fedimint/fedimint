@@ -15,7 +15,7 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
-use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::ln::LightningNodeType;
 use futures::StreamExt;
@@ -700,6 +700,21 @@ impl Lnd {
         Ok((invoice, payment_hash))
     }
 
+    pub async fn print_channels(&self) -> anyhow::Result<()> {
+        let channels = self
+            .lightning_client_lock()
+            .await?
+            .list_channels(ListChannelsRequest {
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+
+        info!(target: LOG_DEVIMINT, ?channels, "Printing LND channels");
+
+        Ok(())
+    }
+
     pub async fn pay_bolt11_invoice(&self, invoice: String) -> anyhow::Result<()> {
         let payment = self
             .lightning_client_lock()
@@ -938,6 +953,7 @@ pub type NamedGateway<'a> = (&'a Gatewayd, &'a str);
 pub async fn open_channels_between_gateways(
     bitcoind: &Bitcoind,
     gateways: &[NamedGateway<'_>],
+    lnd: Lnd,
 ) -> Result<()> {
     let block_height = bitcoind.get_block_count().await? - 1;
     debug!(target: LOG_DEVIMINT, ?block_height, "Syncing gateway lightning nodes to block height...");
@@ -982,6 +998,7 @@ pub async fn open_channels_between_gateways(
             let gw_a_name = (*gw_a_name).to_string();
             let gw_b = (*gw_b).clone();
             let gw_b_name = (*gw_b_name).to_string();
+            let lnd = lnd.clone();
 
             let sats_per_side = 5_000_000;
             debug!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
@@ -992,10 +1009,9 @@ pub async fn open_channels_between_gateways(
                 })
                 .await;
 
-                if res.is_err() {
-                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, ?res, "Failed to open channel");
-                    gw_a.dump_logs()?;
-                    gw_b.dump_logs()?;
+                if let Err(err) = &res {
+                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, err=%err.fmt_compact_anyhow(), "Failed to open channel");
+                    lnd.print_channels().await?;
                 }
 
                 res
@@ -1052,8 +1068,10 @@ pub async fn open_channels_between_gateways(
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
         let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
 
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey, lnd.clone())
+            .await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey, lnd.clone())
+            .await?;
     }
 
     Ok(())
@@ -1062,6 +1080,7 @@ pub async fn open_channels_between_gateways(
 async fn wait_for_ready_channel_on_gateway_with_counterparty(
     gw: &Gatewayd,
     counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+    lnd: Lnd,
 ) -> anyhow::Result<()> {
     poll(
         &format!("Wait for {} channel update", gw.gw_name),
@@ -1080,6 +1099,9 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
             }
 
             debug!(target: LOG_DEVIMINT, ?channels, gw = gw.gw_name, "Counterparty channels not found open");
+            if gw.ln.ln_type() == LightningNodeType::Lnd {
+                lnd.print_channels().await.expect("Could not print LND channels");
+            }
 
             Err(ControlFlow::Continue(anyhow!("channel not found")))
         },
