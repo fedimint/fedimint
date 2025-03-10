@@ -356,12 +356,19 @@ impl Bitcoind {
         amount: bitcoin::Amount,
     ) -> anyhow::Result<bitcoin::Txid> {
         let client = self.wallet_client().await?.clone();
-        Ok(spawn_blocking(move || {
-            client
-                .client
-                .send_to_address(&addr, amount, None, None, None, None, None, None)
+
+        let raw_client = client.client.clone();
+        let txid = spawn_blocking(move || {
+            raw_client.send_to_address(&addr, amount, None, None, None, None, None, None)
         })
-        .await??)
+        .await??;
+
+        // If this ever fails, it means we need to poll here, before we return to the
+        // user, as downstream code expects that mining blocks will include this
+        // tx.
+        assert!(client.get_transaction(txid).await?.is_some());
+
+        Ok(txid)
     }
 
     pub(crate) async fn get_balances(&self) -> anyhow::Result<GetBalancesResult> {
