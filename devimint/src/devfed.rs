@@ -256,29 +256,22 @@ impl DevJitFed {
                 // other.
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
 
-                tokio::try_join!(
-                    async {
-                        let gw_ldk = gw_ldk.get_try().await?.deref();
-                        let gw_lnd = gw_lnd.get_try().await?.deref();
-                        let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
+                let gw_ldk = gw_ldk.get_try().await?.deref();
+                let gw_lnd = gw_lnd.get_try().await?.deref();
+                let gateways: &[NamedGateway<'_>] = &[(gw_lnd, "LND"), (gw_ldk, "LDK")];
 
-                        debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
-                        let start_time = fedimint_core::time::now();
-                        open_channels_between_gateways(&bitcoind, gateways).await?;
-                        info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
-                        anyhow::Ok(())
-                    },
-                    async {
-                        let lnd = lnd.get_try().await?.deref().clone();
-                        let cln = cln.get_try().await?.deref().clone();
+                debug!(target: LOG_DEVIMINT, "Opening channels between gateways...");
+                let start_time = fedimint_core::time::now();
+                open_channels_between_gateways(&bitcoind, gateways).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
 
-                        debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
-                        let start_time = fedimint_core::time::now();
-                        open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
-                        info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
-                        anyhow::Ok(())
-                    }
-                )?;
+                let lnd = lnd.get_try().await?.deref().clone();
+                let cln = cln.get_try().await?.deref().clone();
+
+                debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
+                let start_time = fedimint_core::time::now();
+                open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
 
                 Ok(Arc::new(()))
             }
