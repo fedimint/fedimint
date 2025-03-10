@@ -21,4 +21,12 @@ ignore = [
   "RUSTSEC-2024-0384",
   # ring has a panic that doesn't affect us
   "RUSTSEC-2025-0009",
+  # ring has a panic that doesn't affect us
+  "RUSTSEC-2025-0010",
+  # `paste` unmaintained
+  "RUSTSEC-2024-0436",
+  # `backoff` unmaintained
+  "RUSTSEC-2025-0012",
+  # `protobuf` crash on untrusted data
+  "RUSTSEC-2024-0437",
 ]
