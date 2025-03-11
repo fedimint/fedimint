@@ -54,7 +54,9 @@ use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET, ModuleInstanceId,
     ModuleKind,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations_server};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, FakeServerDbMigrationContext, apply_migrations_server,
+};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
@@ -342,6 +344,7 @@ impl Gateway {
         // Apply database migrations before using the database to ensure old database
         // structures are readable.
         apply_migrations_server(
+            Arc::new(FakeServerDbMigrationContext),
             &gateway_db,
             "gatewayd".to_string(),
             get_gatewayd_database_migrations(),

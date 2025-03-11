@@ -15,7 +15,7 @@ use tracing::warn;
 
 use super::ClientContext;
 use super::recovery::RecoveryProgress;
-use crate::db::ClientMigrationFn;
+use crate::db::ClientModuleMigrationFn;
 use crate::module::ClientModule;
 use crate::sm::ModuleNotifier;
 
@@ -236,7 +236,7 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     /// Retrieves the database migrations from the module to be applied to the
     /// database before the module is initialized. The database migrations map
     /// is indexed on the "from" version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
         BTreeMap::new()
     }
 

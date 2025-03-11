@@ -12,7 +12,7 @@ use anyhow::{Context as _, anyhow, format_err};
 use common::broken_fed_key_pair;
 use db::{DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey, migrate_to_v1};
 use fedimint_api_client::api::{FederationApiExt, SerdeOutputOutcome, deserialize_outcome};
-use fedimint_client_module::db::{ClientMigrationFn, migrate_state};
+use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -433,8 +433,8 @@ impl ClientModuleInit for DummyClientInit {
         })
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
-        let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn> = BTreeMap::new();
         migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
             Box::pin(migrate_to_v1(dbtx))
         });

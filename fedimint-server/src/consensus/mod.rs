@@ -19,7 +19,8 @@ use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, apply_migrations_dbtx, apply_migrations_server_dbtx, verify_module_db_integrity_dbtx,
+    Database, FakeServerDbMigrationContext, apply_migrations_dbtx, apply_migrations_server_dbtx,
+    verify_module_db_integrity_dbtx,
 };
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
@@ -70,6 +71,7 @@ pub async fn run(
     let mut global_dbtx = db.begin_transaction().await;
     apply_migrations_server_dbtx(
         &mut global_dbtx.to_ref_nc(),
+        Arc::new(FakeServerDbMigrationContext),
         "fedimint-server".to_string(),
         get_global_database_migrations(),
     )
@@ -104,6 +106,7 @@ pub async fn run(
                 let mut dbtx = db.begin_transaction().await;
                 apply_migrations_dbtx(
                     &mut dbtx.to_ref_nc(),
+                    Arc::new(FakeServerDbMigrationContext) as Arc<_>,
                     module_init.module_kind().to_string(),
                     module_init.get_database_migrations(),
                     Some(*module_id),

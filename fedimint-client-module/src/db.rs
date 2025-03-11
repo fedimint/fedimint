@@ -8,7 +8,7 @@ use fedimint_core::util::BoxFuture;
 
 /// `ClientMigrationFn` is a function that modules can implement to "migrate"
 /// the database to the next database version.
-pub type ClientMigrationFn = for<'r, 'tx> fn(
+pub type ClientModuleMigrationFn = for<'r, 'tx> fn(
     &'r mut DatabaseTransaction<'tx>,
     Vec<(Vec<u8>, OperationId)>, // active states
     Vec<(Vec<u8>, OperationId)>, // inactive states

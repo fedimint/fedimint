@@ -12,7 +12,7 @@ use fedimint_core::config::{
     ModuleInitRegistry, ServerModuleConfig, ServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{CoreMigrationFn, Database, DatabaseVersion};
+use fedimint_core::db::{Database, DatabaseVersion, ServerDbMigrationFn};
 use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
     ModuleInit, PeerHandle, SupportedModuleApiVersions,
@@ -75,7 +75,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
     /// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn>;
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerDbMigrationFn>;
 
     /// See [`ServerModuleInit::used_db_prefixes`]
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>>;
@@ -229,7 +229,7 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerDbMigrationFn> {
         BTreeMap::new()
     }
 
@@ -326,7 +326,7 @@ where
         )
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerDbMigrationFn> {
         <Self as ServerModuleInit>::get_database_migrations(self)
     }
 

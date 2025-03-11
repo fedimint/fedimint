@@ -3,7 +3,8 @@ use std::fmt::Debug;
 
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationContext,
+    DatabaseVersion, DbMigrationFnContext, IDatabaseTransactionOpsCoreTyped,
+    ServerDbMigrationContext, ServerDbMigrationFn,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
@@ -78,7 +79,7 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
-pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, ServerDbMigrationFn> {
     BTreeMap::new()
 }
 
@@ -104,7 +105,7 @@ pub trait MigrationContextExt {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl MigrationContextExt for MigrationContext<'_> {
+impl MigrationContextExt for DbMigrationFnContext<'_, ServerDbMigrationContext> {
     async fn get_module_history_stream(&mut self) -> BoxStream<ModuleHistoryItem> {
         let module_instance_id = self
             .module_instance_id()

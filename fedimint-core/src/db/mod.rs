@@ -2165,12 +2165,27 @@ macro_rules! push_db_key_items {
     };
 }
 
+// TODO: real things will go in here later
+pub trait IServerDbMigrationContext {}
+// TODO: this is just a placeholder
+pub struct FakeServerDbMigrationContext;
+impl IServerDbMigrationContext for FakeServerDbMigrationContext {}
+pub type ServerDbMigrationContext = Arc<dyn IServerDbMigrationContext + Send + Sync + 'static>;
+
+pub type ServerDbMigrationFnContext<'tx> = DbMigrationFnContext<'tx, ServerDbMigrationContext>;
+pub type ServerDbMigrationFn = DbMigrationFn<ServerDbMigrationContext>;
+
+// NOTE: client _module_ migrations are handled using separate structs due to
+// state machine migrations
+pub type ClientCoreDbMigrationFn = DbMigrationFn<()>;
+pub type ClientCoreDbMigrationFnContext<'tx> = DbMigrationFnContext<'tx, ()>;
+
 /// `CoreMigrationFn` that modules can implement to "migrate" the database
 /// to the next database version.
-pub type CoreMigrationFn = Box<
+pub type DbMigrationFn<C> = Box<
     maybe_add_send!(
         dyn for<'tx> Fn(
-            MigrationContext<'tx>,
+            DbMigrationFnContext<'tx, C>,
         ) -> Pin<
             Box<maybe_add_send!(dyn futures::Future<Output = anyhow::Result<()>> + 'tx)>,
         >
@@ -2201,38 +2216,45 @@ pub fn get_current_database_version<F>(
 
 /// See [`apply_migrations_server_dbtx`]
 pub async fn apply_migrations_server(
+    ctx: ServerDbMigrationContext,
     db: &Database,
     kind: String,
-    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn>,
 ) -> Result<(), anyhow::Error> {
     let mut global_dbtx = db.begin_transaction().await;
     global_dbtx.ensure_global()?;
-    apply_migrations_server_dbtx(&mut global_dbtx.to_ref_nc(), kind, migrations).await?;
+    apply_migrations_server_dbtx(&mut global_dbtx.to_ref_nc(), ctx, kind, migrations).await?;
     global_dbtx.commit_tx_result().await
 }
 
 /// Applies the database migrations to a non-isolated database.
 pub async fn apply_migrations_server_dbtx(
     global_dbtx: &mut DatabaseTransaction<'_>,
+    ctx: ServerDbMigrationContext,
     kind: String,
-    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn>,
 ) -> Result<(), anyhow::Error> {
     global_dbtx.ensure_global()?;
-    apply_migrations_dbtx(global_dbtx, kind, migrations, None, None).await
+    apply_migrations_dbtx(global_dbtx, ctx, kind, migrations, None, None).await
 }
 
-pub async fn apply_migrations(
+pub async fn apply_migrations<C>(
     db: &Database,
+    ctx: C,
     kind: String,
-    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, DbMigrationFn<C>>,
     module_instance_id: Option<ModuleInstanceId>,
     // When used in client side context, we can/should ignore keys that external app
     // is allowed to use, and but since this function is shared, we make it optional argument
     external_prefixes_above: Option<u8>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), anyhow::Error>
+where
+    C: Clone,
+{
     let mut dbtx = db.begin_transaction().await;
     apply_migrations_dbtx(
         &mut dbtx.to_ref_nc(),
+        ctx,
         kind,
         migrations,
         module_instance_id,
@@ -2253,15 +2275,19 @@ pub async fn apply_migrations(
 /// happen atomically). This function is called before the module is initialized
 /// and as long as the correct migrations are supplied in the migrations map,
 /// the module will be able to read and write from the database successfully.
-pub async fn apply_migrations_dbtx(
+pub async fn apply_migrations_dbtx<C>(
     global_dbtx: &mut DatabaseTransaction<'_>,
+    ctx: C,
     kind: String,
-    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, DbMigrationFn<C>>,
     module_instance_id: Option<ModuleInstanceId>,
     // When used in client side context, we can/should ignore keys that external app
     // is allowed to use, and but since this function is shared, we make it optional argument
     external_prefixes_above: Option<u8>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), anyhow::Error>
+where
+    C: Clone,
+{
     // Newly created databases will not have any data since they have just been
     // instantiated.
     let is_new_db = global_dbtx
@@ -2308,9 +2334,10 @@ pub async fn apply_migrations_dbtx(
         while current_db_version < target_db_version {
             if let Some(migration) = migrations.get(&current_db_version) {
                 info!(target: LOG_DB, ?kind, ?current_db_version, ?target_db_version, "Migrating module...");
-                migration(MigrationContext {
+                migration(DbMigrationFnContext {
                     dbtx: global_dbtx.to_ref_nc(),
                     module_instance_id,
+                    ctx: ctx.clone(),
                 })
                 .await?;
             } else {
@@ -2318,6 +2345,7 @@ pub async fn apply_migrations_dbtx(
             }
 
             current_db_version = current_db_version.increment();
+
             global_dbtx
                 .insert_entry(
                     &DatabaseVersionKey(module_instance_id_key),
@@ -2447,12 +2475,14 @@ fn module_instance_id_or_global(module_instance_id: Option<ModuleInstanceId>) ->
     )
 }
 
-pub struct MigrationContext<'tx> {
+pub struct DbMigrationFnContext<'tx, C> {
     dbtx: DatabaseTransaction<'tx>,
     module_instance_id: Option<ModuleInstanceId>,
+    #[allow(dead_code)]
+    ctx: C,
 }
 
-impl<'tx> MigrationContext<'tx> {
+impl<'tx, C> DbMigrationFnContext<'tx, C> {
     pub fn dbtx(&mut self) -> DatabaseTransaction {
         if let Some(module_instance_id) = self.module_instance_id {
             self.dbtx.to_ref_with_prefix_module_id(module_instance_id).0
@@ -2476,15 +2506,15 @@ mod test_utils {
     use std::collections::BTreeMap;
     use std::time::Duration;
 
-    use fedimint_core::db::MigrationContext;
+    use fedimint_core::db::DbMigrationFnContext;
     use futures::future::ready;
     use futures::{Future, FutureExt, StreamExt};
     use rand::Rng;
     use tokio::join;
 
     use super::{
-        CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        DatabaseVersionKeyV0, apply_migrations,
+        Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
+        DbMigrationFn, apply_migrations,
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
@@ -3230,14 +3260,14 @@ mod test_utils {
             .await;
         dbtx.commit_tx().await;
 
-        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+        let mut migrations: BTreeMap<DatabaseVersion, DbMigrationFn<()>> = BTreeMap::new();
 
         migrations.insert(
             DatabaseVersion(0),
             Box::new(|ctx| migrate_test_db_version_0(ctx).boxed()),
         );
 
-        apply_migrations(&db, "TestModule".to_string(), migrations, None, None)
+        apply_migrations(&db, (), "TestModule".to_string(), migrations, None, None)
             .await
             .expect("Error applying migrations for TestModule");
 
@@ -3266,7 +3296,9 @@ mod test_utils {
     }
 
     #[allow(dead_code)]
-    async fn migrate_test_db_version_0(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+    async fn migrate_test_db_version_0(
+        mut ctx: DbMigrationFnContext<'_, ()>,
+    ) -> Result<(), anyhow::Error> {
         let mut dbtx = ctx.dbtx();
         let example_keys_v0 = dbtx
             .find_by_prefix(&DbPrefixTestPrefixV0)

@@ -29,7 +29,7 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_client_module::db::{ClientMigrationFn, migrate_state};
+use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -350,8 +350,8 @@ impl ClientModuleInit for LightningClientInit {
         Ok(LightningClientModule::new(args, self.gateway_conn.clone()))
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
-        let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn> = BTreeMap::new();
         migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
             Box::pin(async {
                 dbtx.remove_entry(&crate::db::ActiveGatewayKey).await;

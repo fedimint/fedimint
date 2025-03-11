@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use db::DbKeyPrefix;
-use fedimint_client_module::db::ClientMigrationFn;
+use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
@@ -127,7 +127,7 @@ impl ClientModuleInit for EmptyClientInit {
         })
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
         BTreeMap::new()
     }
 }

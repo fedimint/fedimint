@@ -16,8 +16,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped, MigrationContext,
+    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, ServerDbMigrationFn, ServerDbMigrationFnContext,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -308,8 +308,8 @@ impl ServerModuleInit for MintInit {
         })
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerDbMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn> = BTreeMap::new();
         migrations.insert(
             DatabaseVersion(0),
             Box::new(|ctx| migrate_db_v0(ctx).boxed()),
@@ -326,7 +326,9 @@ impl ServerModuleInit for MintInit {
     }
 }
 
-async fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> anyhow::Result<()> {
+async fn migrate_db_v0(
+    mut migration_context: ServerDbMigrationFnContext<'_>,
+) -> anyhow::Result<()> {
     let blind_nonces = migration_context
         .get_typed_module_history_stream::<MintModuleTypes>()
         .await
@@ -374,7 +376,9 @@ async fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> anyhow::R
 }
 
 // Remove now unused ECash backups from DB. Backup functionality moved to core.
-async fn migrate_db_v1(mut migration_context: MigrationContext<'_>) -> anyhow::Result<()> {
+async fn migrate_db_v1(
+    mut migration_context: ServerDbMigrationFnContext<'_>,
+) -> anyhow::Result<()> {
     migration_context
         .dbtx()
         .raw_remove_by_prefix(&[0x15])

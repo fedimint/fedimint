@@ -4,8 +4,8 @@ use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped, MigrationContext,
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, ServerDbMigrationFn, ServerDbMigrationFnContext,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -405,8 +405,8 @@ impl_db_lookup!(
     query_prefix = PreimageAuthenticationPrefix
 );
 
-pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-    let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, ServerDbMigrationFn> {
+    let mut migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn> = BTreeMap::new();
     migrations.insert(
         DatabaseVersion(0),
         Box::new(|ctx| migrate_to_v1(ctx).boxed()),
@@ -430,7 +430,7 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigra
     migrations
 }
 
-async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v1(mut ctx: ServerDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
     /// Creates a password hash by appending a 4 byte salt to the plaintext
     /// password.
     fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
@@ -460,7 +460,7 @@ async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-async fn migrate_to_v2(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v2(mut ctx: ServerDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
     let mut dbtx = ctx.dbtx();
 
     // If there is no old federation configuration, there is nothing to do.
@@ -488,7 +488,7 @@ async fn migrate_to_v2(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-async fn migrate_to_v3(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v3(mut ctx: ServerDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
     let mut dbtx = ctx.dbtx();
 
     // If there is no old gateway configuration, there is nothing to do.
@@ -505,7 +505,7 @@ async fn migrate_to_v3(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-async fn migrate_to_v4(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v4(mut ctx: ServerDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
     let mut dbtx = ctx.dbtx();
 
     dbtx.remove_entry(&GatewayConfigurationKeyV2).await;
@@ -535,7 +535,7 @@ async fn migrate_to_v4(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Erro
 /// record and the isolated databases used for each client. We must migrate the
 /// isolated databases to be behind the `ClientDatabase` prefix to allow the
 /// gateway to properly read the federation configs.
-async fn migrate_to_v5(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+async fn migrate_to_v5(mut ctx: ServerDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
     let mut dbtx = ctx.dbtx();
     migrate_federation_configs(&mut dbtx).await
 }

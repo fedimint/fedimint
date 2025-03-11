@@ -1,6 +1,8 @@
 use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::{BlockHash, OutPoint, TxOut, Txid};
-use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
+use fedimint_core::db::{
+    DbMigrationFnContext, IDatabaseTransactionOpsCoreTyped, ServerDbMigrationContext,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
@@ -198,7 +200,9 @@ impl_db_lookup!(
 );
 
 /// Migrate to v1, backfilling all previously pegged-in outpoints
-pub async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+pub async fn migrate_to_v1(
+    mut ctx: DbMigrationFnContext<'_, ServerDbMigrationContext>,
+) -> Result<(), anyhow::Error> {
     let outpoints =
         ctx.get_typed_module_history_stream::<WalletModuleTypes>()
             .await
