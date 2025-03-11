@@ -1,120 +1,58 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::str::FromStr;
 
-use anyhow::Context;
 use axum::Router;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::{get, post};
-use cln_rpc::ClnRpc;
-use cln_rpc::primitives::{Amount as ClnAmount, AmountOrAny};
-use fedimint_core::fedimint_build_code_version_env;
-use fedimint_core::util::handle_version_hash_command;
 use fedimint_gateway_common::V1_API_ENDPOINT;
-use fedimint_logging::TracingSetup;
+use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
-use crate::cli::FaucetOpts;
-use crate::envs::FM_CLIENT_DIR_ENV;
+use crate::federation::Federation;
+use crate::{DevFed, Gatewayd};
 
 #[derive(Clone)]
 pub struct Faucet {
-    #[allow(unused)]
-    bitcoin: Arc<bitcoincore_rpc::Client>,
-    ln_rpc: Arc<Mutex<ClnRpc>>,
+    gw_ldk: Gatewayd,
+    fed: Federation,
 }
 
 impl Faucet {
-    pub async fn new(opts: &FaucetOpts) -> anyhow::Result<Self> {
-        let url = opts.bitcoind_rpc.parse()?;
-        let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
-        let bitcoin = Arc::new(bitcoincore_rpc::Client::new(&host, auth)?);
-        let ln_rpc = Arc::new(Mutex::new(
-            ClnRpc::new(&opts.cln_socket)
-                .await
-                .with_context(|| format!("couldn't open CLN socket {}", &opts.cln_socket))?,
-        ));
-        Ok(Faucet { bitcoin, ln_rpc })
+    pub fn new(dev_fed: &DevFed) -> Self {
+        let gw_ldk = dev_fed.gw_ldk.clone();
+        let fed = dev_fed.fed.clone();
+        Faucet { gw_ldk, fed }
     }
 
     async fn pay_invoice(&self, invoice: String) -> anyhow::Result<()> {
-        let invoice_status = self
-            .ln_rpc
-            .lock()
-            .await
-            .call_typed(&cln_rpc::model::requests::PayRequest {
-                bolt11: invoice,
-                amount_msat: None,
-                label: None,
-                riskfactor: None,
-                maxfeepercent: None,
-                retry_for: None,
-                maxdelay: None,
-                exemptfee: None,
-                localinvreqid: None,
-                exclude: None,
-                maxfee: None,
-                description: None,
-                partial_msat: None,
-            })
-            .await?
-            .status;
-
-        anyhow::ensure!(
-            matches!(
-                invoice_status,
-                cln_rpc::model::responses::PayStatus::COMPLETE
-            ),
-            "payment not complete"
-        );
+        self.gw_ldk
+            .pay_invoice(Bolt11Invoice::from_str(&invoice).expect("Could not parse invoice"))
+            .await?;
         Ok(())
     }
 
     async fn generate_invoice(&self, amount: u64) -> anyhow::Result<String> {
-        Ok(self
-            .ln_rpc
-            .lock()
-            .await
-            .call_typed(&cln_rpc::model::requests::InvoiceRequest {
-                amount_msat: AmountOrAny::Amount(ClnAmount::from_sat(amount)),
-                description: "lnd-gw-to-cln".to_string(),
-                label: format!("faucet-{}", rand::random::<u64>()),
-                expiry: None,
-                fallbacks: None,
-                preimage: None,
-                cltv: None,
-                deschashonly: None,
-                exposeprivatechannels: None,
-            })
-            .await?
-            .bolt11)
+        Ok(self.gw_ldk.create_invoice(amount).await?.to_string())
+    }
+
+    fn get_invite_code(&self) -> anyhow::Result<String> {
+        self.fed.invite_code()
     }
 }
 
-fn get_invite_code(invite_code: Option<String>) -> anyhow::Result<String> {
-    if let Some(s) = invite_code {
-        Ok(s)
-    } else {
-        let data_dir = std::env::var(FM_CLIENT_DIR_ENV)?;
-        Ok(std::fs::read_to_string(
-            PathBuf::from(data_dir).join("invite-code"),
-        )?)
-    }
-}
-
-pub async fn run(opts: FaucetOpts) -> anyhow::Result<()> {
-    TracingSetup::default().init()?;
-
-    handle_version_hash_command(fedimint_build_code_version_env!());
-
-    let faucet = Faucet::new(&opts).await?;
+pub async fn run(
+    dev_fed: &DevFed,
+    fauct_bind_addr: String,
+    gw_lnd_port: u16,
+) -> anyhow::Result<()> {
+    let faucet = Faucet::new(dev_fed);
     let router = Router::new()
         .route(
             "/connect-string",
-            get(|| async {
-                get_invite_code(opts.invite_code)
+            get(|State(faucet): State<Faucet>| async move {
+                faucet
+                    .get_invite_code()
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")))
             }),
         )
@@ -141,14 +79,12 @@ pub async fn run(opts: FaucetOpts) -> anyhow::Result<()> {
         )
         .route(
             "/gateway-api",
-            get(move || async move {
-                format!("http://127.0.0.1:{}/{V1_API_ENDPOINT}", opts.gw_lnd_port)
-            }),
+            get(move || async move { format!("http://127.0.0.1:{gw_lnd_port}/{V1_API_ENDPOINT}") }),
         )
         .layer(CorsLayer::permissive())
         .with_state(faucet);
 
-    let listener = TcpListener::bind(&opts.bind_addr).await?;
+    let listener = TcpListener::bind(fauct_bind_addr).await?;
     axum::serve(listener, router.into_make_service()).await?;
     Ok(())
 }
