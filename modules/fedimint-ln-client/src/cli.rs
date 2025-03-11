@@ -5,11 +5,14 @@ use clap::Parser;
 use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::util::SafeUrl;
 use lightning_invoice::{Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tracing::info;
 
 use crate::OutgoingLightningPayment;
+use crate::recurring::RecurringPaymentProtocol;
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -42,6 +45,13 @@ enum Opts {
         gateway_id: Option<PublicKey>,
         #[clap(long, default_value = "false")]
         force_internal: bool,
+    },
+    RegisterLNURL {
+        server_url: SafeUrl,
+        #[clap(long)]
+        meta: Option<String>,
+        #[clap(long, default_value = "Fedimint LNURL Pay")]
+        description: String,
     },
 }
 
@@ -125,6 +135,22 @@ pub(crate) async fn handle_cli_command(
                     .await?
                     .context("expected a response")?
             }
+        }
+        Opts::RegisterLNURL {
+            server_url,
+            meta,
+            description,
+        } => {
+            let meta = meta.unwrap_or_else(|| {
+                serde_json::to_string(&json!([["text/plain", description]]))
+                    .expect("serialization can't fail")
+            });
+            let recurring_payment_code = module
+                .register_recurring_payment_code(RecurringPaymentProtocol::LNURL, server_url, &meta)
+                .await?;
+            json!({
+                "lnurl": recurring_payment_code.code,
+            })
         }
     })
 }
