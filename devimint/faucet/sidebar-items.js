@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_invite_code","run"],"struct":["Faucet"]};
+window.SIDEBAR_ITEMS = {"fn":["run"],"struct":["Faucet"]};

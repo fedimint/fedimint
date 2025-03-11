@@ -21,9 +21,9 @@
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>serde_json::json;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>tokio::net::TcpStream;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>tokio::{fs, try_join};
-<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>tracing::{debug, info};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>tracing::{debug, error, info};
 <a href=#25 id=25 data-nosnippet>25</a>
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span><span class="kw">crate</span>::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup, write_ready_file};
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span><span class="kw">crate</span>::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 <a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span><span class="kw">crate</span>::federation::Client;
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span><span class="kw">crate</span>::util::{LoadTestTool, ProcessManager, poll};
@@ -1894,94 +1894,95 @@
 <a href=#1894 id=1894 data-nosnippet>1894</a>                <span class="kw">let </span>task_group = task_group.clone();
 <a href=#1895 id=1895 data-nosnippet>1895</a>                <span class="kw">async move </span>{
 <a href=#1896 id=1896 data-nosnippet>1896</a>                    <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1897 id=1897 data-nosnippet>1897</a>                    dev_fed
-<a href=#1898 id=1898 data-nosnippet>1898</a>                        .gw_lnd
-<a href=#1899 id=1899 data-nosnippet>1899</a>                        .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), <span class="number">0</span>, <span class="number">0</span>)
-<a href=#1900 id=1900 data-nosnippet>1900</a>                        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1901 id=1901 data-nosnippet>1901</a>                    <span class="kw">let </span>((), faucet) = <span class="macro">try_join!</span>(
-<a href=#1902 id=1902 data-nosnippet>1902</a>                        dev_fed.fed.pegin_gateways(<span class="number">20_000</span>, <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>dev_fed.gw_lnd]),
-<a href=#1903 id=1903 data-nosnippet>1903</a>                        <span class="kw">async </span>{
-<a href=#1904 id=1904 data-nosnippet>1904</a>                            <span class="kw">let </span>faucet = process_mgr
-<a href=#1905 id=1905 data-nosnippet>1905</a>                                .spawn_daemon(
-<a href=#1906 id=1906 data-nosnippet>1906</a>                                    <span class="string">"devimint-faucet"</span>,
-<a href=#1907 id=1907 data-nosnippet>1907</a>                                    <span class="macro">cmd!</span>(<span class="kw">crate</span>::util::DevimintFaucet, <span class="string">"faucet"</span>),
-<a href=#1908 id=1908 data-nosnippet>1908</a>                                )
-<a href=#1909 id=1909 data-nosnippet>1909</a>                                .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1910 id=1910 data-nosnippet>1910</a>
-<a href=#1911 id=1911 data-nosnippet>1911</a>                            poll(<span class="string">"waiting for faucet startup"</span>, || <span class="kw">async </span>{
-<a href=#1912 id=1912 data-nosnippet>1912</a>                                TcpStream::connect(<span class="macro">format!</span>(
-<a href=#1913 id=1913 data-nosnippet>1913</a>                                    <span class="string">"127.0.0.1:{}"</span>,
-<a href=#1914 id=1914 data-nosnippet>1914</a>                                    process_mgr.globals.FM_PORT_FAUCET
-<a href=#1915 id=1915 data-nosnippet>1915</a>                                ))
-<a href=#1916 id=1916 data-nosnippet>1916</a>                                .<span class="kw">await
-<a href=#1917 id=1917 data-nosnippet>1917</a>                                </span>.context(<span class="string">"connect to faucet"</span>)
-<a href=#1918 id=1918 data-nosnippet>1918</a>                                .map_err(ControlFlow::Continue)
-<a href=#1919 id=1919 data-nosnippet>1919</a>                            })
-<a href=#1920 id=1920 data-nosnippet>1920</a>                            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1921 id=1921 data-nosnippet>1921</a>                            <span class="prelude-val">Ok</span>(faucet)
-<a href=#1922 id=1922 data-nosnippet>1922</a>                        },
-<a href=#1923 id=1923 data-nosnippet>1923</a>                    )<span class="question-mark">?</span>;
-<a href=#1924 id=1924 data-nosnippet>1924</a>                    <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, <span class="prelude-val">Ok</span>(dev_fed)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1925 id=1925 data-nosnippet>1925</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(exec) = exec {
-<a href=#1926 id=1926 data-nosnippet>1926</a>                        exec_user_command(exec).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1927 id=1927 data-nosnippet>1927</a>                        task_group.shutdown();
-<a href=#1928 id=1928 data-nosnippet>1928</a>                    }
-<a href=#1929 id=1929 data-nosnippet>1929</a>                    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;((daemons, faucet))
-<a href=#1930 id=1930 data-nosnippet>1930</a>                }
-<a href=#1931 id=1931 data-nosnippet>1931</a>            };
-<a href=#1932 id=1932 data-nosnippet>1932</a>            cleanup_on_exit(main, task_group).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1933 id=1933 data-nosnippet>1933</a>        }
-<a href=#1934 id=1934 data-nosnippet>1934</a>        TestCmd::LatencyTests { r#type, iterations } =&gt; {
-<a href=#1935 id=1935 data-nosnippet>1935</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1936 id=1936 data-nosnippet>1936</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1937 id=1937 data-nosnippet>1937</a>            latency_tests(dev_fed, r#type, <span class="prelude-val">None</span>, iterations, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1938 id=1938 data-nosnippet>1938</a>        }
-<a href=#1939 id=1939 data-nosnippet>1939</a>        TestCmd::ReconnectTest =&gt; {
-<a href=#1940 id=1940 data-nosnippet>1940</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1941 id=1941 data-nosnippet>1941</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1942 id=1942 data-nosnippet>1942</a>            reconnect_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1943 id=1943 data-nosnippet>1943</a>        }
-<a href=#1944 id=1944 data-nosnippet>1944</a>        TestCmd::CliTests =&gt; {
-<a href=#1945 id=1945 data-nosnippet>1945</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1946 id=1946 data-nosnippet>1946</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1947 id=1947 data-nosnippet>1947</a>            cli_tests(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1948 id=1948 data-nosnippet>1948</a>        }
-<a href=#1949 id=1949 data-nosnippet>1949</a>        TestCmd::LoadTestToolTest =&gt; {
-<a href=#1950 id=1950 data-nosnippet>1950</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1951 id=1951 data-nosnippet>1951</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1952 id=1952 data-nosnippet>1952</a>            cli_load_test_tool_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1953 id=1953 data-nosnippet>1953</a>        }
-<a href=#1954 id=1954 data-nosnippet>1954</a>        TestCmd::LightningReconnectTest =&gt; {
-<a href=#1955 id=1955 data-nosnippet>1955</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1956 id=1956 data-nosnippet>1956</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1957 id=1957 data-nosnippet>1957</a>            lightning_gw_reconnect_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1958 id=1958 data-nosnippet>1958</a>        }
-<a href=#1959 id=1959 data-nosnippet>1959</a>        TestCmd::GatewayRebootTest =&gt; {
-<a href=#1960 id=1960 data-nosnippet>1960</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1961 id=1961 data-nosnippet>1961</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1962 id=1962 data-nosnippet>1962</a>            gw_reboot_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1963 id=1963 data-nosnippet>1963</a>        }
-<a href=#1964 id=1964 data-nosnippet>1964</a>        TestCmd::RecoverytoolTests =&gt; {
-<a href=#1965 id=1965 data-nosnippet>1965</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1966 id=1966 data-nosnippet>1966</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1967 id=1967 data-nosnippet>1967</a>            recoverytool_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1968 id=1968 data-nosnippet>1968</a>        }
-<a href=#1969 id=1969 data-nosnippet>1969</a>        TestCmd::GuardianBackup =&gt; {
-<a href=#1970 id=1970 data-nosnippet>1970</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1971 id=1971 data-nosnippet>1971</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1972 id=1972 data-nosnippet>1972</a>            guardian_backup_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1973 id=1973 data-nosnippet>1973</a>        }
-<a href=#1974 id=1974 data-nosnippet>1974</a>        TestCmd::CannotReplayTransaction =&gt; {
-<a href=#1975 id=1975 data-nosnippet>1975</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1976 id=1976 data-nosnippet>1976</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1977 id=1977 data-nosnippet>1977</a>            cannot_replay_tx_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1978 id=1978 data-nosnippet>1978</a>        }
-<a href=#1979 id=1979 data-nosnippet>1979</a>        TestCmd::UpgradeTests { binary, lnv2 } =&gt; {
-<a href=#1980 id=1980 data-nosnippet>1980</a>            <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
-<a href=#1981 id=1981 data-nosnippet>1981</a>            </span><span class="kw">unsafe </span>{ std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2) };
-<a href=#1982 id=1982 data-nosnippet>1982</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1983 id=1983 data-nosnippet>1983</a>            Box::pin(upgrade_tests(<span class="kw-2">&amp;</span>process_mgr, binary)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1984 id=1984 data-nosnippet>1984</a>        }
-<a href=#1985 id=1985 data-nosnippet>1985</a>    }
-<a href=#1986 id=1986 data-nosnippet>1986</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1987 id=1987 data-nosnippet>1987</a>}</code></pre></div></section></main></body></html>
+<a href=#1897 id=1897 data-nosnippet>1897</a>                    <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd.clone();
+<a href=#1898 id=1898 data-nosnippet>1898</a>                    <span class="kw">let </span>fed = dev_fed.fed.clone();
+<a href=#1899 id=1899 data-nosnippet>1899</a>                    gw_lnd
+<a href=#1900 id=1900 data-nosnippet>1900</a>                        .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), <span class="number">0</span>, <span class="number">0</span>)
+<a href=#1901 id=1901 data-nosnippet>1901</a>                        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1902 id=1902 data-nosnippet>1902</a>                    task_group.spawn_cancellable(<span class="string">"faucet"</span>, <span class="kw">async move </span>{
+<a href=#1903 id=1903 data-nosnippet>1903</a>                        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="kw">crate</span>::faucet::run(
+<a href=#1904 id=1904 data-nosnippet>1904</a>                            <span class="kw-2">&amp;</span>dev_fed,
+<a href=#1905 id=1905 data-nosnippet>1905</a>                            <span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, process_mgr.globals.FM_PORT_FAUCET),
+<a href=#1906 id=1906 data-nosnippet>1906</a>                            process_mgr.globals.FM_PORT_GW_LND,
+<a href=#1907 id=1907 data-nosnippet>1907</a>                        )
+<a href=#1908 id=1908 data-nosnippet>1908</a>                        .<span class="kw">await
+<a href=#1909 id=1909 data-nosnippet>1909</a>                        </span>{
+<a href=#1910 id=1910 data-nosnippet>1910</a>                            <span class="macro">error!</span>(<span class="string">"Error spawning faucet: {err}"</span>);
+<a href=#1911 id=1911 data-nosnippet>1911</a>                        }
+<a href=#1912 id=1912 data-nosnippet>1912</a>                    });
+<a href=#1913 id=1913 data-nosnippet>1913</a>                    <span class="macro">try_join!</span>(fed.pegin_gateways(<span class="number">30_000</span>, <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>gw_lnd]), <span class="kw">async </span>{
+<a href=#1914 id=1914 data-nosnippet>1914</a>                        poll(<span class="string">"waiting for faucet startup"</span>, || <span class="kw">async </span>{
+<a href=#1915 id=1915 data-nosnippet>1915</a>                            TcpStream::connect(<span class="macro">format!</span>(
+<a href=#1916 id=1916 data-nosnippet>1916</a>                                <span class="string">"127.0.0.1:{}"</span>,
+<a href=#1917 id=1917 data-nosnippet>1917</a>                                process_mgr.globals.FM_PORT_FAUCET
+<a href=#1918 id=1918 data-nosnippet>1918</a>                            ))
+<a href=#1919 id=1919 data-nosnippet>1919</a>                            .<span class="kw">await
+<a href=#1920 id=1920 data-nosnippet>1920</a>                            </span>.context(<span class="string">"connect to faucet"</span>)
+<a href=#1921 id=1921 data-nosnippet>1921</a>                            .map_err(ControlFlow::Continue)
+<a href=#1922 id=1922 data-nosnippet>1922</a>                        })
+<a href=#1923 id=1923 data-nosnippet>1923</a>                        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1924 id=1924 data-nosnippet>1924</a>                        <span class="prelude-val">Ok</span>(())
+<a href=#1925 id=1925 data-nosnippet>1925</a>                    },)<span class="question-mark">?</span>;
+<a href=#1926 id=1926 data-nosnippet>1926</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(exec) = exec {
+<a href=#1927 id=1927 data-nosnippet>1927</a>                        exec_user_command(exec).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1928 id=1928 data-nosnippet>1928</a>                        task_group.shutdown();
+<a href=#1929 id=1929 data-nosnippet>1929</a>                    }
+<a href=#1930 id=1930 data-nosnippet>1930</a>                    <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
+<a href=#1931 id=1931 data-nosnippet>1931</a>                }
+<a href=#1932 id=1932 data-nosnippet>1932</a>            };
+<a href=#1933 id=1933 data-nosnippet>1933</a>            cleanup_on_exit(main, task_group).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1934 id=1934 data-nosnippet>1934</a>        }
+<a href=#1935 id=1935 data-nosnippet>1935</a>        TestCmd::LatencyTests { r#type, iterations } =&gt; {
+<a href=#1936 id=1936 data-nosnippet>1936</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1937 id=1937 data-nosnippet>1937</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1938 id=1938 data-nosnippet>1938</a>            latency_tests(dev_fed, r#type, <span class="prelude-val">None</span>, iterations, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1939 id=1939 data-nosnippet>1939</a>        }
+<a href=#1940 id=1940 data-nosnippet>1940</a>        TestCmd::ReconnectTest =&gt; {
+<a href=#1941 id=1941 data-nosnippet>1941</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1942 id=1942 data-nosnippet>1942</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1943 id=1943 data-nosnippet>1943</a>            reconnect_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1944 id=1944 data-nosnippet>1944</a>        }
+<a href=#1945 id=1945 data-nosnippet>1945</a>        TestCmd::CliTests =&gt; {
+<a href=#1946 id=1946 data-nosnippet>1946</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1947 id=1947 data-nosnippet>1947</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1948 id=1948 data-nosnippet>1948</a>            cli_tests(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1949 id=1949 data-nosnippet>1949</a>        }
+<a href=#1950 id=1950 data-nosnippet>1950</a>        TestCmd::LoadTestToolTest =&gt; {
+<a href=#1951 id=1951 data-nosnippet>1951</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1952 id=1952 data-nosnippet>1952</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1953 id=1953 data-nosnippet>1953</a>            cli_load_test_tool_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1954 id=1954 data-nosnippet>1954</a>        }
+<a href=#1955 id=1955 data-nosnippet>1955</a>        TestCmd::LightningReconnectTest =&gt; {
+<a href=#1956 id=1956 data-nosnippet>1956</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1957 id=1957 data-nosnippet>1957</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1958 id=1958 data-nosnippet>1958</a>            lightning_gw_reconnect_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1959 id=1959 data-nosnippet>1959</a>        }
+<a href=#1960 id=1960 data-nosnippet>1960</a>        TestCmd::GatewayRebootTest =&gt; {
+<a href=#1961 id=1961 data-nosnippet>1961</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1962 id=1962 data-nosnippet>1962</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1963 id=1963 data-nosnippet>1963</a>            gw_reboot_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1964 id=1964 data-nosnippet>1964</a>        }
+<a href=#1965 id=1965 data-nosnippet>1965</a>        TestCmd::RecoverytoolTests =&gt; {
+<a href=#1966 id=1966 data-nosnippet>1966</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1967 id=1967 data-nosnippet>1967</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1968 id=1968 data-nosnippet>1968</a>            recoverytool_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1969 id=1969 data-nosnippet>1969</a>        }
+<a href=#1970 id=1970 data-nosnippet>1970</a>        TestCmd::GuardianBackup =&gt; {
+<a href=#1971 id=1971 data-nosnippet>1971</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1972 id=1972 data-nosnippet>1972</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1973 id=1973 data-nosnippet>1973</a>            guardian_backup_test(dev_fed, <span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1974 id=1974 data-nosnippet>1974</a>        }
+<a href=#1975 id=1975 data-nosnippet>1975</a>        TestCmd::CannotReplayTransaction =&gt; {
+<a href=#1976 id=1976 data-nosnippet>1976</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1977 id=1977 data-nosnippet>1977</a>            <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1978 id=1978 data-nosnippet>1978</a>            cannot_replay_tx_test(dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1979 id=1979 data-nosnippet>1979</a>        }
+<a href=#1980 id=1980 data-nosnippet>1980</a>        TestCmd::UpgradeTests { binary, lnv2 } =&gt; {
+<a href=#1981 id=1981 data-nosnippet>1981</a>            <span class="comment">// TODO: Audit that the environment access only happens in single-threaded code.
+<a href=#1982 id=1982 data-nosnippet>1982</a>            </span><span class="kw">unsafe </span>{ std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2) };
+<a href=#1983 id=1983 data-nosnippet>1983</a>            <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1984 id=1984 data-nosnippet>1984</a>            Box::pin(upgrade_tests(<span class="kw-2">&amp;</span>process_mgr, binary)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1985 id=1985 data-nosnippet>1985</a>        }
+<a href=#1986 id=1986 data-nosnippet>1986</a>    }
+<a href=#1987 id=1987 data-nosnippet>1987</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1988 id=1988 data-nosnippet>1988</a>}</code></pre></div></section></main></body></html>
