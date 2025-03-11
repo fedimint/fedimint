@@ -1037,29 +1037,32 @@ pub async fn open_channels_between_gateways(
         fedimint_core::runtime::sleep(Duration::from_secs(2)).await;
     }
 
-    bitcoind.mine_blocks(10).await?;
+    // bitcoind.mine_blocks(10).await?;
 
-    let block_height = bitcoind.get_block_count().await? - 1;
-    debug!(target: LOG_DEVIMINT, ?block_height, "Syncing gateway lightning nodes to block height...");
-    futures::future::try_join_all(
-        gateways
-            .iter()
-            .map(|(gw, _gw_name)| gw.wait_for_block_height(block_height)),
-    )
-    .await?;
+    // let block_height = bitcoind.get_block_count().await? - 1;
+    // debug!(target: LOG_DEVIMINT, ?block_height, "Syncing gateway lightning nodes
+    // to block height..."); futures::future::try_join_all(
+    //     gateways
+    //         .iter()
+    //         .map(|(gw, _gw_name)| gw.wait_for_block_height(block_height)),
+    // )
+    // .await?;
 
     for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
         let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
 
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
-        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(bitcoind, gw_b, gw_a_node_pubkey)
+            .await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(bitcoind, gw_a, gw_b_node_pubkey)
+            .await?;
     }
 
     Ok(())
 }
 
 async fn wait_for_ready_channel_on_gateway_with_counterparty(
+    bitcoind: &Bitcoind,
     gw: &Gatewayd,
     counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
 ) -> anyhow::Result<()> {
@@ -1079,6 +1082,7 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
                 return Ok(());
             }
 
+            let _ = bitcoind.mine_blocks(1).await;
             debug!(target: LOG_DEVIMINT, ?channels, gw = gw.gw_name, "Counterparty channels not found open");
 
             Err(ControlFlow::Continue(anyhow!("channel not found")))
