@@ -14,7 +14,7 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId};
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId, crit};
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_MINT;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -26,7 +26,7 @@
 <a href=#26 id=26 data-nosnippet>26</a>    AggregatePublicKey, BlindedMessage, BlindedSignature, BlindedSignatureShare, BlindingKey,
 <a href=#27 id=27 data-nosnippet>27</a>    PublicKeyShare, aggregate_signature_shares, blind_message, unblind_signature,
 <a href=#28 id=28 data-nosnippet>28</a>};
-<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>tracing::{debug, error};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>tracing::debug;
 <a href=#30 id=30 data-nosnippet>30</a>
 <a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span><span class="kw">crate</span>::client_db::NoteKey;
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span><span class="kw">crate</span>::event::NoteCreated;
@@ -295,7 +295,7 @@
 <a href=#295 id=295 data-nosnippet>295</a>            )
 <a href=#296 id=296 data-nosnippet>296</a>            .<span class="kw">await
 <a href=#297 id=297 data-nosnippet>297</a>        </span>{
-<a href=#298 id=298 data-nosnippet>298</a>            <span class="macro">error!</span>(<span class="question-mark">?</span>note, <span class="string">"E-cash note was replaced in DB"</span>);
+<a href=#298 id=298 data-nosnippet>298</a>            <span class="macro">crit!</span>(target: LOG_CLIENT_MODULE_MINT, %note, <span class="string">"E-cash note was replaced in DB"</span>);
 <a href=#299 id=299 data-nosnippet>299</a>        }
 <a href=#300 id=300 data-nosnippet>300</a>
 <a href=#301 id=301 data-nosnippet>301</a>        MintOutputStateMachine {
@@ -532,7 +532,7 @@
 <a href=#532 id=532 data-nosnippet>532</a>                )
 <a href=#533 id=533 data-nosnippet>533</a>                .<span class="kw">await
 <a href=#534 id=534 data-nosnippet>534</a>            </span>{
-<a href=#535 id=535 data-nosnippet>535</a>                <span class="macro">error!</span>(<span class="question-mark">?</span>note, <span class="string">"E-cash note was replaced in DB"</span>);
+<a href=#535 id=535 data-nosnippet>535</a>                <span class="macro">crit!</span>(target: LOG_CLIENT_MODULE_MINT, %note, <span class="string">"E-cash note was replaced in DB"</span>);
 <a href=#536 id=536 data-nosnippet>536</a>            }
 <a href=#537 id=537 data-nosnippet>537</a>        }
 <a href=#538 id=538 data-nosnippet>538</a>        MintOutputStateMachine {

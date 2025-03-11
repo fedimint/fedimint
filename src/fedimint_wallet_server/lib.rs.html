@@ -98,7 +98,7 @@
 <a href=#98 id=98 data-nosnippet>98</a><span class="kw">use </span>serde::Serialize;
 <a href=#99 id=99 data-nosnippet>99</a><span class="kw">use </span>strum::IntoEnumIterator;
 <a href=#100 id=100 data-nosnippet>100</a><span class="kw">use </span>tokio::sync::{Notify, watch};
-<a href=#101 id=101 data-nosnippet>101</a><span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
+<a href=#101 id=101 data-nosnippet>101</a><span class="kw">use </span>tracing::{debug, info, instrument, trace, warn};
 <a href=#102 id=102 data-nosnippet>102</a>
 <a href=#103 id=103 data-nosnippet>103</a><span class="kw">use </span><span class="kw">crate</span>::db::{
 <a href=#104 id=104 data-nosnippet>104</a>    BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
@@ -1780,7 +1780,7 @@
 <a href=#1780 id=1780 data-nosnippet>1780</a>                    </span>};
 <a href=#1781 id=1781 data-nosnippet>1781</a>
 <a href=#1782 id=1782 data-nosnippet>1782</a>                <span class="kw">if </span>sender.send(all_peers_supported_version).is_err() {
-<a href=#1783 id=1783 data-nosnippet>1783</a>                    <span class="macro">error!</span>(target: LOG_MODULE_WALLET, <span class="string">"Failed to send consensus version to watch channel, stopping task"</span>);
+<a href=#1783 id=1783 data-nosnippet>1783</a>                    <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, <span class="string">"Failed to send consensus version to watch channel, stopping task"</span>);
 <a href=#1784 id=1784 data-nosnippet>1784</a>                    <span class="kw">break</span>;
 <a href=#1785 id=1785 data-nosnippet>1785</a>                }
 <a href=#1786 id=1786 data-nosnippet>1786</a>
