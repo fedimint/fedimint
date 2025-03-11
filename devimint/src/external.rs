@@ -27,9 +27,9 @@ use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tonic_lnd::Client as LndClient;
 use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
-use crate::util::{ProcessHandle, ProcessManager, poll, poll_with_timeout};
+use crate::util::{ProcessHandle, ProcessManager, poll};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_5_0_ALPHA;
 use crate::{Gatewayd, cmd, poll_eq};
@@ -897,7 +897,7 @@ pub async fn open_channel(
 
     bitcoind.mine_blocks(10).await?;
 
-    poll("Wait LND for channel update", || async {
+    poll("Legacy Wait LND for channel update", || async {
         let mut lnd_client = lnd.client.lock().await;
         let channels = lnd_client
             .lightning()
@@ -936,6 +936,8 @@ pub async fn open_channel(
     })
     .await?;
 
+    info!(target: LOG_DEVIMINT, "open_channel successful");
+
     Ok(())
 }
 
@@ -955,13 +957,15 @@ pub async fn open_channels_between_gateways(
     )
     .await?;
 
-    debug!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
+    info!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
     for (gw, _gw_name) in gateways {
         let funding_addr = gw.get_ln_onchain_address().await?;
         bitcoind.send_to(funding_addr, 100_000_000).await?;
     }
 
     bitcoind.mine_blocks(10).await?;
+
+    info!(target: LOG_DEVIMINT, "Gateway lightning nodes funded.");
 
     let block_height = bitcoind.get_block_count().await? - 1;
     debug!(target: LOG_DEVIMINT, ?block_height, "Syncing gateway lightning nodes to block height...");
@@ -983,65 +987,24 @@ pub async fn open_channels_between_gateways(
         gateways.iter().circular_tuple_windows::<(_, _)>().collect()
     };
 
-    let open_channel_tasks = gateway_pairs.iter()
-        .map(|((gw_a, gw_a_name), (gw_b, gw_b_name))| {
-            let gw_a = (*gw_a).clone();
-            let gw_a_name = (*gw_a_name).to_string();
-            let gw_b = (*gw_b).clone();
-            let gw_b_name = (*gw_b_name).to_string();
+    info!(target: LOG_DEVIMINT, block_height = %block_height, "devimint current block");
+    let sats_per_side = 5_000_000;
+    for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
+        info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
+        let txid = gw_a
+            .open_channel(gw_b, sats_per_side * 2, Some(sats_per_side))
+            .await?;
 
-            let sats_per_side = 5_000_000;
-            debug!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
-            tokio::task::spawn(async move {
-                // Sometimes channel openings just after funding the lightning nodes don't work right away.
-                let res = poll_with_timeout(&format!("Open channel from {gw_a_name} to {gw_b_name}"), Duration::from_secs(30), || async {
-                    gw_a.open_channel(&gw_b, sats_per_side * 2, Some(sats_per_side)).await.map_err(ControlFlow::Continue)
-                })
-                .await;
-
-                if res.is_err() {
-                    error!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, ?res, "Failed to open channel");
-                    gw_a.dump_logs()?;
-                    gw_b.dump_logs()?;
-                }
-
-                res
-            })
-        })
-        .collect::<Vec<_>>();
-    let open_channel_task_results: Vec<Result<Result<_, _>, _>> =
-        futures::future::join_all(open_channel_tasks).await;
-
-    let mut channel_funding_txids = Vec::new();
-    for open_channel_task_result in open_channel_task_results {
-        match open_channel_task_result {
-            Ok(Ok(txid)) => {
-                channel_funding_txids.push(txid);
-            }
-            Ok(Err(e)) => {
-                return Err(anyhow::anyhow!(e));
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!(e));
-            }
-        }
-    }
-
-    // Wait for all channel funding transaction to be known by bitcoind.
-    let mut is_missing_any_txids = false;
-    for txid_or in &channel_funding_txids {
-        if let Some(txid) = txid_or {
-            bitcoind.poll_get_transaction(*txid).await?;
-        } else {
-            is_missing_any_txids = true;
+        if let Some(txid) = txid {
+            bitcoind.poll_get_transaction(txid).await?;
         }
     }
 
     // `open_channel` may not have sent out the channel funding transaction
     // immediately. Since it didn't return a funding txid, we need to wait for
     // it to get to the mempool.
-    if is_missing_any_txids {
-        fedimint_core::runtime::sleep(Duration::from_secs(2)).await;
+    if crate::util::Gatewayd::version_or_default().await < *VERSION_0_5_0_ALPHA {
+        fedimint_core::runtime::sleep(Duration::from_secs(5)).await;
     }
 
     bitcoind.mine_blocks(10).await?;
@@ -1062,6 +1025,8 @@ pub async fn open_channels_between_gateways(
         wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
         wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
     }
+
+    info!(target: LOG_DEVIMINT, "open_channels_between_gateways successful");
 
     Ok(())
 }
@@ -1087,7 +1052,6 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
             }
 
             debug!(target: LOG_DEVIMINT, ?channels, gw = gw.gw_name, "Counterparty channels not found open");
-
             Err(ControlFlow::Continue(anyhow!("channel not found")))
         },
     )

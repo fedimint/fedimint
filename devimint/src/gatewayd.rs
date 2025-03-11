@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -20,7 +18,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
 use semver::Version;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -126,19 +124,6 @@ impl Gatewayd {
         }
     }
 
-    pub fn dump_logs(&self) -> Result<()> {
-        let mut logs = File::open(self.log_path.clone())?;
-        let mut contents = String::new();
-        logs.read_to_string(&mut contents)?;
-        info!("================ {} LOGS ================", self.gw_name);
-        info!("{contents}");
-        info!(
-            "================ {} LOGS DONE ================",
-            self.gw_name
-        );
-        Ok(())
-    }
-
     pub async fn terminate(self) -> Result<()> {
         self.process.terminate().await
     }
@@ -214,18 +199,13 @@ impl Gatewayd {
     }
 
     pub async fn get_info(&self) -> Result<serde_json::Value> {
-        let res = retry(
+        retry(
             "Getting gateway info via gateway-cli info",
             backoff_util::aggressive_backoff(),
             || async { cmd!(self, "info").out_json().await },
         )
         .await
-        .context("Getting gateway info via gateway-cli info");
-        if let Err(err) = &res {
-            error!(?err, "gateway-cli failed to get info");
-            self.dump_logs()?;
-        }
-        res
+        .context("Getting gateway info via gateway-cli info")
     }
 
     pub async fn gateway_id(&self) -> Result<String> {
@@ -547,7 +527,10 @@ impl Gatewayd {
                 let Some(block_height) = block_height else {
                     return Err(ControlFlow::Continue(anyhow!("Not synced any blocks yet")));
                 };
-                if block_height >= target_block_height as u32 {
+                let synced = info["synced_to_chain"]
+                    .as_bool()
+                    .expect("Could not get synced_to_chain");
+                if block_height >= target_block_height as u32 && synced {
                     return Ok(());
                 }
             }
