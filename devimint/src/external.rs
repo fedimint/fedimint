@@ -982,13 +982,10 @@ pub async fn open_channels_between_gateways(
 
     let sats_per_side = 5_000_000;
     for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
-        // Sometimes channel openings just after funding the lightning nodes don't work
-        // right away.
-        let txid = poll(&format!("Open channel from {gw_a_name} to {gw_b_name}"), || async {
-            info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
-            gw_a.open_channel(gw_b, sats_per_side * 2, Some(sats_per_side)).await.map_err(ControlFlow::Continue)
-        })
-        .await?;
+        info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");
+        let txid = gw_a
+            .open_channel(gw_b, sats_per_side * 2, Some(sats_per_side))
+            .await?;
 
         if let Some(txid) = txid {
             bitcoind.poll_get_transaction(txid).await?;
