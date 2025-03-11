@@ -10,8 +10,7 @@ use tracing::{debug, info};
 
 use crate::LightningNode;
 use crate::external::{
-    Bitcoind, Electrs, Esplora, Lightningd, Lnd, NamedGateway, open_channel,
-    open_channels_between_gateways,
+    Bitcoind, Electrs, Esplora, Lnd, NamedGateway, open_channels_between_gateways,
 };
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
@@ -31,7 +30,6 @@ where
 #[derive(Clone)]
 pub struct DevFed {
     pub bitcoind: Bitcoind,
-    pub cln: Lightningd,
     pub lnd: Lnd,
     pub fed: Federation,
     pub gw_lnd: Gatewayd,
@@ -44,7 +42,6 @@ impl DevFed {
     pub async fn fast_terminate(self) {
         let Self {
             bitcoind,
-            cln,
             lnd,
             fed,
             gw_lnd,
@@ -58,7 +55,6 @@ impl DevFed {
             spawn_drop(gw_ldk),
             spawn_drop(fed),
             spawn_drop(lnd),
-            spawn_drop(cln),
             spawn_drop(esplora),
             spawn_drop(electrs),
             spawn_drop(bitcoind),
@@ -76,7 +72,6 @@ type JitArc<T> = JitTryAnyhow<Arc<T>>;
 #[derive(Clone)]
 pub struct DevJitFed {
     bitcoind: JitArc<Bitcoind>,
-    cln: JitArc<Lightningd>,
     lnd: JitArc<Lnd>,
     fed: JitArc<Federation>,
     gw_lnd: JitArc<Gatewayd>,
@@ -110,18 +105,6 @@ impl DevJitFed {
                 let bitcoind = Bitcoind::new(&process_mgr, skip_setup).await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started bitcoind");
                 Ok(Arc::new(bitcoind))
-            }
-        });
-        let cln = JitTry::new_try({
-            let process_mgr = process_mgr.to_owned();
-            let bitcoind = bitcoind.clone();
-            || async move {
-                let bitcoind = bitcoind.get_try().await?.deref().clone();
-                debug!(target: LOG_DEVIMINT, "Starting cln...");
-                let start_time = fedimint_core::time::now();
-                let lightningd = Lightningd::new(&process_mgr, bitcoind).await?;
-                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started cln");
-                Ok(Arc::new(lightningd))
             }
         });
         let lnd = JitTry::new_try({
@@ -244,10 +227,7 @@ impl DevJitFed {
         });
 
         let channel_opened = JitTryAnyhow::new_try({
-            let process_mgr = process_mgr.to_owned();
-            let lnd = lnd.clone();
             let gw_lnd = gw_lnd.clone();
-            let cln = cln.clone();
             let gw_ldk = gw_ldk.clone();
             let bitcoind = bitcoind.clone();
             move || async move {
@@ -264,14 +244,6 @@ impl DevJitFed {
                 let start_time = fedimint_core::time::now();
                 open_channels_between_gateways(&bitcoind, gateways).await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
-
-                let lnd = lnd.get_try().await?.deref().clone();
-                let cln = cln.get_try().await?.deref().clone();
-
-                debug!(target: LOG_DEVIMINT, "Opening channels between cln and lnd...");
-                let start_time = fedimint_core::time::now();
-                open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
-                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between cln and lnd");
 
                 Ok(Arc::new(()))
             }
@@ -293,7 +265,6 @@ impl DevJitFed {
 
         Ok(DevJitFed {
             bitcoind,
-            cln,
             lnd,
             fed,
             gw_lnd,
@@ -313,9 +284,6 @@ impl DevJitFed {
     }
     pub async fn esplora(&self) -> anyhow::Result<&Esplora> {
         Ok(self.esplora.get_try().await?.deref())
-    }
-    pub async fn cln(&self) -> anyhow::Result<&Lightningd> {
-        Ok(self.cln.get_try().await?.deref())
     }
     pub async fn lnd(&self) -> anyhow::Result<&Lnd> {
         Ok(self.lnd.get_try().await?.deref())
@@ -364,7 +332,6 @@ impl DevJitFed {
         let _ = self.channel_opened.get_try().await?;
         let _ = self.gw_lnd_registered().await?;
         let _ = self.gw_ldk_connected().await?;
-        let _ = self.cln().await?;
         let _ = self.lnd().await?;
         let _ = self.electrs().await?;
         let _ = self.esplora().await?;
@@ -384,7 +351,6 @@ impl DevJitFed {
         self.finalize(process_mgr).await?;
         Ok(DevFed {
             bitcoind: self.bitcoind().await?.to_owned(),
-            cln: self.cln().await?.to_owned(),
             lnd: self.lnd().await?.to_owned(),
             fed: self.fed().await?.to_owned(),
             gw_lnd: self.gw_lnd().await?.to_owned(),
@@ -397,7 +363,6 @@ impl DevJitFed {
     pub async fn fast_terminate(self) {
         let Self {
             bitcoind,
-            cln,
             lnd,
             fed,
             gw_lnd,
@@ -410,7 +375,6 @@ impl DevJitFed {
             spawn_drop(gw_lnd),
             spawn_drop(fed),
             spawn_drop(lnd),
-            spawn_drop(cln),
             spawn_drop(esplora),
             spawn_drop(electrs),
             spawn_drop(bitcoind),

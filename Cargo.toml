@@ -119,7 +119,6 @@ bls12_381 = "0.8.0"
 bon = "3.3.2"
 bytes = "1.10.0"
 clap = { version = "4.5.31", features = ["derive", "env"] }
-cln-rpc = { package = "fedimint-cln-rpc", version = "0.5.0" }
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.7.0-alpha" }
 erased-serde = "0.4"

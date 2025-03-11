@@ -14,8 +14,6 @@ procs:
     shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-lnd.log
   ldk-gw:
     shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-ldk-0.log
-  cln:
-    shell: tail -n +0 -F $FM_LOGS_DIR/lightningd.log
   lnd:
     shell: tail -n +0 -F $FM_LOGS_DIR/lnd.log
   ldk:
@@ -24,5 +22,3 @@ procs:
     shell: tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
   devimint:
     shell: tail -n +0 -F $FM_LOGS_DIR/devimint-outer.log
-  faucet:
-    shell: tail -n +0 -F $FM_LOGS_DIR/faucet.log

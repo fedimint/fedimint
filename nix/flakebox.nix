@@ -233,7 +233,6 @@ let
         (hiPrio pkgs.bashInteractive)
         bc
         bitcoind
-        clightning
         electrs
         jq
         lnd

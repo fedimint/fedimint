@@ -21,7 +21,7 @@ use fedimint_gateway_common::{FederationInfo, GatewayBalances, GatewayFedConfig}
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::ln::LightningNodeType;
 use itertools::Itertools;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 #[derive(Parser)]
 struct GatewayTestOpts {
@@ -542,15 +542,18 @@ async fn liquidity_test() -> anyhow::Result<()> {
             gw_send.pay_invoice(invoice).await?;
         }
 
+        /*
+        // TODO: Need GW_LDK2
         info!(target: LOG_TEST, "Testing paying through LND Gateway...");
         let invoice = gw_ldk.create_invoice(1_550_000).await?;
-        let cln = dev_fed.cln().await?;
+        let gw_ldk2 = dev_fed.gw_ldk2().await?;
         // Need to try to pay the invoice multiple times in case the channel graph has not been updated yet.
         retry("CLN pay LDK", aggressive_backoff_long(), || async {
             debug!(target: LOG_TEST, "Trying CLN -> LND -> LDK...");
             cln.pay_bolt11_invoice(invoice.to_string()).await?;
             Ok(())
         }).await?;
+        */
 
         info!(target: LOG_TEST, "Pegging-out gateways...");
         federation.pegout_gateways(500_000_000, gateways.clone()).await?;

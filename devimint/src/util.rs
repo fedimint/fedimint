@@ -36,7 +36,6 @@ use crate::envs::{
     FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV, FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV,
     FM_GATEWAYD_BASE_EXECUTABLE_ENV, FM_GWCLI_LDK_ENV, FM_GWCLI_LND_ENV,
-    FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
     FM_LNCLI_BASE_EXECUTABLE_ENV, FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV,
     FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV, FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV,
     FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
@@ -553,15 +552,6 @@ pub fn get_gateway_cli_path() -> Vec<String> {
 
 const LOAD_TEST_TOOL_FALLBACK: &str = "fedimint-load-test-tool";
 
-const LIGHTNING_CLI_FALLBACK: &str = "lightning-cli";
-
-pub fn get_lightning_cli_path() -> Vec<String> {
-    get_command_str_for_alias(
-        &[FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV],
-        &[LIGHTNING_CLI_FALLBACK],
-    )
-}
-
 const LNCLI_FALLBACK: &str = "lncli";
 
 pub fn get_lncli_path() -> Vec<String> {
@@ -578,8 +568,6 @@ pub fn get_bitcoin_cli_path() -> Vec<String> {
 }
 
 const BITCOIND_FALLBACK: &str = "bitcoind";
-
-const LIGHTNINGD_FALLBACK: &str = "lightningd";
 
 const LND_FALLBACK: &str = "lnd";
 
@@ -1061,16 +1049,6 @@ impl Bitcoind {
         to_command(get_command_str_for_alias(
             &[FM_BITCOIND_BASE_EXECUTABLE_ENV],
             &[BITCOIND_FALLBACK],
-        ))
-    }
-}
-
-pub struct Lightningd;
-impl Lightningd {
-    pub fn cmd(self) -> Command {
-        to_command(get_command_str_for_alias(
-            &[FM_LIGHTNINGD_BASE_EXECUTABLE_ENV],
-            &[LIGHTNINGD_FALLBACK],
         ))
     }
 }

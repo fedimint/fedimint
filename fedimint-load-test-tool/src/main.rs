@@ -869,7 +869,7 @@ async fn run_two_gateways_strategy(
         LnInvoiceGeneration::LdkLightningCli => {
             let invoice = ldk_create_invoice(*invoice_amount).await?;
             let elapsed = create_invoice_time.elapsed()?;
-            info!("Created invoice using CLN in {elapsed:?}");
+            info!("Created invoice using LDK in {elapsed:?}");
             event_sender.send(MetricEvent {
                 name: GATEWAY_CREATE_INVOICE.into(),
                 duration: elapsed,

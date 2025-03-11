@@ -65,9 +65,6 @@ pub const FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV: &str = "FM_GATEWAY_CLI_BASE_EXECUT
 // Env variable to override fedimint-load-test-tool binary set:
 pub const FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV: &str = "FM_LOAD_TEST_TOOL_BASE_EXECUTABLE";
 
-// Env variable to override lightning-cli binary set:
-pub const FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV: &str = "FM_LIGHTNING_CLI_BASE_EXECUTABLE";
-
 // Env variable to override lncli binary set:
 pub const FM_LNCLI_BASE_EXECUTABLE_ENV: &str = "FM_LNCLI_BASE_EXECUTABLE";
 
@@ -82,9 +79,6 @@ pub const FM_BTC_CLIENT_ENV: &str = "FM_BTC_CLIENT";
 
 // Env variable to override bitcoind binary set:
 pub const FM_BITCOIND_BASE_EXECUTABLE_ENV: &str = "FM_BITCOIND_BASE_EXECUTABLE";
-
-// Env variable to override lightningd binary set:
-pub const FM_LIGHTNINGD_BASE_EXECUTABLE_ENV: &str = "FM_LIGHTNINGD_BASE_EXECUTABLE";
 
 // Env variable to override lnd binary set:
 pub const FM_LND_BASE_EXECUTABLE_ENV: &str = "FM_LND_BASE_EXECUTABLE";
