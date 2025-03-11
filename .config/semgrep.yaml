@@ -6,7 +6,7 @@ rules:
   message: Use fedimint_core::time::now instead of std::time::SystemTime::now for better wasm compatibility.
   pattern: std::time::SystemTime::now
 
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-system-time-elapsed
   languages:
@@ -21,7 +21,7 @@ rules:
       - fedimint-load-test-tool/
       # doesn't run in wasm
       - devimint/
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-instant-now
   languages:
@@ -32,7 +32,7 @@ rules:
     - pattern: std::time::Instant::now
     - pattern: tokio::time::Instant::now
 
-  severity: WARNING
+  severity: ERROR
   paths:
     exclude:
       # doesn't run in wasm
@@ -47,7 +47,7 @@ rules:
   pattern-either:
     - pattern: tokio::fs::write
     - pattern: std::fs::write
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-file-create
   languages:
@@ -56,21 +56,21 @@ rules:
   pattern-either:
     - pattern: std::fs::File::create
     - pattern: tokio::fs::File::create
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-tokio-spawn
   languages:
     - rust
   message: "`tokio::spawn` won't set task name by default. use `fedimint_core::runtime::spawn` instead"
   pattern: tokio::spawn
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-tokio-sleep
   languages:
     - rust
   message: "`tokio::time::sleep` doesn't work in WASM. Use `fedimint_core::runtime::sleep` instead."
   pattern: tokio::time::sleep
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-raw-block-on
   languages:
@@ -80,7 +80,7 @@ rules:
     - pattern: futures::executor::block_on
     - pattern: tokio::runtime::Handle::block_on
     - pattern: tokio::runtime::Handle::current
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-raw-block-in-place
   languages:
@@ -88,14 +88,14 @@ rules:
   message: Use `fedimint_core::runtime::block_in_place()` instead.
   pattern-either:
     - pattern: tokio::task::block_in_place
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-raw-url
   languages:
     - rust
   message: "`url::Url` may expose confidential username + passwords to logs etc. Use `fedimint_core::SafeUrl` instead."
   pattern: url::Url
-  severity: WARNING
+  severity: ERROR
 
 - id: use-err-formatting
   languages:
@@ -106,7 +106,7 @@ rules:
     # so matching this one with raw regexes instead
     - pattern-regex: '%e\b|%err\b|%error\b'
     - pattern-not-regex: '%err[a-zA-Z\.]+(fmt|as_str)'
-  severity: WARNING
+  severity: ERROR
 
 - id: use-log-targets
   languages:
@@ -117,7 +117,7 @@ rules:
     # so matching this one with raw regexes instead
     - pattern-regex: (error|warn|info|debug)!\([^;]*?\);
     - pattern-not-regex: '(error|warn|info|debug)!\(\s*target: [^;]*?\);'
-  severity: WARNING
+  severity: ERROR
   paths:
     include:
       - fedimint-server/
@@ -136,7 +136,7 @@ rules:
     # so matching this one with raw regexes instead
     - pattern-regex: '#\[instrument\([^;]*?\)\]'
     - pattern-not-regex: '#\[instrument\(\s*target\s*=\s*[^;]*?\)\]'
-  severity: WARNING
+  severity: ERROR
 
 - id: use-client-log-targets
   languages:
@@ -147,7 +147,7 @@ rules:
     # so matching this one with raw regexes instead
     - pattern-regex: '(error|warn|info|debug|trace)!\(\s*target: [^;]*?\);'
     - pattern-not-regex: '(error|warn|info|debug|trace)!\(\s*target: LOG_CLIENT[^;]*?\);'
-  severity: WARNING
+  severity: ERROR
   paths:
     include:
       - fedimint-client/
@@ -159,7 +159,7 @@ rules:
     - rust
   message: "Wildcard imports make it unclear which items are being used. Avoid using `use ...::*;` except in sub-modules of a file such as `use super::*;` in a test module."
   pattern-regex: '^use .*::\*;$'
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-direct-sleep-in-tests
   languages:
@@ -182,7 +182,7 @@ rules:
       - fedimint-client/src/backup/tests.rs
       - devimint/src/tests.rs
   message: "Direct use of fedimint_core::runtime::sleep in tests is discouraged. Use fedimint_core::task::sleep_in_test instead."
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-sleep-in-test-scripts
   languages:
@@ -193,7 +193,7 @@ rules:
     include:
       - scripts/tests/
   message: "Sleeping in test scripts is discouraged. Sleep in rust using fedimint_core::task::sleep_in_test instead."
-  severity: WARNING
+  severity: ERROR
 
 - id: ban-version-req-in-devimint
   languages:
@@ -203,5 +203,14 @@ rules:
     include:
       - devimint/
   message: "semver::VersionReq doesn't work for comparing prereleases. Compare with semver::Version instead. For context, see https://github.com/fedimint/fedimint/pull/4804"
-  severity: WARNING
+  severity: ERROR
+
+# Enable, after we have newer semgrep https://github.com/NixOS/nixpkgs/pull/355763
+# so we can display warning, but fail only on errors.
+# - id: ban-error-logging-level
+#   languages:
+#     - rust
+#   pattern: "error!(...)"
+#   message: "Don't use error logging level, use `crit!` wrapper to avoid conflating any `error` with `error logging level`"
+#   severity: WARNING
 

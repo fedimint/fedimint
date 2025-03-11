@@ -98,7 +98,7 @@ use rand::rngs::OsRng;
 use serde::Serialize;
 use strum::IntoEnumIterator;
 use tokio::sync::{Notify, watch};
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
@@ -1780,7 +1780,7 @@ impl Wallet {
                     };
 
                 if sender.send(all_peers_supported_version).is_err() {
-                    error!(target: LOG_MODULE_WALLET, "Failed to send consensus version to watch channel, stopping task");
+                    warn!(target: LOG_MODULE_WALLET, "Failed to send consensus version to watch channel, stopping task");
                     break;
                 }
 

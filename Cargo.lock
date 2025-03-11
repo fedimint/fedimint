@@ -3137,6 +3137,7 @@ dependencies = [
  "fedimint-eventlog",
  "fedimint-lightning",
  "fedimint-lnv2-common",
+ "fedimint-logging",
  "fedimint-tpe",
  "futures",
  "lightning-invoice",
