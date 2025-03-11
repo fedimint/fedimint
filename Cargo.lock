@@ -3749,6 +3749,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-recurringd"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "axum 0.8.1",
+ "clap",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-derive-secret",
+ "fedimint-ln-client",
+ "fedimint-logging",
+ "fedimint-mint-client",
+ "fedimint-rocksdb",
+ "futures",
+ "lightning-invoice",
+ "lnurl-rs",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-rocksdb"
 version = "0.7.0-alpha"
 dependencies = [

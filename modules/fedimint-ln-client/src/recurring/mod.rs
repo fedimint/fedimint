@@ -70,6 +70,7 @@ impl LightningClientModule {
                                 crate::recurring::PaymentCodeRootKey(
                                     payment_code_root_key.public_key(),
                                 ),
+                                meta,
                             )
                             .await?;
 
