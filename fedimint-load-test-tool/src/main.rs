@@ -15,8 +15,8 @@ use std::vec;
 use anyhow::{Context, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use common::{
-    cln_create_invoice, cln_pay_invoice, cln_wait_invoice_payment, gateway_pay_invoice,
-    get_note_summary, parse_gateway_id, reissue_notes,
+    gateway_pay_invoice, get_note_summary, ldk_create_invoice, ldk_pay_invoice,
+    ldk_wait_invoice_payment, parse_gateway_id, reissue_notes,
 };
 use devimint::cmd;
 use devimint::util::GatewayLndCli;
@@ -68,7 +68,7 @@ struct Opts {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum LnInvoiceGeneration {
-    ClnLightningCli,
+    LdkLightningCli,
 }
 
 #[derive(Subcommand, Clone)]
@@ -671,18 +671,18 @@ async fn do_load_test_user_task(
             warn!("Can't pay invoice, not enough funds: {invoice_amount} > {total_amount}");
         } else {
             match generate_invoice_with {
-                Some(LnInvoiceGeneration::ClnLightningCli) => {
-                    let (invoice, label) = cln_create_invoice(invoice_amount).await?;
+                Some(LnInvoiceGeneration::LdkLightningCli) => {
+                    let invoice = ldk_create_invoice(invoice_amount).await?;
                     gateway_pay_invoice(
                         &prefix,
                         "LND",
                         &client,
-                        invoice,
+                        invoice.clone(),
                         &event_sender,
                         ln_gateway.clone(),
                     )
                     .await?;
-                    cln_wait_invoice_payment(&label).await?;
+                    ldk_wait_invoice_payment(&invoice).await?;
                 }
                 None if additional_invoices.is_empty() => {
                     debug!(
@@ -820,7 +820,7 @@ async fn do_ln_circular_test_user_task(
     };
     match strategy {
         LnCircularStrategy::TwoGateways => {
-            let invoice_generation = LnInvoiceGeneration::ClnLightningCli;
+            let invoice_generation = LnInvoiceGeneration::LdkLightningCli;
             while still_ontime().await {
                 let gateway_id = get_gateway_id(invoice_generation).await?;
                 let ln_gateway = get_lightning_gateway(&client, Some(gateway_id)).await;
@@ -866,8 +866,8 @@ async fn run_two_gateways_strategy(
 ) -> Result<(), anyhow::Error> {
     let create_invoice_time = fedimint_core::time::now();
     match *invoice_generation {
-        LnInvoiceGeneration::ClnLightningCli => {
-            let (invoice, label) = cln_create_invoice(*invoice_amount).await?;
+        LnInvoiceGeneration::LdkLightningCli => {
+            let invoice = ldk_create_invoice(*invoice_amount).await?;
             let elapsed = create_invoice_time.elapsed()?;
             info!("Created invoice using CLN in {elapsed:?}");
             event_sender.send(MetricEvent {
@@ -878,16 +878,16 @@ async fn run_two_gateways_strategy(
                 prefix,
                 "LND",
                 client,
-                invoice,
+                invoice.clone(),
                 event_sender,
                 ln_gateway.clone(),
             )
             .await?;
-            cln_wait_invoice_payment(&label).await?;
+            ldk_wait_invoice_payment(&invoice).await?;
             let (operation_id, invoice) =
                 client_create_invoice(client, *invoice_amount, event_sender, ln_gateway).await?;
             let pay_invoice_time = fedimint_core::time::now();
-            cln_pay_invoice(invoice).await?;
+            ldk_pay_invoice(invoice).await?;
             wait_invoice_payment(
                 prefix,
                 "LND",
@@ -1321,8 +1321,8 @@ async fn handle_metrics_summary(
 
 async fn get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -> anyhow::Result<String> {
     let gateway_json = match generate_invoice_with {
-        LnInvoiceGeneration::ClnLightningCli => {
-            // If we are paying a lnd invoice, we use the cln node
+        LnInvoiceGeneration::LdkLightningCli => {
+            // If we are paying a lnd invoice, we use the LDK node
             cmd!(GatewayLndCli, "info").out_json().await
         }
     }?;

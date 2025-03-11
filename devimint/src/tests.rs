@@ -960,6 +960,10 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
 pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
+    if crate::util::Gatewayd::version_or_default().await < *VERSION_0_5_0_ALPHA {
+        info!("Skipping load test because gatewayd is lower than v0.5.0");
+        return Ok(());
+    }
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed
@@ -990,7 +994,7 @@ pub async fn run_standard_load_test(
         "--notes-per-user",
         "1",
         "--generate-invoice-with",
-        "cln-lightning-cli",
+        "ldk-lightning-cli",
         "--invite-code",
         invite_code
     )
