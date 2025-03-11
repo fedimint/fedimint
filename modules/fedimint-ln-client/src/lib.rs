@@ -13,6 +13,8 @@ pub mod db;
 pub mod incoming;
 pub mod pay;
 pub mod receive;
+/// Implements recurring payment codes (e.g. LNURL, BOLT12)
+pub mod recurring;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter::once;
