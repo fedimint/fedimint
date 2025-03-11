@@ -23,6 +23,7 @@ members = [
   "fedimint-logging",
   "fedimint-metrics",
   "fedimint-recoverytool",
+  "fedimint-recurringd",
   "fedimint-rocksdb",
   "fedimint-server",
   "fedimint-server-core",

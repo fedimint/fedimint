@@ -24,6 +24,7 @@ impl RecurringdClient {
         federation_id: FederationId,
         protocol: RecurringPaymentProtocol,
         payment_code_root_key: PaymentCodeRootKey,
+        meta: &str,
     ) -> Result<RecurringPaymentRegistrationResponse, RecurringdApiError> {
         // TODO: validate decoding works like this and maybe figure out a cleaner way to
         // communicate errors
@@ -31,6 +32,7 @@ impl RecurringdClient {
             federation_id,
             protocol,
             payment_code_root_key,
+            meta: meta.to_owned(),
         };
 
         let response = self
@@ -89,6 +91,8 @@ pub struct RecurringPaymentRegistrationRequest {
     /// Public key from which other keys will be derived for each generated
     /// invoice
     pub payment_code_root_key: PaymentCodeRootKey,
+    /// LNURL meta data, see LUD-06 for more details on the format
+    pub meta: String,
 }
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Hash, Serialize, Deserialize)]
