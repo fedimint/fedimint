@@ -387,6 +387,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[allow(deprecated)]
 async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
@@ -516,6 +517,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[allow(deprecated)]
 async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
@@ -1300,6 +1302,9 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any LightningGateways"
                             );
                             info!("Validated LightningGateways");
+                        }
+                        fedimint_ln_client::db::DbKeyPrefix::RecurringPaymentKey => {
+                            unimplemented!()
                         }
                         fedimint_ln_client::db::DbKeyPrefix::CoreInternalReservedStart
                         | fedimint_ln_client::db::DbKeyPrefix::ExternalReservedStart
