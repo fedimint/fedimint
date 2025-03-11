@@ -118,19 +118,4 @@
 <a href=#118 id=118 data-nosnippet>118</a>}
 <a href=#119 id=119 data-nosnippet>119</a>
 <a href=#120 id=120 data-nosnippet>120</a><span class="attr">#[cfg(test)]
-<a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">mod </span>tests {
-<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">use crate</span>::{decrypt, encrypt, get_encryption_key};
-<a href=#123 id=123 data-nosnippet>123</a>
-<a href=#124 id=124 data-nosnippet>124</a>    <span class="attr">#[test]
-<a href=#125 id=125 data-nosnippet>125</a>    </span><span class="kw">fn </span>encrypts_and_decrypts() {
-<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">let </span>password = <span class="string">"test123"</span>;
-<a href=#127 id=127 data-nosnippet>127</a>        <span class="kw">let </span>salt = <span class="string">"salt1235"</span>;
-<a href=#128 id=128 data-nosnippet>128</a>        <span class="kw">let </span>message = <span class="string">"hello world"</span>;
-<a href=#129 id=129 data-nosnippet>129</a>
-<a href=#130 id=130 data-nosnippet>130</a>        <span class="kw">let </span>key = get_encryption_key(password, salt).unwrap();
-<a href=#131 id=131 data-nosnippet>131</a>        <span class="kw">let </span><span class="kw-2">mut </span>cipher_text = encrypt(message.as_bytes().to_vec(), <span class="kw-2">&amp;</span>key).unwrap();
-<a href=#132 id=132 data-nosnippet>132</a>        <span class="kw">let </span>decrypted = decrypt(<span class="kw-2">&amp;mut </span>cipher_text, <span class="kw-2">&amp;</span>key).unwrap();
-<a href=#133 id=133 data-nosnippet>133</a>
-<a href=#134 id=134 data-nosnippet>134</a>        <span class="macro">assert_eq!</span>(decrypted, message.as_bytes());
-<a href=#135 id=135 data-nosnippet>135</a>    }
-<a href=#136 id=136 data-nosnippet>136</a>}</code></pre></div></section></main></body></html>
+<a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
