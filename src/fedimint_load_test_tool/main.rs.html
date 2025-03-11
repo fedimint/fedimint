@@ -15,8 +15,8 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>anyhow::{Context, bail};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>clap::{Args, Parser, Subcommand, ValueEnum};
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>common::{
-<a href=#18 id=18 data-nosnippet>18</a>    cln_create_invoice, cln_pay_invoice, cln_wait_invoice_payment, gateway_pay_invoice,
-<a href=#19 id=19 data-nosnippet>19</a>    get_note_summary, parse_gateway_id, reissue_notes,
+<a href=#18 id=18 data-nosnippet>18</a>    gateway_pay_invoice, get_note_summary, ldk_create_invoice, ldk_pay_invoice,
+<a href=#19 id=19 data-nosnippet>19</a>    ldk_wait_invoice_payment, parse_gateway_id, reissue_notes,
 <a href=#20 id=20 data-nosnippet>20</a>};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>devimint::cmd;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>devimint::util::GatewayLndCli;
@@ -68,7 +68,7 @@
 <a href=#68 id=68 data-nosnippet>68</a>
 <a href=#69 id=69 data-nosnippet>69</a><span class="attr">#[derive(Debug, Clone, Copy, ValueEnum)]
 <a href=#70 id=70 data-nosnippet>70</a></span><span class="kw">enum </span>LnInvoiceGeneration {
-<a href=#71 id=71 data-nosnippet>71</a>    ClnLightningCli,
+<a href=#71 id=71 data-nosnippet>71</a>    LdkLightningCli,
 <a href=#72 id=72 data-nosnippet>72</a>}
 <a href=#73 id=73 data-nosnippet>73</a>
 <a href=#74 id=74 data-nosnippet>74</a><span class="attr">#[derive(Subcommand, Clone)]
@@ -671,18 +671,18 @@
 <a href=#671 id=671 data-nosnippet>671</a>            <span class="macro">warn!</span>(<span class="string">"Can't pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}"</span>);
 <a href=#672 id=672 data-nosnippet>672</a>        } <span class="kw">else </span>{
 <a href=#673 id=673 data-nosnippet>673</a>            <span class="kw">match </span>generate_invoice_with {
-<a href=#674 id=674 data-nosnippet>674</a>                <span class="prelude-val">Some</span>(LnInvoiceGeneration::ClnLightningCli) =&gt; {
-<a href=#675 id=675 data-nosnippet>675</a>                    <span class="kw">let </span>(invoice, label) = cln_create_invoice(invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#674 id=674 data-nosnippet>674</a>                <span class="prelude-val">Some</span>(LnInvoiceGeneration::LdkLightningCli) =&gt; {
+<a href=#675 id=675 data-nosnippet>675</a>                    <span class="kw">let </span>invoice = ldk_create_invoice(invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#676 id=676 data-nosnippet>676</a>                    gateway_pay_invoice(
 <a href=#677 id=677 data-nosnippet>677</a>                        <span class="kw-2">&amp;</span>prefix,
 <a href=#678 id=678 data-nosnippet>678</a>                        <span class="string">"LND"</span>,
 <a href=#679 id=679 data-nosnippet>679</a>                        <span class="kw-2">&amp;</span>client,
-<a href=#680 id=680 data-nosnippet>680</a>                        invoice,
+<a href=#680 id=680 data-nosnippet>680</a>                        invoice.clone(),
 <a href=#681 id=681 data-nosnippet>681</a>                        <span class="kw-2">&amp;</span>event_sender,
 <a href=#682 id=682 data-nosnippet>682</a>                        ln_gateway.clone(),
 <a href=#683 id=683 data-nosnippet>683</a>                    )
 <a href=#684 id=684 data-nosnippet>684</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#685 id=685 data-nosnippet>685</a>                    cln_wait_invoice_payment(<span class="kw-2">&amp;</span>label).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#685 id=685 data-nosnippet>685</a>                    ldk_wait_invoice_payment(<span class="kw-2">&amp;</span>invoice).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#686 id=686 data-nosnippet>686</a>                }
 <a href=#687 id=687 data-nosnippet>687</a>                <span class="prelude-val">None </span><span class="kw">if </span>additional_invoices.is_empty() =&gt; {
 <a href=#688 id=688 data-nosnippet>688</a>                    <span class="macro">debug!</span>(
@@ -820,7 +820,7 @@
 <a href=#820 id=820 data-nosnippet>820</a>    };
 <a href=#821 id=821 data-nosnippet>821</a>    <span class="kw">match </span>strategy {
 <a href=#822 id=822 data-nosnippet>822</a>        LnCircularStrategy::TwoGateways =&gt; {
-<a href=#823 id=823 data-nosnippet>823</a>            <span class="kw">let </span>invoice_generation = LnInvoiceGeneration::ClnLightningCli;
+<a href=#823 id=823 data-nosnippet>823</a>            <span class="kw">let </span>invoice_generation = LnInvoiceGeneration::LdkLightningCli;
 <a href=#824 id=824 data-nosnippet>824</a>            <span class="kw">while </span>still_ontime().<span class="kw">await </span>{
 <a href=#825 id=825 data-nosnippet>825</a>                <span class="kw">let </span>gateway_id = get_gateway_id(invoice_generation).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#826 id=826 data-nosnippet>826</a>                <span class="kw">let </span>ln_gateway = get_lightning_gateway(<span class="kw-2">&amp;</span>client, <span class="prelude-val">Some</span>(gateway_id)).<span class="kw">await</span>;
@@ -866,8 +866,8 @@
 <a href=#866 id=866 data-nosnippet>866</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
 <a href=#867 id=867 data-nosnippet>867</a>    <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
 <a href=#868 id=868 data-nosnippet>868</a>    <span class="kw">match </span><span class="kw-2">*</span>invoice_generation {
-<a href=#869 id=869 data-nosnippet>869</a>        LnInvoiceGeneration::ClnLightningCli =&gt; {
-<a href=#870 id=870 data-nosnippet>870</a>            <span class="kw">let </span>(invoice, label) = cln_create_invoice(<span class="kw-2">*</span>invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#869 id=869 data-nosnippet>869</a>        LnInvoiceGeneration::LdkLightningCli =&gt; {
+<a href=#870 id=870 data-nosnippet>870</a>            <span class="kw">let </span>invoice = ldk_create_invoice(<span class="kw-2">*</span>invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#871 id=871 data-nosnippet>871</a>            <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;
 <a href=#872 id=872 data-nosnippet>872</a>            <span class="macro">info!</span>(<span class="string">"Created invoice using CLN in {elapsed:?}"</span>);
 <a href=#873 id=873 data-nosnippet>873</a>            event_sender.send(MetricEvent {
@@ -878,16 +878,16 @@
 <a href=#878 id=878 data-nosnippet>878</a>                prefix,
 <a href=#879 id=879 data-nosnippet>879</a>                <span class="string">"LND"</span>,
 <a href=#880 id=880 data-nosnippet>880</a>                client,
-<a href=#881 id=881 data-nosnippet>881</a>                invoice,
+<a href=#881 id=881 data-nosnippet>881</a>                invoice.clone(),
 <a href=#882 id=882 data-nosnippet>882</a>                event_sender,
 <a href=#883 id=883 data-nosnippet>883</a>                ln_gateway.clone(),
 <a href=#884 id=884 data-nosnippet>884</a>            )
 <a href=#885 id=885 data-nosnippet>885</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#886 id=886 data-nosnippet>886</a>            cln_wait_invoice_payment(<span class="kw-2">&amp;</span>label).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#886 id=886 data-nosnippet>886</a>            ldk_wait_invoice_payment(<span class="kw-2">&amp;</span>invoice).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#887 id=887 data-nosnippet>887</a>            <span class="kw">let </span>(operation_id, invoice) =
 <a href=#888 id=888 data-nosnippet>888</a>                client_create_invoice(client, <span class="kw-2">*</span>invoice_amount, event_sender, ln_gateway).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#889 id=889 data-nosnippet>889</a>            <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-<a href=#890 id=890 data-nosnippet>890</a>            cln_pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#890 id=890 data-nosnippet>890</a>            ldk_pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#891 id=891 data-nosnippet>891</a>            wait_invoice_payment(
 <a href=#892 id=892 data-nosnippet>892</a>                prefix,
 <a href=#893 id=893 data-nosnippet>893</a>                <span class="string">"LND"</span>,
@@ -1321,8 +1321,8 @@
 <a href=#1321 id=1321 data-nosnippet>1321</a>
 <a href=#1322 id=1322 data-nosnippet>1322</a><span class="kw">async fn </span>get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -&gt; anyhow::Result&lt;String&gt; {
 <a href=#1323 id=1323 data-nosnippet>1323</a>    <span class="kw">let </span>gateway_json = <span class="kw">match </span>generate_invoice_with {
-<a href=#1324 id=1324 data-nosnippet>1324</a>        LnInvoiceGeneration::ClnLightningCli =&gt; {
-<a href=#1325 id=1325 data-nosnippet>1325</a>            <span class="comment">// If we are paying a lnd invoice, we use the cln node
+<a href=#1324 id=1324 data-nosnippet>1324</a>        LnInvoiceGeneration::LdkLightningCli =&gt; {
+<a href=#1325 id=1325 data-nosnippet>1325</a>            <span class="comment">// If we are paying a lnd invoice, we use the LDK node
 <a href=#1326 id=1326 data-nosnippet>1326</a>            </span><span class="macro">cmd!</span>(GatewayLndCli, <span class="string">"info"</span>).out_json().<span class="kw">await
 <a href=#1327 id=1327 data-nosnippet>1327</a>        </span>}
 <a href=#1328 id=1328 data-nosnippet>1328</a>    }<span class="question-mark">?</span>;
