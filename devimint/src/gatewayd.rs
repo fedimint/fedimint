@@ -527,7 +527,10 @@ impl Gatewayd {
                 let Some(block_height) = block_height else {
                     return Err(ControlFlow::Continue(anyhow!("Not synced any blocks yet")));
                 };
-                if block_height >= target_block_height as u32 {
+                let synced = info["synced_to_chain"]
+                    .as_bool()
+                    .expect("Could not get synced_to_chain");
+                if block_height >= target_block_height as u32 && synced {
                     return Ok(());
                 }
             }

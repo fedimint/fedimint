@@ -845,8 +845,7 @@ pub async fn open_channel(
         .bech32
         .context("bech32 should be present")?;
 
-    let txid = bitcoind.send_to(cln_addr, 100_000_000).await?;
-    bitcoind.poll_get_transaction(txid).await?;
+    bitcoind.send_to(cln_addr, 100_000_000).await?;
     bitcoind.mine_blocks(10).await?;
 
     let lnd_pubkey = lnd.pub_key().await?;
@@ -954,8 +953,7 @@ pub async fn open_channels_between_gateways(
     info!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
     for (gw, _gw_name) in gateways {
         let funding_addr = gw.get_ln_onchain_address().await?;
-        let txid = bitcoind.send_to(funding_addr, 100_000_000).await?;
-        bitcoind.poll_get_transaction(txid).await?;
+        bitcoind.send_to(funding_addr, 100_000_000).await?;
     }
 
     bitcoind.mine_blocks(10).await?;
@@ -982,6 +980,7 @@ pub async fn open_channels_between_gateways(
         gateways.iter().circular_tuple_windows::<(_, _)>().collect()
     };
 
+    info!(target: LOG_DEVIMINT, block_height = %block_height, "devimint current block");
     let sats_per_side = 5_000_000;
     for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
         info!(target: LOG_DEVIMINT, from=%gw_a_name, to=%gw_b_name, "Opening channel with {sats_per_side} sats on each side...");

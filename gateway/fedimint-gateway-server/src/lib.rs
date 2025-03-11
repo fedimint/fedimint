@@ -512,6 +512,7 @@ impl Gateway {
             info!("Gateway is already synced to chain");
         } else {
             self.set_gateway_state(GatewayState::Syncing).await;
+            info!(target: LOG_GATEWAY, "Waiting for chain sync");
             if let Err(e) = ln_client.wait_for_chain_sync().await {
                 error!(?e, "Failed to wait for chain sync");
                 return ReceivePaymentStreamAction::RetryAfterDelay;
