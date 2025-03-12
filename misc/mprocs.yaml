@@ -14,10 +14,14 @@ procs:
     shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-lnd.log
   ldk-gw:
     shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-ldk-0.log
+  ldk-gw2:
+    shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-ldk-1.log
   lnd:
     shell: tail -n +0 -F $FM_LOGS_DIR/lnd.log
   ldk:
     shell: tail -n +0 -F $FM_DATA_DIR/gatewayd-ldk-0/ldk_node/logs/ldk_node_latest.log
+  ldk2:
+    shell: tail -n +0 -F $FM_DATA_DIR/gatewayd-ldk-1/ldk_node/logs/ldk_node_latest.log
   bitcoind:
     shell: tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
   devimint:

@@ -21,7 +21,7 @@ use fedimint_gateway_common::{FederationInfo, GatewayBalances, GatewayFedConfig}
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::ln::LightningNodeType;
 use itertools::Itertools;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Parser)]
 struct GatewayTestOpts {
@@ -495,6 +495,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
 
         let gw_lnd = dev_fed.gw_lnd_registered().await?;
         let gw_ldk = dev_fed.gw_ldk_connected().await?;
+        let gw_ldk_second = dev_fed.gw_ldk_second_connected().await?;
         let gateways = [gw_lnd, gw_ldk].to_vec();
 
         let gateway_matrix = gateways
@@ -542,18 +543,14 @@ async fn liquidity_test() -> anyhow::Result<()> {
             gw_send.pay_invoice(invoice).await?;
         }
 
-        /*
-        // TODO: Need GW_LDK2
         info!(target: LOG_TEST, "Testing paying through LND Gateway...");
         let invoice = gw_ldk.create_invoice(1_550_000).await?;
-        let gw_ldk2 = dev_fed.gw_ldk2().await?;
         // Need to try to pay the invoice multiple times in case the channel graph has not been updated yet.
-        retry("CLN pay LDK", aggressive_backoff_long(), || async {
-            debug!(target: LOG_TEST, "Trying CLN -> LND -> LDK...");
-            cln.pay_bolt11_invoice(invoice.to_string()).await?;
+        retry("LDK2 pay LDK", aggressive_backoff_long(), || async {
+            debug!(target: LOG_TEST, "Trying LDK2 -> LND -> LDK...");
+            gw_ldk_second.pay_invoice(invoice.clone()).await?;
             Ok(())
         }).await?;
-        */
 
         info!(target: LOG_TEST, "Pegging-out gateways...");
         federation.pegout_gateways(500_000_000, gateways.clone()).await?;

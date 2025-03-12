@@ -662,15 +662,12 @@ pub async fn open_channels_between_gateways(
     .await?;
 
     // All unique pairs of gateways.
-    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C), (C, A)].
+    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C)].
     // Since the first gateway within each pair initiates the channel open,
     // order within each pair needs to be enforced so that each Lightning node opens
     // 1 channel.
-    let gateway_pairs: Vec<(&NamedGateway, &NamedGateway)> = if gateways.len() == 2 {
-        gateways.iter().tuple_windows::<(_, _)>().collect()
-    } else {
-        gateways.iter().circular_tuple_windows::<(_, _)>().collect()
-    };
+    let gateway_pairs: Vec<(&NamedGateway, &NamedGateway)> =
+        gateways.iter().tuple_windows::<(_, _)>().collect();
 
     info!(target: LOG_DEVIMINT, block_height = %block_height, "devimint current block");
     let sats_per_side = 5_000_000;
@@ -746,14 +743,22 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
 #[derive(Clone)]
 pub enum LightningNode {
     Lnd(Lnd),
-    Ldk { name: String },
+    Ldk {
+        name: String,
+        gw_port: u16,
+        ldk_port: u16,
+    },
 }
 
 impl LightningNode {
     pub fn ln_type(&self) -> LightningNodeType {
         match self {
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
-            LightningNode::Ldk { name: _ } => LightningNodeType::Ldk,
+            LightningNode::Ldk {
+                name: _,
+                gw_port: _,
+                ldk_port: _,
+            } => LightningNodeType::Ldk,
         }
     }
 }

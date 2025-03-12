@@ -19,6 +19,7 @@ use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_logging::LOG_DEVIMINT;
+use fedimint_testing::ln::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
 use tokio::net::TcpStream;
@@ -1189,6 +1190,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         fed,
         gw_lnd,
         gw_ldk,
+        gw_ldk_second,
         ..
     } = dev_fed;
 
@@ -1206,36 +1208,36 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let (lnd_value, ldk_value) = try_join!(gw_lnd.get_info(), gw_ldk.get_info())?;
 
     // Drop references to gateways so the test can kill them
-    let _lnd_gateway_id = gw_lnd.gateway_id().await?;
+    let lnd_gateway_id = gw_lnd.gateway_id().await?;
     let gw_ldk_name = gw_ldk.gw_name.clone();
+    let gw_ldk_port = gw_ldk.gw_port;
+    let gw_lightning_port = gw_ldk.ldk_port;
     drop(gw_lnd);
     drop(gw_ldk);
 
     // Verify that making a payment while the gateways are down does not result in
     // funds being stuck
-    /*
-    // TODO: Need GW_LDK2
     info!("Making payment while gateway is down");
     let initial_client_balance = client.balance().await?;
-    let invoice = gw_ldk
-        .invoice(
-            3000,
-            "down-payment".to_string(),
-            "down-payment-label".to_string(),
-        )
-        .await?;
-    ln_pay(&client, invoice, lnd_gateway_id, false)
+    let invoice = gw_ldk_second.create_invoice(3000).await?;
+    ln_pay(&client, invoice.to_string(), lnd_gateway_id, false)
         .await
         .expect_err("Expected ln-pay to return error because the gateway is not online");
     let new_client_balance = client.balance().await?;
     anyhow::ensure!(initial_client_balance == new_client_balance);
-    */
 
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
     let (new_gw_lnd, new_gw_ldk) = try_join!(
         Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
-        Gatewayd::new(process_mgr, LightningNode::Ldk { name: gw_ldk_name })
+        Gatewayd::new(
+            process_mgr,
+            LightningNode::Ldk {
+                name: gw_ldk_name,
+                gw_port: gw_ldk_port,
+                ldk_port: gw_lightning_port
+            }
+        )
     )?;
 
     let lnd_gateway_id: fedimint_core::secp256k1::PublicKey =
@@ -1321,14 +1323,14 @@ pub async fn do_try_create_and_pay_invoice(
     .await?
     .invoice;
 
-    match &gw_lnd.ln {
-        LightningNode::Lnd(_lnd) => {
+    match &gw_lnd.ln.ln_type() {
+        LightningNodeType::Lnd => {
             // Pay the invoice using LDK
             gw_ldk
                 .pay_invoice(Bolt11Invoice::from_str(&invoice).expect("Could not parse invoice"))
                 .await?;
         }
-        LightningNode::Ldk { name: _ } => {
+        LightningNodeType::Ldk => {
             unimplemented!("do_try_create_and_pay_invoice not implemented for LDK yet");
         }
     }

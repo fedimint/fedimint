@@ -142,6 +142,7 @@ declare_vars! {
         FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_TX";
         FM_PORT_LND_LISTEN: u16 = port_alloc(1)?; env: "FM_PORT_LND_LISTEN";
         FM_PORT_LDK: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
+        FM_PORT_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
         FM_PORT_LND_RPC: u16 = port_alloc(1)?; env: "FM_PORT_LND_RPC";
         FM_PORT_LND_REST: u16 = port_alloc(1)?; env: "FM_PORT_LND_REST";
         FM_PORT_ELECTRS: u16 = port_alloc(1)?; env: "FM_PORT_ELECTRS";
@@ -152,6 +153,7 @@ declare_vars! {
         FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((3 * fed_size).try_into().unwrap())?; env: "FM_PORT_FEDIMINTD_BASE";
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
+        FM_PORT_GW_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
 
         FM_FEDERATION_BASE_PORT: u16 =  port_alloc((PORTS_PER_FEDIMINTD as usize * fed_size * num_feds).try_into().unwrap())?; env: "FM_FEDERATION_BASE_PORT";

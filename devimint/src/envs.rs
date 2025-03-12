@@ -125,3 +125,6 @@ pub const FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV: &str = "FM_DEVIMINT_RUN_DEPRECAT
 /// Rust code during building, and also checked at runtime to allow
 /// overwriting.
 pub const FM_DEVIMINT_STATIC_DATA_DIR_ENV: &str = "FM_DEVIMINT_STATIC_DATA_DIR";
+
+/// Override LDK's Lightning port
+pub const FM_PORT_LDK_ENV: &str = "FM_PORT_LDK";

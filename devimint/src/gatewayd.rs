@@ -21,7 +21,9 @@ use semver::Version;
 use tracing::info;
 
 use crate::cmd;
-use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
+use crate::envs::{
+    FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV, FM_PORT_LDK_ENV,
+};
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
@@ -37,27 +39,27 @@ pub struct Gatewayd {
     pub gatewayd_version: Version,
     pub gw_name: String,
     pub log_path: PathBuf,
+    pub gw_port: u16,
+    pub ldk_port: u16,
 }
 
 impl Gatewayd {
     pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
         let ln_type = ln.ln_type();
-        let gw_name = match &ln {
-            LightningNode::Lnd(_) => "gatewayd-lnd".to_string(),
-            LightningNode::Ldk { name } => name.to_owned(),
+        let (gw_name, port, lightning_node_port) = match &ln {
+            LightningNode::Lnd(_) => (
+                "gatewayd-lnd".to_string(),
+                process_mgr.globals.FM_PORT_GW_LND,
+                process_mgr.globals.FM_PORT_LND_LISTEN,
+            ),
+            LightningNode::Ldk {
+                name,
+                gw_port,
+                ldk_port,
+            } => (name.to_owned(), gw_port.to_owned(), ldk_port.to_owned()),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
-
-        let port = match ln {
-            LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_GW_LND,
-            LightningNode::Ldk { name: _ } => process_mgr.globals.FM_PORT_GW_LDK,
-        };
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
-
-        let lightning_node_port = match ln {
-            LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_LND_LISTEN,
-            LightningNode::Ldk { name: _ } => process_mgr.globals.FM_PORT_LDK,
-        };
         let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
 
         let mut gateway_env: HashMap<String, String> = HashMap::from_iter([
@@ -70,6 +72,7 @@ impl Gatewayd {
                 format!("127.0.0.1:{port}"),
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
+            (FM_PORT_LDK_ENV.to_owned(), lightning_node_port.to_string()),
         ]);
         if !supports_lnv2() {
             tracing::info!("LNv2 is not supported, running gatewayd in LNv1 mode");
@@ -101,6 +104,8 @@ impl Gatewayd {
             gatewayd_version,
             gw_name,
             log_path,
+            gw_port: port,
+            ldk_port: lightning_node_port,
         };
         poll(
             "waiting for gateway to be ready to respond to rpc",
@@ -136,7 +141,11 @@ impl Gatewayd {
         info!("Stopping lightning node");
         match self.ln.clone() {
             LightningNode::Lnd(lnd) => lnd.terminate().await,
-            LightningNode::Ldk { name: _ } => {
+            LightningNode::Ldk {
+                name: _,
+                gw_port: _,
+                ldk_port: _,
+            } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
                 unimplemented!("LDK node termination not implemented")
