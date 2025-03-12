@@ -67,9 +67,7 @@ use fedimint_core::{
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
-use fedimint_server::core::{
-    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
-};
+use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use fedimint_server::net::api::check_auth;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
@@ -276,7 +274,7 @@ impl ServerModuleInit for WalletInit {
         )
     }
 
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         for direction in ["incoming", "outgoing"] {
             WALLET_INOUT_FEES_SATS
                 .with_label_values(&[direction])
@@ -299,8 +297,7 @@ impl ServerModuleInit for WalletInit {
             args.module_api().clone(),
             &args.shared(),
         )
-        .await?
-        .into())
+        .await?)
     }
 
     fn trusted_dealer_gen(

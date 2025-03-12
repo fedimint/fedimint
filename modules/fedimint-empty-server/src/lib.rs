@@ -26,7 +26,7 @@ use fedimint_empty_common::{
     EmptyCommonInit, EmptyConsensusItem, EmptyInput, EmptyInputError, EmptyModuleTypes,
     EmptyOutput, EmptyOutputError, EmptyOutputOutcome, MODULE_CONSENSUS_VERSION,
 };
-use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use strum::IntoEnumIterator;
 
@@ -96,8 +96,8 @@ impl ServerModuleInit for EmptyInit {
     }
 
     /// Initialize the module
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Empty::new(args.cfg().to_typed()?).into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        Ok(Empty::new(args.cfg().to_typed()?))
     }
 
     /// Generates configs for all peers in a trusted manner for testing

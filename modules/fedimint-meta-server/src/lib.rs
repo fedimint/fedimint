@@ -42,9 +42,7 @@ use fedimint_meta_common::{
     MetaInputError, MetaKey, MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome,
     MetaValue,
 };
-use fedimint_server::core::{
-    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
-};
+use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use rand::{Rng, thread_rng};
 use strum::IntoEnumIterator;
@@ -137,13 +135,12 @@ impl ServerModuleInit for MetaInit {
     }
 
     /// Initialize the module
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(Meta {
             cfg: args.cfg().to_typed()?,
             our_peer_id: args.our_peer_id(),
             num_peers: args.num_peers(),
-        }
-        .into())
+        })
     }
 
     /// Generates configs for all peers in a trusted manner for testing

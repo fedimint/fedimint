@@ -18,7 +18,7 @@ use fedimint_core::module::{
     ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId};
-use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 pub use fedimint_unknown_common as common;
 use fedimint_unknown_common::config::{
     UnknownClientConfig, UnknownConfig, UnknownConfigConsensus, UnknownConfigLocal,
@@ -71,8 +71,8 @@ impl ServerModuleInit for UnknownInit {
     }
 
     /// Initialize the module
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Unknown::new(args.cfg().to_typed()?).into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        Ok(Unknown::new(args.cfg().to_typed()?))
     }
 
     /// Generates configs for all peers in a trusted manner for testing

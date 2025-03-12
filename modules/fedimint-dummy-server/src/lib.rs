@@ -31,7 +31,7 @@ use fedimint_dummy_common::{
     DummyOutput, DummyOutputError, DummyOutputOutcome, MODULE_CONSENSUS_VERSION,
     broken_fed_public_key, fed_public_key,
 };
-use fedimint_server_core::{DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::{FutureExt, StreamExt};
 use strum::IntoEnumIterator;
 
@@ -114,8 +114,8 @@ impl ServerModuleInit for DummyInit {
     }
 
     /// Initialize the module
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Dummy::new(args.cfg().to_typed()?).into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        Ok(Dummy::new(args.cfg().to_typed()?))
     }
 
     /// Generates configs for all peers in a trusted manner for testing

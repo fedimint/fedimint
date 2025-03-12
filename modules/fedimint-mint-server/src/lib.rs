@@ -43,9 +43,7 @@ use fedimint_mint_common::{
 };
 use fedimint_server::config::distributedgen::{PeerHandleOps, eval_poly_g2};
 use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
-use fedimint_server::core::{
-    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
-};
+use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::{FutureExt as _, StreamExt};
 use itertools::Itertools;
 use metrics::{
@@ -146,8 +144,8 @@ impl ServerModuleInit for MintInit {
         )
     }
 
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Mint::new(args.cfg().to_typed()?).into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        Ok(Mint::new(args.cfg().to_typed()?))
     }
 
     fn trusted_dealer_gen(
