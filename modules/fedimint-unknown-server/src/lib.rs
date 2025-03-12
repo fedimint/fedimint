@@ -133,7 +133,7 @@ impl ServerModuleInit for UnknownInit {
         let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
         // Unknown module prior to v0.5.0 had a `DATABASE_VERSION` of 1, so we must
         // insert a no-op migration to ensure that upgrades work.
-        migrations.insert(DatabaseVersion(0), |_| Box::pin(async { Ok(()) }));
+        migrations.insert(DatabaseVersion(0), Box::new(|_| Box::pin(async { Ok(()) })));
         migrations
     }
 }

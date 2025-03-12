@@ -2167,10 +2167,14 @@ macro_rules! push_db_key_items {
 
 /// `CoreMigrationFn` that modules can implement to "migrate" the database
 /// to the next database version.
-pub type CoreMigrationFn = for<'tx> fn(
-    MigrationContext<'tx>,
-) -> Pin<
-    Box<maybe_add_send!(dyn futures::Future<Output = anyhow::Result<()>> + 'tx)>,
+pub type CoreMigrationFn = Box<
+    maybe_add_send!(
+        dyn for<'tx> Fn(
+            MigrationContext<'tx>,
+        ) -> Pin<
+            Box<maybe_add_send!(dyn futures::Future<Output = anyhow::Result<()>> + 'tx)>,
+        >
+    ),
 >;
 
 /// Verifies that all database migrations are defined contiguously and returns
@@ -3228,9 +3232,10 @@ mod test_utils {
 
         let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
 
-        migrations.insert(DatabaseVersion(0), |ctx| {
-            migrate_test_db_version_0(ctx).boxed()
-        });
+        migrations.insert(
+            DatabaseVersion(0),
+            Box::new(|ctx| migrate_test_db_version_0(ctx).boxed()),
+        );
 
         apply_migrations(&db, "TestModule".to_string(), migrations, None, None)
             .await

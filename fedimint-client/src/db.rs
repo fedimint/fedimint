@@ -446,187 +446,200 @@ impl_db_lookup!(key = MetaFieldKey, query_prefix = MetaFieldPrefix);
 
 pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
-    migrations.insert(DatabaseVersion(0), |mut ctx| {
-        Box::pin(async move {
-            let mut dbtx = ctx.dbtx();
+    migrations.insert(
+        DatabaseVersion(0),
+        Box::new(|mut ctx| {
+            Box::pin(async move {
+                let mut dbtx = ctx.dbtx();
 
-            let config_v0 = dbtx
-                .find_by_prefix(&ClientConfigKeyPrefixV0)
-                .await
-                .collect::<Vec<_>>()
-                .await;
+                let config_v0 = dbtx
+                    .find_by_prefix(&ClientConfigKeyPrefixV0)
+                    .await
+                    .collect::<Vec<_>>()
+                    .await;
 
-            assert!(config_v0.len() <= 1);
-            let Some((id, config_v0)) = config_v0.into_iter().next() else {
-                return Ok(());
-            };
+                assert!(config_v0.len() <= 1);
+                let Some((id, config_v0)) = config_v0.into_iter().next() else {
+                    return Ok(());
+                };
 
-            let global = GlobalClientConfig {
-                api_endpoints: config_v0.global.api_endpoints,
-                broadcast_public_keys: None,
-                consensus_version: config_v0.global.consensus_version,
-                meta: config_v0.global.meta,
-            };
+                let global = GlobalClientConfig {
+                    api_endpoints: config_v0.global.api_endpoints,
+                    broadcast_public_keys: None,
+                    consensus_version: config_v0.global.consensus_version,
+                    meta: config_v0.global.meta,
+                };
 
-            let config = ClientConfig {
-                global,
-                modules: config_v0.modules,
-            };
+                let config = ClientConfig {
+                    global,
+                    modules: config_v0.modules,
+                };
 
-            dbtx.remove_entry(&id).await;
-            dbtx.insert_new_entry(&ClientConfigKey, &config).await;
-            Ok(())
-        })
-    });
+                dbtx.remove_entry(&id).await;
+                dbtx.insert_new_entry(&ClientConfigKey, &config).await;
+                Ok(())
+            })
+        }),
+    );
 
     // Migration to add outcome_time to OperationLogEntry
-    migrations.insert(DatabaseVersion(1), |mut ctx| {
-        Box::pin(async move {
-            let mut dbtx = ctx.dbtx();
+    migrations.insert(
+        DatabaseVersion(1),
+        Box::new(|mut ctx| {
+            Box::pin(async move {
+                let mut dbtx = ctx.dbtx();
 
-            // Read all OperationLogEntries using V0 format
-            let operation_logs = dbtx
-                .find_by_prefix(&OperationLogKeyPrefixV0)
-                .await
-                .collect::<Vec<_>>()
-                .await;
+                // Read all OperationLogEntries using V0 format
+                let operation_logs = dbtx
+                    .find_by_prefix(&OperationLogKeyPrefixV0)
+                    .await
+                    .collect::<Vec<_>>()
+                    .await;
 
-            // Build a map from operation_id -> max_time of inactive state
-            let mut op_id_max_time = BTreeMap::new();
+                // Build a map from operation_id -> max_time of inactive state
+                let mut op_id_max_time = BTreeMap::new();
 
-            // Process inactive states
-            {
-                let mut inactive_states_stream =
-                    dbtx.find_by_prefix(&InactiveStateKeyPrefixBytes).await;
+                // Process inactive states
+                {
+                    let mut inactive_states_stream =
+                        dbtx.find_by_prefix(&InactiveStateKeyPrefixBytes).await;
 
-                while let Some((state, meta)) = inactive_states_stream.next().await {
-                    let entry = op_id_max_time
-                        .entry(state.operation_id)
-                        .or_insert(meta.exited_at);
-                    *entry = (*entry).max(meta.exited_at);
+                    while let Some((state, meta)) = inactive_states_stream.next().await {
+                        let entry = op_id_max_time
+                            .entry(state.operation_id)
+                            .or_insert(meta.exited_at);
+                        *entry = (*entry).max(meta.exited_at);
+                    }
                 }
-            }
-            // Migrate each V0 operation log entry to the new format
-            for (op_key_v0, log_entry_v0) in operation_logs {
-                let new_entry = OperationLogEntry::new(
-                    log_entry_v0.operation_module_kind,
-                    log_entry_v0.meta,
-                    log_entry_v0.outcome.map(|outcome| {
-                        OperationOutcome {
-                            outcome,
-                            // If we found state times, use the max, otherwise use
-                            // current time
-                            time: op_id_max_time
-                                .get(&op_key_v0.operation_id)
-                                .copied()
-                                .unwrap_or_else(fedimint_core::time::now),
-                        }
-                    }),
-                );
+                // Migrate each V0 operation log entry to the new format
+                for (op_key_v0, log_entry_v0) in operation_logs {
+                    let new_entry = OperationLogEntry::new(
+                        log_entry_v0.operation_module_kind,
+                        log_entry_v0.meta,
+                        log_entry_v0.outcome.map(|outcome| {
+                            OperationOutcome {
+                                outcome,
+                                // If we found state times, use the max, otherwise use
+                                // current time
+                                time: op_id_max_time
+                                    .get(&op_key_v0.operation_id)
+                                    .copied()
+                                    .unwrap_or_else(fedimint_core::time::now),
+                            }
+                        }),
+                    );
 
-                dbtx.remove_entry(&op_key_v0).await;
-                dbtx.insert_entry(
-                    &OperationLogKey {
-                        operation_id: op_key_v0.operation_id,
-                    },
-                    &new_entry,
-                )
-                .await;
-            }
+                    dbtx.remove_entry(&op_key_v0).await;
+                    dbtx.insert_entry(
+                        &OperationLogKey {
+                            operation_id: op_key_v0.operation_id,
+                        },
+                        &new_entry,
+                    )
+                    .await;
+                }
 
-            Ok(())
-        })
-    });
+                Ok(())
+            })
+        }),
+    );
 
     // Fix #6948
-    migrations.insert(DatabaseVersion(2), |mut ctx| {
-        Box::pin(async move {
-            let mut dbtx = ctx.dbtx();
+    migrations.insert(
+        DatabaseVersion(2),
+        Box::new(|mut ctx: fedimint_core::db::MigrationContext<'_>| {
+            Box::pin(async move {
+                let mut dbtx = ctx.dbtx();
 
-            // Migrate unordered keys that got written to ordered table
-            {
-                let mut ordered_log_entries = dbtx
-                    .raw_find_by_prefix(&[DB_KEY_PREFIX_EVENT_LOG])
-                    .await
-                    .expect("DB operation failed");
-                let mut keys_to_migrate = vec![];
-                while let Some((k, _v)) = ordered_log_entries.next().await {
-                    trace!(target: LOG_CLIENT_DB,
-                        k=%k.as_hex(),
-                        "Checking ordered log key"
-                    );
-                    if EventLogId::consensus_decode_whole(&k[1..], &Default::default()).is_err() {
-                        assert!(
-                            UnordedEventLogId::consensus_decode_whole(&k[1..], &Default::default())
-                                .is_ok()
-                        );
-                        keys_to_migrate.push(k);
-                    }
-                }
-                drop(ordered_log_entries);
-                for mut key_to_migrate in keys_to_migrate {
-                    warn!(target: LOG_CLIENT_DB,
-                        k=%key_to_migrate.as_hex(),
-                        "Migrating unordered event log entry written to an ordered log"
-                    );
-                    let v = dbtx
-                        .raw_remove_entry(&key_to_migrate)
-                        .await
-                        .expect("DB operation failed")
-                        .expect("Was there a moment ago");
-                    assert_eq!(key_to_migrate[0], 0x39);
-                    key_to_migrate[0] = DB_KEY_PREFIX_UNORDERED_EVENT_LOG;
-                    assert_eq!(key_to_migrate[0], 0x3a);
-                    dbtx.raw_insert_bytes(&key_to_migrate, &v)
+                // Migrate unordered keys that got written to ordered table
+                {
+                    let mut ordered_log_entries = dbtx
+                        .raw_find_by_prefix(&[DB_KEY_PREFIX_EVENT_LOG])
                         .await
                         .expect("DB operation failed");
-                }
-            }
-
-            // Migrate ordered keys that got written to unordered table
-            {
-                let mut unordered_log_entries = dbtx
-                    .raw_find_by_prefix(&[DB_KEY_PREFIX_UNORDERED_EVENT_LOG])
-                    .await
-                    .expect("DB operation failed");
-                let mut keys_to_migrate = vec![];
-                while let Some((k, _v)) = unordered_log_entries.next().await {
-                    trace!(target: LOG_CLIENT_DB,
-                        k=%k.as_hex(),
-                        "Checking unordered log key"
-                    );
-                    if UnordedEventLogId::consensus_decode_whole(&k[1..], &Default::default())
-                        .is_err()
-                    {
-                        assert!(
-                            EventLogId::consensus_decode_whole(&k[1..], &Default::default())
-                                .is_ok()
+                    let mut keys_to_migrate = vec![];
+                    while let Some((k, _v)) = ordered_log_entries.next().await {
+                        trace!(target: LOG_CLIENT_DB,
+                            k=%k.as_hex(),
+                            "Checking ordered log key"
                         );
-                        keys_to_migrate.push(k);
+                        if EventLogId::consensus_decode_whole(&k[1..], &Default::default()).is_err()
+                        {
+                            assert!(
+                                UnordedEventLogId::consensus_decode_whole(
+                                    &k[1..],
+                                    &Default::default()
+                                )
+                                .is_ok()
+                            );
+                            keys_to_migrate.push(k);
+                        }
+                    }
+                    drop(ordered_log_entries);
+                    for mut key_to_migrate in keys_to_migrate {
+                        warn!(target: LOG_CLIENT_DB,
+                            k=%key_to_migrate.as_hex(),
+                            "Migrating unordered event log entry written to an ordered log"
+                        );
+                        let v = dbtx
+                            .raw_remove_entry(&key_to_migrate)
+                            .await
+                            .expect("DB operation failed")
+                            .expect("Was there a moment ago");
+                        assert_eq!(key_to_migrate[0], 0x39);
+                        key_to_migrate[0] = DB_KEY_PREFIX_UNORDERED_EVENT_LOG;
+                        assert_eq!(key_to_migrate[0], 0x3a);
+                        dbtx.raw_insert_bytes(&key_to_migrate, &v)
+                            .await
+                            .expect("DB operation failed");
                     }
                 }
-                drop(unordered_log_entries);
-                for mut key_to_migrate in keys_to_migrate {
-                    warn!(target: LOG_CLIENT_DB,
-                        k=%key_to_migrate.as_hex(),
-                        "Migrating ordered event log entry written to an unordered log"
-                    );
-                    let v = dbtx
-                        .raw_remove_entry(&key_to_migrate)
-                        .await
-                        .expect("DB operation failed")
-                        .expect("Was there a moment ago");
-                    assert_eq!(key_to_migrate[0], 0x3a);
-                    key_to_migrate[0] = DB_KEY_PREFIX_EVENT_LOG;
-                    assert_eq!(key_to_migrate[0], 0x39);
-                    dbtx.raw_insert_bytes(&key_to_migrate, &v)
+
+                // Migrate ordered keys that got written to unordered table
+                {
+                    let mut unordered_log_entries = dbtx
+                        .raw_find_by_prefix(&[DB_KEY_PREFIX_UNORDERED_EVENT_LOG])
                         .await
                         .expect("DB operation failed");
+                    let mut keys_to_migrate = vec![];
+                    while let Some((k, _v)) = unordered_log_entries.next().await {
+                        trace!(target: LOG_CLIENT_DB,
+                            k=%k.as_hex(),
+                            "Checking unordered log key"
+                        );
+                        if UnordedEventLogId::consensus_decode_whole(&k[1..], &Default::default())
+                            .is_err()
+                        {
+                            assert!(
+                                EventLogId::consensus_decode_whole(&k[1..], &Default::default())
+                                    .is_ok()
+                            );
+                            keys_to_migrate.push(k);
+                        }
+                    }
+                    drop(unordered_log_entries);
+                    for mut key_to_migrate in keys_to_migrate {
+                        warn!(target: LOG_CLIENT_DB,
+                            k=%key_to_migrate.as_hex(),
+                            "Migrating ordered event log entry written to an unordered log"
+                        );
+                        let v = dbtx
+                            .raw_remove_entry(&key_to_migrate)
+                            .await
+                            .expect("DB operation failed")
+                            .expect("Was there a moment ago");
+                        assert_eq!(key_to_migrate[0], 0x3a);
+                        key_to_migrate[0] = DB_KEY_PREFIX_EVENT_LOG;
+                        assert_eq!(key_to_migrate[0], 0x39);
+                        dbtx.raw_insert_bytes(&key_to_migrate, &v)
+                            .await
+                            .expect("DB operation failed");
+                    }
                 }
-            }
-            Ok(())
-        })
-    });
+                Ok(())
+            })
+        }),
+    );
     migrations
 }
 

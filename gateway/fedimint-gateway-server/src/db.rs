@@ -407,11 +407,26 @@ impl_db_lookup!(
 
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
-    migrations.insert(DatabaseVersion(0), |ctx| migrate_to_v1(ctx).boxed());
-    migrations.insert(DatabaseVersion(1), |ctx| migrate_to_v2(ctx).boxed());
-    migrations.insert(DatabaseVersion(2), |ctx| migrate_to_v3(ctx).boxed());
-    migrations.insert(DatabaseVersion(3), |ctx| migrate_to_v4(ctx).boxed());
-    migrations.insert(DatabaseVersion(4), |ctx| migrate_to_v5(ctx).boxed());
+    migrations.insert(
+        DatabaseVersion(0),
+        Box::new(|ctx| migrate_to_v1(ctx).boxed()),
+    );
+    migrations.insert(
+        DatabaseVersion(1),
+        Box::new(|ctx| migrate_to_v2(ctx).boxed()),
+    );
+    migrations.insert(
+        DatabaseVersion(2),
+        Box::new(|ctx| migrate_to_v3(ctx).boxed()),
+    );
+    migrations.insert(
+        DatabaseVersion(3),
+        Box::new(|ctx| migrate_to_v4(ctx).boxed()),
+    );
+    migrations.insert(
+        DatabaseVersion(4),
+        Box::new(|ctx| migrate_to_v5(ctx).boxed()),
+    );
     migrations
 }
 
