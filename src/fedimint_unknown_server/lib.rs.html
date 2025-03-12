@@ -133,7 +133,7 @@
 <a href=#133 id=133 data-nosnippet>133</a>        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
 <a href=#134 id=134 data-nosnippet>134</a>        <span class="comment">// Unknown module prior to v0.5.0 had a `DATABASE_VERSION` of 1, so we must
 <a href=#135 id=135 data-nosnippet>135</a>        // insert a no-op migration to ensure that upgrades work.
-<a href=#136 id=136 data-nosnippet>136</a>        </span>migrations.insert(DatabaseVersion(<span class="number">0</span>), |<span class="kw">_</span>| Box::pin(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(()) }));
+<a href=#136 id=136 data-nosnippet>136</a>        </span>migrations.insert(DatabaseVersion(<span class="number">0</span>), Box::new(|<span class="kw">_</span>| Box::pin(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(()) })));
 <a href=#137 id=137 data-nosnippet>137</a>        migrations
 <a href=#138 id=138 data-nosnippet>138</a>    }
 <a href=#139 id=139 data-nosnippet>139</a>}
