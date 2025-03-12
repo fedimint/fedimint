@@ -51,6 +51,7 @@ impl ModuleInit for UnknownInit {
 /// Implementation of server module non-consensus functions
 #[async_trait]
 impl ServerModuleInit for UnknownInit {
+    type Module = Unknown;
     type Params = UnknownGenParams;
 
     /// Returns the version of this module

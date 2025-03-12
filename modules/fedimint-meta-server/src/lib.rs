@@ -117,6 +117,7 @@ impl ModuleInit for MetaInit {
 /// Implementation of server module non-consensus functions
 #[async_trait]
 impl ServerModuleInit for MetaInit {
+    type Module = Meta;
     type Params = MetaGenParams;
 
     /// Returns the version of this module

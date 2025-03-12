@@ -20,7 +20,7 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 
-use crate::DynServerModule;
+use crate::{DynServerModule, ServerModule};
 
 /// Interface for Module Generation
 ///
@@ -176,6 +176,7 @@ where
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModuleInit: ModuleInit + Sized {
+    type Module: ServerModule;
     type Params: ModuleInitParams;
 
     /// Version of the module consensus supported by this implementation given a

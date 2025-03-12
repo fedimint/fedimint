@@ -171,6 +171,7 @@ impl ModuleInit for LightningInit {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for LightningInit {
+    type Module = Lightning;
     type Params = LightningGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {

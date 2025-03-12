@@ -94,6 +94,7 @@ impl ModuleInit for DummyInit {
 /// Implementation of server module non-consensus functions
 #[async_trait]
 impl ServerModuleInit for DummyInit {
+    type Module = Dummy;
     type Params = DummyGenParams;
 
     /// Returns the version of this module

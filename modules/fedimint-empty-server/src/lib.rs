@@ -76,6 +76,7 @@ impl ModuleInit for EmptyInit {
 /// Implementation of server module non-consensus functions
 #[async_trait]
 impl ServerModuleInit for EmptyInit {
+    type Module = Empty;
     type Params = EmptyGenParams;
 
     /// Returns the version of this module

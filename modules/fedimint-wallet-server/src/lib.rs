@@ -258,6 +258,7 @@ impl ModuleInit for WalletInit {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for WalletInit {
+    type Module = Wallet;
     type Params = WalletGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
