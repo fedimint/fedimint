@@ -394,7 +394,7 @@ async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_grou
     loop {
         match endpoint.accept().await {
             Some(incoming) => {
-                task_group.spawn_cancellable(
+                task_group.spawn_cancellable_silent(
                     "handle-iroh-connection",
                     handle_incoming(
                         consensus_api.clone(),
@@ -427,7 +427,7 @@ async fn handle_incoming(
     loop {
         let (send_stream, recv_stream) = connection.accept_bi().await?;
 
-        task_group.spawn_cancellable(
+        task_group.spawn_cancellable_silent(
             "handle-iroh-request",
             handle_request(
                 consensus_api.clone(),
