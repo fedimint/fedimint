@@ -248,7 +248,7 @@ impl DynBitcoindRpc {
 
         let sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
             .unwrap_or_else(|_| match network {
-                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.;https://blockstream.info/api/fee-estimates#.\"1\"".to_owned(),
+                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.hourFee;https://blockstream.info/api/fee-estimates#.\"1\"".to_owned(),
                 _ => String::new(),
             })
             .split(';')
