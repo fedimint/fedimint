@@ -58,9 +58,7 @@ use fedimint_ln_common::{
 };
 use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server::config::distributedgen::PeerHandleOps;
-use fedimint_server::core::{
-    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
-};
+use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
@@ -199,6 +197,7 @@ impl ModuleInit for LightningInit {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for LightningInit {
+    type Module = Lightning;
     type Params = LightningGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -216,15 +215,11 @@ impl ServerModuleInit for LightningInit {
         )
     }
 
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         // Eagerly initialize metrics that trigger infrequently
         LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        Ok(
-            Lightning::new(args.cfg().to_typed()?, args.our_peer_id(), &args.shared())
-                .await?
-                .into(),
-        )
+        Ok(Lightning::new(args.cfg().to_typed()?, args.our_peer_id(), &args.shared()).await?)
     }
 
     fn trusted_dealer_gen(

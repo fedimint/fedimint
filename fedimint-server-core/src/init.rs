@@ -20,7 +20,7 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 
-use crate::DynServerModule;
+use crate::{DynServerModule, ServerModule};
 
 /// Interface for Module Generation
 ///
@@ -176,6 +176,7 @@ where
 /// `WalletConfigGenerator`, or `LightningConfigGenerator` structs.
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModuleInit: ModuleInit + Sized {
+    type Module: ServerModule + Send + Sync;
     type Params: ModuleInitParams;
 
     /// Version of the module consensus supported by this implementation given a
@@ -198,8 +199,8 @@ pub trait ServerModuleInit: ModuleInit + Sized {
         <Self as ModuleInit>::Common::KIND
     }
 
-    /// Initialize the [`DynServerModule`] instance from its config
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule>;
+    /// Initialize the module instance from its config
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
 
     fn parse_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<Self::Params> {
         params.to_typed::<Self::Params>()
@@ -269,7 +270,7 @@ where
         module_api: DynModuleApi,
         shared: SharedAnymap,
     ) -> anyhow::Result<DynServerModule> {
-        <Self as ServerModuleInit>::init(
+        let module = <Self as ServerModuleInit>::init(
             self,
             &ServerModuleInitArgs {
                 num_peers,
@@ -282,7 +283,9 @@ where
                 shared,
             },
         )
-        .await
+        .await?;
+
+        Ok(DynServerModule::from(module))
     }
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()> {

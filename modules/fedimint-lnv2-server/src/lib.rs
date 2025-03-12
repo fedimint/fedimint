@@ -49,9 +49,7 @@ use fedimint_lnv2_common::{
 };
 use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server::config::distributedgen::{PeerHandleOps, eval_poly_g1};
-use fedimint_server::core::{
-    DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
-};
+use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use fedimint_server::net::api::check_auth;
 use futures::StreamExt;
 use group::Curve;
@@ -171,6 +169,7 @@ impl ModuleInit for LightningInit {
 
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for LightningInit {
+    type Module = Lightning;
     type Params = LightningGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -188,10 +187,8 @@ impl ServerModuleInit for LightningInit {
         )
     }
 
-    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(args.cfg().to_typed()?, &args.shared())
-            .await?
-            .into())
+    async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        Ok(Lightning::new(args.cfg().to_typed()?, &args.shared()).await?)
     }
 
     fn trusted_dealer_gen(
