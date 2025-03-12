@@ -25,7 +25,6 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
     TransactionItemAmount, api_endpoint,
 };
-use fedimint_core::util::BoxFuture;
 use fedimint_core::{
     Amount, InPoint, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply,
     async_trait_maybe_send, push_db_key_items, push_db_pair_items,
@@ -47,7 +46,7 @@ use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem
 use fedimint_server::core::{
     DynServerModule, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
-use futures::StreamExt;
+use futures::{FutureExt as _, StreamExt};
 use itertools::Itertools;
 use metrics::{
     MINT_INOUT_FEES_SATS, MINT_INOUT_SATS, MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS,
@@ -311,9 +310,15 @@ impl ServerModuleInit for MintInit {
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-        let mut migrations = BTreeMap::new();
-        migrations.insert(DatabaseVersion(0), migrate_db_v0 as CoreMigrationFn);
-        migrations.insert(DatabaseVersion(1), migrate_db_v1 as CoreMigrationFn);
+        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+        migrations.insert(
+            DatabaseVersion(0),
+            Box::new(|ctx| migrate_db_v0(ctx).boxed()),
+        );
+        migrations.insert(
+            DatabaseVersion(1),
+            Box::new(|ctx| migrate_db_v1(ctx).boxed()),
+        );
         migrations
     }
 
@@ -322,65 +327,61 @@ impl ServerModuleInit for MintInit {
     }
 }
 
-fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> BoxFuture<anyhow::Result<()>> {
-    Box::pin(async move {
-        let blind_nonces = migration_context
-            .get_typed_module_history_stream::<MintModuleTypes>()
-            .await
-            .filter_map(|history_item: TypedModuleHistoryItem<_>| async move {
-                match history_item {
-                    TypedModuleHistoryItem::Output(mint_output) => Some(
-                        mint_output
-                            .ensure_v0_ref()
-                            .expect("This migration only runs while we only have v0 outputs")
-                            .blind_nonce,
-                    ),
-                    _ => {
-                        // We only care about e-cash issuances for this migration
-                        None
-                    }
+async fn migrate_db_v0(mut migration_context: MigrationContext<'_>) -> anyhow::Result<()> {
+    let blind_nonces = migration_context
+        .get_typed_module_history_stream::<MintModuleTypes>()
+        .await
+        .filter_map(|history_item: TypedModuleHistoryItem<_>| async move {
+            match history_item {
+                TypedModuleHistoryItem::Output(mint_output) => Some(
+                    mint_output
+                        .ensure_v0_ref()
+                        .expect("This migration only runs while we only have v0 outputs")
+                        .blind_nonce,
+                ),
+                _ => {
+                    // We only care about e-cash issuances for this migration
+                    None
                 }
-            })
-            .collect::<Vec<_>>()
-            .await;
-
-        info!(target: LOG_MODULE_MINT, "Found {} blind nonces in history", blind_nonces.len());
-
-        let mut double_issuances = 0usize;
-        for blind_nonce in blind_nonces {
-            if migration_context
-                .dbtx()
-                .insert_entry(&BlindNonceKey(blind_nonce), &())
-                .await
-                .is_some()
-            {
-                double_issuances += 1;
-                debug!(
-                    target: LOG_MODULE_MINT,
-                    ?blind_nonce,
-                    "Blind nonce already used, money was burned!"
-                );
             }
-        }
+        })
+        .collect::<Vec<_>>()
+        .await;
 
-        if double_issuances > 0 {
-            warn!(target: LOG_MODULE_MINT, "{double_issuances} blind nonces were reused, money was burned by faulty user clients!");
-        }
+    info!(target: LOG_MODULE_MINT, "Found {} blind nonces in history", blind_nonces.len());
 
-        Ok(())
-    })
+    let mut double_issuances = 0usize;
+    for blind_nonce in blind_nonces {
+        if migration_context
+            .dbtx()
+            .insert_entry(&BlindNonceKey(blind_nonce), &())
+            .await
+            .is_some()
+        {
+            double_issuances += 1;
+            debug!(
+                target: LOG_MODULE_MINT,
+                ?blind_nonce,
+                "Blind nonce already used, money was burned!"
+            );
+        }
+    }
+
+    if double_issuances > 0 {
+        warn!(target: LOG_MODULE_MINT, "{double_issuances} blind nonces were reused, money was burned by faulty user clients!");
+    }
+
+    Ok(())
 }
 
 // Remove now unused ECash backups from DB. Backup functionality moved to core.
-fn migrate_db_v1(mut migration_context: MigrationContext<'_>) -> BoxFuture<anyhow::Result<()>> {
-    Box::pin(async move {
-        migration_context
-            .dbtx()
-            .raw_remove_by_prefix(&[0x15])
-            .await
-            .expect("DB error");
-        Ok(())
-    })
+async fn migrate_db_v1(mut migration_context: MigrationContext<'_>) -> anyhow::Result<()> {
+    migration_context
+        .dbtx()
+        .raw_remove_by_prefix(&[0x15])
+        .await
+        .expect("DB error");
+    Ok(())
 }
 
 fn dealer_keygen(
