@@ -394,7 +394,7 @@
 <a href=#394 id=394 data-nosnippet>394</a>    <span class="kw">loop </span>{
 <a href=#395 id=395 data-nosnippet>395</a>        <span class="kw">match </span>endpoint.accept().<span class="kw">await </span>{
 <a href=#396 id=396 data-nosnippet>396</a>            <span class="prelude-val">Some</span>(incoming) =&gt; {
-<a href=#397 id=397 data-nosnippet>397</a>                task_group.spawn_cancellable(
+<a href=#397 id=397 data-nosnippet>397</a>                task_group.spawn_cancellable_silent(
 <a href=#398 id=398 data-nosnippet>398</a>                    <span class="string">"handle-iroh-connection"</span>,
 <a href=#399 id=399 data-nosnippet>399</a>                    handle_incoming(
 <a href=#400 id=400 data-nosnippet>400</a>                        consensus_api.clone(),
@@ -427,7 +427,7 @@
 <a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">loop </span>{
 <a href=#428 id=428 data-nosnippet>428</a>        <span class="kw">let </span>(send_stream, recv_stream) = connection.accept_bi().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#429 id=429 data-nosnippet>429</a>
-<a href=#430 id=430 data-nosnippet>430</a>        task_group.spawn_cancellable(
+<a href=#430 id=430 data-nosnippet>430</a>        task_group.spawn_cancellable_silent(
 <a href=#431 id=431 data-nosnippet>431</a>            <span class="string">"handle-iroh-request"</span>,
 <a href=#432 id=432 data-nosnippet>432</a>            handle_request(
 <a href=#433 id=433 data-nosnippet>433</a>                consensus_api.clone(),
