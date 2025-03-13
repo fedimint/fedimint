@@ -19,7 +19,6 @@ tor = [
   "arti-client/rustls",
   "arti-client/onion-service-client",
 ]
-iroh = ["dep:iroh", "dep:iroh-base"]
 
 [lib]
 name = "fedimint_api_client"
@@ -34,8 +33,8 @@ bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
-iroh = { workspace = true, optional = true }
-iroh-base = { workspace = true, optional = true }
+iroh = { workspace = true, features = ["discovery-pkarr-dht"] }
+iroh-base = { workspace = true, features = ["ticket"] }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.8" }
 jsonrpsee-types = { version = "0.24.8" }

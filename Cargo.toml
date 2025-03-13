@@ -30,7 +30,6 @@ members = [
   "fedimint-testing",
   "fedimint-testing-core",
   "fedimint-wasm-tests",
-  "fedimint-workspace",
   "fedimintd",
   "fuzz",
   "gateway/fedimint-gateway-client",
