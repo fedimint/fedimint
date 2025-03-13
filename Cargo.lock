@@ -6269,6 +6269,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lnurlp"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "fedimint-core",
+ "lightning-invoice",
+ "lnurl-rs",
+ "reqwest 0.12.9",
+ "tokio",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

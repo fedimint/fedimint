@@ -39,6 +39,7 @@ members = [
   "gateway/fedimint-gateway-server",
   "gateway/fedimint-lightning",
   "gateway/integration_tests",
+  "lnurlp",
   "modules/fedimint-dummy-client",
   "modules/fedimint-dummy-common",
   "modules/fedimint-dummy-server",
