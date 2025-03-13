@@ -12,7 +12,7 @@ use fedimint_core::config::{
     ModuleInitRegistry, ServerModuleConfig, ServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{CoreMigrationFn, Database, DatabaseVersion};
+use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
     ModuleInit, PeerHandle, SupportedModuleApiVersions,
@@ -20,6 +20,10 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 
+use crate::migration::{
+    DynServerDbMigrationFn, ServerDbMigrationFnContext, ServerModuleDbMigrationContext,
+    ServerModuleDbMigrationFn,
+};
 use crate::{DynServerModule, ServerModule};
 
 /// Interface for Module Generation
@@ -75,7 +79,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
     /// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn>;
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn>;
 
     /// See [`ServerModuleInit::used_db_prefixes`]
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>>;
@@ -229,7 +233,9 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+    fn get_database_migrations(
+        &self,
+    ) -> BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Self::Module>> {
         BTreeMap::new()
     }
 
@@ -325,9 +331,20 @@ where
             <Self as ServerModuleInit>::get_client_config(self, config)?,
         )
     }
-
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
         <Self as ServerModuleInit>::get_database_migrations(self)
+            .into_iter()
+            .map(|(k, f)| {
+                (k, {
+                    let closure: DynServerDbMigrationFn =
+                        Box::new(move |ctx: ServerDbMigrationFnContext<'_>| {
+                            let map = ctx.map(ServerModuleDbMigrationContext::new);
+                            Box::pin(f(map))
+                        });
+                    closure
+                })
+            })
+            .collect()
     }
 
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {

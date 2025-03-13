@@ -35,6 +35,7 @@ pub mod bitcoincore;
 mod esplora;
 mod feerate_source;
 
+#[cfg(feature = "fedimint-server")]
 pub mod shared;
 
 // <https://blockstream.info/api/block-height/0>

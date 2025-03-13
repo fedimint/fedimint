@@ -44,7 +44,7 @@ use client_db::{
     migrate_to_v1,
 };
 use event::{NoteSpent, OOBNotesReissued, OOBNotesSpent};
-use fedimint_client_module::db::{ClientMigrationFn, migrate_state};
+use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -554,8 +554,8 @@ impl ClientModuleInit for MintClientInit {
             .await
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
-        let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn> = BTreeMap::new();
         migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
             Box::pin(migrate_to_v1(dbtx))
         });

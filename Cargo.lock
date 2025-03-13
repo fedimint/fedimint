@@ -3725,6 +3725,7 @@ dependencies = [
  "async-trait",
  "fedimint-api-client",
  "fedimint-core",
+ "futures",
  "tokio",
 ]
 

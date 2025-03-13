@@ -1,12 +1,13 @@
-use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, MigrationContext};
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::{Amount, OutPoint, impl_db_lookup, impl_db_record};
+use fedimint_server_core::migration::ServerModuleDbMigrationFnContext;
 use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::DummyOutputOutcome;
+use crate::{Dummy, DummyOutputOutcome};
 
 /// Namespaces DB keys for this module
 #[repr(u8)]
@@ -53,7 +54,9 @@ impl_db_record!(
 impl_db_lookup!(key = DummyFundsKeyV1, query_prefix = DummyFundsPrefixV1);
 
 /// Example DB migration from version 0 to version 1
-pub async fn migrate_to_v1(mut ctx: MigrationContext<'_>) -> Result<(), anyhow::Error> {
+pub async fn migrate_to_v1(
+    mut ctx: ServerModuleDbMigrationFnContext<'_, Dummy>,
+) -> Result<(), anyhow::Error> {
     let mut dbtx = ctx.dbtx();
     // Select old entries
     let v0_entries = dbtx

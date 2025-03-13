@@ -14,13 +14,11 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::Sender;
-use db::get_global_database_migrations;
+use db::{ServerDbMigrationContext, get_global_database_migrations};
 use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{
-    Database, apply_migrations_dbtx, apply_migrations_server_dbtx, verify_module_db_integrity_dbtx,
-};
+use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
@@ -30,6 +28,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
+use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
 use iroh::Endpoint;
@@ -70,6 +69,7 @@ pub async fn run(
     let mut global_dbtx = db.begin_transaction().await;
     apply_migrations_server_dbtx(
         &mut global_dbtx.to_ref_nc(),
+        Arc::new(ServerDbMigrationContext),
         "fedimint-server".to_string(),
         get_global_database_migrations(),
     )
@@ -104,6 +104,7 @@ pub async fn run(
                 let mut dbtx = db.begin_transaction().await;
                 apply_migrations_dbtx(
                     &mut dbtx.to_ref_nc(),
+                    Arc::new(ServerDbMigrationContext) as Arc<_>,
                     module_init.module_kind().to_string(),
                     module_init.get_database_migrations(),
                     Some(*module_id),

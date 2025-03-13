@@ -6,6 +6,8 @@
 //! and functionality that are only used on the server side.
 
 mod init;
+pub mod migration;
+
 use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;

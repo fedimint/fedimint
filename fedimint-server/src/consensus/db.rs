@@ -1,16 +1,16 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
-use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
-use fedimint_core::db::{
-    CoreMigrationFn, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, MigrationContext,
-};
+use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::module::ModuleCommon;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
+use fedimint_server_core::migration::{
+    DynModuleHistoryItem, DynServerDbMigrationFn, IServerDbMigrationContext,
+};
 use futures::StreamExt;
 use serde::Serialize;
 
@@ -78,51 +78,37 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
-pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, DynServerDbMigrationFn> {
     BTreeMap::new()
 }
 
-pub enum ModuleHistoryItem {
-    ConsensusItem(DynModuleConsensusItem),
-    Input(DynInput),
-    Output(DynOutput),
-}
-
-pub enum TypedModuleHistoryItem<M: ModuleCommon> {
-    ConsensusItem(M::ConsensusItem),
-    Input(M::Input),
-    Output(M::Output),
-}
+/// A concrete implementation of [`IServerDbMigrationContext`] APIs
+/// available for server-module db migrations.
+pub struct ServerDbMigrationContext;
 
 #[apply(async_trait_maybe_send!)]
-pub trait MigrationContextExt {
-    async fn get_module_history_stream(&mut self) -> BoxStream<ModuleHistoryItem>;
-
-    async fn get_typed_module_history_stream<M: ModuleCommon>(
-        &mut self,
-    ) -> BoxStream<TypedModuleHistoryItem<M>>;
-}
-
-#[apply(async_trait_maybe_send!)]
-impl MigrationContextExt for MigrationContext<'_> {
-    async fn get_module_history_stream(&mut self) -> BoxStream<ModuleHistoryItem> {
-        let module_instance_id = self
-            .module_instance_id()
-            .expect("module_instance_id must be set");
+impl IServerDbMigrationContext for ServerDbMigrationContext {
+    async fn get_module_history_stream<'s, 'tx>(
+        &'s self,
+        module_instance_id: ModuleInstanceId,
+        dbtx: &'s mut DatabaseTransaction<'tx>,
+    ) -> BoxStream<'s, DynModuleHistoryItem>
+    where
+        'tx: 's,
+    {
+        dbtx.ensure_global().expect("Dbtx must be global");
 
         // Items of the currently ongoing session, that have already been processed. We
         // have to query them in full first and collect them into a vector so we don't
         // hold two references to the dbtx at the same time.
-        let active_session_items = self
-            .__global_dbtx()
+        let active_session_items = dbtx
             .find_by_prefix(&AcceptedItemPrefix)
             .await
             .map(|(_, item)| item)
             .collect::<Vec<_>>()
             .await;
 
-        let stream = self
-            .__global_dbtx()
+        let stream = dbtx
             .find_by_prefix(&SignedSessionOutcomePrefix)
             .await
             // Transform the session stream into an accepted item stream
@@ -139,16 +125,16 @@ impl MigrationContextExt for MigrationContext<'_> {
                         .into_iter()
                         .filter_map(|input| {
                             (input.module_instance_id() == module_instance_id)
-                                .then_some(ModuleHistoryItem::Input(input))
+                                .then_some(DynModuleHistoryItem::Input(input))
                         })
                         .chain(tx.outputs.into_iter().filter_map(|output| {
                             (output.module_instance_id() == module_instance_id)
-                                .then_some(ModuleHistoryItem::Output(output))
+                                .then_some(DynModuleHistoryItem::Output(output))
                         }))
                         .collect::<Vec<_>>(),
                     ConsensusItem::Module(mci) => {
                         if mci.module_instance_id() == module_instance_id {
-                            vec![ModuleHistoryItem::ConsensusItem(mci)]
+                            vec![DynModuleHistoryItem::ConsensusItem(mci)]
                         } else {
                             vec![]
                         }
@@ -161,34 +147,5 @@ impl MigrationContextExt for MigrationContext<'_> {
             });
 
         Box::pin(stream)
-    }
-
-    async fn get_typed_module_history_stream<M: ModuleCommon>(
-        &mut self,
-    ) -> BoxStream<TypedModuleHistoryItem<M>> {
-        Box::pin(self.get_module_history_stream().await.map(|item| {
-            match item {
-                ModuleHistoryItem::ConsensusItem(ci) => TypedModuleHistoryItem::ConsensusItem(
-                    ci.as_any()
-                        .downcast_ref::<M::ConsensusItem>()
-                        .expect("Wrong module type")
-                        .clone(),
-                ),
-                ModuleHistoryItem::Input(input) => TypedModuleHistoryItem::Input(
-                    input
-                        .as_any()
-                        .downcast_ref::<M::Input>()
-                        .expect("Wrong module type")
-                        .clone(),
-                ),
-                ModuleHistoryItem::Output(output) => TypedModuleHistoryItem::Output(
-                    output
-                        .as_any()
-                        .downcast_ref::<M::Output>()
-                        .expect("Wrong module type")
-                        .clone(),
-                ),
-            }
-        }))
     }
 }

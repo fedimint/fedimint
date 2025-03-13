@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::ensure;
 use bitcoin::key::Keypair;
@@ -23,8 +24,8 @@ use fedimint_dummy_server::Dummy;
 use fedimint_logging::{LOG_DB, TracingSetup};
 use fedimint_server::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AcceptedTransactionKeyPrefix,
-    AlephUnitsKey, AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
-    get_global_database_migrations,
+    AlephUnitsKey, AlephUnitsPrefix, ServerDbMigrationContext, SignedSessionOutcomeKey,
+    SignedSessionOutcomePrefix, get_global_database_migrations,
 };
 use fedimint_server::core::ServerModule;
 use fedimint_server::db::DbKeyPrefix;
@@ -221,6 +222,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
             }
             Ok(())
         },
+        Arc::new(ServerDbMigrationContext) as Arc<_>,
         "fedimint-server",
         get_global_database_migrations(),
         ModuleDecoderRegistry::from_iter([(

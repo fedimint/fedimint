@@ -9,7 +9,11 @@ readme = { workspace = true }
 repository = { workspace = true }
 
 [features]
-tor = ["fedimint-client/tor", "fedimint-api-client/tor", "fedimint-gateway-common/tor"]
+tor = [
+  "fedimint-client/tor",
+  "fedimint-api-client/tor",
+  "fedimint-gateway-common/tor",
+]
 
 [[bin]]
 name = "gatewayd"

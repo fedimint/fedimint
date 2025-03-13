@@ -11,13 +11,14 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{CoreMigrationFn, DatabaseTransaction, DatabaseVersion};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
     ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId};
+use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 pub use fedimint_unknown_common as common;
 use fedimint_unknown_common::config::{
@@ -130,8 +131,11 @@ impl ServerModuleInit for UnknownInit {
     }
 
     /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(
+        &self,
+    ) -> BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Unknown>> {
+        let mut migrations: BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<_>> =
+            BTreeMap::new();
         // Unknown module prior to v0.5.0 had a `DATABASE_VERSION` of 1, so we must
         // insert a no-op migration to ensure that upgrades work.
         migrations.insert(DatabaseVersion(0), Box::new(|_| Box::pin(async { Ok(()) })));

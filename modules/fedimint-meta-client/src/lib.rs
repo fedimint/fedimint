@@ -15,7 +15,7 @@ use api::MetaFederationApi;
 use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
-use fedimint_client_module::db::ClientMigrationFn;
+use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -197,7 +197,7 @@ impl ClientModuleInit for MetaClientInit {
         })
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
         BTreeMap::new()
     }
 }

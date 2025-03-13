@@ -13,9 +13,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -31,6 +29,7 @@ use fedimint_dummy_common::{
     DummyOutput, DummyOutputError, DummyOutputOutcome, MODULE_CONSENSUS_VERSION,
     broken_fed_public_key, fed_public_key,
 };
+use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::{FutureExt, StreamExt};
 use strum::IntoEnumIterator;
@@ -179,8 +178,11 @@ impl ServerModuleInit for DummyInit {
     }
 
     /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(
+        &self,
+    ) -> BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Dummy>> {
+        let mut migrations: BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Dummy>> =
+            BTreeMap::new();
         migrations.insert(
             DatabaseVersion(0),
             Box::new(|ctx| migrate_to_v1(ctx).boxed()),

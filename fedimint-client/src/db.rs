@@ -4,14 +4,14 @@ use std::time::SystemTime;
 use anyhow::{anyhow, bail};
 use bitcoin::hex::DisplayHex as _;
 use fedimint_api_client::api::ApiVersionSet;
-use fedimint_client_module::db::ClientMigrationFn;
+use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::oplog::{JsonStringed, OperationLogEntry, OperationOutcome};
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
+    Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
     IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
     apply_migrations_dbtx, create_database_version_dbtx, get_current_database_version,
 };
@@ -444,8 +444,10 @@ impl_db_record!(
 
 impl_db_lookup!(key = MetaFieldKey, query_prefix = MetaFieldPrefix);
 
-pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
-    let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+pub fn get_core_client_database_migrations()
+-> BTreeMap<DatabaseVersion, fedimint_core::db::ClientCoreDbMigrationFn> {
+    let mut migrations: BTreeMap<DatabaseVersion, fedimint_core::db::ClientCoreDbMigrationFn> =
+        BTreeMap::new();
     migrations.insert(
         DatabaseVersion(0),
         Box::new(|mut ctx| {
@@ -547,7 +549,7 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
     // Fix #6948
     migrations.insert(
         DatabaseVersion(2),
-        Box::new(|mut ctx: fedimint_core::db::MigrationContext<'_>| {
+        Box::new(|mut ctx: fedimint_core::db::DbMigrationFnContext<'_, _>| {
             Box::pin(async move {
                 let mut dbtx = ctx.dbtx();
 
@@ -649,6 +651,7 @@ pub async fn apply_migrations_core_client_dbtx(
 ) -> Result<(), anyhow::Error> {
     apply_migrations_dbtx(
         dbtx,
+        (),
         kind,
         get_core_client_database_migrations(),
         None,
@@ -669,7 +672,7 @@ pub async fn apply_migrations_core_client_dbtx(
 pub async fn apply_migrations_client_module(
     db: &Database,
     kind: String,
-    migrations: BTreeMap<DatabaseVersion, ClientMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
 ) -> Result<(), anyhow::Error> {
     let mut dbtx = db.begin_transaction().await;
@@ -686,7 +689,7 @@ pub async fn apply_migrations_client_module(
 pub async fn apply_migrations_client_module_dbtx(
     dbtx: &mut DatabaseTransaction<'_>,
     kind: String,
-    migrations: BTreeMap<DatabaseVersion, ClientMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn>,
     module_instance_id: ModuleInstanceId,
 ) -> Result<(), anyhow::Error> {
     // Newly created databases will not have any data underneath the

@@ -3,7 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_client_module::db::ClientMigrationFn;
+use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -74,7 +74,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         task_group: TaskGroup,
     ) -> anyhow::Result<DynClientModule>;
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn>;
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn>;
 
     /// See [`ClientModuleInit::used_db_prefixes`]
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>>;
@@ -203,7 +203,7 @@ where
         .into())
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
         <Self as ClientModuleInit>::get_database_migrations(self)
     }
 

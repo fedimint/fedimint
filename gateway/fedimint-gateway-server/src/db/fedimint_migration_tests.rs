@@ -133,6 +133,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
             }
             Ok(())
         },
+        (),
         "gatewayd",
         get_gatewayd_database_migrations(),
         ModuleDecoderRegistry::from_iter([]),
