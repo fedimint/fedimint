@@ -174,6 +174,11 @@ jobs:
       - name: Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
         run: |
+          # Note: wasm32-unknown is a toolchain that contains both the native
+          # toolchain and wasm32-unknown. Since we want to run both native (in this step)
+          # and wasm32 tests (in a different CI step) we can build everything once using
+          # wasm32-unknown and share most of the artifacts. The native parts don't
+          # mind that the toolchain supports extra targets.
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
