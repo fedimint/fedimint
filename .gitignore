@@ -25,3 +25,5 @@
 .cargo/.package-cache-mutate
 
 .aider.*
+
+iroh-peer-ips.env

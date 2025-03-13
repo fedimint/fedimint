@@ -107,10 +107,7 @@ ssh -q "root@$ssh_host" << EOF
 
   sed -i 's/my-super-host.com/$domain/g' $host_dir/.env
 
-  ufw allow 80/tcp
-  ufw allow 443/tcp
-  ufw allow 22/tcp
-  ufw --force enable
+  ufw --force reset
 
   apt-get update && apt-get install -q -y docker-compose
 
