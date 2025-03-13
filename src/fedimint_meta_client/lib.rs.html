@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>db::DbKeyPrefix;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_client_module::db::ClientMigrationFn;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_client_module::db::ClientModuleMigrationFn;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
@@ -197,7 +197,7 @@
 <a href=#197 id=197 data-nosnippet>197</a>        })
 <a href=#198 id=198 data-nosnippet>198</a>    }
 <a href=#199 id=199 data-nosnippet>199</a>
-<a href=#200 id=200 data-nosnippet>200</a>    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientModuleMigrationFn&gt; {
 <a href=#201 id=201 data-nosnippet>201</a>        BTreeMap::new()
 <a href=#202 id=202 data-nosnippet>202</a>    }
 <a href=#203 id=203 data-nosnippet>203</a>}

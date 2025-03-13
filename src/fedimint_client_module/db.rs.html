@@ -8,7 +8,7 @@
 <a href=#8 id=8 data-nosnippet>8</a>
 <a href=#9 id=9 data-nosnippet>9</a><span class="doccomment">/// `ClientMigrationFn` is a function that modules can implement to "migrate"
 <a href=#10 id=10 data-nosnippet>10</a>/// the database to the next database version.
-<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub type </span>ClientMigrationFn = <span class="kw">for</span>&lt;<span class="lifetime">'r</span>, <span class="lifetime">'tx</span>&gt; <span class="kw">fn</span>(
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub type </span>ClientModuleMigrationFn = <span class="kw">for</span>&lt;<span class="lifetime">'r</span>, <span class="lifetime">'tx</span>&gt; <span class="kw">fn</span>(
 <a href=#12 id=12 data-nosnippet>12</a>    <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>&gt;,
 <a href=#13 id=13 data-nosnippet>13</a>    Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, <span class="comment">// active states
 <a href=#14 id=14 data-nosnippet>14</a>    </span>Vec&lt;(Vec&lt;u8&gt;, OperationId)&gt;, <span class="comment">// inactive states

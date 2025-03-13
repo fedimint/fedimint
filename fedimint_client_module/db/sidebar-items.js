@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["migrate_state"],"type":["ClientMigrationFn","MigrateStateFn"]};
+window.SIDEBAR_ITEMS = {"fn":["migrate_state"],"type":["ClientModuleMigrationFn","MigrateStateFn"]};

@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a>
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span><span class="kw">super</span>::ClientContext;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span><span class="kw">super</span>::recovery::RecoveryProgress;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span><span class="kw">crate</span>::db::ClientMigrationFn;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span><span class="kw">crate</span>::db::ClientModuleMigrationFn;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::module::ClientModule;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::sm::ModuleNotifier;
 <a href=#21 id=21 data-nosnippet>21</a>
@@ -236,7 +236,7 @@
 <a href=#236 id=236 data-nosnippet>236</a>    <span class="doccomment">/// Retrieves the database migrations from the module to be applied to the
 <a href=#237 id=237 data-nosnippet>237</a>    /// database before the module is initialized. The database migrations map
 <a href=#238 id=238 data-nosnippet>238</a>    /// is indexed on the "from" version.
-<a href=#239 id=239 data-nosnippet>239</a>    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
+<a href=#239 id=239 data-nosnippet>239</a>    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientModuleMigrationFn&gt; {
 <a href=#240 id=240 data-nosnippet>240</a>        BTreeMap::new()
 <a href=#241 id=241 data-nosnippet>241</a>    }
 <a href=#242 id=242 data-nosnippet>242</a>

@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::sync::Arc;
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_client_module::db::ClientMigrationFn;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_client_module::db::ClientModuleMigrationFn;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_client_module::module::init::{
 <a href=#8 id=8 data-nosnippet>8</a>    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 <a href=#9 id=9 data-nosnippet>9</a>};
@@ -74,7 +74,7 @@
 <a href=#74 id=74 data-nosnippet>74</a>        task_group: TaskGroup,
 <a href=#75 id=75 data-nosnippet>75</a>    ) -&gt; anyhow::Result&lt;DynClientModule&gt;;
 <a href=#76 id=76 data-nosnippet>76</a>
-<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt;;
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientModuleMigrationFn&gt;;
 <a href=#78 id=78 data-nosnippet>78</a>
 <a href=#79 id=79 data-nosnippet>79</a>    <span class="doccomment">/// See [`ClientModuleInit::used_db_prefixes`]
 <a href=#80 id=80 data-nosnippet>80</a>    </span><span class="kw">fn </span>used_db_prefixes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;BTreeSet&lt;u8&gt;&gt;;
@@ -203,7 +203,7 @@
 <a href=#203 id=203 data-nosnippet>203</a>        </span>.into())
 <a href=#204 id=204 data-nosnippet>204</a>    }
 <a href=#205 id=205 data-nosnippet>205</a>
-<a href=#206 id=206 data-nosnippet>206</a>    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
+<a href=#206 id=206 data-nosnippet>206</a>    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientModuleMigrationFn&gt; {
 <a href=#207 id=207 data-nosnippet>207</a>        &lt;<span class="self">Self </span><span class="kw">as </span>ClientModuleInit&gt;::get_database_migrations(<span class="self">self</span>)
 <a href=#208 id=208 data-nosnippet>208</a>    }
 <a href=#209 id=209 data-nosnippet>209</a>
