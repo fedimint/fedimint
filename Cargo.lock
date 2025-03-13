@@ -2129,6 +2129,7 @@ dependencies = [
  "itertools 0.13.0",
  "nix 0.29.0",
  "rand 0.8.5",
+ "reqwest 0.12.9",
  "semver",
  "serde",
  "serde_json",
