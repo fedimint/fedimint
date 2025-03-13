@@ -1,18 +1,17 @@
 use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::{BlockHash, OutPoint, TxOut, Txid};
-use fedimint_core::db::{
-    DbMigrationFnContext, IDatabaseTransactionOpsCoreTyped, ServerDbMigrationContext,
-};
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
-use fedimint_server::consensus::db::{MigrationContextExt, TypedModuleHistoryItem};
-use fedimint_wallet_common::WalletModuleTypes;
+use fedimint_server::core::migration::{
+    ModuleHistoryItem, ServerModuleDbMigrationFnContext, ServerModuleDbMigrationFnContextExt as _,
+};
 use futures::StreamExt;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::{PendingTransaction, SpendableUTXO, UnsignedTransaction, WalletOutputOutcome};
+use crate::{PendingTransaction, SpendableUTXO, UnsignedTransaction, Wallet, WalletOutputOutcome};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -201,28 +200,27 @@ impl_db_lookup!(
 
 /// Migrate to v1, backfilling all previously pegged-in outpoints
 pub async fn migrate_to_v1(
-    mut ctx: DbMigrationFnContext<'_, ServerDbMigrationContext>,
+    mut ctx: ServerModuleDbMigrationFnContext<'_, Wallet>,
 ) -> Result<(), anyhow::Error> {
-    let outpoints =
-        ctx.get_typed_module_history_stream::<WalletModuleTypes>()
-            .await
-            .filter_map(|item| async {
-                match item {
-                    TypedModuleHistoryItem::Input(input) => {
-                        let outpoint = input
-                            .maybe_v0_ref()
-                            .expect("can only support V0 wallet inputs")
-                            .0
-                            .outpoint();
+    let outpoints = ctx
+        .get_typed_module_history_stream()
+        .await
+        .filter_map(|item| async {
+            match item {
+                ModuleHistoryItem::Input(input) => {
+                    let outpoint = input
+                        .maybe_v0_ref()
+                        .expect("can only support V0 wallet inputs")
+                        .0
+                        .outpoint();
 
-                        Some(outpoint)
-                    }
-                    TypedModuleHistoryItem::Output(_)
-                    | TypedModuleHistoryItem::ConsensusItem(_) => None,
+                    Some(outpoint)
                 }
-            })
-            .collect::<Vec<_>>()
-            .await;
+                ModuleHistoryItem::Output(_) | ModuleHistoryItem::ConsensusItem(_) => None,
+            }
+        })
+        .collect::<Vec<_>>()
+        .await;
 
     let mut dbtx = ctx.dbtx();
     for outpoint in outpoints {

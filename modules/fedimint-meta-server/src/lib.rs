@@ -18,7 +18,6 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, NonCommittable,
-    ServerDbMigrationFn,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -42,6 +41,7 @@ use fedimint_meta_common::{
     MetaInputError, MetaKey, MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome,
     MetaValue,
 };
+use fedimint_server::core::migration::ServerModuleDbMigrationFn;
 use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use rand::{Rng, thread_rng};
@@ -198,7 +198,9 @@ impl ServerModuleInit for MetaInit {
     }
 
     /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerDbMigrationFn> {
+    fn get_database_migrations(
+        &self,
+    ) -> BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Meta>> {
         BTreeMap::new()
     }
 }

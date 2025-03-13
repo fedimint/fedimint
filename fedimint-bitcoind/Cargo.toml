@@ -13,6 +13,9 @@ rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 default = ["bitcoincore-rpc", "esplora-client"]
+# the code behind this flag is server-side only, interfers with wasm builds
+# and should just live in some `fedimint-bitcoind-server` or something (TODO)
+fedimint-server = ["dep:fedimint-server-core"]
 
 [lib]
 name = "fedimint_bitcoind"
@@ -26,7 +29,7 @@ bitcoincore-rpc = { workspace = true, optional = true }
 esplora-client = { workspace = true, optional = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-server-core = { workspace = true }
+fedimint-server-core = { workspace = true, optional = true }
 futures = { workspace = true }
 hex = { workspace = true }
 jaq-core = { workspace = true }

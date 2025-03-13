@@ -130,7 +130,7 @@ use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::{MaybeSend, MaybeSync};
 use crate::util::FmtCompactAnyhow as _;
-use crate::{async_trait_maybe_send, maybe_add_send, timing};
+use crate::{async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, timing};
 
 pub mod mem_impl;
 pub mod notifications;
@@ -2165,25 +2165,92 @@ macro_rules! push_db_key_items {
     };
 }
 
-// TODO: real things will go in here later
-pub trait IServerDbMigrationContext {}
-// TODO: this is just a placeholder
-pub struct FakeServerDbMigrationContext;
-impl IServerDbMigrationContext for FakeServerDbMigrationContext {}
-pub type ServerDbMigrationContext = Arc<dyn IServerDbMigrationContext + Send + Sync + 'static>;
+/// Context passed to the db migration _functions_ (pay attention to `Fn` in the
+/// name)
+///
+/// Typically should not be referred to directly, and instead by a type-alias,
+/// where the inner-context is set.
+///
+/// Notably it has the (optional) module id (innacessible to the modules
+/// directly, but used internally) and an inner context `C` injected by the
+/// outer-layer.
+///
+/// `C` is generic, as in different layers / scopes (server vs client, etc.) a
+/// different (module-typed, type erased, server/client, etc.) contexts might be
+/// needed, while the database migration logic is kind of generic over that.
+pub struct DbMigrationFnContext<'tx, C> {
+    dbtx: DatabaseTransaction<'tx>,
+    module_instance_id: Option<ModuleInstanceId>,
+    ctx: C,
+    __please_use_constructor: (),
+}
 
-pub type ServerDbMigrationFnContext<'tx> = DbMigrationFnContext<'tx, ServerDbMigrationContext>;
-pub type ServerDbMigrationFn = DbMigrationFn<ServerDbMigrationContext>;
+impl<'tx, C> DbMigrationFnContext<'tx, C> {
+    pub fn new(
+        dbtx: DatabaseTransaction<'tx>,
+        module_instance_id: Option<ModuleInstanceId>,
+        ctx: C,
+    ) -> Self {
+        dbtx.ensure_global().expect("Must pass global dbtx");
+        Self {
+            dbtx,
+            module_instance_id,
+            ctx,
+            // this is a constructor
+            __please_use_constructor: (),
+        }
+    }
 
-// NOTE: client _module_ migrations are handled using separate structs due to
-// state machine migrations
+    pub fn map<R>(self, f: impl FnOnce(C) -> R) -> DbMigrationFnContext<'tx, R> {
+        DbMigrationFnContext::new(self.dbtx, self.module_instance_id, f(self.ctx))
+    }
+
+    // TODO: this method is currently visible to the module itself, and it shouldn't
+    #[doc(hidden)]
+    pub fn split_dbtx_ctx<'s>(&'s mut self) -> (&'s mut DatabaseTransaction<'tx>, &'s C) {
+        let Self { dbtx, ctx, .. } = self;
+
+        (dbtx, ctx)
+    }
+
+    pub fn dbtx(&mut self) -> DatabaseTransaction {
+        if let Some(module_instance_id) = self.module_instance_id {
+            self.dbtx.to_ref_with_prefix_module_id(module_instance_id).0
+        } else {
+            self.dbtx.to_ref_nc()
+        }
+    }
+
+    // TODO: this method is currently visible to the module itself, and it shouldn't
+    #[doc(hidden)]
+    pub fn module_instance_id(&self) -> Option<ModuleInstanceId> {
+        self.module_instance_id
+    }
+}
+
+/// [`DbMigrationFn`] with no extra context (ATM gateway)
+pub type GeneralDbMigrationFn = DbMigrationFn<()>;
+pub type GeneralDbMigrationFnContext<'tx> = DbMigrationFnContext<'tx, ()>;
+
+/// [`DbMigrationFn`] used by core client
+///
+/// NOTE: client _module_ migrations are handled using separate structs due to
+/// state machine migrations
 pub type ClientCoreDbMigrationFn = DbMigrationFn<()>;
 pub type ClientCoreDbMigrationFnContext<'tx> = DbMigrationFnContext<'tx, ()>;
 
 /// `CoreMigrationFn` that modules can implement to "migrate" the database
 /// to the next database version.
+///
+/// It is parametrized over `C` (contents), which is extra data/type/interface
+/// custom for different part of the codebase, e.g.:
+///
+/// * server core
+/// * server modules
+/// * client core
+/// * gateway core
 pub type DbMigrationFn<C> = Box<
-    maybe_add_send!(
+    maybe_add_send_sync!(
         dyn for<'tx> Fn(
             DbMigrationFnContext<'tx, C>,
         ) -> Pin<
@@ -2212,30 +2279,6 @@ pub fn get_current_database_version<F>(
     versions
         .last()
         .map_or(DatabaseVersion(0), DatabaseVersion::increment)
-}
-
-/// See [`apply_migrations_server_dbtx`]
-pub async fn apply_migrations_server(
-    ctx: ServerDbMigrationContext,
-    db: &Database,
-    kind: String,
-    migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn>,
-) -> Result<(), anyhow::Error> {
-    let mut global_dbtx = db.begin_transaction().await;
-    global_dbtx.ensure_global()?;
-    apply_migrations_server_dbtx(&mut global_dbtx.to_ref_nc(), ctx, kind, migrations).await?;
-    global_dbtx.commit_tx_result().await
-}
-
-/// Applies the database migrations to a non-isolated database.
-pub async fn apply_migrations_server_dbtx(
-    global_dbtx: &mut DatabaseTransaction<'_>,
-    ctx: ServerDbMigrationContext,
-    kind: String,
-    migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn>,
-) -> Result<(), anyhow::Error> {
-    global_dbtx.ensure_global()?;
-    apply_migrations_dbtx(global_dbtx, ctx, kind, migrations, None, None).await
 }
 
 pub async fn apply_migrations<C>(
@@ -2334,11 +2377,11 @@ where
         while current_db_version < target_db_version {
             if let Some(migration) = migrations.get(&current_db_version) {
                 info!(target: LOG_DB, ?kind, ?current_db_version, ?target_db_version, "Migrating module...");
-                migration(DbMigrationFnContext {
-                    dbtx: global_dbtx.to_ref_nc(),
+                migration(DbMigrationFnContext::new(
+                    global_dbtx.to_ref_nc(),
                     module_instance_id,
-                    ctx: ctx.clone(),
-                })
+                    ctx.clone(),
+                ))
                 .await?;
             } else {
                 warn!(target: LOG_DB, ?current_db_version, "Missing server db migration");
@@ -2474,33 +2517,6 @@ fn module_instance_id_or_global(module_instance_id: Option<ModuleInstanceId>) ->
         |module_instance_id| module_instance_id,
     )
 }
-
-pub struct DbMigrationFnContext<'tx, C> {
-    dbtx: DatabaseTransaction<'tx>,
-    module_instance_id: Option<ModuleInstanceId>,
-    #[allow(dead_code)]
-    ctx: C,
-}
-
-impl<'tx, C> DbMigrationFnContext<'tx, C> {
-    pub fn dbtx(&mut self) -> DatabaseTransaction {
-        if let Some(module_instance_id) = self.module_instance_id {
-            self.dbtx.to_ref_with_prefix_module_id(module_instance_id).0
-        } else {
-            self.dbtx.to_ref_nc()
-        }
-    }
-
-    pub fn module_instance_id(&self) -> Option<ModuleInstanceId> {
-        self.module_instance_id
-    }
-
-    #[doc(hidden)]
-    pub fn __global_dbtx(&mut self) -> &mut DatabaseTransaction<'tx> {
-        &mut self.dbtx
-    }
-}
-
 #[allow(unused_imports)]
 mod test_utils {
     use std::collections::BTreeMap;

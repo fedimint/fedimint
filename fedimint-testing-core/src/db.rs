@@ -14,13 +14,13 @@ use fedimint_client_module::module::ClientModule;
 use fedimint_client_module::sm::{ActiveStateMeta, InactiveStateMeta};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    Database, DatabaseVersion, FakeServerDbMigrationContext, IDatabaseTransactionOpsCoreTyped,
-    ServerDbMigrationFn, apply_migrations, apply_migrations_server,
+    Database, DatabaseVersion, DbMigrationFn, IDatabaseTransactionOpsCoreTyped, apply_migrations,
 };
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
+use fedimint_server::consensus::db::ServerDbMigrationContext;
 use fedimint_server::core::DynServerModuleInit;
 use futures::future::BoxFuture;
 use futures::{FutureExt, StreamExt};
@@ -281,25 +281,22 @@ fn get_temp_database(
 /// passed in as an argument since this is module agnostic. First
 /// applies all defined migrations to the database then executes the `validate``
 /// function which should confirm the database migrations were successful.
-pub async fn validate_migrations_global<F, Fut>(
+pub async fn validate_migrations_global<F, Fut, C>(
     validate: F,
+    ctx: C,
     db_prefix: &str,
-    migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, DbMigrationFn<C>>,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
 where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = anyhow::Result<()>>,
+    C: Clone,
 {
     let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
-    apply_migrations_server(
-        Arc::new(FakeServerDbMigrationContext),
-        &db,
-        db_prefix.to_string(),
-        migrations,
-    )
-    .await
-    .context("Error applying migrations to temp database")?;
+    apply_migrations(&db, ctx, db_prefix.to_string(), migrations, None, None)
+        .await
+        .context("Error applying migrations to temp database")?;
 
     validate(db)
         .await
@@ -327,7 +324,7 @@ where
     let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
     apply_migrations(
         &db,
-        Arc::new(FakeServerDbMigrationContext) as Arc<_>,
+        Arc::new(ServerDbMigrationContext) as Arc<_>,
         module.module_kind().to_string(),
         module.get_database_migrations(),
         Some(TEST_MODULE_INSTANCE_ID),

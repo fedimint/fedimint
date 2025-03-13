@@ -46,7 +46,6 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    ServerDbMigrationFn,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -67,6 +66,7 @@ use fedimint_core::{
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
+use fedimint_server::core::migration::ServerModuleDbMigrationFn;
 use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use fedimint_server::net::api::check_auth;
 pub use fedimint_wallet_common as common;
@@ -401,8 +401,11 @@ impl ServerModuleInit for WalletInit {
     }
 
     /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerDbMigrationFn> {
-        let mut migrations: BTreeMap<DatabaseVersion, ServerDbMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(
+        &self,
+    ) -> BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Wallet>> {
+        let mut migrations: BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Wallet>> =
+            BTreeMap::new();
         migrations.insert(
             DatabaseVersion(0),
             Box::new(|ctx| migrate_to_v1(ctx).boxed()),
