@@ -21,6 +21,7 @@ fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 ldk-node = "0.4.3"

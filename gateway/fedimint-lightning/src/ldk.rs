@@ -11,10 +11,11 @@ use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{BitcoinRpcConfig, is_env_var_set};
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
-use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_core::util::{FmtCompact, SafeUrl};
+use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
 use fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse};
 use fedimint_ln_common::contracts::Preimage;
+use fedimint_logging::LOG_LIGHTNING;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::NodeAlias;
@@ -25,7 +26,7 @@ use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info};
+use tracing::{info, warn};
 
 use super::{
     ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
@@ -146,8 +147,8 @@ impl GatewayLdkClient {
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         let node = Arc::new(node_builder.build()?);
-        node.start_with_runtime(runtime).map_err(|e| {
-            error!(?e, "Failed to start LDK Node");
+        node.start_with_runtime(runtime).map_err(|err| {
+            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");
             LightningRpcError::FailedToConnect
         })?;
 
@@ -194,7 +195,7 @@ impl GatewayLdkClient {
             claim_deadline,
         } = event
         {
-            if let Err(e) = htlc_stream_sender
+            if let Err(err) = htlc_stream_sender
                 .send(InterceptPaymentRequest {
                     payment_hash: Hash::from_slice(&payment_hash.0).expect("Failed to create Hash"),
                     amount_msat: claimable_amount_msat,
@@ -205,7 +206,7 @@ impl GatewayLdkClient {
                 })
                 .await
             {
-                error!(?e, "Failed send InterceptHtlcRequest to stream");
+                warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed send InterceptHtlcRequest to stream");
             }
         }
 
@@ -251,13 +252,13 @@ impl Drop for GatewayLdkClient {
     fn drop(&mut self) {
         self.task_group.shutdown();
 
-        info!("Stopping LDK Node...");
+        info!(target: LOG_LIGHTNING, "Stopping LDK Node...");
         match self.node.stop() {
-            Err(e) => {
-                error!(?e, "Failed to stop LDK Node");
+            Err(err) => {
+                warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to stop LDK Node");
             }
             _ => {
-                info!("LDK Node stopped.");
+                info!(target: LOG_LIGHTNING, "LDK Node stopped.");
             }
         }
     }
@@ -436,7 +437,7 @@ impl ILnRpcClient for GatewayLdkClient {
                     failure_reason: format!("Failed to claim LDK payment with hash {ph_hex_str}"),
                 })?;
         } else {
-            error!("Unwinding payment with hash {ph_hex_str} because the action was not `Settle`");
+            warn!(target: LOG_LIGHTNING, payment_hash = %ph_hex_str, "Unwinding payment because the action was not `Settle`");
             self.node.bolt11_payment().fail_for_hash(ph).map_err(|_| {
                 LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: format!("Failed to unwind LDK payment with hash {ph_hex_str}"),

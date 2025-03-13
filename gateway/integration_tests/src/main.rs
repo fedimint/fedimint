@@ -18,6 +18,7 @@ use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_common::{FederationInfo, GatewayBalances, GatewayFedConfig};
+use fedimint_logging::LOG_TEST;
 use fedimint_testing::ln::LightningNodeType;
 use itertools::Itertools;
 use tracing::{debug, info, warn};
@@ -77,7 +78,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
         devimint::run_devfed_test().call(|dev_fed, process_mgr| async move {
             let gatewayd_version = util::Gatewayd::version_or_default().await;
             if gatewayd_version < *VERSION_0_5_0_ALPHA {
-                warn!("Gateway backup-restore is not supported below v0.5.0");
+                warn!(target: LOG_TEST, "Gateway backup-restore is not supported below v0.5.0");
                 return Ok(());
             }
 
@@ -93,7 +94,7 @@ async fn backup_restore_test() -> anyhow::Result<()> {
             let mnemonic = gw.get_mnemonic().await?.mnemonic;
 
             // Recover without a backup
-            info!("Wiping gateway and recovering without a backup...");
+            info!(target: LOG_TEST, "Wiping gateway and recovering without a backup...");
             let ln = gw.ln.clone();
             let new_gw = stop_and_recover_gateway(
                 process_mgr.clone(),
@@ -105,12 +106,12 @@ async fn backup_restore_test() -> anyhow::Result<()> {
             .await?;
 
             // Recover with a backup
-            info!("Wiping gateway and recovering with a backup...");
-            info!("Creating backup...");
+            info!(target: LOG_TEST, "Wiping gateway and recovering with a backup...");
+            info!(target: LOG_TEST, "Creating backup...");
             new_gw.backup_to_fed(fed).await?;
             stop_and_recover_gateway(process_mgr, mnemonic, new_gw, ln, fed).await?;
 
-            info!("backup_restore_test successful");
+            info!(target: LOG_TEST, "backup_restore_test successful");
             Ok(())
         }),
     )
@@ -132,7 +133,7 @@ async fn stop_and_recover_gateway(
     let gw_type = old_gw.ln.ln_type();
     let gw_name = old_gw.gw_name.clone();
     old_gw.terminate().await?;
-    info!("Terminated Gateway");
+    info!(target: LOG_TEST, "Terminated Gateway");
 
     // Delete the gateway's database
     let data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
@@ -141,13 +142,13 @@ async fn stop_and_recover_gateway(
         .expect("Could not parse data dir");
     let gw_db = data_dir.join(gw_name.clone()).join("gatewayd.db");
     remove_dir_all(gw_db)?;
-    info!("Deleted the Gateway's database");
+    info!(target: LOG_TEST, "Deleted the Gateway's database");
 
     if gw_type == LightningNodeType::Ldk {
         // Delete LDK's database as well
         let ldk_data_dir = data_dir.join(gw_name).join("ldk_node");
         remove_dir_all(ldk_data_dir)?;
-        info!("Deleted LDK's database");
+        info!(target: LOG_TEST, "Deleted LDK's database");
     }
 
     let seed = mnemonic.join(" ");
@@ -156,13 +157,13 @@ async fn stop_and_recover_gateway(
     let new_gw = Gatewayd::new(&process_mgr, new_ln).await?;
     let new_mnemonic = new_gw.get_mnemonic().await?.mnemonic;
     assert_eq!(mnemonic, new_mnemonic);
-    info!("Verified mnemonic is the same after creating new Gateway");
+    info!(target: LOG_TEST, "Verified mnemonic is the same after creating new Gateway");
 
     let federations = serde_json::from_value::<Vec<FederationInfo>>(
         new_gw.get_info().await?["federations"].clone(),
     )?;
     assert_eq!(0, federations.len());
-    info!("Verified new Gateway has no federations");
+    info!(target: LOG_TEST, "Verified new Gateway has no federations");
 
     new_gw.recover_fed(fed).await?;
 
@@ -178,7 +179,7 @@ async fn stop_and_recover_gateway(
     );
     let after_onchain_balance = gateway_balances.onchain_balance_sats;
     assert_eq!(before_onchain_balance, after_onchain_balance);
-    info!("Verified balances after recovery");
+    info!(target: LOG_TEST, "Verified balances after recovery");
 
     Ok(new_gw)
 }
@@ -204,8 +205,9 @@ async fn mnemonic_upgrade_test(
             let gatewayd_version = util::Gatewayd::version_or_default().await;
             let gateway_cli_version = util::GatewayCli::version_or_default().await;
             info!(
-                ?gatewayd_version,
-                ?gateway_cli_version,
+                target: LOG_TEST,
+                gatewayd_version = %gatewayd_version,
+                gateway_cli_version = %gateway_cli_version,
                 "Running gatewayd mnemonic test"
             );
 
@@ -220,7 +222,7 @@ async fn mnemonic_upgrade_test(
             // Gateway mnemonic is only support in >= v0.5.0
             let new_gatewayd_version = util::Gatewayd::version_or_default().await;
             if new_gatewayd_version < *VERSION_0_5_0_ALPHA {
-                warn!("Gateway mnemonic test is not supported below v0.5.0");
+                warn!(target: LOG_TEST, "Gateway mnemonic test is not supported below v0.5.0");
                 return Ok(());
             }
 
@@ -232,7 +234,7 @@ async fn mnemonic_upgrade_test(
                     .contains(&federation_id)
             );
 
-            info!("Verified a legacy federation exists");
+            info!(target: LOG_TEST, "Verified a legacy federation exists");
 
             // Leave federation
             gw_lnd.leave_federation(federation_id).await?;
@@ -249,7 +251,7 @@ async fn mnemonic_upgrade_test(
             );
             assert_eq!(mnemonic_response.legacy_federations.len(), 1);
 
-            info!("Verified leaving and re-joining preservers legacy federation");
+            info!(target: LOG_TEST, "Verified leaving and re-joining preservers legacy federation");
 
             // Leave federation and delete database to force migration to mnemonic
             gw_lnd.leave_federation(federation_id).await?;
@@ -274,9 +276,9 @@ async fn mnemonic_upgrade_test(
             );
             assert_eq!(mnemonic_response.legacy_federations.len(), 0);
 
-            info!("Verified deleting database will migrate the federation to use mnemonic");
+            info!(target: LOG_TEST, "Verified deleting database will migrate the federation to use mnemonic");
 
-            info!("Successfully completed mnemonic upgrade test");
+            info!(target: LOG_TEST, "Successfully completed mnemonic upgrade test");
 
             Ok(())
         })
@@ -309,7 +311,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     output.is_err(),
                     "Connecting to the same federation succeeded"
                 );
-                info!("Verified that gateway couldn't connect to already connected federation");
+                info!(target: LOG_TEST, "Verified that gateway couldn't connect to already connected federation");
 
                 let gatewayd_version = util::Gatewayd::version_or_default().await;
 
@@ -327,7 +329,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     lightning_fee.parts_per_million, 20000,
                     "Federation proportional millionths is not 20000"
                 );
-                info!("Verified per-federation routing fees changed");
+                info!(target: LOG_TEST, "Verified per-federation routing fees changed");
 
                 let info_value = cmd!(gw, "info").out_json().await?;
                 let federations = info_value["federations"]
@@ -368,7 +370,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 )
                 .await?;
                 let new_fed_id = new_fed.calculate_federation_id();
-                info!("Successfully spawned new federation");
+                info!(target: LOG_TEST, "Successfully spawned new federation");
 
                 let new_invite_code = new_fed.invite_code()?;
                 cmd!(gw, "connect-fed", new_invite_code.clone())
@@ -391,7 +393,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     "Default Base msat for new federation was not correct"
                 );
 
-                info!(?new_fed_id, "Verified new federation");
+                info!(target: LOG_TEST, federation_id = %new_fed_id, "Verified new federation");
 
                 // Peg-in sats to gw for the new fed
                 let pegin_amount = Amount::from_msats(10_000_000);
@@ -473,7 +475,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
                 assert_eq!(second_fed_balance_msat, rejoined_federation_balance_msat);
 
-                info!("Gateway configuration test successful");
+                info!(target: LOG_TEST, "Gateway configuration test successful");
                 Ok(())
             }),
     )
@@ -487,7 +489,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
         let federation = dev_fed.fed().await?;
 
         if !devimint::util::supports_lnv2() {
-            info!("LNv2 is not supported, which is necessary for LDK GW and liquidity test");
+            info!(target: LOG_TEST, "LNv2 is not supported, which is necessary for LDK GW and liquidity test");
             return Ok(());
         }
 
@@ -500,18 +502,19 @@ async fn liquidity_test() -> anyhow::Result<()> {
             .cartesian_product(gateways.iter())
             .filter(|(a, b)| a.ln.ln_type() != b.ln.ln_type());
 
-        info!("Pegging-in gateways...");
+        info!(target: LOG_TEST, "Pegging-in gateways...");
 
         federation
             .pegin_gateways(1_000_000, gateways.clone())
             .await?;
 
-        info!("Testing ecash payments between gateways...");
+        info!(target: LOG_TEST, "Testing ecash payments between gateways...");
         for (gw_send, gw_receive) in gateway_matrix.clone() {
             info!(
-                "Testing ecash payment: {} -> {}",
-                gw_send.ln.ln_type(),
-                gw_receive.ln.ln_type()
+                target: LOG_TEST,
+                gw_send = %gw_send.ln.ln_type(),
+                gw_receive = %gw_receive.ln.ln_type(),
+                "Testing ecash payment",
             );
 
             let fed_id = federation.calculate_federation_id();
@@ -525,33 +528,34 @@ async fn liquidity_test() -> anyhow::Result<()> {
             assert_eq!(prev_receive_ecash_balance + 500_000, after_receive_ecash_balance);
         }
 
-        info!("Testing payments between gateways...");
+        info!(target: LOG_TEST, "Testing payments between gateways...");
 
         for (gw_send, gw_receive) in gateway_matrix.clone() {
             info!(
-                "Testing lightning payment: {} -> {}",
-                gw_send.ln.ln_type(),
-                gw_receive.ln.ln_type()
+                target: LOG_TEST,
+                gw_send = %gw_send.ln.ln_type(),
+                gw_receive = %gw_receive.ln.ln_type(),
+                "Testing lightning payment",
             );
 
             let invoice = gw_receive.create_invoice(1_000_000).await?;
             gw_send.pay_invoice(invoice).await?;
         }
 
-        info!("Testing paying through LND Gateway...");
+        info!(target: LOG_TEST, "Testing paying through LND Gateway...");
         let invoice = gw_ldk.create_invoice(1_550_000).await?;
         let cln = dev_fed.cln().await?;
         // Need to try to pay the invoice multiple times in case the channel graph has not been updated yet.
         retry("CLN pay LDK", aggressive_backoff_long(), || async {
-            debug!("Trying CLN -> LND -> LDK...");
+            debug!(target: LOG_TEST, "Trying CLN -> LND -> LDK...");
             cln.pay_bolt11_invoice(invoice.to_string()).await?;
             Ok(())
         }).await?;
 
-        info!("Pegging-out gateways...");
+        info!(target: LOG_TEST, "Pegging-out gateways...");
         federation.pegout_gateways(500_000_000, gateways.clone()).await?;
 
-        info!("Testing closing all channels...");
+        info!(target: LOG_TEST, "Testing closing all channels...");
         for gw in gateways.clone() {
             gw.close_all_channels(dev_fed.bitcoind().await?.clone()).await?;
 
@@ -569,7 +573,7 @@ async fn liquidity_test() -> anyhow::Result<()> {
             ).await?;
         }
 
-        info!("Testing sending onchain...");
+        info!(target: LOG_TEST, "Testing sending onchain...");
         for gw in gateways {
             gw.send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await?;
             retry(
@@ -612,6 +616,6 @@ async fn leave_federation(gw: &Gatewayd, fed_id: String, expected_scid: u64) -> 
 
     assert_eq!(scid, expected_scid);
 
-    info!("Verified gateway left federation {fed_id}");
+    info!(target: LOG_TEST, federation_id = %fed_id, "Verified gateway left federation");
     Ok(())
 }
