@@ -18,6 +18,7 @@ rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 tor = ["fedimint-client-module/tor"]
+iroh = ["fedimint-client-module/iroh"]
 
 [lib]
 name = "fedimint_client"
