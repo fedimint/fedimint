@@ -53,7 +53,7 @@ use fedimint_core::envs::{BitcoinRpcConfig, is_rbf_withdrawal_enabled, is_runnin
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
-    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
+    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
     SupportedModuleApiVersions, TransactionItemAmount, api_endpoint,
 };
 use fedimint_core::task::TaskGroup;
@@ -65,10 +65,10 @@ use fedimint_core::{
     get_network_for_address, push_db_key_items, push_db_pair_items,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
-use fedimint_server::config::distributedgen::PeerHandleOps;
-use fedimint_server::core::migration::ServerModuleDbMigrationFn;
-use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
-use fedimint_server::net::api::check_auth;
+use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
+use fedimint_server_core::migration::ServerModuleDbMigrationFn;
+use fedimint_server_core::net::check_auth;
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::endpoint_constants::{
@@ -341,7 +341,7 @@ impl ServerModuleInit for WalletInit {
 
     async fn distributed_gen(
         &self,
-        peers: &PeerHandle,
+        peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();

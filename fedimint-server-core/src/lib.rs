@@ -5,8 +5,10 @@
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
 
+pub mod config;
 mod init;
 pub mod migration;
+pub mod net;
 
 use std::any::Any;
 use std::fmt::Debug;

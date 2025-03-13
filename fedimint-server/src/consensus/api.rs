@@ -35,8 +35,8 @@ use fedimint_core::endpoint_constants::{
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
-    ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
-    SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
+    ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
+    SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
@@ -51,6 +51,7 @@ use fedimint_core::transaction::{
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
+use fedimint_server_core::net::{GuardianAuthToken, check_auth};
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use tokio::sync::watch::{Receiver, Sender};
@@ -64,8 +65,8 @@ use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSes
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
+use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
-use crate::net::api::{ApiResult, GuardianAuthToken, HasApiContext, check_auth};
 
 #[derive(Clone)]
 pub struct ConsensusApi {

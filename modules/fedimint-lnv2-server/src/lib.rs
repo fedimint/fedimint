@@ -22,8 +22,8 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, api_endpoint,
+    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint,
 };
 use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
@@ -48,9 +48,9 @@ use fedimint_lnv2_common::{
     LightningOutputOutcome, LightningOutputV0, MODULE_CONSENSUS_VERSION, OutgoingWitness,
 };
 use fedimint_logging::LOG_MODULE_LNV2;
-use fedimint_server::config::distributedgen::{PeerHandleOps, eval_poly_g1};
-use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
-use fedimint_server::net::api::check_auth;
+use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
+use fedimint_server_core::net::check_auth;
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use group::Curve;
 use group::ff::Field;
@@ -230,7 +230,7 @@ impl ServerModuleInit for LightningInit {
 
     async fn distributed_gen(
         &self,
-        peers: &PeerHandle,
+        peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();

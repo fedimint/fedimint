@@ -17,9 +17,11 @@ use fedimint_core::envs::{
     BitcoinRpcConfig, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
 };
 use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
+    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
+    api_endpoint,
 };
 use fedimint_logging::LOG_SERVER;
+use fedimint_server_core::net::check_auth;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -30,7 +32,7 @@ use tracing::warn;
 
 use super::PeerEndpoints;
 use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerConnectionInfo};
-use crate::net::api::{ApiResult, HasApiContext, check_auth};
+use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`

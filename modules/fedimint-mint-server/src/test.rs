@@ -9,7 +9,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::{Amount, BitcoinHash, InPoint, PeerId, TransactionId, secp256k1};
 use fedimint_mint_common::config::FeeConsensus;
 use fedimint_mint_common::{MintInput, Nonce, Note};
-use fedimint_server::core::{ServerModule, ServerModuleInit};
+use fedimint_server_core::{ServerModule, ServerModuleInit};
 use tbs::blind_message;
 
 use crate::common::config::MintGenParamsConsensus;

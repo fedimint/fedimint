@@ -17,7 +17,7 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion, PeerHandle,
+    ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
@@ -25,8 +25,10 @@ use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, PeerId, base32, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
+use fedimint_server_core::config::PeerHandleOpsExt as _;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
 use hex::{FromHex, ToHex};
+use peer_handle::PeerHandle;
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -34,13 +36,13 @@ use tokio::sync::watch;
 use tokio_rustls::rustls;
 use tracing::info;
 
-use crate::config::distributedgen::PeerHandleOps;
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p_connector::TlsConfig;
 
 pub mod api;
 pub mod distributedgen;
 pub mod io;
+pub mod peer_handle;
 
 /// The default maximum open connections the API can handle
 pub const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;

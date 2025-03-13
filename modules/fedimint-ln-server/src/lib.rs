@@ -23,7 +23,7 @@ use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
     TransactionItemAmount, api_endpoint,
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
@@ -57,8 +57,8 @@ use fedimint_ln_common::{
     create_gateway_remove_message,
 };
 use fedimint_logging::LOG_MODULE_LN;
-use fedimint_server::config::distributedgen::PeerHandleOps;
-use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::config::PeerHandleOps;
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 use rand::rngs::OsRng;
@@ -261,7 +261,7 @@ impl ServerModuleInit for LightningInit {
 
     async fn distributed_gen(
         &self,
-        peers: &PeerHandle,
+        peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
@@ -1262,7 +1262,7 @@ mod tests {
         PreimageKey,
     };
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
-    use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleShared as _};
+    use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleShared as _};
     use rand::rngs::OsRng;
 
     use crate::db::{ContractKey, LightningAuditItemKey};
