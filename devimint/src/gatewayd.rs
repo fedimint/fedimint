@@ -18,7 +18,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_testing::ln::LightningNodeType;
 use semver::Version;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::cmd;
 use crate::envs::{
@@ -404,7 +404,7 @@ impl Gatewayd {
         bitcoind: &Bitcoind,
         amount: BitcoinAmountOrAll,
         fee_rate: u64,
-    ) -> Result<()> {
+    ) -> Result<bitcoin::Txid> {
         let withdraw_address = bitcoind.get_new_address().await?;
         let value = cmd!(
             self,
@@ -419,15 +419,12 @@ impl Gatewayd {
         )
         .out_json()
         .await?;
+
         let txid: bitcoin::Txid = serde_json::from_value(value)?;
-        bitcoind.mine_blocks(21).await?;
-        let block_height = bitcoind.get_block_count().await? - 1;
-        bitcoind.poll_get_transaction(txid).await?;
-        self.wait_for_block_height(block_height).await?;
-        Ok(())
+        Ok(txid)
     }
 
-    pub async fn close_all_channels(&self, bitcoind: Bitcoind) -> Result<()> {
+    pub async fn close_all_channels(&self) -> Result<()> {
         let channels = self.list_active_channels().await?;
         for chan in channels {
             let remote_pubkey = chan.remote_pubkey;
@@ -441,9 +438,6 @@ impl Gatewayd {
             .run()
             .await?;
         }
-        bitcoind.mine_blocks(50).await?;
-        let block_height = bitcoind.get_block_count().await? - 1;
-        self.wait_for_block_height(block_height).await?;
 
         Ok(())
     }
@@ -663,6 +657,9 @@ impl Gatewayd {
             if let LightningNode::Lnd(lnd) = &self.ln {
                 return lnd.wait_bolt11_invoice(payment_hash).await;
             }
+
+            debug!("Skipping bolt11 invoice check because it is not supported until v0.7");
+            return Ok(());
         }
 
         let payment_hash =
