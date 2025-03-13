@@ -11,6 +11,10 @@ repository = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+default = []
+iroh = ["fedimint-api-client/iroh"]
+
 [lib]
 name = "fedimint_server"
 path = "src/lib.rs"
