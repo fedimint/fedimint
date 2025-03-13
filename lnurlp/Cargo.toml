@@ -1,0 +1,25 @@
+[package]
+name = "lnurlp"
+description = "A tiny command line tool to fetch BOLT11 invoices from LNURLs"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+documentation = { workspace = true }
+readme = "README.md"
+homepage = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+keywords = ["bitcoin", "lightning", "lnurl"]
+
+[[bin]]
+name = "lnurlp"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+fedimint-core = { workspace = true }
+lightning-invoice = { workspace = true }
+lnurl-rs = { version = "0.9.0", default-features = false }
+reqwest = { workspace = true }
+tokio = { workspace = true }
