@@ -886,6 +886,24 @@ mod fedimint_migration_tests {
         )
         .await;
 
+        // Add a recurring payment code entry
+        let keypair = Keypair::new_global(&mut OsRng);
+        let recurring_payment_code_entry = fedimint_ln_client::recurring::RecurringPaymentCodeEntry {
+            protocol: fedimint_ln_client::recurring::RecurringPaymentProtocol::LNURL,
+            root_keypair: keypair,
+            code: "lnurl1dp68gurn8ghj7um9wfmxjcm99e3k7mf0v9cxj0m385ekvcenxc6r2c35xvukxefcv5mkvv34x5ekzd3ev56nyd3hxqurzepexejxxepnxscrvwfnv9nz7cmgv9ex7tmpwp5hg6ryv96x7un9v35kuurjd9jnsctrv5cqp5rzepn".to_string(),
+            recurringd_api: SafeUrl::from_str("http://recurringd.example.com").expect("SafeUrl parsing should not fail"),
+            last_derivation_index: 5,
+            creation_time: fedimint_core::time::now(),
+            meta: "[\"text/plain\", \"Fedimint LNURL Pay\"]".to_string(),
+        };
+
+        dbtx.insert_entry(
+            &fedimint_ln_client::db::RecurringPaymentCodeKey { derivation_idx: 1 },
+            &recurring_payment_code_entry,
+        )
+        .await;
+
         dbtx.commit_tx().await;
     }
 
@@ -1304,7 +1322,35 @@ mod fedimint_migration_tests {
                             info!("Validated LightningGateways");
                         }
                         fedimint_ln_client::db::DbKeyPrefix::RecurringPaymentKey => {
-                            unimplemented!()
+                            let recurring_payment_codes = dbtx
+                                .find_by_prefix(&fedimint_ln_client::db::RecurringPaymentCodeKeyPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_recurring_payment_codes = recurring_payment_codes.len();
+                            ensure!(
+                                num_recurring_payment_codes > 0,
+                                "validate_migrations was not able to read any RecurringPaymentCodes"
+                            );
+
+                            // Validate the structure of the first recurring payment code
+                            let (key, entry) = &recurring_payment_codes[0];
+                            ensure!(
+                                key.derivation_idx == 1,
+                                "Expected derivation_idx to be 1, got {}",
+                                key.derivation_idx
+                            );
+                            ensure!(
+                                entry.protocol == fedimint_ln_client::recurring::RecurringPaymentProtocol::LNURL,
+                                "Expected protocol to be LNURL"
+                            );
+                            ensure!(
+                                entry.last_derivation_index == 5,
+                                "Expected last_derivation_index to be 5, got {}",
+                                entry.last_derivation_index
+                            );
+
+                            info!("Validated RecurringPaymentCodes");
                         }
                         fedimint_ln_client::db::DbKeyPrefix::CoreInternalReservedStart
                         | fedimint_ln_client::db::DbKeyPrefix::ExternalReservedStart
