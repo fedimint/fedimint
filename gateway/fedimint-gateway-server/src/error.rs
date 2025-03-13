@@ -2,13 +2,14 @@ use std::fmt::Display;
 
 use axum::response::{IntoResponse, Response};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
+use fedimint_core::crit;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_gw_client::pay::OutgoingPaymentError;
 use fedimint_lightning::LightningRpcError;
+use fedimint_logging::LOG_GATEWAY;
 use reqwest::StatusCode;
 use thiserror::Error;
-use tracing::error;
 
 use crate::envs::FM_DEBUG_GATEWAY_ENV;
 
@@ -34,7 +35,7 @@ impl IntoResponse for PublicGatewayError {
         // For privacy reasons, we do not return too many details about the failure of
         // the request back to the client to prevent malicious clients from
         // deducing state about the gateway/lightning node.
-        error!("{self}");
+        crit!(target: LOG_GATEWAY, "{self}");
         let (error_message, status_code) = match &self {
             PublicGatewayError::FederationNotConnected(e) => {
                 (e.to_string(), StatusCode::BAD_REQUEST)
@@ -98,7 +99,7 @@ impl IntoResponse for AdminGatewayError {
     // For admin errors, always pass along the full error message for debugging
     // purposes
     fn into_response(self) -> Response {
-        error!("{self}");
+        crit!(target: LOG_GATEWAY, "{self}");
         Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(self.to_string().into())

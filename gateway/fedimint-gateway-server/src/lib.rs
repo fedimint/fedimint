@@ -62,9 +62,9 @@ use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::{SafeUrl, Spanned};
+use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned};
 use fedimint_core::{
-    Amount, BitcoinAmountOrAll, fedimint_build_code_version_env, get_network_for_address,
+    Amount, BitcoinAmountOrAll, crit, fedimint_build_code_version_env, get_network_for_address,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
@@ -111,7 +111,7 @@ use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::thread_rng;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, info_span, warn};
+use tracing::{debug, info, info_span, warn};
 
 use crate::config::LightningModuleMode;
 use crate::db::get_gatewayd_database_migrations;
@@ -307,8 +307,9 @@ impl Gateway {
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, fedimint_mint_client::KIND);
 
         info!(
-            "Starting gatewayd (version: {})",
-            fedimint_build_code_version_env!()
+            target: LOG_GATEWAY,
+            version = %fedimint_build_code_version_env!(),
+            "Starting gatewayd",
         );
 
         let mut gateway_parameters = opts.to_gateway_parameters()?;
@@ -316,7 +317,7 @@ impl Gateway {
         if gateway_parameters.lightning_module_mode != LightningModuleMode::LNv2
             && matches!(opts.mode, LightningMode::Ldk { .. })
         {
-            warn!("Overriding LDK Gateway to only run LNv2...");
+            warn!(target: LOG_GATEWAY, "Overriding LDK Gateway to only run LNv2...");
             gateway_parameters.lightning_module_mode = LightningModuleMode::LNv2;
         }
 
@@ -432,38 +433,38 @@ impl Gateway {
                 // Repeatedly attempt to establish a connection to the lightning node and create a payment stream, re-trying if the connection is broken.
                 loop {
                     if handle.is_shutting_down() {
-                        info!("Gateway lightning payment stream handler loop is shutting down");
+                        info!(target: LOG_GATEWAY, "Gateway lightning payment stream handler loop is shutting down");
                         break;
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
                     let lnrpc_route = self_copy.create_lightning_client(runtime.clone());
 
-                    debug!("Establishing lightning payment stream...");
+                    debug!(target: LOG_GATEWAY, "Establishing lightning payment stream...");
                     let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await
                     {
                         Ok((stream, ln_client)) => (stream, ln_client),
-                        Err(e) => {
-                            warn!(?e, "Failed to open lightning payment stream");
+                        Err(err) => {
+                            warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to open lightning payment stream");
                             continue
                         }
                     };
 
                     // Successful calls to `route_htlcs` establish a connection
                     self_copy.set_gateway_state(GatewayState::Connected).await;
-                    info!("Established lightning payment stream");
+                    info!(target: LOG_GATEWAY, "Established lightning payment stream");
 
                     let route_payments_response =
                         self_copy.route_lightning_payments(&handle, stream, ln_client).await;
 
                     self_copy.set_gateway_state(GatewayState::Disconnected).await;
-                    if let Err(e) = payment_stream_task_group.shutdown_join_all(None).await {
-                        error!("Lightning payment stream task group shutdown errors: {}", e);
+                    if let Err(err) = payment_stream_task_group.shutdown_join_all(None).await {
+                        crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
                     }
 
                     match route_payments_response {
                         ReceivePaymentStreamAction::RetryAfterDelay => {
-                            warn!("Disconnected from lightning node. Waiting {PAYMENT_STREAM_RETRY_SECONDS} seconds and trying again");
+                            warn!(target: LOG_GATEWAY, retry_interval = %PAYMENT_STREAM_RETRY_SECONDS, "Disconnected from lightning node");
                             sleep(Duration::from_secs(PAYMENT_STREAM_RETRY_SECONDS)).await;
                         }
                         ReceivePaymentStreamAction::NoRetry => break,
@@ -496,8 +497,8 @@ impl Gateway {
                     lightning_network,
                     synced_to_chain,
                 ),
-                Err(e) => {
-                    warn!("Failed to retrieve Lightning info: {e:?}");
+                Err(err) => {
+                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to retrieve Lightning info");
                     return ReceivePaymentStreamAction::RetryAfterDelay;
                 }
             };
@@ -509,12 +510,12 @@ impl Gateway {
         );
 
         if synced_to_chain || is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
-            info!("Gateway is already synced to chain");
+            info!(target: LOG_GATEWAY, "Gateway is already synced to chain");
         } else {
             self.set_gateway_state(GatewayState::Syncing).await;
             info!(target: LOG_GATEWAY, "Waiting for chain sync");
-            if let Err(e) = ln_client.wait_for_chain_sync().await {
-                error!(?e, "Failed to wait for chain sync");
+            if let Err(err) = ln_client.wait_for_chain_sync().await {
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to wait for chain sync");
                 return ReceivePaymentStreamAction::RetryAfterDelay;
             }
         }
@@ -527,7 +528,7 @@ impl Gateway {
         };
         self.set_gateway_state(GatewayState::Running { lightning_context })
             .await;
-        info!("Gateway is running");
+        info!(target: LOG_GATEWAY, "Gateway is running");
 
         // Runs until the connection to the lightning node breaks or we receive the
         // shutdown signal.
@@ -545,7 +546,8 @@ impl Gateway {
 
                     let Some(payment_request) = payment_request_or else {
                         warn!(
-                            "Unexpected response from incoming lightning payment stream. Exiting from loop..."
+                            target: LOG_GATEWAY,
+                            "Unexpected response from incoming lightning payment stream. Shutting down payment processor"
                         );
                         break;
                     };
@@ -555,7 +557,8 @@ impl Gateway {
                         self.handle_lightning_payment(payment_request, lightning_context).await;
                     } else {
                         warn!(
-                            ?state_guard,
+                            target: LOG_GATEWAY,
+                            state = %state_guard,
                             "Gateway isn't in a running state, cannot handle incoming payments."
                         );
                         break;
@@ -565,10 +568,10 @@ impl Gateway {
             .await
             .is_ok()
         {
-            warn!("Lightning payment stream connection broken. Gateway is disconnected");
+            warn!(target: LOG_GATEWAY, "Lightning payment stream connection broken. Gateway is disconnected");
             ReceivePaymentStreamAction::RetryAfterDelay
         } else {
-            info!("Received shutdown signal");
+            info!(target: LOG_GATEWAY, "Received shutdown signal");
             ReceivePaymentStreamAction::NoRetry
         }
     }
@@ -595,8 +598,9 @@ impl Gateway {
         lightning_context: &LightningContext,
     ) {
         info!(
-            "Intercepting lightning payment {}",
-            PrettyInterceptPaymentRequest(&payment_request)
+            target: LOG_GATEWAY,
+            lightning_payment = %PrettyInterceptPaymentRequest(&payment_request),
+            "Intercepting lightning payment",
         );
 
         if self
@@ -637,7 +641,7 @@ impl Gateway {
             )
             .await?;
 
-        if let Err(error) = client
+        if let Err(err) = client
             .get_first_module::<GatewayClientModuleV2>()
             .expect("Must have client module")
             .relay_incoming_htlc(
@@ -649,7 +653,7 @@ impl Gateway {
             )
             .await
         {
-            error!("Error relaying incoming lightning payment: {error:?}");
+            warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Error relaying incoming lightning payment");
 
             let outcome = InterceptPaymentResponse {
                 action: PaymentAction::Cancel,
@@ -658,8 +662,8 @@ impl Gateway {
                 htlc_id: htlc_request.htlc_id,
             };
 
-            if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
-                error!("Error sending HTLC response to lightning node: {error:?}");
+            if let Err(err) = lightning_context.lnrpc.complete_htlc(outcome).await {
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Error sending HTLC response to lightning node");
             }
         }
 
@@ -728,8 +732,8 @@ impl Gateway {
             htlc_id: htlc_request.htlc_id,
         };
 
-        if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
-            error!("Error sending lightning payment response to lightning node: {error:?}");
+        if let Err(err) = lightning_context.lnrpc.complete_htlc(outcome).await {
+            warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Error sending lightning payment response to lightning node");
         }
     }
 
@@ -901,7 +905,7 @@ impl Gateway {
         while let Some(update) = updates.next().await {
             match update {
                 WithdrawState::Succeeded(txid) => {
-                    info!("Sent {amount} funds to address {}", address);
+                    info!(target: LOG_GATEWAY, amount = %amount, address = %address, "Sent funds");
                     return Ok(WithdrawResponse { txid, fees });
                 }
                 WithdrawState::Failed(e) => {
@@ -991,7 +995,7 @@ impl Gateway {
             ));
         };
 
-        debug!("Handling pay invoice message: {payload:?}");
+        debug!(target: LOG_GATEWAY, "Handling pay invoice message");
         let client = self.select_client(payload.federation_id).await?;
         let contract_id = payload.contract_id;
         let gateway_module = &client
@@ -1013,7 +1017,7 @@ impl Gateway {
         while let Some(update) = updates.next().await {
             match update {
                 GatewayExtPayStates::Success { preimage, .. } => {
-                    debug!("Successfully paid invoice: {contract_id}");
+                    debug!(target: LOG_GATEWAY, contract_id = %contract_id, "Successfully paid invoice");
                     return Ok(preimage);
                 }
                 GatewayExtPayStates::Fail {
@@ -1036,10 +1040,10 @@ impl Gateway {
                     }));
                 }
                 GatewayExtPayStates::Created => {
-                    debug!("Got initial state Created while paying invoice: {contract_id}");
+                    debug!(target: LOG_GATEWAY, contract_id = %contract_id, "Start pay invoice state machine");
                 }
                 other => {
-                    info!("Got state {other:?} while paying invoice: {contract_id}");
+                    debug!(target: LOG_GATEWAY, state = ?other, contract_id = %contract_id, "Got state while paying invoice");
                 }
             };
         }
@@ -1074,7 +1078,7 @@ impl Gateway {
             Some(true) => Connector::tor(),
             Some(false) => Connector::default(),
             None => {
-                info!("Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
+                debug!(target: LOG_GATEWAY, "Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
                 Connector::default()
             }
         };
@@ -1162,7 +1166,7 @@ impl Gateway {
         federation_manager.add_client(
             federation_index,
             Spanned::new(
-                info_span!("client", federation_id=%federation_id.clone()),
+                info_span!(target: LOG_GATEWAY, "client", federation_id=%federation_id.clone()),
                 async { client },
             )
             .await,
@@ -1172,7 +1176,10 @@ impl Gateway {
         dbtx.save_federation_config(&federation_config).await;
         dbtx.commit_tx().await;
         debug!(
-            "Federation with ID: {federation_id} connected and assigned federation index: {federation_index}"
+            target: LOG_GATEWAY,
+            federation_id = %federation_id,
+            federation_index = %federation_index,
+            "Federation connected"
         );
 
         Ok(federation_info)
@@ -1459,8 +1466,9 @@ impl Gateway {
             let overspend_amount = notes.total_amount().saturating_sub(payload.amount);
             if overspend_amount != Amount::ZERO {
                 warn!(
-                    "Selected notes {} worth more than requested",
-                    overspend_amount
+                    target: LOG_GATEWAY,
+                    overspend_amount = %overspend_amount,
+                    "Selected notes worth more than requested",
                 );
             }
 
@@ -1477,8 +1485,7 @@ impl Gateway {
                 .await?
         };
 
-        info!("Spend ecash operation id: {:?}", operation_id);
-        info!("Spend ecash notes: {:?}", notes);
+        debug!(target: LOG_GATEWAY, ?operation_id, ?notes, "Spend ecash notes");
 
         Ok(SpendEcashResponse {
             operation_id,
@@ -1549,8 +1556,8 @@ impl Gateway {
 
         let tg = task_group.clone();
         tg.spawn("Kill Gateway", |_task_handle| async {
-            if let Err(e) = task_group.shutdown_join_all(Duration::from_secs(180)).await {
-                error!(?e, "Error shutting down gateway");
+            if let Err(err) = task_group.shutdown_join_all(Duration::from_secs(180)).await {
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Error shutting down gateway");
             }
         });
         Ok(())
@@ -1690,7 +1697,7 @@ impl Gateway {
                 .parsed_route_hints(self.num_route_hints)
                 .await;
             if route_hints.is_empty() {
-                warn!("Gateway did not retrieve any route hints, may reduce receive success rate.");
+                warn!(target: LOG_GATEWAY, "Gateway did not retrieve any route hints, may reduce receive success rate.");
             }
 
             for (federation_id, federation_config) in federations {
@@ -1703,7 +1710,7 @@ impl Gateway {
                     let api = self.versioned_api.clone();
                     let gateway_id = self.gateway_id;
 
-                    if let Err(e) = register_task_group
+                    if let Err(err) = register_task_group
                         .spawn_cancellable("register_federation", async move {
                             let gateway_client = client_arc
                                 .get_first_module::<GatewayClientModule>()
@@ -1721,7 +1728,7 @@ impl Gateway {
                         })
                         .await
                     {
-                        warn!(?e, "Failed to shutdown register federation task");
+                        warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to shutdown register federation task");
                     }
                 }
             }
@@ -1756,7 +1763,7 @@ impl Gateway {
                     .map_err(|e| AdminGatewayError::MnemonicError(anyhow!(e.to_string())))?
             } else {
                 let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
-                    info!("Using provided mnemonic from environment variable");
+                    info!(target: LOG_GATEWAY, "Using provided mnemonic from environment variable");
                     Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
                         |e| {
                             AdminGatewayError::MnemonicError(anyhow!(format!(
@@ -1765,7 +1772,7 @@ impl Gateway {
                         },
                     )?
                 } else {
-                    debug!("Generating mnemonic and writing entropy to client storage");
+                    debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
                     Bip39RootSecretStrategy::<12>::random(&mut thread_rng())
                 };
 
@@ -1795,7 +1802,7 @@ impl Gateway {
         for (federation_id, config) in configs {
             let federation_index = config.federation_index;
             match Box::pin(Spanned::try_new(
-                info_span!("client", federation_id  = %federation_id.clone()),
+                info_span!(target: LOG_GATEWAY, "client", federation_id  = %federation_id.clone()),
                 self.client_builder
                     .build(config, Arc::new(self.clone()), &self.mnemonic),
             ))
@@ -1805,7 +1812,7 @@ impl Gateway {
                     federation_manager.add_client(federation_index, client);
                 }
                 _ => {
-                    warn!("Failed to load client for federation: {federation_id}");
+                    warn!(target: LOG_GATEWAY, federation_id = %federation_id, "Failed to load client");
                 }
             }
         }
@@ -1822,7 +1829,7 @@ impl Gateway {
         // Only spawn background registration thread if gateway is running LNv1
         if self.is_running_lnv1() {
             let lightning_module_mode = self.lightning_module_mode;
-            info!(?lightning_module_mode, "Spawning register task...");
+            info!(target: LOG_GATEWAY, lightning_module_mode = %lightning_module_mode, "Spawning register task...");
             let gateway = self.clone();
             let register_task_group = self.task_group.make_subgroup();
             self.task_group.spawn_cancellable("register clients", async move {
@@ -1835,7 +1842,7 @@ impl Gateway {
                     } else {
                         // We need to retry more often if the gateway is not in the Running state
                         const NOT_RUNNING_RETRY: Duration = Duration::from_secs(10);
-                        info!("Will not register federation yet because gateway still not in Running state. Current state: {gateway_state:?}. Will keep waiting, next retry in {NOT_RUNNING_RETRY:?}...");
+                        warn!(target: LOG_GATEWAY, gateway_state = %gateway_state, retry_interval = ?NOT_RUNNING_RETRY, "Will not register federation yet because gateway still not in Running state");
                         sleep(NOT_RUNNING_RETRY).await;
                         continue;
                     }
@@ -1866,9 +1873,11 @@ impl Gateway {
         let ln_cfg: &LightningClientConfig = cfg.cast()?;
 
         if ln_cfg.network.0 != network {
-            error!(
-                "Federation {federation_id} runs on {} but this gateway supports {network}",
-                ln_cfg.network,
+            crit!(
+                target: LOG_GATEWAY,
+                federation_id = %federation_id,
+                network = %network,
+                "Incorrect network for federation",
             );
             return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
                 "Unsupported network {}",
@@ -1897,9 +1906,11 @@ impl Gateway {
         let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
 
         if ln_cfg.network != network {
-            error!(
-                "Federation {federation_id} runs on {} but this gateway supports {network}",
-                ln_cfg.network,
+            crit!(
+                target: LOG_GATEWAY,
+                federation_id = %federation_id,
+                network = %network,
+                "Incorrect network for federation",
             );
             return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
                 "Unsupported network {}",
@@ -2259,13 +2270,13 @@ impl IGatewayClientV2 for Gateway {
                         .await
                     {
                         Ok(..) => return,
-                        Err(error) => {
-                            warn!("Trying to complete HTLC but got {error}, will keep retrying...");
+                        Err(err) => {
+                            warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
                         }
                     }
                 }
-                Err(error) => {
-                    warn!("Trying to complete HTLC but got {error}, will keep retrying...");
+                Err(err) => {
+                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
                 }
             }
 
@@ -2440,8 +2451,8 @@ impl IGatewayClientV1 for Gateway {
         let lightning_context = loop {
             match self.get_lightning_context().await {
                 Ok(lightning_context) => break lightning_context,
-                Err(e) => {
-                    warn!("Trying to complete HTLC but got {e}, will keep retrying...");
+                Err(err) => {
+                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
                     sleep(Duration::from_secs(5)).await;
                     continue;
                 }
