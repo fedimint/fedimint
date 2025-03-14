@@ -35,7 +35,6 @@ use tracing::Instrument;
 // TODO: Make this module public and remove theDkgPeerMessage`pub use` below
 mod version;
 pub use self::version::*;
-use crate::config::P2PMessage;
 use crate::core::{
     ClientConfig, Decoder, DecoderBuilder, Input, InputError, ModuleConsensusItem,
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
@@ -46,9 +45,8 @@ use crate::db::{
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
-use crate::net::peers::DynP2PConnections;
 use crate::task::MaybeSend;
-use crate::{Amount, PeerId, apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
+use crate::{Amount, apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InputMeta {
@@ -162,6 +160,8 @@ pub struct ApiError {
     pub code: i32,
     pub message: String,
 }
+
+pub type ApiResult<T> = Result<T, ApiError>;
 
 impl ApiError {
     pub fn new(code: i32, message: String) -> Self {
@@ -349,7 +349,6 @@ macro_rules! __api_endpoint {
 }
 
 pub use __api_endpoint as api_endpoint;
-use fedimint_core::NumPeers;
 
 use self::registry::ModuleDecoderRegistry;
 
@@ -682,40 +681,5 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncodingBase64<T> {
             module_instance,
             &ModuleRegistry::default(),
         )
-    }
-}
-
-/// A handle passed to `ServerModuleInit::distributed_gen`
-///
-/// This struct encapsulates dkg data that the module should not have a direct
-/// access to, and implements higher level dkg operations available to the
-/// module to complete its distributed initialization inside the federation.
-#[non_exhaustive]
-pub struct PeerHandle<'a> {
-    // TODO: this whole type should be a part of a `fedimint-server` and fields here inaccessible
-    // to outside crates, but until `ServerModule` is not in `fedimint-server` this is impossible
-    #[doc(hidden)]
-    pub num_peers: NumPeers,
-    #[doc(hidden)]
-    pub identity: PeerId,
-    #[doc(hidden)]
-    pub connections: &'a DynP2PConnections<P2PMessage>,
-}
-
-impl<'a> PeerHandle<'a> {
-    pub fn new(
-        num_peers: NumPeers,
-        identity: PeerId,
-        connections: &'a DynP2PConnections<P2PMessage>,
-    ) -> Self {
-        Self {
-            num_peers,
-            identity,
-            connections,
-        }
-    }
-
-    pub fn num_peers(&self) -> NumPeers {
-        self.num_peers
     }
 }

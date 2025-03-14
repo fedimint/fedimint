@@ -22,7 +22,7 @@ use fedimint_core::db::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
     TransactionItemAmount, api_endpoint,
 };
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
@@ -41,8 +41,9 @@ use fedimint_meta_common::{
     MetaInputError, MetaKey, MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome,
     MetaValue,
 };
-use fedimint_server::core::migration::ServerModuleDbMigrationFn;
-use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::config::PeerHandleOps;
+use fedimint_server_core::migration::ServerModuleDbMigrationFn;
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use rand::{Rng, thread_rng};
 use strum::IntoEnumIterator;
@@ -167,7 +168,7 @@ impl ServerModuleInit for MetaInit {
     /// Generates configs for all peers in an untrusted manner
     async fn distributed_gen(
         &self,
-        _peers: &PeerHandle,
+        _peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig> {
         let _params = self.parse_params(params).unwrap();

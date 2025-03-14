@@ -17,7 +17,7 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransacti
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, PeerHandle, SupportedModuleApiVersions, TransactionItemAmount,
+    ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_dummy_common::config::{
@@ -29,6 +29,7 @@ use fedimint_dummy_common::{
     DummyOutput, DummyOutputError, DummyOutputOutcome, MODULE_CONSENSUS_VERSION,
     broken_fed_public_key, fed_public_key,
 };
+use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::{FutureExt, StreamExt};
@@ -143,7 +144,7 @@ impl ServerModuleInit for DummyInit {
     /// Generates configs for all peers in an untrusted manner
     async fn distributed_gen(
         &self,
-        _peers: &PeerHandle,
+        _peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();

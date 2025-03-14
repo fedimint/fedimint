@@ -22,8 +22,8 @@ use fedimint_core::db::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
-    TransactionItemAmount, api_endpoint,
+    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    api_endpoint,
 };
 use fedimint_core::{
     Amount, InPoint, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply,
@@ -41,12 +41,12 @@ use fedimint_mint_common::{
     MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput, MintOutputError,
     MintOutputOutcome,
 };
-use fedimint_server::config::distributedgen::{PeerHandleOps, eval_poly_g2};
-use fedimint_server::core::migration::{
+use fedimint_server_core::config::{PeerHandleOps, eval_poly_g2};
+use fedimint_server_core::migration::{
     ModuleHistoryItem, ServerModuleDbMigrationFn, ServerModuleDbMigrationFnContext,
     ServerModuleDbMigrationFnContextExt as _,
 };
-use fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::{FutureExt as _, StreamExt};
 use itertools::Itertools;
 use metrics::{
@@ -213,7 +213,7 @@ impl ServerModuleInit for MintInit {
 
     async fn distributed_gen(
         &self,
-        peers: &PeerHandle,
+        peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();

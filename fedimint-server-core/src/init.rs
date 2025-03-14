@@ -15,11 +15,12 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
-    ModuleInit, PeerHandle, SupportedModuleApiVersions,
+    ModuleInit, SupportedModuleApiVersions,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 
+use crate::config::PeerHandleOps;
 use crate::migration::{
     DynServerDbMigrationFn, ServerDbMigrationFnContext, ServerModuleDbMigrationContext,
     ServerModuleDbMigrationFn,
@@ -64,7 +65,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
 
     async fn distributed_gen(
         &self,
-        peers: &PeerHandle,
+        peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig>;
 
@@ -218,7 +219,7 @@ pub trait ServerModuleInit: ModuleInit + Sized {
 
     async fn distributed_gen(
         &self,
-        peer: &PeerHandle,
+        peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig>;
 
@@ -309,7 +310,7 @@ where
 
     async fn distributed_gen(
         &self,
-        peers: &PeerHandle,
+        peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
     ) -> anyhow::Result<ServerModuleConfig> {
         <Self as ServerModuleInit>::distributed_gen(self, peers, params).await

@@ -18,7 +18,9 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bls12_381 = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 futures = { workspace = true }
+group = { workspace = true }
 tokio = { workspace = true }

@@ -3,17 +3,17 @@ use std::iter::once;
 
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
-use bls12_381::{G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
+use bls12_381::{G1Projective, G2Projective, Scalar};
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{DkgMessage, P2PMessage};
-use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::PeerHandle;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::encoding::Encodable as _;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::{NumPeers, PeerId};
-use group::Curve;
+use fedimint_server_core::config::{PeerHandleOps, g1, g2, scalar};
 use group::ff::Field;
 use rand::rngs::OsRng;
+
+use super::peer_handle::PeerHandle;
 
 // Implementation of the classic Pedersen DKG.
 
@@ -153,19 +153,6 @@ impl Dkg {
     }
 }
 
-fn g1(scalar: &Scalar) -> G1Projective {
-    G1Projective::generator() * scalar
-}
-
-fn g2(scalar: &Scalar) -> G2Projective {
-    G2Projective::generator() * scalar
-}
-
-// Offset by 1, since evaluating a poly at 0 reveals the secret
-fn scalar(peer: &PeerId) -> Scalar {
-    Scalar::from(peer.to_usize() as u64 + 1)
-}
-
 /// Runs the DKG algorithms with our peers. We do not handle any unexpected
 /// messages and all peers are expected to be cooperative.
 pub async fn run_dkg(
@@ -227,47 +214,12 @@ enum DkgStep {
     Result((Vec<(G1Projective, G2Projective)>, Scalar)),
 }
 
-pub fn eval_poly_g1(coefficients: &[G1Projective], peer: &PeerId) -> G1Affine {
-    coefficients
-        .iter()
-        .copied()
-        .rev()
-        .reduce(|acc, coefficient| acc * scalar(peer) + coefficient)
-        .expect("We have at least one coefficient")
-        .to_affine()
-}
-
-pub fn eval_poly_g2(coefficients: &[G2Projective], peer: &PeerId) -> G2Affine {
-    coefficients
-        .iter()
-        .copied()
-        .rev()
-        .reduce(|acc, coefficient| acc * scalar(peer) + coefficient)
-        .expect("We have at least one coefficient")
-        .to_affine()
-}
-
-// TODO: this trait is only needed to break the `DkgHandle` impl
-// from it's definition that is still in `fedimint-core`
-#[async_trait]
-pub trait PeerHandleOps {
-    async fn run_dkg_g1(&self) -> anyhow::Result<(Vec<G1Projective>, Scalar)>;
-
-    async fn run_dkg_g2(&self) -> anyhow::Result<(Vec<G2Projective>, Scalar)>;
-
-    /// Exchanges a `DkgPeerMsg::Module(Vec<u8>)` with all peers. All peers are
-    /// required to be online and submit a response for this to return
-    /// properly. The caller's message will be included in the returned
-    /// `BTreeMap` under the `PeerId` of this peer. This allows modules to
-    /// exchange arbitrary data during distributed key generation.
-    async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
-        &self,
-        data: T,
-    ) -> anyhow::Result<BTreeMap<PeerId, T>>;
-}
-
 #[async_trait]
 impl<'a> PeerHandleOps for PeerHandle<'a> {
+    fn num_peers(&self) -> NumPeers {
+        self.num_peers
+    }
+
     async fn run_dkg_g1(&self) -> anyhow::Result<(Vec<G1Projective>, Scalar)> {
         run_dkg(self.num_peers, self.identity, self.connections)
             .await
@@ -280,20 +232,14 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
             .map(|(poly, sk)| (poly.into_iter().map(|c| c.1).collect(), sk))
     }
 
-    async fn exchange_encodable<T: Encodable + Decodable + Send + Sync>(
-        &self,
-        data: T,
-    ) -> anyhow::Result<BTreeMap<PeerId, T>> {
-        let mut peer_data: BTreeMap<PeerId, T> = BTreeMap::new();
+    async fn exchange_bytes(&self, bytes: Vec<u8>) -> anyhow::Result<BTreeMap<PeerId, Vec<u8>>> {
+        let mut peer_data: BTreeMap<PeerId, Vec<u8>> = BTreeMap::new();
 
         self.connections
-            .send(
-                Recipient::Everyone,
-                P2PMessage::Encodable(data.consensus_encode_to_vec()),
-            )
+            .send(Recipient::Everyone, P2PMessage::Encodable(bytes.clone()))
             .await;
 
-        peer_data.insert(self.identity, data);
+        peer_data.insert(self.identity, bytes);
 
         for peer in self.num_peers.peer_ids().filter(|p| *p != self.identity) {
             let message = self
@@ -304,10 +250,7 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
 
             match message {
                 P2PMessage::Encodable(bytes) => {
-                    peer_data.insert(
-                        peer,
-                        T::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())?,
-                    );
+                    peer_data.insert(peer, bytes);
                 }
                 message => {
                     anyhow::bail!("Invalid message from {peer}: {message:?}");
@@ -325,9 +268,10 @@ mod tests {
 
     use bls12_381::{G1Projective, G2Projective};
     use fedimint_core::{NumPeersExt, PeerId};
+    use fedimint_server_core::config::{eval_poly_g1, eval_poly_g2, g1, g2};
     use group::Curve;
 
-    use crate::config::distributedgen::{Dkg, DkgStep, eval_poly_g1, eval_poly_g2, g1, g2};
+    use crate::config::distributedgen::{Dkg, DkgStep};
 
     #[test_log::test]
     fn test_dkg() {
