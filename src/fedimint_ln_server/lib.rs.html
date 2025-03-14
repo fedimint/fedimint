@@ -23,7 +23,7 @@
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_core::module::audit::Audit;
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_core::module::{
 <a href=#25 id=25 data-nosnippet>25</a>    ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-<a href=#26 id=26 data-nosnippet>26</a>    InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle, SupportedModuleApiVersions,
+<a href=#26 id=26 data-nosnippet>26</a>    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
 <a href=#27 id=27 data-nosnippet>27</a>    TransactionItemAmount, api_endpoint,
 <a href=#28 id=28 data-nosnippet>28</a>};
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
@@ -57,8 +57,8 @@
 <a href=#57 id=57 data-nosnippet>57</a>    create_gateway_remove_message,
 <a href=#58 id=58 data-nosnippet>58</a>};
 <a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span>fedimint_logging::LOG_MODULE_LN;
-<a href=#60 id=60 data-nosnippet>60</a><span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
-<a href=#61 id=61 data-nosnippet>61</a><span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+<a href=#60 id=60 data-nosnippet>60</a><span class="kw">use </span>fedimint_server_core::config::PeerHandleOps;
+<a href=#61 id=61 data-nosnippet>61</a><span class="kw">use </span>fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 <a href=#62 id=62 data-nosnippet>62</a><span class="kw">use </span>futures::StreamExt;
 <a href=#63 id=63 data-nosnippet>63</a><span class="kw">use </span>metrics::{LN_CANCEL_OUTGOING_CONTRACTS, LN_FUNDED_CONTRACT_SATS, LN_INCOMING_OFFER};
 <a href=#64 id=64 data-nosnippet>64</a><span class="kw">use </span>rand::rngs::OsRng;
@@ -261,7 +261,7 @@
 <a href=#261 id=261 data-nosnippet>261</a>
 <a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">async fn </span>distributed_gen(
 <a href=#263 id=263 data-nosnippet>263</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#264 id=264 data-nosnippet>264</a>        peers: <span class="kw-2">&amp;</span>PeerHandle,
+<a href=#264 id=264 data-nosnippet>264</a>        peers: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>PeerHandleOps + Send + Sync),
 <a href=#265 id=265 data-nosnippet>265</a>        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
 <a href=#266 id=266 data-nosnippet>266</a>    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
 <a href=#267 id=267 data-nosnippet>267</a>        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
@@ -1262,7 +1262,7 @@
 <a href=#1262 id=1262 data-nosnippet>1262</a>        PreimageKey,
 <a href=#1263 id=1263 data-nosnippet>1263</a>    };
 <a href=#1264 id=1264 data-nosnippet>1264</a>    <span class="kw">use </span>fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
-<a href=#1265 id=1265 data-nosnippet>1265</a>    <span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleShared <span class="kw">as _</span>};
+<a href=#1265 id=1265 data-nosnippet>1265</a>    <span class="kw">use </span>fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleShared <span class="kw">as _</span>};
 <a href=#1266 id=1266 data-nosnippet>1266</a>    <span class="kw">use </span>rand::rngs::OsRng;
 <a href=#1267 id=1267 data-nosnippet>1267</a>
 <a href=#1268 id=1268 data-nosnippet>1268</a>    <span class="kw">use </span><span class="kw">crate</span>::db::{ContractKey, LightningAuditItemKey};

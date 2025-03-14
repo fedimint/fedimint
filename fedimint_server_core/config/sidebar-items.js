@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["eval_poly_g1","eval_poly_g2","g1","g2","scalar"],"trait":["PeerHandleOps","PeerHandleOpsExt"]};

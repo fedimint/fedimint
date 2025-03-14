@@ -53,7 +53,7 @@
 <a href=#53 id=53 data-nosnippet>53</a><span class="kw">use </span>fedimint_core::module::audit::Audit;
 <a href=#54 id=54 data-nosnippet>54</a><span class="kw">use </span>fedimint_core::module::{
 <a href=#55 id=55 data-nosnippet>55</a>    ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
-<a href=#56 id=56 data-nosnippet>56</a>    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
+<a href=#56 id=56 data-nosnippet>56</a>    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
 <a href=#57 id=57 data-nosnippet>57</a>    SupportedModuleApiVersions, TransactionItemAmount, api_endpoint,
 <a href=#58 id=58 data-nosnippet>58</a>};
 <a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -65,10 +65,10 @@
 <a href=#65 id=65 data-nosnippet>65</a>    get_network_for_address, push_db_key_items, push_db_pair_items,
 <a href=#66 id=66 data-nosnippet>66</a>};
 <a href=#67 id=67 data-nosnippet>67</a><span class="kw">use </span>fedimint_logging::LOG_MODULE_WALLET;
-<a href=#68 id=68 data-nosnippet>68</a><span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
-<a href=#69 id=69 data-nosnippet>69</a><span class="kw">use </span>fedimint_server::core::migration::ServerModuleDbMigrationFn;
-<a href=#70 id=70 data-nosnippet>70</a><span class="kw">use </span>fedimint_server::core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
-<a href=#71 id=71 data-nosnippet>71</a><span class="kw">use </span>fedimint_server::net::api::check_auth;
+<a href=#68 id=68 data-nosnippet>68</a><span class="kw">use </span>fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
+<a href=#69 id=69 data-nosnippet>69</a><span class="kw">use </span>fedimint_server_core::migration::ServerModuleDbMigrationFn;
+<a href=#70 id=70 data-nosnippet>70</a><span class="kw">use </span>fedimint_server_core::net::check_auth;
+<a href=#71 id=71 data-nosnippet>71</a><span class="kw">use </span>fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 <a href=#72 id=72 data-nosnippet>72</a><span class="kw">pub use </span>fedimint_wallet_common <span class="kw">as </span>common;
 <a href=#73 id=73 data-nosnippet>73</a><span class="kw">use </span>fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 <a href=#74 id=74 data-nosnippet>74</a><span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{
@@ -341,7 +341,7 @@
 <a href=#341 id=341 data-nosnippet>341</a>
 <a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">async fn </span>distributed_gen(
 <a href=#343 id=343 data-nosnippet>343</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#344 id=344 data-nosnippet>344</a>        peers: <span class="kw-2">&amp;</span>PeerHandle,
+<a href=#344 id=344 data-nosnippet>344</a>        peers: <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>PeerHandleOps + Send + Sync),
 <a href=#345 id=345 data-nosnippet>345</a>        params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
 <a href=#346 id=346 data-nosnippet>346</a>    ) -&gt; anyhow::Result&lt;ServerModuleConfig&gt; {
 <a href=#347 id=347 data-nosnippet>347</a>        <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
