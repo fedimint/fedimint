@@ -489,6 +489,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
         async move {
             let peer_port = 10000 + 8137 + peer * 2;
             let api_port = peer_port + 1;
+            let ui_port = peer_port + 2;
             let metrics_port = 3510 + peer;
 
             // TODO: we should use this, and override ports that need to be fixed by an env
@@ -506,6 +507,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
                 FM_P2P_URL: format!("fedimint://127.0.0.1:{peer_port}"),
                 FM_BIND_API: format!("127.0.0.1:{api_port}"),
                 FM_API_URL: format!("ws://127.0.0.1:{api_port}"),
+                FM_BIND_UI: format!("127.0.0.1:{ui_port}"),
                 FM_DATA_DIR: process_mgr
                     .globals
                     .FM_DATA_DIR

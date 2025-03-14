@@ -173,7 +173,7 @@ pub struct FederationTestBuilder {
     base_port: u16,
     primary_module_kind: ModuleKind,
     version_hash: String,
-    params: ServerModuleConfigGenParamsRegistry,
+    modules: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
 }
@@ -194,7 +194,7 @@ impl FederationTestBuilder {
                 .expect("Failed to allocate a port range"),
             primary_module_kind,
             version_hash: "fedimint-testing-dummy-version-hash".to_owned(),
-            params,
+            modules: params,
             server_init,
             client_init,
         }
@@ -232,16 +232,23 @@ impl FederationTestBuilder {
             "too many peers offline ({num_offline}) to reach consensus"
         );
         let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
-        let params = local_config_gen_params(&peers, self.base_port, &self.params)
+        let params = local_config_gen_params(&peers, self.base_port, &self.modules)
             .expect("Generates local config");
 
-        let configs =
-            ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
+        let configs = ServerConfig::trusted_dealer_gen(
+            self.modules,
+            &params,
+            &self.server_init,
+            &self.version_hash,
+        );
 
         let task_group = TaskGroup::new();
         for (peer_id, cfg) in configs.clone() {
-            let p2p_bind_addr = params.get(&peer_id).expect("Must exist").p2p_bind;
-            let api_bind_addr = params.get(&peer_id).expect("Must exist").api_bind;
+            let peer_port = self.base_port + u16::from(peer_id) * 2;
+
+            let p2p_bind = format!("127.0.0.1:{peer_port}").parse().unwrap();
+            let api_bind = format!("127.0.0.1:{}", peer_port + 1).parse().unwrap();
+
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
@@ -256,7 +263,7 @@ impl FederationTestBuilder {
 
             let connector = TlsTcpConnector::new(
                 cfg.tls_config(),
-                p2p_bind_addr,
+                p2p_bind,
                 cfg.local.p2p_endpoints.clone(),
                 cfg.local.identity,
             )
@@ -277,7 +284,7 @@ impl FederationTestBuilder {
                 Box::pin(consensus::run(
                     connections,
                     p2p_status_receivers,
-                    api_bind_addr,
+                    api_bind,
                     cfg.clone(),
                     db.clone(),
                     module_init_registry,
