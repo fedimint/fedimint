@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["INVALID_INVOICE_PAYMENT_SECRET","MOCK_INVOICE_PREIMAGE"],"enum":["LightningNodeType"],"struct":["FakeLightningTest"]};
+window.SIDEBAR_ITEMS = {"constant":["INVALID_INVOICE_PAYMENT_SECRET","MOCK_INVOICE_PREIMAGE"],"struct":["FakeLightningTest"]};

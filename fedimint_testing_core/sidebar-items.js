@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["test_dir"],"mod":["db","envs"]};
+window.SIDEBAR_ITEMS = {"fn":["test_dir"],"mod":["config","db","envs","node_type"]};

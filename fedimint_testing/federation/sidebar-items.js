@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["local_config_gen_params"],"static":["API_AUTH"],"struct":["FederationTest","FederationTestBuilder"]};
+window.SIDEBAR_ITEMS = {"struct":["FederationTest","FederationTestBuilder"]};
