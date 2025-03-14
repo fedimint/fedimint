@@ -13,7 +13,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, get_current_database_version};
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    BitcoinRpcConfig, FM_DISABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
@@ -350,7 +350,9 @@ impl Fedimintd {
                 },
             );
 
-        let s = if is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV) {
+        let s = if is_env_var_set(FM_DISABLE_MODULE_LNV2_ENV) {
+            s
+        } else {
             s.with_module_kind(fedimint_lnv2_server::LightningInit)
                 .with_module_instance(
                     fedimint_lnv2_server::LightningInit::kind(),
@@ -365,8 +367,6 @@ impl Fedimintd {
                         },
                     },
                 )
-        } else {
-            s
         };
 
         let s = if is_env_var_set(FM_DISABLE_META_MODULE_ENV) {

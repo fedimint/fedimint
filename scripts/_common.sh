@@ -80,7 +80,10 @@ function run_test_for_versions() {
   fed_version=$3
   client_version=$5
   gateway_version=$7
-  export FM_ENABLE_MODULE_LNV2=$9
+  LNV2=$9
+  if [ "$LNV2" -eq 0 ]; then
+    export FM_DISABLE_MODULE_LNV2=1
+  fi
 
   use_fed_binaries_for_version "$fed_version"
   use_client_binaries_for_version "$client_version"
@@ -95,12 +98,12 @@ function run_test_for_versions() {
     export FM_BACKWARDS_COMPATIBILITY_TEST=1
     # run back-compat tests with 4/4 setup
     export FM_OFFLINE_NODES=0
-    export FM_RUN_TEST_VERSIONS="FM: $fed_version, CLI: $client_version, GW: $gateway_version LNv2: $FM_ENABLE_MODULE_LNV2"
+    export FM_RUN_TEST_VERSIONS="FM: $fed_version, CLI: $client_version, GW: $gateway_version LNv2: $LNV2"
   else
     # default to run current tests in 3/4 setup
     export FM_OFFLINE_NODES=1
     export FM_DISCOVER_API_VERSION_TIMEOUT=5
-    export FM_RUN_TEST_VERSIONS="LNv2: $FM_ENABLE_MODULE_LNV2"
+    export FM_RUN_TEST_VERSIONS="LNv2: $LNV2"
   fi
 
   if [[ ("$client_version"  == "v0.2.1" || "$client_version"  == "v0.2.2" ) && "$fed_version" == "current" ]]; then

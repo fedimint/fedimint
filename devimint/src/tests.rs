@@ -11,7 +11,7 @@ use bitcoin::Txid;
 use clap::Subcommand;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
+use fedimint_core::envs::{FM_DISABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
@@ -1983,7 +1983,9 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         }
         TestCmd::UpgradeTests { binary, lnv2 } => {
             // TODO: Audit that the environment access only happens in single-threaded code.
-            unsafe { std::env::set_var(FM_ENABLE_MODULE_LNV2_ENV, lnv2) };
+            if lnv2 == "0" {
+                unsafe { std::env::set_var(FM_DISABLE_MODULE_LNV2_ENV, "1") };
+            }
             let (process_mgr, _) = setup(common_args).await?;
             Box::pin(upgrade_tests(&process_mgr, binary)).await?;
         }
