@@ -869,7 +869,7 @@
 <a href=#869 id=869 data-nosnippet>869</a>        LnInvoiceGeneration::LdkLightningCli =&gt; {
 <a href=#870 id=870 data-nosnippet>870</a>            <span class="kw">let </span>invoice = ldk_create_invoice(<span class="kw-2">*</span>invoice_amount).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#871 id=871 data-nosnippet>871</a>            <span class="kw">let </span>elapsed = create_invoice_time.elapsed()<span class="question-mark">?</span>;
-<a href=#872 id=872 data-nosnippet>872</a>            <span class="macro">info!</span>(<span class="string">"Created invoice using CLN in {elapsed:?}"</span>);
+<a href=#872 id=872 data-nosnippet>872</a>            <span class="macro">info!</span>(<span class="string">"Created invoice using LDK in {elapsed:?}"</span>);
 <a href=#873 id=873 data-nosnippet>873</a>            event_sender.send(MetricEvent {
 <a href=#874 id=874 data-nosnippet>874</a>                name: GATEWAY_CREATE_INVOICE.into(),
 <a href=#875 id=875 data-nosnippet>875</a>                duration: elapsed,
