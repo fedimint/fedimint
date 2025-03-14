@@ -26,7 +26,7 @@ erased-serde = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-gateway-server = { workspace = true }
+fedimint-gateway-server-db = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
