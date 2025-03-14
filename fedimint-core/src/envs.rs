@@ -16,7 +16,7 @@ use crate::util::FmtCompact as _;
 /// all client code handles correct modules that client doesn't know about.
 pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 
-pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
+pub const FM_DISABLE_MODULE_LNV2_ENV: &str = "FM_DISABLE_MODULE_LNV2";
 
 /// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.

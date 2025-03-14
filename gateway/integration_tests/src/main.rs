@@ -200,7 +200,7 @@ async fn mnemonic_upgrade_test(
     // TODO: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", old_gateway_cli_path) };
     // TODO: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("FM_ENABLE_MODULE_LNV2", "0") };
+    unsafe { std::env::set_var("FM_DISABLE_MODULE_LNV2", "1") };
 
     devimint::run_devfed_test()
         .call(|dev_fed, process_mgr| async move {
