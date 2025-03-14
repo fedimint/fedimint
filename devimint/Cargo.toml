@@ -19,7 +19,6 @@ bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 bon = { workspace = true }
 clap = { workspace = true }
-cln-rpc = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }

@@ -140,9 +140,9 @@ declare_vars! {
         FM_PORT_BTC_P2P: u16 = port_alloc(1)?; env: "FM_PORT_BTC_P2P";
         FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK";
         FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_TX";
-        FM_PORT_CLN: u16 = port_alloc(1)?; env: "FM_PORT_CLN";
         FM_PORT_LND_LISTEN: u16 = port_alloc(1)?; env: "FM_PORT_LND_LISTEN";
         FM_PORT_LDK: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
+        FM_PORT_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
         FM_PORT_LND_RPC: u16 = port_alloc(1)?; env: "FM_PORT_LND_RPC";
         FM_PORT_LND_REST: u16 = port_alloc(1)?; env: "FM_PORT_LND_REST";
         FM_PORT_ELECTRS: u16 = port_alloc(1)?; env: "FM_PORT_ELECTRS";
@@ -153,6 +153,7 @@ declare_vars! {
         FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((3 * fed_size).try_into().unwrap())?; env: "FM_PORT_FEDIMINTD_BASE";
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
+        FM_PORT_GW_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
 
         FM_FEDERATION_BASE_PORT: u16 =  port_alloc((PORTS_PER_FEDIMINTD as usize * fed_size * num_feds).try_into().unwrap())?; env: "FM_FEDERATION_BASE_PORT";
@@ -160,7 +161,6 @@ declare_vars! {
 
         FM_LDK_BITCOIND_RPC_URL: String = format!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_LDK_BITCOIND_RPC_URL";
 
-        FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join("cln")).await?; env: "FM_CLN_DIR";
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?; env: "FM_LND_DIR";
         FM_LDK_DIR: PathBuf = mkdir(FM_TEST_DIR.join("ldk")).await?; env: "FM_LDK_DIR";
         FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join("bitcoin")).await?; env: "FM_BTC_DIR";
@@ -171,7 +171,6 @@ declare_vars! {
         FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join("esplora")).await?; env: "FM_ESPLORA_DIR";
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join("ready"); env: "FM_READY_FILE";
 
-        FM_CLN_SOCKET: PathBuf = FM_CLN_DIR.join("regtest/lightning-rpc"); env: "FM_CLN_SOCKET";
         FM_LND_RPC_ADDR: String = f!("https://localhost:{FM_PORT_LND_RPC}"); env: "FM_LND_RPC_ADDR";
         FM_LND_TLS_CERT: PathBuf = FM_LND_DIR.join("tls.cert"); env: "FM_LND_TLS_CERT";
         FM_LND_MACAROON: PathBuf = FM_LND_DIR.join("data/chain/bitcoin/regtest/admin.macaroon"); env: "FM_LND_MACAROON";
@@ -189,9 +188,6 @@ declare_vars! {
         FM_FAUCET_BIND_ADDR: String = f!("0.0.0.0:{FM_PORT_FAUCET}"); env: "FM_FAUCET_BIND_ADDR";
 
         // clients env: "// ";
-        FM_LIGHTNING_CLI: String = f!("{lightning_cli} --network regtest --lightning-dir={lightning_dir}",
-            lightning_cli = crate::util::get_lightning_cli_path().join(" "),
-            lightning_dir = utf8(&FM_CLN_DIR)); env: "FM_LIGHTNING_CLI";
         FM_LNCLI: String = f!("{lncli} -n regtest --lnddir={lnddir} --rpcserver=localhost:{FM_PORT_LND_RPC}",
             lncli = crate::util::get_lncli_path().join(" "),
             lnddir = utf8(&FM_LND_DIR)); env: "FM_LNCLI";

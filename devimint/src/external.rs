@@ -1,20 +1,17 @@
 use std::ops::ControlFlow;
-use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use bitcoin::hashes::Hash;
+use bitcoin::hashes::{Hash, sha256};
 use bitcoincore_rpc::RpcApi;
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 use bitcoincore_rpc::jsonrpc::error::RpcError;
-use cln_rpc::ClnRpc;
-use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
-use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
+use fedimint_core::task::{block_in_place, sleep, timeout};
 use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::ln::LightningNodeType;
@@ -26,13 +23,13 @@ use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tonic_lnd::Client as LndClient;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
-use tracing::{debug, info, trace, warn};
+use tonic_lnd::lnrpc::GetInfoRequest;
+use tracing::{debug, info, trace};
 
 use crate::util::{ProcessHandle, ProcessManager, poll};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_5_0_ALPHA;
-use crate::{Gatewayd, cmd, poll_eq};
+use crate::{Gatewayd, cmd};
 
 #[derive(Clone)]
 pub struct Bitcoind {
@@ -381,188 +378,6 @@ impl Bitcoind {
     }
 }
 
-pub struct LightningdProcessHandle(ProcessHandle);
-
-impl LightningdProcessHandle {
-    async fn terminate(&self) -> Result<()> {
-        if self.0.is_running().await {
-            self.0.terminate().await
-        } else {
-            Ok(())
-        }
-    }
-}
-
-impl Drop for LightningdProcessHandle {
-    fn drop(&mut self) {
-        // Terminate cln in a controlled way, otherwise it may leave running processes.
-        block_in_place(|| {
-            if let Err(e) = block_on(self.terminate()) {
-                warn!(target: LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
-            }
-        });
-    }
-}
-
-#[derive(Clone)]
-pub struct Lightningd {
-    pub(crate) rpc: Arc<Mutex<ClnRpc>>,
-    pub(crate) process: Arc<LightningdProcessHandle>,
-    pub(crate) bitcoind: Bitcoind,
-}
-
-impl Lightningd {
-    pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        let cln_dir = &process_mgr.globals.FM_CLN_DIR;
-        let conf = format!(
-            include_str!("cfg/lightningd.conf"),
-            port = process_mgr.globals.FM_PORT_CLN,
-            bitcoin_rpcport = process_mgr.globals.FM_PORT_BTC_RPC,
-            log_path = process_mgr.globals.FM_CLN_DIR.join("cln.log").display(),
-        );
-        write_overwrite_async(process_mgr.globals.FM_CLN_DIR.join("config"), conf).await?;
-        let process = Lightningd::start(process_mgr, cln_dir).await?;
-
-        let socket_cln = cln_dir.join("regtest/lightning-rpc");
-        poll("lightningd", || async {
-            ClnRpc::new(socket_cln.clone())
-                .await
-                .context("connect to lightningd")
-                .map_err(ControlFlow::Continue)
-        })
-        .await?;
-        let rpc = ClnRpc::new(socket_cln).await?;
-        Ok(Self {
-            bitcoind,
-            rpc: Arc::new(Mutex::new(rpc)),
-            process: Arc::new(LightningdProcessHandle(process)),
-        })
-    }
-
-    pub async fn start(process_mgr: &ProcessManager, cln_dir: &Path) -> Result<ProcessHandle> {
-        let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
-        let cmd = cmd!(
-            crate::util::Lightningd,
-            "--dev-fast-gossip",
-            "--dev-bitcoind-poll=1",
-            format!("--lightning-dir={}", utf8(cln_dir)),
-            format!("--bitcoin-datadir={btc_dir}"),
-        );
-
-        process_mgr.spawn_daemon("lightningd", cmd).await
-    }
-
-    pub async fn request<R>(&self, request: R) -> Result<R::Response>
-    where
-        R: cln_rpc::model::TypedRequest + serde::Serialize + std::fmt::Debug,
-        R::Response: serde::de::DeserializeOwned + std::fmt::Debug,
-    {
-        let mut rpc = self.rpc.lock().await;
-        Ok(rpc.call_typed(&request).await?)
-    }
-
-    // TODO: Remove this method once we drop backwards compatibility for versions
-    // earlier than v0.4.0-alpha.
-    async fn await_block_processing(&self) -> Result<()> {
-        poll("lightningd block processing", || async {
-            let btc_height = self
-                .bitcoind
-                .get_blockchain_info()
-                .await
-                .context("bitcoind getblockchaininfo")
-                .map_err(ControlFlow::Continue)?
-                .blocks;
-            let lnd_height = self
-                .request(cln_rpc::model::requests::GetinfoRequest {})
-                .await
-                .map_err(ControlFlow::Continue)?
-                .blockheight;
-            poll_eq!(u64::from(lnd_height), btc_height)
-        })
-        .await?;
-        Ok(())
-    }
-
-    pub async fn pub_key(&self) -> Result<String> {
-        Ok(self
-            .request(cln_rpc::model::requests::GetinfoRequest {})
-            .await?
-            .id
-            .to_string())
-    }
-
-    pub async fn terminate(self) -> Result<()> {
-        self.process.terminate().await
-    }
-
-    pub async fn invoice(
-        &self,
-        amount: u64,
-        description: String,
-        label: String,
-    ) -> anyhow::Result<String> {
-        let invoice = self
-            .request(cln_rpc::model::requests::InvoiceRequest {
-                amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount)),
-                description,
-                label,
-                expiry: Some(60),
-                fallbacks: None,
-                preimage: None,
-                cltv: None,
-                deschashonly: None,
-                exposeprivatechannels: None,
-            })
-            .await?
-            .bolt11;
-        Ok(invoice)
-    }
-
-    pub async fn pay_bolt11_invoice(&self, invoice: String) -> anyhow::Result<()> {
-        let invoice_status = self
-            .request(cln_rpc::model::requests::PayRequest {
-                bolt11: invoice,
-                amount_msat: None,
-                label: None,
-                riskfactor: None,
-                maxfeepercent: None,
-                retry_for: None,
-                maxdelay: None,
-                exemptfee: None,
-                localinvreqid: None,
-                exclude: None,
-                maxfee: None,
-                description: None,
-                partial_msat: None,
-            })
-            .await?
-            .status;
-
-        anyhow::ensure!(matches!(
-            invoice_status,
-            cln_rpc::model::responses::PayStatus::COMPLETE
-        ));
-
-        Ok(())
-    }
-
-    pub async fn wait_any_bolt11_invoice(&self) -> anyhow::Result<()> {
-        let invoice_status = self
-            .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
-                lastpay_index: None,
-                timeout: None,
-            })
-            .await?
-            .status;
-        anyhow::ensure!(matches!(
-            invoice_status,
-            cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
-        ));
-
-        Ok(())
-    }
-}
-
 #[derive(Clone)]
 pub struct Lnd {
     pub(crate) client: Arc<Mutex<LndClient>>,
@@ -664,30 +479,6 @@ impl Lnd {
             .identity_pubkey)
     }
 
-    // TODO: Remove this method once we drop backwards compatibility for versions
-    // earlier than v0.4.0-alpha.
-    async fn await_block_processing(&self) -> Result<()> {
-        poll("lnd block processing", || async {
-            let synced = self
-                .lightning_client_lock()
-                .await
-                .map_err(ControlFlow::Break)?
-                .get_info(GetInfoRequest {})
-                .await
-                .context("lnd get_info")
-                .map_err(ControlFlow::Continue)?
-                .into_inner()
-                .synced_to_chain;
-            if synced {
-                Ok(())
-            } else {
-                Err(ControlFlow::Continue(anyhow!("lnd not synced_to_chain")))
-            }
-        })
-        .await?;
-        Ok(())
-    }
-
     pub async fn terminate(self) -> Result<()> {
         self.process.terminate().await
     }
@@ -755,7 +546,7 @@ impl Lnd {
     pub async fn create_hold_invoice(
         &self,
         amount: u64,
-    ) -> anyhow::Result<([u8; 32], String, cln_rpc::primitives::Sha256)> {
+    ) -> anyhow::Result<([u8; 32], String, sha256::Hash)> {
         let preimage = rand::random::<[u8; 32]>();
         let hash = {
             let mut engine = bitcoin::hashes::sha256::Hash::engine();
@@ -788,7 +579,7 @@ impl Lnd {
     pub async fn settle_hold_invoice(
         &self,
         preimage: [u8; 32],
-        payment_hash: cln_rpc::primitives::Sha256,
+        payment_hash: sha256::Hash,
     ) -> anyhow::Result<()> {
         let mut hold_invoice_subscription = self
             .invoices_client_lock()
@@ -835,112 +626,6 @@ impl Lnd {
     }
 }
 
-// TODO: Remove this method once we drop backwards compatibility for versions
-// earlier than v0.4.0-alpha.
-pub async fn open_channel(
-    process_mgr: &ProcessManager,
-    bitcoind: &Bitcoind,
-    cln: &Lightningd,
-    lnd: &Lnd,
-) -> Result<()> {
-    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
-    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-
-    let cln_addr = cln
-        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
-        .await?
-        .bech32
-        .context("bech32 should be present")?;
-
-    bitcoind.send_to(cln_addr, 100_000_000).await?;
-    bitcoind.mine_blocks(10).await?;
-
-    let lnd_pubkey = lnd.pub_key().await?;
-    let cln_pubkey = cln.pub_key().await?;
-
-    cln.request(cln_rpc::model::requests::ConnectRequest {
-        id: format!(
-            "{}@127.0.0.1:{}",
-            lnd_pubkey, process_mgr.globals.FM_PORT_LND_LISTEN
-        ),
-        host: None,
-        port: None,
-    })
-    .await
-    .context("connect request")?;
-
-    poll("fund channel", || async {
-        cln.request(cln_rpc::model::requests::FundchannelRequest {
-            id: lnd_pubkey
-                .parse()
-                .context("failed to parse lnd pubkey")
-                .map_err(ControlFlow::Break)?,
-            amount: cln_rpc::primitives::AmountOrAll::Amount(
-                cln_rpc::primitives::Amount::from_sat(10_000_000),
-            ),
-            push_msat: Some(cln_rpc::primitives::Amount::from_sat(5_000_000)),
-            feerate: None,
-            announce: None,
-            minconf: None,
-            close_to: None,
-            request_amt: None,
-            compact_lease: None,
-            utxos: None,
-            mindepth: None,
-            reserve: None,
-            channel_type: None,
-        })
-        .await
-        .map_err(ControlFlow::Continue)
-    })
-    .await?;
-
-    bitcoind.mine_blocks(10).await?;
-
-    poll("Legacy Wait LND for channel update", || async {
-        let mut lnd_client = lnd.client.lock().await;
-        let channels = lnd_client
-            .lightning()
-            .list_channels(ListChannelsRequest {
-                active_only: true,
-                ..Default::default()
-            })
-            .await
-            .context("lnd list channels")
-            .map_err(ControlFlow::Break)?
-            .into_inner();
-
-        if let Some(channel) = channels
-            .channels
-            .iter()
-            .find(|channel| channel.remote_pubkey == cln_pubkey)
-        {
-            let chan_info = lnd_client
-                .lightning()
-                .get_chan_info(ChanInfoRequest {
-                    chan_id: channel.chan_id,
-                })
-                .await;
-
-            match chan_info {
-                Ok(_) => {
-                    return Ok(());
-                }
-                Err(err) => {
-                    debug!(target: LOG_DEVIMINT, err = %err.fmt_compact(), "Getting chan info failed");
-                }
-            }
-        }
-
-        Err(ControlFlow::Continue(anyhow!("channel not found")))
-    })
-    .await?;
-
-    info!(target: LOG_DEVIMINT, "open_channel successful");
-
-    Ok(())
-}
-
 pub type NamedGateway<'a> = (&'a Gatewayd, &'a str);
 
 #[allow(clippy::similar_names)]
@@ -977,15 +662,12 @@ pub async fn open_channels_between_gateways(
     .await?;
 
     // All unique pairs of gateways.
-    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C), (C, A)].
+    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C)].
     // Since the first gateway within each pair initiates the channel open,
     // order within each pair needs to be enforced so that each Lightning node opens
     // 1 channel.
-    let gateway_pairs: Vec<(&NamedGateway, &NamedGateway)> = if gateways.len() == 2 {
-        gateways.iter().tuple_windows::<(_, _)>().collect()
-    } else {
-        gateways.iter().circular_tuple_windows::<(_, _)>().collect()
-    };
+    let gateway_pairs: Vec<(&NamedGateway, &NamedGateway)> =
+        gateways.iter().tuple_windows::<(_, _)>().collect();
 
     info!(target: LOG_DEVIMINT, block_height = %block_height, "devimint current block");
     let sats_per_side = 5_000_000;
@@ -1061,14 +743,22 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
 #[derive(Clone)]
 pub enum LightningNode {
     Lnd(Lnd),
-    Ldk { name: String },
+    Ldk {
+        name: String,
+        gw_port: u16,
+        ldk_port: u16,
+    },
 }
 
 impl LightningNode {
     pub fn ln_type(&self) -> LightningNodeType {
         match self {
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
-            LightningNode::Ldk { name: _ } => LightningNodeType::Ldk,
+            LightningNode::Ldk {
+                name: _,
+                gw_port: _,
+                ldk_port: _,
+            } => LightningNodeType::Ldk,
         }
     }
 }

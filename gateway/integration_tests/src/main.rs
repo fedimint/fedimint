@@ -3,14 +3,16 @@
 use std::collections::BTreeMap;
 use std::env;
 use std::fs::remove_dir_all;
+use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::ensure;
 use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
-use devimint::util::ProcessManager;
+use devimint::util::{ProcessManager, poll_with_timeout};
 use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cmd, util};
 use fedimint_core::config::FederationId;
@@ -484,111 +486,152 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
 /// Test that verifies the various liquidity tools (onchain, lightning, ecash)
 /// work correctly.
+#[allow(clippy::too_many_lines)]
 async fn liquidity_test() -> anyhow::Result<()> {
-    devimint::run_devfed_test().call(|dev_fed, _process_mgr| async move {
-        let federation = dev_fed.fed().await?;
+    devimint::run_devfed_test()
+        .call(|dev_fed, _process_mgr| async move {
+            let federation = dev_fed.fed().await?;
 
-        if !devimint::util::supports_lnv2() {
-            info!(target: LOG_TEST, "LNv2 is not supported, which is necessary for LDK GW and liquidity test");
-            return Ok(());
-        }
+            if !devimint::util::supports_lnv2() {
+                info!(target: LOG_TEST, "LNv2 is not supported, which is necessary for LDK GW and liquidity test");
+                return Ok(());
+            }
 
-        let gw_lnd = dev_fed.gw_lnd_registered().await?;
-        let gw_ldk = dev_fed.gw_ldk_connected().await?;
-        let gateways = [gw_lnd, gw_ldk].to_vec();
+            let gw_lnd = dev_fed.gw_lnd_registered().await?;
+            let gw_ldk = dev_fed.gw_ldk_connected().await?;
+            let gw_ldk_second = dev_fed.gw_ldk_second_connected().await?;
+            let gateways = [gw_lnd, gw_ldk].to_vec();
 
-        let gateway_matrix = gateways
-            .iter()
-            .cartesian_product(gateways.iter())
-            .filter(|(a, b)| a.ln.ln_type() != b.ln.ln_type());
+            let gateway_matrix = gateways
+                .iter()
+                .cartesian_product(gateways.iter())
+                .filter(|(a, b)| a.ln.ln_type() != b.ln.ln_type());
 
-        info!(target: LOG_TEST, "Pegging-in gateways...");
+            info!(target: LOG_TEST, "Pegging-in gateways...");
+            federation
+                .pegin_gateways(1_000_000, gateways.clone())
+                .await?;
 
-        federation
-            .pegin_gateways(1_000_000, gateways.clone())
+            info!(target: LOG_TEST, "Testing ecash payments between gateways...");
+            for (gw_send, gw_receive) in gateway_matrix.clone() {
+                info!(
+                    target: LOG_TEST,
+                    gw_send = %gw_send.ln.ln_type(),
+                    gw_receive = %gw_receive.ln.ln_type(),
+                    "Testing ecash payment",
+                );
+
+                let fed_id = federation.calculate_federation_id();
+                let prev_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
+                let prev_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
+                let ecash = gw_send.send_ecash(fed_id.clone(), 500_000).await?;
+                gw_receive.receive_ecash(ecash).await?;
+                let after_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
+                let after_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
+                assert_eq!(prev_send_ecash_balance - 500_000, after_send_ecash_balance);
+                assert_eq!(
+                    prev_receive_ecash_balance + 500_000,
+                    after_receive_ecash_balance
+                );
+            }
+
+            info!(target: LOG_TEST, "Testing payments between gateways...");
+
+            for (gw_send, gw_receive) in gateway_matrix.clone() {
+                info!(
+                    target: LOG_TEST,
+                    gw_send = %gw_send.ln.ln_type(),
+                    gw_receive = %gw_receive.ln.ln_type(),
+                    "Testing lightning payment",
+                );
+
+                let invoice = gw_receive.create_invoice(1_000_000).await?;
+                gw_send.pay_invoice(invoice).await?;
+            }
+
+            info!(target: LOG_TEST, "Testing paying through LND Gateway...");
+            // Need to try to pay the invoice multiple times in case the channel graph has
+            // not been updated yet. LDK's channel graph updates slowly in these
+            // tests, so we need to try for awhile.
+            poll_with_timeout("LDK2 pay LDK", Duration::from_secs(180), || async {
+                debug!(target: LOG_TEST, "Trying LDK2 -> LND -> LDK...");
+                let invoice = gw_ldk
+                    .create_invoice(1_550_000)
+                    .await
+                    .map_err(ControlFlow::Continue)?;
+                gw_ldk_second
+                    .pay_invoice(invoice.clone())
+                    .await
+                    .map_err(ControlFlow::Continue)?;
+                Ok(())
+            })
             .await?;
 
-        info!(target: LOG_TEST, "Testing ecash payments between gateways...");
-        for (gw_send, gw_receive) in gateway_matrix.clone() {
-            info!(
-                target: LOG_TEST,
-                gw_send = %gw_send.ln.ln_type(),
-                gw_receive = %gw_receive.ln.ln_type(),
-                "Testing ecash payment",
-            );
+            info!(target: LOG_TEST, "Pegging-out gateways...");
+            federation
+                .pegout_gateways(500_000_000, gateways.clone())
+                .await?;
 
-            let fed_id = federation.calculate_federation_id();
-            let prev_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
-            let prev_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
-            let ecash = gw_send.send_ecash(fed_id.clone(), 500_000).await?;
-            gw_receive.receive_ecash(ecash).await?;
-            let after_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
-            let after_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
-            assert_eq!(prev_send_ecash_balance - 500_000, after_send_ecash_balance);
-            assert_eq!(prev_receive_ecash_balance + 500_000, after_receive_ecash_balance);
-        }
+            info!(target: LOG_TEST, "Testing closing all channels...");
+            gw_ldk_second.close_all_channels().await?;
+            gw_ldk.close_all_channels().await?;
+            let bitcoind = dev_fed.bitcoind().await?;
+            // Need to mine enough blocks in case the channels are force closed.
+            bitcoind.mine_blocks(2016).await?;
+            let block_height = bitcoind.get_block_count().await? - 1;
+            gw_ldk_second.wait_for_block_height(block_height).await?;
+            check_empty_lightning_balance(gw_ldk_second).await?;
+            gw_ldk.wait_for_block_height(block_height).await?;
+            check_empty_lightning_balance(gw_ldk).await?;
+            check_empty_lightning_balance(gw_lnd).await?;
 
-        info!(target: LOG_TEST, "Testing payments between gateways...");
+            info!(target: LOG_TEST, "Testing sending onchain...");
+            // TODO: LND is sometimes keeping 10000 sats as reserve when sending onchain
+            // For now we will skip checking LND.
+            gw_ldk
+                .send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10)
+                .await?;
+            gw_ldk_second
+                .send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10)
+                .await?;
+            check_empty_onchain_balance(gw_ldk).await?;
+            check_empty_onchain_balance(gw_ldk_second).await?;
 
-        for (gw_send, gw_receive) in gateway_matrix.clone() {
-            info!(
-                target: LOG_TEST,
-                gw_send = %gw_send.ln.ln_type(),
-                gw_receive = %gw_receive.ln.ln_type(),
-                "Testing lightning payment",
-            );
-
-            let invoice = gw_receive.create_invoice(1_000_000).await?;
-            gw_send.pay_invoice(invoice).await?;
-        }
-
-        info!(target: LOG_TEST, "Testing paying through LND Gateway...");
-        let invoice = gw_ldk.create_invoice(1_550_000).await?;
-        let cln = dev_fed.cln().await?;
-        // Need to try to pay the invoice multiple times in case the channel graph has not been updated yet.
-        retry("CLN pay LDK", aggressive_backoff_long(), || async {
-            debug!(target: LOG_TEST, "Trying CLN -> LND -> LDK...");
-            cln.pay_bolt11_invoice(invoice.to_string()).await?;
             Ok(())
-        }).await?;
+        })
+        .await
+}
 
-        info!(target: LOG_TEST, "Pegging-out gateways...");
-        federation.pegout_gateways(500_000_000, gateways.clone()).await?;
+async fn check_empty_onchain_balance(gw: &Gatewayd) -> anyhow::Result<()> {
+    retry(
+        "Wait for onchain balance update",
+        aggressive_backoff_long(),
+        || async {
+            let curr_balance = gw.get_balances().await?.onchain_balance_sats;
+            let gw_name = gw.gw_name.clone();
+            ensure!(
+                curr_balance == 0,
+                "Gateway onchain balance is not empty: {curr_balance} gw_name: {gw_name}"
+            );
+            Ok(())
+        },
+    )
+    .await
+}
 
-        info!(target: LOG_TEST, "Testing closing all channels...");
-        for gw in gateways.clone() {
-            gw.close_all_channels(dev_fed.bitcoind().await?.clone()).await?;
-
-            retry(
-                "Wait for balance update after sweeping all lightning funds",
-                aggressive_backoff_long(),
-                || async {
-                    let balances = gw.get_balances().await?;
-                    let curr_lightning_balance = balances.lightning_balance_msats;
-                    ensure!(curr_lightning_balance == 0, "Close channels did not sweep all lightning funds");
-                    let inbound_lightning_balance = balances.inbound_lightning_liquidity_msats;
-                    ensure!(inbound_lightning_balance == 0, "Close channels did not sweep all lightning funds");
-                    Ok(())
-                }
-            ).await?;
-        }
-
-        info!(target: LOG_TEST, "Testing sending onchain...");
-        for gw in gateways {
-            gw.send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10).await?;
-            retry(
-                "Wait for balance update after sending on chain funds",
-                aggressive_backoff_long(),
-                || async {
-                    let curr_balance = gw.get_balances().await?.onchain_balance_sats;
-                    ensure!(curr_balance == 0, "Gateway onchain balance did not match previous balance minus withdraw amount");
-                    Ok(())
-                }
-            ).await?;
-        }
-
-        Ok(())
-    }).await
+async fn check_empty_lightning_balance(gw: &Gatewayd) -> anyhow::Result<()> {
+    let balances = gw.get_balances().await?;
+    let curr_lightning_balance = balances.lightning_balance_msats;
+    ensure!(
+        curr_lightning_balance == 0,
+        "Close channels did not sweep all lightning funds"
+    );
+    let inbound_lightning_balance = balances.inbound_lightning_liquidity_msats;
+    ensure!(
+        inbound_lightning_balance == 0,
+        "Close channels did not sweep all lightning funds"
+    );
+    Ok(())
 }
 
 /// Leaves the specified federation by issuing a `leave-fed` POST request to the

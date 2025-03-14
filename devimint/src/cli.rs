@@ -94,13 +94,12 @@ impl CommonArgs {
 
 #[derive(Subcommand)]
 pub enum Cmd {
-    /// Spins up bitcoind, cln, lnd, electrs, esplora, and opens a channel
-    /// between the two lightning nodes
+    /// Spins up bitcoind, electrs, and esplora.
     ExternalDaemons {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
         exec: Option<Vec<ffi::OsString>>,
     },
-    /// Spins up bitcoind, cln, lnd w/ gateway, a faucet, electrs,
+    /// Spins up bitcoind, LDK Gateway, lnd w/ gateway, a faucet, electrs,
     /// esplora, and a federation sized from FM_FED_SIZE it opens LN channel
     /// between the two nodes. it connects the gateways to the federation.
     /// it finally switches to use the LND gateway for LNv1

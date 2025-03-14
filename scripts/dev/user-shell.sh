@@ -21,10 +21,10 @@ echo
 echo "This shell provides the following aliases:"
 echo ""
 echo "  fm-cli   - cli client to interact with the federation"
-echo "  lightning-cli  - cli client for Core Lightning"
 echo "  lncli          - cli client for LND"
 echo "  bitcoin-cli    - cli client for bitcoind"
 echo "  gateway-lnd    - cli client for the LND gateway"
 echo "  gateway-ldk    - cli client for the LDK gateway"
+echo "  gateway-ldk2   - cli client for the second LDK gateway"
 echo
 echo "Use '--help' on each command for more information"

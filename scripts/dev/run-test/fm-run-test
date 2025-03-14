@@ -48,10 +48,6 @@ on_error() {
   echo "## LOG LDK-0 NODE:"
   { cat  "$FM_RUN_TEST_TMPDIR"/devimint-*/gatewayd-ldk-0/ldk_node/logs/ldk_node_latest.log || true; } | grep -v "Failed to retrieve fee rate estimates" || true
   echo
-  echo
-  echo "## LOG CLN NODE:"
-  cat  "$FM_RUN_TEST_TMPDIR"/devimint-*/cln/cln.log || true
-  echo
   echo "## FAIL END $test_name$version_str."
 }
 

@@ -2012,7 +2012,6 @@ dependencies = [
  "fedimint-build",
  "fedimint-client",
  "fedimint-client-module",
- "fedimint-cln-rpc",
  "fedimint-core",
  "fedimint-gateway-common",
  "fedimint-lightning",
@@ -2703,24 +2702,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
-]
-
-[[package]]
-name = "fedimint-cln-rpc"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b18ef5cb304805598eb57457da792d0ace660ec01f7fda82340511704420436"
-dependencies = [
- "anyhow",
- "bitcoin",
- "bytes",
- "futures-util",
- "hex",
- "log",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]

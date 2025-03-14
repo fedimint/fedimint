@@ -21,9 +21,7 @@ use clap::Parser as _;
 use cli::cleanup_on_exit;
 use devfed::DevJitFed;
 pub use devfed::{DevFed, dev_fed};
-pub use external::{
-    ExternalDaemons, LightningNode, Lightningd, LightningdProcessHandle, Lnd, external_daemons,
-};
+pub use external::{ExternalDaemons, LightningNode, Lnd, external_daemons};
 use futures::Future;
 pub use gatewayd::Gatewayd;
 use tests::log_binary_versions;
