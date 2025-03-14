@@ -15,7 +15,6 @@
 
 pub mod client;
 pub mod config;
-mod db;
 pub mod envs;
 mod error;
 mod events;
@@ -39,7 +38,6 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;
 pub use config::GatewayParameters;
-use db::GatewayDbtxNcExt;
 use envs::{FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV};
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
@@ -77,6 +75,7 @@ use fedimint_gateway_common::{
     ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
     SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
+use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
@@ -114,7 +113,6 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
 
 use crate::config::LightningModuleMode;
-use crate::db::get_gatewayd_database_migrations;
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
