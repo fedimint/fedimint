@@ -56,8 +56,6 @@ pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
     pub invite_code: String,
-    #[serde(default)]
-    #[cfg(feature = "tor")]
     pub use_tor: Option<bool>,
     pub recover: Option<bool>,
 }

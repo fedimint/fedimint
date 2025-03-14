@@ -19,7 +19,7 @@ use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_testing::ln::LightningNodeType;
+use fedimint_testing_core::node_type::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
 use tokio::net::TcpStream;

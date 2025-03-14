@@ -14,7 +14,7 @@ use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, sleep, timeout};
 use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_testing::ln::LightningNodeType;
+use fedimint_testing_core::node_type::LightningNodeType;
 use futures::StreamExt;
 use hex::ToHex;
 use itertools::Itertools;

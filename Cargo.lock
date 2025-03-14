@@ -2025,7 +2025,7 @@ dependencies = [
  "fedimint-mint-server",
  "fedimint-portalloc",
  "fedimint-server",
- "fedimint-testing",
+ "fedimint-testing-core",
  "fedimint-tonic-lnd",
  "fedimint-unknown-server",
  "fedimint-wallet-client",
@@ -3796,6 +3796,7 @@ dependencies = [
  "rand 0.8.5",
  "tempfile",
  "tokio",
+ "tokio-rustls 0.24.1",
  "tracing",
 ]
 
@@ -4026,6 +4027,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-server",
  "fedimint-testing",
+ "fedimint-testing-core",
  "fedimint-wallet-client",
  "fedimint-wallet-common",
  "fedimint-wallet-server",
@@ -4397,6 +4399,7 @@ dependencies = [
  "fedimint-gateway-common",
  "fedimint-logging",
  "fedimint-testing",
+ "fedimint-testing-core",
  "itertools 0.13.0",
  "serde_json",
  "tokio",

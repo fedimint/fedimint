@@ -16,7 +16,7 @@ use fedimint_gateway_common::{
 };
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
-use fedimint_testing::ln::LightningNodeType;
+use fedimint_testing_core::node_type::LightningNodeType;
 use semver::Version;
 use tracing::{debug, info};
 

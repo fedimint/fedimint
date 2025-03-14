@@ -1,5 +1,5 @@
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, LazyLock};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
@@ -8,9 +8,7 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::AdminCreds;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::PeerId;
-use fedimint_core::config::{
-    ClientConfig, FederationId, META_FEDERATION_NAME_KEY, ServerModuleConfigGenParamsRegistry,
-};
+use fedimint_core::config::{ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -23,15 +21,13 @@ use fedimint_gateway_common::ConnectFedPayload;
 use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
-use fedimint_server::config::{ConfigGenParams, PeerConnectionInfo, PeerEndpoints, ServerConfig};
+use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
-use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector, gen_cert_and_key};
-use tokio_rustls::rustls;
+use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
+use fedimint_testing_core::config::local_config_gen_params;
 use tracing::info;
-
-pub static API_AUTH: LazyLock<ApiAuth> = LazyLock::new(|| ApiAuth("pass".to_string()));
 
 /// Test fixture for a running fedimint federation
 #[derive(Clone)]
@@ -150,7 +146,6 @@ impl FederationTest {
     pub async fn connect_gateway(&self, gw: &Gateway) {
         gw.handle_connect_federation(ConnectFedPayload {
             invite_code: self.invite_code().to_string(),
-            #[cfg(feature = "tor")]
             use_tor: Some(false),
             recover: Some(false),
         })
@@ -333,73 +328,4 @@ impl FederationTestBuilder {
             num_offline: self.num_offline,
         }
     }
-}
-
-/// Creates the config gen params for each peer
-///
-/// Uses peers * 2 ports offset from `base_port`
-pub fn local_config_gen_params(
-    peers: &[PeerId],
-    base_port: u16,
-    server_config_gen: &ServerModuleConfigGenParamsRegistry,
-) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
-    // Generate TLS cert and private key
-    let tls_keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
-        .iter()
-        .map(|peer| {
-            (
-                *peer,
-                gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap(),
-            )
-        })
-        .collect();
-
-    // Generate the P2P and API URL on 2 different ports for each peer
-    let connections: BTreeMap<PeerId, PeerConnectionInfo> = peers
-        .iter()
-        .map(|peer| {
-            let peer_port = base_port + u16::from(*peer) * 2;
-
-            let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
-            let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
-
-            let params = PeerConnectionInfo {
-                name: format!("peer-{}", peer.to_usize()),
-                endpoints: PeerEndpoints::Tcp {
-                    api_url: api_url.parse().expect("Should parse"),
-                    p2p_url: p2p_url.parse().expect("Should parse"),
-                    cert: tls_keys[peer].0.clone().0,
-                },
-                federation_name: None,
-            };
-            (*peer, params)
-        })
-        .collect();
-
-    peers
-        .iter()
-        .map(|peer| {
-            let peer_port = base_port + u16::from(*peer) * 2;
-
-            let p2p_bind = format!("127.0.0.1:{peer_port}");
-            let api_bind = format!("127.0.0.1:{}", peer_port + 1);
-
-            let params = ConfigGenParams {
-                identity: *peer,
-                api_auth: API_AUTH.clone(),
-                tls_key: Some(tls_keys[peer].1.clone()),
-                iroh_api_sk: None,
-                iroh_p2p_sk: None,
-                p2p_bind: p2p_bind.parse().expect("Valid address"),
-                api_bind: api_bind.parse().expect("Valid address"),
-                peers: connections.clone(),
-                meta: BTreeMap::from([(
-                    META_FEDERATION_NAME_KEY.to_owned(),
-                    "\"federation_name\"".to_string(),
-                )]),
-                modules: server_config_gen.clone(),
-            };
-            Ok((*peer, params))
-        })
-        .collect()
 }
