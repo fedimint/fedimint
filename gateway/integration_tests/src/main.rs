@@ -21,7 +21,7 @@ use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_common::{FederationInfo, GatewayBalances, GatewayFedConfig};
 use fedimint_logging::LOG_TEST;
-use fedimint_testing::ln::LightningNodeType;
+use fedimint_testing_core::node_type::LightningNodeType;
 use itertools::Itertools;
 use tracing::{debug, info, warn};
 

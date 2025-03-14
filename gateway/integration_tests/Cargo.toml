@@ -21,6 +21,7 @@ fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-testing = { workspace = true }
+fedimint-testing-core = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

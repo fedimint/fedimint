@@ -1,5 +1,7 @@
+pub mod config;
 pub mod db;
 pub mod envs;
+pub mod node_type;
 
 use std::path::PathBuf;
 use std::{env, fs};

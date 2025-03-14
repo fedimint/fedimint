@@ -27,4 +27,5 @@ futures = { workspace = true }
 rand = { workspace = true }
 tempfile = "3.17.1"
 tokio = { workspace = true }
+tokio-rustls = { workspace = true }
 tracing = { workspace = true }
