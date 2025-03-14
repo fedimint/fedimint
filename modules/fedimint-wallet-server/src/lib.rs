@@ -1003,6 +1003,7 @@ fn calculate_pegout_metrics(
 #[derive(Debug)]
 pub struct Wallet {
     cfg: WalletConfig,
+    db: Database,
     secp: Secp256k1<All>,
     btc_rpc: DynBitcoindRpc,
     our_peer_id: PeerId,
@@ -1083,6 +1084,7 @@ impl Wallet {
 
         let wallet = Wallet {
             cfg,
+            db: db.clone(),
             secp: Default::default(),
             btc_rpc,
             our_peer_id,
@@ -1654,6 +1656,24 @@ impl Wallet {
             let db = db.clone();
             run_broadcast_pending_tx(db, bitcoind, broadcast_pending_notify)
         });
+    }
+
+    /// Get the current consensus block count for UI display
+    pub async fn consensus_block_count_ui(&self) -> u32 {
+        self.consensus_block_count(&mut self.db.begin_transaction_nc().await)
+            .await
+    }
+
+    /// Get the current consensus fee rate for UI display
+    pub async fn consensus_feerate_ui(&self) -> Feerate {
+        self.consensus_fee_rate(&mut self.db.begin_transaction_nc().await)
+            .await
+    }
+
+    /// Get the current wallet summary for UI display
+    pub async fn get_wallet_summary_ui(&self) -> WalletSummary {
+        self.get_wallet_summary(&mut self.db.begin_transaction_nc().await)
+            .await
     }
 
     /// Shutdown the task group shared throughout fedimintd, giving 60 seconds

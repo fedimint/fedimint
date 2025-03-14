@@ -1,0 +1,19 @@
+[package]
+name = "fedimint-server-ui"
+version = "0.7.0-alpha"
+edition = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true } 
+axum = "0.8.1" 
+axum-extra = { version = "0.10.0", features = ["cookie"] }
+chrono = "0.4"
+fedimint-core = { workspace = true }
+fedimint-lnv2-server = { workspace = true }
+fedimint-server-core = { workspace = true }
+fedimint-wallet-server = { workspace = true }
+maud = "0.27.0"
+qrcode = { version = "0.12", features = ["svg"] }
+serde = { workspace = true }
+tokio = { workspace = true }

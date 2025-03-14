@@ -25,8 +25,12 @@ pub mod db;
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::future::Future;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
+use anyhow::Context;
 use config::ServerConfig;
 use config::io::{PLAINTEXT_PASSWORD, read_server_config};
 use fedimint_aead::random_salt;
@@ -36,11 +40,13 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::net::peers::DynP2PConnections;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::util::write_new;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
+use fedimint_server_core::dashboard_ui::DynDashboardApi;
+use fedimint_server_core::setup_ui::{DynSetupApi, ISetupApi};
 use jsonrpsee::RpcModule;
 use net::api::ApiSecrets;
 use net::p2p_connector::IrohConnector;
@@ -69,6 +75,23 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
+/// A function/closure type for handling dashboard UI
+pub type DashboardUiHandler = Box<
+    dyn Fn(DynDashboardApi, SocketAddr, TaskHandle) -> Pin<Box<dyn Future<Output = ()> + Send>>
+        + Send
+        + Sync
+        + 'static,
+>;
+
+/// A function/closure type for handling setup UI
+pub type SetupUiHandler = Box<
+    dyn Fn(DynSetupApi, SocketAddr, TaskHandle) -> Pin<Box<dyn Future<Output = ()> + Send>>
+        + Send
+        + Sync
+        + 'static,
+>;
+
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
     force_api_secrets: ApiSecrets,
@@ -77,6 +100,8 @@ pub async fn run(
     code_version_str: String,
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
+    dashboard_ui_handler: Option<DashboardUiHandler>,
+    setup_ui_handler: Option<SetupUiHandler>,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -116,14 +141,15 @@ pub async fn run(
             (cfg, connections, p2p_status_receivers)
         }
         None => {
-            run_config_gen(
+            Box::pin(run_config_gen(
                 data_dir.clone(),
                 settings.clone(),
                 db.clone(),
                 &task_group,
                 code_version_str.clone(),
                 force_api_secrets.clone(),
-            )
+                setup_ui_handler,
+            ))
             .await?
         }
     };
@@ -154,6 +180,8 @@ pub async fn run(
         force_api_secrets,
         data_dir,
         code_version_str,
+        settings.ui_bind,
+        dashboard_ui_handler,
     ))
     .await?;
 
@@ -206,6 +234,7 @@ pub async fn run_config_gen(
     task_group: &TaskGroup,
     code_version_str: String,
     api_secrets: ApiSecrets,
+    setup_ui_handler: Option<SetupUiHandler>,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -219,7 +248,7 @@ pub async fn run_config_gen(
 
     let config_gen = ConfigGenApi::new(settings.clone(), db.clone(), cgp_sender);
 
-    let mut rpc_module = RpcModule::new(config_gen);
+    let mut rpc_module = RpcModule::new(config_gen.clone());
 
     net::api::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
 
@@ -232,6 +261,16 @@ pub async fn run_config_gen(
     )
     .await;
 
+    let ui_task_group = TaskGroup::new();
+
+    if let Some(setup_ui_handler) = setup_ui_handler {
+        ui_task_group.spawn("web-ui", move |handle| {
+            setup_ui_handler(config_gen.clone().into_dyn(), settings.ui_bind, handle)
+        });
+
+        info!(target: LOG_CONSENSUS, "Setup UI running at http://{} 🚀", settings.ui_bind);
+    }
+
     let cg_params = cgp_receiver
         .recv()
         .await
@@ -242,6 +281,11 @@ pub async fn run_config_gen(
         .expect("Config api should still be running");
 
     api_handler.stopped().await;
+
+    ui_task_group
+        .shutdown_join_all(None)
+        .await
+        .context("Failed to shutdown UI server after config gen")?;
 
     let connector = if cg_params.iroh_endpoints().is_empty() {
         TlsTcpConnector::new(
@@ -277,6 +321,7 @@ pub async fn run_config_gen(
     .into_dyn();
 
     let cfg = ServerConfig::distributed_gen(
+        settings.modules,
         &cg_params,
         settings.registry.clone(),
         code_version_str.clone(),

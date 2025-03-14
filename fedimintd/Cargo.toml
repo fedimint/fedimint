@@ -41,6 +41,7 @@ fedimint-mint-common = { workspace = true }
 fedimint-mint-server = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
+fedimint-server-ui = { workspace = true }
 fedimint-unknown-common = { workspace = true }
 fedimint-unknown-server = { workspace = true }
 fedimint-wallet-server = { workspace = true }

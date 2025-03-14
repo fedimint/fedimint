@@ -28,6 +28,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
+use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
@@ -63,6 +64,8 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
+    ui_bind_addr: SocketAddr,
+    dashboard_ui_handler: Option<crate::DashboardUiHandler>,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -192,7 +195,7 @@ pub async fn run(
         Box::pin(start_iroh_api(
             iroh_api_sk,
             api_bind_addr,
-            consensus_api,
+            consensus_api.clone(),
             task_group,
         ))
         .await;
@@ -220,6 +223,14 @@ pub async fn run(
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
+
+    if let Some(dashboard_ui_handler) = dashboard_ui_handler {
+        task_group.spawn("dashboard-ui", move |handle| {
+            dashboard_ui_handler(consensus_api.clone().into_dyn(), ui_bind_addr, handle)
+        });
+
+        info!(target: LOG_CONSENSUS, "Dashboard UI running at http://{ui_bind_addr} 🚀");
+    }
 
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!

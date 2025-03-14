@@ -46,13 +46,16 @@ use crate::{poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
 /// Number of ports we allocate for every `fedimintd` instance
-pub const PORTS_PER_FEDIMINTD: u16 = 3;
+pub const PORTS_PER_FEDIMINTD: u16 = 4;
 /// Which port is for p2p inside the range from [`PORTS_PER_FEDIMINTD`]
 pub const FEDIMINTD_P2P_PORT_OFFSET: u16 = 0;
 /// Which port is for api inside the range from [`PORTS_PER_FEDIMINTD`]
 pub const FEDIMINTD_API_PORT_OFFSET: u16 = 1;
+/// Which port is for the web ui inside the range from [`PORTS_PER_FEDIMINTD`]
+pub const FEDIMINTD_UI_PORT_OFFSET: u16 = 2;
 /// Which port is for prometheus inside the range from [`PORTS_PER_FEDIMINTD`]
-pub const FEDIMINTD_METRICS_PORT_OFFSET: u16 = 2;
+pub const FEDIMINTD_METRICS_PORT_OFFSET: u16 = 3;
+
 #[derive(Clone)]
 pub struct Federation {
     // client is only for internal use, use cli commands instead

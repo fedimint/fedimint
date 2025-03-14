@@ -27,6 +27,7 @@ members = [
   "fedimint-server",
   "fedimint-server-core",
   "fedimint-server-tests",
+  "fedimint-server-ui",
   "fedimint-testing",
   "fedimint-testing-core",
   "fedimint-wasm-tests",
@@ -164,6 +165,7 @@ fedimint-portalloc = { path = "utils/portalloc", version = "=0.7.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.7.0-alpha" }
 fedimint-server = { path = "./fedimint-server", version = "=0.7.0-alpha" }
 fedimint-server-core = { path = "./fedimint-server-core", version = "=0.7.0-alpha" }
+fedimint-server-ui = { path = "./fedimint-server-ui", version = "=0.7.0-alpha" }
 fedimint-testing = { path = "./fedimint-testing", version = "=0.7.0-alpha" }
 fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.7.0-alpha" }
 fedimint-unknown-common = { path = "./modules/fedimint-unknown-common", version = "=0.7.0-alpha" }

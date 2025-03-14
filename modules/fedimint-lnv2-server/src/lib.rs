@@ -188,7 +188,7 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(Lightning::new(args.cfg().to_typed()?, &args.shared()).await?)
+        Ok(Lightning::new(args.cfg().to_typed()?, args.db(), &args.shared()).await?)
     }
 
     fn trusted_dealer_gen(
@@ -324,6 +324,7 @@ fn coefficient(index: u64) -> Scalar {
 #[derive(Debug)]
 pub struct Lightning {
     cfg: LightningConfig,
+    db: Database,
     /// Block count updated periodically by a background task
     block_count_rx: watch::Receiver<Option<u64>>,
 }
@@ -638,6 +639,7 @@ impl ServerModule for Lightning {
 impl Lightning {
     async fn new(
         cfg: LightningConfig,
+        db: &Database,
         shared_bitcoin: &ServerModuleSharedBitcoin,
     ) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
@@ -647,6 +649,7 @@ impl Lightning {
 
         Ok(Lightning {
             cfg,
+            db: db.clone(),
             block_count_rx,
         })
     }
@@ -801,5 +804,27 @@ impl Lightning {
             .map(|entry| entry.0.0)
             .collect()
             .await
+    }
+
+    pub async fn consensus_block_count_ui(&self) -> u64 {
+        self.consensus_block_count(&mut self.db.begin_transaction_nc().await)
+            .await
+    }
+
+    pub async fn consensus_unix_time_ui(&self) -> u64 {
+        self.consensus_unix_time(&mut self.db.begin_transaction_nc().await)
+            .await
+    }
+
+    pub async fn add_gateway_ui(&self, gateway: SafeUrl) -> bool {
+        Self::add_gateway(self.db.clone(), gateway).await
+    }
+
+    pub async fn remove_gateway_ui(&self, gateway: SafeUrl) -> bool {
+        Self::remove_gateway(self.db.clone(), gateway).await
+    }
+
+    pub async fn gateways_ui(&self) -> Vec<SafeUrl> {
+        Self::gateways(self.db.clone()).await
     }
 }

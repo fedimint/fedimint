@@ -1,30 +1,29 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::discriminant;
 use std::str::FromStr as _;
+use std::sync::Arc;
 
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
-use fedimint_bitcoind::create_bitcoind;
 use fedimint_core::PeerId;
 use fedimint_core::admin_client::{ServerStatus, SetLocalParamsRequest};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
-    ADD_PEER_CONNECTION_INFO_ENDPOINT, AUTH_ENDPOINT, CHECK_BITCOIN_STATUS_ENDPOINT,
-    RESET_SETUP_ENDPOINT, SERVER_STATUS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, START_DKG_ENDPOINT,
+    ADD_PEER_CONNECTION_INFO_ENDPOINT, SERVER_STATUS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+    START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
+    FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
 };
 use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
-    api_endpoint,
+    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
 };
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::net::check_auth;
+use fedimint_server_core::setup_ui::ISetupApi;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
@@ -63,12 +62,24 @@ pub struct LocalParams {
     federation_name: Option<String>,
 }
 
+impl LocalParams {
+    /// Convert to PeerConnectionInfo
+    pub fn connection_info(&self) -> PeerConnectionInfo {
+        PeerConnectionInfo {
+            name: self.name.clone(),
+            endpoints: self.endpoints.clone(),
+            federation_name: self.federation_name.clone(),
+        }
+    }
+}
+
 /// Serves the config gen API endpoints
+#[derive(Clone)]
 pub struct ConfigGenApi {
     /// Our config gen settings configured locally
     settings: ConfigGenSettings,
     /// In-memory state machine
-    state: Mutex<ConfigGenState>,
+    state: Arc<Mutex<ConfigGenState>>,
     /// DB not really used
     db: Database,
     /// Triggers the distributed key generation
@@ -79,7 +90,7 @@ impl ConfigGenApi {
     pub fn new(settings: ConfigGenSettings, db: Database, sender: Sender<ConfigGenParams>) -> Self {
         Self {
             settings,
-            state: Mutex::new(ConfigGenState::default()),
+            state: Arc::new(Mutex::new(ConfigGenState::default())),
             db,
             sender,
         }
@@ -100,16 +111,49 @@ impl ConfigGenApi {
             None => ServerStatus::AwaitingLocalParams,
         }
     }
+}
 
-    pub async fn reset(&self) {
-        *self.state.lock().await = ConfigGenState::default();
+#[async_trait]
+impl ISetupApi for ConfigGenApi {
+    async fn our_connection_info(&self) -> Option<String> {
+        self.state
+            .lock()
+            .await
+            .local_params
+            .as_ref()
+            .map(|lp| lp.connection_info().encode_base32())
     }
 
-    pub async fn set_local_parameters(
+    async fn auth(&self) -> Option<ApiAuth> {
+        self.state
+            .lock()
+            .await
+            .local_params
+            .as_ref()
+            .map(|lp| lp.auth.clone())
+    }
+
+    async fn connected_peers(&self) -> Vec<String> {
+        self.state
+            .lock()
+            .await
+            .connection_info
+            .clone()
+            .into_iter()
+            .map(|info| info.name)
+            .collect()
+    }
+
+    async fn reset_connection_info(&self) {
+        self.state.lock().await.connection_info.clear();
+    }
+
+    async fn set_local_parameters(
         &self,
         auth: ApiAuth,
-        request: SetLocalParamsRequest,
-    ) -> anyhow::Result<PeerConnectionInfo> {
+        name: String,
+        federation_name: Option<String>,
+    ) -> anyhow::Result<String> {
         ensure!(
             auth.0.trim() == auth.0,
             "Password contains leading/trailing whitespace",
@@ -124,27 +168,21 @@ impl ConfigGenApi {
             );
 
             ensure!(
-                lp.name == request.name,
+                lp.name == name,
                 "Local parameters have already been set with a different name."
             );
 
             ensure!(
-                lp.federation_name == request.federation_name,
+                lp.federation_name == federation_name,
                 "Local parameters have already been set with a different federation name."
             );
 
-            let info = PeerConnectionInfo {
-                name: lp.name,
-                endpoints: lp.endpoints,
-                federation_name: lp.federation_name,
-            };
-
-            return Ok(info);
+            return Ok(lp.connection_info().encode_base32());
         }
 
         let lp = match self.settings.networking {
             NetworkingStack::Tcp => {
-                let (tls_cert, tls_key) = gen_cert_and_key(&request.name)
+                let (tls_cert, tls_key) = gen_cert_and_key(&name)
                     .expect("Failed to generate TLS for given guardian name");
 
                 LocalParams {
@@ -157,8 +195,8 @@ impl ConfigGenApi {
                         p2p_url: self.settings.p2p_url.clone(),
                         cert: tls_cert.0,
                     },
-                    name: request.name,
-                    federation_name: request.federation_name,
+                    name,
+                    federation_name,
                 }
             }
             NetworkingStack::Iroh => {
@@ -190,34 +228,35 @@ impl ConfigGenApi {
                         api_pk: iroh_api_sk.public(),
                         p2p_pk: iroh_p2p_sk.public(),
                     },
-                    name: request.name,
-                    federation_name: request.federation_name,
+                    name,
+                    federation_name,
                 }
             }
         };
 
         state.local_params = Some(lp.clone());
 
-        let info = PeerConnectionInfo {
-            name: lp.name,
-            endpoints: lp.endpoints,
-            federation_name: lp.federation_name,
-        };
-
-        Ok(info)
+        Ok(lp.connection_info().encode_base32())
     }
 
-    pub async fn add_peer_connection_info(&self, info: PeerConnectionInfo) -> anyhow::Result<()> {
+    async fn add_peer_connection_info(&self, info: String) -> anyhow::Result<String> {
+        let info = PeerConnectionInfo::decode_base32(&info)?;
+
         let mut state = self.state.lock().await;
 
         if state.connection_info.contains(&info) {
-            return Ok(());
+            return Ok(info.name.clone());
         }
 
         let local_params = state
             .local_params
             .clone()
             .expect("The endpoint is authenticated.");
+
+        ensure!(
+            info != local_params.connection_info(),
+            "You cannot add you own connection info"
+        );
 
         ensure!(
             discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
@@ -235,12 +274,12 @@ impl ConfigGenApi {
             );
         }
 
-        state.connection_info.insert(info);
+        state.connection_info.insert(info.clone());
 
-        Ok(())
+        Ok(info.name)
     }
 
-    pub async fn start_dkg(&self) -> anyhow::Result<()> {
+    async fn start_dkg(&self) -> anyhow::Result<()> {
         let mut state = self.state.lock().await.clone();
 
         let local_params = state
@@ -248,11 +287,7 @@ impl ConfigGenApi {
             .clone()
             .expect("The endpoint is authenticated.");
 
-        let our_peer_info = PeerConnectionInfo {
-            name: local_params.name,
-            endpoints: local_params.endpoints,
-            federation_name: local_params.federation_name,
-        };
+        let our_peer_info = local_params.connection_info();
 
         state.connection_info.insert(our_peer_info.clone());
 
@@ -274,8 +309,6 @@ impl ConfigGenApi {
             iroh_api_sk: local_params.iroh_api_sk,
             iroh_p2p_sk: local_params.iroh_p2p_sk,
             api_auth: local_params.auth,
-            p2p_bind: self.settings.p2p_bind,
-            api_bind: self.settings.api_bind,
             peers: (0..)
                 .map(|i| PeerId::from(i as u16))
                 .zip(state.connection_info.clone().into_iter())
@@ -336,11 +369,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                let info = config.set_local_parameters(auth, request)
+                 config.set_local_parameters(auth, request.name, request.federation_name)
                     .await
-                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
-
-                Ok(info.encode_base32())
+                    .map_err(|e| ApiError::bad_request(e.to_string()))
             }
         },
         api_endpoint! {
@@ -349,13 +380,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             async |config: &ConfigGenApi, context, info: String| -> String {
                 check_auth(context)?;
 
-                let info = PeerConnectionInfo::decode_base32(&info)
-                    .map_err(|e|ApiError::bad_request(e.to_string()))?;
-
-                config.add_peer_connection_info(info.clone()).await
-                    .map_err(|e|ApiError::bad_request(e.to_string()))?;
-
-                Ok(info.name)
+                config.add_peer_connection_info(info.clone())
+                    .await
+                    .map_err(|e|ApiError::bad_request(e.to_string()))
             }
         },
         api_endpoint! {
@@ -367,84 +394,5 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
                 config.start_dkg().await.map_err(|e| ApiError::server_error(e.to_string()))
             }
         },
-        api_endpoint! {
-            RESET_SETUP_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, _v: ()| -> () {
-                check_auth(context)?;
-
-                config.reset().await;
-
-                Ok(())
-            }
-        },
-        api_endpoint! {
-            AUTH_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |_config: &ConfigGenApi, context, _v: ()| -> () {
-                check_auth(context)?;
-
-                Ok(())
-            }
-        },
-        api_endpoint! {
-            CHECK_BITCOIN_STATUS_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |_config: &ConfigGenApi, context, _v: ()| -> BitcoinRpcConnectionStatus {
-                check_auth(context)?;
-
-                check_bitcoin_status().await
-            }
-        },
     ]
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct BitcoinRpcConnectionStatus {
-    chain_tip_block_height: u64,
-    chain_tip_block_time: u32,
-    sync_percentage: Option<f64>,
-}
-
-async fn check_bitcoin_status() -> ApiResult<BitcoinRpcConnectionStatus> {
-    let bitcoin_rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars()
-        .map_err(|e| ApiError::server_error(format!("Failed to get bitcoin rpc env vars: {e}")))?;
-
-    let client = create_bitcoind(&bitcoin_rpc_config)
-        .map_err(|e| ApiError::server_error(format!("Failed to connect to bitcoin rpc: {e}")))?;
-
-    let block_count = client.get_block_count().await.map_err(|e| {
-        ApiError::server_error(format!("Failed to get block count from bitcoin rpc: {e}"))
-    })?;
-
-    let chain_tip_block_height = block_count - 1;
-
-    let chain_tip_block_hash = client
-        .get_block_hash(chain_tip_block_height)
-        .await
-        .map_err(|e| {
-            ApiError::server_error(format!(
-                "Failed to get block hash for block count {block_count} from bitcoin rpc: {e}"
-            ))
-        })?;
-
-    let chain_tip_block = client.get_block(&chain_tip_block_hash).await.map_err(|e| {
-        ApiError::server_error(format!(
-            "Failed to get block for block hash {chain_tip_block_hash} from bitcoin rpc: {e}"
-        ))
-    })?;
-
-    let chain_tip_block_time = chain_tip_block.header.time;
-
-    let sync_percentage = client.get_sync_percentage().await.map_err(|e| {
-        ApiError::server_error(format!(
-            "Failed to get sync percentage from bitcoin rpc: {e}"
-        ))
-    })?;
-
-    Ok(BitcoinRpcConnectionStatus {
-        chain_tip_block_height,
-        chain_tip_block_time,
-        sync_percentage,
-    })
 }
