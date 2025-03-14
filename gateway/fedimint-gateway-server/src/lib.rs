@@ -40,7 +40,7 @@ use client::GatewayClientBuilder;
 use config::GatewayOpts;
 pub use config::GatewayParameters;
 use db::GatewayDbtxNcExt;
-use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
+use envs::{FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV};
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
@@ -413,6 +413,7 @@ impl Gateway {
         self,
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<TaskShutdownToken> {
+        self.verify_lightning_module_mode()?;
         self.register_clients_timer();
         self.load_clients().await?;
         self.start_gateway(runtime);
@@ -421,6 +422,24 @@ impl Gateway {
         run_webserver(Arc::new(self)).await?;
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
+    }
+
+    /// Verifies that the gateway is not running on mainnet with
+    /// `LightningModuleMode::All`
+    fn verify_lightning_module_mode(&self) -> anyhow::Result<()> {
+        if !is_env_var_set(FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV)
+            && self.network == Network::Bitcoin
+            && self.lightning_module_mode == LightningModuleMode::All
+        {
+            crit!(
+                "It is not recommended to run the Gateway with `LightningModuleMode::All`, because LNv2 invoices cannot be paid with LNv1 clients. If you really know what you're doing and want to bypass this, please set FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK"
+            );
+            return Err(anyhow!(
+                "Cannot run gateway with LightningModuleMode::All on mainnet"
+            ));
+        }
+
+        Ok(())
     }
 
     /// Begins the task for listening for intercepted payments from the
