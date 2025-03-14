@@ -39,7 +39,7 @@ use crate::envs::{
     FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
     FM_LNCLI_BASE_EXECUTABLE_ENV, FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV,
     FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV, FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV,
-    FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
+    FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV, FM_RECURRINGD_BASE_EXECUTABLE_ENV,
 };
 
 // If a binary doesn't provide a clap version, default to the first stable
@@ -1121,6 +1121,16 @@ impl DevimintFaucet {
         to_command(get_command_str_for_alias(
             &[FM_DEVIMINT_FAUCET_BASE_EXECUTABLE_ENV],
             &[DEVIMINT_FAUCET_FALLBACK],
+        ))
+    }
+}
+
+pub struct Recurringd;
+impl Recurringd {
+    pub fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[FM_RECURRINGD_BASE_EXECUTABLE_ENV],
+            &["fedimint-recurringd"],
         ))
     }
 }

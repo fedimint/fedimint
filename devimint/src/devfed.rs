@@ -15,6 +15,7 @@ use crate::external::{
 };
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
+use crate::recurringd::Recurringd;
 use crate::util::{ProcessManager, supports_lnv2};
 
 async fn spawn_drop<T>(t: T)
@@ -38,6 +39,7 @@ pub struct DevFed {
     pub gw_ldk: Gatewayd,
     pub electrs: Electrs,
     pub esplora: Esplora,
+    pub recurringd: Recurringd,
 }
 
 impl DevFed {
@@ -51,6 +53,7 @@ impl DevFed {
             gw_ldk,
             electrs,
             esplora,
+            recurringd,
         } = self;
 
         join!(
@@ -62,6 +65,7 @@ impl DevFed {
             spawn_drop(esplora),
             spawn_drop(electrs),
             spawn_drop(bitcoind),
+            spawn_drop(recurringd),
         );
     }
 }
@@ -83,11 +87,13 @@ pub struct DevJitFed {
     gw_ldk: JitArc<Gatewayd>,
     electrs: JitArc<Electrs>,
     esplora: JitArc<Esplora>,
+    recurringd: JitArc<Recurringd>,
     start_time: std::time::SystemTime,
     gw_lnd_registered: JitArc<()>,
     gw_ldk_connected: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
     channel_opened: JitArc<()>,
+    recurringd_connected: JitArc<()>,
 }
 
 impl DevJitFed {
@@ -291,6 +297,34 @@ impl DevJitFed {
             }
         });
 
+        let recurringd = JitTryAnyhow::new_try({
+            let process_mgr = process_mgr.to_owned();
+            move || async move {
+                debug!(target: LOG_DEVIMINT, "Starting recurringd...");
+                let start_time = fedimint_core::time::now();
+                let recurringd = Recurringd::new(&process_mgr).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started recurringd");
+                Ok(Arc::new(recurringd))
+            }
+        });
+
+        let recurringd_connected = JitTryAnyhow::new_try({
+            let recurringd = recurringd.clone();
+            let fed = fed.clone();
+            move || async move {
+                let recurringd = recurringd.get_try().await?.deref();
+                let fed = fed.get_try().await?.deref();
+                debug!(target: LOG_DEVIMINT, "Connecting recurringd to federation...");
+                let start_time = fedimint_core::time::now();
+                if !skip_setup {
+                    let invite_code = fed.invite_code()?;
+                    recurringd.add_federation(&invite_code).await?;
+                }
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Connected recurringd to federation");
+                Ok(Arc::new(()))
+            }
+        });
+
         Ok(DevJitFed {
             bitcoind,
             cln,
@@ -300,11 +334,13 @@ impl DevJitFed {
             gw_ldk,
             electrs,
             esplora,
+            recurringd,
             start_time,
             gw_lnd_registered,
             gw_ldk_connected,
             fed_epoch_generated,
             channel_opened,
+            recurringd_connected,
         })
     }
 
@@ -352,6 +388,15 @@ impl DevJitFed {
         Ok(self.fed().await?.internal_client().await?.clone())
     }
 
+    pub async fn recurringd(&self) -> anyhow::Result<&Recurringd> {
+        Ok(self.recurringd.get_try().await?.deref())
+    }
+
+    pub async fn recurringd_connected(&self) -> anyhow::Result<&Recurringd> {
+        self.recurringd_connected.get_try().await?;
+        Ok(self.recurringd.get_try().await?.deref())
+    }
+
     pub async fn finalize(&self, process_mgr: &ProcessManager) -> anyhow::Result<()> {
         let fed_size = process_mgr.globals.FM_FED_SIZE;
         let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
@@ -368,6 +413,7 @@ impl DevJitFed {
         let _ = self.lnd().await?;
         let _ = self.electrs().await?;
         let _ = self.esplora().await?;
+        let _ = self.recurringd_connected().await?;
         let _ = self.fed_epoch_generated.get_try().await?;
 
         debug!(
@@ -391,6 +437,7 @@ impl DevJitFed {
             gw_ldk: self.gw_ldk().await?.to_owned(),
             esplora: self.esplora().await?.to_owned(),
             electrs: self.electrs().await?.to_owned(),
+            recurringd: self.recurringd().await?.to_owned(),
         })
     }
 
@@ -401,19 +448,23 @@ impl DevJitFed {
             lnd,
             fed,
             gw_lnd,
+            gw_ldk,
             electrs,
             esplora,
+            recurringd,
             ..
         } = self;
 
         join!(
             spawn_drop(gw_lnd),
+            spawn_drop(gw_ldk),
             spawn_drop(fed),
             spawn_drop(lnd),
             spawn_drop(cln),
             spawn_drop(esplora),
             spawn_drop(electrs),
             spawn_drop(bitcoind),
+            spawn_drop(recurringd),
         );
     }
 }

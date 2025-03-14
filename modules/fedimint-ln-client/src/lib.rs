@@ -13,8 +13,11 @@ pub mod db;
 pub mod incoming;
 pub mod pay;
 pub mod receive;
+/// Implements recurring payment codes (e.g. LNURL, BOLT12)
+pub mod recurring;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::pending;
 use std::iter::once;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -25,8 +28,10 @@ use api::LnFederationApi;
 use async_stream::{stream, try_stream};
 use bitcoin::Network;
 use bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
+use bitcoin::secp256k1::SECP256K1;
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
+    RecurringPaymentCodeKeyPrefix,
 };
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
@@ -51,13 +56,13 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
 };
-use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
+use fedimint_core::task::{MaybeSend, MaybeSync, sleep, timeout};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{BoxStream, backoff_util, retry};
+use fedimint_core::util::{BoxFuture, BoxStream, FmtCompact, SafeUrl, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
-use fedimint_derive_secret::ChildId;
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
@@ -76,6 +81,7 @@ use fedimint_ln_common::{
     LightningOutputV0,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
+use futures::future::select_all;
 use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
@@ -88,7 +94,9 @@ use rand::{CryptoRng, Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::IntoEnumIterator;
-use tracing::{debug, error, info};
+use tokio::select;
+use tokio::sync::Notify;
+use tracing::{debug, error, info, trace};
 
 use crate::db::PaymentResultPrefix;
 use crate::incoming::{
@@ -103,6 +111,8 @@ use crate::receive::{
     LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer, get_incoming_contract,
 };
+use crate::recurring::api::{RecurringdApiError, RecurringdClient};
+use crate::recurring::{RecurringPaymentCodeEntry, RecurringPaymentProtocol};
 
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
@@ -320,6 +330,16 @@ impl ModuleInit for LightningClientInit {
                         "Lightning Gateways"
                     );
                 }
+                DbKeyPrefix::RecurringPaymentKey => {
+                    push_db_pair_items!(
+                        dbtx,
+                        RecurringPaymentCodeKeyPrefix,
+                        RecurringPaymentCodeKey,
+                        RecurringPaymentCodeEntry,
+                        ln_client_items,
+                        "Recurring Payment Code"
+                    );
+                }
                 DbKeyPrefix::ExternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedEnd => {}
@@ -335,6 +355,7 @@ impl ModuleInit for LightningClientInit {
 pub enum LightningChildKeys {
     RedeemKey = 0,
     PreimageAuthentication = 1,
+    RecurringPaymentCodeSecret = 2,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -402,12 +423,14 @@ pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<LightningClientStateMachines>,
     redeem_key: Keypair,
+    recurring_payment_code_secret: DerivableSecret,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
     preimage_auth: Keypair,
     client_ctx: ClientContext<Self>,
     update_gateway_cache_merge: UpdateMerge,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    new_recurring_payment_code: Arc<Notify>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -625,6 +648,16 @@ impl LightningClientModule {
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     ) -> Self {
         let secp = Secp256k1::new();
+
+        let new_recurring_payment_code = Arc::new(Notify::new());
+        args.task_group().spawn_cancellable(
+            "Recurring payment sync",
+            Self::scan_recurring_payment_code_invoices(
+                args.context(),
+                new_recurring_payment_code.clone(),
+            ),
+        );
+
         Self {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
@@ -632,6 +665,9 @@ impl LightningClientModule {
                 .module_root_secret()
                 .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
                 .to_secp_key(&secp),
+            recurring_payment_code_secret: args.module_root_secret().child_key(ChildId(
+                LightningChildKeys::RecurringPaymentCodeSecret as u64,
+            )),
             module_api: args.module_api().clone(),
             preimage_auth: args
                 .module_root_secret()
@@ -641,6 +677,7 @@ impl LightningClientModule {
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
             gateway_conn,
+            new_recurring_payment_code,
         }
     }
 
@@ -1905,6 +1942,259 @@ impl LightningClientModule {
             }
         };
         bail!("Lightning Payment failed")
+    }
+
+    pub async fn register_recurring_payment_code(
+        &self,
+        protocol: RecurringPaymentProtocol,
+        recurringd_api: SafeUrl,
+    ) -> Result<RecurringPaymentCodeEntry, RecurringdApiError> {
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let recurringd_api_inner = recurringd_api.clone();
+                    let new_recurring_payment_code = self.new_recurring_payment_code.clone();
+                    Box::pin(async move {
+                        let next_idx = dbtx
+                            .find_by_prefix_sorted_descending(&RecurringPaymentCodeKeyPrefix)
+                            .await
+                            .map(|(k, _)| k.derivation_idx)
+                            .next()
+                            .await
+                            .map_or(0, |last_idx| last_idx + 1);
+
+                        let payment_code_root_key = self.get_payment_code_root_key(next_idx);
+
+                        let recurringd_client = RecurringdClient::new(recurringd_api_inner.clone());
+                        let register_response = recurringd_client
+                            .register_recurring_payment_code(
+                                self.client_ctx
+                                    .get_config()
+                                    .await
+                                    .global
+                                    .calculate_federation_id(),
+                                protocol,
+                                crate::recurring::PaymentCodeRootKey(
+                                    payment_code_root_key.public_key(),
+                                ),
+                            )
+                            .await?;
+
+                        let payment_code_entry = RecurringPaymentCodeEntry {
+                            protocol,
+                            root_keypair: payment_code_root_key,
+                            code: register_response.recurring_payment_code,
+                            recurringd_api: recurringd_api_inner,
+                            last_derivation_index: 0,
+                            creation_time: fedimint_core::time::now(),
+                        };
+                        dbtx.insert_new_entry(
+                            &crate::db::RecurringPaymentCodeKey {
+                                derivation_idx: next_idx,
+                            },
+                            &payment_code_entry,
+                        )
+                        .await;
+                        dbtx.on_commit(move || new_recurring_payment_code.notify_waiters());
+
+                        Ok(payment_code_entry)
+                    })
+                },
+                None,
+            )
+            .await
+            .map_err(|e| match e {
+                fedimint_core::db::AutocommitError::ClosureError { error, .. } => error,
+                fedimint_core::db::AutocommitError::CommitFailed { last_error, .. } => {
+                    panic!("Commit failed: {last_error}")
+                }
+            })
+    }
+
+    pub async fn get_recurring_payment_codes(&self) -> Vec<(u64, RecurringPaymentCodeEntry)> {
+        Self::get_recurring_payment_codes_static(self.client_ctx.module_db()).await
+    }
+
+    pub async fn get_recurring_payment_codes_static(
+        db: &fedimint_core::db::Database,
+    ) -> Vec<(u64, RecurringPaymentCodeEntry)> {
+        assert!(!db.is_global(), "Needs to run in module context");
+        db.begin_transaction_nc()
+            .await
+            .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
+            .await
+            .map(|(idx, entry)| (idx.derivation_idx, entry))
+            .collect()
+            .await
+    }
+
+    fn get_payment_code_root_key(&self, payment_code_registration_idx: u64) -> Keypair {
+        self.recurring_payment_code_secret
+            .child_key(ChildId(payment_code_registration_idx))
+            .to_secp_key(&self.secp)
+    }
+
+    pub async fn scan_recurring_payment_code_invoices(
+        client: ClientContext<Self>,
+        new_code_registered: Arc<Notify>,
+    ) {
+        const QUERY_RETRY_DELAY: Duration = Duration::from_secs(60);
+
+        loop {
+            // We have to register the waiter before querying the DB for recurring payment
+            // code registrations so we don't miss any notification between querying the DB
+            // and registering the notifier.
+            let new_code_registered_future = new_code_registered.notified();
+
+            // We wait for all recurring payment codes to have an invoice in parallel
+            let all_recurring_invoice_futures = Self::get_recurring_payment_codes_static(client.module_db())
+                .await
+                .into_iter()
+                .map(|(payment_code_idx, payment_code)| Box::pin(async move {
+                    let client = RecurringdClient::new(payment_code.recurringd_api.clone());
+                    let invoice_index = payment_code.last_derivation_index + 1;
+
+                    trace!(
+                        root_key=?payment_code.root_keypair.public_key(),
+                        %invoice_index,
+                        server=%payment_code.recurringd_api,
+                        "Waiting for new invoice from recurringd"
+                    );
+
+                    match client.await_new_invoice(crate::recurring::PaymentCodeRootKey(payment_code.root_keypair.public_key()), invoice_index).await {
+                        Ok(invoice) => {Ok((payment_code_idx, payment_code, invoice_index, invoice))}
+                        Err(err) => {
+                            debug!(
+                                err=%err.fmt_compact(),
+                                root_key=?payment_code.root_keypair.public_key(),
+                                invoice_index=%invoice_index,
+                                server=%payment_code.recurringd_api,
+                                "Failed querying recurring payment code invoice, will retry in {:?}",
+                                QUERY_RETRY_DELAY,
+                            );
+                            sleep(QUERY_RETRY_DELAY).await;
+                            Err(err)
+                        }
+                    }
+                }))
+                .collect::<Vec<_>>();
+
+            // TODO: isn't there some shorthand for this
+            let await_any_invoice: BoxFuture<_> = if all_recurring_invoice_futures.is_empty() {
+                Box::pin(pending())
+            } else {
+                Box::pin(select_all(all_recurring_invoice_futures))
+            };
+
+            let (payment_code_idx, _payment_code, invoice_idx, invoice) = select! {
+                (ret, _, _) = await_any_invoice => {match ret {
+                    Ok(ret) => ret,
+                    Err(_) => {
+                        continue;
+                    }
+                }}
+                () = new_code_registered_future => {
+                    continue;
+                }
+            };
+
+            Self::process_recurring_payment_code_invoice(
+                &client,
+                payment_code_idx,
+                invoice_idx,
+                invoice,
+            )
+            .await;
+
+            // Just in case something goes wrong, we don't want to burn too much CPU
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    async fn process_recurring_payment_code_invoice(
+        client: &ClientContext<Self>,
+        payment_code_idx: u64,
+        invoice_idx: u64,
+        invoice: lightning_invoice::Bolt11Invoice,
+    ) {
+        let mut dbtx = client.module_db().begin_transaction().await;
+        let old_payment_code_entry = dbtx
+            .get_value(&crate::db::RecurringPaymentCodeKey {
+                derivation_idx: payment_code_idx,
+            })
+            .await
+            .expect("We queried it, so it exists in our DB");
+
+        let new_payment_code_entry = RecurringPaymentCodeEntry {
+            last_derivation_index: invoice_idx,
+            ..old_payment_code_entry.clone()
+        };
+        dbtx.insert_entry(
+            &crate::db::RecurringPaymentCodeKey {
+                derivation_idx: payment_code_idx,
+            },
+            &new_payment_code_entry,
+        )
+        .await;
+
+        Self::create_recurring_receive_operation(
+            client,
+            &mut dbtx.to_ref_nc(),
+            &old_payment_code_entry,
+            invoice_idx,
+            invoice,
+        )
+        .await;
+
+        dbtx.commit_tx().await;
+    }
+
+    #[allow(clippy::pedantic)]
+    async fn create_recurring_receive_operation(
+        client: &ClientContext<Self>,
+        dbtx: &mut fedimint_core::db::DatabaseTransaction<'_>,
+        payment_code: &RecurringPaymentCodeEntry,
+        invoice_index: u64,
+        invoice: lightning_invoice::Bolt11Invoice,
+    ) {
+        // TODO: pipe secure secp context to here
+        let invoice_key =
+            tweak_user_secret_key(SECP256K1, payment_code.root_keypair, invoice_index);
+
+        // TODO: use proper operation id, what do we use for LN normally? Preimage I
+        // guess?
+        let operation_id = OperationId::new_random();
+        debug!(
+            ?operation_id,
+            payment_code_key=?payment_code.root_keypair.public_key(),
+            invoice_index=%invoice_index,
+            "Creating recurring receive operation"
+        );
+        let ln_state =
+            LightningClientStateMachines::Receive(crate::receive::LightningReceiveStateMachine {
+                operation_id,
+                // TODO: technically we want a state that doesn't assume the offer was accepted
+                // since we haven't checked, but for an MVP this is good enough
+                state: crate::receive::LightningReceiveStates::ConfirmedInvoice(
+                    crate::receive::LightningReceiveConfirmedInvoice {
+                        invoice,
+                        receiving_key: crate::ReceivingKey::Personal(invoice_key),
+                    },
+                ),
+            });
+
+        // TODO: add operation meta
+        client
+            .manual_operation_start_dbtx(
+                dbtx,
+                operation_id,
+                "ln",
+                (),
+                vec![client.make_dyn_state(ln_state)],
+            )
+            .await
+            .expect("OperationId is random");
     }
 }
 

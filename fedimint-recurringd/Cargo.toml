@@ -1,0 +1,30 @@
+[package]
+name = "fedimint-recurringd"
+edition = "2021"
+version = { workspace = true }
+license = { workspace = true }
+
+[[bin]]
+name = "fedimint-recurringd"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+clap = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
+fedimint-ln-client = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-mint-client = { workspace = true }
+fedimint-rocksdb = { workspace = true }
+futures = { workspace = true }
+lightning-invoice = { workspace = true }
+lnurl-rs = { version = "0.9.0", default-features = false }
+rand = { workspace = true }
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

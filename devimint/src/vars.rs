@@ -154,6 +154,7 @@ declare_vars! {
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
+        FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
 
         FM_FEDERATION_BASE_PORT: u16 =  port_alloc((PORTS_PER_FEDIMINTD as usize * fed_size * num_feds).try_into().unwrap())?; env: "FM_FEDERATION_BASE_PORT";
         fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";

@@ -26,6 +26,7 @@ pub use external::{
 };
 use futures::Future;
 pub use gatewayd::Gatewayd;
+pub use recurringd::Recurringd;
 use tests::log_binary_versions;
 use util::ProcessManager;
 
@@ -36,6 +37,7 @@ pub mod external;
 pub mod faucet;
 pub mod federation;
 pub mod gatewayd;
+pub mod recurringd;
 pub mod tests;
 pub mod util;
 pub mod vars;
