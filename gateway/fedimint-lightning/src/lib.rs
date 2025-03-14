@@ -20,6 +20,7 @@ use fedimint_gateway_common::{
 use fedimint_ln_common::PrunedInvoice;
 pub use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
+use fedimint_logging::LOG_LIGHTNING;
 use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -268,7 +269,7 @@ impl dyn ILnRpcClient {
                 if info.synced_to_chain {
                     Ok(())
                 } else {
-                    warn!(?block_height, "Lightning node is not synced yet");
+                    warn!(target: LOG_LIGHTNING, block_height = %block_height, "Lightning node is not synced yet");
                     Err(anyhow::anyhow!("Not synced yet"))
                 }
             },
@@ -278,7 +279,7 @@ impl dyn ILnRpcClient {
             failure_reason: format!("Failed to sync to chain: {e:?}"),
         })?;
 
-        info!("Gateway successfully synced with the chain");
+        info!(target: LOG_LIGHTNING, "Gateway successfully synced with the chain");
         Ok(())
     }
 }

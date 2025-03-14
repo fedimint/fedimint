@@ -8,7 +8,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::SafeUrl;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
-use fedimint_logging::TracingSetup;
+use fedimint_logging::{LOG_TEST, TracingSetup};
 use fedimint_testing::db::{
     BYTE_32, snapshot_db_migrations_with_decoders, validate_migrations_global,
 };
@@ -105,7 +105,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                             num_configs > 0,
                             "validate_migrations was not able to read any FederationConfigs"
                         );
-                        info!("Validated FederationConfig");
+                        info!(target: LOG_TEST, "Validated FederationConfig");
                     }
                     DbKeyPrefix::GatewayPublicKey => {
                         let gateway_id = dbtx.get_value(&GatewayPublicKey).await;
@@ -113,7 +113,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                             gateway_id.is_some(),
                             "validate_migrations was not able to read GatewayPublicKey"
                         );
-                        info!("Validated GatewayPublicKey");
+                        info!(target: LOG_TEST, "Validated GatewayPublicKey");
                     }
                     DbKeyPrefix::PreimageAuthentication => {
                         let preimage_authentications = dbtx
@@ -126,7 +126,7 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                             num_auths > 0,
                             "validate_migrations was not able to read any PreimageAuthentication"
                         );
-                        info!("Validated PreimageAuthentication");
+                        info!(target: LOG_TEST, "Validated PreimageAuthentication");
                     }
                     _ => {}
                 }

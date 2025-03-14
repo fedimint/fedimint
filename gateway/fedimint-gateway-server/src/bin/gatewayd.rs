@@ -13,7 +13,7 @@ use std::sync::Arc;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_gateway_server::Gateway;
-use fedimint_logging::TracingSetup;
+use fedimint_logging::{LOG_GATEWAY, TracingSetup};
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
 use tracing::info;
@@ -32,7 +32,7 @@ fn main() -> Result<(), anyhow::Error> {
         let shutdown_receiver = gatewayd.clone().run(runtime.clone()).await?;
         shutdown_receiver.await;
         gatewayd.unannounce_from_all_federations().await;
-        info!("Gatewayd exiting...");
+        info!(target: LOG_GATEWAY, "Gatewayd exiting...");
         Ok(())
     })
 }

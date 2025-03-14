@@ -294,7 +294,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 
             // Try to pay an invoice, this should fail since the client will not set the
             // gateway's fees.
-            info!("### User client paying invoice");
+            info!(target: LOG_TEST, "### User client paying invoice");
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
@@ -312,7 +312,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                     assert_eq!(pay_sub.ok().await?, LnPayState::Created);
                     let funded = pay_sub.ok().await?;
                     assert_matches!(funded, LnPayState::Funded { .. });
-                    info!("### User client funded contract");
+                    info!(target: LOG_TEST, "### User client funded contract");
 
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
@@ -331,7 +331,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                         .await?
                         .into_stream();
                     assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
-                    info!("### Gateway client started payment");
+                    info!(target: LOG_TEST, "### Gateway client started payment");
                     assert_matches!(
                         gw_pay_sub.ok().await?,
                         GatewayExtPayStates::Canceled {
@@ -343,7 +343,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                             }
                         }
                     );
-                    info!("### Gateway client canceled payment");
+                    info!(target: LOG_TEST, "### Gateway client canceled payment");
                 }
                 _ => panic!("Expected Lightning payment!"),
             }

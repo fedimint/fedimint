@@ -10,6 +10,7 @@ use fedimint_core::util::Spanned;
 use fedimint_gateway_common::FederationInfo;
 use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::GatewayClientModuleV2;
+use fedimint_logging::LOG_GATEWAY;
 use tracing::info;
 
 use crate::AdminResult;
@@ -119,7 +120,7 @@ impl FederationManager {
             }
         }
 
-        info!("Finished waiting for incoming payments");
+        info!(target: LOG_GATEWAY, "Finished waiting for incoming payments");
         Ok(())
     }
 

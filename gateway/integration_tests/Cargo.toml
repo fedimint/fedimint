@@ -19,6 +19,7 @@ clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
+fedimint-logging = { workspace = true }
 fedimint-testing = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }

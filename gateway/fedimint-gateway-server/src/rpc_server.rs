@@ -8,6 +8,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::FmtCompact;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
@@ -35,7 +36,7 @@ use hex::ToHex;
 use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
-use tracing::{error, info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::Gateway;
 use crate::error::{AdminGatewayError, PublicGatewayError};
@@ -59,16 +60,16 @@ pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
         });
 
         match graceful.await {
-            Err(e) => {
-                error!("Error shutting down gatewayd webserver: {:?}", e);
+            Err(err) => {
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Error shutting down gatewayd webserver");
             }
             _ => {
-                info!("Successfully shutdown webserver");
+                info!(target: LOG_GATEWAY, "Successfully shutdown webserver");
             }
         }
     });
 
-    info!("Successfully started webserver on {}", gateway.listen);
+    info!(target: LOG_GATEWAY, listen = %gateway.listen, "Successfully started webserver");
     Ok(())
 }
 
@@ -253,7 +254,7 @@ async fn create_invoice_for_operator(
     Ok(Json(json!(invoice)))
 }
 
-#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn pay_invoice_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PayInvoiceForOperatorPayload>,
@@ -262,7 +263,7 @@ async fn pay_invoice_operator(
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
 }
 
-#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn pay_invoice(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<fedimint_ln_client::pay::PayInvoicePayload>,
