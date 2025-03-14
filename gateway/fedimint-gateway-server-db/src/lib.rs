@@ -37,6 +37,7 @@ impl GatewayDbExt for Database {
     }
 }
 
+#[allow(async_fn_in_trait)]
 pub trait GatewayDbtxNcExt {
     async fn save_federation_config(&mut self, config: &FederationConfig);
     async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0>;
@@ -625,4 +626,4 @@ impl_db_record!(
 );
 
 #[cfg(test)]
-mod fedimint_migration_tests;
+mod migration_tests;
