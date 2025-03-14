@@ -53,7 +53,7 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-time = { version = "0.3.37", features = ["formatting"] }
+time = { version = "0.3.39", features = ["formatting"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
 
