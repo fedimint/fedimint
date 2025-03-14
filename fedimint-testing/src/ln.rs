@@ -12,7 +12,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+    GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
 };
 use fedimint_lightning::{
     CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
@@ -305,6 +305,12 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<Option<GetInvoiceResponse>, LightningRpcError> {
         Err(LightningRpcError::FailedToGetInvoice {
             failure_reason: "FakeLightningTest does not support getting invoices".to_string(),
+        })
+    }
+
+    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
+        Err(LightningRpcError::FailedToListTransactions {
+            failure_reason: "FakeLightningTest does not support listing transactions".to_string(),
         })
     }
 }

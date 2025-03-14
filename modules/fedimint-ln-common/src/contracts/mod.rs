@@ -1,11 +1,13 @@
 pub mod incoming;
 pub mod outgoing;
 
+use std::fmt::Display;
 use std::io::Error;
 
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::{Hash as BitcoinHash, hash_newtype};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::hex::ToHex;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{OutPoint, secp256k1};
 use serde::{Deserialize, Serialize};
@@ -118,6 +120,12 @@ impl Decodable for ContractId {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Preimage(pub [u8; 32]);
+
+impl Display for Preimage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.encode_hex::<String>())
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PreimageKey(#[serde(with = "serde_big_array::BigArray")] pub [u8; 33]);

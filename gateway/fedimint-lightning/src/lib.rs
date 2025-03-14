@@ -15,7 +15,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+    GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
 };
 use fedimint_ln_common::PrunedInvoice;
 pub use fedimint_ln_common::contracts::Preimage;
@@ -53,6 +53,8 @@ pub enum LightningRpcError {
     FailedToCloseChannelsWithPeer { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
+    #[error("Failed to list transactions: {failure_reason}")]
+    FailedToListTransactions { failure_reason: String },
     #[error("Failed to get funding address: {failure_reason}")]
     FailedToGetLnOnchainAddress { failure_reason: String },
     #[error("Failed to withdraw funds on-chain: {failure_reason}")]
@@ -219,6 +221,8 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         get_invoice_request: GetInvoiceRequest,
     ) -> Result<Option<GetInvoiceResponse>, LightningRpcError>;
+
+    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {

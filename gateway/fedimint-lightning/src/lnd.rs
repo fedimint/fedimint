@@ -10,6 +10,7 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit, secp256k1};
+use fedimint_gateway_common::ListTransactionsResponse;
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
@@ -1423,6 +1424,12 @@ impl ILnRpcClient for GatewayLndClient {
             created_at: UNIX_EPOCH + Duration::from_secs(invoice.creation_date as u64),
             status,
         }))
+    }
+
+    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
+        Ok(ListTransactionsResponse {
+            transactions: vec![],
+        })
     }
 }
 

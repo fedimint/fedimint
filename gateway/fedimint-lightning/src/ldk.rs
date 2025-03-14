@@ -8,12 +8,11 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::{Network, OutPoint};
 use fedimint_bip39::Mnemonic;
 use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
-use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::{BitcoinRpcConfig, is_env_var_set};
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
-use fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse};
+use fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
 use ldk_node::lightning::ln::PaymentHash;
@@ -672,14 +671,14 @@ impl ILnRpcClient for GatewayLdkClient {
             })
             .iter()
             .map(|details| {
-                let (preimage, payment_hash) = get_preimage_and_payment_hash(&details.kind);
+                let (preimage, payment_hash, _) = get_preimage_and_payment_hash(&details.kind);
                 let status = match details.status {
                     PaymentStatus::Failed => fedimint_gateway_common::PaymentStatus::Failed,
                     PaymentStatus::Succeeded => fedimint_gateway_common::PaymentStatus::Succeeded,
                     PaymentStatus::Pending => fedimint_gateway_common::PaymentStatus::Pending,
                 };
                 GetInvoiceResponse {
-                    preimage: preimage.map(|p| p.0.consensus_encode_to_hex()),
+                    preimage: preimage.map(|p| p.to_string()),
                     payment_hash,
                     amount: Amount::from_msats(
                         details
@@ -694,11 +693,57 @@ impl ILnRpcClient for GatewayLdkClient {
 
         Ok(invoices.first().cloned())
     }
+
+    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
+        let transactions = self
+            .node
+            .list_payments_with_filter(|_details| {
+                // TODO: Filter on timestamp
+                true
+            })
+            .iter()
+            .map(|details| {
+                let (preimage, payment_hash, payment_kind) =
+                    get_preimage_and_payment_hash(&details.kind);
+                let direction = match details.direction {
+                    PaymentDirection::Outbound => {
+                        fedimint_gateway_common::PaymentDirection::Outbound
+                    }
+                    PaymentDirection::Inbound => fedimint_gateway_common::PaymentDirection::Inbound,
+                };
+                let status = match details.status {
+                    PaymentStatus::Failed => fedimint_gateway_common::PaymentStatus::Failed,
+                    PaymentStatus::Succeeded => fedimint_gateway_common::PaymentStatus::Succeeded,
+                    PaymentStatus::Pending => fedimint_gateway_common::PaymentStatus::Pending,
+                };
+                fedimint_gateway_common::PaymentDetails {
+                    payment_hash,
+                    preimage: preimage.map(|p| p.to_string()),
+                    payment_kind,
+                    amount: Amount::from_msats(
+                        details
+                            .amount_msat
+                            .expect("amountless invoices are not supported"),
+                    ),
+                    direction,
+                    status,
+                    timestamp: details.latest_update_timestamp,
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(ListTransactionsResponse { transactions })
+    }
 }
 
 /// Maps LDK's `PaymentKind` to an optional preimage and an optional payment
 /// hash depending on the type of payment.
-fn get_preimage_and_payment_hash(kind: &PaymentKind) -> (Option<Preimage>, Option<sha256::Hash>) {
+fn get_preimage_and_payment_hash(
+    kind: &PaymentKind,
+) -> (
+    Option<Preimage>,
+    Option<sha256::Hash>,
+    fedimint_gateway_common::PaymentKind,
+) {
     match kind {
         PaymentKind::Bolt11 {
             hash,
@@ -707,6 +752,7 @@ fn get_preimage_and_payment_hash(kind: &PaymentKind) -> (Option<Preimage>, Optio
         } => (
             preimage.map(|p| Preimage(p.0)),
             Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
+            fedimint_gateway_common::PaymentKind::Bolt11,
         ),
         PaymentKind::Bolt11Jit {
             hash,
@@ -716,6 +762,7 @@ fn get_preimage_and_payment_hash(kind: &PaymentKind) -> (Option<Preimage>, Optio
         } => (
             preimage.map(|p| Preimage(p.0)),
             Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
+            fedimint_gateway_common::PaymentKind::Bolt11,
         ),
         PaymentKind::Bolt12Offer {
             hash,
@@ -727,6 +774,7 @@ fn get_preimage_and_payment_hash(kind: &PaymentKind) -> (Option<Preimage>, Optio
         } => (
             preimage.map(|p| Preimage(p.0)),
             hash.map(|h| sha256::Hash::from_slice(&h.0).expect("Failed to convert payment hash")),
+            fedimint_gateway_common::PaymentKind::Bolt12Offer,
         ),
         PaymentKind::Bolt12Refund {
             hash,
@@ -737,11 +785,13 @@ fn get_preimage_and_payment_hash(kind: &PaymentKind) -> (Option<Preimage>, Optio
         } => (
             preimage.map(|p| Preimage(p.0)),
             hash.map(|h| sha256::Hash::from_slice(&h.0).expect("Failed to convert payment hash")),
+            fedimint_gateway_common::PaymentKind::Bolt12Refund,
         ),
         PaymentKind::Spontaneous { hash, preimage } => (
             preimage.map(|p| Preimage(p.0)),
             Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
+            fedimint_gateway_common::PaymentKind::Bolt11,
         ),
-        PaymentKind::Onchain => panic!("No preimage for onchain payment"),
+        PaymentKind::Onchain => (None, None, fedimint_gateway_common::PaymentKind::Onchain),
     }
 }

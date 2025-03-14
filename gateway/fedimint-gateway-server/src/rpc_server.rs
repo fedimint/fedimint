@@ -17,12 +17,13 @@ use fedimint_gateway_common::{
     DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
     GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
     GetInvoiceRequest, InfoPayload, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    LeaveFedPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, OpenChannelRequest,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT,
-    ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WithdrawPayload,
+    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload,
+    PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
+    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    WithdrawPayload,
 };
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -167,6 +168,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
+        .route(LIST_TRANSACTIONS_ENDPOINT, post(list_transactions))
         .route(SEND_ONCHAIN_ENDPOINT, post(send_onchain))
         .route(ADDRESS_RECHECK_ENDPOINT, post(recheck_address))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
@@ -465,4 +467,13 @@ async fn get_invoice(
 ) -> Result<impl IntoResponse, AdminGatewayError> {
     let invoice = gateway.handle_get_invoice_msg(payload).await?;
     Ok(Json(json!(invoice)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn list_transactions(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<ListTransactionsPayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    let transactions = gateway.handle_list_transactions_msg(payload).await?;
+    Ok(Json(json!(transactions)))
 }

@@ -40,6 +40,7 @@ pub const GET_INVOICE_ENDPOINT: &str = "/get_invoice";
 pub const GET_LN_ONCHAIN_ADDRESS_ENDPOINT: &str = "/get_ln_onchain_address";
 pub const LEAVE_FED_ENDPOINT: &str = "/leave_fed";
 pub const LIST_ACTIVE_CHANNELS_ENDPOINT: &str = "/list_active_channels";
+pub const LIST_TRANSACTIONS_ENDPOINT: &str = "/list_transactions";
 pub const MNEMONIC_ENDPOINT: &str = "/mnemonic";
 pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
@@ -337,6 +338,39 @@ pub struct GetInvoiceResponse {
     pub amount: Amount,
     pub created_at: SystemTime,
     pub status: PaymentStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ListTransactionsPayload {}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ListTransactionsResponse {
+    pub transactions: Vec<PaymentDetails>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PaymentDetails {
+    pub payment_hash: Option<sha256::Hash>,
+    pub preimage: Option<String>,
+    pub payment_kind: PaymentKind,
+    pub amount: Amount,
+    pub direction: PaymentDirection,
+    pub status: PaymentStatus,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum PaymentKind {
+    Bolt11,
+    Bolt12Offer,
+    Bolt12Refund,
+    Onchain,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum PaymentDirection {
+    Outbound,
+    Inbound,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
