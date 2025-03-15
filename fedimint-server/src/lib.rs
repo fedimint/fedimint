@@ -116,14 +116,14 @@ pub async fn run(
             (cfg, connections, p2p_status_receivers)
         }
         None => {
-            run_config_gen(
+            Box::pin(run_config_gen(
                 data_dir.clone(),
                 settings.clone(),
                 db.clone(),
                 &task_group,
                 code_version_str.clone(),
                 force_api_secrets.clone(),
-            )
+            ))
             .await?
         }
     };
@@ -219,6 +219,11 @@ pub async fn run_config_gen(
 
     let config_gen = ConfigGenApi::new(settings.clone(), db.clone(), cgp_sender);
 
+    task_group.spawn_cancellable(
+        "web-ui",
+        fedimint_server_ui::start_web_ui(config_gen.clone(), settings.ui_bind),
+    );
+
     let mut rpc_module = RpcModule::new(config_gen);
 
     net::api::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
@@ -277,6 +282,7 @@ pub async fn run_config_gen(
     .into_dyn();
 
     let cfg = ServerConfig::distributed_gen(
+        settings.modules,
         &cg_params,
         settings.registry.clone(),
         code_version_str.clone(),

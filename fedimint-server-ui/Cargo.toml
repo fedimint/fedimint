@@ -1,0 +1,15 @@
+[package]
+name = "fedimint-server-ui"
+version = "0.7.0-alpha"
+edition = { workspace = true }
+
+[dependencies]
+fedimint-core = { workspace = true }
+fedimint-server-core = { workspace = true }
+axum = "0.8.1" 
+axum-extra = { version = "0.10.0", features = ["cookie"] }
+maud = "0.27.0"
+tokio = { workspace = true }
+serde = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true } 

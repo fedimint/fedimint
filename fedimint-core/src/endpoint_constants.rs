@@ -8,7 +8,6 @@ pub const AWAIT_OUTPUT_OUTCOME_ENDPOINT: &str = "await_output_outcome";
 pub const BACKUP_ENDPOINT: &str = "backup";
 pub const ADD_CONFIG_GEN_PEER_ENDPOINT: &str = "add_config_gen_peer";
 pub const BACKUP_STATISTICS_ENDPOINT: &str = "backup_statistics";
-pub const CHECK_BITCOIN_STATUS_ENDPOINT: &str = "check_bitcoin_status";
 pub const CLIENT_CONFIG_ENDPOINT: &str = "client_config";
 pub const CLIENT_CONFIG_JSON_ENDPOINT: &str = "client_config_json";
 pub const SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT: &str = "server_config_consensus_hash";

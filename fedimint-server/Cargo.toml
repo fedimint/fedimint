@@ -63,6 +63,7 @@ tokio-rustls = { workspace = true }
 tokio-util = { version = "0.7.13", features = ["codec"] }
 tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
+fedimint-server-ui = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }

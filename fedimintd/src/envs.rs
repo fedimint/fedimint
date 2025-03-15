@@ -25,6 +25,9 @@ pub const FM_BIND_API_ENV: &str = "FM_BIND_API";
 // Env variable to TODO
 pub const FM_API_URL_ENV: &str = "FM_API_URL";
 
+// Env variable to bind the web UI server
+pub const FM_BIND_UI_ENV: &str = "FM_BIND_UI";
+
 // Env variable to TODO
 pub const FM_BITCOIN_NETWORK_ENV: &str = "FM_BITCOIN_NETWORK";
 

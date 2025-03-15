@@ -212,6 +212,8 @@ pub struct ConfigGenSettings {
     pub p2p_bind: SocketAddr,
     /// Bind address for our API connection
     pub api_bind: SocketAddr,
+    /// Bind address for our UI connection
+    pub ui_bind: SocketAddr,
     /// URL for our P2P connection
     pub p2p_url: SafeUrl,
     /// URL for our API connection
@@ -244,10 +246,6 @@ pub struct ConfigGenParams {
     pub iroh_p2p_sk: Option<iroh::SecretKey>,
     /// Secret API auth string
     pub api_auth: ApiAuth,
-    /// Bind address for P2P communication
-    pub p2p_bind: SocketAddr,
-    /// Bind address for API communication
-    pub api_bind: SocketAddr,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
     /// Guardian-defined key-value pairs that will be passed to the client
@@ -537,6 +535,7 @@ impl ServerConfig {
     }
 
     pub fn trusted_dealer_gen(
+        modules: ServerModuleConfigGenParamsRegistry,
         params: &HashMap<PeerId, ConfigGenParams>,
         registry: &ServerModuleInitRegistry,
         code_version_str: &str,
@@ -551,8 +550,8 @@ impl ServerConfig {
             broadcast_sks.insert(peer_id, broadcast_sk);
         }
 
-        let modules = peer0.modules.iter_modules();
         let module_configs: BTreeMap<_, _> = modules
+            .iter_modules()
             .map(|(module_id, kind, module_params)| {
                 (
                     module_id,
@@ -588,6 +587,7 @@ impl ServerConfig {
 
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
+        modules: ServerModuleConfigGenParamsRegistry,
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
         code_version_str: String,
@@ -599,6 +599,7 @@ impl ServerConfig {
         // in case we are running by ourselves, avoid DKG
         if params.peer_ids().len() == 1 {
             let server = Self::trusted_dealer_gen(
+                modules,
                 &HashMap::from([(params.identity, params.clone())]),
                 &registry,
                 &code_version_str,
@@ -661,7 +662,7 @@ impl ServerConfig {
 
         let mut module_cfgs = BTreeMap::new();
 
-        for (module_id, kind, module_params) in params.modules.iter_modules() {
+        for (module_id, kind, module_params) in modules.iter_modules() {
             info!(
                 target: LOG_NET_PEER_DKG,
                 "Running distributed key generation for module of kind {kind}..."

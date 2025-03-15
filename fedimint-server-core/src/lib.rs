@@ -9,6 +9,7 @@ pub mod config;
 mod init;
 pub mod migration;
 pub mod net;
+pub mod config_gen;
 
 use std::any::Any;
 use std::fmt::Debug;
