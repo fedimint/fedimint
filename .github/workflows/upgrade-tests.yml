@@ -45,7 +45,7 @@ jobs:
       - name: Prepare
         uses: ./.github/actions/prepare
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
