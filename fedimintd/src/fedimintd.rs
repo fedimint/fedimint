@@ -350,7 +350,10 @@ impl Fedimintd {
                 },
             );
 
-        let s = if is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV) {
+        let enable_lnv2 = std::env::var_os(FM_ENABLE_MODULE_LNV2_ENV).is_none()
+            || is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV);
+
+        let s = if enable_lnv2 {
             s.with_module_kind(fedimint_lnv2_server::LightningInit)
                 .with_module_instance(
                     fedimint_lnv2_server::LightningInit::kind(),
