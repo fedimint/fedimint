@@ -46,7 +46,7 @@ use tracing::{debug, error, info};
 
 use crate::default_esplora_server;
 use crate::envs::{
-    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV,
     FM_BITCOIN_NETWORK_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV,
     FM_FINALITY_DELAY_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV,
     FM_TOKIO_CONSOLE_BIND_ENV,
@@ -86,6 +86,9 @@ struct ServerOpts {
     /// Our API address for clients to connect to us
     #[arg(long, env = FM_API_URL_ENV, default_value = "ws://127.0.0.1:8174")]
     api_url: SafeUrl,
+    /// Address we bind to for exposing the Web UI
+    #[arg(long, env = FM_BIND_UI_ENV, default_value = "127.0.0.1:8175")]
+    bind_ui: SocketAddr,
     /// The bitcoin network that fedimint will be running on
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
     network: bitcoin::network::Network,
@@ -529,6 +532,7 @@ async fn run(
     let settings = ConfigGenSettings {
         p2p_bind: opts.bind_p2p,
         api_bind: opts.bind_api,
+        ui_bind: opts.bind_ui,
         p2p_url: opts.p2p_url,
         api_url: opts.api_url,
         meta: opts.extra_dkg_meta.clone(),
@@ -554,6 +558,8 @@ async fn run(
         code_version_str,
         &module_inits,
         task_group.clone(),
+        Some(Box::new(fedimint_server_ui::dashboard::start)),
+        Some(Box::new(fedimint_server_ui::setup::start)),
     ))
     .await
 }

@@ -6,9 +6,11 @@
 //! and functionality that are only used on the server side.
 
 pub mod config;
+pub mod dashboard_ui;
 mod init;
 pub mod migration;
 pub mod net;
+pub mod setup_ui;
 
 use std::any::Any;
 use std::fmt::Debug;

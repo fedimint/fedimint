@@ -33,7 +33,7 @@ pub fn local_config_gen_params(
     let connections: BTreeMap<PeerId, PeerConnectionInfo> = peers
         .iter()
         .map(|peer| {
-            let peer_port = base_port + u16::from(*peer) * 2;
+            let peer_port = base_port + u16::from(*peer) * 3;
 
             let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
             let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
@@ -54,19 +54,12 @@ pub fn local_config_gen_params(
     peers
         .iter()
         .map(|peer| {
-            let peer_port = base_port + u16::from(*peer) * 2;
-
-            let p2p_bind = format!("127.0.0.1:{peer_port}");
-            let api_bind = format!("127.0.0.1:{}", peer_port + 1);
-
             let params = ConfigGenParams {
                 identity: *peer,
                 api_auth: API_AUTH.clone(),
                 tls_key: Some(tls_keys[peer].1.clone()),
                 iroh_api_sk: None,
                 iroh_p2p_sk: None,
-                p2p_bind: p2p_bind.parse().expect("Valid address"),
-                api_bind: api_bind.parse().expect("Valid address"),
                 peers: connections.clone(),
                 meta: BTreeMap::from([(
                     META_FEDERATION_NAME_KEY.to_owned(),

@@ -14,9 +14,9 @@ use fedimint_core::admin_client::{ServerStatus, ServerStatusLegacy};
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
-use fedimint_core::config::{ClientConfig, JsonClientConfig};
+use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME_KEY};
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
-use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
+use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
@@ -35,7 +35,7 @@ use fedimint_core::endpoint_constants::{
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
-    ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
+    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiResult, ApiVersion,
     SerdeModuleEncoding, SerdeModuleEncodingBase64, SupportedApiVersionsSummary, api_endpoint,
 };
 use fedimint_core::net::api_announcement::{
@@ -51,6 +51,7 @@ use fedimint_core::transaction::{
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
+use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::net::{GuardianAuthToken, check_auth};
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
@@ -263,7 +264,7 @@ impl ConsensusApi {
         self.shutdown_sender.send_replace(index);
     }
 
-    async fn get_federation_audit(&self, _auth: &GuardianAuthToken) -> ApiResult<AuditSummary> {
+    async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
         let mut dbtx = self.db.begin_transaction_nc().await;
         // Writes are related to compacting audit keys, which we can safely ignore
         // within an API request since the compaction will happen when constructing an
@@ -556,6 +557,66 @@ impl HasApiContext<DynServerModule> for ConsensusApi {
     }
 }
 
+#[async_trait]
+impl IDashboardApi for ConsensusApi {
+    async fn auth(&self) -> ApiAuth {
+        self.cfg.private.api_auth.clone()
+    }
+
+    async fn guardian_name(&self) -> String {
+        self.cfg
+            .consensus
+            .api_endpoints()
+            .get(&self.cfg.local.identity)
+            .map(|endpoint| endpoint.name.clone())
+            .expect("Guardian API endpoint must exist")
+    }
+
+    async fn federation_name(&self) -> String {
+        self.cfg
+            .consensus
+            .meta
+            .get(META_FEDERATION_NAME_KEY)
+            .cloned()
+            .expect("Federation name must be set")
+    }
+
+    async fn session_count(&self) -> usize {
+        self.session_count().await as usize
+    }
+
+    async fn peer_connection_status(&self) -> BTreeMap<PeerId, bool> {
+        self.p2p_status_receivers
+            .iter()
+            .map(|(peer, receiver)| (*peer, *receiver.borrow() == P2PConnectionStatus::Connected))
+            .collect()
+    }
+
+    async fn federation_invite_code(&self) -> String {
+        self.cfg
+            .get_invite_code(self.get_active_api_secret())
+            .to_string()
+    }
+
+    async fn federation_audit(&self) -> AuditSummary {
+        self.get_federation_audit()
+            .await
+            .expect("Failed to get federation audit")
+    }
+
+    fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule> {
+        self.modules
+            .iter_modules()
+            .find_map(|(_, module_kind, module)| {
+                if *module_kind == kind {
+                    Some(module)
+                } else {
+                    None
+                }
+            })
+    }
+}
+
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
     vec![
         api_endpoint! {
@@ -700,8 +761,8 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             AUDIT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, _v: ()| -> AuditSummary {
-                let auth = check_auth(context)?;
-                Ok(fedimint.get_federation_audit(&auth).await?)
+                check_auth(context)?;
+                Ok(fedimint.get_federation_audit().await?)
             }
         },
         api_endpoint! {
