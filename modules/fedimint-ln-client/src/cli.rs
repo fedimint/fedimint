@@ -1,7 +1,7 @@
 use std::{ffi, iter};
 
 use anyhow::{Context as _, bail};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::PublicKey;
@@ -49,14 +49,26 @@ enum Opts {
         #[clap(long, default_value = "false")]
         force_internal: bool,
     },
-    RegisterLNURL {
+    #[clap(subcommand)]
+    Lnurl(LnurlCommands),
+}
+
+#[derive(Subcommand, Serialize)]
+enum LnurlCommands {
+    /// Register a new LNURL payment code with a specific LNURL server
+    Register {
+        /// The LNURL server to register with
         server_url: SafeUrl,
+        /// Set LNURL meta data, see LUD-06 for more details on the format
         #[clap(long)]
         meta: Option<String>,
+        ///Shrthand for setting the short description in the LNURL meta data
         #[clap(long, default_value = "Fedimint LNURL Pay")]
         description: String,
     },
-    AwaitLnurlReceive {
+    /// Await a LNURL-triggered lightning receive operation to complete
+    AwaitReceive {
+        /// The operation ID of the receive operation to await
         operation_id: OperationId,
     },
 }
@@ -142,11 +154,11 @@ pub(crate) async fn handle_cli_command(
                     .context("expected a response")?
             }
         }
-        Opts::RegisterLNURL {
+        Opts::Lnurl(LnurlCommands::Register {
             server_url,
             meta,
             description,
-        } => {
+        }) => {
             let meta = meta.unwrap_or_else(|| {
                 serde_json::to_string(&json!([["text/plain", description]]))
                     .expect("serialization can't fail")
@@ -158,7 +170,7 @@ pub(crate) async fn handle_cli_command(
                 "lnurl": recurring_payment_code.code,
             })
         }
-        Opts::AwaitLnurlReceive { operation_id } => {
+        Opts::Lnurl(LnurlCommands::AwaitReceive { operation_id }) => {
             let LightningOperationMetaVariant::RecurringPaymentReceive(operation_meta) = module
                 .client_ctx
                 .get_operation(operation_id)
