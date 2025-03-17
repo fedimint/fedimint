@@ -71,10 +71,12 @@ enum LnurlCommands {
     },
     /// List all LNURLs registered
     List,
-    /// List all invoices generated for a LNURL
+    /// List all invoices and their operation ids generated for a LNURL
     Invoices { payment_code_idx: u64 },
+    /// List details for a specific invoice by operation id
+    InvoiceDetails { operation_id: OperationId },
     /// Await a LNURL-triggered lightning receive operation to complete
-    AwaitReceive {
+    AwaitInvoicePaid {
         /// The operation ID of the receive operation to await
         operation_id: OperationId,
     },
@@ -208,6 +210,7 @@ pub(crate) async fn handle_cli_command(
             })
         }
         Opts::Lnurl(LnurlCommands::Invoices { payment_code_idx }) => {
+            // TODO: wait for background sync to complete
             let invoices = module
                 .list_recurring_payment_code_invoices(payment_code_idx)
                 .await
@@ -224,7 +227,24 @@ pub(crate) async fn handle_cli_command(
                 "invoices": invoices,
             })
         }
-        Opts::Lnurl(LnurlCommands::AwaitReceive { operation_id }) => {
+        Opts::Lnurl(LnurlCommands::InvoiceDetails { operation_id }) => {
+            let LightningOperationMetaVariant::RecurringPaymentReceive(operation_meta) = module
+                .client_ctx
+                .get_operation(operation_id)
+                .await?
+                .meta::<LightningOperationMeta>()
+                .variant
+            else {
+                bail!("Operation is not a recurring lightning receive");
+            };
+
+            json!({
+                "payment_code_id": operation_meta.payment_code_id,
+                "invoice": operation_meta.invoice,
+                "amount_msat": operation_meta.invoice.amount_milli_satoshis(),
+            })
+        }
+        Opts::Lnurl(LnurlCommands::AwaitInvoicePaid { operation_id }) => {
             let LightningOperationMetaVariant::RecurringPaymentReceive(operation_meta) = module
                 .client_ctx
                 .get_operation(operation_id)
