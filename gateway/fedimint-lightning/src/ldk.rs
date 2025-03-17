@@ -697,9 +697,9 @@ impl ILnRpcClient for GatewayLdkClient {
     async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
         let transactions = self
             .node
-            .list_payments_with_filter(|_details| {
+            .list_payments_with_filter(|details| {
                 // TODO: Filter on timestamp
-                true
+                details.kind != PaymentKind::Onchain
             })
             .iter()
             .map(|details| {

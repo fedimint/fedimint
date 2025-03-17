@@ -7,8 +7,7 @@ use fedimint_core::time::now;
 use fedimint_eventlog::{EventKind, EventLogId};
 use fedimint_gateway_client::GatewayRpcClient;
 use fedimint_gateway_common::{
-    ConnectFedPayload, LeaveFedPayload, ListTransactionsPayload, PaymentLogPayload,
-    PaymentSummaryPayload,
+    ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
 };
 
 use crate::print_response;
@@ -33,9 +32,6 @@ pub enum GeneralCommands {
         #[clap(long)]
         recover: Option<bool>,
     },
-    /// List the transactions that the Lightning node has processed (onchain and
-    /// lightning)
-    ListTransactions,
     /// Leave a federation.
     LeaveFed {
         #[clap(long)]
@@ -118,12 +114,6 @@ impl GeneralCommands {
                     })
                     .await?;
 
-                print_response(response);
-            }
-            Self::ListTransactions => {
-                let response = create_client()
-                    .list_transactions(ListTransactionsPayload {})
-                    .await?;
                 print_response(response);
             }
             Self::LeaveFed { federation_id } => {

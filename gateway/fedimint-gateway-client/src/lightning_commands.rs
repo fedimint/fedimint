@@ -3,7 +3,7 @@ use clap::Subcommand;
 use fedimint_gateway_client::GatewayRpcClient;
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GetInvoiceRequest,
-    OpenChannelRequest, PayInvoiceForOperatorPayload,
+    ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
 };
 use lightning_invoice::Bolt11Invoice;
 
@@ -52,6 +52,9 @@ pub enum LightningCommands {
     },
     /// List active channels.
     ListActiveChannels,
+    /// List the Lightning transactions that the Lightning node has received and
+    /// sent
+    ListTransactions,
     /// Get details about a specific invoice
     GetInvoice {
         /// The payment hash of the invoice
@@ -116,6 +119,12 @@ impl LightningCommands {
             Self::GetInvoice { payment_hash } => {
                 let response = create_client()
                     .get_invoice(GetInvoiceRequest { payment_hash })
+                    .await?;
+                print_response(response);
+            }
+            Self::ListTransactions => {
+                let response = create_client()
+                    .list_transactions(ListTransactionsPayload {})
                     .await?;
                 print_response(response);
             }

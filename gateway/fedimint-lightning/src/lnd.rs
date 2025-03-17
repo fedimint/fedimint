@@ -10,7 +10,9 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit, secp256k1};
-use fedimint_gateway_common::ListTransactionsResponse;
+use fedimint_gateway_common::{
+    ListTransactionsResponse, PaymentDetails, PaymentDirection, PaymentKind,
+};
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
@@ -31,8 +33,8 @@ use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
     GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress, ListChannelsRequest,
-    ListInvoiceRequest, ListPeersRequest, OpenChannelRequest, SendCoinsRequest,
-    WalletBalanceRequest,
+    ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest, OpenChannelRequest,
+    SendCoinsRequest, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -1404,6 +1406,7 @@ impl ILnRpcClient for GatewayLndClient {
             Ok(invoice) => invoice.into_inner(),
             Err(_) => return Ok(None),
         };
+        // TODO: Set to None if fails
         let preimage: [u8; 32] = invoice
             .clone()
             .r_preimage
@@ -1427,8 +1430,88 @@ impl ILnRpcClient for GatewayLndClient {
     }
 
     async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
+        let mut client = self.connect().await?;
+        let payments = client
+            .lightning()
+            .list_payments(ListPaymentsRequest {
+                // TODO: add time bound here
+                ..Default::default()
+            })
+            .await
+            .map_err(|err| LightningRpcError::FailedToListTransactions {
+                failure_reason: err.to_string(),
+            })?
+            .into_inner();
+
+        let mut payments = payments
+            .payments
+            .iter()
+            .map(|payment| {
+                let payment_hash = sha256::Hash::from_str(&payment.payment_hash).ok();
+                let preimage = (!payment.payment_preimage.is_empty())
+                    .then_some(payment.payment_preimage.clone());
+                let status = match &payment.status() {
+                    PaymentStatus::Succeeded => fedimint_gateway_common::PaymentStatus::Succeeded,
+                    PaymentStatus::Failed => fedimint_gateway_common::PaymentStatus::Failed,
+                    _ => fedimint_gateway_common::PaymentStatus::Pending,
+                };
+                PaymentDetails {
+                    payment_hash,
+                    preimage,
+                    payment_kind: PaymentKind::Bolt11,
+                    amount: Amount::from_msats(payment.value_msat as u64),
+                    direction: PaymentDirection::Outbound,
+                    status,
+                    // TODO: Verify that this is the right type
+                    timestamp: payment.creation_time_ns as u64,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let invoices = client
+            .lightning()
+            .list_invoices(ListInvoiceRequest {
+                pending_only: false,
+                ..Default::default()
+            })
+            .await
+            .map_err(|err| LightningRpcError::FailedToListTransactions {
+                failure_reason: err.to_string(),
+            })?
+            .into_inner();
+
+        let mut incoming_payments = invoices
+            .invoices
+            .iter()
+            .filter_map(|invoice| {
+                // TODO: Filter by time bound
+                let status = match &invoice.state() {
+                    InvoiceState::Settled => fedimint_gateway_common::PaymentStatus::Succeeded,
+                    InvoiceState::Canceled => fedimint_gateway_common::PaymentStatus::Failed,
+                    _ => return None,
+                };
+                let preimage = (!invoice.r_preimage.is_empty())
+                    .then_some(invoice.r_preimage.encode_hex::<String>());
+                Some(PaymentDetails {
+                    payment_hash: Some(
+                        sha256::Hash::from_slice(&invoice.r_hash)
+                            .expect("Could not convert payment hash"),
+                    ),
+                    preimage,
+                    payment_kind: PaymentKind::Bolt11,
+                    amount: Amount::from_msats(invoice.value_msat as u64),
+                    direction: PaymentDirection::Inbound,
+                    status,
+                    timestamp: invoice.settle_date as u64,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        payments.append(&mut incoming_payments);
+        payments.sort_by_key(|p| p.timestamp);
+
         Ok(ListTransactionsResponse {
-            transactions: vec![],
+            transactions: payments,
         })
     }
 }
