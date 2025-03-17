@@ -1,18 +1,21 @@
 use std::{ffi, iter};
 
-use anyhow::Context as _;
+use anyhow::{Context as _, bail};
 use clap::Parser;
 use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
+use futures::StreamExt;
 use lightning_invoice::{Bolt11InvoiceDescription, Description};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::info;
+use tracing::{debug, info};
 
-use crate::OutgoingLightningPayment;
 use crate::recurring::RecurringPaymentProtocol;
+use crate::{
+    LightningOperationMeta, LightningOperationMetaVariant, LnReceiveState, OutgoingLightningPayment,
+};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -52,6 +55,9 @@ enum Opts {
         meta: Option<String>,
         #[clap(long, default_value = "Fedimint LNURL Pay")]
         description: String,
+    },
+    AwaitLnurlReceive {
+        operation_id: OperationId,
     },
 }
 
@@ -151,6 +157,39 @@ pub(crate) async fn handle_cli_command(
             json!({
                 "lnurl": recurring_payment_code.code,
             })
+        }
+        Opts::AwaitLnurlReceive { operation_id } => {
+            let LightningOperationMetaVariant::RecurringPaymentReceive(operation_meta) = module
+                .client_ctx
+                .get_operation(operation_id)
+                .await?
+                .meta::<LightningOperationMeta>()
+                .variant
+            else {
+                bail!("Operation is not a recurring lightning receive")
+            };
+            let mut stream = module
+                .subscribe_ln_recurring_receive(operation_id)
+                .await?
+                .into_stream();
+            while let Some(update) = stream.next().await {
+                debug!(?update, "Await invoice state update");
+                match update {
+                    LnReceiveState::Claimed => {
+                        let amount_msat = operation_meta.invoice.amount_milli_satoshis();
+                        return Ok(json!({
+                            "payment_code_id": operation_meta.payment_code_id,
+                            "invoice": operation_meta.invoice,
+                            "amount_msat": amount_msat,
+                        }));
+                    }
+                    LnReceiveState::Canceled { reason } => {
+                        return Err(reason.into());
+                    }
+                    _ => {}
+                }
+            }
+            unreachable!("Stream should not end without an outcome");
         }
     })
 }
