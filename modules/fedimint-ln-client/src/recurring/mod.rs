@@ -1,5 +1,6 @@
 pub mod api;
 
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::future::pending;
 use std::str::FromStr;
@@ -348,6 +349,18 @@ impl LightningClientModule {
                 }
             }
         }))
+    }
+
+    pub async fn list_recurring_payment_codes(&self) -> BTreeMap<u64, RecurringPaymentCodeEntry> {
+        self.client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&RecurringPaymentCodeKeyPrefix)
+            .await
+            .map(|(idx, entry)| (idx.derivation_idx, entry))
+            .collect()
+            .await
     }
 }
 
