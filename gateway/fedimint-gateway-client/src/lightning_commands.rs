@@ -74,7 +74,7 @@ pub enum LightningCommands {
     },
 }
 
-pub(crate) fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
     s.parse::<DateTime<Utc>>()
 }
 
@@ -141,10 +141,12 @@ impl LightningCommands {
                 start_time,
                 end_time,
             } => {
+                let start_secs = start_time.timestamp().try_into()?;
+                let end_secs = end_time.timestamp().try_into()?;
                 let response = create_client()
                     .list_transactions(ListTransactionsPayload {
-                        start_secs: start_time.timestamp() as u64,
-                        end_secs: end_time.timestamp() as u64,
+                        start_secs,
+                        end_secs,
                     })
                     .await?;
                 print_response(response);

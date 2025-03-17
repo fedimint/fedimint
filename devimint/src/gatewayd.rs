@@ -2,17 +2,19 @@ use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::SystemTime;
 
 use anyhow::{Context, Result, anyhow};
 use bitcoin::hashes::sha256;
+use chrono::{DateTime, Utc};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
 use fedimint_gateway_common::{
-    ChannelInfo, GatewayBalances, GetInvoiceResponse, MnemonicResponse, PaymentStatus,
-    PaymentSummaryResponse, V1_API_ENDPOINT,
+    ChannelInfo, GatewayBalances, GetInvoiceResponse, ListTransactionsResponse, MnemonicResponse,
+    PaymentDetails, PaymentStatus, PaymentSummaryResponse, V1_API_ENDPOINT,
 };
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -678,5 +680,27 @@ impl Gatewayd {
         anyhow::ensure!(invoice.status == PaymentStatus::Succeeded);
 
         Ok(())
+    }
+
+    pub async fn list_transactions(
+        &self,
+        start: SystemTime,
+        end: SystemTime,
+    ) -> Result<Vec<PaymentDetails>> {
+        let start_datetime: DateTime<Utc> = start.into();
+        let end_datetime: DateTime<Utc> = end.into();
+        let response = cmd!(
+            self,
+            "lightning",
+            "list-transactions",
+            "--start-time",
+            start_datetime.to_rfc3339(),
+            "--end-time",
+            end_datetime.to_rfc3339()
+        )
+        .out_json()
+        .await?;
+        let transactions = serde_json::from_value::<ListTransactionsResponse>(response)?;
+        Ok(transactions.transactions)
     }
 }

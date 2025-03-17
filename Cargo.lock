@@ -2095,6 +2095,7 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "bon",
+ "chrono",
  "clap",
  "esplora-client 0.10.0",
  "fedimint-api-client",
