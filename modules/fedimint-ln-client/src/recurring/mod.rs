@@ -6,11 +6,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use anyhow::bail;
 use api::{RecurringdApiError, RecurringdClient};
+use async_stream::stream;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::SECP256K1;
 use fedimint_client_module::OperationId;
 use fedimint_client_module::module::ClientContext;
+use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -29,9 +32,10 @@ use tokio::sync::Notify;
 use tracing::{debug, trace};
 
 use crate::db::RecurringPaymentCodeKeyPrefix;
+use crate::receive::LightningReceiveError;
 use crate::{
     LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
-    LightningOperationMetaVariant, tweak_user_secret_key,
+    LightningOperationMetaVariant, LnReceiveState, tweak_user_secret_key,
 };
 
 impl LightningClientModule {
@@ -299,6 +303,51 @@ impl LightningClientModule {
             )
             .await
             .expect("OperationId is random");
+    }
+
+    pub async fn subscribe_ln_recurring_receive(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+        let LightningOperationMetaVariant::RecurringPaymentReceive(ReurringPaymentReceiveMeta {
+            invoice,
+            ..
+        }) = operation.meta::<LightningOperationMeta>().variant
+        else {
+            bail!("Operation is not a recurring lightning receive")
+        };
+
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(self.client_ctx.outcome_or_updates(operation, operation_id, move || {
+            stream! {
+                let self_ref = client_ctx.self_ref();
+
+                yield LnReceiveState::Created;
+                yield LnReceiveState::WaitingForPayment { invoice: invoice.to_string(), timeout: invoice.expiry_time() };
+
+                match self_ref.await_receive_success(operation_id).await {
+                    Ok(_) => {
+                        yield LnReceiveState::Funded;
+
+                        if let Ok(out_points) = self_ref.await_claim_acceptance(operation_id).await {
+                            yield LnReceiveState::AwaitingFunds;
+
+                            if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
+                                yield LnReceiveState::Claimed;
+                                return;
+                            }
+                        }
+
+                        yield LnReceiveState::Canceled { reason: LightningReceiveError::Rejected };
+                    }
+                    Err(e) => {
+                        yield LnReceiveState::Canceled { reason: e };
+                    }
+                }
+            }
+        }))
     }
 }
 
