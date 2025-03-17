@@ -28,6 +28,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 bcrypt = { workspace = true }
 bitcoin = { workspace = true }
+chrono = { workspace = true }
 clap = { workspace = true }
 clap_complete = "4.5.46"
 fedimint-core = { workspace = true }

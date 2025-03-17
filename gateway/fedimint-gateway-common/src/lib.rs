@@ -341,7 +341,10 @@ pub struct GetInvoiceResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ListTransactionsPayload {}
+pub struct ListTransactionsPayload {
+    pub start_secs: u64,
+    pub end_secs: u64,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ListTransactionsResponse {
@@ -356,7 +359,7 @@ pub struct PaymentDetails {
     pub amount: Amount,
     pub direction: PaymentDirection,
     pub status: PaymentStatus,
-    pub timestamp: u64,
+    pub timestamp_secs: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

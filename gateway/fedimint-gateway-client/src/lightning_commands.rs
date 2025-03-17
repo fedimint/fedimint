@@ -1,4 +1,5 @@
 use bitcoin::hashes::sha256;
+use chrono::{DateTime, Utc};
 use clap::Subcommand;
 use fedimint_gateway_client::GatewayRpcClient;
 use fedimint_gateway_common::{
@@ -54,13 +55,27 @@ pub enum LightningCommands {
     ListActiveChannels,
     /// List the Lightning transactions that the Lightning node has received and
     /// sent
-    ListTransactions,
+    ListTransactions {
+        /// The timestamp to start listing transactions from (e.g.,
+        /// "2025-03-14T15:30:00Z")
+        #[arg(long, value_parser = parse_datetime)]
+        start_time: DateTime<Utc>,
+
+        /// The timestamp to end listing transactions from (e.g.,
+        /// "2025-03-15T15:30:00Z")
+        #[arg(long, value_parser = parse_datetime)]
+        end_time: DateTime<Utc>,
+    },
     /// Get details about a specific invoice
     GetInvoice {
         /// The payment hash of the invoice
         #[clap(long)]
         payment_hash: sha256::Hash,
     },
+}
+
+pub(crate) fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+    s.parse::<DateTime<Utc>>()
 }
 
 impl LightningCommands {
@@ -122,9 +137,15 @@ impl LightningCommands {
                     .await?;
                 print_response(response);
             }
-            Self::ListTransactions => {
+            Self::ListTransactions {
+                start_time,
+                end_time,
+            } => {
                 let response = create_client()
-                    .list_transactions(ListTransactionsPayload {})
+                    .list_transactions(ListTransactionsPayload {
+                        start_secs: start_time.timestamp() as u64,
+                        end_secs: end_time.timestamp() as u64,
+                    })
                     .await?;
                 print_response(response);
             }

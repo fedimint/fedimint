@@ -222,7 +222,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         get_invoice_request: GetInvoiceRequest,
     ) -> Result<Option<GetInvoiceResponse>, LightningRpcError>;
 
-    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError>;
+    async fn list_transactions(
+        &self,
+        start_secs: u64,
+        end_secs: u64,
+    ) -> Result<ListTransactionsResponse, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {

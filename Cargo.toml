@@ -120,6 +120,7 @@ bitcoin_hashes = "0.14.0"
 bls12_381 = "0.8.0"
 bon = "3.3.2"
 bytes = "1.10.1"
+chrono = "0.4.40"
 clap = { version = "4.5.32", features = ["derive", "env"] }
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.7.0-alpha" }

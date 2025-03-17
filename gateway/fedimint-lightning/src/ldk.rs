@@ -694,12 +694,17 @@ impl ILnRpcClient for GatewayLdkClient {
         Ok(invoices.first().cloned())
     }
 
-    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
+    async fn list_transactions(
+        &self,
+        start_secs: u64,
+        end_secs: u64,
+    ) -> Result<ListTransactionsResponse, LightningRpcError> {
         let transactions = self
             .node
             .list_payments_with_filter(|details| {
-                // TODO: Filter on timestamp
                 details.kind != PaymentKind::Onchain
+                    && details.latest_update_timestamp >= start_secs
+                    && details.latest_update_timestamp < end_secs
             })
             .iter()
             .map(|details| {
@@ -727,7 +732,7 @@ impl ILnRpcClient for GatewayLdkClient {
                     ),
                     direction,
                     status,
-                    timestamp: details.latest_update_timestamp,
+                    timestamp_secs: details.latest_update_timestamp,
                 }
             })
             .collect::<Vec<_>>();

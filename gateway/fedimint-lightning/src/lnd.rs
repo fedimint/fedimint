@@ -1406,7 +1406,6 @@ impl ILnRpcClient for GatewayLndClient {
             Ok(invoice) => invoice.into_inner(),
             Err(_) => return Ok(None),
         };
-        // TODO: Set to None if fails
         let preimage: [u8; 32] = invoice
             .clone()
             .r_preimage
@@ -1429,12 +1428,16 @@ impl ILnRpcClient for GatewayLndClient {
         }))
     }
 
-    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
+    async fn list_transactions(
+        &self,
+        start_secs: u64,
+        end_secs: u64,
+    ) -> Result<ListTransactionsResponse, LightningRpcError> {
         let mut client = self.connect().await?;
         let payments = client
             .lightning()
             .list_payments(ListPaymentsRequest {
-                // TODO: add time bound here
+                // On higher versions on LND, we can filter on the time range directly in the query
                 ..Default::default()
             })
             .await
@@ -1446,7 +1449,11 @@ impl ILnRpcClient for GatewayLndClient {
         let mut payments = payments
             .payments
             .iter()
-            .map(|payment| {
+            .filter_map(|payment| {
+                let timestamp_secs = (payment.creation_time_ns / 1_000_000_000) as u64;
+                if timestamp_secs < start_secs || timestamp_secs >= end_secs {
+                    return None;
+                }
                 let payment_hash = sha256::Hash::from_str(&payment.payment_hash).ok();
                 let preimage = (!payment.payment_preimage.is_empty())
                     .then_some(payment.payment_preimage.clone());
@@ -1455,16 +1462,15 @@ impl ILnRpcClient for GatewayLndClient {
                     PaymentStatus::Failed => fedimint_gateway_common::PaymentStatus::Failed,
                     _ => fedimint_gateway_common::PaymentStatus::Pending,
                 };
-                PaymentDetails {
+                Some(PaymentDetails {
                     payment_hash,
                     preimage,
                     payment_kind: PaymentKind::Bolt11,
                     amount: Amount::from_msats(payment.value_msat as u64),
                     direction: PaymentDirection::Outbound,
                     status,
-                    // TODO: Verify that this is the right type
-                    timestamp: payment.creation_time_ns as u64,
-                }
+                    timestamp_secs,
+                })
             })
             .collect::<Vec<_>>();
 
@@ -1472,6 +1478,7 @@ impl ILnRpcClient for GatewayLndClient {
             .lightning()
             .list_invoices(ListInvoiceRequest {
                 pending_only: false,
+                // On higher versions on LND, we can filter on the time range directly in the query
                 ..Default::default()
             })
             .await
@@ -1484,7 +1491,10 @@ impl ILnRpcClient for GatewayLndClient {
             .invoices
             .iter()
             .filter_map(|invoice| {
-                // TODO: Filter by time bound
+                let timestamp_secs = invoice.settle_date as u64;
+                if timestamp_secs < start_secs || timestamp_secs >= end_secs {
+                    return None;
+                }
                 let status = match &invoice.state() {
                     InvoiceState::Settled => fedimint_gateway_common::PaymentStatus::Succeeded,
                     InvoiceState::Canceled => fedimint_gateway_common::PaymentStatus::Failed,
@@ -1502,13 +1512,13 @@ impl ILnRpcClient for GatewayLndClient {
                     amount: Amount::from_msats(invoice.value_msat as u64),
                     direction: PaymentDirection::Inbound,
                     status,
-                    timestamp: invoice.settle_date as u64,
+                    timestamp_secs,
                 })
             })
             .collect::<Vec<_>>();
 
         payments.append(&mut incoming_payments);
-        payments.sort_by_key(|p| p.timestamp);
+        payments.sort_by_key(|p| p.timestamp_secs);
 
         Ok(ListTransactionsResponse {
             transactions: payments,

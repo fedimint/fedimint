@@ -1708,10 +1708,13 @@ impl Gateway {
 
     pub async fn handle_list_transactions_msg(
         &self,
-        _payload: ListTransactionsPayload,
+        payload: ListTransactionsPayload,
     ) -> AdminResult<ListTransactionsResponse> {
         let lightning_context = self.get_lightning_context().await?;
-        let response = lightning_context.lnrpc.list_transactions().await?;
+        let response = lightning_context
+            .lnrpc
+            .list_transactions(payload.start_secs, payload.end_secs)
+            .await?;
         Ok(response)
     }
 

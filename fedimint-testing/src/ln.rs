@@ -308,7 +308,11 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn list_transactions(&self) -> Result<ListTransactionsResponse, LightningRpcError> {
+    async fn list_transactions(
+        &self,
+        _start_secs: u64,
+        _end_secs: u64,
+    ) -> Result<ListTransactionsResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToListTransactions {
             failure_reason: "FakeLightningTest does not support listing transactions".to_string(),
         })
