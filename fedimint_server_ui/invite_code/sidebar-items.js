@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_qr_code_svg","invite_code_card","invite_code_modal"]};

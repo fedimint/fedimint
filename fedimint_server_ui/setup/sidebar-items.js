@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_peer_handler","federation_setup","login_form","login_submit","reset_peers_handler","setup_form","setup_layout","setup_submit","start","start_dkg_handler"],"struct":["PeerInfoInput","SetupInput"]};

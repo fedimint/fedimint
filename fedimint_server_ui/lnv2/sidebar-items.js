@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_gateway","remove_gateway","render"],"struct":["GatewayForm"]};

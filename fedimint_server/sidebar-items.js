@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_config","run","run_config_gen","update_server_info_version_dbtx"],"mod":["config","consensus","db","envs","metrics","net"]};
+window.SIDEBAR_ITEMS = {"fn":["get_config","run","run_config_gen","update_server_info_version_dbtx"],"mod":["config","consensus","db","envs","metrics","net"],"type":["DashboardUiHandler","SetupUiHandler"]};

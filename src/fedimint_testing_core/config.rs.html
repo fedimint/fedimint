@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>    </span><span class="kw">let </span>connections: BTreeMap&lt;PeerId, PeerConnectionInfo&gt; = peers
 <a href=#34 id=34 data-nosnippet>34</a>        .iter()
 <a href=#35 id=35 data-nosnippet>35</a>        .map(|peer| {
-<a href=#36 id=36 data-nosnippet>36</a>            <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">2</span>;
+<a href=#36 id=36 data-nosnippet>36</a>            <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">3</span>;
 <a href=#37 id=37 data-nosnippet>37</a>
 <a href=#38 id=38 data-nosnippet>38</a>            <span class="kw">let </span>p2p_url = <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{peer_port}"</span>);
 <a href=#39 id=39 data-nosnippet>39</a>            <span class="kw">let </span>api_url = <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{}"</span>, peer_port + <span class="number">1</span>);
@@ -54,27 +54,20 @@
 <a href=#54 id=54 data-nosnippet>54</a>    peers
 <a href=#55 id=55 data-nosnippet>55</a>        .iter()
 <a href=#56 id=56 data-nosnippet>56</a>        .map(|peer| {
-<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">let </span>peer_port = base_port + u16::from(<span class="kw-2">*</span>peer) * <span class="number">2</span>;
-<a href=#58 id=58 data-nosnippet>58</a>
-<a href=#59 id=59 data-nosnippet>59</a>            <span class="kw">let </span>p2p_bind = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{peer_port}"</span>);
-<a href=#60 id=60 data-nosnippet>60</a>            <span class="kw">let </span>api_bind = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, peer_port + <span class="number">1</span>);
-<a href=#61 id=61 data-nosnippet>61</a>
-<a href=#62 id=62 data-nosnippet>62</a>            <span class="kw">let </span>params = ConfigGenParams {
-<a href=#63 id=63 data-nosnippet>63</a>                identity: <span class="kw-2">*</span>peer,
-<a href=#64 id=64 data-nosnippet>64</a>                api_auth: API_AUTH.clone(),
-<a href=#65 id=65 data-nosnippet>65</a>                tls_key: <span class="prelude-val">Some</span>(tls_keys[peer].<span class="number">1</span>.clone()),
-<a href=#66 id=66 data-nosnippet>66</a>                iroh_api_sk: <span class="prelude-val">None</span>,
-<a href=#67 id=67 data-nosnippet>67</a>                iroh_p2p_sk: <span class="prelude-val">None</span>,
-<a href=#68 id=68 data-nosnippet>68</a>                p2p_bind: p2p_bind.parse().expect(<span class="string">"Valid address"</span>),
-<a href=#69 id=69 data-nosnippet>69</a>                api_bind: api_bind.parse().expect(<span class="string">"Valid address"</span>),
-<a href=#70 id=70 data-nosnippet>70</a>                peers: connections.clone(),
-<a href=#71 id=71 data-nosnippet>71</a>                meta: BTreeMap::from([(
-<a href=#72 id=72 data-nosnippet>72</a>                    META_FEDERATION_NAME_KEY.to_owned(),
-<a href=#73 id=73 data-nosnippet>73</a>                    <span class="string">"\"federation_name\""</span>.to_string(),
-<a href=#74 id=74 data-nosnippet>74</a>                )]),
-<a href=#75 id=75 data-nosnippet>75</a>                modules: server_config_gen.clone(),
-<a href=#76 id=76 data-nosnippet>76</a>            };
-<a href=#77 id=77 data-nosnippet>77</a>            <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))
-<a href=#78 id=78 data-nosnippet>78</a>        })
-<a href=#79 id=79 data-nosnippet>79</a>        .collect()
-<a href=#80 id=80 data-nosnippet>80</a>}</code></pre></div></section></main></body></html>
+<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">let </span>params = ConfigGenParams {
+<a href=#58 id=58 data-nosnippet>58</a>                identity: <span class="kw-2">*</span>peer,
+<a href=#59 id=59 data-nosnippet>59</a>                api_auth: API_AUTH.clone(),
+<a href=#60 id=60 data-nosnippet>60</a>                tls_key: <span class="prelude-val">Some</span>(tls_keys[peer].<span class="number">1</span>.clone()),
+<a href=#61 id=61 data-nosnippet>61</a>                iroh_api_sk: <span class="prelude-val">None</span>,
+<a href=#62 id=62 data-nosnippet>62</a>                iroh_p2p_sk: <span class="prelude-val">None</span>,
+<a href=#63 id=63 data-nosnippet>63</a>                peers: connections.clone(),
+<a href=#64 id=64 data-nosnippet>64</a>                meta: BTreeMap::from([(
+<a href=#65 id=65 data-nosnippet>65</a>                    META_FEDERATION_NAME_KEY.to_owned(),
+<a href=#66 id=66 data-nosnippet>66</a>                    <span class="string">"\"federation_name\""</span>.to_string(),
+<a href=#67 id=67 data-nosnippet>67</a>                )]),
+<a href=#68 id=68 data-nosnippet>68</a>                modules: server_config_gen.clone(),
+<a href=#69 id=69 data-nosnippet>69</a>            };
+<a href=#70 id=70 data-nosnippet>70</a>            <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>peer, params))
+<a href=#71 id=71 data-nosnippet>71</a>        })
+<a href=#72 id=72 data-nosnippet>72</a>        .collect()
+<a href=#73 id=73 data-nosnippet>73</a>}</code></pre></div></section></main></body></html>
