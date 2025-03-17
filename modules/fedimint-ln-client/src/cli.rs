@@ -51,6 +51,7 @@ enum Opts {
         #[clap(long, default_value = "false")]
         force_internal: bool,
     },
+    /// Register and manage LNURLs
     #[clap(subcommand)]
     Lnurl(LnurlCommands),
 }
@@ -70,6 +71,8 @@ enum LnurlCommands {
     },
     /// List all LNURLs registered
     List,
+    /// List all invoices generated for a LNURL
+    Invoices { payment_code_idx: u64 },
     /// Await a LNURL-triggered lightning receive operation to complete
     AwaitReceive {
         /// The operation ID of the receive operation to await
@@ -202,6 +205,23 @@ pub(crate) async fn handle_cli_command(
 
             json!({
                 "codes": codes,
+            })
+        }
+        Opts::Lnurl(LnurlCommands::Invoices { payment_code_idx }) => {
+            let invoices = module
+                .list_recurring_payment_code_invoices(payment_code_idx)
+                .await
+                .context("Unknown payment code index")?
+                .into_iter()
+                .map(|(idx, operation_id)| {
+                    let invoice = json!({
+                        "operation_id": operation_id,
+                    });
+                    (idx, invoice)
+                })
+                .collect::<BTreeMap<_, _>>();
+            json!({
+                "invoices": invoices,
             })
         }
         Opts::Lnurl(LnurlCommands::AwaitReceive { operation_id }) => {

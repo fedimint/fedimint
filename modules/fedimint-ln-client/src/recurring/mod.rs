@@ -32,11 +32,11 @@ use tokio::select;
 use tokio::sync::Notify;
 use tracing::{debug, trace};
 
-use crate::db::RecurringPaymentCodeKeyPrefix;
+use crate::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
 use crate::receive::LightningReceiveError;
 use crate::{
     LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
-    LightningOperationMetaVariant, LnReceiveState, tweak_user_secret_key,
+    LightningOperationMetaVariant, LnReceiveState, tweak_user_key, tweak_user_secret_key,
 };
 
 impl LightningClientModule {
@@ -217,6 +217,7 @@ impl LightningClientModule {
         invoice_idx: u64,
         invoice: lightning_invoice::Bolt11Invoice,
     ) {
+        // TODO: validate invoice hash etc.
         let mut dbtx = client.module_db().begin_transaction().await;
         let old_payment_code_entry = dbtx
             .get_value(&crate::db::RecurringPaymentCodeKey {
@@ -263,7 +264,7 @@ impl LightningClientModule {
 
         // TODO: use proper operation id, what do we use for LN normally? Preimage I
         // guess?
-        let operation_id = OperationId::new_random();
+        let operation_id = OperationId(*invoice.payment_hash().as_ref());
         debug!(
             ?operation_id,
             payment_code_key=?payment_code.root_keypair.public_key(),
@@ -361,6 +362,44 @@ impl LightningClientModule {
             .map(|(idx, entry)| (idx.derivation_idx, entry))
             .collect()
             .await
+    }
+
+    pub async fn get_recurring_payment_code(
+        &self,
+        payment_code_idx: u64,
+    ) -> Option<RecurringPaymentCodeEntry> {
+        self.client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&RecurringPaymentCodeKey {
+                derivation_idx: payment_code_idx,
+            })
+            .await
+    }
+
+    pub async fn list_recurring_payment_code_invoices(
+        &self,
+        payment_code_idx: u64,
+    ) -> Option<BTreeMap<u64, OperationId>> {
+        let payment_code = self.get_recurring_payment_code(payment_code_idx).await?;
+
+        let operations = (1..=payment_code.last_derivation_index)
+            .map(|invoice_idx: u64| {
+                let invoice_key = tweak_user_key(
+                    SECP256K1,
+                    payment_code.root_keypair.public_key(),
+                    invoice_idx,
+                );
+                let payment_hash =
+                    sha256::Hash::hash(&sha256::Hash::hash(&invoice_key.serialize())[..]);
+                let operation_id = OperationId(*payment_hash.as_ref());
+
+                (invoice_idx, operation_id)
+            })
+            .collect();
+
+        Some(operations)
     }
 }
 
