@@ -253,6 +253,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = DevJitFed::new(&process_mgr, skip_setup)?;
+                    dev_fed.finalize(&process_mgr).await?;
 
                     let pegin_start_time = Instant::now();
                     debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
