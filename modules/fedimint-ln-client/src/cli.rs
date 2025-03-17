@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::time::UNIX_EPOCH;
 use std::{ffi, iter};
 
 use anyhow::{Context as _, bail};
@@ -12,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, info};
 
-use crate::recurring::RecurringPaymentProtocol;
+use crate::recurring::{PaymentCodeRootKey, RecurringPaymentProtocol};
 use crate::{
     LightningOperationMeta, LightningOperationMetaVariant, LnReceiveState, OutgoingLightningPayment,
 };
@@ -66,6 +68,8 @@ enum LnurlCommands {
         #[clap(long, default_value = "Fedimint LNURL Pay")]
         description: String,
     },
+    /// List all LNURLs registered
+    List,
     /// Await a LNURL-triggered lightning receive operation to complete
     AwaitReceive {
         /// The operation ID of the receive operation to await
@@ -168,6 +172,36 @@ pub(crate) async fn handle_cli_command(
                 .await?;
             json!({
                 "lnurl": recurring_payment_code.code,
+            })
+        }
+        Opts::Lnurl(LnurlCommands::List) => {
+            let codes: BTreeMap<u64, serde_json::Value> = module
+                .list_recurring_payment_codes()
+                .await
+                .into_iter()
+                .map(|(idx, code)| {
+                    let root_public_key = PaymentCodeRootKey(code.root_keypair.public_key());
+                    let recurring_payment_code_id = root_public_key.to_payment_code_id();
+                    let creation_timestamp = code
+                        .creation_time
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards")
+                        .as_secs();
+                    let code_json = json!({
+                        "lnurl": code.code,
+                        // TODO: use time_to_iso8601
+                        "creation_timestamp": creation_timestamp,
+                        "root_public_key": root_public_key,
+                        "recurring_payment_code_id": recurring_payment_code_id,
+                        "recurringd_api": code.recurringd_api,
+                        "last_derivation_index": code.last_derivation_index,
+                    });
+                    (idx, code_json)
+                })
+                .collect();
+
+            json!({
+                "codes": codes,
             })
         }
         Opts::Lnurl(LnurlCommands::AwaitReceive { operation_id }) => {
