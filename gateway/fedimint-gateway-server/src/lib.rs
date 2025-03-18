@@ -70,10 +70,11 @@ use fedimint_gateway_common::{
     CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningMode,
-    MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentLogPayload,
-    PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse, OpenChannelRequest,
+    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 use fedimint_gw_client::events::compute_lnv1_stats;
@@ -1703,6 +1704,18 @@ impl Gateway {
         let lightning_context = self.get_lightning_context().await?;
         let invoice = lightning_context.lnrpc.get_invoice(payload).await?;
         Ok(invoice)
+    }
+
+    pub async fn handle_list_transactions_msg(
+        &self,
+        payload: ListTransactionsPayload,
+    ) -> AdminResult<ListTransactionsResponse> {
+        let lightning_context = self.get_lightning_context().await?;
+        let response = lightning_context
+            .lnrpc
+            .list_transactions(payload.start_secs, payload.end_secs)
+            .await?;
+        Ok(response)
     }
 
     /// Registers the gateway with each specified federation.

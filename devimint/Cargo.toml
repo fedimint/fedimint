@@ -18,6 +18,7 @@ axum = { workspace = true, features = ["tracing"] }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 bon = { workspace = true }
+chrono = { workspace = true }
 clap = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-api-client = { workspace = true }

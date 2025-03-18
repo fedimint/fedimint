@@ -41,7 +41,7 @@ pub enum GeneralCommands {
     Seed,
     /// Safely stop the gateway
     Stop,
-    /// List the transactions that the gateway has processed
+    /// List the fedimint transactions that the gateway has processed
     PaymentLog {
         #[clap(long)]
         end_position: Option<EventLogId>,

@@ -13,9 +13,10 @@ use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA};
+use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cmd, util};
 use fedimint_core::config::FederationId;
+use fedimint_core::time::now;
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
@@ -547,6 +548,24 @@ async fn liquidity_test() -> anyhow::Result<()> {
 
                 let invoice = gw_receive.create_invoice(1_000_000).await?;
                 gw_send.pay_invoice(invoice).await?;
+            }
+
+            if devimint::util::Gatewayd::version_or_default().await >= *VERSION_0_7_0_ALPHA {
+                let start = now() - Duration::from_secs(5 * 60);
+                let end = now() + Duration::from_secs(5 * 60);
+                info!(target: LOG_TEST, "Verifying list of transactions");
+                let lnd_transactions = gw_lnd.list_transactions(start, end).await?;
+                // One inbound and one outbound transaction
+                assert_eq!(lnd_transactions.len(), 2);
+
+                let ldk_transactions = gw_ldk.list_transactions(start, end).await?;
+                assert_eq!(ldk_transactions.len(), 2);
+
+                // Verify that transactions are filtered by time
+                let start = now() - Duration::from_secs(10 * 60);
+                let end = now() - Duration::from_secs(5 * 60);
+                let lnd_transactions = gw_lnd.list_transactions(start, end).await?;
+                assert_eq!(lnd_transactions.len(), 0);
             }
 
             info!(target: LOG_TEST, "Testing paying through LND Gateway...");
