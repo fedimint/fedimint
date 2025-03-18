@@ -2,9 +2,8 @@ use std::path::Path;
 
 use anyhow::Context;
 use fedimint_core::db::IRawDatabase;
-use fedimint_core::task::block_in_place;
 use fedimint_core::{apply, async_trait_maybe_send};
-use fedimint_logging::LOG_CLIENT;
+use fedimint_logging::LOG_DB;
 use tracing::{debug, info};
 
 /// Locked version of database
@@ -27,30 +26,28 @@ pub struct LockedBuilder {
 
 impl LockedBuilder {
     /// Create a [`Self`] by acquiring a lock file
-    pub fn new(lock_path: &Path) -> anyhow::Result<LockedBuilder> {
-        block_in_place(|| {
-            let file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(lock_path)
-                .with_context(|| format!("Failed to open {}", lock_path.display()))?;
+    pub fn new(db_path: &Path) -> anyhow::Result<LockedBuilder> {
+        let lock_path = db_path.with_extension("db.lock");
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&lock_path)
+            .with_context(|| format!("Failed to open {}", lock_path.display()))?;
 
-            debug!(target: LOG_CLIENT, "Acquiring database lock");
+        debug!(target: LOG_DB, lock=%lock_path.display(), "Acquiring database lock");
 
-            let lock = match fs_lock::FileLock::new_try_exclusive(file) {
-                Ok(lock) => lock,
-                Err((file, _)) => {
-                    info!(target: LOG_CLIENT, "Waiting for the database lock");
+        let lock = match fs_lock::FileLock::new_try_exclusive(file) {
+            Ok(lock) => lock,
+            Err((file, _)) => {
+                info!(target: LOG_DB, lock=%lock_path.display(), "Waiting for the database lock");
 
-                    fs_lock::FileLock::new_exclusive(file)
-                        .context("Failed to acquire a lock file")?
-                }
-            };
-            debug!(target: LOG_CLIENT, "Acquired database lock");
+                fs_lock::FileLock::new_exclusive(file).context("Failed to acquire a lock file")?
+            }
+        };
+        debug!(target: LOG_DB, lock=%lock_path.display(), "Acquired database lock");
 
-            Ok(LockedBuilder { lock })
-        })
+        Ok(LockedBuilder { lock })
     }
 
     /// Create [`Locked`] by giving it the database to wrap

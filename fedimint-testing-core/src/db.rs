@@ -18,6 +18,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::task::block_in_place;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::consensus::db::ServerDbMigrationContext;
@@ -56,7 +57,7 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 /// Opens the backup database in the `snapshot_dir`. If the `is_isolated` flag
 /// is set, the database will be opened as an isolated database with
 /// `TEST_MODULE_INSTANCE_ID` as the prefix.
-fn open_snapshot_db(
+async fn open_snapshot_db(
     decoders: ModuleDecoderRegistry,
     snapshot_dir: &Path,
     is_isolated: bool,
@@ -64,6 +65,7 @@ fn open_snapshot_db(
     if is_isolated {
         Ok(Database::new(
             RocksDb::open(snapshot_dir)
+                .await
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
         )
@@ -72,6 +74,7 @@ fn open_snapshot_db(
     } else {
         Ok(Database::new(
             RocksDb::open(snapshot_dir)
+                .await
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
         ))
@@ -98,7 +101,7 @@ where
     ) {
         (Some("force"), true) => {
             tokio::fs::remove_dir_all(&snapshot_dir).await?;
-            let db = open_snapshot_db(decoders, &snapshot_dir, is_isolated)?;
+            let db = open_snapshot_db(decoders, &snapshot_dir, is_isolated).await?;
             prepare_fn(db).await;
         }
         (Some(_), true) => {
@@ -109,7 +112,7 @@ where
         }
         (Some(_), false) => {
             debug!(dir = %snapshot_dir.display(), "Snapshot dir does not exist. Creating.");
-            let db = open_snapshot_db(decoders, &snapshot_dir, is_isolated)?;
+            let db = open_snapshot_db(decoders, &snapshot_dir, is_isolated).await?;
             prepare_fn(db).await;
         }
         (None, true) => {
@@ -247,7 +250,7 @@ pub const TEST_MODULE_INSTANCE_ID: u16 = 0;
 /// Retrieves a temporary database from the database backup directory.
 /// The first folder that starts with `db_prefix` will return as a temporary
 /// database.
-fn get_temp_database(
+async fn get_temp_database(
     db_prefix: &str,
     decoders: &ModuleDecoderRegistry,
 ) -> anyhow::Result<(Database, TempDir)> {
@@ -264,6 +267,7 @@ fn get_temp_database(
             if name.starts_with(db_prefix) {
                 let temp_path = format!("{}-{}", name.as_str(), OsRng.next_u64());
                 let temp_db = open_temp_db_and_copy(&temp_path, &file.path(), decoders.clone())
+                    .await
                     .with_context(|| {
                         format!("Opening temp db for {name}. Copying to {temp_path}")
                     })?;
@@ -293,7 +297,7 @@ where
     Fut: futures::Future<Output = anyhow::Result<()>>,
     C: Clone,
 {
-    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders).await?;
     apply_migrations(&db, ctx, db_prefix.to_string(), migrations, None, None)
         .await
         .context("Error applying migrations to temp database")?;
@@ -321,7 +325,7 @@ where
         module.module_kind(),
         module.decoder(),
     )]);
-    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders).await?;
     apply_migrations(
         &db,
         Arc::new(ServerDbMigrationContext) as Arc<_>,
@@ -353,7 +357,7 @@ where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
-    let (db, _tmp_dir) = get_temp_database(db_prefix, &ModuleDecoderRegistry::default())?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &ModuleDecoderRegistry::default()).await?;
     let mut dbtx = db.begin_transaction().await;
     apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), db_prefix.to_string())
         .await
@@ -387,7 +391,7 @@ where
         module.as_common().module_kind(),
         T::decoder(),
     )]);
-    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders).await?;
     apply_migrations_client_module(
         &db,
         module.as_common().module_kind().to_string(),
@@ -426,23 +430,30 @@ where
 
 /// Open a temporary database located at `temp_path` and copy the contents from
 /// the folder `src_dir` to the temporary database's path.
-fn open_temp_db_and_copy(
+async fn open_temp_db_and_copy(
     temp_path: &str,
     src_dir: &Path,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<(Database, TempDir)> {
     // First copy the contents from src_dir to the path where the database will be
     // opened
-    let tmp_dir = tempfile::Builder::new().prefix(temp_path).tempdir()?;
-    copy_directory(src_dir, tmp_dir.path())
-        .context("Error copying database to temporary directory")?;
+    let tmp_dir = block_in_place(|| -> anyhow::Result<TempDir> {
+        let tmp_dir = tempfile::Builder::new().prefix(temp_path).tempdir()?;
+        copy_directory_blocking(src_dir, tmp_dir.path())
+            .context("Error copying database to temporary directory")?;
 
-    Ok((Database::new(RocksDb::open(&tmp_dir)?, decoders), tmp_dir))
+        Ok(tmp_dir)
+    })?;
+
+    Ok((
+        Database::new(RocksDb::open(&tmp_dir).await?, decoders),
+        tmp_dir,
+    ))
 }
 
 /// Helper function that recursively copies all contents from
 /// `src` to `dst`.
-pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
+pub fn copy_directory_blocking(src: &Path, dst: &Path) -> io::Result<()> {
     trace!(target: LOG_TEST, src = %src.display(), dst = %dst.display(), "Copy dir");
 
     // Create the destination directory if it doesn't exist
@@ -452,7 +463,7 @@ pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
-            copy_directory(&path, &dst.join(entry.file_name()))?;
+            copy_directory_blocking(&path, &dst.join(entry.file_name()))?;
         } else {
             let dst_path = dst.join(entry.file_name());
             trace!(target: LOG_TEST, src = %path.display(), dst = %dst_path.display(), "Copy file");

@@ -298,7 +298,7 @@ impl Gateway {
         let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())?;
 
         let gateway_db = Database::new(
-            fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
+            fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).await?,
             decoders,
         );
 

@@ -3761,6 +3761,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fedimint-core",
+ "fedimint-logging",
+ "fs-lock",
  "futures",
  "rocksdb",
  "tempfile",

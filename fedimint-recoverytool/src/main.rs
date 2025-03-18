@@ -104,9 +104,11 @@ fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 33]> {
         .map_err(|_| anyhow!("tweaks have to be 33 bytes long"))
 }
 
-fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
+async fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
     Database::new(
-        RocksDbReadOnly::open_read_only(path).expect("Error opening readonly DB"),
+        RocksDbReadOnly::open_read_only(path)
+            .await
+            .expect("Error opening readonly DB"),
         module_decoders,
     )
 }
@@ -155,7 +157,7 @@ async fn process_and_print_tweak_source(
                 .expect("Could not encode to stdout");
         }
         TweakSource::Utxos { legacy, db } => {
-            let db = get_db(db, ModuleRegistry::default());
+            let db = get_db(db, ModuleRegistry::default()).await;
 
             let db = if *legacy {
                 db
@@ -193,7 +195,7 @@ async fn process_and_print_tweak_source(
             )])
             .with_fallback();
 
-            let db = get_db(db, decoders);
+            let db = get_db(db, decoders).await;
             let mut dbtx = db.begin_transaction_nc().await;
 
             let mut change_tweak_idx: u64 = 0;

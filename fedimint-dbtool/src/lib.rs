@@ -157,9 +157,7 @@ impl FedimintDBTool {
         let options = &self.cli_args;
         match &options.command {
             DbCommand::List { prefix } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
-                    .unwrap()
-                    .into_database();
+                let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
                 let prefix_iter = dbtx
                     .raw_find_by_prefix(prefix)
@@ -172,9 +170,7 @@ impl FedimintDBTool {
                 dbtx.commit_tx().await;
             }
             DbCommand::Write { key, value } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
-                    .unwrap()
-                    .into_database();
+                let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
                 dbtx.raw_insert_bytes(key, value)
                     .await
@@ -182,9 +178,7 @@ impl FedimintDBTool {
                 dbtx.commit_tx().await;
             }
             DbCommand::Delete { key } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
-                    .unwrap()
-                    .into_database();
+                let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
                 dbtx.raw_remove_entry(key)
                     .await
@@ -238,9 +232,7 @@ impl FedimintDBTool {
                 dbdump.dump_database().await?;
             }
             DbCommand::DeletePrefix { prefix } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
-                    .unwrap()
-                    .into_database();
+                let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
                 dbtx.raw_remove_by_prefix(prefix).await?;
                 dbtx.commit_tx().await;
@@ -249,4 +241,11 @@ impl FedimintDBTool {
 
         Ok(())
     }
+}
+
+async fn open_db(options: &Options) -> fedimint_core::db::Database {
+    fedimint_rocksdb::RocksDb::open(&options.database_dir)
+        .await
+        .unwrap()
+        .into_database()
 }
