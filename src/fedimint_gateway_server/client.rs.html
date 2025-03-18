@@ -14,10 +14,10 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_gateway_common::FederationConfig;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_gw_client::GatewayClientInit;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_gwv2_client::GatewayClientInitV2;
-<a href=#19 id=19 data-nosnippet>19</a>
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbExt;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_gateway_server_db::GatewayDbExt <span class="kw">as _</span>;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_gw_client::GatewayClientInit;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_gwv2_client::GatewayClientInitV2;
+<a href=#20 id=20 data-nosnippet>20</a>
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span><span class="kw">crate</span>::error::AdminGatewayError;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use crate</span>::{AdminResult, Gateway};
 <a href=#23 id=23 data-nosnippet>23</a>

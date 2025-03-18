@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::encoding::Encodable;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::push_db_pair_items;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_gateway_server::Gateway;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_gateway_server_db::GatewayDbtxNcExt <span class="kw">as _</span>;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_server::config::ServerConfig;
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_server::config::io::read_server_config;
@@ -199,7 +199,7 @@
 <a href=#199 id=199 data-nosnippet>199</a>
 <a href=#200 id=200 data-nosnippet>200</a>    <span class="kw">async fn </span>serialize_gateway(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
 <a href=#201 id=201 data-nosnippet>201</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only_db.begin_transaction_nc().<span class="kw">await</span>;
-<a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">let </span>gateway_serialized = Gateway::dump_database(<span class="kw-2">&amp;mut </span>dbtx, <span class="self">self</span>.prefixes.clone()).<span class="kw">await</span>;
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">let </span>gateway_serialized = dbtx.dump_database(<span class="self">self</span>.prefixes.clone()).<span class="kw">await</span>;
 <a href=#203 id=203 data-nosnippet>203</a>        <span class="self">self</span>.serialized
 <a href=#204 id=204 data-nosnippet>204</a>            .insert(<span class="string">"gateway"</span>.to_string(), Box::new(gateway_serialized));
 <a href=#205 id=205 data-nosnippet>205</a>        <span class="prelude-val">Ok</span>(())
