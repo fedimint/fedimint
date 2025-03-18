@@ -250,8 +250,6 @@ pub struct ConfigGenParams {
     pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
-    /// Module init params (also contains local params from us)
-    pub modules: ServerModuleConfigGenParamsRegistry,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]

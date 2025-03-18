@@ -195,19 +195,17 @@ async fn federation_setup(
             h4 class="mb-3" { "Connect with Other Guardians" }
 
             @if !connected_peers.is_empty() {
-                div class="mb-4" {
-                    ul class="list-group mb-4" {
-                        @for peer in connected_peers {
-                            li class="list-group-item" { (peer) }
+                div class="text-center" {
+                    form method="post" action="/reset-connection-info" {
+                        button type="submit" class="btn btn-warning setup-btn" {
+                            "Reset Guardian Connections"
                         }
+                    }
+                }
 
-                        div class="text-center" {
-                            form method="post" action="/reset-connection-info" {
-                                button type="submit" class="btn btn-warning setup-btn" {
-                                    "Reset Guardian Connections"
-                                }
-                            }
-                        }
+                ul class="list-group mb-4" {
+                    @for peer in connected_peers {
+                        li class="list-group-item" { (peer) }
                     }
                 }
             }

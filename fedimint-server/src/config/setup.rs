@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::iter::once;
 use std::mem::discriminant;
 use std::str::FromStr as _;
 use std::sync::Arc;
@@ -7,6 +8,7 @@ use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
+use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
@@ -257,6 +259,7 @@ impl ISetupApi for SetupApi {
         if let Some(federation_name) = state
             .connection_info
             .iter()
+            .chain(once(&local_params.connection_info()))
             .find_map(|info| info.federation_name.clone())
         {
             ensure!(
@@ -304,8 +307,10 @@ impl ISetupApi for SetupApi {
                 .map(|i| PeerId::from(i as u16))
                 .zip(state.connection_info.clone().into_iter())
                 .collect(),
-            meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
-            modules: self.settings.modules.clone(),
+            meta: BTreeMap::from_iter(vec![(
+                META_FEDERATION_NAME_KEY.to_string(),
+                federation_name,
+            )]),
         };
 
         self.sender

@@ -305,11 +305,8 @@ impl Federation {
         let mut peer_to_env_vars_map = BTreeMap::new();
 
         let peers: Vec<_> = num_peers.peer_ids().collect();
-        let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
-            &peers,
-            process_mgr.globals.FM_FEDERATION_BASE_PORT,
-            &ServerModuleConfigGenParamsRegistry::default(),
-        )?;
+        let params: HashMap<PeerId, ConfigGenParams> =
+            local_config_gen_params(&peers, process_mgr.globals.FM_FEDERATION_BASE_PORT)?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
@@ -992,7 +989,7 @@ pub async fn run_cli_dkg(
         .set_config_gen_connections(auth_for(leader_id), leader_endpoint, &leader_name, None)
         .await?;
 
-    let server_gen_params = &params[leader_id].modules;
+    let server_gen_params = ServerModuleConfigGenParamsRegistry::default();
 
     debug!(target: LOG_DEVIMINT, "calling set_config_gen_params for leader");
     cli_set_config_gen_params(

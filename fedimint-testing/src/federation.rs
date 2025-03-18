@@ -233,8 +233,8 @@ impl FederationTestBuilder {
             "too many peers offline ({num_offline}) to reach consensus"
         );
         let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
-        let params = local_config_gen_params(&peers, self.base_port, &self.modules)
-            .expect("Generates local config");
+        let params =
+            local_config_gen_params(&peers, self.base_port).expect("Generates local config");
 
         let configs = ServerConfig::trusted_dealer_gen(
             self.modules,

@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 
 use fedimint_core::PeerId;
-use fedimint_core::config::{META_FEDERATION_NAME_KEY, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::module::ApiAuth;
 use fedimint_server::config::{ConfigGenParams, PeerConnectionInfo, PeerEndpoints};
 use fedimint_server::net::p2p_connector::gen_cert_and_key;
@@ -16,7 +15,6 @@ pub static API_AUTH: LazyLock<ApiAuth> = LazyLock::new(|| ApiAuth("pass".to_stri
 pub fn local_config_gen_params(
     peers: &[PeerId],
     base_port: u16,
-    server_config_gen: &ServerModuleConfigGenParamsRegistry,
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
     // Generate TLS cert and private key
     let tls_keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
@@ -61,11 +59,7 @@ pub fn local_config_gen_params(
                 iroh_api_sk: None,
                 iroh_p2p_sk: None,
                 peers: connections.clone(),
-                meta: BTreeMap::from([(
-                    META_FEDERATION_NAME_KEY.to_owned(),
-                    "\"federation_name\"".to_string(),
-                )]),
-                modules: server_config_gen.clone(),
+                meta: BTreeMap::new(),
             };
             Ok((*peer, params))
         })
