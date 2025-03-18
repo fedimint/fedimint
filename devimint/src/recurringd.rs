@@ -115,4 +115,8 @@ impl Recurringd {
 
         Ok(response.text().await?)
     }
+
+    pub fn api_url(&self) -> SafeUrl {
+        self.api_url.clone()
+    }
 }
