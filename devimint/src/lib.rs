@@ -43,6 +43,7 @@ pub mod version_constants;
 pub async fn run_devfed_test<F, FF>(
     #[builder(finish_fn)] f: F,
     num_feds: Option<usize>,
+    pre_dkg: Option<bool>,
 ) -> anyhow::Result<()>
 where
     F: FnOnce(DevJitFed, ProcessManager) -> FF,
@@ -56,7 +57,7 @@ where
 
     let (process_mgr, task_group) = cli::setup(args).await?;
     log_binary_versions().await?;
-    let dev_fed = devfed::DevJitFed::new(&process_mgr, false)?;
+    let dev_fed = devfed::DevJitFed::new(&process_mgr, false, pre_dkg.unwrap_or_default())?;
     // workaround https://github.com/tokio-rs/tokio/issues/6463
     // by waiting on all jits to complete, we make it less likely
     // that something is not finished yet and will block in `on_block`

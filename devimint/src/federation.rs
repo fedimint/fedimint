@@ -295,6 +295,7 @@ impl Federation {
         process_mgr: &ProcessManager,
         bitcoind: Bitcoind,
         skip_setup: bool,
+        pre_dkg: bool,
         // Which of the pre-allocated federations to use (most tests just use single `0` one)
         fed_index: usize,
         federation_name: String,
@@ -344,7 +345,7 @@ impl Federation {
             peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);
         }
 
-        if !skip_setup {
+        if !skip_setup && !pre_dkg {
             // we don't guarantee backwards-compatibility for dkg, so we use the
             // fedimint-cli version that matches fedimintd
             let (original_fedimint_cli_path, original_fm_mint_client) =
@@ -395,7 +396,7 @@ impl Federation {
             move || async move {
                 let client = Client::open_or_create(federation_name.as_str())?;
                 let invite_code = Self::invite_code_static()?;
-                if !skip_setup {
+                if !skip_setup && !pre_dkg {
                     cmd!(client, "join-federation", invite_code).run().await?;
                 }
                 Ok(client)

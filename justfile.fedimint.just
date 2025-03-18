@@ -130,6 +130,14 @@ tmuxinator:
 devimint-env *PARAMS:
   ./scripts/dev/devimint-env.sh {{PARAMS}}
 
+devimint-env-pre-dkg *PARAMS:
+  @>&2 echo "fedimint-0 UI: http://localhost:2002"
+  @>&2 echo "fedimint-1 UI: http://localhost:2006"
+  @>&2 echo "fedimint-2 UI: http://localhost:2010"
+  @>&2 echo "fedimint-3 UI: http://localhost:2014"
+  env FM_FEDERATIONS_BASE_PORT=2000 FM_PRE_DKG=true ./scripts/dev/devimint-env.sh {{PARAMS}}
+
+
 devimint-env-tmux *PARAMS:
   ./scripts/dev/tmuxinator/run.sh {{PARAMS}}
 

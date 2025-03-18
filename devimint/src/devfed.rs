@@ -65,7 +65,7 @@ impl DevFed {
     }
 }
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
-    DevJitFed::new(process_mgr, false)?
+    DevJitFed::new(process_mgr, false, false)?
         .to_dev_fed(process_mgr)
         .await
 }
@@ -88,10 +88,13 @@ pub struct DevJitFed {
     gw_ldk_second_connected: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
     channel_opened: JitArc<()>,
+
+    skip_setup: bool,
+    pre_dkg: bool,
 }
 
 impl DevJitFed {
-    pub fn new(process_mgr: &ProcessManager, skip_setup: bool) -> Result<DevJitFed> {
+    pub fn new(process_mgr: &ProcessManager, skip_setup: bool, pre_dkg: bool) -> Result<DevJitFed> {
         let fed_size = process_mgr.globals.FM_FED_SIZE;
         let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
         anyhow::ensure!(
@@ -156,9 +159,15 @@ impl DevJitFed {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 debug!(target: LOG_DEVIMINT, "Starting federation...");
                 let start_time = fedimint_core::time::now();
-                let mut fed =
-                    Federation::new(&process_mgr, bitcoind, skip_setup, 0, "default".to_string())
-                        .await?;
+                let mut fed = Federation::new(
+                    &process_mgr,
+                    bitcoind,
+                    skip_setup,
+                    pre_dkg,
+                    0,
+                    "default".to_string(),
+                )
+                .await?;
 
                 // Create a degraded federation if there are offline nodes
                 fed.degrade_federation(&process_mgr).await?;
@@ -189,7 +198,7 @@ impl DevJitFed {
                 let fed = fed.get_try().await?.deref();
                 debug!(target: LOG_DEVIMINT, "Registering lnd gateway...");
                 let start_time = fedimint_core::time::now();
-                if !skip_setup {
+                if !skip_setup && !pre_dkg {
                     gw_lnd.connect_fed(fed).await?;
                 }
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Registered lnd gateway");
@@ -242,7 +251,7 @@ impl DevJitFed {
                     let fed = fed.get_try().await?.deref();
                     debug!(target: LOG_DEVIMINT, "Registering ldk gateway...");
                     let start_time = fedimint_core::time::now();
-                    if !skip_setup {
+                    if !skip_setup && !pre_dkg {
                         gw_ldk.connect_fed(fed).await?;
                     }
                     info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Connected ldk gateway");
@@ -259,7 +268,7 @@ impl DevJitFed {
                     let fed = fed.get_try().await?.deref();
                     debug!(target: LOG_DEVIMINT, "Registering ldk gateway 2...");
                     let start_time = fedimint_core::time::now();
-                    if !skip_setup {
+                    if !skip_setup && !pre_dkg {
                         gw_ldk2.connect_fed(fed).await?;
                     }
                     info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Connected ldk gateway 2");
@@ -300,7 +309,7 @@ impl DevJitFed {
                 let fed = fed.get_try().await?.deref().clone();
                 debug!(target: LOG_DEVIMINT, "Generating federation epoch...");
                 let start_time = fedimint_core::time::now();
-                if !skip_setup {
+                if !skip_setup && !pre_dkg {
                     fed.mine_then_wait_blocks_sync(10).await?;
                 }
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Generated federation epoch");
@@ -323,6 +332,8 @@ impl DevJitFed {
             gw_ldk_second_connected,
             fed_epoch_generated,
             channel_opened,
+            skip_setup,
+            pre_dkg,
         })
     }
 
@@ -382,7 +393,9 @@ impl DevJitFed {
             "too many offline nodes ({offline_nodes}) to reach consensus"
         );
 
-        let _ = self.internal_client_gw_registered().await?;
+        if !self.pre_dkg && !self.skip_setup {
+            let _ = self.internal_client_gw_registered().await?;
+        }
         let _ = self.channel_opened.get_try().await?;
         let _ = self.gw_lnd_registered().await?;
         let _ = self.gw_ldk_connected().await?;
