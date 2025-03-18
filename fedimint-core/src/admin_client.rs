@@ -34,7 +34,7 @@ pub enum ServerStatusLegacy {
 pub enum ServerStatus {
     AwaitingLocalParams,
     /// Waiting for peers to share the config gen params
-    CollectingConnectionInfo(Vec<String>),
+    SharingConnectionInfo,
     /// Consensus is running
     ConsensusRunning,
 }

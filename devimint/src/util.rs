@@ -694,8 +694,7 @@ impl FedimintCli {
             "--password",
             &auth.0,
             "admin",
-            "config-gen",
-            "--ws",
+            "setup",
             endpoint,
             "set-local-params",
             format!("Devimint Guardian {peer}"),
@@ -719,8 +718,7 @@ impl FedimintCli {
             "--password",
             &auth.0,
             "admin",
-            "config-gen",
-            "--ws",
+            "setup",
             endpoint,
             "set-local-params",
             format!("Devimint Guardian {peer}")
@@ -731,21 +729,15 @@ impl FedimintCli {
         Ok(serde_json::from_value(json)?)
     }
 
-    pub async fn add_peer_connection_info(
-        self,
-        params: &str,
-        auth: &ApiAuth,
-        endpoint: &str,
-    ) -> Result<()> {
+    pub async fn add_peer(self, params: &str, auth: &ApiAuth, endpoint: &str) -> Result<()> {
         cmd!(
             self,
             "--password",
             &auth.0,
             "admin",
-            "config-gen",
-            "--ws",
+            "setup",
             endpoint,
-            "add-peer-connection-info",
+            "add-peer",
             params
         )
         .run()
@@ -758,8 +750,7 @@ impl FedimintCli {
             "--password",
             &auth.0,
             "admin",
-            "config-gen",
-            "--ws",
+            "setup",
             endpoint,
             "server-status",
         )
@@ -775,8 +766,7 @@ impl FedimintCli {
             "--password",
             &auth.0,
             "admin",
-            "config-gen",
-            "--ws",
+            "setup",
             endpoint,
             "start-dkg"
         )

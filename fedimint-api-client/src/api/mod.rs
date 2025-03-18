@@ -431,7 +431,7 @@ impl DynGlobalApi {
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
     // actions through Tor ? Should we add the `Connector` choice to
     // ConfigParams then ?
-    pub async fn from_pre_peer_id_admin_endpoint(
+    pub async fn from_setup_endpoint(
         url: SafeUrl,
         api_secret: &Option<String>,
     ) -> anyhow::Result<Self> {

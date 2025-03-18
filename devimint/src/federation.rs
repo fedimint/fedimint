@@ -335,7 +335,7 @@ impl Federation {
                 )
                 .await?,
             );
-            let admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
+            let admin_client = DynGlobalApi::from_setup_endpoint(
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
             )
@@ -1145,7 +1145,7 @@ pub async fn run_cli_dkg_v2(
         for (p, endpoint) in &endpoints {
             if p != peer {
                 crate::util::FedimintCli
-                    .add_peer_connection_info(&info, auth_for(p), endpoint)
+                    .add_peer(&info, auth_for(p), endpoint)
                     .await?;
             }
         }

@@ -36,7 +36,7 @@ use crate::net::p2p_connector::gen_cert_and_key;
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
 #[derive(Debug, Clone, Default)]
-pub struct ConfigGenState {
+pub struct SetupState {
     /// Our local connection
     local_params: Option<LocalParams>,
     /// Connection info received from other guardians
@@ -75,46 +75,37 @@ impl LocalParams {
 
 /// Serves the config gen API endpoints
 #[derive(Clone)]
-pub struct ConfigGenApi {
+pub struct SetupApi {
     /// Our config gen settings configured locally
     settings: ConfigGenSettings,
     /// In-memory state machine
-    state: Arc<Mutex<ConfigGenState>>,
+    state: Arc<Mutex<SetupState>>,
     /// DB not really used
     db: Database,
     /// Triggers the distributed key generation
     sender: Sender<ConfigGenParams>,
 }
 
-impl ConfigGenApi {
+impl SetupApi {
     pub fn new(settings: ConfigGenSettings, db: Database, sender: Sender<ConfigGenParams>) -> Self {
         Self {
             settings,
-            state: Arc::new(Mutex::new(ConfigGenState::default())),
+            state: Arc::new(Mutex::new(SetupState::default())),
             db,
             sender,
         }
     }
 
     pub async fn server_status(&self) -> ServerStatus {
-        let state = self.state.lock().await;
-
-        match state.local_params {
-            Some(..) => ServerStatus::CollectingConnectionInfo(
-                state
-                    .connection_info
-                    .clone()
-                    .into_iter()
-                    .map(|info| info.name)
-                    .collect(),
-            ),
+        match self.state.lock().await.local_params {
+            Some(..) => ServerStatus::SharingConnectionInfo,
             None => ServerStatus::AwaitingLocalParams,
         }
     }
 }
 
 #[async_trait]
-impl ISetupApi for ConfigGenApi {
+impl ISetupApi for SetupApi {
     async fn our_connection_info(&self) -> Option<String> {
         self.state
             .lock()
@@ -327,12 +318,12 @@ impl ISetupApi for ConfigGenApi {
 }
 
 #[async_trait]
-impl HasApiContext<ConfigGenApi> for ConfigGenApi {
+impl HasApiContext<SetupApi> for SetupApi {
     async fn context(
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
-    ) -> (&ConfigGenApi, ApiEndpointContext<'_>) {
+    ) -> (&SetupApi, ApiEndpointContext<'_>) {
         assert!(id.is_none());
 
         let db = self.db.clone();
@@ -352,19 +343,19 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
     }
 }
 
-pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
+pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
     vec![
         api_endpoint! {
             SERVER_STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, _c, _v: ()| -> ServerStatus {
+            async |config: &SetupApi, _c, _v: ()| -> ServerStatus {
                 Ok(config.server_status().await)
             }
         },
         api_endpoint! {
             SET_LOCAL_PARAMS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, request: SetLocalParamsRequest| -> String {
+            async |config: &SetupApi, context, request: SetLocalParamsRequest| -> String {
                 let auth = context
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
@@ -377,7 +368,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         api_endpoint! {
             ADD_PEER_CONNECTION_INFO_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, info: String| -> String {
+            async |config: &SetupApi, context, info: String| -> String {
                 check_auth(context)?;
 
                 config.add_peer_connection_info(info.clone())
@@ -388,7 +379,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         api_endpoint! {
             START_DKG_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, _v: ()| -> () {
+            async |config: &SetupApi, context, _v: ()| -> () {
                 check_auth(context)?;
 
                 config.start_dkg().await.map_err(|e| ApiError::server_error(e.to_string()))

@@ -54,8 +54,8 @@ use tokio::sync::watch;
 use tracing::{info, warn};
 
 use crate::config::ConfigGenSettings;
-use crate::config::api::ConfigGenApi;
 use crate::config::io::{SALT_FILE, write_server_config};
+use crate::config::setup::SetupApi;
 use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::initialize_gauge_metrics;
@@ -246,14 +246,14 @@ pub async fn run_config_gen(
 
     let (cgp_sender, mut cgp_receiver) = tokio::sync::mpsc::channel(1);
 
-    let config_gen = ConfigGenApi::new(settings.clone(), db.clone(), cgp_sender);
+    let config_gen = SetupApi::new(settings.clone(), db.clone(), cgp_sender);
 
     let mut rpc_module = RpcModule::new(config_gen.clone());
 
-    net::api::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
+    net::api::attach_endpoints(&mut rpc_module, config::setup::server_endpoints(), None);
 
     let api_handler = net::api::spawn(
-        "config-gen",
+        "setup",
         settings.api_bind,
         rpc_module,
         10,

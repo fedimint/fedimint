@@ -271,7 +271,7 @@ mod tests {
     use fedimint_server_core::config::{eval_poly_g1, eval_poly_g2, g1, g2};
     use group::Curve;
 
-    use crate::config::distributedgen::{Dkg, DkgStep};
+    use crate::config::dkg::{Dkg, DkgStep};
 
     #[test_log::test]
     fn test_dkg() {

@@ -39,10 +39,10 @@ use tracing::info;
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p_connector::TlsConfig;
 
-pub mod api;
-pub mod distributedgen;
+pub mod dkg;
 pub mod io;
 pub mod peer_handle;
+pub mod setup;
 
 /// The default maximum open connections the API can handle
 pub const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
