@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["server_endpoints"],"struct":["ConsensusApi"]};
+window.SIDEBAR_ITEMS = {"fn":["backup_statistics_static","server_endpoints"],"struct":["ConsensusApi"]};

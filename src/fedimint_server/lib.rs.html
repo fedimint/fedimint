@@ -163,7 +163,7 @@
 <a href=#163 id=163 data-nosnippet>163</a>
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">let </span>db = db.with_decoders(decoders);
 <a href=#165 id=165 data-nosnippet>165</a>
-<a href=#166 id=166 data-nosnippet>166</a>    initialize_gauge_metrics(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+<a href=#166 id=166 data-nosnippet>166</a>    initialize_gauge_metrics(<span class="kw-2">&amp;</span>task_group, <span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 <a href=#167 id=167 data-nosnippet>167</a>
 <a href=#168 id=168 data-nosnippet>168</a>    start_api_announcement_service(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>task_group, <span class="kw-2">&amp;</span>cfg, force_api_secrets.get_active()).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#169 id=169 data-nosnippet>169</a>
@@ -242,7 +242,7 @@
 <a href=#242 id=242 data-nosnippet>242</a>)&gt; {
 <a href=#243 id=243 data-nosnippet>243</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
 <a href=#244 id=244 data-nosnippet>244</a>
-<a href=#245 id=245 data-nosnippet>245</a>    initialize_gauge_metrics(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+<a href=#245 id=245 data-nosnippet>245</a>    initialize_gauge_metrics(task_group, <span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 <a href=#246 id=246 data-nosnippet>246</a>
 <a href=#247 id=247 data-nosnippet>247</a>    <span class="kw">let </span>(cgp_sender, <span class="kw-2">mut </span>cgp_receiver) = tokio::sync::mpsc::channel(<span class="number">1</span>);
 <a href=#248 id=248 data-nosnippet>248</a>
