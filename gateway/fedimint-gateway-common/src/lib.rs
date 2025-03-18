@@ -33,6 +33,7 @@ pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
 pub const CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt11_invoice_for_operator";
+pub const CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt12_offer_for_operator";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
 pub const GATEWAY_INFO_POST_ENDPOINT: &str = "/info";
 pub const GET_BALANCES_ENDPOINT: &str = "/balances";
@@ -374,6 +375,19 @@ pub enum PaymentKind {
 pub enum PaymentDirection {
     Outbound,
     Inbound,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetOfferPayload {
+    pub amount: Option<Amount>,
+    pub description: Option<String>,
+    pub expiry_secs: Option<u32>,
+    pub quantity: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GetOfferResponse {
+    pub offer: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]

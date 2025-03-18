@@ -69,12 +69,12 @@ use fedimint_gateway_common::{
     BackupPayload, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
-    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningMode,
-    ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse, OpenChannelRequest,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, PaymentStats,
-    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
-    WithdrawPayload, WithdrawResponse,
+    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, GetOfferPayload, GetOfferResponse,
+    LeaveFedPayload, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
+    MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentLogPayload,
+    PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 use fedimint_gw_client::events::compute_lnv1_stats;
@@ -1716,6 +1716,22 @@ impl Gateway {
             .list_transactions(payload.start_secs, payload.end_secs)
             .await?;
         Ok(response)
+    }
+
+    /// Generates a BOLT12 offer using the gateway's lightning node
+    pub async fn handle_bolt_12_offer_msg(
+        &self,
+        payload: GetOfferPayload,
+    ) -> AdminResult<GetOfferResponse> {
+        let lightning_context = self.get_lightning_context().await?;
+        let offer = lightning_context.lnrpc.bolt12_offer(
+            payload.amount,
+            payload.description,
+            payload.expiry_secs,
+            payload.quantity,
+        )?;
+        info!(?offer, "Bolt12 Offer");
+        Ok(GetOfferResponse { offer })
     }
 
     /// Registers the gateway with each specified federation.

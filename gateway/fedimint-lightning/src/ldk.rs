@@ -738,6 +738,33 @@ impl ILnRpcClient for GatewayLdkClient {
             .collect::<Vec<_>>();
         Ok(ListTransactionsResponse { transactions })
     }
+
+    fn bolt12_offer(
+        &self,
+        amount: Option<Amount>,
+        description: Option<String>,
+        expiry_secs: Option<u32>,
+        quantity: Option<u64>,
+    ) -> Result<String, LightningRpcError> {
+        let description = description.unwrap_or_default();
+        let offer = if let Some(amount) = amount {
+            self.node
+                .bolt12_payment()
+                .receive(amount.msats, &description, expiry_secs, quantity)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        } else {
+            self.node
+                .bolt12_payment()
+                .receive_variable_amount(&description, expiry_secs)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        };
+
+        Ok(offer.to_string())
+    }
 }
 
 /// Maps LDK's `PaymentKind` to an optional preimage and an optional payment

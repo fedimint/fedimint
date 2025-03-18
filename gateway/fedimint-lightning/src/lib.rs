@@ -69,6 +69,8 @@ pub enum LightningRpcError {
     FailedToSyncToChain { failure_reason: String },
     #[error("Invalid metadata: {failure_reason}")]
     InvalidMetadata { failure_reason: String },
+    #[error("Bolt12 Error: {failure_reason}")]
+    Bolt12Error { failure_reason: String },
 }
 
 /// Represents an active connection to the lightning node.
@@ -227,6 +229,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         start_secs: u64,
         end_secs: u64,
     ) -> Result<ListTransactionsResponse, LightningRpcError>;
+
+    fn bolt12_offer(
+        &self,
+        amount: Option<Amount>,
+        description: Option<String>,
+        expiry_secs: Option<u32>,
+        quantity: Option<u64>,
+    ) -> Result<String, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {
