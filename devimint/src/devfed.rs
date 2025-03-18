@@ -362,6 +362,10 @@ impl DevJitFed {
     pub async fn bitcoind(&self) -> anyhow::Result<&Bitcoind> {
         Ok(self.bitcoind.get_try().await?.deref())
     }
+    pub async fn epochs_generated(&self) -> anyhow::Result<()> {
+        let _ = self.fed_epoch_generated.get_try().await?;
+        Ok(())
+    }
 
     pub async fn internal_client(&self) -> anyhow::Result<Client> {
         Ok(self.fed().await?.internal_client().await?.clone())

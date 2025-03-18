@@ -263,6 +263,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
 
                         let (operation_id, (), ()) = tokio::try_join!(
                             async {
+                                dev_fed.epochs_generated().await?;
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
                                 debug!(
