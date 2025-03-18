@@ -11,7 +11,7 @@ use std::{env, unreachable};
 use anyhow::{Context, Result, anyhow, bail, format_err};
 use fedimint_api_client::api::StatusResponse;
 use fedimint_core::PeerId;
-use fedimint_core::admin_client::{PeerServerParams, ServerStatus};
+use fedimint_core::admin_client::{PeerServerParamsLegacy, SetupStatus};
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::ApiAuth;
@@ -744,7 +744,7 @@ impl FedimintCli {
         .await
     }
 
-    pub async fn server_status(self, auth: &ApiAuth, endpoint: &str) -> Result<ServerStatus> {
+    pub async fn setup_status(self, auth: &ApiAuth, endpoint: &str) -> Result<SetupStatus> {
         let json = cmd!(
             self,
             "--password",
@@ -752,7 +752,7 @@ impl FedimintCli {
             "admin",
             "setup",
             endpoint,
-            "server-status",
+            "status",
         )
         .out_json()
         .await?;
@@ -860,7 +860,7 @@ impl FedimintCli {
         }
     }
 
-    pub async fn get_config_gen_peers(self, endpoint: &str) -> Result<Vec<PeerServerParams>> {
+    pub async fn get_config_gen_peers(self, endpoint: &str) -> Result<Vec<PeerServerParamsLegacy>> {
         let result = cmd!(
             self,
             "admin",
@@ -1210,7 +1210,7 @@ mod legacy_types {
     use std::collections::BTreeMap;
 
     use fedimint_core::PeerId;
-    use fedimint_core::admin_client::PeerServerParams;
+    use fedimint_core::admin_client::PeerServerParamsLegacy;
     use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
     use serde::{Deserialize, Serialize};
 
@@ -1219,7 +1219,7 @@ mod legacy_types {
     #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
     pub struct ConfigGenParamsConsensusLegacy {
         /// Endpoints of all servers
-        pub peers: BTreeMap<PeerId, PeerServerParams>,
+        pub peers: BTreeMap<PeerId, PeerServerParamsLegacy>,
         /// Guardian-defined key-value pairs that will be passed to the client
         pub meta: BTreeMap<String, String>,
         /// Module init params (also contains local params from us)

@@ -29,29 +29,9 @@ pub enum ServerStatusLegacy {
     SetupRestarted,
 }
 
-/// The state of the server returned via APIs
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ServerStatus {
-    AwaitingLocalParams,
-    /// Waiting for peers to share the config gen params
-    SharingConnectionInfo,
-    /// Consensus is running
-    ConsensusRunning,
-}
-
-/// Sent by admin user to the API
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConfigGenConnectionsRequest {
-    /// Our guardian name
-    pub our_name: String,
-    /// URL of "leader" guardian to send our connection info to
-    /// Will be `None` if we are the leader
-    pub leader_api_url: Option<SafeUrl>,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Connection information sent between peers in order to start config gen
-pub struct PeerServerParams {
+pub struct PeerServerParamsLegacy {
     /// TLS cert is necessary for P2P auth during DKG and  consensus
     pub cert: String,
     /// P2P is the network for running DKG and consensus
@@ -62,6 +42,16 @@ pub struct PeerServerParams {
     pub name: String,
     /// Status of the peer if known
     pub status: Option<ServerStatusLegacy>,
+}
+
+/// The state of the server returned via APIs
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SetupStatus {
+    AwaitingLocalParams,
+    /// Waiting for peers to share the config gen params
+    SharingConnectionInfo,
+    /// Consensus is running
+    ConsensusIsRunning,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

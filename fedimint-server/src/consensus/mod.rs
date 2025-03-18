@@ -153,16 +153,6 @@ pub async fn run(
     let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
 
-    let mut ci_status_senders = BTreeMap::new();
-    let mut ci_status_receivers = BTreeMap::new();
-
-    for peer in cfg.consensus.broadcast_public_keys.keys().copied() {
-        let (ci_sender, ci_receiver) = watch::channel(None);
-
-        ci_status_senders.insert(peer, ci_sender);
-        ci_status_receivers.insert(peer, ci_receiver);
-    }
-
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
         db: db.clone(),
@@ -176,7 +166,6 @@ pub async fn run(
             &module_init_registry,
         ),
         p2p_status_receivers,
-        ci_status_receivers,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };
@@ -238,13 +227,8 @@ pub async fn run(
         db,
         federation_api: DynGlobalApi::from_endpoints(api_urls, &force_api_secrets.get_active())
             .await?,
-        self_id_str: cfg.local.identity.to_string(),
-        peer_id_str: (0..cfg.consensus.api_endpoints().len())
-            .map(|x| x.to_string())
-            .collect(),
         cfg: cfg.clone(),
         connections,
-        ci_status_senders,
         submission_receiver,
         shutdown_receiver,
         modules: module_registry,

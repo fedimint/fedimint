@@ -388,7 +388,7 @@ struct SetupAdminArgs {
 
 #[derive(Debug, Clone, Subcommand)]
 enum SetupAdminCmd {
-    ServerStatus,
+    Status,
     SetLocalParams {
         name: String,
         #[clap(long)]
@@ -1255,8 +1255,8 @@ impl FedimintCli {
         let client = DynGlobalApi::from_setup_endpoint(args.endpoint.clone(), &None).await?;
 
         match &args.subcommand {
-            SetupAdminCmd::ServerStatus => {
-                let status = client.server_status(cli.auth()?).await?;
+            SetupAdminCmd::Status => {
+                let status = client.setup_status(cli.auth()?).await?;
 
                 Ok(serde_json::to_value(status).expect("JSON serialization failed"))
             }

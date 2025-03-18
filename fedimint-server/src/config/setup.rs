@@ -6,11 +6,11 @@ use std::sync::Arc;
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
-use fedimint_core::admin_client::{ServerStatus, SetLocalParamsRequest};
+use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
-    ADD_PEER_CONNECTION_INFO_ENDPOINT, SERVER_STATUS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+    ADD_PEER_CONNECTION_INFO_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
     START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::{
@@ -96,10 +96,10 @@ impl SetupApi {
         }
     }
 
-    pub async fn server_status(&self) -> ServerStatus {
+    pub async fn setup_status(&self) -> SetupStatus {
         match self.state.lock().await.local_params {
-            Some(..) => ServerStatus::SharingConnectionInfo,
-            None => ServerStatus::AwaitingLocalParams,
+            Some(..) => SetupStatus::SharingConnectionInfo,
+            None => SetupStatus::AwaitingLocalParams,
         }
     }
 }
@@ -346,10 +346,10 @@ impl HasApiContext<SetupApi> for SetupApi {
 pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
     vec![
         api_endpoint! {
-            SERVER_STATUS_ENDPOINT,
+            SETUP_STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &SetupApi, _c, _v: ()| -> ServerStatus {
-                Ok(config.server_status().await)
+            async |config: &SetupApi, _c, _v: ()| -> SetupStatus {
+                Ok(config.setup_status().await)
             }
         },
         api_endpoint! {
