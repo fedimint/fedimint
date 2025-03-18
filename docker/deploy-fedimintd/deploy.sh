@@ -59,6 +59,8 @@ echo >&2 '### Wiping previous setup'
 ssh -q "root@$ssh_host" << EOF
   touch ~/.hushlogin
 
+  systemctl stop fedimint-docker-compose 2>/dev/null || true
+
   if [ -e $host_dir  ] ; then
     # Stop the docker-compose stack
     cd $host_dir && docker-compose down 2>/dev/null || true
@@ -66,7 +68,6 @@ ssh -q "root@$ssh_host" << EOF
     docker volume rm fedimint-docker_fedimintd_data 2>/dev/null || true
   fi
 
-  systemctl stop fedimint-docker-compose 2>/dev/null || true
   rm -rf /root/fedimint-docker
   rm -rf /etc/systemd/system/fedimint-docker-compose.service
   sudo systemctl daemon-reload
