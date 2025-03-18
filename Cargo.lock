@@ -2878,7 +2878,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",
- "fedimint-gateway-server",
+ "fedimint-gateway-server-db",
  "fedimint-ln-client",
  "fedimint-ln-server",
  "fedimint-lnv2-client",
@@ -3134,6 +3134,7 @@ dependencies = [
  "fedimint-dummy-server",
  "fedimint-eventlog",
  "fedimint-gateway-common",
+ "fedimint-gateway-server-db",
  "fedimint-gw-client",
  "fedimint-gwv2-client",
  "fedimint-lightning",
@@ -3173,6 +3174,33 @@ dependencies = [
  "tower-http",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "fedimint-gateway-server-db"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin",
+ "erased-serde 0.4.6",
+ "fedimint-api-client",
+ "fedimint-client-module",
+ "fedimint-core",
+ "fedimint-eventlog",
+ "fedimint-gateway-common",
+ "fedimint-ln-client",
+ "fedimint-ln-common",
+ "fedimint-lnv2-common",
+ "fedimint-logging",
+ "fedimint-testing",
+ "futures",
+ "lightning-invoice",
+ "rand 0.8.5",
+ "serde",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

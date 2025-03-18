@@ -14,10 +14,10 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_gateway_common::FederationConfig;
+use fedimint_gateway_server_db::GatewayDbExt as _;
 use fedimint_gw_client::GatewayClientInit;
 use fedimint_gwv2_client::GatewayClientInitV2;
 
-use crate::db::GatewayDbExt;
 use crate::error::AdminGatewayError;
 use crate::{AdminResult, Gateway};
 

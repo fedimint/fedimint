@@ -15,7 +15,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::push_db_pair_items;
-use fedimint_gateway_server::Gateway;
+use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::config::io::read_server_config;
@@ -199,7 +199,7 @@ impl DatabaseDump {
 
     async fn serialize_gateway(&mut self) -> anyhow::Result<()> {
         let mut dbtx = self.read_only_db.begin_transaction_nc().await;
-        let gateway_serialized = Gateway::dump_database(&mut dbtx, self.prefixes.clone()).await;
+        let gateway_serialized = dbtx.dump_database(self.prefixes.clone()).await;
         self.serialized
             .insert("gateway".to_string(), Box::new(gateway_serialized));
         Ok(())

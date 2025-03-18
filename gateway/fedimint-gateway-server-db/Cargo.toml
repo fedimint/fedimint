@@ -1,0 +1,38 @@
+[package]
+name = "fedimint-gateway-server-db"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+description = "fedimint-gateway-server sends/receives Lightning Network payments on behalf of Fedimint clients (db defintions)"
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "fedimint_gateway_server_db"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+bitcoin = { workspace = true }
+erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client-module = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-eventlog = { workspace = true }
+fedimint-gateway-common = { workspace = true }
+fedimint-ln-client = { workspace = true }
+fedimint-ln-common = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
+futures = { workspace = true }
+lightning-invoice = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+
+[dev-dependencies]
+fedimint-logging = { workspace = true }
+fedimint-testing = { workspace = true }
