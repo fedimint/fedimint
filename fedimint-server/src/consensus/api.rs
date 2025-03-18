@@ -394,37 +394,6 @@ impl ConsensusApi {
         dbtx.get_value(&ClientBackupKey(id)).await
     }
 
-    async fn backup_statistics(&self, dbtx: &mut DatabaseTransaction<'_>) -> BackupStatistics {
-        const DAY_SECS: u64 = 24 * 60 * 60;
-        const WEEK_SECS: u64 = 7 * DAY_SECS;
-        const MONTH_SECS: u64 = 30 * DAY_SECS;
-        const QUARTER_SECS: u64 = 3 * MONTH_SECS;
-
-        let mut backup_stats = BackupStatistics::default();
-
-        let mut all_backups_stream = dbtx.find_by_prefix(&ClientBackupKeyPrefix).await;
-        while let Some((_, backup)) = all_backups_stream.next().await {
-            backup_stats.num_backups += 1;
-            backup_stats.total_size += backup.data.len();
-
-            let age_secs = backup.timestamp.elapsed().unwrap_or_default().as_secs();
-            if age_secs < DAY_SECS {
-                backup_stats.refreshed_1d += 1;
-            }
-            if age_secs < WEEK_SECS {
-                backup_stats.refreshed_1w += 1;
-            }
-            if age_secs < MONTH_SECS {
-                backup_stats.refreshed_1m += 1;
-            }
-            if age_secs < QUARTER_SECS {
-                backup_stats.refreshed_3m += 1;
-            }
-        }
-
-        backup_stats
-    }
-
     /// List API URL announcements from all peers we have received them from (at
     /// least ourselves)
     async fn api_announcements(&self) -> BTreeMap<PeerId, SignedApiAnnouncement> {
@@ -832,10 +801,43 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             BACKUP_STATISTICS_ENDPOINT,
             ApiVersion::new(0, 5),
-            async |fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
+            async |_fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
                 check_auth(context)?;
-                Ok(fedimint.backup_statistics(&mut context.dbtx().into_nc()).await)
+                Ok(backup_statistics_static(&mut context.dbtx().into_nc()).await)
             }
         },
     ]
+}
+
+pub(crate) async fn backup_statistics_static(
+    dbtx: &mut DatabaseTransaction<'_>,
+) -> BackupStatistics {
+    const DAY_SECS: u64 = 24 * 60 * 60;
+    const WEEK_SECS: u64 = 7 * DAY_SECS;
+    const MONTH_SECS: u64 = 30 * DAY_SECS;
+    const QUARTER_SECS: u64 = 3 * MONTH_SECS;
+
+    let mut backup_stats = BackupStatistics::default();
+
+    let mut all_backups_stream = dbtx.find_by_prefix(&ClientBackupKeyPrefix).await;
+    while let Some((_, backup)) = all_backups_stream.next().await {
+        backup_stats.num_backups += 1;
+        backup_stats.total_size += backup.data.len();
+
+        let age_secs = backup.timestamp.elapsed().unwrap_or_default().as_secs();
+        if age_secs < DAY_SECS {
+            backup_stats.refreshed_1d += 1;
+        }
+        if age_secs < WEEK_SECS {
+            backup_stats.refreshed_1w += 1;
+        }
+        if age_secs < MONTH_SECS {
+            backup_stats.refreshed_1m += 1;
+        }
+        if age_secs < QUARTER_SECS {
+            backup_stats.refreshed_3m += 1;
+        }
+    }
+
+    backup_stats
 }

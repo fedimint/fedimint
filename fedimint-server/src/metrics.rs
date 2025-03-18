@@ -1,9 +1,11 @@
 pub(crate) mod jsonrpsee;
 
 use std::sync::LazyLock;
+use std::time::Duration;
 
 use fedimint_core::backup::ClientBackupKeyPrefix;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_metrics::prometheus::{
     HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, register_histogram_vec_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
@@ -13,6 +15,11 @@ use fedimint_metrics::{
     register_int_counter_vec_with_registry,
 };
 use futures::StreamExt as _;
+use tokio::sync::OnceCell;
+
+use crate::consensus::api::backup_statistics_static;
+
+const BACKUP_STATS_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
 pub static TX_ELEMS_BUCKETS: LazyLock<Vec<f64>> = LazyLock::new(|| {
     vec![
@@ -154,6 +161,31 @@ pub(crate) static STORED_BACKUPS_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
     )
     .unwrap()
 });
+
+pub(crate) static BACKUP_COUNTS: LazyLock<IntGaugeVec> = LazyLock::new(|| {
+    register_int_gauge_vec_with_registry!(
+        opts!(
+            "backup_counts",
+            "Backups refreshed at least once in a given timeframe",
+        ),
+        &["timeframe"],
+        REGISTRY
+    )
+    .unwrap()
+});
+
+pub(crate) static TOTAL_BACKUP_SIZE: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!("total_backup_size", "Total size og backups in the DB",),
+        REGISTRY
+    )
+    .unwrap()
+});
+
+/// Lock for spawning exactly one task for updating backup related gauges that
+/// are computed fresh from DB regularly instead of being updated incrementally.
+static BACKUP_COUNTS_UPDATE_TASK: OnceCell<()> = OnceCell::const_new();
+
 pub(crate) static PEER_CONNECT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
     register_int_counter_vec_with_registry!(
         opts!("peer_connect_total", "Number of times peer (re/)connected",),
@@ -184,7 +216,7 @@ pub(crate) static PEER_MESSAGES_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|
 
 /// Initialize gauges or other metrics that need eager initialization on start,
 /// e.g. because they are triggered infrequently.
-pub(crate) async fn initialize_gauge_metrics(db: &Database) {
+pub(crate) async fn initialize_gauge_metrics(tg: &TaskGroup, db: &Database) {
     STORED_BACKUPS_COUNT.set(
         db.begin_transaction_nc()
             .await
@@ -193,4 +225,56 @@ pub(crate) async fn initialize_gauge_metrics(db: &Database) {
             .count()
             .await as i64,
     );
+
+    let db_inner = db.clone();
+    BACKUP_COUNTS_UPDATE_TASK
+        .get_or_init(move || async move {
+            tg.spawn_cancellable("prometheus_backup_stats", async move {
+                loop {
+                    let backup_counts =
+                        backup_statistics_static(&mut db_inner.begin_transaction_nc().await).await;
+
+                    BACKUP_COUNTS.with_label_values(&["1d"]).set(
+                        backup_counts
+                            .refreshed_1d
+                            .try_into()
+                            .expect("u64 to i64 overflow"),
+                    );
+                    BACKUP_COUNTS.with_label_values(&["1w"]).set(
+                        backup_counts
+                            .refreshed_1w
+                            .try_into()
+                            .expect("u64 to i64 overflow"),
+                    );
+                    BACKUP_COUNTS.with_label_values(&["1m"]).set(
+                        backup_counts
+                            .refreshed_1m
+                            .try_into()
+                            .expect("u64 to i64 overflow"),
+                    );
+                    BACKUP_COUNTS.with_label_values(&["3m"]).set(
+                        backup_counts
+                            .refreshed_3m
+                            .try_into()
+                            .expect("u64 to i64 overflow"),
+                    );
+                    BACKUP_COUNTS.with_label_values(&["all_time"]).set(
+                        backup_counts
+                            .num_backups
+                            .try_into()
+                            .expect("u64 to i64 overflow"),
+                    );
+
+                    TOTAL_BACKUP_SIZE.set(
+                        backup_counts
+                            .total_size
+                            .try_into()
+                            .expect("u64 to i64 overflow"),
+                    );
+
+                    sleep(BACKUP_STATS_REFRESH_INTERVAL).await;
+                }
+            });
+        })
+        .await;
 }
