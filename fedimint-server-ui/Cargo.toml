@@ -1,12 +1,21 @@
 [package]
 name = "fedimint-server-ui"
-version = "0.7.0-alpha"
+version = { workspace = true }
+authors = { workspace = true }
 edition = { workspace = true }
+description = "fedimint-server-ui is a server-side rendered admin web UI for fedimintd."
+license = { workspace = true }
+readme = { workspace = true }
+repository = { workspace = true }
+
+[lib]
+name = "fedimint_server_ui"
+path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true } 
-axum = "0.8.1" 
+async-trait = { workspace = true }
+axum = "0.8.1"
 axum-extra = { version = "0.10.0", features = ["cookie"] }
 chrono = "0.4"
 fedimint-core = { workspace = true }
