@@ -175,7 +175,7 @@ fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version 
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.7.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.7.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.7.0-alpha" }
-fs-lock = "0.1.9"
+fs-lock = "=0.1.8" # https://github.com/cargo-bins/cargo-binstall/issues/2090
 futures = "0.3.31"
 futures-util = "0.3.30"
 group = "0.13.0"
