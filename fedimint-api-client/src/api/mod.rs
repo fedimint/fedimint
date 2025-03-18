@@ -919,7 +919,9 @@ fn jsonrpc_error_to_peer_error(jsonrpc_error: JsonRpcClientError) -> PeerError {
         JsonRpcClientError::Transport(error) => PeerError::Transport(anyhow!(error)),
         JsonRpcClientError::RestartNeeded(arc) => PeerError::Transport(anyhow!(arc)),
         JsonRpcClientError::ParseError(error) => PeerError::InvalidResponse(anyhow!(error)),
-        JsonRpcClientError::InvalidSubscriptionId => todo!(),
+        JsonRpcClientError::InvalidSubscriptionId => {
+            PeerError::Transport(anyhow!("Invalid subscription id"))
+        }
         JsonRpcClientError::InvalidRequestId(invalid_request_id) => {
             PeerError::InvalidRequest(anyhow!(invalid_request_id))
         }
