@@ -1,6 +1,3 @@
-//TODO:remove
-#![allow(dead_code, unused_variables)]
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -12,7 +9,6 @@ use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped, IRawDatabase};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::hashes::sha256;
-use fedimint_core::secp256k1::{All, Secp256k1};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinHash};
 use fedimint_derive_secret::DerivableSecret;
@@ -43,7 +39,6 @@ pub struct RecurringInvoiceServer {
     clients: Arc<RwLock<HashMap<FederationId, ClientHandleArc>>>,
     invoice_generated: Arc<Notify>,
     base_url: SafeUrl,
-    secp_ctx: Secp256k1<All>,
 }
 
 impl RecurringInvoiceServer {
@@ -66,7 +61,6 @@ impl RecurringInvoiceServer {
             clients: Arc::new(RwLock::new(clients)),
             invoice_generated: Arc::new(Default::default()),
             base_url,
-            secp_ctx: Default::default(),
         })
     }
 
