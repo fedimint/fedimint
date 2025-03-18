@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["LightningCommands"]};
+window.SIDEBAR_ITEMS = {"enum":["LightningCommands"],"fn":["parse_datetime"]};

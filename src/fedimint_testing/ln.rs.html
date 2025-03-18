@@ -12,7 +12,7 @@
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::util::BoxStream;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_gateway_common::{
 <a href=#14 id=14 data-nosnippet>14</a>    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-<a href=#15 id=15 data-nosnippet>15</a>    GetInvoiceResponse, OpenChannelRequest, SendOnchainRequest,
+<a href=#15 id=15 data-nosnippet>15</a>    GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
 <a href=#16 id=16 data-nosnippet>16</a>};
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_lightning::{
 <a href=#18 id=18 data-nosnippet>18</a>    CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
@@ -307,4 +307,14 @@
 <a href=#307 id=307 data-nosnippet>307</a>            failure_reason: <span class="string">"FakeLightningTest does not support getting invoices"</span>.to_string(),
 <a href=#308 id=308 data-nosnippet>308</a>        })
 <a href=#309 id=309 data-nosnippet>309</a>    }
-<a href=#310 id=310 data-nosnippet>310</a>}</code></pre></div></section></main></body></html>
+<a href=#310 id=310 data-nosnippet>310</a>
+<a href=#311 id=311 data-nosnippet>311</a>    <span class="kw">async fn </span>list_transactions(
+<a href=#312 id=312 data-nosnippet>312</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#313 id=313 data-nosnippet>313</a>        _start_secs: u64,
+<a href=#314 id=314 data-nosnippet>314</a>        _end_secs: u64,
+<a href=#315 id=315 data-nosnippet>315</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ListTransactionsResponse, LightningRpcError&gt; {
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToListTransactions {
+<a href=#317 id=317 data-nosnippet>317</a>            failure_reason: <span class="string">"FakeLightningTest does not support listing transactions"</span>.to_string(),
+<a href=#318 id=318 data-nosnippet>318</a>        })
+<a href=#319 id=319 data-nosnippet>319</a>    }
+<a href=#320 id=320 data-nosnippet>320</a>}</code></pre></div></section></main></body></html>
