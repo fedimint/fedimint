@@ -66,6 +66,14 @@ impl WasmClient {
             .map_err(|x| JsError::new(&x.to_string()))
     }
 
+    #[wasm_bindgen]
+    /// Extract federation ID from an invite code without joining the federation
+    pub fn extract_federation_id(invite_code: String) -> Result<String, JsError> {
+        let invite_code = InviteCode::from_str(&invite_code)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(invite_code.federation_id().to_string())
+    }
+    
     async fn client_builder(db: Database) -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
         let mut builder = fedimint_client::Client::builder(db).await?;
         builder.with_module(MintClientInit);
