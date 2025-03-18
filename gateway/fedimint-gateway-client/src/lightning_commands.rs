@@ -1,10 +1,11 @@
 use bitcoin::hashes::sha256;
 use chrono::{DateTime, Utc};
 use clap::Subcommand;
+use fedimint_core::Amount;
 use fedimint_gateway_client::GatewayRpcClient;
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GetInvoiceRequest,
-    ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
+    GetOfferPayload, ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
 };
 use lightning_invoice::Bolt11Invoice;
 
@@ -71,6 +72,19 @@ pub enum LightningCommands {
         /// The payment hash of the invoice
         #[clap(long)]
         payment_hash: sha256::Hash,
+    },
+    Offer {
+        #[clap(long)]
+        amount_msat: Option<u64>,
+
+        #[clap(long)]
+        description: Option<String>,
+
+        #[clap(long)]
+        expiry_secs: Option<u32>,
+
+        #[clap(long)]
+        quantity: Option<u64>,
     },
 }
 
@@ -147,6 +161,22 @@ impl LightningCommands {
                     .list_transactions(ListTransactionsPayload {
                         start_secs,
                         end_secs,
+                    })
+                    .await?;
+                print_response(response);
+            }
+            Self::Offer {
+                amount_msat,
+                description,
+                expiry_secs,
+                quantity,
+            } => {
+                let response = create_client()
+                    .get_offer(GetOfferPayload {
+                        amount: amount_msat.and_then(|msats| Some(Amount::from_msats(msats))),
+                        description,
+                        expiry_secs,
+                        quantity,
                     })
                     .await?;
                 print_response(response);

@@ -1524,6 +1524,18 @@ impl ILnRpcClient for GatewayLndClient {
             transactions: payments,
         })
     }
+
+    fn bolt12_offer(
+        &self,
+        _amount_msat: Option<Amount>,
+        _description: Option<String>,
+        _expiry_secs: Option<u32>,
+        _quantity: Option<u64>,
+    ) -> Result<String, LightningRpcError> {
+        Err(LightningRpcError::Bolt12Error {
+            failure_reason: "LND Does not support Bolt12".to_string(),
+        })
+    }
 }
 
 fn route_hints_to_lnd(

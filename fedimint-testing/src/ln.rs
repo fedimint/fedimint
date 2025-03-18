@@ -317,4 +317,16 @@ impl ILnRpcClient for FakeLightningTest {
             failure_reason: "FakeLightningTest does not support listing transactions".to_string(),
         })
     }
+
+    fn bolt12_offer(
+        &self,
+        _amount_msat: Option<Amount>,
+        _description: Option<String>,
+        _expiry_secs: Option<u32>,
+        _quantity: Option<u64>,
+    ) -> Result<String, LightningRpcError> {
+        Err(LightningRpcError::Bolt12Error {
+            failure_reason: "FakeLightningTest does not support Bolt12".to_string(),
+        })
+    }
 }
