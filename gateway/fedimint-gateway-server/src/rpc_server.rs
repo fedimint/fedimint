@@ -14,16 +14,17 @@ use fedimint_gateway_common::{
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
     CloseChannelsWithPeerRequest, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest, GetOfferPayload, InfoPayload,
-    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
-    ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, OpenChannelRequest,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT,
-    ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WithdrawPayload,
+    CreateInvoiceForOperatorPayload, CreateOfferPayload, DepositAddressPayload,
+    DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+    GetInvoiceRequest, InfoPayload, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload,
+    RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
+    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
+    V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
 };
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -164,6 +165,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
             post(pay_invoice_operator),
         )
+        .route(PAY_OFFER_FOR_OPERATOR_ENDPOINT, post(pay_offer_operator))
         .route(GET_INVOICE_ENDPOINT, post(get_invoice))
         .route(GET_LN_ONCHAIN_ADDRESS_ENDPOINT, get(get_ln_onchain_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
@@ -485,8 +487,19 @@ async fn list_transactions(
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
 async fn create_offer_for_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<GetOfferPayload>,
+    Json(payload): Json<CreateOfferPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
-    let offer = gateway.handle_bolt_12_offer_msg(payload).await?;
+    let offer = gateway
+        .handle_create_offer_for_operator_msg(payload)
+        .await?;
     Ok(Json(json!(offer)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn pay_offer_operator(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<PayOfferPayload>,
+) -> Result<impl IntoResponse, AdminGatewayError> {
+    gateway.handle_pay_offer_for_operator_msg(payload).await?;
+    Ok(Json(json!(())))
 }
