@@ -21,6 +21,7 @@ use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
 use lightning::ln::PaymentPreimage;
 use lightning::ln::channelmanager::PaymentId;
+use lightning::offers::offer::Offer;
 use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc::Sender;
@@ -739,7 +740,7 @@ impl ILnRpcClient for GatewayLdkClient {
         Ok(ListTransactionsResponse { transactions })
     }
 
-    fn bolt12_offer(
+    fn create_offer(
         &self,
         amount: Option<Amount>,
         description: Option<String>,
@@ -764,6 +765,35 @@ impl ILnRpcClient for GatewayLdkClient {
         };
 
         Ok(offer.to_string())
+    }
+
+    fn pay_offer(
+        &self,
+        offer: String,
+        quantity: Option<u64>,
+        amount: Option<Amount>,
+        payer_note: Option<String>,
+    ) -> Result<(), LightningRpcError> {
+        let offer = Offer::from_str(&offer).map_err(|_| LightningRpcError::Bolt12Error {
+            failure_reason: "Failed to parse Bolt12 Offer".to_string(),
+        })?;
+        let payment_id = if let Some(amount) = amount {
+            self.node
+                .bolt12_payment()
+                .send_using_amount(&offer, amount.msats, quantity, payer_note)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        } else {
+            self.node
+                .bolt12_payment()
+                .send(&offer, quantity, payer_note)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        };
+        info!(target: LOG_LIGHTNING, ?payment_id, "Bolt12 PaymentId");
+        Ok(())
     }
 }
 

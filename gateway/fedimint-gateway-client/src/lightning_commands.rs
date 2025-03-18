@@ -4,8 +4,9 @@ use clap::Subcommand;
 use fedimint_core::Amount;
 use fedimint_gateway_client::GatewayRpcClient;
 use fedimint_gateway_common::{
-    CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GetInvoiceRequest,
-    GetOfferPayload, ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
+    CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
+    GetInvoiceRequest, ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
+    PayOfferPayload,
 };
 use lightning_invoice::Bolt11Invoice;
 
@@ -73,7 +74,7 @@ pub enum LightningCommands {
         #[clap(long)]
         payment_hash: sha256::Hash,
     },
-    Offer {
+    CreateOffer {
         #[clap(long)]
         amount_msat: Option<u64>,
 
@@ -85,6 +86,19 @@ pub enum LightningCommands {
 
         #[clap(long)]
         quantity: Option<u64>,
+    },
+    PayOffer {
+        #[clap(long)]
+        offer: String,
+
+        #[clap(long)]
+        amount_msat: Option<u64>,
+
+        #[clap(long)]
+        quantity: Option<u64>,
+
+        #[clap(long)]
+        payer_note: Option<String>,
     },
 }
 
@@ -165,14 +179,14 @@ impl LightningCommands {
                     .await?;
                 print_response(response);
             }
-            Self::Offer {
+            Self::CreateOffer {
                 amount_msat,
                 description,
                 expiry_secs,
                 quantity,
             } => {
                 let response = create_client()
-                    .get_offer(GetOfferPayload {
+                    .create_offer(CreateOfferPayload {
                         amount: amount_msat.and_then(|msats| Some(Amount::from_msats(msats))),
                         description,
                         expiry_secs,
@@ -180,6 +194,21 @@ impl LightningCommands {
                     })
                     .await?;
                 print_response(response);
+            }
+            Self::PayOffer {
+                offer,
+                amount_msat,
+                quantity,
+                payer_note,
+            } => {
+                create_client()
+                    .pay_offer(PayOfferPayload {
+                        offer,
+                        amount: amount_msat.and_then(|msats| Some(Amount::from_msats(msats))),
+                        quantity,
+                        payer_note,
+                    })
+                    .await?;
             }
         };
 
