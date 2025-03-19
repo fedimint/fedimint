@@ -140,7 +140,7 @@ async fn setup_submit(
             let content = html! {
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/" class="btn btn-primary setup-btn" { "Try Again" }
+                    a href="/" class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -199,11 +199,7 @@ async fn federation_setup(
     let content = html! {
         section class="mb-4" {
             div class="alert alert-info mb-3" {
-                "Share this code with other guardians:"
-            }
-
-            div class="connection-code card p-3 mb-3" {
-                code { (our_connection_info) }
+                (our_connection_info)
             }
 
             div class="text-center" {
@@ -226,7 +222,7 @@ async fn federation_setup(
             form method="post" action="/add-connection-info" {
                 div class="mb-3" {
                     input type="text" class="form-control mb-2" id="peer_info" name="peer_info"
-                        placeholder="Paste connection info from another guardian" required;
+                        placeholder="Paste setup code from fellow guardian" required;
                 }
 
                 div class="row mt-3" {
@@ -281,7 +277,7 @@ async fn add_peer_handler(
             let content = html! {
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Back to Setup" }
+                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -311,7 +307,7 @@ async fn start_dkg_handler(
                 }
                 div class="button-container mt-4" {
                     a href="/" class="btn btn-primary setup-btn" {
-                        "Go to Guardian Dashboard"
+                        "Go to Dashboard"
                     }
                 }
             };
@@ -320,10 +316,9 @@ async fn start_dkg_handler(
         }
         Err(e) => {
             let content = html! {
-                h2 class="mb-4 text-center" { "Error Starting Federation" }
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Back to Setup" }
+                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 

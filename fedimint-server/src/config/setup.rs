@@ -283,7 +283,7 @@ impl ISetupApi for SetupApi {
             .connection_info
             .iter()
             .find_map(|info| info.federation_name.clone())
-            .context("We need one leader to configure the federation name")?;
+            .context("We need one guardian to configure the federations name")?;
 
         let our_id = state
             .connection_info

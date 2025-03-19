@@ -100,23 +100,6 @@ pub fn common_styles() -> &'static str {
         border-color: #bee5eb;
     }
     
-    /* Connection and invite codes */
-    .connection-code {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 0.25rem;
-        padding: 1rem;
-        overflow-x: auto;
-        font-family: monospace;
-        margin-bottom: 1rem;
-        word-break: break-all;
-        color: #000;
-    }
-    
-    .connection-code code {
-        color: #000 !important;
-    }
-    
     /* Button styling */
     .setup-btn {
         width: auto;
@@ -213,18 +196,9 @@ pub(crate) fn login_submit_response(
     }
 
     let content = html! {
-        h2 class="mb-4 text-center" { "Guardian Login" }
-        div class="alert alert-danger" role="alert" {
-            "Invalid password. Please try again."
-        }
-        form method="post" action="/login" {
-            div class="form-group mb-4" {
-                label for="password" class="form-label" { "Guardian Password" }
-                input type="password" class="form-control" id="password" name="password" placeholder="Your password" required;
-            }
-            div class="button-container" {
-                button type="submit" class="btn btn-primary setup-btn" { "Log In" }
-            }
+        div class="alert alert-danger" { "The password is invalid" }
+        div class="button-container" {
+            a href="/login" class="btn btn-primary setup-btn" { "Return to Login" }
         }
     };
 
