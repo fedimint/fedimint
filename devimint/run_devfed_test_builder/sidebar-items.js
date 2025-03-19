@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["sealed"],"struct":["Empty","SetNumFeds"],"trait":["IsComplete","IsSet","IsUnset","State"]};
+window.SIDEBAR_ITEMS = {"mod":["sealed"],"struct":["Empty","SetNumFeds","SetPreDkg"],"trait":["IsComplete","IsSet","IsUnset","State"]};
