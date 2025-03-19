@@ -549,7 +549,7 @@ async fn run(
     };
 
     let db = Database::new(
-        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE)).await?,
         ModuleRegistry::default(),
     );
 

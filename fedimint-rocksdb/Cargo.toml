@@ -19,12 +19,19 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
+fs-lock = { workspace = true }
 futures = { workspace = true }
-rocksdb = { version = "0.22.0", features = [ "jemalloc" ] }
+rocksdb = { version = "0.22.0", features = ["jemalloc"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.17.1"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = [
+  "rt",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }

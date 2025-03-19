@@ -152,6 +152,7 @@ impl GatewayClientBuilder {
 
         let (db, root_secret) = if db_path.exists() {
             let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone())
+                .await
                 .map_err(AdminGatewayError::ClientCreationError)?;
             let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
             let root_secret = self.client_plainrootsecret(&db).await?;

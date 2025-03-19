@@ -75,7 +75,7 @@ impl DatabaseDump {
         modules: Vec<String>,
         prefixes: Vec<String>,
     ) -> anyhow::Result<DatabaseDump> {
-        let Ok(read_only_rocks_db) = RocksDbReadOnly::open_read_only(data_dir.clone()) else {
+        let Ok(read_only_rocks_db) = RocksDbReadOnly::open_read_only(data_dir.clone()).await else {
             panic!("Error reading RocksDB database. Quitting...");
         };
 

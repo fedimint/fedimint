@@ -10,7 +10,6 @@
 #![allow(clippy::large_futures)]
 
 mod client;
-mod db_locked;
 pub mod envs;
 mod utils;
 
@@ -28,7 +27,6 @@ use std::{fs, result};
 use anyhow::{Context, format_err};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use client::ModuleSelector;
-use db_locked::LockedBuilder;
 #[cfg(feature = "tor")]
 use envs::FM_USE_TOR_ENV;
 use envs::{FM_API_SECRET_ENV, SALT_FILE};
@@ -282,13 +280,9 @@ impl Opts {
     async fn load_rocks_db(&self) -> CliResult<Database> {
         debug!(target: LOG_CLIENT, "Loading client database");
         let db_path = self.data_dir_create().await?.join("client.db");
-        let lock_path = db_path.with_extension("db.lock");
-        Ok(LockedBuilder::new(&lock_path)
-            .map_err_cli_msg("could not lock database")?
-            .with_db(
-                fedimint_rocksdb::RocksDb::open(db_path)
-                    .map_err_cli_msg("could not open database")?,
-            )
+        Ok(fedimint_rocksdb::RocksDb::open(db_path)
+            .await
+            .map_err_cli_msg("could not open database")?
             .into())
     }
 

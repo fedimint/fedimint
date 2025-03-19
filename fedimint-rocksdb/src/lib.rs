@@ -3,6 +3,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::needless_lifetimes)]
 
+pub mod db_locked;
 pub mod envs;
 
 use std::fmt;
@@ -12,10 +13,12 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
+use db_locked::{Locked, LockedBuilder};
 use fedimint_core::db::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
     PrefixStream,
 };
+use fedimint_core::task::block_in_place;
 use futures::stream;
 pub use rocksdb;
 use rocksdb::{
@@ -46,13 +49,29 @@ pub struct RocksDb(rocksdb::OptimisticTransactionDB);
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
 impl RocksDb {
-    pub fn open(db_path: impl AsRef<Path>) -> anyhow::Result<RocksDb> {
+    #[allow(clippy::unused_async)]
+    pub async fn open(db_path: impl AsRef<Path>) -> anyhow::Result<Locked<RocksDb>> {
+        let db_path = db_path.as_ref();
+
+        block_in_place(|| Self::open_blocking(db_path))
+    }
+    pub fn open_blocking(db_path: &Path) -> anyhow::Result<Locked<RocksDb>> {
+        block_in_place(|| {
+            std::fs::create_dir_all(
+                db_path
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("db path must have a base dir"))?,
+            )?;
+            Ok(LockedBuilder::new(db_path)?.with_db(Self::open_blocking_unlocked(db_path)?))
+        })
+    }
+    pub fn open_blocking_unlocked(db_path: &Path) -> anyhow::Result<RocksDb> {
         let mut opts = get_default_options()?;
         // Since we turned synchronous writes one we should never encounter a corrupted
         // WAL and should rather fail in this case
         opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
         let db: rocksdb::OptimisticTransactionDB =
-            rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, &db_path)?;
+            rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, db_path)?;
         Ok(RocksDb(db))
     }
 
@@ -111,8 +130,15 @@ pub struct RocksDbReadOnly(rocksdb::DB);
 pub struct RocksDbReadOnlyTransaction<'a>(&'a rocksdb::DB);
 
 impl RocksDbReadOnly {
-    pub fn open_read_only(db_path: impl AsRef<Path>) -> anyhow::Result<RocksDbReadOnly> {
+    #[allow(clippy::unused_async)]
+    pub async fn open_read_only(db_path: impl AsRef<Path>) -> anyhow::Result<RocksDbReadOnly> {
+        let db_path = db_path.as_ref();
+        block_in_place(|| Self::open_read_only_blocking(db_path))
+    }
+
+    pub fn open_read_only_blocking(db_path: &Path) -> anyhow::Result<RocksDbReadOnly> {
         let opts = get_default_options()?;
+        // Note: rocksdb is OK if one process has write access, and other read-access
         let db = rocksdb::DB::open_for_read_only(&opts, db_path, false)?;
         Ok(RocksDbReadOnly(db))
     }
@@ -458,7 +484,7 @@ mod fedimint_rocksdb_tests {
             .unwrap();
 
         Database::new(
-            RocksDb::open(path).unwrap(),
+            RocksDb::open_blocking(path.as_ref()).unwrap(),
             ModuleDecoderRegistry::default(),
         )
     }
@@ -573,7 +599,7 @@ mod fedimint_rocksdb_tests {
             .unwrap();
 
         let module_db = Database::new(
-            RocksDb::open(path).unwrap(),
+            RocksDb::open_blocking(path.as_ref()).unwrap(),
             ModuleDecoderRegistry::default(),
         );
 
@@ -649,7 +675,7 @@ mod fedimint_rocksdb_tests {
             .unwrap();
         {
             let db = Database::new(
-                RocksDb::open(&path).unwrap(),
+                RocksDb::open(&path).await.unwrap(),
                 ModuleDecoderRegistry::default(),
             );
             let mut dbtx = db.begin_transaction().await;
@@ -694,7 +720,7 @@ mod fedimint_rocksdb_tests {
             dbtx.commit_tx().await;
         }
         // Test readonly implementation
-        let db_readonly = RocksDbReadOnly::open_read_only(path).unwrap();
+        let db_readonly = RocksDbReadOnly::open_read_only(path).await.unwrap();
         let db_readonly = Database::new(db_readonly, ModuleRegistry::default());
         let mut dbtx = db_readonly.begin_transaction_nc().await;
         let query = dbtx
