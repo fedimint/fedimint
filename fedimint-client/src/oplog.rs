@@ -139,7 +139,7 @@ impl OperationLog {
         };
 
         let mut dbtx = self.db.begin_transaction_nc().await;
-        let mut operation_log_keys = Vec::with_capacity(limit);
+        let mut operation_log_keys = Vec::with_capacity(32);
 
         // Find all the operation log keys in the requested window. Since we decided to
         // not introduce a find_by_range_rev function we have to jump through some
