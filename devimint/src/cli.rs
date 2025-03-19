@@ -18,8 +18,9 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::devfed::DevJitFed;
 use crate::envs::{
-    FM_DEVIMINT_STATIC_DATA_DIR_ENV, FM_FED_SIZE_ENV, FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV,
-    FM_NUM_FEDS_ENV, FM_OFFLINE_NODES_ENV, FM_TEST_DIR_ENV,
+    FM_DEVIMINT_STATIC_DATA_DIR_ENV, FM_FED_SIZE_ENV, FM_FEDERATIONS_BASE_PORT_ENV,
+    FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV, FM_NUM_FEDS_ENV, FM_OFFLINE_NODES_ENV,
+    FM_TEST_DIR_ENV,
 };
 use crate::federation::Fedimintd;
 use crate::util::{ProcessManager, poll};
@@ -63,6 +64,10 @@ pub struct CommonArgs {
     /// Run degraded federation with FM_OFFLINE_NODES shutdown
     #[clap(long, env = FM_OFFLINE_NODES_ENV, default_value = "0")]
     pub offline_nodes: usize,
+
+    /// Force a base federations port, e.g. for convenience during dev tasks
+    #[clap(long, env = FM_FEDERATIONS_BASE_PORT_ENV)]
+    pub federations_base_port: Option<u16>,
 }
 
 impl CommonArgs {
@@ -142,8 +147,14 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         .with_directive("jsonrpsee-client=off")
         .init()?;
 
-    let globals =
-        vars::Global::new(test_dir, arg.num_feds, arg.fed_size, arg.offline_nodes).await?;
+    let globals = vars::Global::new(
+        test_dir,
+        arg.num_feds,
+        arg.fed_size,
+        arg.offline_nodes,
+        arg.federations_base_port,
+    )
+    .await?;
 
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
