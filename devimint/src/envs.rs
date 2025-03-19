@@ -46,6 +46,9 @@ pub const FM_FEDERATIONS_BASE_PORT_ENV: &str = "FM_FEDERATIONS_BASE_PORT";
 // Env variable to set a federation's invite code
 pub const FM_INVITE_CODE_ENV: &str = "FM_INVITE_CODE";
 
+// Env variable to stop in a pre-dkg stage of devimint
+pub const FM_PRE_DKG_ENV: &str = "FM_PRE_DKG";
+
 // util.rs
 
 // Env variable to override gatewayd binary set:

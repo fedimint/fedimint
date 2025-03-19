@@ -20,7 +20,7 @@ use crate::devfed::DevJitFed;
 use crate::envs::{
     FM_DEVIMINT_STATIC_DATA_DIR_ENV, FM_FED_SIZE_ENV, FM_FEDERATIONS_BASE_PORT_ENV,
     FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV, FM_NUM_FEDS_ENV, FM_OFFLINE_NODES_ENV,
-    FM_TEST_DIR_ENV,
+    FM_PRE_DKG_ENV, FM_TEST_DIR_ENV,
 };
 use crate::federation::Fedimintd;
 use crate::util::{ProcessManager, poll};
@@ -45,6 +45,10 @@ pub struct CommonArgs {
     /// devimint data dir
     #[arg(long, env = "FM_SKIP_SETUP")]
     skip_setup: bool,
+
+    /// Do not set up federation and stop at a pre-dkg stage
+    #[arg(long, env = FM_PRE_DKG_ENV)]
+    pre_dkg: bool,
 
     /// Number of peers to allocate in every federation
     #[clap(short = 'n', long, env = FM_FED_SIZE_ENV, default_value = "4")]
@@ -259,16 +263,17 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             trace!(target: LOG_DEVIMINT, "Starting dev fed");
             let start_time = Instant::now();
             let skip_setup = common_args.skip_setup;
+            let pre_dkg = common_args.pre_dkg;
             let (process_mgr, task_group) = setup(common_args).await?;
             let main = {
                 let task_group = task_group.clone();
                 async move {
-                    let dev_fed = DevJitFed::new(&process_mgr, skip_setup)?;
+                    let dev_fed = DevJitFed::new(&process_mgr, skip_setup, pre_dkg)?;
 
                     let pegin_start_time = Instant::now();
                     debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
-                    if !skip_setup {
+                    if !skip_setup && !pre_dkg {
                         const GW_PEGIN_AMOUNT: u64 = 1_000_000;
                         const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
 
@@ -346,10 +351,16 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         );
                     }
 
-                    // TODO: Audit that the environment access only happens in single-threaded code.
-                    unsafe {
-                        std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().await?.invite_code()?);
-                    };
+                    if !pre_dkg {
+                        // TODO: Audit that the environment access only happens in single-threaded
+                        // code.
+                        unsafe {
+                            std::env::set_var(
+                                FM_INVITE_CODE_ENV,
+                                dev_fed.fed().await?.invite_code()?,
+                            );
+                        };
+                    }
 
                     dev_fed.finalize(&process_mgr).await?;
 
