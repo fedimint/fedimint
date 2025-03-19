@@ -8,13 +8,33 @@ pub mod wallet;
 
 use axum::response::{Html, IntoResponse, Redirect};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use fedimint_core::hex::ToHex;
 use fedimint_core::module::ApiAuth;
+use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoginInput {
     pub password: String,
+}
+
+/// Generic state for both setup and dashboard UIs
+#[derive(Clone)]
+pub struct AuthState<T> {
+    pub(crate) api: T,
+    pub(crate) auth_cookie_name: String,
+    pub(crate) auth_cookie_value: String,
+}
+
+impl<T> AuthState<T> {
+    pub fn new(api: T) -> Self {
+        Self {
+            api,
+            auth_cookie_name: thread_rng().r#gen::<[u8; 4]>().encode_hex(),
+            auth_cookie_value: thread_rng().r#gen::<[u8; 32]>().encode_hex(),
+        }
+    }
 }
 
 // Common CSS styling shared by all layouts
@@ -178,11 +198,13 @@ pub(crate) fn login_form_response() -> impl IntoResponse {
 
 pub(crate) fn login_submit_response(
     auth: ApiAuth,
+    auth_cookie_name: String,
+    auth_cookie_value: String,
     jar: CookieJar,
     input: LoginInput,
 ) -> impl IntoResponse {
     if auth.0 == input.password {
-        let mut cookie = Cookie::new("guardian_api_auth", input.password);
+        let mut cookie = Cookie::new(auth_cookie_name, auth_cookie_value);
 
         cookie.set_http_only(true);
         cookie.set_same_site(Some(SameSite::Lax));
@@ -209,11 +231,13 @@ pub(crate) fn login_submit_response(
     Html(login_layout("Login Failed", content).into_string()).into_response()
 }
 
-pub(crate) async fn check_auth(auth: ApiAuth, jar: &CookieJar) -> bool {
-    let session_password = match jar.get("guardian_api_auth") {
-        Some(cookie) => cookie.value().to_string(),
-        None => return false,
-    };
-
-    auth.0 == session_password
+pub(crate) async fn check_auth(
+    auth_cookie_name: &str,
+    auth_cookie_value: &str,
+    jar: &CookieJar,
+) -> bool {
+    match jar.get(auth_cookie_name) {
+        Some(cookie) => cookie.value() == auth_cookie_value,
+        None => false,
+    }
 }

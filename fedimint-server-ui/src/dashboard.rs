@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 use {fedimint_lnv2_server, fedimint_wallet_server};
 
 use crate::{
-    LoginInput, audit, check_auth, common_styles, connection_status, invite_code, lnv2,
+    AuthState, LoginInput, audit, check_auth, common_styles, connection_status, invite_code, lnv2,
     login_form_response, login_submit_response, wallet,
 };
 
@@ -96,31 +96,41 @@ pub fn dashboard_layout(content: Markup) -> Markup {
 }
 
 // Dashboard login form handler
-async fn login_form(State(_api): State<DynDashboardApi>) -> impl IntoResponse {
+async fn login_form(State(_state): State<AuthState<DynDashboardApi>>) -> impl IntoResponse {
     login_form_response()
 }
 
 // Dashboard login submit handler
 async fn login_submit(
-    State(api): State<DynDashboardApi>,
+    State(state): State<AuthState<DynDashboardApi>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
-    login_submit_response(api.auth().await, jar, input).into_response()
+    login_submit_response(
+        state.api.auth().await,
+        state.auth_cookie_name,
+        state.auth_cookie_value,
+        jar,
+        input,
+    )
+    .into_response()
 }
 
 // Main dashboard view
-async fn dashboard_view(State(api): State<DynDashboardApi>, jar: CookieJar) -> impl IntoResponse {
-    if !check_auth(api.auth().await, &jar).await {
+async fn dashboard_view(
+    State(state): State<AuthState<DynDashboardApi>>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    let guardian_name = api.guardian_name().await;
-    let federation_name = api.federation_name().await;
-    let session_count = api.session_count().await;
-    let peer_status = api.peer_connection_status().await;
-    let invite_code = api.federation_invite_code().await;
-    let audit_summary = api.federation_audit().await;
+    let guardian_name = state.api.guardian_name().await;
+    let federation_name = state.api.federation_name().await;
+    let session_count = state.api.session_count().await;
+    let peer_status = state.api.peer_connection_status().await;
+    let invite_code = state.api.federation_invite_code().await;
+    let audit_summary = state.api.federation_audit().await;
 
     let mut content = html! {
         div class="row gy-4" {
@@ -171,7 +181,7 @@ async fn dashboard_view(State(api): State<DynDashboardApi>, jar: CookieJar) -> i
     };
 
     // Conditionally add Lightning V2 UI if the module is available
-    if let Some(lightning) = api.get_module::<fedimint_lnv2_server::Lightning>() {
+    if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
         content = html! {
             (content)
             (lnv2::render(lightning).await)
@@ -179,7 +189,7 @@ async fn dashboard_view(State(api): State<DynDashboardApi>, jar: CookieJar) -> i
     }
 
     // Conditionally add Wallet UI if the module is available
-    if let Some(wallet_module) = api.get_module::<fedimint_wallet_server::Wallet>() {
+    if let Some(wallet_module) = state.api.get_module::<fedimint_wallet_server::Wallet>() {
         content = html! {
             (content)
             (wallet::render(wallet_module).await)
@@ -190,7 +200,7 @@ async fn dashboard_view(State(api): State<DynDashboardApi>, jar: CookieJar) -> i
 }
 
 pub fn start(
-    dashboard_api: DynDashboardApi,
+    api: DynDashboardApi,
     ui_bind: SocketAddr,
     task_handle: TaskHandle,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
@@ -200,7 +210,7 @@ pub fn start(
         .route("/login", get(login_form).post(login_submit));
 
     // Only add LNv2 gateway routes if the module exists
-    if dashboard_api
+    if api
         .get_module::<fedimint_lnv2_server::Lightning>()
         .is_some()
     {
@@ -210,7 +220,7 @@ pub fn start(
     }
 
     // Finalize the router with state
-    let app = app.with_state(dashboard_api);
+    let app = app.with_state(AuthState::new(api));
 
     Box::pin(async move {
         let listener = TcpListener::bind(ui_bind)

@@ -14,7 +14,9 @@ use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
-use crate::{LoginInput, check_auth, common_styles, login_form_response, login_submit_response};
+use crate::{
+    AuthState, LoginInput, check_auth, common_styles, login_form_response, login_submit_response,
+};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SetupInput {
@@ -64,8 +66,8 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
 }
 
 // GET handler for the /setup route (display the setup form)
-async fn setup_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse {
-    if config_api.our_connection_info().await.is_some() {
+async fn setup_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
+    if state.api.our_connection_info().await.is_some() {
         return Redirect::to("/federation-setup").into_response();
     }
 
@@ -102,10 +104,11 @@ async fn setup_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse 
 
 // POST handler for the /setup route (process the password setup form)
 async fn setup_submit(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
-    match config_api
+    match state
+        .api
         .set_local_parameters(
             ApiAuth(input.password.clone()),
             input.name,
@@ -128,8 +131,8 @@ async fn setup_submit(
 }
 
 // GET handler for the /login route (display the login form)
-async fn login_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse {
-    if config_api.our_connection_info().await.is_none() {
+async fn login_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
+    if state.api.our_connection_info().await.is_none() {
         return Redirect::to("/").into_response();
     }
 
@@ -138,38 +141,41 @@ async fn login_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse 
 
 // POST handler for the /login route (authenticate and set session cookie)
 async fn login_submit(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
+    let auth = match state.api.auth().await {
         Some(auth) => auth,
         None => return Redirect::to("/").into_response(),
     };
 
-    login_submit_response(auth, jar, input).into_response()
+    login_submit_response(
+        auth,
+        state.auth_cookie_name,
+        state.auth_cookie_value,
+        jar,
+        input,
+    )
+    .into_response()
 }
 
 // GET handler for the /federation-setup route (main federation management page)
 async fn federation_setup(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    let our_connection_info = config_api
+    let our_connection_info = state
+        .api
         .our_connection_info()
         .await
         .expect("Successful authentication ensures that the local parameters have been set");
 
-    let connected_peers = config_api.connected_peers().await;
+    let connected_peers = state.api.connected_peers().await;
 
     let content = html! {
         section class="mb-4" {
@@ -246,20 +252,15 @@ async fn federation_setup(
 
 // POST handler for adding peer connection info
 async fn add_peer_handler(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
     Form(input): Form<PeerInfoInput>,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    match config_api.add_peer_connection_info(input.peer_info).await {
+    match state.api.add_peer_connection_info(input.peer_info).await {
         Ok(..) => Redirect::to("/federation-setup").into_response(),
         Err(e) => {
             let content = html! {
@@ -277,19 +278,14 @@ async fn add_peer_handler(
 
 // POST handler for starting the DKG process
 async fn start_dkg_handler(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    match config_api.start_dkg().await {
+    match state.api.start_dkg().await {
         Ok(()) => {
             // Show simple DKG success page
             let content = html! {
@@ -324,25 +320,20 @@ async fn start_dkg_handler(
 
 // POST handler for resetting peer connection info
 async fn reset_peers_handler(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    config_api.reset_connection_info().await;
+    state.api.reset_connection_info().await;
 
     Redirect::to("/federation-setup").into_response()
 }
 
 pub fn start(
-    config_api: DynSetupApi,
+    api: DynSetupApi,
     ui_bind: SocketAddr,
     task_handle: TaskHandle,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
@@ -353,7 +344,7 @@ pub fn start(
         .route("/add-connection-info", post(add_peer_handler))
         .route("/reset-connection-info", post(reset_peers_handler))
         .route("/start-dkg", post(start_dkg_handler))
-        .with_state(config_api);
+        .with_state(AuthState::new(api));
 
     Box::pin(async move {
         let listener = TcpListener::bind(ui_bind)
