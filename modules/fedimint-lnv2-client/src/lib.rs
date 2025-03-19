@@ -378,22 +378,13 @@ impl LightningClientModule {
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
         task_group: &TaskGroup,
     ) {
-        task_group.spawn("gateway_map_update_task", move |handle| async move {
+        task_group.spawn_cancellable("gateway_map_update_task", async move {
             let mut interval = tokio::time::interval(Duration::from_secs(24 * 60 * 60));
-            let mut shutdown_rx = handle.make_shutdown_rx();
 
             loop {
-                tokio::select! {
-                    _  = &mut Box::pin(interval.tick()) => {
-                        Self::update_gateway_map(
-                            &federation_id,
-                            &client_ctx,
-                            &module_api,
-                            &gateway_conn
-                        ).await;
-                    },
-                    () = &mut shutdown_rx => { break },
-                };
+                Self::update_gateway_map(&federation_id, &client_ctx, &module_api, &gateway_conn)
+                    .await;
+                interval.tick().await;
             }
         });
     }
