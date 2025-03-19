@@ -75,7 +75,7 @@
 <a href=#75 id=75 data-nosnippet>75</a>        modules: Vec&lt;String&gt;,
 <a href=#76 id=76 data-nosnippet>76</a>        prefixes: Vec&lt;String&gt;,
 <a href=#77 id=77 data-nosnippet>77</a>    ) -&gt; anyhow::Result&lt;DatabaseDump&gt; {
-<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span><span class="prelude-val">Ok</span>(read_only_rocks_db) = RocksDbReadOnly::open_read_only(data_dir.clone()) <span class="kw">else </span>{
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span><span class="prelude-val">Ok</span>(read_only_rocks_db) = RocksDbReadOnly::open_read_only(data_dir.clone()).<span class="kw">await else </span>{
 <a href=#79 id=79 data-nosnippet>79</a>            <span class="macro">panic!</span>(<span class="string">"Error reading RocksDB database. Quitting..."</span>);
 <a href=#80 id=80 data-nosnippet>80</a>        };
 <a href=#81 id=81 data-nosnippet>81</a>

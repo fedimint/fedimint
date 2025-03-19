@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DbCommand"],"fn":["hex_parser","print_kv"],"mod":["dump","envs"],"struct":["FedimintDBTool","Options"]};
+window.SIDEBAR_ITEMS = {"enum":["DbCommand"],"fn":["hex_parser","open_db","print_kv"],"mod":["dump","envs"],"struct":["FedimintDBTool","Options"]};

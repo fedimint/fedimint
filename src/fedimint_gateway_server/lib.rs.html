@@ -298,7 +298,7 @@
 <a href=#298 id=298 data-nosnippet>298</a>        <span class="kw">let </span>decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())<span class="question-mark">?</span>;
 <a href=#299 id=299 data-nosnippet>299</a>
 <a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">let </span>gateway_db = Database::new(
-<a href=#301 id=301 data-nosnippet>301</a>            fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
+<a href=#301 id=301 data-nosnippet>301</a>            fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).<span class="kw">await</span><span class="question-mark">?</span>,
 <a href=#302 id=302 data-nosnippet>302</a>            decoders,
 <a href=#303 id=303 data-nosnippet>303</a>        );
 <a href=#304 id=304 data-nosnippet>304</a>

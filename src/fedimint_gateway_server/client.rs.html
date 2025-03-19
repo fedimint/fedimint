@@ -152,72 +152,73 @@
 <a href=#152 id=152 data-nosnippet>152</a>
 <a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">let </span>(db, root_secret) = <span class="kw">if </span>db_path.exists() {
 <a href=#154 id=154 data-nosnippet>154</a>            <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone())
-<a href=#155 id=155 data-nosnippet>155</a>                .map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
-<a href=#156 id=156 data-nosnippet>156</a>            <span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
-<a href=#157 id=157 data-nosnippet>157</a>            <span class="kw">let </span>root_secret = <span class="self">self</span>.client_plainrootsecret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#158 id=158 data-nosnippet>158</a>            (db, root_secret)
-<a href=#159 id=159 data-nosnippet>159</a>        } <span class="kw">else </span>{
-<a href=#160 id=160 data-nosnippet>160</a>            <span class="kw">let </span>db = gateway.gateway_db.get_client_database(<span class="kw-2">&amp;</span>federation_id);
-<a href=#161 id=161 data-nosnippet>161</a>            <span class="kw">let </span>secret = <span class="self">Self</span>::derive_federation_secret(mnemonic, <span class="kw-2">&amp;</span>federation_id);
-<a href=#162 id=162 data-nosnippet>162</a>            (db, secret)
-<a href=#163 id=163 data-nosnippet>163</a>        };
-<a href=#164 id=164 data-nosnippet>164</a>
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="self">Self</span>::verify_client_config(<span class="kw-2">&amp;</span>db, federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#166 id=166 data-nosnippet>166</a>
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">let </span>client_builder = <span class="self">self</span>.create_client_builder(db, <span class="kw-2">&amp;</span>config, gateway).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#168 id=168 data-nosnippet>168</a>
-<a href=#169 id=169 data-nosnippet>169</a>        <span class="kw">if </span>Client::is_initialized(client_builder.db_no_decoders()).<span class="kw">await </span>{
-<a href=#170 id=170 data-nosnippet>170</a>            client_builder.open(root_secret).<span class="kw">await
-<a href=#171 id=171 data-nosnippet>171</a>        </span>} <span class="kw">else </span>{
-<a href=#172 id=172 data-nosnippet>172</a>            <span class="kw">let </span>client_config = config
-<a href=#173 id=173 data-nosnippet>173</a>                .connector
-<a href=#174 id=174 data-nosnippet>174</a>                .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
-<a href=#175 id=175 data-nosnippet>175</a>                .<span class="kw">await
-<a href=#176 id=176 data-nosnippet>176</a>                </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
-<a href=#177 id=177 data-nosnippet>177</a>            client_builder
-<a href=#178 id=178 data-nosnippet>178</a>                .join(root_secret, client_config.clone(), invite_code.api_secret())
-<a href=#179 id=179 data-nosnippet>179</a>                .<span class="kw">await
-<a href=#180 id=180 data-nosnippet>180</a>        </span>}
-<a href=#181 id=181 data-nosnippet>181</a>        .map(Arc::new)
-<a href=#182 id=182 data-nosnippet>182</a>        .map_err(AdminGatewayError::ClientCreationError)
-<a href=#183 id=183 data-nosnippet>183</a>    }
-<a href=#184 id=184 data-nosnippet>184</a>
-<a href=#185 id=185 data-nosnippet>185</a>    <span class="doccomment">/// Verifies that the saved `ClientConfig` contains the expected
-<a href=#186 id=186 data-nosnippet>186</a>    /// federation's config.
-<a href=#187 id=187 data-nosnippet>187</a>    </span><span class="kw">async fn </span>verify_client_config(db: <span class="kw-2">&amp;</span>Database, federation_id: FederationId) -&gt; AdminResult&lt;()&gt; {
-<a href=#188 id=188 data-nosnippet>188</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
-<a href=#189 id=189 data-nosnippet>189</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = dbtx.get_value(<span class="kw-2">&amp;</span>ClientConfigKey).<span class="kw">await </span>{
-<a href=#190 id=190 data-nosnippet>190</a>            <span class="kw">if </span>config.calculate_federation_id() != federation_id {
-<a href=#191 id=191 data-nosnippet>191</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::ClientCreationError(<span class="macro">anyhow::anyhow!</span>(
-<a href=#192 id=192 data-nosnippet>192</a>                    <span class="string">"Federation Id did not match saved federation ID"</span>.to_string()
-<a href=#193 id=193 data-nosnippet>193</a>                )));
-<a href=#194 id=194 data-nosnippet>194</a>            }
-<a href=#195 id=195 data-nosnippet>195</a>        }
-<a href=#196 id=196 data-nosnippet>196</a>        <span class="prelude-val">Ok</span>(())
-<a href=#197 id=197 data-nosnippet>197</a>    }
-<a href=#198 id=198 data-nosnippet>198</a>
-<a href=#199 id=199 data-nosnippet>199</a>    <span class="doccomment">/// Derives a per-federation secret according to Fedimint's multi-federation
-<a href=#200 id=200 data-nosnippet>200</a>    /// secret derivation policy.
-<a href=#201 id=201 data-nosnippet>201</a>    </span><span class="kw">fn </span>derive_federation_secret(
-<a href=#202 id=202 data-nosnippet>202</a>        mnemonic: <span class="kw-2">&amp;</span>Mnemonic,
-<a href=#203 id=203 data-nosnippet>203</a>        federation_id: <span class="kw-2">&amp;</span>FederationId,
-<a href=#204 id=204 data-nosnippet>204</a>    ) -&gt; DerivableSecret {
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>global_root_secret = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(mnemonic);
-<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>multi_federation_root_secret = global_root_secret.child_key(ChildId(<span class="number">0</span>));
-<a href=#207 id=207 data-nosnippet>207</a>        <span class="kw">let </span>federation_root_secret = multi_federation_root_secret.federation_key(federation_id);
-<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">let </span>federation_wallet_root_secret = federation_root_secret.child_key(ChildId(<span class="number">0</span>));
-<a href=#209 id=209 data-nosnippet>209</a>        federation_wallet_root_secret.child_key(ChildId(<span class="number">0</span>))
-<a href=#210 id=210 data-nosnippet>210</a>    }
-<a href=#211 id=211 data-nosnippet>211</a>
-<a href=#212 id=212 data-nosnippet>212</a>    <span class="doccomment">/// Returns a vector of "legacy" federations which did not derive their
-<a href=#213 id=213 data-nosnippet>213</a>    /// client secret's from the gateway's mnemonic.
-<a href=#214 id=214 data-nosnippet>214</a>    </span><span class="kw">pub fn </span>legacy_federations(<span class="kw-2">&amp;</span><span class="self">self</span>, all_federations: BTreeSet&lt;FederationId&gt;) -&gt; Vec&lt;FederationId&gt; {
-<a href=#215 id=215 data-nosnippet>215</a>        all_federations
-<a href=#216 id=216 data-nosnippet>216</a>            .into_iter()
-<a href=#217 id=217 data-nosnippet>217</a>            .filter(|federation_id| {
-<a href=#218 id=218 data-nosnippet>218</a>                <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">"{federation_id}.db"</span>));
-<a href=#219 id=219 data-nosnippet>219</a>                db_path.exists()
-<a href=#220 id=220 data-nosnippet>220</a>            })
-<a href=#221 id=221 data-nosnippet>221</a>            .collect::&lt;Vec&lt;FederationId&gt;&gt;()
-<a href=#222 id=222 data-nosnippet>222</a>    }
-<a href=#223 id=223 data-nosnippet>223</a>}</code></pre></div></section></main></body></html>
+<a href=#155 id=155 data-nosnippet>155</a>                .<span class="kw">await
+<a href=#156 id=156 data-nosnippet>156</a>                </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
+<a href=#157 id=157 data-nosnippet>157</a>            <span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
+<a href=#158 id=158 data-nosnippet>158</a>            <span class="kw">let </span>root_secret = <span class="self">self</span>.client_plainrootsecret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#159 id=159 data-nosnippet>159</a>            (db, root_secret)
+<a href=#160 id=160 data-nosnippet>160</a>        } <span class="kw">else </span>{
+<a href=#161 id=161 data-nosnippet>161</a>            <span class="kw">let </span>db = gateway.gateway_db.get_client_database(<span class="kw-2">&amp;</span>federation_id);
+<a href=#162 id=162 data-nosnippet>162</a>            <span class="kw">let </span>secret = <span class="self">Self</span>::derive_federation_secret(mnemonic, <span class="kw-2">&amp;</span>federation_id);
+<a href=#163 id=163 data-nosnippet>163</a>            (db, secret)
+<a href=#164 id=164 data-nosnippet>164</a>        };
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="self">Self</span>::verify_client_config(<span class="kw-2">&amp;</span>db, federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#167 id=167 data-nosnippet>167</a>
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">let </span>client_builder = <span class="self">self</span>.create_client_builder(db, <span class="kw-2">&amp;</span>config, gateway).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>        <span class="kw">if </span>Client::is_initialized(client_builder.db_no_decoders()).<span class="kw">await </span>{
+<a href=#171 id=171 data-nosnippet>171</a>            client_builder.open(root_secret).<span class="kw">await
+<a href=#172 id=172 data-nosnippet>172</a>        </span>} <span class="kw">else </span>{
+<a href=#173 id=173 data-nosnippet>173</a>            <span class="kw">let </span>client_config = config
+<a href=#174 id=174 data-nosnippet>174</a>                .connector
+<a href=#175 id=175 data-nosnippet>175</a>                .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+<a href=#176 id=176 data-nosnippet>176</a>                .<span class="kw">await
+<a href=#177 id=177 data-nosnippet>177</a>                </span>.map_err(AdminGatewayError::ClientCreationError)<span class="question-mark">?</span>;
+<a href=#178 id=178 data-nosnippet>178</a>            client_builder
+<a href=#179 id=179 data-nosnippet>179</a>                .join(root_secret, client_config.clone(), invite_code.api_secret())
+<a href=#180 id=180 data-nosnippet>180</a>                .<span class="kw">await
+<a href=#181 id=181 data-nosnippet>181</a>        </span>}
+<a href=#182 id=182 data-nosnippet>182</a>        .map(Arc::new)
+<a href=#183 id=183 data-nosnippet>183</a>        .map_err(AdminGatewayError::ClientCreationError)
+<a href=#184 id=184 data-nosnippet>184</a>    }
+<a href=#185 id=185 data-nosnippet>185</a>
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="doccomment">/// Verifies that the saved `ClientConfig` contains the expected
+<a href=#187 id=187 data-nosnippet>187</a>    /// federation's config.
+<a href=#188 id=188 data-nosnippet>188</a>    </span><span class="kw">async fn </span>verify_client_config(db: <span class="kw-2">&amp;</span>Database, federation_id: FederationId) -&gt; AdminResult&lt;()&gt; {
+<a href=#189 id=189 data-nosnippet>189</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = dbtx.get_value(<span class="kw-2">&amp;</span>ClientConfigKey).<span class="kw">await </span>{
+<a href=#191 id=191 data-nosnippet>191</a>            <span class="kw">if </span>config.calculate_federation_id() != federation_id {
+<a href=#192 id=192 data-nosnippet>192</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(AdminGatewayError::ClientCreationError(<span class="macro">anyhow::anyhow!</span>(
+<a href=#193 id=193 data-nosnippet>193</a>                    <span class="string">"Federation Id did not match saved federation ID"</span>.to_string()
+<a href=#194 id=194 data-nosnippet>194</a>                )));
+<a href=#195 id=195 data-nosnippet>195</a>            }
+<a href=#196 id=196 data-nosnippet>196</a>        }
+<a href=#197 id=197 data-nosnippet>197</a>        <span class="prelude-val">Ok</span>(())
+<a href=#198 id=198 data-nosnippet>198</a>    }
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a>    <span class="doccomment">/// Derives a per-federation secret according to Fedimint's multi-federation
+<a href=#201 id=201 data-nosnippet>201</a>    /// secret derivation policy.
+<a href=#202 id=202 data-nosnippet>202</a>    </span><span class="kw">fn </span>derive_federation_secret(
+<a href=#203 id=203 data-nosnippet>203</a>        mnemonic: <span class="kw-2">&amp;</span>Mnemonic,
+<a href=#204 id=204 data-nosnippet>204</a>        federation_id: <span class="kw-2">&amp;</span>FederationId,
+<a href=#205 id=205 data-nosnippet>205</a>    ) -&gt; DerivableSecret {
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>global_root_secret = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::to_root_secret(mnemonic);
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="kw">let </span>multi_federation_root_secret = global_root_secret.child_key(ChildId(<span class="number">0</span>));
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">let </span>federation_root_secret = multi_federation_root_secret.federation_key(federation_id);
+<a href=#209 id=209 data-nosnippet>209</a>        <span class="kw">let </span>federation_wallet_root_secret = federation_root_secret.child_key(ChildId(<span class="number">0</span>));
+<a href=#210 id=210 data-nosnippet>210</a>        federation_wallet_root_secret.child_key(ChildId(<span class="number">0</span>))
+<a href=#211 id=211 data-nosnippet>211</a>    }
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a>    <span class="doccomment">/// Returns a vector of "legacy" federations which did not derive their
+<a href=#214 id=214 data-nosnippet>214</a>    /// client secret's from the gateway's mnemonic.
+<a href=#215 id=215 data-nosnippet>215</a>    </span><span class="kw">pub fn </span>legacy_federations(<span class="kw-2">&amp;</span><span class="self">self</span>, all_federations: BTreeSet&lt;FederationId&gt;) -&gt; Vec&lt;FederationId&gt; {
+<a href=#216 id=216 data-nosnippet>216</a>        all_federations
+<a href=#217 id=217 data-nosnippet>217</a>            .into_iter()
+<a href=#218 id=218 data-nosnippet>218</a>            .filter(|federation_id| {
+<a href=#219 id=219 data-nosnippet>219</a>                <span class="kw">let </span>db_path = <span class="self">self</span>.work_dir.join(<span class="macro">format!</span>(<span class="string">"{federation_id}.db"</span>));
+<a href=#220 id=220 data-nosnippet>220</a>                db_path.exists()
+<a href=#221 id=221 data-nosnippet>221</a>            })
+<a href=#222 id=222 data-nosnippet>222</a>            .collect::&lt;Vec&lt;FederationId&gt;&gt;()
+<a href=#223 id=223 data-nosnippet>223</a>    }
+<a href=#224 id=224 data-nosnippet>224</a>}</code></pre></div></section></main></body></html>
