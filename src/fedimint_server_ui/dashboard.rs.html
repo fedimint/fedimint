@@ -14,7 +14,7 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>{fedimint_lnv2_server, fedimint_wallet_server};
 <a href=#15 id=15 data-nosnippet>15</a>
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use crate</span>::{
-<a href=#17 id=17 data-nosnippet>17</a>    LoginInput, audit, check_auth, common_styles, connection_status, invite_code, lnv2,
+<a href=#17 id=17 data-nosnippet>17</a>    AuthState, LoginInput, audit, check_auth, common_styles, connection_status, invite_code, lnv2,
 <a href=#18 id=18 data-nosnippet>18</a>    login_form_response, login_submit_response, wallet,
 <a href=#19 id=19 data-nosnippet>19</a>};
 <a href=#20 id=20 data-nosnippet>20</a>
@@ -96,130 +96,140 @@
 <a href=#96 id=96 data-nosnippet>96</a>}
 <a href=#97 id=97 data-nosnippet>97</a>
 <a href=#98 id=98 data-nosnippet>98</a><span class="comment">// Dashboard login form handler
-<a href=#99 id=99 data-nosnippet>99</a></span><span class="kw">async fn </span>login_form(State(_api): State&lt;DynDashboardApi&gt;) -&gt; <span class="kw">impl </span>IntoResponse {
+<a href=#99 id=99 data-nosnippet>99</a></span><span class="kw">async fn </span>login_form(State(_state): State&lt;AuthState&lt;DynDashboardApi&gt;&gt;) -&gt; <span class="kw">impl </span>IntoResponse {
 <a href=#100 id=100 data-nosnippet>100</a>    login_form_response()
 <a href=#101 id=101 data-nosnippet>101</a>}
 <a href=#102 id=102 data-nosnippet>102</a>
 <a href=#103 id=103 data-nosnippet>103</a><span class="comment">// Dashboard login submit handler
 <a href=#104 id=104 data-nosnippet>104</a></span><span class="kw">async fn </span>login_submit(
-<a href=#105 id=105 data-nosnippet>105</a>    State(api): State&lt;DynDashboardApi&gt;,
+<a href=#105 id=105 data-nosnippet>105</a>    State(state): State&lt;AuthState&lt;DynDashboardApi&gt;&gt;,
 <a href=#106 id=106 data-nosnippet>106</a>    jar: CookieJar,
 <a href=#107 id=107 data-nosnippet>107</a>    Form(input): Form&lt;LoginInput&gt;,
 <a href=#108 id=108 data-nosnippet>108</a>) -&gt; <span class="kw">impl </span>IntoResponse {
-<a href=#109 id=109 data-nosnippet>109</a>    login_submit_response(api.auth().<span class="kw">await</span>, jar, input).into_response()
-<a href=#110 id=110 data-nosnippet>110</a>}
-<a href=#111 id=111 data-nosnippet>111</a>
-<a href=#112 id=112 data-nosnippet>112</a><span class="comment">// Main dashboard view
-<a href=#113 id=113 data-nosnippet>113</a></span><span class="kw">async fn </span>dashboard_view(State(api): State&lt;DynDashboardApi&gt;, jar: CookieJar) -&gt; <span class="kw">impl </span>IntoResponse {
-<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">if </span>!check_auth(api.auth().<span class="kw">await</span>, <span class="kw-2">&amp;</span>jar).<span class="kw">await </span>{
-<a href=#115 id=115 data-nosnippet>115</a>        <span class="kw">return </span>Redirect::to(<span class="string">"/login"</span>).into_response();
-<a href=#116 id=116 data-nosnippet>116</a>    }
-<a href=#117 id=117 data-nosnippet>117</a>
-<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">let </span>guardian_name = api.guardian_name().<span class="kw">await</span>;
-<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">let </span>federation_name = api.federation_name().<span class="kw">await</span>;
-<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">let </span>session_count = api.session_count().<span class="kw">await</span>;
-<a href=#121 id=121 data-nosnippet>121</a>    <span class="kw">let </span>peer_status = api.peer_connection_status().<span class="kw">await</span>;
-<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">let </span>invite_code = api.federation_invite_code().<span class="kw">await</span>;
-<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">let </span>audit_summary = api.federation_audit().<span class="kw">await</span>;
-<a href=#124 id=124 data-nosnippet>124</a>
-<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">let </span><span class="kw-2">mut </span>content = <span class="macro">html!</span> {
-<a href=#126 id=126 data-nosnippet>126</a>        div class=<span class="string">"row gy-4" </span>{
-<a href=#127 id=127 data-nosnippet>127</a>            <span class="comment">// Guardian Information Column
-<a href=#128 id=128 data-nosnippet>128</a>            </span>div class=<span class="string">"col-md-6" </span>{
-<a href=#129 id=129 data-nosnippet>129</a>                div class=<span class="string">"card h-100" </span>{
-<a href=#130 id=130 data-nosnippet>130</a>                    div class=<span class="string">"card-header dashboard-header" </span>{ <span class="string">"General Information" </span>}
-<a href=#131 id=131 data-nosnippet>131</a>                    div class=<span class="string">"card-body" </span>{
-<a href=#132 id=132 data-nosnippet>132</a>                        table class=<span class="string">"table" </span>{
-<a href=#133 id=133 data-nosnippet>133</a>                            tr {
-<a href=#134 id=134 data-nosnippet>134</a>                                th { <span class="string">"Guardian Name" </span>}
-<a href=#135 id=135 data-nosnippet>135</a>                                td { (guardian_name) }
-<a href=#136 id=136 data-nosnippet>136</a>                            }
-<a href=#137 id=137 data-nosnippet>137</a>                            tr {
-<a href=#138 id=138 data-nosnippet>138</a>                                th { <span class="string">"Federation Name" </span>}
-<a href=#139 id=139 data-nosnippet>139</a>                                td { (federation_name) }
-<a href=#140 id=140 data-nosnippet>140</a>                            }
-<a href=#141 id=141 data-nosnippet>141</a>                            tr {
-<a href=#142 id=142 data-nosnippet>142</a>                                th { <span class="string">"Current Session Count" </span>}
-<a href=#143 id=143 data-nosnippet>143</a>                                td { (session_count) }
-<a href=#144 id=144 data-nosnippet>144</a>                            }
-<a href=#145 id=145 data-nosnippet>145</a>                        }
-<a href=#146 id=146 data-nosnippet>146</a>                    }
-<a href=#147 id=147 data-nosnippet>147</a>                }
-<a href=#148 id=148 data-nosnippet>148</a>            }
-<a href=#149 id=149 data-nosnippet>149</a>
-<a href=#150 id=150 data-nosnippet>150</a>            <span class="comment">// Invite Code Column
-<a href=#151 id=151 data-nosnippet>151</a>            </span>div class=<span class="string">"col-md-6" </span>{
-<a href=#152 id=152 data-nosnippet>152</a>                (invite_code::invite_code_card())
-<a href=#153 id=153 data-nosnippet>153</a>            }
-<a href=#154 id=154 data-nosnippet>154</a>        }
-<a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a>        <span class="comment">// Render the invite code modal
-<a href=#157 id=157 data-nosnippet>157</a>        </span>(invite_code::invite_code_modal(<span class="kw-2">&amp;</span>invite_code))
-<a href=#158 id=158 data-nosnippet>158</a>
-<a href=#159 id=159 data-nosnippet>159</a>        <span class="comment">// Second row: Audit Summary and Peer Status
-<a href=#160 id=160 data-nosnippet>160</a>        </span>div class=<span class="string">"row gy-4 mt-2" </span>{
-<a href=#161 id=161 data-nosnippet>161</a>            <span class="comment">// Audit Information Column
-<a href=#162 id=162 data-nosnippet>162</a>            </span>div class=<span class="string">"col-lg-8" </span>{
-<a href=#163 id=163 data-nosnippet>163</a>                (audit::render_audit_summary(<span class="kw-2">&amp;</span>audit_summary))
-<a href=#164 id=164 data-nosnippet>164</a>            }
+<a href=#109 id=109 data-nosnippet>109</a>    login_submit_response(
+<a href=#110 id=110 data-nosnippet>110</a>        state.api.auth().<span class="kw">await</span>,
+<a href=#111 id=111 data-nosnippet>111</a>        state.auth_cookie_name,
+<a href=#112 id=112 data-nosnippet>112</a>        state.auth_cookie_value,
+<a href=#113 id=113 data-nosnippet>113</a>        jar,
+<a href=#114 id=114 data-nosnippet>114</a>        input,
+<a href=#115 id=115 data-nosnippet>115</a>    )
+<a href=#116 id=116 data-nosnippet>116</a>    .into_response()
+<a href=#117 id=117 data-nosnippet>117</a>}
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a><span class="comment">// Main dashboard view
+<a href=#120 id=120 data-nosnippet>120</a></span><span class="kw">async fn </span>dashboard_view(
+<a href=#121 id=121 data-nosnippet>121</a>    State(state): State&lt;AuthState&lt;DynDashboardApi&gt;&gt;,
+<a href=#122 id=122 data-nosnippet>122</a>    jar: CookieJar,
+<a href=#123 id=123 data-nosnippet>123</a>) -&gt; <span class="kw">impl </span>IntoResponse {
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">if </span>!check_auth(<span class="kw-2">&amp;</span>state.auth_cookie_name, <span class="kw-2">&amp;</span>state.auth_cookie_value, <span class="kw-2">&amp;</span>jar).<span class="kw">await </span>{
+<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw">return </span>Redirect::to(<span class="string">"/login"</span>).into_response();
+<a href=#126 id=126 data-nosnippet>126</a>    }
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">let </span>guardian_name = state.api.guardian_name().<span class="kw">await</span>;
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">let </span>federation_name = state.api.federation_name().<span class="kw">await</span>;
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>session_count = state.api.session_count().<span class="kw">await</span>;
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">let </span>peer_status = state.api.peer_connection_status().<span class="kw">await</span>;
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">let </span>invite_code = state.api.federation_invite_code().<span class="kw">await</span>;
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">let </span>audit_summary = state.api.federation_audit().<span class="kw">await</span>;
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="kw">let </span><span class="kw-2">mut </span>content = <span class="macro">html!</span> {
+<a href=#136 id=136 data-nosnippet>136</a>        div class=<span class="string">"row gy-4" </span>{
+<a href=#137 id=137 data-nosnippet>137</a>            <span class="comment">// Guardian Information Column
+<a href=#138 id=138 data-nosnippet>138</a>            </span>div class=<span class="string">"col-md-6" </span>{
+<a href=#139 id=139 data-nosnippet>139</a>                div class=<span class="string">"card h-100" </span>{
+<a href=#140 id=140 data-nosnippet>140</a>                    div class=<span class="string">"card-header dashboard-header" </span>{ <span class="string">"General Information" </span>}
+<a href=#141 id=141 data-nosnippet>141</a>                    div class=<span class="string">"card-body" </span>{
+<a href=#142 id=142 data-nosnippet>142</a>                        table class=<span class="string">"table" </span>{
+<a href=#143 id=143 data-nosnippet>143</a>                            tr {
+<a href=#144 id=144 data-nosnippet>144</a>                                th { <span class="string">"Guardian Name" </span>}
+<a href=#145 id=145 data-nosnippet>145</a>                                td { (guardian_name) }
+<a href=#146 id=146 data-nosnippet>146</a>                            }
+<a href=#147 id=147 data-nosnippet>147</a>                            tr {
+<a href=#148 id=148 data-nosnippet>148</a>                                th { <span class="string">"Federation Name" </span>}
+<a href=#149 id=149 data-nosnippet>149</a>                                td { (federation_name) }
+<a href=#150 id=150 data-nosnippet>150</a>                            }
+<a href=#151 id=151 data-nosnippet>151</a>                            tr {
+<a href=#152 id=152 data-nosnippet>152</a>                                th { <span class="string">"Current Session Count" </span>}
+<a href=#153 id=153 data-nosnippet>153</a>                                td { (session_count) }
+<a href=#154 id=154 data-nosnippet>154</a>                            }
+<a href=#155 id=155 data-nosnippet>155</a>                        }
+<a href=#156 id=156 data-nosnippet>156</a>                    }
+<a href=#157 id=157 data-nosnippet>157</a>                }
+<a href=#158 id=158 data-nosnippet>158</a>            }
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>            <span class="comment">// Invite Code Column
+<a href=#161 id=161 data-nosnippet>161</a>            </span>div class=<span class="string">"col-md-6" </span>{
+<a href=#162 id=162 data-nosnippet>162</a>                (invite_code::invite_code_card())
+<a href=#163 id=163 data-nosnippet>163</a>            }
+<a href=#164 id=164 data-nosnippet>164</a>        }
 <a href=#165 id=165 data-nosnippet>165</a>
-<a href=#166 id=166 data-nosnippet>166</a>            <span class="comment">// Peer Connection Status Column
-<a href=#167 id=167 data-nosnippet>167</a>            </span>div class=<span class="string">"col-lg-4" </span>{
-<a href=#168 id=168 data-nosnippet>168</a>                (connection_status::render_connection_status(<span class="kw-2">&amp;</span>peer_status))
-<a href=#169 id=169 data-nosnippet>169</a>            }
-<a href=#170 id=170 data-nosnippet>170</a>        }
-<a href=#171 id=171 data-nosnippet>171</a>    };
-<a href=#172 id=172 data-nosnippet>172</a>
-<a href=#173 id=173 data-nosnippet>173</a>    <span class="comment">// Conditionally add Lightning V2 UI if the module is available
-<a href=#174 id=174 data-nosnippet>174</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(lightning) = api.get_module::&lt;fedimint_lnv2_server::Lightning&gt;() {
-<a href=#175 id=175 data-nosnippet>175</a>        content = <span class="macro">html!</span> {
-<a href=#176 id=176 data-nosnippet>176</a>            (content)
-<a href=#177 id=177 data-nosnippet>177</a>            (lnv2::render(lightning).<span class="kw">await</span>)
-<a href=#178 id=178 data-nosnippet>178</a>        };
-<a href=#179 id=179 data-nosnippet>179</a>    }
-<a href=#180 id=180 data-nosnippet>180</a>
-<a href=#181 id=181 data-nosnippet>181</a>    <span class="comment">// Conditionally add Wallet UI if the module is available
-<a href=#182 id=182 data-nosnippet>182</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(wallet_module) = api.get_module::&lt;fedimint_wallet_server::Wallet&gt;() {
-<a href=#183 id=183 data-nosnippet>183</a>        content = <span class="macro">html!</span> {
-<a href=#184 id=184 data-nosnippet>184</a>            (content)
-<a href=#185 id=185 data-nosnippet>185</a>            (wallet::render(wallet_module).<span class="kw">await</span>)
-<a href=#186 id=186 data-nosnippet>186</a>        };
-<a href=#187 id=187 data-nosnippet>187</a>    }
-<a href=#188 id=188 data-nosnippet>188</a>
-<a href=#189 id=189 data-nosnippet>189</a>    Html(dashboard_layout(content).into_string()).into_response()
-<a href=#190 id=190 data-nosnippet>190</a>}
-<a href=#191 id=191 data-nosnippet>191</a>
-<a href=#192 id=192 data-nosnippet>192</a><span class="kw">pub fn </span>start(
-<a href=#193 id=193 data-nosnippet>193</a>    dashboard_api: DynDashboardApi,
-<a href=#194 id=194 data-nosnippet>194</a>    ui_bind: SocketAddr,
-<a href=#195 id=195 data-nosnippet>195</a>    task_handle: TaskHandle,
-<a href=#196 id=196 data-nosnippet>196</a>) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = ()&gt; + Send&gt;&gt; {
-<a href=#197 id=197 data-nosnippet>197</a>    <span class="comment">// Create a basic router with core routes
-<a href=#198 id=198 data-nosnippet>198</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>app = Router::new()
-<a href=#199 id=199 data-nosnippet>199</a>        .route(<span class="string">"/"</span>, get(dashboard_view))
-<a href=#200 id=200 data-nosnippet>200</a>        .route(<span class="string">"/login"</span>, get(login_form).post(login_submit));
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="comment">// Render the invite code modal
+<a href=#167 id=167 data-nosnippet>167</a>        </span>(invite_code::invite_code_modal(<span class="kw-2">&amp;</span>invite_code))
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a>        <span class="comment">// Second row: Audit Summary and Peer Status
+<a href=#170 id=170 data-nosnippet>170</a>        </span>div class=<span class="string">"row gy-4 mt-2" </span>{
+<a href=#171 id=171 data-nosnippet>171</a>            <span class="comment">// Audit Information Column
+<a href=#172 id=172 data-nosnippet>172</a>            </span>div class=<span class="string">"col-lg-8" </span>{
+<a href=#173 id=173 data-nosnippet>173</a>                (audit::render_audit_summary(<span class="kw-2">&amp;</span>audit_summary))
+<a href=#174 id=174 data-nosnippet>174</a>            }
+<a href=#175 id=175 data-nosnippet>175</a>
+<a href=#176 id=176 data-nosnippet>176</a>            <span class="comment">// Peer Connection Status Column
+<a href=#177 id=177 data-nosnippet>177</a>            </span>div class=<span class="string">"col-lg-4" </span>{
+<a href=#178 id=178 data-nosnippet>178</a>                (connection_status::render_connection_status(<span class="kw-2">&amp;</span>peer_status))
+<a href=#179 id=179 data-nosnippet>179</a>            }
+<a href=#180 id=180 data-nosnippet>180</a>        }
+<a href=#181 id=181 data-nosnippet>181</a>    };
+<a href=#182 id=182 data-nosnippet>182</a>
+<a href=#183 id=183 data-nosnippet>183</a>    <span class="comment">// Conditionally add Lightning V2 UI if the module is available
+<a href=#184 id=184 data-nosnippet>184</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(lightning) = state.api.get_module::&lt;fedimint_lnv2_server::Lightning&gt;() {
+<a href=#185 id=185 data-nosnippet>185</a>        content = <span class="macro">html!</span> {
+<a href=#186 id=186 data-nosnippet>186</a>            (content)
+<a href=#187 id=187 data-nosnippet>187</a>            (lnv2::render(lightning).<span class="kw">await</span>)
+<a href=#188 id=188 data-nosnippet>188</a>        };
+<a href=#189 id=189 data-nosnippet>189</a>    }
+<a href=#190 id=190 data-nosnippet>190</a>
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="comment">// Conditionally add Wallet UI if the module is available
+<a href=#192 id=192 data-nosnippet>192</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(wallet_module) = state.api.get_module::&lt;fedimint_wallet_server::Wallet&gt;() {
+<a href=#193 id=193 data-nosnippet>193</a>        content = <span class="macro">html!</span> {
+<a href=#194 id=194 data-nosnippet>194</a>            (content)
+<a href=#195 id=195 data-nosnippet>195</a>            (wallet::render(wallet_module).<span class="kw">await</span>)
+<a href=#196 id=196 data-nosnippet>196</a>        };
+<a href=#197 id=197 data-nosnippet>197</a>    }
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a>    Html(dashboard_layout(content).into_string()).into_response()
+<a href=#200 id=200 data-nosnippet>200</a>}
 <a href=#201 id=201 data-nosnippet>201</a>
-<a href=#202 id=202 data-nosnippet>202</a>    <span class="comment">// Only add LNv2 gateway routes if the module exists
-<a href=#203 id=203 data-nosnippet>203</a>    </span><span class="kw">if </span>dashboard_api
-<a href=#204 id=204 data-nosnippet>204</a>        .get_module::&lt;fedimint_lnv2_server::Lightning&gt;()
-<a href=#205 id=205 data-nosnippet>205</a>        .is_some()
-<a href=#206 id=206 data-nosnippet>206</a>    {
-<a href=#207 id=207 data-nosnippet>207</a>        app = app
-<a href=#208 id=208 data-nosnippet>208</a>            .route(<span class="string">"/lnv2_gateway_add"</span>, post(lnv2::add_gateway))
-<a href=#209 id=209 data-nosnippet>209</a>            .route(<span class="string">"/lnv2_gateway_remove"</span>, post(lnv2::remove_gateway));
-<a href=#210 id=210 data-nosnippet>210</a>    }
+<a href=#202 id=202 data-nosnippet>202</a><span class="kw">pub fn </span>start(
+<a href=#203 id=203 data-nosnippet>203</a>    api: DynDashboardApi,
+<a href=#204 id=204 data-nosnippet>204</a>    ui_bind: SocketAddr,
+<a href=#205 id=205 data-nosnippet>205</a>    task_handle: TaskHandle,
+<a href=#206 id=206 data-nosnippet>206</a>) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = ()&gt; + Send&gt;&gt; {
+<a href=#207 id=207 data-nosnippet>207</a>    <span class="comment">// Create a basic router with core routes
+<a href=#208 id=208 data-nosnippet>208</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>app = Router::new()
+<a href=#209 id=209 data-nosnippet>209</a>        .route(<span class="string">"/"</span>, get(dashboard_view))
+<a href=#210 id=210 data-nosnippet>210</a>        .route(<span class="string">"/login"</span>, get(login_form).post(login_submit));
 <a href=#211 id=211 data-nosnippet>211</a>
-<a href=#212 id=212 data-nosnippet>212</a>    <span class="comment">// Finalize the router with state
-<a href=#213 id=213 data-nosnippet>213</a>    </span><span class="kw">let </span>app = app.with_state(dashboard_api);
-<a href=#214 id=214 data-nosnippet>214</a>
-<a href=#215 id=215 data-nosnippet>215</a>    Box::pin(<span class="kw">async move </span>{
-<a href=#216 id=216 data-nosnippet>216</a>        <span class="kw">let </span>listener = TcpListener::bind(ui_bind)
-<a href=#217 id=217 data-nosnippet>217</a>            .<span class="kw">await
-<a href=#218 id=218 data-nosnippet>218</a>            </span>.expect(<span class="string">"Failed to bind dashboard UI"</span>);
-<a href=#219 id=219 data-nosnippet>219</a>
-<a href=#220 id=220 data-nosnippet>220</a>        axum::serve(listener, app.into_make_service())
-<a href=#221 id=221 data-nosnippet>221</a>            .with_graceful_shutdown(task_handle.make_shutdown_rx())
-<a href=#222 id=222 data-nosnippet>222</a>            .<span class="kw">await
-<a href=#223 id=223 data-nosnippet>223</a>            </span>.expect(<span class="string">"Failed to serve dashboard UI"</span>);
-<a href=#224 id=224 data-nosnippet>224</a>    })
-<a href=#225 id=225 data-nosnippet>225</a>}</code></pre></div></section></main></body></html>
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="comment">// Only add LNv2 gateway routes if the module exists
+<a href=#213 id=213 data-nosnippet>213</a>    </span><span class="kw">if </span>api
+<a href=#214 id=214 data-nosnippet>214</a>        .get_module::&lt;fedimint_lnv2_server::Lightning&gt;()
+<a href=#215 id=215 data-nosnippet>215</a>        .is_some()
+<a href=#216 id=216 data-nosnippet>216</a>    {
+<a href=#217 id=217 data-nosnippet>217</a>        app = app
+<a href=#218 id=218 data-nosnippet>218</a>            .route(<span class="string">"/lnv2_gateway_add"</span>, post(lnv2::add_gateway))
+<a href=#219 id=219 data-nosnippet>219</a>            .route(<span class="string">"/lnv2_gateway_remove"</span>, post(lnv2::remove_gateway));
+<a href=#220 id=220 data-nosnippet>220</a>    }
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="comment">// Finalize the router with state
+<a href=#223 id=223 data-nosnippet>223</a>    </span><span class="kw">let </span>app = app.with_state(AuthState::new(api));
+<a href=#224 id=224 data-nosnippet>224</a>
+<a href=#225 id=225 data-nosnippet>225</a>    Box::pin(<span class="kw">async move </span>{
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">let </span>listener = TcpListener::bind(ui_bind)
+<a href=#227 id=227 data-nosnippet>227</a>            .<span class="kw">await
+<a href=#228 id=228 data-nosnippet>228</a>            </span>.expect(<span class="string">"Failed to bind dashboard UI"</span>);
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>        axum::serve(listener, app.into_make_service())
+<a href=#231 id=231 data-nosnippet>231</a>            .with_graceful_shutdown(task_handle.make_shutdown_rx())
+<a href=#232 id=232 data-nosnippet>232</a>            .<span class="kw">await
+<a href=#233 id=233 data-nosnippet>233</a>            </span>.expect(<span class="string">"Failed to serve dashboard UI"</span>);
+<a href=#234 id=234 data-nosnippet>234</a>    })
+<a href=#235 id=235 data-nosnippet>235</a>}</code></pre></div></section></main></body></html>

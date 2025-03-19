@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>maud::{Markup, html};
 <a href=#7 id=7 data-nosnippet>7</a>
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::check_auth;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use crate</span>::{AuthState, check_auth};
 <a href=#9 id=9 data-nosnippet>9</a>
 <a href=#10 id=10 data-nosnippet>10</a><span class="comment">// Form for gateway management
 <a href=#11 id=11 data-nosnippet>11</a></span><span class="attr">#[derive(serde::Deserialize)]
@@ -113,36 +113,40 @@
 <a href=#113 id=113 data-nosnippet>113</a>
 <a href=#114 id=114 data-nosnippet>114</a><span class="comment">// Handler for adding a new gateway
 <a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">pub async fn </span>add_gateway(
-<a href=#116 id=116 data-nosnippet>116</a>    State(api): State&lt;DynDashboardApi&gt;,
+<a href=#116 id=116 data-nosnippet>116</a>    State(state): State&lt;AuthState&lt;DynDashboardApi&gt;&gt;,
 <a href=#117 id=117 data-nosnippet>117</a>    jar: CookieJar,
 <a href=#118 id=118 data-nosnippet>118</a>    Form(form): Form&lt;GatewayForm&gt;,
 <a href=#119 id=119 data-nosnippet>119</a>) -&gt; <span class="kw">impl </span>IntoResponse {
-<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">if </span>!check_auth(api.auth().<span class="kw">await</span>, <span class="kw-2">&amp;</span>jar).<span class="kw">await </span>{
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">if </span>!check_auth(<span class="kw-2">&amp;</span>state.auth_cookie_name, <span class="kw-2">&amp;</span>state.auth_cookie_value, <span class="kw-2">&amp;</span>jar).<span class="kw">await </span>{
 <a href=#121 id=121 data-nosnippet>121</a>        <span class="kw">return </span>Redirect::to(<span class="string">"/login"</span>).into_response();
 <a href=#122 id=122 data-nosnippet>122</a>    }
 <a href=#123 id=123 data-nosnippet>123</a>
-<a href=#124 id=124 data-nosnippet>124</a>    api.get_module::&lt;fedimint_lnv2_server::Lightning&gt;()
-<a href=#125 id=125 data-nosnippet>125</a>        .expect(<span class="string">"Route only mounted when Lightning V2 module exists"</span>)
-<a href=#126 id=126 data-nosnippet>126</a>        .add_gateway_ui(form.gateway_url)
-<a href=#127 id=127 data-nosnippet>127</a>        .<span class="kw">await</span>;
-<a href=#128 id=128 data-nosnippet>128</a>
-<a href=#129 id=129 data-nosnippet>129</a>    Redirect::to(<span class="string">"/"</span>).into_response()
-<a href=#130 id=130 data-nosnippet>130</a>}
-<a href=#131 id=131 data-nosnippet>131</a>
-<a href=#132 id=132 data-nosnippet>132</a><span class="comment">// Handler for removing a gateway
-<a href=#133 id=133 data-nosnippet>133</a></span><span class="kw">pub async fn </span>remove_gateway(
-<a href=#134 id=134 data-nosnippet>134</a>    State(api): State&lt;DynDashboardApi&gt;,
-<a href=#135 id=135 data-nosnippet>135</a>    jar: CookieJar,
-<a href=#136 id=136 data-nosnippet>136</a>    Form(form): Form&lt;GatewayForm&gt;,
-<a href=#137 id=137 data-nosnippet>137</a>) -&gt; <span class="kw">impl </span>IntoResponse {
-<a href=#138 id=138 data-nosnippet>138</a>    <span class="kw">if </span>!check_auth(api.auth().<span class="kw">await</span>, <span class="kw-2">&amp;</span>jar).<span class="kw">await </span>{
-<a href=#139 id=139 data-nosnippet>139</a>        <span class="kw">return </span>Redirect::to(<span class="string">"/login"</span>).into_response();
-<a href=#140 id=140 data-nosnippet>140</a>    }
-<a href=#141 id=141 data-nosnippet>141</a>
-<a href=#142 id=142 data-nosnippet>142</a>    api.get_module::&lt;fedimint_lnv2_server::Lightning&gt;()
-<a href=#143 id=143 data-nosnippet>143</a>        .expect(<span class="string">"Route only mounted when Lightning V2 module exists"</span>)
-<a href=#144 id=144 data-nosnippet>144</a>        .remove_gateway_ui(form.gateway_url)
-<a href=#145 id=145 data-nosnippet>145</a>        .<span class="kw">await</span>;
-<a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a>    Redirect::to(<span class="string">"/"</span>).into_response()
-<a href=#148 id=148 data-nosnippet>148</a>}</code></pre></div></section></main></body></html>
+<a href=#124 id=124 data-nosnippet>124</a>    state
+<a href=#125 id=125 data-nosnippet>125</a>        .api
+<a href=#126 id=126 data-nosnippet>126</a>        .get_module::&lt;fedimint_lnv2_server::Lightning&gt;()
+<a href=#127 id=127 data-nosnippet>127</a>        .expect(<span class="string">"Route only mounted when Lightning V2 module exists"</span>)
+<a href=#128 id=128 data-nosnippet>128</a>        .add_gateway_ui(form.gateway_url)
+<a href=#129 id=129 data-nosnippet>129</a>        .<span class="kw">await</span>;
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a>    Redirect::to(<span class="string">"/"</span>).into_response()
+<a href=#132 id=132 data-nosnippet>132</a>}
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a><span class="comment">// Handler for removing a gateway
+<a href=#135 id=135 data-nosnippet>135</a></span><span class="kw">pub async fn </span>remove_gateway(
+<a href=#136 id=136 data-nosnippet>136</a>    State(state): State&lt;AuthState&lt;DynDashboardApi&gt;&gt;,
+<a href=#137 id=137 data-nosnippet>137</a>    jar: CookieJar,
+<a href=#138 id=138 data-nosnippet>138</a>    Form(form): Form&lt;GatewayForm&gt;,
+<a href=#139 id=139 data-nosnippet>139</a>) -&gt; <span class="kw">impl </span>IntoResponse {
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">if </span>!check_auth(<span class="kw-2">&amp;</span>state.auth_cookie_name, <span class="kw-2">&amp;</span>state.auth_cookie_value, <span class="kw-2">&amp;</span>jar).<span class="kw">await </span>{
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="kw">return </span>Redirect::to(<span class="string">"/login"</span>).into_response();
+<a href=#142 id=142 data-nosnippet>142</a>    }
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>    state
+<a href=#145 id=145 data-nosnippet>145</a>        .api
+<a href=#146 id=146 data-nosnippet>146</a>        .get_module::&lt;fedimint_lnv2_server::Lightning&gt;()
+<a href=#147 id=147 data-nosnippet>147</a>        .expect(<span class="string">"Route only mounted when Lightning V2 module exists"</span>)
+<a href=#148 id=148 data-nosnippet>148</a>        .remove_gateway_ui(form.gateway_url)
+<a href=#149 id=149 data-nosnippet>149</a>        .<span class="kw">await</span>;
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>    Redirect::to(<span class="string">"/"</span>).into_response()
+<a href=#152 id=152 data-nosnippet>152</a>}</code></pre></div></section></main></body></html>

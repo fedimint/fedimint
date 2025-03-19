@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["server_endpoints"],"struct":["ConfigGenApi","ConfigGenState","LocalParams"]};
