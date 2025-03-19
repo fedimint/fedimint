@@ -22,7 +22,9 @@ use crate::{
 pub(crate) struct SetupInput {
     pub password: String,
     pub name: String,
-    pub federation_name: Option<String>,
+    #[serde(default)]
+    pub is_lead: bool,
+    pub federation_name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,24 +75,38 @@ async fn setup_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoRes
 
     let content = html! {
         form method="post" action="/" {
-            div class="form-group mb-4" {
-                label for="name" class="form-label" { "Guardian Name" }
-                input type="text" class="form-control" id="name" name="name"
-                     placeholder="Your guardian name"
-                     required;
-            }
-
-            div class="form-group mb-4" {
-                label for="federation_name" class="form-label" { "Federation Name (optional)" }
-                input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
-                div class="field-description" {
-                    "The federation name needs to be set by exactly one guardian."
+            style {
+                r#"
+                .toggle-content {
+                    display: none;
                 }
+                
+                .toggle-control:checked ~ .toggle-content {
+                    display: block;
+                }
+                "#
             }
 
             div class="form-group mb-4" {
-                label for="password" class="form-label" { "Guardian Password" }
+                input type="text" class="form-control" id="name" name="name" placeholder="Guardian name" required;
+            }
+
+            div class="form-group mb-4" {
                 input type="password" class="form-control" id="password" name="password" placeholder="Secure password" required;
+            }
+
+            div class="form-group mb-4" {
+                div class="form-check" {
+                    input type="checkbox" class="form-check-input toggle-control" id="is_lead" name="is_lead" value="true";
+
+                    label class="form-check-label" for="is_lead" {
+                        "I am the guardian setting up the global configuration for this federation."
+                    }
+
+                    div class="toggle-content mt-3" {
+                        input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
+                    }
+                }
             }
 
             div class="button-container" {
@@ -107,13 +123,16 @@ async fn setup_submit(
     State(state): State<AuthState<DynSetupApi>>,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
+    // Only use federation_name if is_lead is true
+    let federation_name = if input.is_lead {
+        Some(input.federation_name)
+    } else {
+        None
+    };
+
     match state
         .api
-        .set_local_parameters(
-            ApiAuth(input.password.clone()),
-            input.name,
-            input.federation_name,
-        )
+        .set_local_parameters(ApiAuth(input.password), input.name, federation_name)
         .await
     {
         Ok(_) => Redirect::to("/login").into_response(),
@@ -198,21 +217,9 @@ async fn federation_setup(
         hr class="my-4" {}
 
         section class="mb-4" {
-            h4 class="mb-3" { "Connect with Other Guardians" }
-
-            @if !connected_peers.is_empty() {
-                div class="text-center" {
-                    form method="post" action="/reset-connection-info" {
-                        button type="submit" class="btn btn-warning setup-btn" {
-                            "Reset Guardian Connections"
-                        }
-                    }
-                }
-
-                ul class="list-group mb-4" {
-                    @for peer in connected_peers {
-                        li class="list-group-item" { (peer) }
-                    }
+            ul class="list-group mb-4" {
+                @for peer in connected_peers {
+                    li class="list-group-item" { (peer) }
                 }
             }
 
@@ -222,17 +229,25 @@ async fn federation_setup(
                         placeholder="Paste connection info from another guardian" required;
                 }
 
-                div class="text-center" {
-                    button type="submit" class="btn btn-primary setup-btn" { "Add Guardian" }
+                div class="row mt-3" {
+                    div class="col-6" {
+                        button type="button" class="btn btn-warning w-100" onclick="document.getElementById('reset-form').submit();" {
+                            "Reset Guardians"
+                        }
+                    }
+
+                    div class="col-6" {
+                        button type="submit" class="btn btn-primary w-100" { "Add Guardian" }
+                    }
                 }
             }
+
+            form id="reset-form" method="post" action="/reset-connection-info" class="d-none" {}
         }
 
         hr class="my-4" {}
 
         section class="mb-4" {
-            h4 class="mb-3" { "Launch Federation" }
-
             div class="alert alert-warning mb-4" {
                 "Make sure all information is correct and every guardian is ready before launching the federation. This process cannot be reversed once started."
             }
@@ -264,7 +279,6 @@ async fn add_peer_handler(
         Ok(..) => Redirect::to("/federation-setup").into_response(),
         Err(e) => {
             let content = html! {
-                h2 class="mb-4 text-center" { "Error Adding Guardian" }
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
                     a href="/federation-setup" class="btn btn-primary setup-btn" { "Back to Setup" }

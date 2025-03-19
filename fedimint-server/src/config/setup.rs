@@ -147,31 +147,25 @@ impl ISetupApi for SetupApi {
         name: String,
         federation_name: Option<String>,
     ) -> anyhow::Result<String> {
+        ensure!(!name.is_empty(), "The guardian name is empty");
+
+        ensure!(!auth.0.is_empty(), "The password is empty");
+
         ensure!(
             auth.0.trim() == auth.0,
-            "Password contains leading/trailing whitespace",
+            "The password contains leading/trailing whitespace",
         );
+
+        if let Some(federation_name) = federation_name.as_ref() {
+            ensure!(!federation_name.is_empty(), "The federation name is empty");
+        }
 
         let mut state = self.state.lock().await;
 
-        if let Some(lp) = state.local_params.clone() {
-            ensure!(
-                lp.auth == auth,
-                "Local parameters have already been set with a different auth."
-            );
-
-            ensure!(
-                lp.name == name,
-                "Local parameters have already been set with a different name."
-            );
-
-            ensure!(
-                lp.federation_name == federation_name,
-                "Local parameters have already been set with a different federation name."
-            );
-
-            return Ok(lp.connection_info().encode_base32());
-        }
+        ensure!(
+            state.local_params.is_none(),
+            "Local parameters have already been set"
+        );
 
         let lp = match self.settings.networking {
             NetworkingStack::Tcp => {
