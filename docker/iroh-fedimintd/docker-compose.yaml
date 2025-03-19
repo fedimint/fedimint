@@ -1,0 +1,17 @@
+services:
+  fedimintd:
+    image: fedimint/fedimintd:master
+    ports:
+      - 8175:8175
+    volumes:
+      - fedimintd_data:/data
+    environment:
+      - FM_FORCE_IROH=1
+      - FM_BITCOIN_NETWORK=signet
+      - FM_BITCOIN_RPC_KIND=esplora
+      - FM_BITCOIN_RPC_URL=https://mutinynet.com/api
+      - FM_BIND_UI=0.0.0.0:8175
+    restart: always
+
+volumes:
+  fedimintd_data:

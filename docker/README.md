@@ -14,3 +14,12 @@ of this directory in the past releases for more info.
 
 For help please try [Fedimint Github Discussions](https://github.com/fedimint/fedimint/discussions)
 or `#mint-ops` channel on [Fedimint's Discord server](https://chat.fedimint.org/).
+
+## Iroh
+
+We have an additional `docker-compose.yaml` that supports Iroh, but is considered experimental. To try it:
+
+```
+cd iroh-fedimintd
+docker compose up -d
+```
