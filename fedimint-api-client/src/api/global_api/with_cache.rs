@@ -11,7 +11,7 @@ use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, ADD_PEER_CONNECTION_INFO_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, ADD_PEER_SETUP_CODE_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT,
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT,
     BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
     FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT,
@@ -381,7 +381,7 @@ where
         auth: ApiAuth,
     ) -> FederationResult<String> {
         self.request_admin(
-            ADD_PEER_CONNECTION_INFO_ENDPOINT,
+            ADD_PEER_SETUP_CODE_ENDPOINT,
             ApiRequestErased::new(info),
             auth,
         )

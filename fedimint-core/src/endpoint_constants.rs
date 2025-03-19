@@ -1,4 +1,4 @@
-pub const ADD_PEER_CONNECTION_INFO_ENDPOINT: &str = "add_peer_connection_info";
+pub const ADD_PEER_SETUP_CODE_ENDPOINT: &str = "add_peer_setup_code";
 pub const AUDIT_ENDPOINT: &str = "audit";
 pub const GUARDIAN_CONFIG_BACKUP_ENDPOINT: &str = "download_guardian_backup";
 pub const AUTH_ENDPOINT: &str = "auth";

@@ -247,14 +247,14 @@ pub struct ConfigGenParams {
     /// Secret API auth string
     pub api_auth: ApiAuth,
     /// Endpoints of all servers
-    pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
+    pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 /// Connection information sent between peers in order to start config gen
-pub struct PeerConnectionInfo {
+pub struct PeerSetupCode {
     /// Name of the peer, used in TLS auth
     pub name: String,
     /// The peer's api and p2p endpoint
@@ -263,7 +263,7 @@ pub struct PeerConnectionInfo {
     pub federation_name: Option<String>,
 }
 
-impl PeerConnectionInfo {
+impl PeerSetupCode {
     pub fn encode_base32(&self) -> String {
         format!(
             "fedimint{}",

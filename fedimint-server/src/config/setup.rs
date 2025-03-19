@@ -12,7 +12,7 @@ use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
-    ADD_PEER_CONNECTION_INFO_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
+    ADD_PEER_SETUP_CODE_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
     START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::{
@@ -32,7 +32,7 @@ use tokio_rustls::rustls;
 use tracing::warn;
 
 use super::PeerEndpoints;
-use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerConnectionInfo};
+use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerSetupCode};
 use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
 
@@ -42,7 +42,7 @@ pub struct SetupState {
     /// Our local connection
     local_params: Option<LocalParams>,
     /// Connection info received from other guardians
-    connection_info: BTreeSet<PeerConnectionInfo>,
+    setup_codes: BTreeSet<PeerSetupCode>,
 }
 
 #[derive(Clone, Debug)]
@@ -65,9 +65,8 @@ pub struct LocalParams {
 }
 
 impl LocalParams {
-    /// Convert to PeerConnectionInfo
-    pub fn connection_info(&self) -> PeerConnectionInfo {
-        PeerConnectionInfo {
+    pub fn setup_code(&self) -> PeerSetupCode {
+        PeerSetupCode {
             name: self.name.clone(),
             endpoints: self.endpoints.clone(),
             federation_name: self.federation_name.clone(),
@@ -108,13 +107,13 @@ impl SetupApi {
 
 #[async_trait]
 impl ISetupApi for SetupApi {
-    async fn our_connection_info(&self) -> Option<String> {
+    async fn setup_code(&self) -> Option<String> {
         self.state
             .lock()
             .await
             .local_params
             .as_ref()
-            .map(|lp| lp.connection_info().encode_base32())
+            .map(|lp| lp.setup_code().encode_base32())
     }
 
     async fn auth(&self) -> Option<ApiAuth> {
@@ -130,15 +129,15 @@ impl ISetupApi for SetupApi {
         self.state
             .lock()
             .await
-            .connection_info
+            .setup_codes
             .clone()
             .into_iter()
             .map(|info| info.name)
             .collect()
     }
 
-    async fn reset_connection_info(&self) {
-        self.state.lock().await.connection_info.clear();
+    async fn reset_peers(&self) {
+        self.state.lock().await.setup_codes.clear();
     }
 
     async fn set_local_parameters(
@@ -223,15 +222,15 @@ impl ISetupApi for SetupApi {
 
         state.local_params = Some(lp.clone());
 
-        Ok(lp.connection_info().encode_base32())
+        Ok(lp.setup_code().encode_base32())
     }
 
-    async fn add_peer_connection_info(&self, info: String) -> anyhow::Result<String> {
-        let info = PeerConnectionInfo::decode_base32(&info)?;
+    async fn add_peer_setup_code(&self, info: String) -> anyhow::Result<String> {
+        let info = PeerSetupCode::decode_base32(&info)?;
 
         let mut state = self.state.lock().await;
 
-        if state.connection_info.contains(&info) {
+        if state.setup_codes.contains(&info) {
             return Ok(info.name.clone());
         }
 
@@ -241,7 +240,7 @@ impl ISetupApi for SetupApi {
             .expect("The endpoint is authenticated.");
 
         ensure!(
-            info != local_params.connection_info(),
+            info != local_params.setup_code(),
             "You cannot add you own connection info"
         );
 
@@ -251,9 +250,9 @@ impl ISetupApi for SetupApi {
         );
 
         if let Some(federation_name) = state
-            .connection_info
+            .setup_codes
             .iter()
-            .chain(once(&local_params.connection_info()))
+            .chain(once(&local_params.setup_code()))
             .find_map(|info| info.federation_name.clone())
         {
             ensure!(
@@ -262,7 +261,7 @@ impl ISetupApi for SetupApi {
             );
         }
 
-        state.connection_info.insert(info.clone());
+        state.setup_codes.insert(info.clone());
 
         Ok(info.name)
     }
@@ -275,20 +274,25 @@ impl ISetupApi for SetupApi {
             .clone()
             .expect("The endpoint is authenticated.");
 
-        let our_peer_info = local_params.connection_info();
+        let our_setup_code = local_params.setup_code();
 
-        state.connection_info.insert(our_peer_info.clone());
+        state.setup_codes.insert(our_setup_code.clone());
+
+        ensure!(
+            state.setup_codes.len() == 1 || state.setup_codes.len() >= 4,
+            "The number of guardians is invalid"
+        );
 
         let federation_name = state
-            .connection_info
+            .setup_codes
             .iter()
             .find_map(|info| info.federation_name.clone())
             .context("We need one guardian to configure the federations name")?;
 
         let our_id = state
-            .connection_info
+            .setup_codes
             .iter()
-            .position(|info| info == &our_peer_info)
+            .position(|info| info == &our_setup_code)
             .expect("We inserted the key above.");
 
         let params = ConfigGenParams {
@@ -299,7 +303,7 @@ impl ISetupApi for SetupApi {
             api_auth: local_params.auth,
             peers: (0..)
                 .map(|i| PeerId::from(i as u16))
-                .zip(state.connection_info.clone().into_iter())
+                .zip(state.setup_codes.clone().into_iter())
                 .collect(),
             meta: BTreeMap::from_iter(vec![(
                 META_FEDERATION_NAME_KEY.to_string(),
@@ -365,12 +369,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
             }
         },
         api_endpoint! {
-            ADD_PEER_CONNECTION_INFO_ENDPOINT,
+            ADD_PEER_SETUP_CODE_ENDPOINT,
             ApiVersion::new(0, 0),
             async |config: &SetupApi, context, info: String| -> String {
                 check_auth(context)?;
 
-                config.add_peer_connection_info(info.clone())
+                config.add_peer_setup_code(info.clone())
                     .await
                     .map_err(|e|ApiError::bad_request(e.to_string()))
             }

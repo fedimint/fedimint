@@ -69,7 +69,7 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
 
 // GET handler for the /setup route (display the setup form)
 async fn setup_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.our_connection_info().await.is_some() {
+    if state.api.setup_code().await.is_some() {
         return Redirect::to("/federation-setup").into_response();
     }
 
@@ -151,7 +151,7 @@ async fn setup_submit(
 
 // GET handler for the /login route (display the login form)
 async fn login_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.our_connection_info().await.is_none() {
+    if state.api.setup_code().await.is_none() {
         return Redirect::to("/").into_response();
     }
 
@@ -190,7 +190,7 @@ async fn federation_setup(
 
     let our_connection_info = state
         .api
-        .our_connection_info()
+        .setup_code()
         .await
         .expect("Successful authentication ensures that the local parameters have been set");
 
@@ -271,7 +271,7 @@ async fn add_peer_handler(
         return Redirect::to("/login").into_response();
     }
 
-    match state.api.add_peer_connection_info(input.peer_info).await {
+    match state.api.add_peer_setup_code(input.peer_info).await {
         Ok(..) => Redirect::to("/federation-setup").into_response(),
         Err(e) => {
             let content = html! {
@@ -336,7 +336,7 @@ async fn reset_peers_handler(
         return Redirect::to("/login").into_response();
     }
 
-    state.api.reset_connection_info().await;
+    state.api.reset_peers().await;
 
     Redirect::to("/federation-setup").into_response()
 }
