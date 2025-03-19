@@ -1124,7 +1124,8 @@ fn to_command(cli: Vec<String>) -> Command {
 }
 
 pub fn supports_lnv2() -> bool {
-    is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV)
+    std::env::var_os(FM_ENABLE_MODULE_LNV2_ENV).is_none()
+        || is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV)
 }
 
 /// Returns true if running backwards-compatibility tests
