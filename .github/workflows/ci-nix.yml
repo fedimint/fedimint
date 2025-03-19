@@ -46,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -95,7 +95,7 @@ jobs:
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -140,7 +140,7 @@ jobs:
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -223,7 +223,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -283,7 +283,7 @@ jobs:
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -312,7 +312,7 @@ jobs:
         uses: ./.github/actions/prepare
       - uses: actions/checkout@v4
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -431,7 +431,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
-      - uses: cachix/cachix-action@v15
+      - uses: cachix/cachix-action@v16
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
