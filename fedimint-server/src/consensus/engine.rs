@@ -67,11 +67,6 @@ pub struct ConsensusEngine {
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
     pub connections: DynP2PConnections<P2PMessage>,
-    pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
-    /// Just a string version of `cfg.local.identity` for performance
-    pub self_id_str: String,
-    /// Just a string version of peer ids for performance
-    pub peer_id_str: Vec<String>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub checkpoint_retention: u64,
@@ -591,10 +586,10 @@ impl ConsensusEngine {
         item: ConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
-        let peer_id_str = &self.peer_id_str[peer.to_usize()];
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item").level(Level::TRACE);
+
         let timing_prom = CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS
-            .with_label_values(&[peer_id_str])
+            .with_label_values(&[&peer.to_usize().to_string()])
             .start_timer();
 
         trace!(
@@ -604,15 +599,11 @@ impl ConsensusEngine {
             "Processing consensus item"
         );
 
-        self.ci_status_senders
-            .get(&peer)
-            .expect("No ci status sender for peer {peer}")
-            .send(Some(session_index))
-            .inspect_err(|e| warn!(target: LOG_CONSENSUS, "Failed to update ci status {e}"))
-            .ok();
-
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
-            .with_label_values(&[&self.self_id_str, peer_id_str])
+            .with_label_values(&[
+                &self.cfg.local.identity.to_usize().to_string(),
+                &peer.to_usize().to_string(),
+            ])
             .set(session_index as i64);
 
         let mut dbtx = self.db.begin_transaction().await;
@@ -678,6 +669,7 @@ impl ConsensusEngine {
                     module_instance_id,
                 )
                 .await;
+
             timing_prom.observe_duration();
         }
 
@@ -695,8 +687,9 @@ impl ConsensusEngine {
             .expect("Committing consensus epoch failed");
 
         CONSENSUS_ITEMS_PROCESSED_TOTAL
-            .with_label_values(&[&self.peer_id_str[peer.to_usize()]])
+            .with_label_values(&[&peer.to_usize().to_string()])
             .inc();
+
         timing_prom.observe_duration();
 
         Ok(())

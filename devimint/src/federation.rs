@@ -10,7 +10,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::ClientModule;
-use fedimint_core::admin_client::{ServerStatus, ServerStatusLegacy};
+use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -305,11 +305,8 @@ impl Federation {
         let mut peer_to_env_vars_map = BTreeMap::new();
 
         let peers: Vec<_> = num_peers.peer_ids().collect();
-        let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
-            &peers,
-            process_mgr.globals.FM_FEDERATION_BASE_PORT,
-            &ServerModuleConfigGenParamsRegistry::default(),
-        )?;
+        let params: HashMap<PeerId, ConfigGenParams> =
+            local_config_gen_params(&peers, process_mgr.globals.FM_FEDERATION_BASE_PORT)?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
@@ -335,7 +332,7 @@ impl Federation {
                 )
                 .await?,
             );
-            let admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
+            let admin_client = DynGlobalApi::from_setup_endpoint(
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
             )
@@ -992,7 +989,7 @@ pub async fn run_cli_dkg(
         .set_config_gen_connections(auth_for(leader_id), leader_endpoint, &leader_name, None)
         .await?;
 
-    let server_gen_params = &params[leader_id].modules;
+    let server_gen_params = ServerModuleConfigGenParamsRegistry::default();
 
     debug!(target: LOG_DEVIMINT, "calling set_config_gen_params for leader");
     cli_set_config_gen_params(
@@ -1109,16 +1106,16 @@ pub async fn run_cli_dkg_v2(
     let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].api_auth };
 
     for (peer, endpoint) in &endpoints {
-        let status = poll("awaiting-server-status", || async {
+        let status = poll("awaiting-setup-status-awaiting-local-params", || async {
             crate::util::FedimintCli
-                .server_status(auth_for(peer), endpoint)
+                .setup_status(auth_for(peer), endpoint)
                 .await
                 .map_err(ControlFlow::Continue)
         })
         .await
         .unwrap();
 
-        assert_eq!(status, ServerStatus::AwaitingLocalParams);
+        assert_eq!(status, SetupStatus::AwaitingLocalParams);
     }
 
     debug!(target: LOG_DEVIMINT, "Setting local parameters...");
@@ -1145,7 +1142,7 @@ pub async fn run_cli_dkg_v2(
         for (p, endpoint) in &endpoints {
             if p != peer {
                 crate::util::FedimintCli
-                    .add_peer_connection_info(&info, auth_for(p), endpoint)
+                    .add_peer(&info, auth_for(p), endpoint)
                     .await?;
             }
         }
@@ -1160,16 +1157,16 @@ pub async fn run_cli_dkg_v2(
     }
 
     for (peer, endpoint) in &endpoints {
-        let status = poll("awaiting-server-status", || async {
+        let status = poll("awaiting-setup-status-consensus-is-running", || async {
             crate::util::FedimintCli
-                .server_status(auth_for(peer), endpoint)
+                .setup_status(auth_for(peer), endpoint)
                 .await
                 .map_err(ControlFlow::Continue)
         })
         .await
         .unwrap();
 
-        assert_eq!(status, ServerStatus::ConsensusRunning);
+        assert_eq!(status, SetupStatus::ConsensusIsRunning);
     }
 
     debug!(target: LOG_DEVIMINT, "Consensus is running...");

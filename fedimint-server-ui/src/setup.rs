@@ -14,13 +14,17 @@ use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
-use crate::{LoginInput, check_auth, common_styles, login_form_response, login_submit_response};
+use crate::{
+    AuthState, LoginInput, check_auth, common_styles, login_form_response, login_submit_response,
+};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SetupInput {
     pub password: String,
     pub name: String,
-    pub federation_name: Option<String>,
+    #[serde(default)]
+    pub is_lead: bool,
+    pub federation_name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,31 +68,45 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
 }
 
 // GET handler for the /setup route (display the setup form)
-async fn setup_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse {
-    if config_api.our_connection_info().await.is_some() {
+async fn setup_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
+    if state.api.setup_code().await.is_some() {
         return Redirect::to("/federation-setup").into_response();
     }
 
     let content = html! {
         form method="post" action="/" {
-            div class="form-group mb-4" {
-                label for="name" class="form-label" { "Guardian Name" }
-                input type="text" class="form-control" id="name" name="name"
-                     placeholder="Your guardian name"
-                     required;
-            }
-
-            div class="form-group mb-4" {
-                label for="federation_name" class="form-label" { "Federation Name (optional)" }
-                input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
-                div class="field-description" {
-                    "The federation name needs to be set by exactly one guardian."
+            style {
+                r#"
+                .toggle-content {
+                    display: none;
                 }
+                
+                .toggle-control:checked ~ .toggle-content {
+                    display: block;
+                }
+                "#
             }
 
             div class="form-group mb-4" {
-                label for="password" class="form-label" { "Guardian Password" }
+                input type="text" class="form-control" id="name" name="name" placeholder="Guardian name" required;
+            }
+
+            div class="form-group mb-4" {
                 input type="password" class="form-control" id="password" name="password" placeholder="Secure password" required;
+            }
+
+            div class="form-group mb-4" {
+                div class="form-check" {
+                    input type="checkbox" class="form-check-input toggle-control" id="is_lead" name="is_lead" value="true";
+
+                    label class="form-check-label" for="is_lead" {
+                        "I am the guardian setting up the global configuration for this federation."
+                    }
+
+                    div class="toggle-content mt-3" {
+                        input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
+                    }
+                }
             }
 
             div class="button-container" {
@@ -102,15 +120,19 @@ async fn setup_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse 
 
 // POST handler for the /setup route (process the password setup form)
 async fn setup_submit(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
-    match config_api
-        .set_local_parameters(
-            ApiAuth(input.password.clone()),
-            input.name,
-            input.federation_name,
-        )
+    // Only use federation_name if is_lead is true
+    let federation_name = if input.is_lead {
+        Some(input.federation_name)
+    } else {
+        None
+    };
+
+    match state
+        .api
+        .set_local_parameters(ApiAuth(input.password), input.name, federation_name)
         .await
     {
         Ok(_) => Redirect::to("/login").into_response(),
@@ -118,7 +140,7 @@ async fn setup_submit(
             let content = html! {
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/" class="btn btn-primary setup-btn" { "Try Again" }
+                    a href="/" class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -128,8 +150,8 @@ async fn setup_submit(
 }
 
 // GET handler for the /login route (display the login form)
-async fn login_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse {
-    if config_api.our_connection_info().await.is_none() {
+async fn login_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
+    if state.api.setup_code().await.is_none() {
         return Redirect::to("/").into_response();
     }
 
@@ -138,47 +160,46 @@ async fn login_form(State(config_api): State<DynSetupApi>) -> impl IntoResponse 
 
 // POST handler for the /login route (authenticate and set session cookie)
 async fn login_submit(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
+    let auth = match state.api.auth().await {
         Some(auth) => auth,
         None => return Redirect::to("/").into_response(),
     };
 
-    login_submit_response(auth, jar, input).into_response()
+    login_submit_response(
+        auth,
+        state.auth_cookie_name,
+        state.auth_cookie_value,
+        jar,
+        input,
+    )
+    .into_response()
 }
 
 // GET handler for the /federation-setup route (main federation management page)
 async fn federation_setup(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    let our_connection_info = config_api
-        .our_connection_info()
+    let our_connection_info = state
+        .api
+        .setup_code()
         .await
         .expect("Successful authentication ensures that the local parameters have been set");
 
-    let connected_peers = config_api.connected_peers().await;
+    let connected_peers = state.api.connected_peers().await;
 
     let content = html! {
         section class="mb-4" {
             div class="alert alert-info mb-3" {
-                "Share this code with other guardians:"
-            }
-
-            div class="connection-code card p-3 mb-3" {
-                code { (our_connection_info) }
+                (our_connection_info)
             }
 
             div class="text-center" {
@@ -192,43 +213,37 @@ async fn federation_setup(
         hr class="my-4" {}
 
         section class="mb-4" {
-            h4 class="mb-3" { "Connect with Other Guardians" }
-
-            @if !connected_peers.is_empty() {
-                div class="mb-4" {
-                    ul class="list-group mb-4" {
-                        @for peer in connected_peers {
-                            li class="list-group-item" { (peer) }
-                        }
-
-                        div class="text-center" {
-                            form method="post" action="/reset-connection-info" {
-                                button type="submit" class="btn btn-warning setup-btn" {
-                                    "Reset Guardian Connections"
-                                }
-                            }
-                        }
-                    }
+            ul class="list-group mb-4" {
+                @for peer in connected_peers {
+                    li class="list-group-item" { (peer) }
                 }
             }
 
             form method="post" action="/add-connection-info" {
                 div class="mb-3" {
                     input type="text" class="form-control mb-2" id="peer_info" name="peer_info"
-                        placeholder="Paste connection info from another guardian" required;
+                        placeholder="Paste setup code from fellow guardian" required;
                 }
 
-                div class="text-center" {
-                    button type="submit" class="btn btn-primary setup-btn" { "Add Guardian" }
+                div class="row mt-3" {
+                    div class="col-6" {
+                        button type="button" class="btn btn-warning w-100" onclick="document.getElementById('reset-form').submit();" {
+                            "Reset Guardians"
+                        }
+                    }
+
+                    div class="col-6" {
+                        button type="submit" class="btn btn-primary w-100" { "Add Guardian" }
+                    }
                 }
             }
+
+            form id="reset-form" method="post" action="/reset-connection-info" class="d-none" {}
         }
 
         hr class="my-4" {}
 
         section class="mb-4" {
-            h4 class="mb-3" { "Launch Federation" }
-
             div class="alert alert-warning mb-4" {
                 "Make sure all information is correct and every guardian is ready before launching the federation. This process cannot be reversed once started."
             }
@@ -248,27 +263,21 @@ async fn federation_setup(
 
 // POST handler for adding peer connection info
 async fn add_peer_handler(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
     Form(input): Form<PeerInfoInput>,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    match config_api.add_peer_connection_info(input.peer_info).await {
+    match state.api.add_peer_setup_code(input.peer_info).await {
         Ok(..) => Redirect::to("/federation-setup").into_response(),
         Err(e) => {
             let content = html! {
-                h2 class="mb-4 text-center" { "Error Adding Guardian" }
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Back to Setup" }
+                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -279,19 +288,14 @@ async fn add_peer_handler(
 
 // POST handler for starting the DKG process
 async fn start_dkg_handler(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    match config_api.start_dkg().await {
+    match state.api.start_dkg().await {
         Ok(()) => {
             // Show simple DKG success page
             let content = html! {
@@ -303,7 +307,7 @@ async fn start_dkg_handler(
                 }
                 div class="button-container mt-4" {
                     a href="/" class="btn btn-primary setup-btn" {
-                        "Go to Guardian Dashboard"
+                        "Go to Dashboard"
                     }
                 }
             };
@@ -312,10 +316,9 @@ async fn start_dkg_handler(
         }
         Err(e) => {
             let content = html! {
-                h2 class="mb-4 text-center" { "Error Starting Federation" }
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Back to Setup" }
+                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -326,25 +329,20 @@ async fn start_dkg_handler(
 
 // POST handler for resetting peer connection info
 async fn reset_peers_handler(
-    State(config_api): State<DynSetupApi>,
+    State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
-    let auth = match config_api.auth().await {
-        Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
-    };
-
-    if !check_auth(auth, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    config_api.reset_connection_info().await;
+    state.api.reset_peers().await;
 
     Redirect::to("/federation-setup").into_response()
 }
 
 pub fn start(
-    config_api: DynSetupApi,
+    api: DynSetupApi,
     ui_bind: SocketAddr,
     task_handle: TaskHandle,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
@@ -355,7 +353,7 @@ pub fn start(
         .route("/add-connection-info", post(add_peer_handler))
         .route("/reset-connection-info", post(reset_peers_handler))
         .route("/start-dkg", post(start_dkg_handler))
-        .with_state(config_api);
+        .with_state(AuthState::new(api));
 
     Box::pin(async move {
         let listener = TcpListener::bind(ui_bind)

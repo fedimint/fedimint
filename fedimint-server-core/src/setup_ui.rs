@@ -10,7 +10,7 @@ pub type DynSetupApi = Arc<dyn ISetupApi + Send + Sync + 'static>;
 #[async_trait]
 pub trait ISetupApi {
     /// Get our connection info encoded as base32 string
-    async fn our_connection_info(&self) -> Option<String>;
+    async fn setup_code(&self) -> Option<String>;
 
     /// Get the auth token for API calls
     async fn auth(&self) -> Option<ApiAuth>;
@@ -18,8 +18,8 @@ pub trait ISetupApi {
     /// Get list of names of connected peers
     async fn connected_peers(&self) -> Vec<String>;
 
-    /// Reset all connection info (remove all peers)
-    async fn reset_connection_info(&self);
+    /// Reset the set of other guardians
+    async fn reset_peers(&self);
 
     /// Set local guardian parameters
     async fn set_local_parameters(
@@ -30,7 +30,7 @@ pub trait ISetupApi {
     ) -> Result<String>;
 
     /// Add peer connection info
-    async fn add_peer_connection_info(&self, info: String) -> Result<String>;
+    async fn add_peer_setup_code(&self, info: String) -> Result<String>;
 
     /// Start the distributed key generation process
     async fn start_dkg(&self) -> Result<()>;

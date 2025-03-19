@@ -39,10 +39,10 @@ use tracing::info;
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p_connector::TlsConfig;
 
-pub mod api;
-pub mod distributedgen;
+pub mod dkg;
 pub mod io;
 pub mod peer_handle;
+pub mod setup;
 
 /// The default maximum open connections the API can handle
 pub const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
@@ -247,16 +247,14 @@ pub struct ConfigGenParams {
     /// Secret API auth string
     pub api_auth: ApiAuth,
     /// Endpoints of all servers
-    pub peers: BTreeMap<PeerId, PeerConnectionInfo>,
+    pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
-    /// Module init params (also contains local params from us)
-    pub modules: ServerModuleConfigGenParamsRegistry,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 /// Connection information sent between peers in order to start config gen
-pub struct PeerConnectionInfo {
+pub struct PeerSetupCode {
     /// Name of the peer, used in TLS auth
     pub name: String,
     /// The peer's api and p2p endpoint
@@ -265,7 +263,7 @@ pub struct PeerConnectionInfo {
     pub federation_name: Option<String>,
 }
 
-impl PeerConnectionInfo {
+impl PeerSetupCode {
     pub fn encode_base32(&self) -> String {
         format!(
             "fedimint{}",

@@ -15,9 +15,7 @@ use base64::Engine as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError, PeerError};
-use fedimint_core::admin_client::{
-    ConfigGenConnectionsRequest, PeerServerParams, ServerStatus, ServerStatusLegacy,
-};
+use fedimint_core::admin_client::{PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
@@ -431,7 +429,7 @@ impl DynGlobalApi {
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
     // actions through Tor ? Should we add the `Connector` choice to
     // ConfigParams then ?
-    pub async fn from_pre_peer_id_admin_endpoint(
+    pub async fn from_setup_endpoint(
         url: SafeUrl,
         api_secret: &Option<String>,
     ) -> anyhow::Result<Self> {
@@ -490,7 +488,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Must be called first before any other calls to the API
     async fn set_password(&self, auth: ApiAuth) -> FederationResult<()>;
 
-    async fn server_status(&self, auth: ApiAuth) -> FederationResult<ServerStatus>;
+    async fn setup_status(&self, auth: ApiAuth) -> FederationResult<SetupStatus>;
 
     async fn set_local_params(
         &self,
@@ -505,16 +503,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         auth: ApiAuth,
     ) -> FederationResult<String>;
 
-    /// During config gen, sets the server connection containing our endpoints
-    ///
-    /// Optionally sends our server info to the config gen leader using
-    /// `add_config_gen_peer`
-    async fn set_config_gen_connections(
-        &self,
-        info: ConfigGenConnectionsRequest,
-        auth: ApiAuth,
-    ) -> FederationResult<()>;
-
     /// During config gen, used for an API-to-API call that adds a peer's server
     /// connection info to the leader.
     ///
@@ -522,13 +510,13 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// `set_server_connections` so clients should retry.
     ///
     /// This call is not authenticated because it's guardian-to-guardian
-    async fn add_config_gen_peer(&self, peer: PeerServerParams) -> FederationResult<()>;
+    async fn add_config_gen_peer(&self, peer: PeerServerParamsLegacy) -> FederationResult<()>;
 
     /// During config gen, gets all the server connections we've received from
     /// peers using `add_config_gen_peer`
     ///
     /// Could be called on the leader, so it's not authenticated
-    async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>>;
+    async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParamsLegacy>>;
 
     /// Runs DKG, can only be called once after configs have been generated in
     /// `get_consensus_config_gen_params`.  If DKG fails this returns a 500

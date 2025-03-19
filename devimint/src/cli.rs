@@ -12,7 +12,6 @@ use fedimint_logging::LOG_DEVIMINT;
 use rand::Rng as _;
 use rand::distributions::Alphanumeric;
 use tokio::fs;
-use tokio::net::TcpStream;
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace, warn};
 
@@ -22,10 +21,9 @@ use crate::envs::{
     FM_INVITE_CODE_ENV, FM_LINK_TEST_DIR_ENV, FM_NUM_FEDS_ENV, FM_OFFLINE_NODES_ENV,
     FM_PRE_DKG_ENV, FM_TEST_DIR_ENV,
 };
-use crate::federation::Fedimintd;
 use crate::util::{ProcessManager, poll};
 use crate::vars::mkdir;
-use crate::{ExternalDaemons, external_daemons, vars};
+use crate::{external_daemons, vars};
 
 fn random_test_dir_suffix() -> String {
     rand::thread_rng()
@@ -116,8 +114,6 @@ pub enum Cmd {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
         exec: Option<Vec<ffi::OsString>>,
     },
-    /// Runs bitcoind, spins up FM_FED_SIZE worth of fedimints
-    RunUi,
     /// Rpc commands to the long running devimint instance. Could be entry point
     /// for devimint as a cli
     #[clap(flatten)]
@@ -384,20 +380,6 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
             }
         }
         Cmd::Rpc(rpc_cmd) => rpc_command(rpc_cmd, common_args).await?,
-        Cmd::RunUi => {
-            let (process_mgr, task_group) = setup(common_args).await?;
-            let task_group_clone = task_group.clone();
-            let main = async {
-                let result = run_ui(&process_mgr).await;
-                let daemons = write_ready_file(&process_mgr.globals, result).await?;
-
-                debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
-                task_group_clone.make_handle().make_shutdown_rx().await;
-
-                Ok::<_, anyhow::Error>(daemons)
-            };
-            Box::pin(cleanup_on_exit(main, task_group)).await?;
-        }
     }
     Ok(())
 }
@@ -501,70 +483,4 @@ pub async fn rpc_command(rpc: RpcCmd, common: CommonArgs) -> Result<()> {
             Ok(())
         }
     }
-}
-
-async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, ExternalDaemons)> {
-    let externals = external_daemons(process_mgr).await?;
-    let fed_size = process_mgr.globals.FM_FED_SIZE;
-    let fedimintds = futures::future::try_join_all((0..fed_size).map(|peer| {
-        let bitcoind = externals.bitcoind.clone();
-        async move {
-            let peer_port = 10000 + 8137 + peer * 2;
-            let api_port = peer_port + 1;
-            let ui_port = peer_port + 2;
-            let metrics_port = 3510 + peer;
-
-            // TODO: we should use this, and override ports that need to be fixed by an env
-            // var and/or just scap `run-ui` altogether
-            // let peer_id = PeerId::new(peer as u16);
-            // let peer_env_vars = vars::Fedimintd::init(
-            //     &process_mgr.globals,
-            //     "ui-test-federation".to_string(),
-            //     peer_id,
-            //     process_mgr.globals.fedimintd_overrides.peer_expect(peer_id),
-            // )
-            // .await?;
-            let vars = vars::Fedimintd {
-                FM_BIND_P2P: format!("127.0.0.1:{peer_port}"),
-                FM_P2P_URL: format!("fedimint://127.0.0.1:{peer_port}"),
-                FM_BIND_API: format!("127.0.0.1:{api_port}"),
-                FM_API_URL: format!("ws://127.0.0.1:{api_port}"),
-                FM_BIND_UI: format!("127.0.0.1:{ui_port}"),
-                FM_DATA_DIR: process_mgr
-                    .globals
-                    .FM_DATA_DIR
-                    .join(format!("fedimintd-{peer}")),
-                FM_BIND_METRICS_API: format!("127.0.0.1:{metrics_port}"),
-                FM_FORCE_BITCOIN_RPC_URL: format!(
-                    "http://bitcoin:bitcoin@127.0.0.1:{}",
-                    process_mgr.globals.FM_PORT_BTC_RPC
-                ),
-                FM_FORCE_BITCOIN_RPC_KIND: "bitcoind".into(),
-                FM_IROH_P2P_SECRET_KEY_OVERRIDE: String::new(),
-                FM_IROH_API_SECRET_KEY_OVERRIDE: String::new(),
-            };
-            let fm = Fedimintd::new(
-                process_mgr,
-                bitcoind.clone(),
-                peer,
-                &vars,
-                "default".to_string(),
-            )
-            .await?;
-            let server_addr = &vars.FM_BIND_API;
-
-            poll("waiting for api startup", || async {
-                TcpStream::connect(server_addr)
-                    .await
-                    .context("connect to api")
-                    .map_err(ControlFlow::Continue)
-            })
-            .await?;
-
-            anyhow::Ok(fm)
-        }
-    }))
-    .await?;
-
-    Ok((fedimintds, externals))
 }

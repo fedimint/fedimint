@@ -358,7 +358,7 @@ enum AdminCmd {
     /// Download guardian config to back it up
     GuardianConfigBackup,
 
-    ConfigGen(ConfigGenAdminArgs),
+    Setup(SetupAdminArgs),
     /// Sign and announce a new API endpoint. The previous one will be
     /// invalidated
     SignApiAnnouncement {
@@ -379,26 +379,22 @@ enum AdminCmd {
 }
 
 #[derive(Debug, Clone, Args)]
-struct ConfigGenAdminArgs {
-    #[arg(long, env = "FM_WS_URL")]
-    ws: SafeUrl,
-
-    #[arg(env = FM_API_SECRET_ENV)]
-    api_secret: Option<String>,
+struct SetupAdminArgs {
+    endpoint: SafeUrl,
 
     #[clap(subcommand)]
-    subcommand: ConfigGenAdminCmd,
+    subcommand: SetupAdminCmd,
 }
 
 #[derive(Debug, Clone, Subcommand)]
-enum ConfigGenAdminCmd {
-    ServerStatus,
+enum SetupAdminCmd {
+    Status,
     SetLocalParams {
         name: String,
         #[clap(long)]
         federation_name: Option<String>,
     },
-    AddPeerConnectionInfo {
+    AddPeer {
         info: String,
     },
     StartDkg,
@@ -867,8 +863,8 @@ impl FedimintCli {
                         .map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::ConfigGen(dkg_args)) => self
-                .handle_admin_config_gen_command(cli, dkg_args)
+            Command::Admin(AdminCmd::Setup(dkg_args)) => self
+                .handle_admin_setup_command(cli, dkg_args)
                 .await
                 .map(CliOutput::Raw)
                 .map_err_cli_msg("Config Gen Error"),
@@ -1251,24 +1247,20 @@ impl FedimintCli {
         }
     }
 
-    async fn handle_admin_config_gen_command(
+    async fn handle_admin_setup_command(
         &self,
         cli: Opts,
-        config_gen_args: ConfigGenAdminArgs,
+        args: SetupAdminArgs,
     ) -> anyhow::Result<Value> {
-        let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
-            config_gen_args.ws.clone(),
-            &config_gen_args.api_secret,
-        )
-        .await?;
+        let client = DynGlobalApi::from_setup_endpoint(args.endpoint.clone(), &None).await?;
 
-        match &config_gen_args.subcommand {
-            ConfigGenAdminCmd::ServerStatus => {
-                let status = client.server_status(cli.auth()?).await?;
+        match &args.subcommand {
+            SetupAdminCmd::Status => {
+                let status = client.setup_status(cli.auth()?).await?;
 
                 Ok(serde_json::to_value(status).expect("JSON serialization failed"))
             }
-            ConfigGenAdminCmd::SetLocalParams {
+            SetupAdminCmd::SetLocalParams {
                 name,
                 federation_name,
             } => {
@@ -1278,14 +1270,14 @@ impl FedimintCli {
 
                 Ok(serde_json::to_value(info).expect("JSON serialization failed"))
             }
-            ConfigGenAdminCmd::AddPeerConnectionInfo { info } => {
+            SetupAdminCmd::AddPeer { info } => {
                 let name = client
                     .add_peer_connection_info(info.clone(), cli.auth()?)
                     .await?;
 
                 Ok(serde_json::to_value(name).expect("JSON serialization failed"))
             }
-            ConfigGenAdminCmd::StartDkg => {
+            SetupAdminCmd::StartDkg => {
                 client.start_dkg(cli.auth()?).await?;
 
                 Ok(Value::Null)

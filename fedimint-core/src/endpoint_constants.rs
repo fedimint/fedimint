@@ -1,4 +1,4 @@
-pub const ADD_PEER_CONNECTION_INFO_ENDPOINT: &str = "add_peer_connection_info";
+pub const ADD_PEER_SETUP_CODE_ENDPOINT: &str = "add_peer_setup_code";
 pub const AUDIT_ENDPOINT: &str = "audit";
 pub const GUARDIAN_CONFIG_BACKUP_ENDPOINT: &str = "download_guardian_backup";
 pub const AUTH_ENDPOINT: &str = "auth";
@@ -21,7 +21,7 @@ pub const CONFIG_GEN_PEERS_ENDPOINT: &str = "config_gen_peers";
 pub const CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT: &str = "consensus_config_gen_params";
 pub const VERIFY_CONFIG_HASH_ENDPOINT: &str = "verify_config_hash";
 pub const RECOVER_ENDPOINT: &str = "recover";
-pub const SERVER_STATUS_ENDPOINT: &str = "server_status";
+pub const SETUP_STATUS_ENDPOINT: &str = "setup_status";
 pub const START_DKG_ENDPOINT: &str = "start_dkg";
 pub const RUN_DKG_ENDPOINT: &str = "run_dkg";
 pub const RESET_SETUP_ENDPOINT: &str = "reset_setup";

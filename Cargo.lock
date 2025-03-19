@@ -2091,7 +2091,7 @@ name = "devimint"
 version = "0.7.0-alpha"
 dependencies = [
  "anyhow",
- "axum 0.7.9",
+ "axum 0.8.1",
  "bitcoin",
  "bitcoincore-rpc",
  "bon",
@@ -3598,7 +3598,7 @@ name = "fedimint-metrics"
 version = "0.7.0-alpha"
 dependencies = [
  "anyhow",
- "axum 0.7.9",
+ "axum 0.8.1",
  "fedimint-core",
  "prometheus",
  "tokio",

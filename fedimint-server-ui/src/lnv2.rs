@@ -5,7 +5,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use maud::{Markup, html};
 
-use crate::check_auth;
+use crate::{AuthState, check_auth};
 
 // Form for gateway management
 #[derive(serde::Deserialize)]
@@ -113,15 +113,17 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
 
 // Handler for adding a new gateway
 pub async fn add_gateway(
-    State(api): State<DynDashboardApi>,
+    State(state): State<AuthState<DynDashboardApi>>,
     jar: CookieJar,
     Form(form): Form<GatewayForm>,
 ) -> impl IntoResponse {
-    if !check_auth(api.auth().await, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    api.get_module::<fedimint_lnv2_server::Lightning>()
+    state
+        .api
+        .get_module::<fedimint_lnv2_server::Lightning>()
         .expect("Route only mounted when Lightning V2 module exists")
         .add_gateway_ui(form.gateway_url)
         .await;
@@ -131,15 +133,17 @@ pub async fn add_gateway(
 
 // Handler for removing a gateway
 pub async fn remove_gateway(
-    State(api): State<DynDashboardApi>,
+    State(state): State<AuthState<DynDashboardApi>>,
     jar: CookieJar,
     Form(form): Form<GatewayForm>,
 ) -> impl IntoResponse {
-    if !check_auth(api.auth().await, &jar).await {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Redirect::to("/login").into_response();
     }
 
-    api.get_module::<fedimint_lnv2_server::Lightning>()
+    state
+        .api
+        .get_module::<fedimint_lnv2_server::Lightning>()
         .expect("Route only mounted when Lightning V2 module exists")
         .remove_gateway_ui(form.gateway_url)
         .await;

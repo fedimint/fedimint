@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::iter::once;
 use std::mem::discriminant;
 use std::str::FromStr as _;
 use std::sync::Arc;
@@ -6,11 +7,12 @@ use std::sync::Arc;
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
-use fedimint_core::admin_client::{ServerStatus, SetLocalParamsRequest};
+use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
+use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
-    ADD_PEER_CONNECTION_INFO_ENDPOINT, SERVER_STATUS_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+    ADD_PEER_SETUP_CODE_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
     START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::{
@@ -30,17 +32,17 @@ use tokio_rustls::rustls;
 use tracing::warn;
 
 use super::PeerEndpoints;
-use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerConnectionInfo};
+use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerSetupCode};
 use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
 #[derive(Debug, Clone, Default)]
-pub struct ConfigGenState {
+pub struct SetupState {
     /// Our local connection
     local_params: Option<LocalParams>,
     /// Connection info received from other guardians
-    connection_info: BTreeSet<PeerConnectionInfo>,
+    setup_codes: BTreeSet<PeerSetupCode>,
 }
 
 #[derive(Clone, Debug)]
@@ -63,9 +65,8 @@ pub struct LocalParams {
 }
 
 impl LocalParams {
-    /// Convert to PeerConnectionInfo
-    pub fn connection_info(&self) -> PeerConnectionInfo {
-        PeerConnectionInfo {
+    pub fn setup_code(&self) -> PeerSetupCode {
+        PeerSetupCode {
             name: self.name.clone(),
             endpoints: self.endpoints.clone(),
             federation_name: self.federation_name.clone(),
@@ -75,53 +76,44 @@ impl LocalParams {
 
 /// Serves the config gen API endpoints
 #[derive(Clone)]
-pub struct ConfigGenApi {
+pub struct SetupApi {
     /// Our config gen settings configured locally
     settings: ConfigGenSettings,
     /// In-memory state machine
-    state: Arc<Mutex<ConfigGenState>>,
+    state: Arc<Mutex<SetupState>>,
     /// DB not really used
     db: Database,
     /// Triggers the distributed key generation
     sender: Sender<ConfigGenParams>,
 }
 
-impl ConfigGenApi {
+impl SetupApi {
     pub fn new(settings: ConfigGenSettings, db: Database, sender: Sender<ConfigGenParams>) -> Self {
         Self {
             settings,
-            state: Arc::new(Mutex::new(ConfigGenState::default())),
+            state: Arc::new(Mutex::new(SetupState::default())),
             db,
             sender,
         }
     }
 
-    pub async fn server_status(&self) -> ServerStatus {
-        let state = self.state.lock().await;
-
-        match state.local_params {
-            Some(..) => ServerStatus::CollectingConnectionInfo(
-                state
-                    .connection_info
-                    .clone()
-                    .into_iter()
-                    .map(|info| info.name)
-                    .collect(),
-            ),
-            None => ServerStatus::AwaitingLocalParams,
+    pub async fn setup_status(&self) -> SetupStatus {
+        match self.state.lock().await.local_params {
+            Some(..) => SetupStatus::SharingConnectionInfo,
+            None => SetupStatus::AwaitingLocalParams,
         }
     }
 }
 
 #[async_trait]
-impl ISetupApi for ConfigGenApi {
-    async fn our_connection_info(&self) -> Option<String> {
+impl ISetupApi for SetupApi {
+    async fn setup_code(&self) -> Option<String> {
         self.state
             .lock()
             .await
             .local_params
             .as_ref()
-            .map(|lp| lp.connection_info().encode_base32())
+            .map(|lp| lp.setup_code().encode_base32())
     }
 
     async fn auth(&self) -> Option<ApiAuth> {
@@ -137,15 +129,15 @@ impl ISetupApi for ConfigGenApi {
         self.state
             .lock()
             .await
-            .connection_info
+            .setup_codes
             .clone()
             .into_iter()
             .map(|info| info.name)
             .collect()
     }
 
-    async fn reset_connection_info(&self) {
-        self.state.lock().await.connection_info.clear();
+    async fn reset_peers(&self) {
+        self.state.lock().await.setup_codes.clear();
     }
 
     async fn set_local_parameters(
@@ -154,31 +146,25 @@ impl ISetupApi for ConfigGenApi {
         name: String,
         federation_name: Option<String>,
     ) -> anyhow::Result<String> {
+        ensure!(!name.is_empty(), "The guardian name is empty");
+
+        ensure!(!auth.0.is_empty(), "The password is empty");
+
         ensure!(
             auth.0.trim() == auth.0,
-            "Password contains leading/trailing whitespace",
+            "The password contains leading/trailing whitespace",
         );
+
+        if let Some(federation_name) = federation_name.as_ref() {
+            ensure!(!federation_name.is_empty(), "The federation name is empty");
+        }
 
         let mut state = self.state.lock().await;
 
-        if let Some(lp) = state.local_params.clone() {
-            ensure!(
-                lp.auth == auth,
-                "Local parameters have already been set with a different auth."
-            );
-
-            ensure!(
-                lp.name == name,
-                "Local parameters have already been set with a different name."
-            );
-
-            ensure!(
-                lp.federation_name == federation_name,
-                "Local parameters have already been set with a different federation name."
-            );
-
-            return Ok(lp.connection_info().encode_base32());
-        }
+        ensure!(
+            state.local_params.is_none(),
+            "Local parameters have already been set"
+        );
 
         let lp = match self.settings.networking {
             NetworkingStack::Tcp => {
@@ -236,15 +222,15 @@ impl ISetupApi for ConfigGenApi {
 
         state.local_params = Some(lp.clone());
 
-        Ok(lp.connection_info().encode_base32())
+        Ok(lp.setup_code().encode_base32())
     }
 
-    async fn add_peer_connection_info(&self, info: String) -> anyhow::Result<String> {
-        let info = PeerConnectionInfo::decode_base32(&info)?;
+    async fn add_peer_setup_code(&self, info: String) -> anyhow::Result<String> {
+        let info = PeerSetupCode::decode_base32(&info)?;
 
         let mut state = self.state.lock().await;
 
-        if state.connection_info.contains(&info) {
+        if state.setup_codes.contains(&info) {
             return Ok(info.name.clone());
         }
 
@@ -254,7 +240,7 @@ impl ISetupApi for ConfigGenApi {
             .expect("The endpoint is authenticated.");
 
         ensure!(
-            info != local_params.connection_info(),
+            info != local_params.setup_code(),
             "You cannot add you own connection info"
         );
 
@@ -264,8 +250,9 @@ impl ISetupApi for ConfigGenApi {
         );
 
         if let Some(federation_name) = state
-            .connection_info
+            .setup_codes
             .iter()
+            .chain(once(&local_params.setup_code()))
             .find_map(|info| info.federation_name.clone())
         {
             ensure!(
@@ -274,7 +261,7 @@ impl ISetupApi for ConfigGenApi {
             );
         }
 
-        state.connection_info.insert(info.clone());
+        state.setup_codes.insert(info.clone());
 
         Ok(info.name)
     }
@@ -287,20 +274,25 @@ impl ISetupApi for ConfigGenApi {
             .clone()
             .expect("The endpoint is authenticated.");
 
-        let our_peer_info = local_params.connection_info();
+        let our_setup_code = local_params.setup_code();
 
-        state.connection_info.insert(our_peer_info.clone());
+        state.setup_codes.insert(our_setup_code.clone());
+
+        ensure!(
+            state.setup_codes.len() == 1 || state.setup_codes.len() >= 4,
+            "The number of guardians is invalid"
+        );
 
         let federation_name = state
-            .connection_info
+            .setup_codes
             .iter()
             .find_map(|info| info.federation_name.clone())
-            .context("We need one leader to configure the federation name")?;
+            .context("We need one guardian to configure the federations name")?;
 
         let our_id = state
-            .connection_info
+            .setup_codes
             .iter()
-            .position(|info| info == &our_peer_info)
+            .position(|info| info == &our_setup_code)
             .expect("We inserted the key above.");
 
         let params = ConfigGenParams {
@@ -311,10 +303,12 @@ impl ISetupApi for ConfigGenApi {
             api_auth: local_params.auth,
             peers: (0..)
                 .map(|i| PeerId::from(i as u16))
-                .zip(state.connection_info.clone().into_iter())
+                .zip(state.setup_codes.clone().into_iter())
                 .collect(),
-            meta: BTreeMap::from_iter(vec![("federation_name".to_string(), federation_name)]),
-            modules: self.settings.modules.clone(),
+            meta: BTreeMap::from_iter(vec![(
+                META_FEDERATION_NAME_KEY.to_string(),
+                federation_name,
+            )]),
         };
 
         self.sender
@@ -327,12 +321,12 @@ impl ISetupApi for ConfigGenApi {
 }
 
 #[async_trait]
-impl HasApiContext<ConfigGenApi> for ConfigGenApi {
+impl HasApiContext<SetupApi> for SetupApi {
     async fn context(
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
-    ) -> (&ConfigGenApi, ApiEndpointContext<'_>) {
+    ) -> (&SetupApi, ApiEndpointContext<'_>) {
         assert!(id.is_none());
 
         let db = self.db.clone();
@@ -352,19 +346,19 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
     }
 }
 
-pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
+pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
     vec![
         api_endpoint! {
-            SERVER_STATUS_ENDPOINT,
+            SETUP_STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, _c, _v: ()| -> ServerStatus {
-                Ok(config.server_status().await)
+            async |config: &SetupApi, _c, _v: ()| -> SetupStatus {
+                Ok(config.setup_status().await)
             }
         },
         api_endpoint! {
             SET_LOCAL_PARAMS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, request: SetLocalParamsRequest| -> String {
+            async |config: &SetupApi, context, request: SetLocalParamsRequest| -> String {
                 let auth = context
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
@@ -375,12 +369,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             }
         },
         api_endpoint! {
-            ADD_PEER_CONNECTION_INFO_ENDPOINT,
+            ADD_PEER_SETUP_CODE_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, info: String| -> String {
+            async |config: &SetupApi, context, info: String| -> String {
                 check_auth(context)?;
 
-                config.add_peer_connection_info(info.clone())
+                config.add_peer_setup_code(info.clone())
                     .await
                     .map_err(|e|ApiError::bad_request(e.to_string()))
             }
@@ -388,7 +382,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
         api_endpoint! {
             START_DKG_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |config: &ConfigGenApi, context, _v: ()| -> () {
+            async |config: &SetupApi, context, _v: ()| -> () {
                 check_auth(context)?;
 
                 config.start_dkg().await.map_err(|e| ApiError::server_error(e.to_string()))
