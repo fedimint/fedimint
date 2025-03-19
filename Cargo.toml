@@ -184,8 +184,8 @@ hex = "0.4.3"
 hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.7.0-alpha" }
 hyper = "1.6"
-iroh = "0.34.0"
-iroh-base = "0.34.0"
+iroh = { version = "0.34.0", default-features = false }
+iroh-base = { version = "0.34.0", default-features = false }
 itertools = "0.13.0"
 jaq-core = "2.1.1"
 jaq-json = { version = "1.1.1", features = ["serde_json"] }
@@ -212,7 +212,7 @@ serde-big-array = "0.5.1"
 serde_json = "1.0.140"
 slotmap = "1.0.7"
 sha3 = "0.10.8"
-strum = "0.26"
+strum = { version = "0.26", features = ["derive"] }
 strum_macros = "0.26"
 subtle = "2.6.1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }

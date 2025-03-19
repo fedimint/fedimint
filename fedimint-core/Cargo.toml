@@ -41,7 +41,7 @@ group = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
 imbl = "5.0.0"
-iroh-base = { workspace = true }
+iroh-base = { workspace = true, default-features = false, features = ["key"] }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.8", features = ["client"] }
 lightning = { workspace = true }

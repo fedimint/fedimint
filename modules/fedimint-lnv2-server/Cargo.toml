@@ -15,7 +15,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-bitcoind = { workspace = true }
+fedimint-bitcoind = { workspace = true, features = ["fedimint-server"] }
 fedimint-core = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }

@@ -34,8 +34,10 @@ bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
-iroh = { workspace = true, optional = true }
-iroh-base = { workspace = true, optional = true }
+iroh = { workspace = true, optional = true, default-features = false }
+iroh-base = { workspace = true, optional = true, default-features = false, features = [
+  "ticket",
+] }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.8" }
 jsonrpsee-types = { version = "0.24.8" }
@@ -63,6 +65,9 @@ strum = { workspace = true, optional = true }
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
 # It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.
 curve25519-dalek = { version = ">=4.1.3", optional = true }
+iroh = { workspace = true, optional = true, default-features = false, features = [
+  "discovery-pkarr-dht",
+] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = "0.24.8"

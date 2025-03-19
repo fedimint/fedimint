@@ -55,13 +55,29 @@ final-check-ci: lint
   just test-compatibility
   just udeps
 
-check-wasm:
+# check before making a release
+final-check-release:
+  just check-packages-features
+  just final-check-ci
+
+# verify verify various feature combinations we might care about
+check-packages-features:
+  just check-wasm --no-default-features
+  # TODO: broken, seems like one of the deps
+  # just check-wasm --features iroh
+  cargo workspaces exec cargo check
+  cargo workspaces exec cargo check --no-default-features
+  # there are some features that require nightly
+  nix shell github:nix-community/fenix#latest.toolchain -c cargo workspaces exec cargo check --all-features
+
+check-wasm *EXTRA_ARGS:
   #!/usr/bin/env bash
   env CARGO_BUILD_TARGET_DIR=${CARGO_BUILD_TARGET_DIR:-$(pwd)/target}/pkgs/check-wasm \
     nix develop .#crossWasm -c \
       cargo check --target wasm32-unknown-unknown \
         --package fedimint-client \
-        --package fedimint-wasm-tests
+        --package fedimint-wasm-tests \
+        {{EXTRA_ARGS}}
 
 # regenerate server db migration snapshots
 # ex: `just snapshot-server-db-migrations fedimint-server`
