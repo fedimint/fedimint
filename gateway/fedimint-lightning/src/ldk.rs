@@ -21,7 +21,7 @@ use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
 use lightning::ln::PaymentPreimage;
 use lightning::ln::channelmanager::PaymentId;
-use lightning::offers::offer::Offer;
+use lightning::offers::offer::{Offer, OfferId};
 use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc::Sender;
@@ -76,6 +76,12 @@ pub struct GatewayLdkClient {
     /// doesn't allow for multiple simultaneous calls with the same invoice to
     /// execute in parallel. This helps ensure that the function is idempotent.
     outbound_lightning_payment_lock_pool: lockable::LockPool<PaymentId>,
+
+    /// Lock pool used to ensure that our implementation of
+    /// `ILnRpcClient::pay_offer` doesn't allow for multiple simultaneous
+    /// calls with the same offer to execute in parallel. This helps ensure
+    /// that the function is idempotent.
+    outbound_offer_lock_pool: lockable::LockPool<LdkOfferId>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -168,6 +174,7 @@ impl GatewayLdkClient {
             task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
             outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
+            outbound_offer_lock_pool: lockable::LockPool::new(),
         })
     }
 
@@ -777,6 +784,11 @@ impl ILnRpcClient for GatewayLdkClient {
         let offer = Offer::from_str(&offer).map_err(|_| LightningRpcError::Bolt12Error {
             failure_reason: "Failed to parse Bolt12 Offer".to_string(),
         })?;
+
+        let _offer_lock_guard = self
+            .outbound_offer_lock_pool
+            .blocking_lock(LdkOfferId(offer.id()));
+
         let payment_id = if let Some(amount) = amount {
             self.node
                 .bolt12_payment()
@@ -855,5 +867,14 @@ fn get_preimage_and_payment_hash(
             fedimint_gateway_common::PaymentKind::Bolt11,
         ),
         PaymentKind::Onchain => (None, None, fedimint_gateway_common::PaymentKind::Onchain),
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct LdkOfferId(OfferId);
+
+impl std::hash::Hash for LdkOfferId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.0.0);
     }
 }
