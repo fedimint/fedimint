@@ -174,12 +174,12 @@ async fn dashboard_view(
         // Second row: Audit Summary and Peer Status
         div class="row gy-4 mt-2" {
             // Audit Information Column
-            div class="col-lg-8" {
+            div class="col-lg-6" {
                 (audit::render(&audit_summary))
             }
 
             // Peer Connection Status Column
-            div class="col-lg-4" {
+            div class="col-lg-6" {
                 (latency::render(consensus_ord_latency, &p2p_connection_status))
             }
         }
