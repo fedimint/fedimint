@@ -187,7 +187,7 @@ impl LightningCommands {
             } => {
                 let response = create_client()
                     .create_offer(CreateOfferPayload {
-                        amount: amount_msat.and_then(|msats| Some(Amount::from_msats(msats))),
+                        amount: amount_msat.map(Amount::from_msats),
                         description,
                         expiry_secs,
                         quantity,
@@ -204,7 +204,7 @@ impl LightningCommands {
                 create_client()
                     .pay_offer(PayOfferPayload {
                         offer,
-                        amount: amount_msat.and_then(|msats| Some(Amount::from_msats(msats))),
+                        amount: amount_msat.map(Amount::from_msats),
                         quantity,
                         payer_note,
                     })
