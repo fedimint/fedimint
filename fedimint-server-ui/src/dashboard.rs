@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 use {fedimint_lnv2_server, fedimint_wallet_server};
 
 use crate::{
-    AuthState, LoginInput, audit, check_auth, common_styles, connection_status, invite_code, lnv2,
+    AuthState, LoginInput, audit, check_auth, common_styles, invite_code, latency, lnv2,
     login_form_response, login_submit_response, wallet,
 };
 
@@ -125,32 +125,37 @@ async fn dashboard_view(
         return Redirect::to("/login").into_response();
     }
 
-    let guardian_name = state.api.guardian_name().await;
+    let guardian_names = state.api.guardian_names().await;
     let federation_name = state.api.federation_name().await;
     let session_count = state.api.session_count().await;
-    let peer_status = state.api.peer_connection_status().await;
+    let consensus_ord_latency = state.api.consensus_ord_latency().await;
+    let p2p_connection_status = state.api.p2p_connection_status().await;
     let invite_code = state.api.federation_invite_code().await;
     let audit_summary = state.api.federation_audit().await;
 
     let mut content = html! {
         div class="row gy-4" {
-            // Guardian Information Column
             div class="col-md-6" {
                 div class="card h-100" {
-                    div class="card-header dashboard-header" { "General Information" }
+                    div class="card-header dashboard-header" { (federation_name) }
                     div class="card-body" {
-                        table class="table" {
-                            tr {
-                                th { "Guardian Name" }
-                                td { (guardian_name) }
+                        div class="alert alert-info" {
+                            "Session Count: " strong { (session_count) }
+                        }
+                        table class="table table-sm mb-0" {
+                            thead {
+                                tr {
+                                    th { "Guardian ID" }
+                                    th { "Guardian Name" }
+                                }
                             }
-                            tr {
-                                th { "Federation Name" }
-                                td { (federation_name) }
-                            }
-                            tr {
-                                th { "Current Session Count" }
-                                td { (session_count) }
+                            tbody {
+                                @for (guardian_id, name) in guardian_names {
+                                    tr {
+                                        td { (guardian_id.to_string()) }
+                                        td { (name) }
+                                    }
+                                }
                             }
                         }
                     }
@@ -169,13 +174,13 @@ async fn dashboard_view(
         // Second row: Audit Summary and Peer Status
         div class="row gy-4 mt-2" {
             // Audit Information Column
-            div class="col-lg-8" {
-                (audit::render_audit_summary(&audit_summary))
+            div class="col-lg-6" {
+                (audit::render(&audit_summary))
             }
 
             // Peer Connection Status Column
-            div class="col-lg-4" {
-                (connection_status::render_connection_status(&peer_status))
+            div class="col-lg-6" {
+                (latency::render(consensus_ord_latency, &p2p_connection_status))
             }
         }
     };

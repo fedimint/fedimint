@@ -23,7 +23,6 @@
 extern crate fedimint_core;
 pub mod db;
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -34,8 +33,6 @@ use anyhow::Context;
 use config::ServerConfig;
 use config::io::{PLAINTEXT_PASSWORD, read_server_config};
 use fedimint_aead::random_salt;
-use fedimint_api_client::api::P2PConnectionStatus;
-use fedimint_core::PeerId;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
@@ -49,8 +46,8 @@ use fedimint_server_core::dashboard_ui::DynDashboardApi;
 use fedimint_server_core::setup_ui::{DynSetupApi, ISetupApi};
 use jsonrpsee::RpcModule;
 use net::api::ApiSecrets;
+use net::p2p::P2PStatusReceivers;
 use net::p2p_connector::IrohConnector;
-use tokio::sync::watch;
 use tracing::{info, warn};
 
 use crate::config::ConfigGenSettings;
@@ -238,7 +235,7 @@ pub async fn run_config_gen(
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
-    BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>,
+    P2PStatusReceivers,
 )> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
 

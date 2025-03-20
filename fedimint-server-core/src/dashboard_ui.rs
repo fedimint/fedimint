@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use fedimint_core::PeerId;
@@ -17,8 +18,11 @@ pub trait IDashboardApi {
     /// Get the guardian's authentication details
     async fn auth(&self) -> ApiAuth;
 
-    /// Get the guardian name
-    async fn guardian_name(&self) -> String;
+    /// Get the guardian ID
+    async fn guardian_id(&self) -> PeerId;
+
+    /// Get a map of peer IDs to guardian names
+    async fn guardian_names(&self) -> BTreeMap<PeerId, String>;
 
     /// Get the federation name
     async fn federation_name(&self) -> String;
@@ -26,8 +30,11 @@ pub trait IDashboardApi {
     /// Get the current active session count
     async fn session_count(&self) -> usize;
 
-    /// Returns a map of peer ID to connection status
-    async fn peer_connection_status(&self) -> BTreeMap<PeerId, bool>;
+    /// The time it took to order our last proposal in the current session
+    async fn consensus_ord_latency(&self) -> Option<Duration>;
+
+    /// Returns a map of peer ID to estimated round trip time
+    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<Duration>>;
 
     /// Get the federation invite code to share with users
     async fn federation_invite_code(&self) -> String;

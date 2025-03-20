@@ -15,7 +15,8 @@ use std::time::Duration;
 use anyhow::bail;
 use async_channel::Sender;
 use db::{ServerDbMigrationContext, get_global_database_migrations};
-use fedimint_api_client::api::{DynGlobalApi, P2PConnectionStatus};
+use fedimint_api_client::api::DynGlobalApi;
+use fedimint_core::NumPeers;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
@@ -26,7 +27,6 @@ use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN,
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
@@ -47,6 +47,7 @@ use crate::db::verify_server_db_integrity_dbtx;
 use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
+use crate::net::p2p::P2PStatusReceivers;
 use crate::{net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
@@ -55,7 +56,7 @@ const TRANSACTION_BUFFER: usize = 1000;
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     connections: DynP2PConnections<P2PMessage>,
-    p2p_status_receivers: BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>,
+    p2p_status_receivers: P2PStatusReceivers,
     api_bind_addr: SocketAddr,
     cfg: ServerConfig,
     db: Database,
@@ -152,6 +153,7 @@ pub async fn run(
 
     let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
+    let (ord_latency_sender, ord_latency_receiver) = watch::channel(None);
 
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
@@ -166,6 +168,7 @@ pub async fn run(
             &module_init_registry,
         ),
         p2p_status_receivers,
+        ord_latency_receiver,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };
@@ -229,6 +232,7 @@ pub async fn run(
             .await?,
         cfg: cfg.clone(),
         connections,
+        ord_latency_sender,
         submission_receiver,
         shutdown_receiver,
         modules: module_registry,

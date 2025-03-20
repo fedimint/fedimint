@@ -2,12 +2,13 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
-use fedimint_api_client::api::{GuardianConfigBackup, P2PConnectionStatus};
+use fedimint_api_client::api::GuardianConfigBackup;
 use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
@@ -24,11 +25,12 @@ use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
     BACKUP_STATISTICS_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
-    FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
+    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -53,7 +55,7 @@ use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::net::{GuardianAuthToken, check_auth};
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
-use tokio::sync::watch::{Receiver, Sender};
+use tokio::sync::watch::{self, Receiver, Sender};
 use tracing::{debug, info, warn};
 
 use crate::config::io::{
@@ -66,6 +68,7 @@ use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_d
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
+use crate::net::p2p::P2PStatusReceivers;
 
 #[derive(Clone)]
 pub struct ConsensusApi {
@@ -82,7 +85,8 @@ pub struct ConsensusApi {
     pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub shutdown_receiver: Receiver<Option<u64>>,
     pub shutdown_sender: Sender<Option<u64>>,
-    pub p2p_status_receivers: BTreeMap<PeerId, Receiver<P2PConnectionStatus>>,
+    pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
+    pub p2p_status_receivers: P2PStatusReceivers,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
 }
@@ -484,13 +488,17 @@ impl IDashboardApi for ConsensusApi {
         self.cfg.private.api_auth.clone()
     }
 
-    async fn guardian_name(&self) -> String {
+    async fn guardian_id(&self) -> PeerId {
+        self.cfg.local.identity
+    }
+
+    async fn guardian_names(&self) -> BTreeMap<PeerId, String> {
         self.cfg
             .consensus
             .api_endpoints()
-            .get(&self.cfg.local.identity)
-            .map(|endpoint| endpoint.name.clone())
-            .expect("Guardian API endpoint must exist")
+            .iter()
+            .map(|(peer_id, endpoint)| (*peer_id, endpoint.name.clone()))
+            .collect()
     }
 
     async fn federation_name(&self) -> String {
@@ -506,10 +514,14 @@ impl IDashboardApi for ConsensusApi {
         self.session_count().await as usize
     }
 
-    async fn peer_connection_status(&self) -> BTreeMap<PeerId, bool> {
+    async fn consensus_ord_latency(&self) -> Option<Duration> {
+        *self.ord_latency_receiver.borrow()
+    }
+
+    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<Duration>> {
         self.p2p_status_receivers
             .iter()
-            .map(|(peer, receiver)| (*peer, *receiver.borrow() == P2PConnectionStatus::Connected))
+            .map(|(peer, receiver)| (*peer, *receiver.borrow()))
             .collect()
     }
 
@@ -622,6 +634,23 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |_f: &ConsensusApi, _c, _v: ()| -> SetupStatus {
                 Ok(SetupStatus::ConsensusIsRunning)
+            }
+        },
+        api_endpoint! {
+            CONSENSUS_ORD_LATENCY_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |fedimint: &ConsensusApi, _c, _v: ()| -> Option<Duration> {
+                Ok(*fedimint.ord_latency_receiver.borrow())
+            }
+        },
+        api_endpoint! {
+            P2P_CONNECTION_STATUS_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<Duration>> {
+                Ok(fedimint.p2p_status_receivers
+                    .iter()
+                    .map(|(peer, receiver)| (*peer, *receiver.borrow()))
+                    .collect())
             }
         },
         api_endpoint! {
