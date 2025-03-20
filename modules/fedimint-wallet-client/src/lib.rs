@@ -779,7 +779,7 @@ impl WalletClientModule {
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
                         dbtx.on_commit(move || {
-                            let _ = sender.send(());
+                            sender.send_replace(());
                         });
 
                         Ok((operation_id, address, tweak_idx))
@@ -1050,7 +1050,7 @@ impl WalletClientModule {
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
                         dbtx.on_commit(move || {
-                            let _ = sender.send(());
+                            sender.send_replace(());
                         });
 
                         Ok::<_, anyhow::Error>(())

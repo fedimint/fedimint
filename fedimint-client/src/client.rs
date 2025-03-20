@@ -831,7 +831,7 @@ impl Client {
                     dbtx.commit_tx().await;
                     num_responses += 1;
                     // ignore errors: we don't care if anyone is still listening
-                    let _ = num_responses_sender.send(num_responses);
+                    num_responses_sender.send_replace(num_responses);
                 }
             }
         }

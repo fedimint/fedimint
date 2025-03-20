@@ -41,9 +41,12 @@ impl TaskGroupInner {
     pub fn shutdown(&self) {
         // Note: set the flag before starting to call shutdown handlers
         // to avoid confusion.
-        self.on_shutdown_tx
-            .send(true)
-            .expect("We must have on_shutdown_rx around so this never fails");
+        #[allow(clippy::disallowed_methods)]
+        {
+            self.on_shutdown_tx
+                .send(true)
+                .expect("We must have on_shutdown_rx around so this never fails");
+        }
 
         let subgroups = self.subgroups.lock().expect("locking failed").clone();
         for subgroup in subgroups {
