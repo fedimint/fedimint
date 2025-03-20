@@ -1,7 +1,7 @@
 pub mod audit;
-pub mod connection_status;
 pub mod dashboard;
 pub mod invite_code;
+pub mod latency;
 pub mod lnv2;
 pub mod setup;
 pub mod wallet;

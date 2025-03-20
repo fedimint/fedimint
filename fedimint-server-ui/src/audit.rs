@@ -1,7 +1,7 @@
 use fedimint_core::module::audit::AuditSummary;
 use maud::{Markup, html};
 
-pub fn render_audit_summary(audit_summary: &AuditSummary) -> Markup {
+pub fn render(audit_summary: &AuditSummary) -> Markup {
     html! {
         div class="card h-100" {
             div class="card-header dashboard-header" { "Audit Summary" }

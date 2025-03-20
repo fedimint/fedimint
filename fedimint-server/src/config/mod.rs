@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use anyhow::{Context, bail, ensure, format_err};
 use bitcoin::hashes::sha256;
-use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonWithKind, ModuleInitRegistry, P2PMessage,
@@ -32,11 +31,11 @@ use peer_handle::PeerHandle;
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
-use tokio::sync::watch;
 use tokio_rustls::rustls;
 use tracing::info;
 
 use crate::fedimint_core::encoding::Encodable;
+use crate::net::p2p::P2PStatusReceivers;
 use crate::net::p2p_connector::TlsConfig;
 
 pub mod dkg;
@@ -590,7 +589,7 @@ impl ServerConfig {
         registry: ServerModuleInitRegistry,
         code_version_str: String,
         connections: DynP2PConnections<P2PMessage>,
-        p2p_status_receivers: BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>,
+        p2p_status_receivers: P2PStatusReceivers,
     ) -> anyhow::Result<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
 
@@ -605,10 +604,7 @@ impl ServerConfig {
             return Ok(server[&params.identity].clone());
         }
 
-        while p2p_status_receivers
-            .values()
-            .any(|r| *r.borrow() == P2PConnectionStatus::Disconnected)
-        {
+        while p2p_status_receivers.values().any(|r| r.borrow().is_none()) {
             info!(
                 target: LOG_NET_PEER_DKG,
                 "Waiting for all p2p connections to open..."

@@ -1,4 +1,5 @@
 use std::io::Cursor;
+use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -19,6 +20,8 @@ pub trait IP2PConnection<M>: Send + 'static {
     async fn send(&mut self, message: M) -> anyhow::Result<()>;
 
     async fn receive(&mut self) -> anyhow::Result<M>;
+
+    fn rtt(&self) -> Duration;
 
     fn into_dyn(self) -> DynP2PConnection<M>
     where
@@ -48,6 +51,10 @@ where
             &self.next().await.context("Framed stream is closed")??,
         ))?)
     }
+
+    fn rtt(&self) -> Duration {
+        Duration::from_millis(0)
+    }
 }
 
 #[async_trait]
@@ -73,5 +80,9 @@ where
         Ok(bincode::deserialize_from(Cursor::new(
             &self.accept_uni().await?.read_to_end(1_000_000_000).await?,
         ))?)
+    }
+
+    fn rtt(&self) -> Duration {
+        self.rtt()
     }
 }

@@ -36,7 +36,7 @@ use tracing::{Level, debug, info, instrument, trace, warn};
 use crate::LOG_CONSENSUS;
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
-use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData, get_citem_bytes_chsum};
+use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
 use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
@@ -67,6 +67,7 @@ pub struct ConsensusEngine {
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
     pub connections: DynP2PConnections<P2PMessage>,
+    pub ord_latency_sender: watch::Sender<Option<Duration>>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub checkpoint_retention: u64,
@@ -255,6 +256,7 @@ impl ConsensusEngine {
                         self.submission_receiver.clone(),
                         signature_receiver,
                         timestamp_sender,
+                        self.is_recovery().await,
                     ),
                     FinalizationHandler::new(unit_data_sender),
                     BackupWriter::new(self.db.clone()).await,
@@ -266,6 +268,8 @@ impl ConsensusEngine {
                 aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
             ),
         );
+
+        self.ord_latency_sender.send(None).ok();
 
         let signed_session_outcome = self
             .complete_signed_session_outcome(
@@ -292,12 +296,23 @@ impl ConsensusEngine {
         Ok(())
     }
 
+    async fn is_recovery(&self) -> bool {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&AlephUnitsPrefix)
+            .await
+            .next()
+            .await
+            .is_some()
+    }
+
     pub async fn complete_signed_session_outcome(
         &self,
         session_index: u64,
         ordered_unit_receiver: Receiver<OrderedUnit>,
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
-        timestamp_receiver: Receiver<(Instant, u64)>,
+        timestamp_receiver: Receiver<Instant>,
     ) -> anyhow::Result<SignedSessionOutcome> {
         // It is guaranteed that aleph bft will always replay all previously processed
         // items from the current session from index zero
@@ -322,19 +337,19 @@ impl ConsensusEngine {
 
                     if let Some(UnitData::Batch(bytes)) = ordered_unit.data {
                         if ordered_unit.creator == self.identity() {
-                            loop {
-                                 match timestamp_receiver.try_recv() {
-                                    Ok((timestamp, chsum)) => {
-                                        if get_citem_bytes_chsum(&bytes) == chsum {
-                                            CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
-                                            break;
-                                        }
-                                        warn!(target: LOG_CONSENSUS, "Not reporting ordering latency on possibly out of sync item");
-                                    }
-                                    Err(err) => {
-                                        debug!(target: LOG_CONSENSUS, err = %err.fmt_compact(), "Missing submission timestamp. This is normal on start");
-                                        break;
-                                    }
+                            match timestamp_receiver.try_recv() {
+                                Ok(timestamp) => {
+                                    let latency = match *self.ord_latency_sender.borrow() {
+                                        Some(latency) => (9 * latency +  timestamp.elapsed()) / 10,
+                                        None => timestamp.elapsed()
+                                    };
+
+                                    self.ord_latency_sender.send(Some(latency)).ok();
+
+                                    CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
+                                }
+                                Err(err) => {
+                                    debug!(target: LOG_CONSENSUS, err = %err.fmt_compact(), "Missing submission timestamp. This is normal in recovery");
                                 }
                             }
                         }

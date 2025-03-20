@@ -6,10 +6,10 @@
 //! details.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use async_channel::{Receiver, Sender, bounded};
 use async_trait::async_trait;
-use fedimint_api_client::api::P2PConnectionStatus;
 use fedimint_core::PeerId;
 use fedimint_core::net::peers::{IP2PConnections, Recipient};
 use fedimint_core::task::{TaskGroup, sleep};
@@ -25,15 +25,15 @@ use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_CO
 use crate::net::p2p_connection::DynP2PConnection;
 use crate::net::p2p_connector::DynP2PConnector;
 
-pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<P2PConnectionStatus>>;
-pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<P2PConnectionStatus>>;
+pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<Option<Duration>>>;
+pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<Option<Duration>>>;
 
 pub fn p2p_status_channels(peers: Vec<PeerId>) -> (P2PStatusSenders, P2PStatusReceivers) {
     let mut senders = BTreeMap::new();
     let mut receivers = BTreeMap::new();
 
     for peer in peers {
-        let (sender, receiver) = watch::channel(P2PConnectionStatus::Disconnected);
+        let (sender, receiver) = watch::channel(None);
 
         senders.insert(peer, sender);
         receivers.insert(peer, receiver);
@@ -175,7 +175,7 @@ impl<M: Send + 'static> P2PConnection<M> {
         peer_id: PeerId,
         connector: DynP2PConnector<M>,
         incoming_connections: Receiver<DynP2PConnection<M>>,
-        status_sender: watch::Sender<P2PConnectionStatus>,
+        status_sender: watch::Sender<Option<Duration>>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
         let (outgoing_sender, outgoing_receiver) = bounded(1024);
@@ -243,7 +243,7 @@ struct P2PConnectionSMCommon<M> {
     peer_id_str: String,
     connector: DynP2PConnector<M>,
     incoming_connections: Receiver<DynP2PConnection<M>>,
-    status_sender: watch::Sender<P2PConnectionStatus>,
+    status_sender: watch::Sender<Option<Duration>>,
 }
 
 enum P2PConnectionSMState<M> {
@@ -254,21 +254,15 @@ enum P2PConnectionSMState<M> {
 impl<M: Send + 'static> P2PConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
-            P2PConnectionSMState::Disconnected(disconnected) => {
-                self.common
-                    .status_sender
-                    .send(P2PConnectionStatus::Disconnected)
-                    .ok();
+            P2PConnectionSMState::Disconnected(backoff) => {
+                self.common.status_sender.send(None).ok();
 
-                self.common.transition_disconnected(disconnected).await
+                self.common.transition_disconnected(backoff).await
             }
-            P2PConnectionSMState::Connected(connected) => {
-                self.common
-                    .status_sender
-                    .send(P2PConnectionStatus::Connected)
-                    .ok();
+            P2PConnectionSMState::Connected(connection) => {
+                self.common.status_sender.send(Some(connection.rtt())).ok();
 
-                self.common.transition_connected(connected).await
+                self.common.transition_connected(connection).await
             }
         }
         .map(|state| P2PConnectionStateMachine {
