@@ -193,6 +193,7 @@ jaq-core = "2.1.1"
 jaq-json = { version = "1.1.1", features = ["serde_json"] }
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
+lnurl-rs = { version = "0.9.0", default-features = false }
 miniscript = "12.3.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"

@@ -22,7 +22,7 @@ fedimint-mint-client = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
-lnurl-rs = { version = "0.9.0", default-features = false }
+lnurl-rs = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
