@@ -1248,13 +1248,12 @@ mod iroh {
                 })
                 .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
+            let builder = Endpoint::builder().discovery_n0();
+            #[cfg(not(target_family = "wasm"))]
+            let builder = builder.discovery_dht();
             Ok(Self {
                 node_ids,
-                endpoint: Endpoint::builder()
-                    .discovery_n0()
-                    .discovery_dht()
-                    .bind()
-                    .await?,
+                endpoint: builder.bind().await?,
                 connection_overrides: BTreeMap::new(),
             })
         }

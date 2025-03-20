@@ -251,11 +251,16 @@ impl Fedimintd {
 
         let opts: ServerOpts = ServerOpts::parse();
 
-        TracingSetup::default()
-            .tokio_console_bind(opts.tokio_console_bind)
-            .with_jaeger(opts.with_telemetry)
-            .init()
-            .unwrap();
+        let mut tracing_builder = TracingSetup::default();
+
+        #[cfg(feature = "telemetry")]
+        {
+            tracing_builder
+                .tokio_console_bind(opts.tokio_console_bind)
+                .with_jaeger(opts.with_telemetry);
+        }
+
+        tracing_builder.init().unwrap();
 
         info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 

@@ -110,6 +110,8 @@ impl GeneralCommands {
                         invite_code,
                         #[cfg(feature = "tor")]
                         use_tor,
+                        #[cfg(not(feature = "tor"))]
+                        use_tor: None,
                         recover,
                     })
                     .await?;
