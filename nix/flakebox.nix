@@ -809,6 +809,16 @@ in
       bin = "fedimint-recoverytool";
     };
 
+    fedimint-recurringd-pkgs = fedimintBuildPackageGroup {
+      pname = "fedimint-recurringd-pkgs";
+      packages = [ "fedimint-recurringd" ];
+    };
+
+    fedimint-recurringd = flakeboxLib.pickBinary {
+      pkg = fedimint-recurringd-pkgs;
+      bin = "fedimint-recurringd";
+    };
+
     container =
       let
         entrypointScript = pkgs.writeShellScriptBin "entrypoint" ''
