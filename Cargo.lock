@@ -3464,6 +3464,7 @@ name = "fedimint-lnv2-tests"
 version = "0.7.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-trait",
  "clap",
  "devimint",

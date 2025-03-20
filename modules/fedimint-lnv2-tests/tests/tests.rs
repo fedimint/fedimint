@@ -2,6 +2,7 @@ mod mock;
 
 use std::sync::Arc;
 
+use assert_matches::assert_matches;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -76,7 +77,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     assert_eq!(sub.ok().await?, SendOperationState::Funding);
     assert_eq!(sub.ok().await?, SendOperationState::Funded);
-    assert_eq!(sub.ok().await?, SendOperationState::Success);
+    assert_matches!(sub.ok().await?, SendOperationState::Success { .. });
 
     assert_eq!(
         client
@@ -226,7 +227,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         .await
         .expect("Failed to claim outgoing contract");
 
-    assert_eq!(sub.ok().await?, SendOperationState::Success);
+    assert_matches!(sub.ok().await?, SendOperationState::Success { .. });
 
     Ok(())
 }

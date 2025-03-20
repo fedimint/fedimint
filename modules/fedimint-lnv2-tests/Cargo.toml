@@ -17,6 +17,7 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+assert_matches = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
