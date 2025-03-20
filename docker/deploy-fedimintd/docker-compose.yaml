@@ -68,7 +68,6 @@ services:
       - "traefik.http.routers.fedimintd.rule=Host(`${FM_DOMAIN}`) && Path(`/ws/`)"
       - "traefik.http.routers.fedimintd.entrypoints=websecure"
       - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
-    restart: unless-stopped
     networks:
       - fedimint_network
 
@@ -86,7 +85,6 @@ services:
       - "traefik.http.routers.guardian-ui.rule=Host(`${FM_DOMAIN}`)"
       - "traefik.http.routers.guardian-ui.entrypoints=websecure"
       - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
-    restart: unless-stopped
     networks:
       - fedimint_network
 
