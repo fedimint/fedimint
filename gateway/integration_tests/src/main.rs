@@ -587,6 +587,21 @@ async fn liquidity_test() -> anyhow::Result<()> {
             })
             .await?;
 
+            if devimint::util::Gatewayd::version_or_default().await >= *VERSION_0_7_0_ALPHA {
+                info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
+                let offer_with_amount = gw_ldk_second.create_offer(Some(Amount::from_msats(10_000_000))).await?;
+                gw_ldk.pay_offer(offer_with_amount, None).await?;
+
+                let offer_without_amount = gw_ldk.create_offer(None).await?;
+                gw_ldk_second.pay_offer(offer_without_amount.clone(), Some(Amount::from_msats(5_000_000))).await?;
+
+                // Cannot pay an offer without an amount without specifying an amount
+                gw_ldk_second.pay_offer(offer_without_amount.clone(), None).await.expect_err("Cannot pay amountless offer without specifying an amount");
+
+                // Verify we can pay the offer again
+                gw_ldk_second.pay_offer(offer_without_amount, Some(Amount::from_msats(3_000_000))).await?;
+            }
+
             info!(target: LOG_TEST, "Pegging-out gateways...");
             federation
                 .pegout_gateways(500_000_000, gateways.clone())

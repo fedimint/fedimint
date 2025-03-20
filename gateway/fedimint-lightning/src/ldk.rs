@@ -792,7 +792,7 @@ impl ILnRpcClient for GatewayLdkClient {
                     failure_reason: err.to_string(),
                 })?
         };
-        info!(target: LOG_LIGHTNING, ?payment_id, "Bolt12 PaymentId");
+        info!(target: LOG_LIGHTNING, offer = %offer, payment_id = %payment_id, "Successfully paid offer");
         Ok(())
     }
 }
