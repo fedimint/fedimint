@@ -110,72 +110,74 @@
 <a href=#110 id=110 data-nosnippet>110</a>                        invite_code,
 <a href=#111 id=111 data-nosnippet>111</a>                        <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
 <a href=#112 id=112 data-nosnippet>112</a>                        </span>use_tor,
-<a href=#113 id=113 data-nosnippet>113</a>                        recover,
-<a href=#114 id=114 data-nosnippet>114</a>                    })
-<a href=#115 id=115 data-nosnippet>115</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#116 id=116 data-nosnippet>116</a>
-<a href=#117 id=117 data-nosnippet>117</a>                print_response(response);
-<a href=#118 id=118 data-nosnippet>118</a>            }
-<a href=#119 id=119 data-nosnippet>119</a>            <span class="self">Self</span>::LeaveFed { federation_id } =&gt; {
-<a href=#120 id=120 data-nosnippet>120</a>                <span class="kw">let </span>response = create_client()
-<a href=#121 id=121 data-nosnippet>121</a>                    .leave_federation(LeaveFedPayload { federation_id })
-<a href=#122 id=122 data-nosnippet>122</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#123 id=123 data-nosnippet>123</a>                print_response(response);
-<a href=#124 id=124 data-nosnippet>124</a>            }
-<a href=#125 id=125 data-nosnippet>125</a>            <span class="self">Self</span>::Seed =&gt; {
-<a href=#126 id=126 data-nosnippet>126</a>                <span class="kw">let </span>response = create_client().get_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#127 id=127 data-nosnippet>127</a>                print_response(response);
-<a href=#128 id=128 data-nosnippet>128</a>            }
-<a href=#129 id=129 data-nosnippet>129</a>            <span class="self">Self</span>::Stop =&gt; {
-<a href=#130 id=130 data-nosnippet>130</a>                create_client().stop().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#131 id=131 data-nosnippet>131</a>            }
-<a href=#132 id=132 data-nosnippet>132</a>            <span class="self">Self</span>::PaymentLog {
-<a href=#133 id=133 data-nosnippet>133</a>                end_position,
-<a href=#134 id=134 data-nosnippet>134</a>                pagination_size,
-<a href=#135 id=135 data-nosnippet>135</a>                federation_id,
-<a href=#136 id=136 data-nosnippet>136</a>                event_kinds,
-<a href=#137 id=137 data-nosnippet>137</a>            } =&gt; {
-<a href=#138 id=138 data-nosnippet>138</a>                <span class="kw">let </span>payment_log = create_client()
-<a href=#139 id=139 data-nosnippet>139</a>                    .payment_log(PaymentLogPayload {
-<a href=#140 id=140 data-nosnippet>140</a>                        end_position,
-<a href=#141 id=141 data-nosnippet>141</a>                        pagination_size,
-<a href=#142 id=142 data-nosnippet>142</a>                        federation_id,
-<a href=#143 id=143 data-nosnippet>143</a>                        event_kinds,
-<a href=#144 id=144 data-nosnippet>144</a>                    })
-<a href=#145 id=145 data-nosnippet>145</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#146 id=146 data-nosnippet>146</a>                print_response(payment_log);
-<a href=#147 id=147 data-nosnippet>147</a>            }
-<a href=#148 id=148 data-nosnippet>148</a>            <span class="self">Self</span>::CreatePasswordHash { password, cost } =&gt; print_response(
-<a href=#149 id=149 data-nosnippet>149</a>                bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))
-<a href=#150 id=150 data-nosnippet>150</a>                    .expect(<span class="string">"Unable to create bcrypt hash"</span>),
-<a href=#151 id=151 data-nosnippet>151</a>            ),
-<a href=#152 id=152 data-nosnippet>152</a>            <span class="self">Self</span>::PaymentSummary { start, end } =&gt; {
-<a href=#153 id=153 data-nosnippet>153</a>                <span class="kw">let </span>now = now();
-<a href=#154 id=154 data-nosnippet>154</a>                <span class="kw">let </span>now_millis = now
-<a href=#155 id=155 data-nosnippet>155</a>                    .duration_since(UNIX_EPOCH)
-<a href=#156 id=156 data-nosnippet>156</a>                    .expect(<span class="string">"Before unix epoch"</span>)
-<a href=#157 id=157 data-nosnippet>157</a>                    .as_millis()
-<a href=#158 id=158 data-nosnippet>158</a>                    .try_into()<span class="question-mark">?</span>;
-<a href=#159 id=159 data-nosnippet>159</a>                <span class="kw">let </span>one_day_ago = now
-<a href=#160 id=160 data-nosnippet>160</a>                    .checked_sub(Duration::from_secs(<span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24</span>))
-<a href=#161 id=161 data-nosnippet>161</a>                    .expect(<span class="string">"Before unix epoch"</span>);
-<a href=#162 id=162 data-nosnippet>162</a>                <span class="kw">let </span>one_day_ago_millis = one_day_ago
-<a href=#163 id=163 data-nosnippet>163</a>                    .duration_since(UNIX_EPOCH)
-<a href=#164 id=164 data-nosnippet>164</a>                    .expect(<span class="string">"Before unix epoch"</span>)
-<a href=#165 id=165 data-nosnippet>165</a>                    .as_millis()
-<a href=#166 id=166 data-nosnippet>166</a>                    .try_into()<span class="question-mark">?</span>;
-<a href=#167 id=167 data-nosnippet>167</a>                <span class="kw">let </span>end_millis = end.unwrap_or(now_millis);
-<a href=#168 id=168 data-nosnippet>168</a>                <span class="kw">let </span>start_millis = start.unwrap_or(one_day_ago_millis);
-<a href=#169 id=169 data-nosnippet>169</a>                <span class="kw">let </span>payment_summary = create_client()
-<a href=#170 id=170 data-nosnippet>170</a>                    .payment_summary(PaymentSummaryPayload {
-<a href=#171 id=171 data-nosnippet>171</a>                        start_millis,
-<a href=#172 id=172 data-nosnippet>172</a>                        end_millis,
-<a href=#173 id=173 data-nosnippet>173</a>                    })
-<a href=#174 id=174 data-nosnippet>174</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#175 id=175 data-nosnippet>175</a>                print_response(payment_summary);
-<a href=#176 id=176 data-nosnippet>176</a>            }
-<a href=#177 id=177 data-nosnippet>177</a>        }
-<a href=#178 id=178 data-nosnippet>178</a>
-<a href=#179 id=179 data-nosnippet>179</a>        <span class="prelude-val">Ok</span>(())
-<a href=#180 id=180 data-nosnippet>180</a>    }
-<a href=#181 id=181 data-nosnippet>181</a>}</code></pre></div></section></main></body></html>
+<a href=#113 id=113 data-nosnippet>113</a>                        <span class="attr">#[cfg(not(feature = <span class="string">"tor"</span>))]
+<a href=#114 id=114 data-nosnippet>114</a>                        </span>use_tor: <span class="prelude-val">None</span>,
+<a href=#115 id=115 data-nosnippet>115</a>                        recover,
+<a href=#116 id=116 data-nosnippet>116</a>                    })
+<a href=#117 id=117 data-nosnippet>117</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a>                print_response(response);
+<a href=#120 id=120 data-nosnippet>120</a>            }
+<a href=#121 id=121 data-nosnippet>121</a>            <span class="self">Self</span>::LeaveFed { federation_id } =&gt; {
+<a href=#122 id=122 data-nosnippet>122</a>                <span class="kw">let </span>response = create_client()
+<a href=#123 id=123 data-nosnippet>123</a>                    .leave_federation(LeaveFedPayload { federation_id })
+<a href=#124 id=124 data-nosnippet>124</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#125 id=125 data-nosnippet>125</a>                print_response(response);
+<a href=#126 id=126 data-nosnippet>126</a>            }
+<a href=#127 id=127 data-nosnippet>127</a>            <span class="self">Self</span>::Seed =&gt; {
+<a href=#128 id=128 data-nosnippet>128</a>                <span class="kw">let </span>response = create_client().get_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#129 id=129 data-nosnippet>129</a>                print_response(response);
+<a href=#130 id=130 data-nosnippet>130</a>            }
+<a href=#131 id=131 data-nosnippet>131</a>            <span class="self">Self</span>::Stop =&gt; {
+<a href=#132 id=132 data-nosnippet>132</a>                create_client().stop().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#133 id=133 data-nosnippet>133</a>            }
+<a href=#134 id=134 data-nosnippet>134</a>            <span class="self">Self</span>::PaymentLog {
+<a href=#135 id=135 data-nosnippet>135</a>                end_position,
+<a href=#136 id=136 data-nosnippet>136</a>                pagination_size,
+<a href=#137 id=137 data-nosnippet>137</a>                federation_id,
+<a href=#138 id=138 data-nosnippet>138</a>                event_kinds,
+<a href=#139 id=139 data-nosnippet>139</a>            } =&gt; {
+<a href=#140 id=140 data-nosnippet>140</a>                <span class="kw">let </span>payment_log = create_client()
+<a href=#141 id=141 data-nosnippet>141</a>                    .payment_log(PaymentLogPayload {
+<a href=#142 id=142 data-nosnippet>142</a>                        end_position,
+<a href=#143 id=143 data-nosnippet>143</a>                        pagination_size,
+<a href=#144 id=144 data-nosnippet>144</a>                        federation_id,
+<a href=#145 id=145 data-nosnippet>145</a>                        event_kinds,
+<a href=#146 id=146 data-nosnippet>146</a>                    })
+<a href=#147 id=147 data-nosnippet>147</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#148 id=148 data-nosnippet>148</a>                print_response(payment_log);
+<a href=#149 id=149 data-nosnippet>149</a>            }
+<a href=#150 id=150 data-nosnippet>150</a>            <span class="self">Self</span>::CreatePasswordHash { password, cost } =&gt; print_response(
+<a href=#151 id=151 data-nosnippet>151</a>                bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))
+<a href=#152 id=152 data-nosnippet>152</a>                    .expect(<span class="string">"Unable to create bcrypt hash"</span>),
+<a href=#153 id=153 data-nosnippet>153</a>            ),
+<a href=#154 id=154 data-nosnippet>154</a>            <span class="self">Self</span>::PaymentSummary { start, end } =&gt; {
+<a href=#155 id=155 data-nosnippet>155</a>                <span class="kw">let </span>now = now();
+<a href=#156 id=156 data-nosnippet>156</a>                <span class="kw">let </span>now_millis = now
+<a href=#157 id=157 data-nosnippet>157</a>                    .duration_since(UNIX_EPOCH)
+<a href=#158 id=158 data-nosnippet>158</a>                    .expect(<span class="string">"Before unix epoch"</span>)
+<a href=#159 id=159 data-nosnippet>159</a>                    .as_millis()
+<a href=#160 id=160 data-nosnippet>160</a>                    .try_into()<span class="question-mark">?</span>;
+<a href=#161 id=161 data-nosnippet>161</a>                <span class="kw">let </span>one_day_ago = now
+<a href=#162 id=162 data-nosnippet>162</a>                    .checked_sub(Duration::from_secs(<span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24</span>))
+<a href=#163 id=163 data-nosnippet>163</a>                    .expect(<span class="string">"Before unix epoch"</span>);
+<a href=#164 id=164 data-nosnippet>164</a>                <span class="kw">let </span>one_day_ago_millis = one_day_ago
+<a href=#165 id=165 data-nosnippet>165</a>                    .duration_since(UNIX_EPOCH)
+<a href=#166 id=166 data-nosnippet>166</a>                    .expect(<span class="string">"Before unix epoch"</span>)
+<a href=#167 id=167 data-nosnippet>167</a>                    .as_millis()
+<a href=#168 id=168 data-nosnippet>168</a>                    .try_into()<span class="question-mark">?</span>;
+<a href=#169 id=169 data-nosnippet>169</a>                <span class="kw">let </span>end_millis = end.unwrap_or(now_millis);
+<a href=#170 id=170 data-nosnippet>170</a>                <span class="kw">let </span>start_millis = start.unwrap_or(one_day_ago_millis);
+<a href=#171 id=171 data-nosnippet>171</a>                <span class="kw">let </span>payment_summary = create_client()
+<a href=#172 id=172 data-nosnippet>172</a>                    .payment_summary(PaymentSummaryPayload {
+<a href=#173 id=173 data-nosnippet>173</a>                        start_millis,
+<a href=#174 id=174 data-nosnippet>174</a>                        end_millis,
+<a href=#175 id=175 data-nosnippet>175</a>                    })
+<a href=#176 id=176 data-nosnippet>176</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#177 id=177 data-nosnippet>177</a>                print_response(payment_summary);
+<a href=#178 id=178 data-nosnippet>178</a>            }
+<a href=#179 id=179 data-nosnippet>179</a>        }
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="prelude-val">Ok</span>(())
+<a href=#182 id=182 data-nosnippet>182</a>    }
+<a href=#183 id=183 data-nosnippet>183</a>}</code></pre></div></section></main></body></html>
