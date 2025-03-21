@@ -38,7 +38,7 @@ impl SendStateMachine {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct SendSMCommon {
     pub operation_id: OperationId,
-    pub funding_txid: TransactionId,
+    pub outpoint: OutPoint,
     pub gateway_api: SafeUrl,
     pub contract: OutgoingContract,
     pub invoice: LightningInvoice,
@@ -83,7 +83,7 @@ impl State for SendStateMachine {
         match &self.state {
             SendSMState::Funding => {
                 vec![StateTransition::new(
-                    Self::await_funding(global_context.clone(), self.common.funding_txid),
+                    Self::await_funding(global_context.clone(), self.common.outpoint.txid),
                     |_, error, old_state| {
                         Box::pin(async move { Self::transition_funding(error, &old_state) })
                     },
@@ -95,6 +95,7 @@ impl State for SendStateMachine {
                         Self::gateway_send_payment(
                             self.common.gateway_api.clone(),
                             context.federation_id,
+                            self.common.outpoint,
                             self.common.contract.clone(),
                             self.common.invoice.clone(),
                             self.common.refund_keypair,
@@ -110,7 +111,11 @@ impl State for SendStateMachine {
                         },
                     ),
                     StateTransition::new(
-                        Self::await_preimage(self.common.contract.clone(), gc_preimage.clone()),
+                        Self::await_preimage(
+                            self.common.outpoint,
+                            self.common.contract.clone(),
+                            gc_preimage.clone(),
+                        ),
                         move |dbtx, preimage, old_state| {
                             Box::pin(Self::transition_preimage(
                                 dbtx,
@@ -155,6 +160,7 @@ impl SendStateMachine {
     async fn gateway_send_payment(
         gateway_api: SafeUrl,
         federation_id: FederationId,
+        outpoint: OutPoint,
         contract: OutgoingContract,
         invoice: LightningInvoice,
         refund_keypair: Keypair,
@@ -166,6 +172,7 @@ impl SendStateMachine {
                 .send_payment(
                     gateway_api.clone(),
                     federation_id,
+                    outpoint,
                     contract.clone(),
                     invoice.clone(),
                     refund_keypair.sign_schnorr(secp256k1::Message::from_digest(
@@ -196,7 +203,7 @@ impl SendStateMachine {
             Err(signature) => {
                 let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
-                        old_state.common.contract.contract_id(),
+                        old_state.common.outpoint,
                         OutgoingWitness::Cancel(signature),
                     )),
                     amount: old_state.common.contract.amount,
@@ -219,12 +226,13 @@ impl SendStateMachine {
 
     #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
     async fn await_preimage(
+        outpoint: OutPoint,
         contract: OutgoingContract,
         global_context: DynGlobalClientContext,
     ) -> Option<[u8; 32]> {
         let preimage = global_context
             .module_api()
-            .await_preimage(&contract.contract_id(), contract.expiration)
+            .await_preimage(outpoint, contract.expiration)
             .await?;
 
         if contract.verify_preimage(&preimage) {
@@ -248,7 +256,7 @@ impl SendStateMachine {
 
         let client_input = ClientInput::<LightningInput> {
             input: LightningInput::V0(LightningInputV0::Outgoing(
-                old_state.common.contract.contract_id(),
+                old_state.common.outpoint,
                 OutgoingWitness::Refund,
             )),
             amount: old_state.common.contract.amount,
