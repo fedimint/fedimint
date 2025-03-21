@@ -62,8 +62,6 @@ ssh -q "root@$ssh_host" << EOF
   systemctl stop fedimint-docker-compose 2>/dev/null || true
 
   if [ -e $host_dir  ] ; then
-    # Stop the docker-compose stack
-    cd $host_dir && docker-compose down 2>/dev/null || true
     # We remove only the fedimintd_data named volume
     docker volume rm fedimint-docker_fedimintd_data 2>/dev/null || true
   fi
@@ -90,8 +88,8 @@ After=docker.service
 
 [Service]
 WorkingDirectory=${host_dir}
-ExecStart=/usr/bin/docker-compose up
-ExecStop=/usr/bin/docker-compose down
+ExecStart=/usr/bin/docker compose up
+ExecStop=/usr/bin/docker compose down
 Restart=always
 
 [Install]
@@ -113,8 +111,6 @@ ssh -q "root@$ssh_host" << EOF
   ufw allow 22/tcp
   ufw --force enable
 
-  apt-get update && apt-get install -q -y docker-compose
-
   systemctl daemon-reload
   systemctl enable fedimint-docker-compose
   systemctl start fedimint-docker-compose
@@ -134,9 +130,9 @@ The firewall was configured and enabled for you.
 
 docker-compose services were defined in the $host_dir and
 if ever need arise you can adjust them from there. You can
-'cd' to that directory and use 'docker-compose' to do basic
-operations. E.g. 'docker-compose logs fedimintd' to view the
-logs, or 'docker-compose exec -u bitcoin bitcoin bash' to
+'cd' to that directory and use 'docker compose' to do basic
+operations. E.g. 'docker compose logs fedimintd' to view the
+logs, or 'docker compose exec -u bitcoin bitcoin bash' to
 "enter" bitcoind container.
 
 Systemd unit 'fedimint-docker-compose' was installed and
