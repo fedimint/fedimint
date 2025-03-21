@@ -1,6 +1,6 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::{OutPoint, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_lnv2_common::ContractId;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use serde::{Deserialize, Serialize};
@@ -10,13 +10,14 @@ use tpe::DecryptionKeyShare;
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
-    BlockCountVote = 0x41,
-    UnixTimeVote = 0x42,
-    IncomingContract = 0x43,
-    OutgoingContract = 0x44,
-    DecryptionKeyShare = 0x45,
-    Preimage = 0x46,
-    Gateway = 0x47,
+    BlockCountVote = 0x01,
+    UnixTimeVote = 0x02,
+    IncomingContract = 0x03,
+    IncomingContractOutpoint = 0x04,
+    OutgoingContract = 0x05,
+    DecryptionKeyShare = 0x06,
+    Preimage = 0x07,
+    Gateway = 0x08,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -54,7 +55,7 @@ impl_db_record!(
 impl_db_lookup!(key = UnixTimeVoteKey, query_prefix = UnixTimeVotePrefix);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct IncomingContractKey(pub ContractId);
+pub struct IncomingContractKey(pub OutPoint);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct IncomingContractPrefix;
@@ -72,7 +73,25 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct OutgoingContractKey(pub ContractId);
+pub struct IncomingContractOutpointKey(pub ContractId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct IncomingContractOutpointPrefix;
+
+impl_db_record!(
+    key = IncomingContractOutpointKey,
+    value = OutPoint,
+    db_prefix = DbKeyPrefix::IncomingContractOutpoint,
+    notify_on_modify = true
+);
+
+impl_db_lookup!(
+    key = IncomingContractOutpointKey,
+    query_prefix = IncomingContractOutpointPrefix
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct OutgoingContractKey(pub OutPoint);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct OutgoingContractPrefix;
@@ -90,7 +109,7 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct DecryptionKeyShareKey(pub ContractId);
+pub struct DecryptionKeyShareKey(pub OutPoint);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct DecryptionKeySharePrefix;
@@ -108,7 +127,7 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct PreimageKey(pub ContractId);
+pub struct PreimageKey(pub OutPoint);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct PreimagePrefix;

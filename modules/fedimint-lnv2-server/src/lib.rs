@@ -66,8 +66,9 @@ use tracing::trace;
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, DecryptionKeyShareKey,
     DecryptionKeySharePrefix, GatewayKey, GatewayPrefix, IncomingContractKey,
-    IncomingContractPrefix, OutgoingContractKey, OutgoingContractPrefix, PreimageKey,
-    PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
+    IncomingContractOutpointKey, IncomingContractOutpointPrefix, IncomingContractPrefix,
+    OutgoingContractKey, OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey,
+    UnixTimeVotePrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -128,6 +129,16 @@ impl ModuleInit for LightningInit {
                         IncomingContract,
                         lightning,
                         "Lightning Incoming Contracts"
+                    );
+                }
+                DbKeyPrefix::IncomingContractOutpoint => {
+                    push_db_pair_items!(
+                        dbtx,
+                        IncomingContractOutpointPrefix,
+                        LightningIncomingContractOutpointKey,
+                        OutPoint,
+                        lightning,
+                        "Lightning Incoming Contracts Outpoints"
                     );
                 }
                 DbKeyPrefix::DecryptionKeyShare => {
@@ -359,6 +370,7 @@ impl ServerModule for Lightning {
         peer: PeerId,
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_LNV2, ?consensus_item, "Processing consensus item proposal");
+
         match consensus_item {
             LightningConsensusItem::BlockCountVote(vote) => {
                 let current_vote = dbtx
@@ -393,9 +405,9 @@ impl ServerModule for Lightning {
         _in_point: InPoint,
     ) -> Result<InputMeta, LightningInputError> {
         let (pub_key, amount) = match input.ensure_v0_ref()? {
-            LightningInputV0::Outgoing(contract_id, outgoing_witness) => {
+            LightningInputV0::Outgoing(outpoint, outgoing_witness) => {
                 let contract = dbtx
-                    .remove_entry(&OutgoingContractKey(*contract_id))
+                    .remove_entry(&OutgoingContractKey(*outpoint))
                     .await
                     .ok_or(LightningInputError::UnknownContract)?;
 
@@ -409,8 +421,7 @@ impl ServerModule for Lightning {
                             return Err(LightningInputError::InvalidPreimage);
                         }
 
-                        dbtx.insert_entry(&PreimageKey(*contract_id), preimage)
-                            .await;
+                        dbtx.insert_entry(&PreimageKey(*outpoint), preimage).await;
 
                         contract.claim_pk
                     }
@@ -432,9 +443,9 @@ impl ServerModule for Lightning {
 
                 (pub_key, contract.amount)
             }
-            LightningInputV0::Incoming(contract_id, agg_decryption_key) => {
+            LightningInputV0::Incoming(outpoint, agg_decryption_key) => {
                 let contract = dbtx
-                    .remove_entry(&IncomingContractKey(*contract_id))
+                    .remove_entry(&IncomingContractKey(*outpoint))
                     .await
                     .ok_or(LightningInputError::UnknownContract)?;
 
@@ -466,17 +477,12 @@ impl ServerModule for Lightning {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a LightningOutput,
-        _outpoint: OutPoint,
+        outpoint: OutPoint,
     ) -> Result<TransactionItemAmount, LightningOutputError> {
         let amount = match output.ensure_v0_ref()? {
             LightningOutputV0::Outgoing(contract) => {
-                if dbtx
-                    .insert_entry(&OutgoingContractKey(contract.contract_id()), contract)
-                    .await
-                    .is_some()
-                {
-                    return Err(LightningOutputError::ContractAlreadyExists);
-                }
+                dbtx.insert_new_entry(&OutgoingContractKey(outpoint), contract)
+                    .await;
 
                 contract.amount
             }
@@ -489,17 +495,18 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::ContractExpired);
                 }
 
-                if dbtx
-                    .insert_entry(&IncomingContractKey(contract.contract_id()), contract)
-                    .await
-                    .is_some()
-                {
-                    return Err(LightningOutputError::ContractAlreadyExists);
-                }
+                dbtx.insert_new_entry(&IncomingContractKey(outpoint), contract)
+                    .await;
+
+                dbtx.insert_entry(
+                    &IncomingContractOutpointKey(contract.contract_id()),
+                    &outpoint,
+                )
+                .await;
 
                 let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
 
-                dbtx.insert_entry(&DecryptionKeyShareKey(contract.contract_id()), &dk_share)
+                dbtx.insert_entry(&DecryptionKeyShareKey(outpoint), &dk_share)
                     .await;
 
                 contract.commitment.amount
@@ -562,7 +569,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 AWAIT_INCOMING_CONTRACT_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Lightning, context, params: (ContractId, u64) | -> Option<ContractId> {
+                async |module: &Lightning, context, params: (ContractId, u64) | -> Option<OutPoint> {
                     let db = context.db();
 
                     Ok(module.await_incoming_contract(db, params.0, params.1).await)
@@ -571,7 +578,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 AWAIT_PREIMAGE_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Lightning, context, params: (ContractId, u64)| -> Option<[u8; 32]> {
+                async |module: &Lightning, context, params: (OutPoint, u64)| -> Option<[u8; 32]> {
                     let db = context.db();
 
                     Ok(module.await_preimage(db, params.0, params.1).await)
@@ -580,7 +587,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 DECRYPTION_KEY_SHARE_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |_module: &Lightning, context, params: ContractId| -> DecryptionKeyShare {
+                async |_module: &Lightning, context, params: OutPoint| -> DecryptionKeyShare {
                     let share = context
                         .db()
                         .begin_transaction_nc()
@@ -595,10 +602,10 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Lightning, context, contract_id: ContractId| -> Option<u64> {
+                async |module: &Lightning, context, outpoint: OutPoint| -> Option<(ContractId, u64)> {
                     let db = context.db();
 
-                    Ok(module.outgoing_contract_expiration(db, contract_id).await)
+                    Ok(module.outgoing_contract_expiration(db, outpoint).await)
                 }
             },
             api_endpoint! {
@@ -711,11 +718,11 @@ impl Lightning {
         db: Database,
         contract_id: ContractId,
         expiration: u64,
-    ) -> Option<ContractId> {
+    ) -> Option<OutPoint> {
         loop {
             timeout(
                 Duration::from_secs(10),
-                db.wait_key_exists(&IncomingContractKey(contract_id)),
+                db.wait_key_exists(&IncomingContractOutpointKey(contract_id)),
             )
             .await
             .ok();
@@ -724,8 +731,11 @@ impl Lightning {
             // its expiration in the same database transaction
             let mut dbtx = db.begin_transaction_nc().await;
 
-            if let Some(contract) = dbtx.get_value(&IncomingContractKey(contract_id)).await {
-                return Some(contract.contract_id());
+            if let Some(outpoint) = dbtx
+                .get_value(&IncomingContractOutpointKey(contract_id))
+                .await
+            {
+                return Some(outpoint);
             }
 
             if expiration <= self.consensus_unix_time(&mut dbtx).await {
@@ -737,13 +747,13 @@ impl Lightning {
     async fn await_preimage(
         &self,
         db: Database,
-        contract_id: ContractId,
+        outpoint: OutPoint,
         expiration: u64,
     ) -> Option<[u8; 32]> {
         loop {
             timeout(
                 Duration::from_secs(10),
-                db.wait_key_exists(&PreimageKey(contract_id)),
+                db.wait_key_exists(&PreimageKey(outpoint)),
             )
             .await
             .ok();
@@ -752,7 +762,7 @@ impl Lightning {
             // the contracts expiration in the same database transaction
             let mut dbtx = db.begin_transaction_nc().await;
 
-            if let Some(preimage) = dbtx.get_value(&PreimageKey(contract_id)).await {
+            if let Some(preimage) = dbtx.get_value(&PreimageKey(outpoint)).await {
                 return Some(preimage);
             }
 
@@ -765,15 +775,17 @@ impl Lightning {
     async fn outgoing_contract_expiration(
         &self,
         db: Database,
-        contract_id: ContractId,
-    ) -> Option<u64> {
+        outpoint: OutPoint,
+    ) -> Option<(ContractId, u64)> {
         let mut dbtx = db.begin_transaction_nc().await;
 
-        let contract = dbtx.get_value(&OutgoingContractKey(contract_id)).await?;
+        let contract = dbtx.get_value(&OutgoingContractKey(outpoint)).await?;
 
         let consensus_block_count = self.consensus_block_count(&mut dbtx).await;
 
-        Some(contract.expiration.saturating_sub(consensus_block_count))
+        let expiration = contract.expiration.saturating_sub(consensus_block_count);
+
+        Some((contract.contract_id(), expiration))
     }
 
     async fn add_gateway(db: Database, gateway: SafeUrl) -> bool {

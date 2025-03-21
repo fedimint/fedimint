@@ -14,7 +14,7 @@ use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
-use fedimint_lnv2_common::{ContractId, LightningInput, LightningInputV0};
+use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use fedimint_logging::LOG_CLIENT_MODULE_GW;
 use tpe::{AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, aggregate_dk_shares};
 use tracing::warn;
@@ -51,7 +51,7 @@ impl fmt::Display for ReceiveStateMachine {
 pub struct ReceiveSMCommon {
     pub operation_id: OperationId,
     pub contract: IncomingContract,
-    pub out_point: OutPoint,
+    pub outpoint: OutPoint,
     pub refund_keypair: Keypair,
 }
 
@@ -106,8 +106,7 @@ impl State for ReceiveStateMachine {
                     Self::await_decryption_shares(
                         global_context.clone(),
                         context.tpe_pks.clone(),
-                        self.common.out_point,
-                        self.common.contract.contract_id(),
+                        self.common.outpoint,
                         self.common.contract.clone(),
                     ),
                     move |dbtx, output_outcomes, old_state| {
@@ -141,7 +140,6 @@ impl ReceiveStateMachine {
         global_context: DynGlobalClientContext,
         tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
         outpoint: OutPoint,
-        contract_id: ContractId,
         contract: IncomingContract,
     ) -> Result<BTreeMap<PeerId, DecryptionKeyShare>, String> {
         global_context.await_tx_accepted(outpoint.txid).await?;
@@ -167,7 +165,7 @@ impl ReceiveStateMachine {
                     global_context.api().all_peers().to_num_peers(),
                 ),
                 DECRYPTION_KEY_SHARE_ENDPOINT.to_owned(),
-                ApiRequestErased::new(contract_id),
+                ApiRequestErased::new(outpoint),
             )
             .await)
     }
@@ -252,7 +250,7 @@ impl ReceiveStateMachine {
 
         let client_input = ClientInput::<LightningInput> {
             input: LightningInput::V0(LightningInputV0::Incoming(
-                old_state.common.contract.contract_id(),
+                old_state.common.outpoint,
                 agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,

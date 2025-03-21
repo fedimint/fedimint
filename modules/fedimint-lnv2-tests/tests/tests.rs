@@ -6,7 +6,7 @@ use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBu
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::util::NextOrPending as _;
-use fedimint_core::{Amount, sats};
+use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
@@ -196,14 +196,14 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         .await
         .ok_or(anyhow::anyhow!("Operation not found"))?;
 
-    let contract = match operation.meta::<LightningOperationMeta>() {
-        LightningOperationMeta::Send(send_operation_meta) => send_operation_meta.contract,
+    let (contract, txid) = match operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::Send(meta) => (meta.contract, meta.change_outpoint_range.txid),
         LightningOperationMeta::Receive(..) => panic!("Operation Meta is a Receive variant"),
     };
 
     let client_input = ClientInput::<LightningInput> {
         input: LightningInput::V0(LightningInputV0::Outgoing(
-            contract.contract_id(),
+            OutPoint { txid, out_idx: 0 },
             OutgoingWitness::Claim(MOCK_INVOICE_PREIMAGE),
         )),
         amount: contract.amount,

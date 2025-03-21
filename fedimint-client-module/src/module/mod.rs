@@ -28,8 +28,8 @@ use fedimint_core::{
 use fedimint_eventlog::{Event, EventKind};
 use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use self::init::ClientModuleInit;
@@ -1110,7 +1110,7 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
 }
 
 /// A contiguous range of input/output indexes
-#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 pub struct IdxRange {
     start: u64,
     end: u64,
@@ -1156,7 +1156,7 @@ impl IntoIterator for IdxRange {
     }
 }
 
-#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 pub struct OutPointRange {
     pub txid: TransactionId,
     idx_range: IdxRange,
