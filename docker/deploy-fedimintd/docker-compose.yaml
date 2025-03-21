@@ -1,8 +1,3 @@
-# See the .env file for config options
-
-# version of docker-compose format, do not change
-version: "3.3"
-
 services:
   traefik:
     image: "traefik:v2.10"
