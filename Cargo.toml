@@ -290,4 +290,4 @@ opt-level = 1
 [profile.release]
 debug = "line-tables-only"
 lto = "fat"
-codegen-units = 1
+codegen-units = 4
