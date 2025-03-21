@@ -27,7 +27,7 @@ use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN,
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
+use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API, LOG_NET_IROH};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
@@ -57,7 +57,8 @@ const TRANSACTION_BUFFER: usize = 1000;
 pub async fn run(
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
-    api_bind_addr: SocketAddr,
+    ws_api_bind_addr: SocketAddr,
+    iroh_api_bind_addr: SocketAddr,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -179,14 +180,14 @@ pub async fn run(
         &cfg.local,
         consensus_api.clone(),
         force_api_secrets.clone(),
-        api_bind_addr,
+        ws_api_bind_addr,
     )
     .await;
 
     if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
         Box::pin(start_iroh_api(
             iroh_api_sk,
-            api_bind_addr,
+            iroh_api_bind_addr,
             consensus_api.clone(),
             task_group,
         ))
@@ -354,6 +355,7 @@ async fn start_iroh_api(
         .secret_key(secret_key)
         .alpns(vec![FEDIMINT_API_ALPN.to_vec()]);
 
+    info!(target: LOG_NET_IROH, addr=%bind_addr, "Iroh api bind addr");
     let builder = match bind_addr {
         SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
         SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),

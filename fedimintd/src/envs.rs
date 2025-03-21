@@ -23,6 +23,12 @@ pub const FM_P2P_URL_ENV: &str = "FM_P2P_URL";
 pub const FM_BIND_API_ENV: &str = "FM_BIND_API";
 
 // Env variable to TODO
+pub const FM_BIND_API_WS_ENV: &str = "FM_BIND_API_WS";
+
+// Env variable to TODO
+pub const FM_BIND_API_IROH_ENV: &str = "FM_BIND_API_IROH";
+
+// Env variable to TODO
 pub const FM_API_URL_ENV: &str = "FM_API_URL";
 
 // Env variable to bind the web UI server

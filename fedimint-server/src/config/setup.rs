@@ -177,8 +177,17 @@ impl ISetupApi for SetupApi {
                     iroh_api_sk: None,
                     iroh_p2p_sk: None,
                     endpoints: PeerEndpoints::Tcp {
-                        api_url: self.settings.api_url.clone(),
-                        p2p_url: self.settings.p2p_url.clone(),
+                        api_url: self
+                            .settings
+                            .api_url
+                            .clone()
+                            .ok_or_else(|| anyhow::format_err!("Api URL must be configured"))?,
+                        p2p_url: self
+                            .settings
+                            .p2p_url
+                            .clone()
+                            .ok_or_else(|| anyhow::format_err!("P2P URL must be configured"))?,
+
                         cert: tls_cert.0,
                     },
                     name,

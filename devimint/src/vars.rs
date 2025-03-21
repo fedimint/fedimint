@@ -247,6 +247,9 @@ impl Global {
 declare_vars! {
     Fedimintd = (globals: &Global, federation_name: String, peer_id: PeerId, overrides: &FedimintdPeerOverrides) => {
         FM_BIND_P2P: String = format!("127.0.0.1:{}", overrides.p2p.port()); env: "FM_BIND_P2P";
+        FM_BIND_API_WS: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API_WS";
+        FM_BIND_API_IROH: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API_IROH";
+        // for backwards compatibility with old versions
         FM_BIND_API: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API";
         FM_P2P_URL: String =  format!("fedimint://127.0.0.1:{}", overrides.p2p.port()); env: "FM_P2P_URL";
         FM_API_URL: String =  format!("ws://127.0.0.1:{}", overrides.api.port()); env: "FM_API_URL";

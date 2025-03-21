@@ -25,7 +25,7 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream, rustls};
 use tokio_util::codec::LengthDelimitedCodec;
-use tracing::trace;
+use tracing::{info, trace};
 
 use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection};
 
@@ -283,6 +283,8 @@ impl IrohConnector {
             .discovery_dht()
             .secret_key(secret_key)
             .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()]);
+
+        info!(target: LOG_NET_IROH, addr=%bind_addr, "Iroh p2p bind addr");
 
         let builder = match bind_addr {
             SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
