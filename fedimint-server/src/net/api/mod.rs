@@ -99,7 +99,7 @@ pub async fn spawn<T>(
     max_connections: u32,
     api_secrets: ApiSecrets,
 ) -> ServerHandle {
-    info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
+    info!(target: LOG_NET_API, "Starting http api on ws://{api_bind}");
 
     let builder = tower::ServiceBuilder::new().layer(HttpAuthLayer::new(api_secrets.get_all()));
 

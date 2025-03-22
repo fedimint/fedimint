@@ -287,6 +287,7 @@ impl FederationTestBuilder {
                     connections,
                     p2p_status_receivers,
                     api_bind,
+                    api_bind,
                     cfg.clone(),
                     db.clone(),
                     module_init_registry,

@@ -2,6 +2,8 @@ services:
   fedimintd:
     image: fedimint/fedimintd:master
     ports:
+      - 8173:8173
+      - 8174:8174
       - 8175:8175
     volumes:
       - fedimintd_data:/data
@@ -10,8 +12,22 @@ services:
       - FM_BITCOIN_NETWORK=signet
       - FM_BITCOIN_RPC_KIND=esplora
       - FM_BITCOIN_RPC_URL=https://mutinynet.com/api
-      - FM_BIND_UI=0.0.0.0:8175
+      - FM_BIND_P2P=0.0.0.0:8173
+      - FM_BIND_API_IROH=0.0.0.0:8174
+      - FM_BIND_API_WS=172.25.0.11:8174
+      - FM_BIND_UI=172.25.0.11:8175
+    networks:
+      fedimint_network:
+        ipv4_address: 172.25.0.11
     restart: always
+
+networks:
+  fedimint_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+          gateway: 172.25.0.1
 
 volumes:
   fedimintd_data:
