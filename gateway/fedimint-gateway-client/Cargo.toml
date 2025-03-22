@@ -30,7 +30,7 @@ bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.46"
+clap_complete = "4.5.47"
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }

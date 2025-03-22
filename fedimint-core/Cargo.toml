@@ -22,7 +22,7 @@ anyhow = { workspace = true }
 async-channel = "2.3.1"
 async-recursion = "1.1.1"
 async-trait = { workspace = true }
-backon = { version = "1.4.0", default-features = false }
+backon = { version = "1.4.1", default-features = false }
 backtrace = "0.3.74"
 base64 = { workspace = true }
 base64-url = { workspace = true }
@@ -43,7 +43,7 @@ hex-conservative = { workspace = true }
 imbl = "5.0.0"
 iroh-base = { workspace = true, default-features = false, features = ["key"] }
 itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.8", features = ["client"] }
+jsonrpsee-core = { version = "0.24.9", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
 lightning-types = "0.1.0"
