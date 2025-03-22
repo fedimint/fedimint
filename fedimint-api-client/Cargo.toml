@@ -39,7 +39,7 @@ iroh-base = { workspace = true, optional = true, default-features = false, featu
   "ticket",
 ] }
 itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.8" }
+jsonrpsee-core = { version = "0.24.9" }
 jsonrpsee-types = { version = "0.24.8" }
 lru = "0.13.0"
 rand = { workspace = true }
@@ -50,7 +50,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.24.8", features = [
+jsonrpsee-ws-client = { version = "0.24.9", features = [
   "tls",
 ], default-features = false }
 tokio-rustls = { version = "0.26.0", default-features = false, features = [
@@ -70,4 +70,4 @@ iroh = { workspace = true, optional = true, default-features = false, features =
 ] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = "0.24.8"
+jsonrpsee-wasm-client = "0.24.9"
