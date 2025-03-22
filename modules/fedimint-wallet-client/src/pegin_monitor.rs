@@ -192,7 +192,7 @@ async fn check_and_claim_idx_pegins(
 
                             let claimed_sender = pengin_claimed_sender.clone();
                             dbtx.on_commit(move || {
-                                let _ = claimed_sender.send(());
+                                claimed_sender.send_replace(());
                             });
 
                             let peg_in_tweak_index_data = PegInTweakIndexData {

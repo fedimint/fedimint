@@ -255,12 +255,14 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
             P2PConnectionSMState::Disconnected(backoff) => {
-                self.common.status_sender.send(None).ok();
+                self.common.status_sender.send_replace(None);
 
                 self.common.transition_disconnected(backoff).await
             }
             P2PConnectionSMState::Connected(connection) => {
-                self.common.status_sender.send(Some(connection.rtt())).ok();
+                self.common
+                    .status_sender
+                    .send_replace(Some(connection.rtt()));
 
                 self.common.transition_connected(connection).await
             }

@@ -186,6 +186,8 @@ where
     }
 
     pub fn update_recovery_progress(&self, progress: RecoveryProgress) {
+        // we want a warning if the send channel was not connected to
+        #[allow(clippy::disallowed_methods)]
         if progress.is_done() {
             // Recovery is complete when the recovery function finishes. To avoid
             // confusing any downstream code, we never send completed process.

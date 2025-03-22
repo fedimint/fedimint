@@ -1803,6 +1803,7 @@ impl Wallet {
                         None
                     };
 
+                #[allow(clippy::disallowed_methods)]
                 if sender.send(all_peers_supported_version).is_err() {
                     warn!(target: LOG_MODULE_WALLET, "Failed to send consensus version to watch channel, stopping task");
                     break;
