@@ -34,7 +34,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::now;
-use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send, secp256k1};
+use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -286,13 +286,17 @@ impl GatewayClientModuleV2 {
 
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
-        let max_delay = self
+        let (contract_id, expiration) = self
             .module_api
-            .outgoing_contract_expiration(&payload.contract.contract_id())
+            .outgoing_contract_expiration(payload.outpoint)
             .await
             .map_err(|_| anyhow!("The gateway can not reach the federation"))?
-            .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?
-            .saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
+            .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?;
+
+        ensure!(
+            contract_id == payload.contract.contract_id(),
+            "Contract Id returned by the federation does not match contract in request"
+        );
 
         let (payment_hash, amount) = match &payload.invoice {
             LightningInvoice::Bolt11(invoice) => (
@@ -316,8 +320,9 @@ impl GatewayClientModuleV2 {
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
                 operation_id,
+                outpoint: payload.outpoint,
                 contract: payload.contract.clone(),
-                max_delay,
+                max_delay: expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2),
                 min_contract_amount,
                 invoice: payload.invoice,
                 claim_keypair: self.keypair,
@@ -345,7 +350,7 @@ impl GatewayClientModuleV2 {
                     outgoing_contract: payload.contract.clone(),
                     min_contract_amount,
                     invoice_amount: Amount::from_msats(amount),
-                    max_delay,
+                    max_delay: expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2),
                 },
             )
             .await;
@@ -415,18 +420,15 @@ impl GatewayClientModuleV2 {
         };
         let commitment = contract.commitment.clone();
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |out_point_range: OutPointRange| {
-                assert_eq!(out_point_range.count(), 1);
-                let out_idx = out_point_range.start_idx();
+            state_machines: Arc::new(move |range: OutPointRange| {
+                assert_eq!(range.count(), 1);
+
                 vec![
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
                             operation_id,
                             contract: contract.clone(),
-                            out_point: OutPoint {
-                                txid: out_point_range.txid(),
-                                out_idx,
-                            },
+                            outpoint: range.into_iter().next().unwrap(),
                             refund_keypair,
                         },
                         state: ReceiveSMState::Funding,
@@ -496,17 +498,14 @@ impl GatewayClientModuleV2 {
         };
         let commitment = contract.commitment.clone();
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
-            state_machines: Arc::new(move |out_point_range| {
-                assert_eq!(out_point_range.count(), 1);
-                let out_idx = out_point_range.start_idx();
+            state_machines: Arc::new(move |range| {
+                assert_eq!(range.count(), 1);
+
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,
                         contract: contract.clone(),
-                        out_point: OutPoint {
-                            txid: out_point_range.txid(),
-                            out_idx,
-                        },
+                        outpoint: range.into_iter().next().unwrap(),
                         refund_keypair,
                     },
                     state: ReceiveSMState::Funding,

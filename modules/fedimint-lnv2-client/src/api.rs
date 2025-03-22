@@ -7,7 +7,7 @@ use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{NumPeersExt, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_lnv2_common::ContractId;
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
@@ -19,9 +19,13 @@ use rand::seq::SliceRandom;
 pub trait LightningFederationApi {
     async fn consensus_block_count(&self) -> FederationResult<u64>;
 
-    async fn await_incoming_contract(&self, contract_id: &ContractId, expiration: u64) -> bool;
+    async fn await_incoming_contract(
+        &self,
+        contract_id: &ContractId,
+        expiration: u64,
+    ) -> Option<OutPoint>;
 
-    async fn await_preimage(&self, contract_id: &ContractId, expiration: u64) -> Option<[u8; 32]>;
+    async fn await_preimage(&self, contract_id: OutPoint, expiration: u64) -> Option<[u8; 32]>;
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>>;
 
@@ -45,19 +49,22 @@ where
         .await
     }
 
-    async fn await_incoming_contract(&self, contract_id: &ContractId, expiration: u64) -> bool {
-        self.request_current_consensus_retry::<Option<ContractId>>(
+    async fn await_incoming_contract(
+        &self,
+        contract_id: &ContractId,
+        expiration: u64,
+    ) -> Option<OutPoint> {
+        self.request_current_consensus_retry::<Option<OutPoint>>(
             AWAIT_INCOMING_CONTRACT_ENDPOINT.to_string(),
             ApiRequestErased::new((contract_id, expiration)),
         )
         .await
-        .is_some()
     }
 
-    async fn await_preimage(&self, contract_id: &ContractId, expiration: u64) -> Option<[u8; 32]> {
+    async fn await_preimage(&self, outpoint: OutPoint, expiration: u64) -> Option<[u8; 32]> {
         self.request_current_consensus_retry(
             AWAIT_PREIMAGE_ENDPOINT.to_string(),
-            ApiRequestErased::new((contract_id, expiration)),
+            ApiRequestErased::new((outpoint, expiration)),
         )
         .await
     }

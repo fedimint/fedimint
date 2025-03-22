@@ -5,7 +5,7 @@ use bitcoin::secp256k1::schnorr::Signature;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -38,6 +38,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         &self,
         gateway_api: SafeUrl,
         federation_id: FederationId,
+        outpoint: OutPoint,
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
@@ -113,6 +114,7 @@ impl GatewayConnection for RealGatewayConnection {
         &self,
         gateway_api: SafeUrl,
         federation_id: FederationId,
+        outpoint: OutPoint,
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
@@ -126,6 +128,7 @@ impl GatewayConnection for RealGatewayConnection {
             )
             .json(&SendPaymentPayload {
                 federation_id,
+                outpoint,
                 contract,
                 invoice,
                 auth,
@@ -151,6 +154,7 @@ pub struct CreateBolt11InvoicePayload {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SendPaymentPayload {
     pub federation_id: FederationId,
+    pub outpoint: OutPoint,
     pub contract: OutgoingContract,
     pub invoice: LightningInvoice,
     pub auth: Signature,
