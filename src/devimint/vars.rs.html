@@ -247,19 +247,22 @@
 <a href=#247 id=247 data-nosnippet>247</a><span class="macro">declare_vars!</span> {
 <a href=#248 id=248 data-nosnippet>248</a>    Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, federation_name: String, peer_id: PeerId, overrides: <span class="kw-2">&amp;</span>FedimintdPeerOverrides) =&gt; {
 <a href=#249 id=249 data-nosnippet>249</a>        FM_BIND_P2P: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.p2p.port()); env: <span class="string">"FM_BIND_P2P"</span>;
-<a href=#250 id=250 data-nosnippet>250</a>        FM_BIND_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API"</span>;
-<a href=#251 id=251 data-nosnippet>251</a>        FM_P2P_URL: String =  <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{}"</span>, overrides.p2p.port()); env: <span class="string">"FM_P2P_URL"</span>;
-<a href=#252 id=252 data-nosnippet>252</a>        FM_API_URL: String =  <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_API_URL"</span>;
-<a href=#253 id=253 data-nosnippet>253</a>        FM_BIND_UI: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: <span class="string">"FM_BIND_UI"</span>;
-<a href=#254 id=254 data-nosnippet>254</a>        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: <span class="string">"FM_BIND_METRICS_API"</span>;
-<a href=#255 id=255 data-nosnippet>255</a>        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{federation_name}-{peer_id}"</span>))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
-<a href=#256 id=256 data-nosnippet>256</a>
-<a href=#257 id=257 data-nosnippet>257</a>        FM_IROH_P2P_SECRET_KEY_OVERRIDE : String = overrides.p2p.secret_key(); env: FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV;
-<a href=#258 id=258 data-nosnippet>258</a>        FM_IROH_API_SECRET_KEY_OVERRIDE : String = overrides.api.secret_key(); env: FM_IROH_API_SECRET_KEY_OVERRIDE_ENV;
+<a href=#250 id=250 data-nosnippet>250</a>        FM_BIND_API_WS: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API_WS"</span>;
+<a href=#251 id=251 data-nosnippet>251</a>        FM_BIND_API_IROH: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API_IROH"</span>;
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="comment">// for backwards compatibility with old versions
+<a href=#253 id=253 data-nosnippet>253</a>        </span>FM_BIND_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_BIND_API"</span>;
+<a href=#254 id=254 data-nosnippet>254</a>        FM_P2P_URL: String =  <span class="macro">format!</span>(<span class="string">"fedimint://127.0.0.1:{}"</span>, overrides.p2p.port()); env: <span class="string">"FM_P2P_URL"</span>;
+<a href=#255 id=255 data-nosnippet>255</a>        FM_API_URL: String =  <span class="macro">format!</span>(<span class="string">"ws://127.0.0.1:{}"</span>, overrides.api.port()); env: <span class="string">"FM_API_URL"</span>;
+<a href=#256 id=256 data-nosnippet>256</a>        FM_BIND_UI: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: <span class="string">"FM_BIND_UI"</span>;
+<a href=#257 id=257 data-nosnippet>257</a>        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: <span class="string">"FM_BIND_METRICS_API"</span>;
+<a href=#258 id=258 data-nosnippet>258</a>        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{federation_name}-{peer_id}"</span>))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
 <a href=#259 id=259 data-nosnippet>259</a>
-<a href=#260 id=260 data-nosnippet>260</a>        <span class="comment">// We only need to force the current bitcoind rpc on fedimintd, other daemons take their
-<a href=#261 id=261 data-nosnippet>261</a>        // rpc settings over command-line etc. so always will use the right ones.
-<a href=#262 id=262 data-nosnippet>262</a>        </span>FM_FORCE_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>, globals.FM_PORT_BTC_RPC); env: FM_FORCE_BITCOIN_RPC_URL_ENV;
-<a href=#263 id=263 data-nosnippet>263</a>        FM_FORCE_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_FORCE_BITCOIN_RPC_KIND_ENV;
-<a href=#264 id=264 data-nosnippet>264</a>    }
-<a href=#265 id=265 data-nosnippet>265</a>}</code></pre></div></section></main></body></html>
+<a href=#260 id=260 data-nosnippet>260</a>        FM_IROH_P2P_SECRET_KEY_OVERRIDE : String = overrides.p2p.secret_key(); env: FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV;
+<a href=#261 id=261 data-nosnippet>261</a>        FM_IROH_API_SECRET_KEY_OVERRIDE : String = overrides.api.secret_key(); env: FM_IROH_API_SECRET_KEY_OVERRIDE_ENV;
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="comment">// We only need to force the current bitcoind rpc on fedimintd, other daemons take their
+<a href=#264 id=264 data-nosnippet>264</a>        // rpc settings over command-line etc. so always will use the right ones.
+<a href=#265 id=265 data-nosnippet>265</a>        </span>FM_FORCE_BITCOIN_RPC_URL: String = <span class="macro">f!</span>(<span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>, globals.FM_PORT_BTC_RPC); env: FM_FORCE_BITCOIN_RPC_URL_ENV;
+<a href=#266 id=266 data-nosnippet>266</a>        FM_FORCE_BITCOIN_RPC_KIND: String = <span class="string">"bitcoind"</span>; env: FM_FORCE_BITCOIN_RPC_KIND_ENV;
+<a href=#267 id=267 data-nosnippet>267</a>    }
+<a href=#268 id=268 data-nosnippet>268</a>}</code></pre></div></section></main></body></html>
