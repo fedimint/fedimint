@@ -16,6 +16,7 @@ use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
 use futures::future::{AbortHandle, Abortable};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
 use serde_json::json;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};
@@ -88,6 +89,32 @@ impl WasmClient {
         // FIXME: wallet module?
         builder.with_primary_module(1);
         Ok(builder)
+    }
+
+    #[wasm_bindgen]
+    /// Parse a bolt11 invoice and extract its components
+    /// without joining the federation
+    pub fn parse_bolt11_invoice(invoice_str: &str) -> Result<String, JsError> {
+        let invoice = lightning_invoice::Bolt11Invoice::from_str(invoice_str)
+            .map_err(|e| JsError::new(&format!("Failed to parse Lightning invoice: {}", e)))?;
+
+        let amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
+        let amount_sat = amount_msat as f64 / 1000.0;
+
+        let expiry_seconds = invoice.expiry_time().as_secs();
+
+        // memo
+        let description = match invoice.description() {
+            Bolt11InvoiceDescription::Direct(desc) => desc.to_string(),
+            Bolt11InvoiceDescription::Hash(_) => "Description hash only".to_string(),
+        };
+
+        let response = json!({
+            "amount": amount_sat,
+            "expiry": expiry_seconds,
+            "memo": description,
+        });
+        Ok(serde_json::to_string(&response).map_err(|e| JsError::new(&e.to_string()))?)
     }
 
     async fn open_inner(client_name: String) -> anyhow::Result<Option<WasmClient>> {
