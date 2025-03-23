@@ -831,7 +831,7 @@
 <a href=#831 id=831 data-nosnippet>831</a>                    dbtx.commit_tx().<span class="kw">await</span>;
 <a href=#832 id=832 data-nosnippet>832</a>                    num_responses += <span class="number">1</span>;
 <a href=#833 id=833 data-nosnippet>833</a>                    <span class="comment">// ignore errors: we don't care if anyone is still listening
-<a href=#834 id=834 data-nosnippet>834</a>                    </span><span class="kw">let _ </span>= num_responses_sender.send(num_responses);
+<a href=#834 id=834 data-nosnippet>834</a>                    </span>num_responses_sender.send_replace(num_responses);
 <a href=#835 id=835 data-nosnippet>835</a>                }
 <a href=#836 id=836 data-nosnippet>836</a>            }
 <a href=#837 id=837 data-nosnippet>837</a>        }

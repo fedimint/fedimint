@@ -60,7 +60,7 @@
 <a href=#60 id=60 data-nosnippet>60</a>            .spawn_fee_rate_update_task(<span class="kw-2">&amp;</span><span class="self">self</span>.task_group, network, <span class="number">1</span>, {
 <a href=#61 id=61 data-nosnippet>61</a>                <span class="kw">move </span>|feerate| {
 <a href=#62 id=62 data-nosnippet>62</a>                    <span class="macro">debug!</span>(target: LOG_BITCOIN, %feerate, <span class="string">"New feerate"</span>);
-<a href=#63 id=63 data-nosnippet>63</a>                    <span class="kw">let _ </span>= tx.send(<span class="prelude-val">Some</span>(feerate));
+<a href=#63 id=63 data-nosnippet>63</a>                    tx.send_replace(<span class="prelude-val">Some</span>(feerate));
 <a href=#64 id=64 data-nosnippet>64</a>                }
 <a href=#65 id=65 data-nosnippet>65</a>            })<span class="question-mark">?</span>;
 <a href=#66 id=66 data-nosnippet>66</a>
@@ -87,7 +87,7 @@
 <a href=#87 id=87 data-nosnippet>87</a>            .spawn_block_count_update_task(<span class="kw-2">&amp;</span><span class="self">self</span>.task_group, {
 <a href=#88 id=88 data-nosnippet>88</a>                <span class="kw">move </span>|block_count| {
 <a href=#89 id=89 data-nosnippet>89</a>                    <span class="macro">debug!</span>(target: LOG_BITCOIN, %block_count, <span class="string">"New block count"</span>);
-<a href=#90 id=90 data-nosnippet>90</a>                    <span class="kw">let _ </span>= tx.send(<span class="prelude-val">Some</span>(block_count));
+<a href=#90 id=90 data-nosnippet>90</a>                    tx.send_replace(<span class="prelude-val">Some</span>(block_count));
 <a href=#91 id=91 data-nosnippet>91</a>                }
 <a href=#92 id=92 data-nosnippet>92</a>            });
 <a href=#93 id=93 data-nosnippet>93</a>

@@ -301,7 +301,7 @@
 <a href=#301 id=301 data-nosnippet>301</a>            <span class="macro">panic!</span>(<span class="string">"Trying to overwrite event in the client event log"</span>);
 <a href=#302 id=302 data-nosnippet>302</a>        }
 <a href=#303 id=303 data-nosnippet>303</a>        <span class="self">self</span>.on_commit(<span class="kw">move </span>|| {
-<a href=#304 id=304 data-nosnippet>304</a>            <span class="kw">let _ </span>= log_ordering_wakeup_tx.send(());
+<a href=#304 id=304 data-nosnippet>304</a>            log_ordering_wakeup_tx.send_replace(());
 <a href=#305 id=305 data-nosnippet>305</a>        });
 <a href=#306 id=306 data-nosnippet>306</a>    }
 <a href=#307 id=307 data-nosnippet>307</a>
@@ -392,7 +392,7 @@
 <a href=#392 id=392 data-nosnippet>392</a>        // fail to commit.
 <a href=#393 id=393 data-nosnippet>393</a>        </span>dbtx.commit_tx().<span class="kw">await</span>;
 <a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">if </span>!unordered_events.is_empty() {
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw">let _ </span>= log_event_added.send(());
+<a href=#395 id=395 data-nosnippet>395</a>            log_event_added.send_replace(());
 <a href=#396 id=396 data-nosnippet>396</a>        }
 <a href=#397 id=397 data-nosnippet>397</a>
 <a href=#398 id=398 data-nosnippet>398</a>        <span class="macro">trace!</span>(target: LOG_CLIENT_EVENT_LOG, <span class="string">"Event log ordering task waits for more events"</span>);
