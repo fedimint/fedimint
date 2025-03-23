@@ -269,7 +269,7 @@ impl ConsensusEngine {
             ),
         );
 
-        self.ord_latency_sender.send(None).ok();
+        self.ord_latency_sender.send_replace(None);
 
         let signed_session_outcome = self
             .complete_signed_session_outcome(
@@ -344,7 +344,7 @@ impl ConsensusEngine {
                                         None => timestamp.elapsed()
                                     };
 
-                                    self.ord_latency_sender.send(Some(latency)).ok();
+                                    self.ord_latency_sender.send_replace(Some(latency));
 
                                     CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
                                 }
@@ -415,6 +415,7 @@ impl ConsensusEngine {
 
         // We send our own signature to the data provider to be submitted to the atomic
         // broadcast and collected by our peers
+        #[allow(clippy::disallowed_methods)]
         signature_sender.send(Some(keychain.sign(&header)))?;
 
         let mut signatures = BTreeMap::new();

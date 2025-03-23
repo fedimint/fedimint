@@ -301,7 +301,7 @@ where
             panic!("Trying to overwrite event in the client event log");
         }
         self.on_commit(move || {
-            let _ = log_ordering_wakeup_tx.send(());
+            log_ordering_wakeup_tx.send_replace(());
         });
     }
 
@@ -392,7 +392,7 @@ pub async fn run_event_log_ordering_task(
         // fail to commit.
         dbtx.commit_tx().await;
         if !unordered_events.is_empty() {
-            let _ = log_event_added.send(());
+            log_event_added.send_replace(());
         }
 
         trace!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task waits for more events");

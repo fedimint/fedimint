@@ -174,7 +174,7 @@ impl TxSubmissionStates {
                 {
                     Ok(transaction_error.to_string())
                 } else {
-                    let _ = tx_submitted.send(true);
+                    tx_submitted.send_replace(true);
                     Err(anyhow::anyhow!("Transaction is still valid"))
                 }
             },

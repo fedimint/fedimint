@@ -60,7 +60,7 @@ impl ServerModuleSharedBitcoinInner {
             .spawn_fee_rate_update_task(&self.task_group, network, 1, {
                 move |feerate| {
                     debug!(target: LOG_BITCOIN, %feerate, "New feerate");
-                    let _ = tx.send(Some(feerate));
+                    tx.send_replace(Some(feerate));
                 }
             })?;
 
@@ -87,7 +87,7 @@ impl ServerModuleSharedBitcoinInner {
             .spawn_block_count_update_task(&self.task_group, {
                 move |block_count| {
                     debug!(target: LOG_BITCOIN, %block_count, "New block count");
-                    let _ = tx.send(Some(block_count));
+                    tx.send_replace(Some(block_count));
                 }
             });
 
