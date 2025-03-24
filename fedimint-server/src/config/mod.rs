@@ -606,21 +606,31 @@ impl ServerConfig {
             return Ok(server[&params.identity].clone());
         }
 
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Waiting for all p2p connections to open..."
+        );
+
         while p2p_status_receivers.values().any(|r| r.borrow().is_none()) {
+            let peers = p2p_status_receivers
+                .iter()
+                .filter_map(|entry| entry.1.borrow().map(|_| *entry.0))
+                .collect::<Vec<PeerId>>();
+
             info!(
                 target: LOG_NET_PEER_DKG,
-                "Waiting for all p2p connections to open..."
+                "Connected to peers: {peers:?}..."
             );
 
             sleep(Duration::from_secs(1)).await;
         }
 
+        let checksum = params.peers.consensus_hash_sha256();
+
         info!(
             target: LOG_NET_PEER_DKG,
-            "Comparing peer connection info checksum..."
+            "Comparing connection codes checksum {checksum}..."
         );
-
-        let checksum = params.peers.consensus_hash_sha256();
 
         connections
             .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
@@ -643,7 +653,7 @@ impl ServerConfig {
 
         info!(
             target: LOG_NET_PEER_DKG,
-            "Running distributed key generation..."
+            "Running config generation..."
         );
 
         let handle = PeerHandle::new(
@@ -661,7 +671,7 @@ impl ServerConfig {
         for (module_id, kind, module_params) in modules.iter_modules() {
             info!(
                 target: LOG_NET_PEER_DKG,
-                "Running distributed key generation for module of kind {kind}..."
+                "Running config generation for module of kind {kind}..."
             );
 
             let cfg = registry
@@ -682,12 +692,12 @@ impl ServerConfig {
             code_version_str,
         );
 
+        let checksum = cfg.consensus.consensus_hash_sha256();
+
         info!(
             target: LOG_NET_PEER_DKG,
-            "Comparing consensus config checksum..."
+            "Comparing consensus config checksum {checksum}..."
         );
-
-        let checksum = cfg.consensus.consensus_hash_sha256();
 
         connections
             .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
@@ -710,7 +720,7 @@ impl ServerConfig {
 
         info!(
             target: LOG_NET_PEER_DKG,
-            "Distributed key generation has completed successfully!"
+            "Config generation has completed successfully!"
         );
 
         Ok(cfg)
