@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::iter::once;
 
-use anyhow::{Context, ensure};
+use anyhow::{Context, bail, ensure};
 use async_trait::async_trait;
 use bls12_381::{G1Projective, G2Projective, Scalar};
 use fedimint_core::bitcoin::hashes::sha256;
@@ -9,9 +9,11 @@ use fedimint_core::config::{DkgMessage, P2PMessage};
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
 use fedimint_core::{NumPeers, PeerId};
+use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::{PeerHandleOps, g1, g2, scalar};
 use group::ff::Field;
 use rand::rngs::OsRng;
+use tracing::info;
 
 use super::peer_handle::PeerHandle;
 
@@ -40,7 +42,7 @@ impl Dkg {
         Dkg {
             num_peers,
             identity,
-            polynomial: polynomial.clone(),
+            polynomial,
             hash_commitments: once((identity, commitment.consensus_hash_sha256())).collect(),
             commitments: once((identity, commitment)).collect(),
             sk_shares: BTreeMap::new(),
@@ -175,7 +177,7 @@ pub async fn run_dkg(
 
             let message = match message {
                 P2PMessage::Dkg(message) => message,
-                _ => anyhow::bail!("Received unexpected message: {message:?}"),
+                _ => bail!("Received unexpected message: {message:?}"),
             };
 
             match dkg.step(peer, message)? {
@@ -221,18 +223,33 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
     }
 
     async fn run_dkg_g1(&self) -> anyhow::Result<(Vec<G1Projective>, Scalar)> {
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Running distributed key generation for group G1..."
+        );
+
         run_dkg(self.num_peers, self.identity, self.connections)
             .await
             .map(|(poly, sk)| (poly.into_iter().map(|c| c.0).collect(), sk))
     }
 
     async fn run_dkg_g2(&self) -> anyhow::Result<(Vec<G2Projective>, Scalar)> {
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Running distributed key generation for group G2..."
+        );
+
         run_dkg(self.num_peers, self.identity, self.connections)
             .await
             .map(|(poly, sk)| (poly.into_iter().map(|c| c.1).collect(), sk))
     }
 
     async fn exchange_bytes(&self, bytes: Vec<u8>) -> anyhow::Result<BTreeMap<PeerId, Vec<u8>>> {
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Exchanging raw bytes..."
+        );
+
         let mut peer_data: BTreeMap<PeerId, Vec<u8>> = BTreeMap::new();
 
         self.connections
