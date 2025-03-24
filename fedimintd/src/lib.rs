@@ -17,7 +17,16 @@ mod fedimintd;
 pub mod envs;
 use crate::envs::FM_PORT_ESPLORA_ENV;
 
+const FM_CUSTOM_BITCOIN_RPC_URL: &str = "FM_CUSTOM_BITCOIN_RPC_URL";
+
 pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
+    if let Ok(custom_url) = std::env::var(FM_CUSTOM_BITCOIN_RPC_URL) {
+        return BitcoinRpcConfig {
+            kind: "esplora".to_string(),
+            url: SafeUrl::parse(&custom_url).expect("Failed to parse custom Bitcoin RPC URL"),
+        };
+    }
+
     let url = match network {
         Network::Bitcoin => SafeUrl::parse("https://blockstream.info/api/")
             .expect("Failed to parse default esplora server"),
