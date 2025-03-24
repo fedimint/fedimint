@@ -38,6 +38,22 @@ impl OperationLog {
         }
     }
 
+    /// Logs an event when a new operation is added
+    async fn log_new_operation_event(
+        &self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta: &impl Serialize,
+    ) {
+        info!(
+            target: LOG_CLIENT,
+            operation_id = ?operation_id,
+            operation_type = operation_type,
+            operation_meta = ?serde_json::to_value(operation_meta).expect("Serialization should not fail"),
+            "New operation added"
+        );
+    }
+
     /// Will return the oldest operation log key in the database and cache the
     /// result. If no entry exists yet the DB will be queried on each call till
     /// an entry is present.
@@ -64,6 +80,9 @@ impl OperationLog {
         operation_type: &str,
         operation_meta: impl serde::Serialize,
     ) {
+        // Log the new operation event
+        self.log_new_operation_event(operation_id, operation_type, &operation_meta).await;
+
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry::new(
