@@ -302,3 +302,24 @@ deploy-docker-demo-all:
   just deploy-docker-demo fedimintd-docker-2.dev.fedimint.org
   just deploy-docker-demo fedimintd-docker-3.dev.fedimint.org
   just deploy-docker-demo fedimintd-docker-4.dev.fedimint.org
+
+# Update docs/api.md
+ai-generate-api-docs:
+  aider \
+    --no-auto-commits --no-git \
+    --message \
+      "Go through API endpoint functions (defined with Rust api_endpoint! macro) and create/update the api.md file documenting the name of the endpoint (resolve the name to value of the constant used), its arguments and return value and the purpose of the API call. When using non-primitive types defined by our project, make the name in the output link to our documentation page for it: 'https://docs.fedimint.org/?search=TypeNameHere'" \
+    ./fedimint-core/src/endpoint_constants.rs \
+    ./fedimint-server/src/consensus/api.rs \
+    ./modules/fedimint-meta-server/src/lib.rs \
+    ./modules/fedimint-meta-common/src/endpoint.rs \
+    ./modules/fedimint-wallet-server/src/lib.rs \
+    ./modules/fedimint-wallet-common/src/endpoint_constants.rs \
+    ./modules/fedimint-lnv2-server/src/lib.rs \
+    ./modules/fedimint-lnv2-common/src/endpoint_constants.rs \
+    ./modules/fedimint-ln-server/src/lib.rs \
+    ./modules/fedimint-ln-common/src/gateway_endpoint_constants.rs \
+    ./modules/fedimint-ln-common/src/federation_endpoint_constants.rs \
+    ./modules/fedimint-mint-server/src/lib.rs \
+    ./modules/fedimint-mint-common/src/endpoint_constants.rs \
+    docs/api.md
