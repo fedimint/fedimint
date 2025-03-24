@@ -20,7 +20,7 @@ use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
+use fedimint_core::{OutPoint, extensible_associated_module_type, plugin_types_trait_impl_common};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -53,8 +53,8 @@ extensible_associated_module_type!(
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum LightningInputV0 {
-    Outgoing(ContractId, OutgoingWitness),
-    Incoming(ContractId, AggregateDecryptionKey),
+    Outgoing(OutPoint, OutgoingWitness),
+    Incoming(OutPoint, AggregateDecryptionKey),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -124,8 +124,6 @@ pub enum LightningOutputError {
     InvalidContract,
     #[error("The contract is expired")]
     ContractExpired,
-    #[error("A contract with this ContractId already exists")]
-    ContractAlreadyExists,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]

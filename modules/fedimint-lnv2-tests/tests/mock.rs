@@ -7,7 +7,7 @@ use fedimint_core::secp256k1::Keypair;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use fedimint_ln_common::bitcoin;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
@@ -131,6 +131,7 @@ impl GatewayConnection for MockGatewayConnection {
         &self,
         _gateway_api: SafeUrl,
         _federation_id: FederationId,
+        _outpoint: OutPoint,
         contract: OutgoingContract,
         invoice: LightningInvoice,
         _auth: Signature,

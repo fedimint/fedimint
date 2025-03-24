@@ -40,7 +40,7 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, apply, async_trait_maybe_send};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
@@ -79,8 +79,7 @@ pub enum LightningOperationMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendOperationMeta {
-    pub funding_txid: TransactionId,
-    pub funding_change_outpoints: Vec<OutPoint>,
+    pub change_outpoint_range: OutPointRange,
     pub gateway: SafeUrl,
     pub contract: OutgoingContract,
     pub invoice: LightningInvoice,
@@ -561,11 +560,11 @@ impl LightningClientModule {
             amount: contract.amount,
         };
         let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
-            state_machines: Arc::new(move |out_point_range: OutPointRange| {
+            state_machines: Arc::new(move |range: OutPointRange| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
                     common: SendSMCommon {
                         operation_id,
-                        funding_txid: out_point_range.txid(),
+                        outpoint: range.into_iter().next().unwrap(),
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
@@ -586,10 +585,9 @@ impl LightningClientModule {
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                move |change_range| {
+                move |change_outpoint_range| {
                     LightningOperationMeta::Send(SendOperationMeta {
-                        funding_txid: change_range.txid(),
-                        funding_change_outpoints: change_range.into_iter().collect(),
+                        change_outpoint_range,
                         gateway: gateway_api.clone(),
                         contract: contract.clone(),
                         invoice: LightningInvoice::Bolt11(invoice.clone()),
@@ -673,7 +671,7 @@ impl LightningClientModule {
                                 // our refund transaction to be rejected. Therefore, we check one last time if
                                 // the preimage is available before we enter the failure state.
                                 if let Some(preimage) = module_api.await_preimage(
-                                    &state.common.contract.contract_id(),
+                                    state.common.outpoint,
                                     0
                                 ).await {
                                     if state.common.contract.verify_preimage(&preimage) {

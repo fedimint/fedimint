@@ -94,7 +94,7 @@ impl ReceiveStateMachine {
     async fn await_incoming_contract(
         contract: IncomingContract,
         global_context: DynGlobalClientContext,
-    ) -> bool {
+    ) -> Option<OutPoint> {
         global_context
             .module_api()
             .await_incoming_contract(&contract.contract_id(), contract.commitment.expiration)
@@ -105,15 +105,15 @@ impl ReceiveStateMachine {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: ReceiveStateMachine,
         global_context: DynGlobalClientContext,
-        contract_confirmed: bool,
+        outpoint: Option<OutPoint>,
     ) -> ReceiveStateMachine {
-        if !contract_confirmed {
+        let Some(outpoint) = outpoint else {
             return old_state.update(ReceiveSMState::Expired);
-        }
+        };
 
         let client_input = ClientInput::<LightningInput> {
             input: LightningInput::V0(LightningInputV0::Incoming(
-                old_state.common.contract.contract_id(),
+                outpoint,
                 old_state.common.agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,

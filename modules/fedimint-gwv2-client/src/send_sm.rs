@@ -44,6 +44,7 @@ impl fmt::Display for SendStateMachine {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct SendSMCommon {
     pub operation_id: OperationId,
+    pub outpoint: OutPoint,
     pub contract: OutgoingContract,
     pub max_delay: u64,
     pub min_contract_amount: Amount,
@@ -237,7 +238,7 @@ impl SendStateMachine {
                     .await;
                 let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
-                        old_state.common.contract.contract_id(),
+                        old_state.common.outpoint,
                         OutgoingWitness::Claim(payment_response.preimage),
                     )),
                     amount: old_state.common.contract.amount,
