@@ -28,8 +28,8 @@
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_eventlog::{Event, EventKind};
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>futures::Stream;
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>serde::Serialize;
-<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>serde::de::DeserializeOwned;
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>serde::de::DeserializeOwned;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>serde::{Deserialize, Serialize};
 <a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>tracing::warn;
 <a href=#34 id=34 data-nosnippet>34</a>
 <a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
@@ -1110,7 +1110,7 @@
 <a href=#1110 id=1110 data-nosnippet>1110</a>}
 <a href=#1111 id=1111 data-nosnippet>1111</a>
 <a href=#1112 id=1112 data-nosnippet>1112</a><span class="doccomment">/// A contiguous range of input/output indexes
-<a href=#1113 id=1113 data-nosnippet>1113</a></span><span class="attr">#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
+<a href=#1113 id=1113 data-nosnippet>1113</a></span><span class="attr">#[derive(Copy, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 <a href=#1114 id=1114 data-nosnippet>1114</a></span><span class="kw">pub struct </span>IdxRange {
 <a href=#1115 id=1115 data-nosnippet>1115</a>    start: u64,
 <a href=#1116 id=1116 data-nosnippet>1116</a>    end: u64,
@@ -1156,7 +1156,7 @@
 <a href=#1156 id=1156 data-nosnippet>1156</a>    }
 <a href=#1157 id=1157 data-nosnippet>1157</a>}
 <a href=#1158 id=1158 data-nosnippet>1158</a>
-<a href=#1159 id=1159 data-nosnippet>1159</a><span class="attr">#[derive(Copy, Clone, Encodable, Decodable, PartialEq, Eq, Hash, Debug)]
+<a href=#1159 id=1159 data-nosnippet>1159</a><span class="attr">#[derive(Copy, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
 <a href=#1160 id=1160 data-nosnippet>1160</a></span><span class="kw">pub struct </span>OutPointRange {
 <a href=#1161 id=1161 data-nosnippet>1161</a>    <span class="kw">pub </span>txid: TransactionId,
 <a href=#1162 id=1162 data-nosnippet>1162</a>    idx_range: IdxRange,
