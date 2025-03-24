@@ -60,3 +60,7 @@ You might consider viewing the following top-level crates:
 * [gateway_cli](./ln_gateway/index.html) is a command line client for LN Gateway.
 * [fedimint_dbtool](./fedimint_dbtool/index.html) implements a helpful database helper tool.
 * [recoverytool](./recoverytool/index.html) implements an on chain multisig recovery tool for defunct/test Federations.
+
+# API documentation
+
+See [AI-generated API documentation](./api.md).
