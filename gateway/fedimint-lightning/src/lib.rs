@@ -238,13 +238,13 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         quantity: Option<u64>,
     ) -> Result<String, LightningRpcError>;
 
-    fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         quantity: Option<u64>,
         amount: Option<Amount>,
         payer_note: Option<String>,
-    ) -> Result<(), LightningRpcError>;
+    ) -> Result<Preimage, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {

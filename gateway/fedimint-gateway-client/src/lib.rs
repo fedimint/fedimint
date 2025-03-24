@@ -14,11 +14,11 @@ use fedimint_gateway_common::{
     LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, ListTransactionsResponse,
     MNEMONIC_ENDPOINT, MnemonicResponse, OPEN_CHANNEL_ENDPOINT, OpenChannelRequest,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
-    PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
-    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT,
-    ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
+    PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
+    RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT,
+    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
 use lightning_invoice::Bolt11Invoice;
 use reqwest::{Method, StatusCode};
@@ -305,7 +305,7 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
-    pub async fn pay_offer(&self, payload: PayOfferPayload) -> GatewayRpcResult<()> {
+    pub async fn pay_offer(&self, payload: PayOfferPayload) -> GatewayRpcResult<PayOfferResponse> {
         let url = self
             .base_url
             .join(PAY_OFFER_FOR_OPERATOR_ENDPOINT)

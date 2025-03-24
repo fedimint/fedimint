@@ -201,7 +201,7 @@ impl LightningCommands {
                 quantity,
                 payer_note,
             } => {
-                create_client()
+                let response = create_client()
                     .pay_offer(PayOfferPayload {
                         offer,
                         amount: amount_msat.map(Amount::from_msats),
@@ -209,6 +209,7 @@ impl LightningCommands {
                         payer_note,
                     })
                     .await?;
+                print_response(response);
             }
         };
 

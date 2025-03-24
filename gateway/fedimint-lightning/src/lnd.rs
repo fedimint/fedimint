@@ -1537,13 +1537,13 @@ impl ILnRpcClient for GatewayLndClient {
         })
     }
 
-    fn pay_offer(
+    async fn pay_offer(
         &self,
         _offer: String,
         _quantity: Option<u64>,
         _amount: Option<Amount>,
         _payer_note: Option<String>,
-    ) -> Result<(), LightningRpcError> {
+    ) -> Result<Preimage, LightningRpcError> {
         Err(LightningRpcError::Bolt12Error {
             failure_reason: "LND Does not support Bolt12".to_string(),
         })

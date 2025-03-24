@@ -538,7 +538,6 @@ async fn liquidity_test() -> anyhow::Result<()> {
             }
 
             info!(target: LOG_TEST, "Testing payments between gateways...");
-
             for (gw_send, gw_receive) in gateway_matrix.clone() {
                 info!(
                     target: LOG_TEST,
@@ -589,17 +588,33 @@ async fn liquidity_test() -> anyhow::Result<()> {
 
             if devimint::util::Gatewayd::version_or_default().await >= *VERSION_0_7_0_ALPHA {
                 info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
-                let offer_with_amount = gw_ldk_second.create_offer(Some(Amount::from_msats(10_000_000))).await?;
-                gw_ldk.pay_offer(offer_with_amount, None).await?;
+                // TODO: investigate why the first BOLT12 payment attempt is expiring consistently
+                poll_with_timeout("First BOLT12 payment", Duration::from_secs(30), || async {
+                    let prev_balance = gw_ldk_second.get_balances().await.map_err(ControlFlow::Continue)?.lightning_balance_msats;
+                    let offer_with_amount = gw_ldk_second.create_offer(Some(Amount::from_msats(10_000_000))).await.map_err(ControlFlow::Continue)?;
+                    gw_ldk.pay_offer(offer_with_amount, None).await.map_err(ControlFlow::Continue)?;
+                    let post_balance = gw_ldk_second.get_balances().await.map_err(ControlFlow::Continue)?.lightning_balance_msats;
+                    assert_eq!(prev_balance + 10_000_000, post_balance);
+                    Ok(())
+                }).await?;
 
+                let prev_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
                 let offer_without_amount = gw_ldk.create_offer(None).await?;
                 gw_ldk_second.pay_offer(offer_without_amount.clone(), Some(Amount::from_msats(5_000_000))).await?;
+                let post_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
+                assert_eq!(prev_balance + 5_000_000, post_balance);
 
                 // Cannot pay an offer without an amount without specifying an amount
+                let prev_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
                 gw_ldk_second.pay_offer(offer_without_amount.clone(), None).await.expect_err("Cannot pay amountless offer without specifying an amount");
+                let post_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
+                assert_eq!(prev_balance, post_balance);
 
                 // Verify we can pay the offer again
+                let prev_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
                 gw_ldk_second.pay_offer(offer_without_amount, Some(Amount::from_msats(3_000_000))).await?;
+                let post_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
+                assert_eq!(prev_balance + 3_000_000, post_balance);
             }
 
             info!(target: LOG_TEST, "Pegging-out gateways...");

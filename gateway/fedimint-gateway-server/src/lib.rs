@@ -72,10 +72,10 @@ use fedimint_gateway_common::{
     FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
     GetInvoiceResponse, LeaveFedPayload, LightningMode, ListTransactionsPayload,
     ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
-    PayOfferPayload, PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
-    WithdrawResponse,
+    PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 use fedimint_gw_client::events::compute_lnv1_stats;
@@ -1731,7 +1731,6 @@ impl Gateway {
             payload.expiry_secs,
             payload.quantity,
         )?;
-        info!(?offer, "Bolt12 Offer");
         Ok(CreateOfferResponse { offer })
     }
 
@@ -1739,15 +1738,20 @@ impl Gateway {
     pub async fn handle_pay_offer_for_operator_msg(
         &self,
         payload: PayOfferPayload,
-    ) -> AdminResult<()> {
+    ) -> AdminResult<PayOfferResponse> {
         let lightning_context = self.get_lightning_context().await?;
-        lightning_context.lnrpc.pay_offer(
-            payload.offer,
-            payload.quantity,
-            payload.amount,
-            payload.payer_note,
-        )?;
-        Ok(())
+        let preimage = lightning_context
+            .lnrpc
+            .pay_offer(
+                payload.offer,
+                payload.quantity,
+                payload.amount,
+                payload.payer_note,
+            )
+            .await?;
+        Ok(PayOfferResponse {
+            preimage: preimage.to_string(),
+        })
     }
 
     /// Registers the gateway with each specified federation.

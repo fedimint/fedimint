@@ -399,6 +399,11 @@ pub struct PayOfferPayload {
     pub payer_note: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayOfferResponse {
+    pub preimage: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum PaymentStatus {
     Pending,

@@ -500,6 +500,6 @@ async fn pay_offer_operator(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PayOfferPayload>,
 ) -> Result<impl IntoResponse, AdminGatewayError> {
-    gateway.handle_pay_offer_for_operator_msg(payload).await?;
-    Ok(Json(json!(())))
+    let response = gateway.handle_pay_offer_for_operator_msg(payload).await?;
+    Ok(Json(json!(response)))
 }

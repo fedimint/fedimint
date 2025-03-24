@@ -774,13 +774,13 @@ impl ILnRpcClient for GatewayLdkClient {
         Ok(offer.to_string())
     }
 
-    fn pay_offer(
+    async fn pay_offer(
         &self,
         offer: String,
         quantity: Option<u64>,
         amount: Option<Amount>,
         payer_note: Option<String>,
-    ) -> Result<(), LightningRpcError> {
+    ) -> Result<Preimage, LightningRpcError> {
         let offer = Offer::from_str(&offer).map_err(|_| LightningRpcError::Bolt12Error {
             failure_reason: "Failed to parse Bolt12 Offer".to_string(),
         })?;
@@ -804,8 +804,34 @@ impl ILnRpcClient for GatewayLdkClient {
                     failure_reason: err.to_string(),
                 })?
         };
-        info!(target: LOG_LIGHTNING, offer = %offer, payment_id = %payment_id, "Successfully paid offer");
-        Ok(())
+
+        loop {
+            if let Some(payment_details) = self.node.payment(&payment_id) {
+                match payment_details.status {
+                    PaymentStatus::Pending => {}
+                    PaymentStatus::Succeeded => match payment_details.kind {
+                        PaymentKind::Bolt12Offer {
+                            preimage: Some(preimage),
+                            ..
+                        } => {
+                            info!(target: LOG_LIGHTNING, offer = %offer, payment_id = %payment_id, preimage = %preimage, "Successfully paid offer");
+                            return Ok(Preimage(preimage.0));
+                        }
+                        _ => {
+                            return Err(LightningRpcError::FailedPayment {
+                                failure_reason: "Unexpected payment kind".to_string(),
+                            });
+                        }
+                    },
+                    PaymentStatus::Failed => {
+                        return Err(LightningRpcError::FailedPayment {
+                            failure_reason: "Bolt12 payment failed".to_string(),
+                        });
+                    }
+                }
+            }
+            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+        }
     }
 }
 
