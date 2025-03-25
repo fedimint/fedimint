@@ -46,6 +46,7 @@
         (import ./nix/overlays/esplora-electrs.nix)
         (import ./nix/overlays/darwin-compile-fixes.nix)
         (import ./nix/overlays/cargo-honggfuzz.nix)
+        (import ./nix/overlays/rust-i18n.nix)
         (import ./nix/overlays/trustedcoin.nix)
       ];
     in
@@ -55,6 +56,7 @@
         wasm-bindgen = import ./nix/overlays/wasm-bindgen.nix;
         darwin-compile-fixes = import ./nix/overlays/darwin-compile-fixes.nix;
         cargo-honggfuzz = import ./nix/overlays/cargo-honggfuzz.nix;
+        rust-i18n= import ./nix/overlays/rust-i18n.nix;
       };
 
       bundlers = bundlers.bundlers;
@@ -318,6 +320,7 @@
 
                     # marked as broken on MacOS
                     pkgs.cargo-llvm-cov
+                    pkgs.rust-i18n-cli
                   ];
 
                 shellHook = ''

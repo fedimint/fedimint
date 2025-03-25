@@ -8,6 +8,9 @@ license = { workspace = true }
 readme = { workspace = true }
 repository = { workspace = true }
 
+[package.metadata.i18n]
+available-locales = ["en", "es", "pl"]
+
 [lib]
 name = "fedimint_server_ui"
 path = "src/lib.rs"
@@ -24,5 +27,6 @@ fedimint-server-core = { workspace = true }
 fedimint-wallet-server = { workspace = true }
 maud = "0.27.0"
 qrcode = { version = "0.12", features = ["svg"] }
+rust-i18n = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

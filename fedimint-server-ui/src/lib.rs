@@ -12,7 +12,10 @@ use fedimint_core::hex::ToHex;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use maud::{DOCTYPE, Markup, html};
+use rust_i18n::t;
 use serde::Deserialize;
+
+rust_i18n::i18n!(fallback = "en");
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoginInput {
@@ -147,7 +150,7 @@ pub(crate) fn login_layout(title: &str, content: Markup) -> Markup {
                     div class="row justify-content-center" {
                         div class="col-md-8 col-lg-5 narrow-container" {
                             header class="text-center" {
-                                h1 class="header-title" { "Fedimint Guardian UI" }
+                                h1 class="header-title" { (t!("Fedimint Guardian UI")) }
                             }
 
                             div class="card" {

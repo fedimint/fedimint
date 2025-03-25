@@ -11,6 +11,7 @@ use fedimint_core::module::ApiAuth;
 use fedimint_core::task::TaskHandle;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use maud::{DOCTYPE, Markup, html};
+use rust_i18n::t;
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
@@ -50,7 +51,7 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
                     div class="row justify-content-center" {
                         div class="col-md-8 col-lg-5 narrow-container" {
                             header class="text-center" {
-                                h1 class="header-title" { "Fedimint Guardian UI" }
+                                h1 class="header-title" { (t!("Fedimint Guardian UI")) }
                             }
 
                             div class="card" {
@@ -88,7 +89,7 @@ async fn setup_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoRes
             }
 
             div class="form-group mb-4" {
-                input type="text" class="form-control" id="name" name="name" placeholder="Guardian name" required;
+                input type="text" class="form-control" id="name" name="name" placeholder=(t!("Guardian name")) required;
             }
 
             div class="form-group mb-4" {
@@ -346,6 +347,10 @@ pub fn start(
     ui_bind: SocketAddr,
     task_handle: TaskHandle,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    if let Ok(locale) = std::env::var("FM_UI_LOCALE") {
+        rust_i18n::set_locale(&locale);
+    }
+
     let app = Router::new()
         .route("/", get(setup_form).post(setup_submit))
         .route("/login", get(login_form).post(login_submit))
