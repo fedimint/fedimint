@@ -1,5 +1,7 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
 
 pub mod db;
 
@@ -17,13 +19,15 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, NonCommittable,
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    NonCommittable,
 };
 use fedimint_core::module::audit::Audit;
+use fedimint_core::module::serde_json::Value;
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
     InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmount, api_endpoint,
+    TransactionItemAmount, api_endpoint, serde_json,
 };
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
@@ -37,9 +41,9 @@ use fedimint_meta_common::endpoint::{
     SubmitRequest,
 };
 use fedimint_meta_common::{
-    MODULE_CONSENSUS_VERSION, MetaCommonInit, MetaConsensusItem, MetaConsensusValue, MetaInput,
-    MetaInputError, MetaKey, MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome,
-    MetaValue,
+    DEFAULT_META_KEY, MODULE_CONSENSUS_VERSION, MetaCommonInit, MetaConsensusItem,
+    MetaConsensusValue, MetaInput, MetaInputError, MetaKey, MetaModuleTypes, MetaOutput,
+    MetaOutputError, MetaOutputOutcome, MetaValue,
 };
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
@@ -141,6 +145,7 @@ impl ServerModuleInit for MetaInit {
             cfg: args.cfg().to_typed()?,
             our_peer_id: args.our_peer_id(),
             num_peers: args.num_peers(),
+            db: args.db().clone(),
         })
     }
 
@@ -212,6 +217,7 @@ pub struct Meta {
     pub cfg: MetaConfig,
     pub our_peer_id: PeerId,
     pub num_peers: NumPeers,
+    pub db: Database,
 }
 
 impl Meta {
@@ -527,5 +533,114 @@ impl Meta {
             .into_iter()
             .map(|(k, v)| (k.peer_id, v.value))
             .collect())
+    }
+}
+
+// UI Methods for Meta Module
+
+impl Meta {
+    /// UI helper to submit a value change with default auth
+    pub async fn handle_submit_request_ui(
+        &self,
+        key: String,
+        key_value: String,
+    ) -> Result<(), ApiError> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        let mut value = dbtx
+            .get_value(&MetaConsensusKey(DEFAULT_META_KEY))
+            .await
+            .map(|cv| serde_json::from_slice(cv.value.as_slice()))
+            .transpose()
+            .map_err(|e| ApiError::server_error(e.to_string()))?
+            .unwrap_or(Value::default());
+
+        value[key] = Value::String(key_value);
+
+        self.handle_submit_request(
+            &mut dbtx.to_ref_nc(),
+            &ApiAuth(String::new()),
+            &SubmitRequest {
+                key: DEFAULT_META_KEY,
+                value: MetaValue::from(serde_json::to_vec(&value).unwrap().as_slice()),
+            },
+        )
+        .await?;
+
+        dbtx.commit_tx_result()
+            .await
+            .map_err(|e| ApiError::server_error(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// UI helper to get consensus data as a key-value map
+    pub async fn handle_get_consensus_request_ui(
+        &self,
+    ) -> Result<Option<BTreeMap<String, String>>, ApiError> {
+        self.handle_get_consensus_request(
+            &mut self.db.begin_transaction_nc().await,
+            &GetConsensusRequest(DEFAULT_META_KEY),
+        )
+        .await?
+        .map(|value| serde_json::from_slice(value.value.as_slice()))
+        .transpose()
+        .map_err(|e| ApiError::server_error(e.to_string()))
+    }
+
+    /// UI helper to get consensus revision
+    pub async fn handle_get_consensus_revision_request_ui(&self) -> Result<u64, ApiError> {
+        self.handle_get_consensus_revision_request(
+            &mut self.db.begin_transaction_nc().await,
+            &GetConsensusRequest(DEFAULT_META_KEY),
+        )
+        .await
+        .map(|r| r.unwrap_or(0))
+    }
+
+    /// Get the submissions for UI display, but only return the key-value pairs
+    /// where the value differs from the current consensus value
+    pub async fn get_submissions_differing_from_consensus_ui(
+        &self,
+    ) -> BTreeMap<PeerId, (String, String)> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        let consensus_value = dbtx
+            .get_value(&MetaConsensusKey(DEFAULT_META_KEY))
+            .await
+            .map(|cv| serde_json::from_slice::<Value>(cv.value.as_slice()))
+            .transpose()
+            .expect("Failed to deserialize meta consensus value")
+            .unwrap_or(Value::default());
+
+        let submissions = dbtx
+            .find_by_prefix(&MetaSubmissionsByKeyPrefix(DEFAULT_META_KEY))
+            .await
+            .collect::<Vec<_>>()
+            .await;
+
+        let mut result = BTreeMap::new();
+        for (k, v) in submissions {
+            if let Ok(submission_json) = serde_json::from_slice::<Value>(v.value.as_slice()) {
+                // Find the first different key-value pair
+                for (key, value) in submission_json
+                    .as_object()
+                    .unwrap_or(&serde_json::Map::new())
+                {
+                    let consensus_val = consensus_value.get(key);
+                    // If the value in the submission is different from consensus or consensus
+                    // doesn't have this key
+                    if consensus_val.is_none() || consensus_val != Some(value) {
+                        // Insert the first difference found for this peer
+                        result.insert(
+                            k.peer_id,
+                            (key.clone(), value.as_str().unwrap_or_default().to_string()),
+                        );
+                        break;
+                    }
+                }
+            }
+        }
+
+        result
     }
 }
