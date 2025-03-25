@@ -1206,7 +1206,7 @@ mod iroh {
     use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
     use iroh_base::ticket::NodeTicket;
     use serde_json::Value;
-    use tracing::{trace, warn};
+    use tracing::{debug, trace, warn};
 
     use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
 
@@ -1251,9 +1251,17 @@ mod iroh {
             let builder = Endpoint::builder().discovery_n0();
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
+            let endpoint = builder.bind().await?;
+            debug!(
+                target: LOG_NET_IROH,
+                node_id = %endpoint.node_id(),
+                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                "Iroh api client endpoint"
+            );
+
             Ok(Self {
                 node_ids,
-                endpoint: builder.bind().await?,
+                endpoint,
                 connection_overrides: BTreeMap::new(),
             })
         }

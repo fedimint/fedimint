@@ -19,7 +19,7 @@ tor = [
   "arti-client/rustls",
   "arti-client/onion-service-client",
 ]
-iroh = ["dep:iroh", "dep:iroh-base"]
+iroh = ["dep:iroh", "dep:iroh-base", "dep:z32"]
 
 [lib]
 name = "fedimint_api_client"
@@ -48,6 +48,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+z32 = { workspace = true, optional = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.24.9", features = [

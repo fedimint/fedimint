@@ -13,7 +13,7 @@ rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 default = []
-iroh = ["fedimint-api-client/iroh"]
+iroh = ["fedimint-api-client/iroh", "dep:z32"]
 
 [lib]
 name = "fedimint_server"
@@ -67,6 +67,7 @@ tokio-rustls = { workspace = true }
 tokio-util = { version = "0.7.14", features = ["codec"] }
 tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
+z32 = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-log = { workspace = true }

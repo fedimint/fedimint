@@ -355,13 +355,20 @@ async fn start_iroh_api(
         .secret_key(secret_key)
         .alpns(vec![FEDIMINT_API_ALPN.to_vec()]);
 
-    info!(target: LOG_NET_IROH, addr=%bind_addr, "Iroh api bind addr");
     let builder = match bind_addr {
         SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
         SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
     };
 
     let endpoint = builder.bind().await.expect("Failed to bind iroh api");
+
+    info!(
+        target: LOG_NET_IROH,
+        %bind_addr,
+        node_id = %endpoint.node_id(),
+        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+        "Iroh api server endpoint"
+    );
 
     task_group.spawn_cancellable(
         "iroh-api",
