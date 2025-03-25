@@ -99,7 +99,7 @@ impl SetupApi {
 
     pub async fn setup_status(&self) -> SetupStatus {
         match self.state.lock().await.local_params {
-            Some(..) => SetupStatus::SharingConnectionInfo,
+            Some(..) => SetupStatus::SharingConnectionCodes,
             None => SetupStatus::AwaitingLocalParams,
         }
     }
