@@ -2782,6 +2782,7 @@ dependencies = [
  "futures",
  "imbl",
  "js-sys",
+ "lightning-invoice",
  "rexie",
  "serde_json",
  "wasm-bindgen",
