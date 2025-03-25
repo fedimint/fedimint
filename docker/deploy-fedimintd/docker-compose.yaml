@@ -48,7 +48,10 @@ services:
     volumes:
       - fedimintd_data:/data
     ports:
-      - "0.0.0.0:8173:8173"
+      - 8173:8173/tcp # p2p tls
+      - 8173:8173/udp # p2p iroh
+      - 8174:8174/udp # api iroh
+      - 127.0.0.1:8175:8175/tcp # ui
     environment:
       - FM_BITCOIN_RPC_KIND=${FM_BITCOIN_RPC_KIND}
       - FM_BITCOIN_RPC_URL=${FM_BITCOIN_RPC_URL}
