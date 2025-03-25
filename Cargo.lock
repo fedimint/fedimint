@@ -2585,6 +2585,7 @@ dependencies = [
  "tokio-rustls 0.26.0",
  "tracing",
  "webpki-roots 0.26.8",
+ "z32",
 ]
 
 [[package]]
@@ -3814,6 +3815,7 @@ dependencies = [
  "tokio-util",
  "tower 0.4.13",
  "tracing",
+ "z32",
 ]
 
 [[package]]

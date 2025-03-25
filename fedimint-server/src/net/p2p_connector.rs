@@ -284,18 +284,26 @@ impl IrohConnector {
             .secret_key(secret_key)
             .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()]);
 
-        info!(target: LOG_NET_IROH, addr=%bind_addr, "Iroh p2p bind addr");
-
         let builder = match bind_addr {
             SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
             SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
         };
+
+        let endpoint = builder.bind().await.expect("Could not bind to port");
+        info!(
+            target: LOG_NET_IROH,
+            %bind_addr,
+            node_id = %endpoint.node_id(),
+            node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+            "Iroh p2p server endpoint"
+        );
+
         Self {
             node_ids: node_ids
                 .into_iter()
                 .filter(|entry| entry.0 != identity)
                 .collect(),
-            endpoint: builder.bind().await.expect("Could not bind to port"),
+            endpoint,
             connection_overrides: BTreeMap::default(),
         }
     }
