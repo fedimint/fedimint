@@ -13,6 +13,8 @@ pub mod db;
 pub mod incoming;
 pub mod pay;
 pub mod receive;
+/// Implements recurring payment codes (e.g. LNURL, BOLT12)
+pub mod recurring;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter::once;
@@ -27,6 +29,7 @@ use bitcoin::Network;
 use bitcoin::hashes::{Hash, HashEngine, Hmac, HmacEngine, sha256};
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
+    RecurringPaymentCodeKeyPrefix,
 };
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
@@ -57,7 +60,7 @@ use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
-use fedimint_derive_secret::ChildId;
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
@@ -88,6 +91,7 @@ use rand::{CryptoRng, Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::IntoEnumIterator;
+use tokio::sync::Notify;
 use tracing::{debug, error, info};
 
 use crate::db::PaymentResultPrefix;
@@ -103,6 +107,7 @@ use crate::receive::{
     LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer, get_incoming_contract,
 };
+use crate::recurring::RecurringPaymentCodeEntry;
 
 /// Number of blocks until outgoing lightning contracts times out and user
 /// client can get refund
@@ -253,18 +258,37 @@ pub struct LightningOperationMeta {
     pub extra_meta: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LightningOperationMetaVariant {
-    Pay(LightningOperationMetaPay),
-    Receive {
-        out_point: OutPoint,
-        invoice: Bolt11Invoice,
-        gateway_id: Option<secp256k1::PublicKey>,
-    },
-    Claim {
-        out_points: Vec<OutPoint>,
-    },
+pub use depreacated_variant_hack::LightningOperationMetaVariant;
+
+/// This is a hack to allow us to use the deprecated variant in the database
+/// without the serde derived implementation throwing warnings.
+///
+/// See <https://github.com/serde-rs/serde/issues/2195>
+#[allow(deprecated)]
+mod depreacated_variant_hack {
+    use super::{
+        Bolt11Invoice, Deserialize, LightningOperationMetaPay, OutPoint, Serialize, secp256k1,
+    };
+    use crate::recurring::ReurringPaymentReceiveMeta;
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum LightningOperationMetaVariant {
+        Pay(LightningOperationMetaPay),
+        Receive {
+            out_point: OutPoint,
+            invoice: Bolt11Invoice,
+            gateway_id: Option<secp256k1::PublicKey>,
+        },
+        #[deprecated(
+            since = "0.7.0",
+            note = "Use recurring payment functionality instead instead"
+        )]
+        Claim {
+            out_points: Vec<OutPoint>,
+        },
+        RecurringPaymentReceive(ReurringPaymentReceiveMeta),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -320,6 +344,16 @@ impl ModuleInit for LightningClientInit {
                         "Lightning Gateways"
                     );
                 }
+                DbKeyPrefix::RecurringPaymentKey => {
+                    push_db_pair_items!(
+                        dbtx,
+                        RecurringPaymentCodeKeyPrefix,
+                        RecurringPaymentCodeKey,
+                        RecurringPaymentCodeEntry,
+                        ln_client_items,
+                        "Recurring Payment Code"
+                    );
+                }
                 DbKeyPrefix::ExternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedEnd => {}
@@ -335,6 +369,7 @@ impl ModuleInit for LightningClientInit {
 pub enum LightningChildKeys {
     RedeemKey = 0,
     PreimageAuthentication = 1,
+    RecurringPaymentCodeSecret = 2,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -402,12 +437,14 @@ pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
     notifier: ModuleNotifier<LightningClientStateMachines>,
     redeem_key: Keypair,
+    recurring_payment_code_secret: DerivableSecret,
     secp: Secp256k1<All>,
     module_api: DynModuleApi,
     preimage_auth: Keypair,
     client_ctx: ClientContext<Self>,
     update_gateway_cache_merge: UpdateMerge,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    new_recurring_payment_code: Arc<Notify>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -520,12 +557,14 @@ impl ClientModule for LightningClientModule {
                         "invoice": invoice,
                     });
                 }
+                #[allow(deprecated)]
                 "scan_receive_for_user_tweaked" => {
                     let req: ScanReceiveForUserTweakedRequest = serde_json::from_value(payload)?;
                     let keypair = Keypair::from_secret_key(&self.secp, &req.user_key);
                     let operation_ids = self.scan_receive_for_user_tweaked(keypair, req.indices, req.extra_meta).await;
                     yield serde_json::to_value(operation_ids)?;
                 }
+                #[allow(deprecated)]
                 "subscribe_ln_claim" => {
                     let req: SubscribeLnClaimRequest = serde_json::from_value(payload)?;
                     for await state in self.subscribe_ln_claim(req.operation_id).await?.into_stream() {
@@ -625,6 +664,16 @@ impl LightningClientModule {
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     ) -> Self {
         let secp = Secp256k1::new();
+
+        let new_recurring_payment_code = Arc::new(Notify::new());
+        args.task_group().spawn_cancellable(
+            "Recurring payment sync",
+            Self::scan_recurring_payment_code_invoices(
+                args.context(),
+                new_recurring_payment_code.clone(),
+            ),
+        );
+
         Self {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
@@ -632,6 +681,9 @@ impl LightningClientModule {
                 .module_root_secret()
                 .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
                 .to_secp_key(&secp),
+            recurring_payment_code_secret: args.module_root_secret().child_key(ChildId(
+                LightningChildKeys::RecurringPaymentCodeSecret as u64,
+            )),
             module_api: args.module_api().clone(),
             preimage_auth: args
                 .module_root_secret()
@@ -641,6 +693,7 @@ impl LightningClientModule {
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
             gateway_conn,
+            new_recurring_payment_code,
         }
     }
 
@@ -1462,6 +1515,8 @@ impl LightningClientModule {
 
     /// Scan unspent incoming contracts for a payment hash that matches a
     /// tweaked keys in the `indices` vector
+    #[deprecated(since = "0.7.0", note = "Use recurring payment functionality instead")]
+    #[allow(deprecated)]
     pub async fn scan_receive_for_user_tweaked<M: Serialize + Send + Sync + Clone>(
         &self,
         key_pair: Keypair,
@@ -1487,6 +1542,8 @@ impl LightningClientModule {
 
     /// Scan unspent incoming contracts for a payment hash that matches a public
     /// key and claim the incoming contract
+    #[deprecated(since = "0.7.0", note = "Use recurring payment functionality instead")]
+    #[allow(deprecated)]
     pub async fn scan_receive_for_user<M: Serialize + Send + Sync>(
         &self,
         key_pair: Keypair,
@@ -1501,6 +1558,8 @@ impl LightningClientModule {
 
     /// Claim the funded, unspent incoming contract by submitting a transaction
     /// to the federation and awaiting the primary module's outputs
+    #[deprecated(since = "0.7.0", note = "Use recurring payment functionality instead")]
+    #[allow(deprecated)]
     pub async fn claim_funded_incoming_contract<M: Serialize + Send + Sync>(
         &self,
         key_pair: Keypair,
@@ -1691,6 +1750,8 @@ impl LightningClientModule {
         Ok((operation_id, invoice, preimage))
     }
 
+    #[deprecated(since = "0.7.0", note = "Use recurring payment functionality instead")]
+    #[allow(deprecated)]
     pub async fn subscribe_ln_claim(
         &self,
         operation_id: OperationId,
