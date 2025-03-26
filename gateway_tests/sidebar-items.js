@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayTest"],"fn":["backup_restore_test","check_empty_lightning_balance","check_empty_onchain_balance","config_test","leave_federation","liquidity_test","main","mnemonic_upgrade_test","stop_and_recover_gateway"],"struct":["GatewayTestOpts"]};
+window.SIDEBAR_ITEMS = {"enum":["GatewayTest"],"fn":["backup_restore_test","check_empty_lightning_balance","check_empty_onchain_balance","config_test","get_transaction","leave_federation","liquidity_test","main","mnemonic_upgrade_test","stop_and_recover_gateway"],"struct":["GatewayTestOpts"]};
