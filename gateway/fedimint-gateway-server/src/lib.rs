@@ -2043,18 +2043,24 @@ impl Gateway {
                 let chain_source_config = {
                     match (esplora_server_url, bitcoind_rpc_url) {
                         (Some(esplora_server_url), None) => GatewayLdkChainSourceConfig::Esplora {
-                            server_url: SafeUrl::parse(&esplora_server_url.clone()).unwrap(),
+                            server_url: SafeUrl::parse(&esplora_server_url.clone())
+                                .expect("Could not parse esplora server url"),
                         },
                         (None, Some(bitcoind_rpc_url)) => GatewayLdkChainSourceConfig::Bitcoind {
-                            server_url: SafeUrl::parse(&bitcoind_rpc_url.clone()).unwrap(),
+                            server_url: SafeUrl::parse(&bitcoind_rpc_url.clone())
+                                .expect("Could not parse bitcoind rpc url"),
                         },
                         (None, None) => {
                             panic!("Either esplora or bitcoind chain info source must be provided")
                         }
-                        (Some(_), Some(_)) => {
-                            panic!(
-                                "Either esplora or bitcoind chain info source must be provided, but not both"
-                            )
+                        (Some(_), Some(bitcoind_rpc_url)) => {
+                            warn!(
+                                "Esplora and bitcoind connection parameters are both set, using bitcoind..."
+                            );
+                            GatewayLdkChainSourceConfig::Bitcoind {
+                                server_url: SafeUrl::parse(&bitcoind_rpc_url.clone())
+                                    .expect("Could not parse bitcoind rpc url"),
+                            }
                         }
                     }
                 };

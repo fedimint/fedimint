@@ -144,7 +144,15 @@ impl GatewayLdkClient {
                 );
             }
             GatewayLdkChainSourceConfig::Esplora { server_url } => {
-                node_builder.set_chain_source_esplora(server_url.to_string(), None);
+                // Esplora client cannot handle trailing slashes
+                let host = server_url
+                    .host_str()
+                    .ok_or(anyhow::anyhow!("Missing esplora host"))?;
+                let port = server_url
+                    .port()
+                    .ok_or(anyhow::anyhow!("Missing esplora port"))?;
+                let server_url = format!("{}://{}:{}", server_url.scheme(), host, port);
+                node_builder.set_chain_source_esplora(server_url, None);
             }
         };
         let Some(data_dir_str) = data_dir.to_str() else {

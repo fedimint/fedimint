@@ -159,6 +159,7 @@ declare_vars! {
         FM_FEDERATION_BASE_PORT: u16 = federation_base_ports; env: "FM_FEDERATION_BASE_PORT";
         fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";
 
+        FM_LDK_ESPLORA_SERVER_URL: String = format!("http://localhost:{FM_PORT_ESPLORA}"); env: "FM_LDK_ESPLORA_SERVER_URL";
         FM_LDK_BITCOIND_RPC_URL: String = format!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_LDK_BITCOIND_RPC_URL";
 
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?; env: "FM_LND_DIR";
