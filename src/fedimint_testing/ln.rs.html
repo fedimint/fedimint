@@ -317,4 +317,28 @@
 <a href=#317 id=317 data-nosnippet>317</a>            failure_reason: <span class="string">"FakeLightningTest does not support listing transactions"</span>.to_string(),
 <a href=#318 id=318 data-nosnippet>318</a>        })
 <a href=#319 id=319 data-nosnippet>319</a>    }
-<a href=#320 id=320 data-nosnippet>320</a>}</code></pre></div></section></main></body></html>
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">fn </span>create_offer(
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#323 id=323 data-nosnippet>323</a>        _amount_msat: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#324 id=324 data-nosnippet>324</a>        _description: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#325 id=325 data-nosnippet>325</a>        _expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#326 id=326 data-nosnippet>326</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#327 id=327 data-nosnippet>327</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, LightningRpcError&gt; {
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#329 id=329 data-nosnippet>329</a>            failure_reason: <span class="string">"FakeLightningTest does not support Bolt12"</span>.to_string(),
+<a href=#330 id=330 data-nosnippet>330</a>        })
+<a href=#331 id=331 data-nosnippet>331</a>    }
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a>    <span class="kw">async fn </span>pay_offer(
+<a href=#334 id=334 data-nosnippet>334</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#335 id=335 data-nosnippet>335</a>        _offer: String,
+<a href=#336 id=336 data-nosnippet>336</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#337 id=337 data-nosnippet>337</a>        _amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#338 id=338 data-nosnippet>338</a>        _payer_note: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#339 id=339 data-nosnippet>339</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningRpcError&gt; {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#341 id=341 data-nosnippet>341</a>            failure_reason: <span class="string">"FakeLightningTest does not support Bolt12"</span>.to_string(),
+<a href=#342 id=342 data-nosnippet>342</a>        })
+<a href=#343 id=343 data-nosnippet>343</a>    }
+<a href=#344 id=344 data-nosnippet>344</a>}</code></pre></div></section></main></body></html>

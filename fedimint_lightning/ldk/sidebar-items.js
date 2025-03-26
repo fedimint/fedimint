@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayLdkChainSourceConfig"],"fn":["get_preimage_and_payment_hash"],"struct":["GatewayLdkClient"]};
+window.SIDEBAR_ITEMS = {"enum":["GatewayLdkChainSourceConfig"],"fn":["get_preimage_and_payment_hash"],"struct":["GatewayLdkClient","LdkOfferId"]};

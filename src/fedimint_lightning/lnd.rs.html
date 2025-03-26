@@ -1524,64 +1524,88 @@
 <a href=#1524 id=1524 data-nosnippet>1524</a>            transactions: payments,
 <a href=#1525 id=1525 data-nosnippet>1525</a>        })
 <a href=#1526 id=1526 data-nosnippet>1526</a>    }
-<a href=#1527 id=1527 data-nosnippet>1527</a>}
-<a href=#1528 id=1528 data-nosnippet>1528</a>
-<a href=#1529 id=1529 data-nosnippet>1529</a><span class="kw">fn </span>route_hints_to_lnd(
-<a href=#1530 id=1530 data-nosnippet>1530</a>    route_hints: <span class="kw-2">&amp;</span>[fedimint_ln_common::route_hints::RouteHint],
-<a href=#1531 id=1531 data-nosnippet>1531</a>) -&gt; Vec&lt;tonic_lnd::lnrpc::RouteHint&gt; {
-<a href=#1532 id=1532 data-nosnippet>1532</a>    route_hints
-<a href=#1533 id=1533 data-nosnippet>1533</a>        .iter()
-<a href=#1534 id=1534 data-nosnippet>1534</a>        .map(|hint| tonic_lnd::lnrpc::RouteHint {
-<a href=#1535 id=1535 data-nosnippet>1535</a>            hop_hints: hint
-<a href=#1536 id=1536 data-nosnippet>1536</a>                .<span class="number">0
-<a href=#1537 id=1537 data-nosnippet>1537</a>                </span>.iter()
-<a href=#1538 id=1538 data-nosnippet>1538</a>                .map(|hop| tonic_lnd::lnrpc::HopHint {
-<a href=#1539 id=1539 data-nosnippet>1539</a>                    node_id: hop.src_node_id.serialize().encode_hex(),
-<a href=#1540 id=1540 data-nosnippet>1540</a>                    chan_id: hop.short_channel_id,
-<a href=#1541 id=1541 data-nosnippet>1541</a>                    fee_base_msat: hop.base_msat,
-<a href=#1542 id=1542 data-nosnippet>1542</a>                    fee_proportional_millionths: hop.proportional_millionths,
-<a href=#1543 id=1543 data-nosnippet>1543</a>                    cltv_expiry_delta: u32::from(hop.cltv_expiry_delta),
-<a href=#1544 id=1544 data-nosnippet>1544</a>                })
-<a href=#1545 id=1545 data-nosnippet>1545</a>                .collect(),
-<a href=#1546 id=1546 data-nosnippet>1546</a>        })
-<a href=#1547 id=1547 data-nosnippet>1547</a>        .collect()
-<a href=#1548 id=1548 data-nosnippet>1548</a>}
-<a href=#1549 id=1549 data-nosnippet>1549</a>
-<a href=#1550 id=1550 data-nosnippet>1550</a><span class="kw">fn </span>wire_features_to_lnd_feature_vec(features_wire_encoded: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;Vec&lt;i32&gt;&gt; {
-<a href=#1551 id=1551 data-nosnippet>1551</a>    <span class="macro">ensure!</span>(
-<a href=#1552 id=1552 data-nosnippet>1552</a>        features_wire_encoded.len() &lt;= <span class="number">1_000</span>,
-<a href=#1553 id=1553 data-nosnippet>1553</a>        <span class="string">"Will not process feature bit vectors larger than 1000 byte"
-<a href=#1554 id=1554 data-nosnippet>1554</a>    </span>);
-<a href=#1555 id=1555 data-nosnippet>1555</a>
-<a href=#1556 id=1556 data-nosnippet>1556</a>    <span class="kw">let </span>lnd_features = features_wire_encoded
+<a href=#1527 id=1527 data-nosnippet>1527</a>
+<a href=#1528 id=1528 data-nosnippet>1528</a>    <span class="kw">fn </span>create_offer(
+<a href=#1529 id=1529 data-nosnippet>1529</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1530 id=1530 data-nosnippet>1530</a>        _amount_msat: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#1531 id=1531 data-nosnippet>1531</a>        _description: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#1532 id=1532 data-nosnippet>1532</a>        _expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#1533 id=1533 data-nosnippet>1533</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1534 id=1534 data-nosnippet>1534</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, LightningRpcError&gt; {
+<a href=#1535 id=1535 data-nosnippet>1535</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#1536 id=1536 data-nosnippet>1536</a>            failure_reason: <span class="string">"LND Does not support Bolt12"</span>.to_string(),
+<a href=#1537 id=1537 data-nosnippet>1537</a>        })
+<a href=#1538 id=1538 data-nosnippet>1538</a>    }
+<a href=#1539 id=1539 data-nosnippet>1539</a>
+<a href=#1540 id=1540 data-nosnippet>1540</a>    <span class="kw">async fn </span>pay_offer(
+<a href=#1541 id=1541 data-nosnippet>1541</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1542 id=1542 data-nosnippet>1542</a>        _offer: String,
+<a href=#1543 id=1543 data-nosnippet>1543</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1544 id=1544 data-nosnippet>1544</a>        _amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#1545 id=1545 data-nosnippet>1545</a>        _payer_note: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#1546 id=1546 data-nosnippet>1546</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningRpcError&gt; {
+<a href=#1547 id=1547 data-nosnippet>1547</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#1548 id=1548 data-nosnippet>1548</a>            failure_reason: <span class="string">"LND Does not support Bolt12"</span>.to_string(),
+<a href=#1549 id=1549 data-nosnippet>1549</a>        })
+<a href=#1550 id=1550 data-nosnippet>1550</a>    }
+<a href=#1551 id=1551 data-nosnippet>1551</a>}
+<a href=#1552 id=1552 data-nosnippet>1552</a>
+<a href=#1553 id=1553 data-nosnippet>1553</a><span class="kw">fn </span>route_hints_to_lnd(
+<a href=#1554 id=1554 data-nosnippet>1554</a>    route_hints: <span class="kw-2">&amp;</span>[fedimint_ln_common::route_hints::RouteHint],
+<a href=#1555 id=1555 data-nosnippet>1555</a>) -&gt; Vec&lt;tonic_lnd::lnrpc::RouteHint&gt; {
+<a href=#1556 id=1556 data-nosnippet>1556</a>    route_hints
 <a href=#1557 id=1557 data-nosnippet>1557</a>        .iter()
-<a href=#1558 id=1558 data-nosnippet>1558</a>        .rev()
-<a href=#1559 id=1559 data-nosnippet>1559</a>        .enumerate()
-<a href=#1560 id=1560 data-nosnippet>1560</a>        .flat_map(|(byte_idx, <span class="kw-2">&amp;</span>feature_byte)| {
-<a href=#1561 id=1561 data-nosnippet>1561</a>            (<span class="number">0</span>..<span class="number">8</span>).filter_map(<span class="kw">move </span>|bit_idx| {
-<a href=#1562 id=1562 data-nosnippet>1562</a>                <span class="kw">if </span>(feature_byte &amp; (<span class="number">1u8 </span>&lt;&lt; bit_idx)) != <span class="number">0 </span>{
-<a href=#1563 id=1563 data-nosnippet>1563</a>                    <span class="prelude-val">Some</span>(
-<a href=#1564 id=1564 data-nosnippet>1564</a>                        i32::try_from(byte_idx * <span class="number">8 </span>+ bit_idx)
-<a href=#1565 id=1565 data-nosnippet>1565</a>                            .expect(<span class="string">"Index will never exceed i32::MAX for feature vectors &lt;8MB"</span>),
-<a href=#1566 id=1566 data-nosnippet>1566</a>                    )
-<a href=#1567 id=1567 data-nosnippet>1567</a>                } <span class="kw">else </span>{
-<a href=#1568 id=1568 data-nosnippet>1568</a>                    <span class="prelude-val">None
-<a href=#1569 id=1569 data-nosnippet>1569</a>                </span>}
-<a href=#1570 id=1570 data-nosnippet>1570</a>            })
-<a href=#1571 id=1571 data-nosnippet>1571</a>        })
-<a href=#1572 id=1572 data-nosnippet>1572</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#1558 id=1558 data-nosnippet>1558</a>        .map(|hint| tonic_lnd::lnrpc::RouteHint {
+<a href=#1559 id=1559 data-nosnippet>1559</a>            hop_hints: hint
+<a href=#1560 id=1560 data-nosnippet>1560</a>                .<span class="number">0
+<a href=#1561 id=1561 data-nosnippet>1561</a>                </span>.iter()
+<a href=#1562 id=1562 data-nosnippet>1562</a>                .map(|hop| tonic_lnd::lnrpc::HopHint {
+<a href=#1563 id=1563 data-nosnippet>1563</a>                    node_id: hop.src_node_id.serialize().encode_hex(),
+<a href=#1564 id=1564 data-nosnippet>1564</a>                    chan_id: hop.short_channel_id,
+<a href=#1565 id=1565 data-nosnippet>1565</a>                    fee_base_msat: hop.base_msat,
+<a href=#1566 id=1566 data-nosnippet>1566</a>                    fee_proportional_millionths: hop.proportional_millionths,
+<a href=#1567 id=1567 data-nosnippet>1567</a>                    cltv_expiry_delta: u32::from(hop.cltv_expiry_delta),
+<a href=#1568 id=1568 data-nosnippet>1568</a>                })
+<a href=#1569 id=1569 data-nosnippet>1569</a>                .collect(),
+<a href=#1570 id=1570 data-nosnippet>1570</a>        })
+<a href=#1571 id=1571 data-nosnippet>1571</a>        .collect()
+<a href=#1572 id=1572 data-nosnippet>1572</a>}
 <a href=#1573 id=1573 data-nosnippet>1573</a>
-<a href=#1574 id=1574 data-nosnippet>1574</a>    <span class="prelude-val">Ok</span>(lnd_features)
-<a href=#1575 id=1575 data-nosnippet>1575</a>}
-<a href=#1576 id=1576 data-nosnippet>1576</a>
-<a href=#1577 id=1577 data-nosnippet>1577</a><span class="doccomment">/// Utility struct for logging payment hashes. Useful for debugging.
-<a href=#1578 id=1578 data-nosnippet>1578</a></span><span class="kw">struct </span>PrettyPaymentHash&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Vec&lt;u8&gt;);
+<a href=#1574 id=1574 data-nosnippet>1574</a><span class="kw">fn </span>wire_features_to_lnd_feature_vec(features_wire_encoded: <span class="kw-2">&amp;</span>[u8]) -&gt; anyhow::Result&lt;Vec&lt;i32&gt;&gt; {
+<a href=#1575 id=1575 data-nosnippet>1575</a>    <span class="macro">ensure!</span>(
+<a href=#1576 id=1576 data-nosnippet>1576</a>        features_wire_encoded.len() &lt;= <span class="number">1_000</span>,
+<a href=#1577 id=1577 data-nosnippet>1577</a>        <span class="string">"Will not process feature bit vectors larger than 1000 byte"
+<a href=#1578 id=1578 data-nosnippet>1578</a>    </span>);
 <a href=#1579 id=1579 data-nosnippet>1579</a>
-<a href=#1580 id=1580 data-nosnippet>1580</a><span class="kw">impl </span>Display <span class="kw">for </span>PrettyPaymentHash&lt;<span class="lifetime">'_</span>&gt; {
-<a href=#1581 id=1581 data-nosnippet>1581</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#1582 id=1582 data-nosnippet>1582</a>        <span class="macro">write!</span>(f, <span class="string">"payment_hash={}"</span>, <span class="self">self</span>.<span class="number">0</span>.encode_hex::&lt;String&gt;())
-<a href=#1583 id=1583 data-nosnippet>1583</a>    }
-<a href=#1584 id=1584 data-nosnippet>1584</a>}
-<a href=#1585 id=1585 data-nosnippet>1585</a>
-<a href=#1586 id=1586 data-nosnippet>1586</a><span class="attr">#[cfg(test)]
-<a href=#1587 id=1587 data-nosnippet>1587</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#1580 id=1580 data-nosnippet>1580</a>    <span class="kw">let </span>lnd_features = features_wire_encoded
+<a href=#1581 id=1581 data-nosnippet>1581</a>        .iter()
+<a href=#1582 id=1582 data-nosnippet>1582</a>        .rev()
+<a href=#1583 id=1583 data-nosnippet>1583</a>        .enumerate()
+<a href=#1584 id=1584 data-nosnippet>1584</a>        .flat_map(|(byte_idx, <span class="kw-2">&amp;</span>feature_byte)| {
+<a href=#1585 id=1585 data-nosnippet>1585</a>            (<span class="number">0</span>..<span class="number">8</span>).filter_map(<span class="kw">move </span>|bit_idx| {
+<a href=#1586 id=1586 data-nosnippet>1586</a>                <span class="kw">if </span>(feature_byte &amp; (<span class="number">1u8 </span>&lt;&lt; bit_idx)) != <span class="number">0 </span>{
+<a href=#1587 id=1587 data-nosnippet>1587</a>                    <span class="prelude-val">Some</span>(
+<a href=#1588 id=1588 data-nosnippet>1588</a>                        i32::try_from(byte_idx * <span class="number">8 </span>+ bit_idx)
+<a href=#1589 id=1589 data-nosnippet>1589</a>                            .expect(<span class="string">"Index will never exceed i32::MAX for feature vectors &lt;8MB"</span>),
+<a href=#1590 id=1590 data-nosnippet>1590</a>                    )
+<a href=#1591 id=1591 data-nosnippet>1591</a>                } <span class="kw">else </span>{
+<a href=#1592 id=1592 data-nosnippet>1592</a>                    <span class="prelude-val">None
+<a href=#1593 id=1593 data-nosnippet>1593</a>                </span>}
+<a href=#1594 id=1594 data-nosnippet>1594</a>            })
+<a href=#1595 id=1595 data-nosnippet>1595</a>        })
+<a href=#1596 id=1596 data-nosnippet>1596</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#1597 id=1597 data-nosnippet>1597</a>
+<a href=#1598 id=1598 data-nosnippet>1598</a>    <span class="prelude-val">Ok</span>(lnd_features)
+<a href=#1599 id=1599 data-nosnippet>1599</a>}
+<a href=#1600 id=1600 data-nosnippet>1600</a>
+<a href=#1601 id=1601 data-nosnippet>1601</a><span class="doccomment">/// Utility struct for logging payment hashes. Useful for debugging.
+<a href=#1602 id=1602 data-nosnippet>1602</a></span><span class="kw">struct </span>PrettyPaymentHash&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Vec&lt;u8&gt;);
+<a href=#1603 id=1603 data-nosnippet>1603</a>
+<a href=#1604 id=1604 data-nosnippet>1604</a><span class="kw">impl </span>Display <span class="kw">for </span>PrettyPaymentHash&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#1605 id=1605 data-nosnippet>1605</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#1606 id=1606 data-nosnippet>1606</a>        <span class="macro">write!</span>(f, <span class="string">"payment_hash={}"</span>, <span class="self">self</span>.<span class="number">0</span>.encode_hex::&lt;String&gt;())
+<a href=#1607 id=1607 data-nosnippet>1607</a>    }
+<a href=#1608 id=1608 data-nosnippet>1608</a>}
+<a href=#1609 id=1609 data-nosnippet>1609</a>
+<a href=#1610 id=1610 data-nosnippet>1610</a><span class="attr">#[cfg(test)]
+<a href=#1611 id=1611 data-nosnippet>1611</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>

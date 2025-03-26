@@ -21,782 +21,886 @@
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>lightning::ln::PaymentPreimage;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>lightning::ln::channelmanager::PaymentId;
-<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>lightning::util::scid_utils::scid_from_parts;
-<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>lightning_invoice::Bolt11Invoice;
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>tokio::sync::mpsc::Sender;
-<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>tracing::{info, warn};
-<a href=#29 id=29 data-nosnippet>29</a>
-<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use super</span>::{
-<a href=#31 id=31 data-nosnippet>31</a>    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
-<a href=#32 id=32 data-nosnippet>32</a>};
-<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use crate</span>::{
-<a href=#34 id=34 data-nosnippet>34</a>    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-<a href=#35 id=35 data-nosnippet>35</a>    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-<a href=#36 id=36 data-nosnippet>36</a>    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-<a href=#37 id=37 data-nosnippet>37</a>    OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
-<a href=#38 id=38 data-nosnippet>38</a>    SendOnchainResponse,
-<a href=#39 id=39 data-nosnippet>39</a>};
-<a href=#40 id=40 data-nosnippet>40</a>
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">pub enum </span>GatewayLdkChainSourceConfig {
-<a href=#42 id=42 data-nosnippet>42</a>    Bitcoind { server_url: SafeUrl },
-<a href=#43 id=43 data-nosnippet>43</a>    Esplora { server_url: SafeUrl },
-<a href=#44 id=44 data-nosnippet>44</a>}
-<a href=#45 id=45 data-nosnippet>45</a>
-<a href=#46 id=46 data-nosnippet>46</a><span class="kw">impl </span>GatewayLdkChainSourceConfig {
-<a href=#47 id=47 data-nosnippet>47</a>    <span class="kw">fn </span>bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
-<a href=#48 id=48 data-nosnippet>48</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#49 id=49 data-nosnippet>49</a>            <span class="self">Self</span>::Bitcoind { server_url } =&gt; BitcoinRpcConfig {
-<a href=#50 id=50 data-nosnippet>50</a>                kind: <span class="string">"bitcoind"</span>.to_string(),
-<a href=#51 id=51 data-nosnippet>51</a>                url: server_url.clone(),
-<a href=#52 id=52 data-nosnippet>52</a>            },
-<a href=#53 id=53 data-nosnippet>53</a>            <span class="self">Self</span>::Esplora { server_url } =&gt; BitcoinRpcConfig {
-<a href=#54 id=54 data-nosnippet>54</a>                kind: <span class="string">"esplora"</span>.to_string(),
-<a href=#55 id=55 data-nosnippet>55</a>                url: server_url.clone(),
-<a href=#56 id=56 data-nosnippet>56</a>            },
-<a href=#57 id=57 data-nosnippet>57</a>        }
-<a href=#58 id=58 data-nosnippet>58</a>    }
-<a href=#59 id=59 data-nosnippet>59</a>}
-<a href=#60 id=60 data-nosnippet>60</a>
-<a href=#61 id=61 data-nosnippet>61</a><span class="kw">pub struct </span>GatewayLdkClient {
-<a href=#62 id=62 data-nosnippet>62</a>    <span class="doccomment">/// The underlying lightning node.
-<a href=#63 id=63 data-nosnippet>63</a>    </span>node: Arc&lt;ldk_node::Node&gt;,
-<a href=#64 id=64 data-nosnippet>64</a>
-<a href=#65 id=65 data-nosnippet>65</a>    <span class="doccomment">/// The client for querying data about the blockchain.
-<a href=#66 id=66 data-nosnippet>66</a>    </span>bitcoind_rpc: DynBitcoindRpc,
-<a href=#67 id=67 data-nosnippet>67</a>
-<a href=#68 id=68 data-nosnippet>68</a>    task_group: TaskGroup,
-<a href=#69 id=69 data-nosnippet>69</a>
-<a href=#70 id=70 data-nosnippet>70</a>    <span class="doccomment">/// The HTLC stream, until it is taken by calling
-<a href=#71 id=71 data-nosnippet>71</a>    /// `ILnRpcClient::route_htlcs`.
-<a href=#72 id=72 data-nosnippet>72</a>    </span>htlc_stream_receiver_or: <span class="prelude-ty">Option</span>&lt;tokio::sync::mpsc::Receiver&lt;InterceptPaymentRequest&gt;&gt;,
-<a href=#73 id=73 data-nosnippet>73</a>
-<a href=#74 id=74 data-nosnippet>74</a>    <span class="doccomment">/// Lock pool used to ensure that our implementation of `ILnRpcClient::pay`
-<a href=#75 id=75 data-nosnippet>75</a>    /// doesn't allow for multiple simultaneous calls with the same invoice to
-<a href=#76 id=76 data-nosnippet>76</a>    /// execute in parallel. This helps ensure that the function is idempotent.
-<a href=#77 id=77 data-nosnippet>77</a>    </span>outbound_lightning_payment_lock_pool: lockable::LockPool&lt;PaymentId&gt;,
-<a href=#78 id=78 data-nosnippet>78</a>}
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>lightning::offers::offer::{Offer, OfferId};
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>lightning::util::scid_utils::scid_from_parts;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>tokio::sync::mpsc::Sender;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>tracing::{info, warn};
+<a href=#30 id=30 data-nosnippet>30</a>
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use super</span>::{
+<a href=#32 id=32 data-nosnippet>32</a>    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
+<a href=#33 id=33 data-nosnippet>33</a>};
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use crate</span>::{
+<a href=#35 id=35 data-nosnippet>35</a>    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+<a href=#36 id=36 data-nosnippet>36</a>    CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
+<a href=#37 id=37 data-nosnippet>37</a>    GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
+<a href=#38 id=38 data-nosnippet>38</a>    OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
+<a href=#39 id=39 data-nosnippet>39</a>    SendOnchainResponse,
+<a href=#40 id=40 data-nosnippet>40</a>};
+<a href=#41 id=41 data-nosnippet>41</a>
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">pub enum </span>GatewayLdkChainSourceConfig {
+<a href=#43 id=43 data-nosnippet>43</a>    Bitcoind { server_url: SafeUrl },
+<a href=#44 id=44 data-nosnippet>44</a>    Esplora { server_url: SafeUrl },
+<a href=#45 id=45 data-nosnippet>45</a>}
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">impl </span>GatewayLdkChainSourceConfig {
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="kw">fn </span>bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+<a href=#49 id=49 data-nosnippet>49</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#50 id=50 data-nosnippet>50</a>            <span class="self">Self</span>::Bitcoind { server_url } =&gt; BitcoinRpcConfig {
+<a href=#51 id=51 data-nosnippet>51</a>                kind: <span class="string">"bitcoind"</span>.to_string(),
+<a href=#52 id=52 data-nosnippet>52</a>                url: server_url.clone(),
+<a href=#53 id=53 data-nosnippet>53</a>            },
+<a href=#54 id=54 data-nosnippet>54</a>            <span class="self">Self</span>::Esplora { server_url } =&gt; BitcoinRpcConfig {
+<a href=#55 id=55 data-nosnippet>55</a>                kind: <span class="string">"esplora"</span>.to_string(),
+<a href=#56 id=56 data-nosnippet>56</a>                url: server_url.clone(),
+<a href=#57 id=57 data-nosnippet>57</a>            },
+<a href=#58 id=58 data-nosnippet>58</a>        }
+<a href=#59 id=59 data-nosnippet>59</a>    }
+<a href=#60 id=60 data-nosnippet>60</a>}
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a><span class="kw">pub struct </span>GatewayLdkClient {
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="doccomment">/// The underlying lightning node.
+<a href=#64 id=64 data-nosnippet>64</a>    </span>node: Arc&lt;ldk_node::Node&gt;,
+<a href=#65 id=65 data-nosnippet>65</a>
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="doccomment">/// The client for querying data about the blockchain.
+<a href=#67 id=67 data-nosnippet>67</a>    </span>bitcoind_rpc: DynBitcoindRpc,
+<a href=#68 id=68 data-nosnippet>68</a>
+<a href=#69 id=69 data-nosnippet>69</a>    task_group: TaskGroup,
+<a href=#70 id=70 data-nosnippet>70</a>
+<a href=#71 id=71 data-nosnippet>71</a>    <span class="doccomment">/// The HTLC stream, until it is taken by calling
+<a href=#72 id=72 data-nosnippet>72</a>    /// `ILnRpcClient::route_htlcs`.
+<a href=#73 id=73 data-nosnippet>73</a>    </span>htlc_stream_receiver_or: <span class="prelude-ty">Option</span>&lt;tokio::sync::mpsc::Receiver&lt;InterceptPaymentRequest&gt;&gt;,
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="doccomment">/// Lock pool used to ensure that our implementation of `ILnRpcClient::pay`
+<a href=#76 id=76 data-nosnippet>76</a>    /// doesn't allow for multiple simultaneous calls with the same invoice to
+<a href=#77 id=77 data-nosnippet>77</a>    /// execute in parallel. This helps ensure that the function is idempotent.
+<a href=#78 id=78 data-nosnippet>78</a>    </span>outbound_lightning_payment_lock_pool: lockable::LockPool&lt;PaymentId&gt;,
 <a href=#79 id=79 data-nosnippet>79</a>
-<a href=#80 id=80 data-nosnippet>80</a><span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>GatewayLdkClient {
-<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-<a href=#82 id=82 data-nosnippet>82</a>        f.debug_struct(<span class="string">"GatewayLdkClient"</span>).finish_non_exhaustive()
-<a href=#83 id=83 data-nosnippet>83</a>    }
-<a href=#84 id=84 data-nosnippet>84</a>}
-<a href=#85 id=85 data-nosnippet>85</a>
-<a href=#86 id=86 data-nosnippet>86</a><span class="kw">impl </span>GatewayLdkClient {
-<a href=#87 id=87 data-nosnippet>87</a>    <span class="doccomment">/// Creates a new `GatewayLdkClient` instance and starts the underlying
-<a href=#88 id=88 data-nosnippet>88</a>    /// lightning node. All resources, including the lightning node, will be
-<a href=#89 id=89 data-nosnippet>89</a>    /// cleaned up when the returned `GatewayLdkClient` instance is dropped.
-<a href=#90 id=90 data-nosnippet>90</a>    /// There's no need to manually stop the node.
-<a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">pub fn </span>new(
-<a href=#92 id=92 data-nosnippet>92</a>        data_dir: <span class="kw-2">&amp;</span>Path,
-<a href=#93 id=93 data-nosnippet>93</a>        chain_source_config: GatewayLdkChainSourceConfig,
-<a href=#94 id=94 data-nosnippet>94</a>        network: Network,
-<a href=#95 id=95 data-nosnippet>95</a>        lightning_port: u16,
-<a href=#96 id=96 data-nosnippet>96</a>        alias: String,
-<a href=#97 id=97 data-nosnippet>97</a>        mnemonic: Mnemonic,
-<a href=#98 id=98 data-nosnippet>98</a>        runtime: Arc&lt;tokio::runtime::Runtime&gt;,
-<a href=#99 id=99 data-nosnippet>99</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
-<a href=#101 id=101 data-nosnippet>101</a>        <span class="kw">let </span>alias = <span class="kw">if </span>alias.is_empty() {
-<a href=#102 id=102 data-nosnippet>102</a>            <span class="string">"LDK Gateway"</span>.to_string()
-<a href=#103 id=103 data-nosnippet>103</a>        } <span class="kw">else </span>{
-<a href=#104 id=104 data-nosnippet>104</a>            alias
-<a href=#105 id=105 data-nosnippet>105</a>        };
-<a href=#106 id=106 data-nosnippet>106</a>        <span class="kw">let </span>alias_bytes = alias.as_bytes();
-<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">let </span>truncated = <span class="kw-2">&amp;</span>alias_bytes[..alias_bytes.len().min(<span class="number">32</span>)];
-<a href=#108 id=108 data-nosnippet>108</a>        bytes[..truncated.len()].copy_from_slice(truncated);
-<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">let </span>node_alias = <span class="prelude-val">Some</span>(NodeAlias(bytes));
-<a href=#110 id=110 data-nosnippet>110</a>
-<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">let </span><span class="kw-2">mut </span>node_builder = ldk_node::Builder::from_config(ldk_node::config::Config {
-<a href=#112 id=112 data-nosnippet>112</a>            network,
-<a href=#113 id=113 data-nosnippet>113</a>            listening_addresses: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[SocketAddress::TcpIpV4 {
-<a href=#114 id=114 data-nosnippet>114</a>                addr: [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>],
-<a href=#115 id=115 data-nosnippet>115</a>                port: lightning_port,
-<a href=#116 id=116 data-nosnippet>116</a>            }]),
-<a href=#117 id=117 data-nosnippet>117</a>            node_alias,
-<a href=#118 id=118 data-nosnippet>118</a>            ..Default::default()
-<a href=#119 id=119 data-nosnippet>119</a>        });
-<a href=#120 id=120 data-nosnippet>120</a>
-<a href=#121 id=121 data-nosnippet>121</a>        node_builder.set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>);
-<a href=#122 id=122 data-nosnippet>122</a>
-<a href=#123 id=123 data-nosnippet>123</a>        <span class="kw">let </span>bitcoind_rpc = create_bitcoind(<span class="kw-2">&amp;</span>chain_source_config.bitcoin_rpc_config())<span class="question-mark">?</span>;
-<a href=#124 id=124 data-nosnippet>124</a>
-<a href=#125 id=125 data-nosnippet>125</a>        <span class="kw">match </span>chain_source_config {
-<a href=#126 id=126 data-nosnippet>126</a>            GatewayLdkChainSourceConfig::Bitcoind { server_url } =&gt; {
-<a href=#127 id=127 data-nosnippet>127</a>                node_builder.set_chain_source_bitcoind_rpc(
-<a href=#128 id=128 data-nosnippet>128</a>                    server_url
-<a href=#129 id=129 data-nosnippet>129</a>                        .host_str()
-<a href=#130 id=130 data-nosnippet>130</a>                        .expect(<span class="string">"Could not retrieve host from bitcoind RPC url"</span>)
-<a href=#131 id=131 data-nosnippet>131</a>                        .to_string(),
-<a href=#132 id=132 data-nosnippet>132</a>                    server_url
-<a href=#133 id=133 data-nosnippet>133</a>                        .port()
-<a href=#134 id=134 data-nosnippet>134</a>                        .expect(<span class="string">"Could not retrieve port from bitcoind RPC url"</span>),
-<a href=#135 id=135 data-nosnippet>135</a>                    server_url.username().to_string(),
-<a href=#136 id=136 data-nosnippet>136</a>                    server_url.password().unwrap_or_default().to_string(),
-<a href=#137 id=137 data-nosnippet>137</a>                );
-<a href=#138 id=138 data-nosnippet>138</a>            }
-<a href=#139 id=139 data-nosnippet>139</a>            GatewayLdkChainSourceConfig::Esplora { server_url } =&gt; {
-<a href=#140 id=140 data-nosnippet>140</a>                node_builder.set_chain_source_esplora(server_url.to_string(), <span class="prelude-val">None</span>);
-<a href=#141 id=141 data-nosnippet>141</a>            }
-<a href=#142 id=142 data-nosnippet>142</a>        };
-<a href=#143 id=143 data-nosnippet>143</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(data_dir_str) = data_dir.to_str() <span class="kw">else </span>{
-<a href=#144 id=144 data-nosnippet>144</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid data dir path"</span>));
-<a href=#145 id=145 data-nosnippet>145</a>        };
-<a href=#146 id=146 data-nosnippet>146</a>        node_builder.set_storage_dir_path(data_dir_str.to_string());
-<a href=#147 id=147 data-nosnippet>147</a>
-<a href=#148 id=148 data-nosnippet>148</a>        <span class="kw">let </span>node = Arc::new(node_builder.build()<span class="question-mark">?</span>);
-<a href=#149 id=149 data-nosnippet>149</a>        node.start_with_runtime(runtime).map_err(|err| {
-<a href=#150 id=150 data-nosnippet>150</a>            <span class="macro">crit!</span>(target: LOG_LIGHTNING, err = %err.fmt_compact(), <span class="string">"Failed to start LDK Node"</span>);
-<a href=#151 id=151 data-nosnippet>151</a>            LightningRpcError::FailedToConnect
-<a href=#152 id=152 data-nosnippet>152</a>        })<span class="question-mark">?</span>;
-<a href=#153 id=153 data-nosnippet>153</a>
-<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">let </span>(htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(<span class="number">1024</span>);
-<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span>task_group = TaskGroup::new();
-<a href=#156 id=156 data-nosnippet>156</a>
-<a href=#157 id=157 data-nosnippet>157</a>        <span class="kw">let </span>node_clone = node.clone();
-<a href=#158 id=158 data-nosnippet>158</a>        task_group.spawn(<span class="string">"ldk lightning node event handler"</span>, |handle| <span class="kw">async move </span>{
-<a href=#159 id=159 data-nosnippet>159</a>            <span class="kw">loop </span>{
-<a href=#160 id=160 data-nosnippet>160</a>                <span class="self">Self</span>::handle_next_event(<span class="kw-2">&amp;</span>node_clone, <span class="kw-2">&amp;</span>htlc_stream_sender, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
-<a href=#161 id=161 data-nosnippet>161</a>            }
-<a href=#162 id=162 data-nosnippet>162</a>        });
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="doccomment">/// Lock pool used to ensure that our implementation of
+<a href=#81 id=81 data-nosnippet>81</a>    /// `ILnRpcClient::pay_offer` doesn't allow for multiple simultaneous
+<a href=#82 id=82 data-nosnippet>82</a>    /// calls with the same offer to execute in parallel. This helps ensure
+<a href=#83 id=83 data-nosnippet>83</a>    /// that the function is idempotent.
+<a href=#84 id=84 data-nosnippet>84</a>    </span>outbound_offer_lock_pool: lockable::LockPool&lt;LdkOfferId&gt;,
+<a href=#85 id=85 data-nosnippet>85</a>}
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a><span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>GatewayLdkClient {
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#89 id=89 data-nosnippet>89</a>        f.debug_struct(<span class="string">"GatewayLdkClient"</span>).finish_non_exhaustive()
+<a href=#90 id=90 data-nosnippet>90</a>    }
+<a href=#91 id=91 data-nosnippet>91</a>}
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a><span class="kw">impl </span>GatewayLdkClient {
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="doccomment">/// Creates a new `GatewayLdkClient` instance and starts the underlying
+<a href=#95 id=95 data-nosnippet>95</a>    /// lightning node. All resources, including the lightning node, will be
+<a href=#96 id=96 data-nosnippet>96</a>    /// cleaned up when the returned `GatewayLdkClient` instance is dropped.
+<a href=#97 id=97 data-nosnippet>97</a>    /// There's no need to manually stop the node.
+<a href=#98 id=98 data-nosnippet>98</a>    </span><span class="kw">pub fn </span>new(
+<a href=#99 id=99 data-nosnippet>99</a>        data_dir: <span class="kw-2">&amp;</span>Path,
+<a href=#100 id=100 data-nosnippet>100</a>        chain_source_config: GatewayLdkChainSourceConfig,
+<a href=#101 id=101 data-nosnippet>101</a>        network: Network,
+<a href=#102 id=102 data-nosnippet>102</a>        lightning_port: u16,
+<a href=#103 id=103 data-nosnippet>103</a>        alias: String,
+<a href=#104 id=104 data-nosnippet>104</a>        mnemonic: Mnemonic,
+<a href=#105 id=105 data-nosnippet>105</a>        runtime: Arc&lt;tokio::runtime::Runtime&gt;,
+<a href=#106 id=106 data-nosnippet>106</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="kw">let </span>alias = <span class="kw">if </span>alias.is_empty() {
+<a href=#109 id=109 data-nosnippet>109</a>            <span class="string">"LDK Gateway"</span>.to_string()
+<a href=#110 id=110 data-nosnippet>110</a>        } <span class="kw">else </span>{
+<a href=#111 id=111 data-nosnippet>111</a>            alias
+<a href=#112 id=112 data-nosnippet>112</a>        };
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">let </span>alias_bytes = alias.as_bytes();
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span>truncated = <span class="kw-2">&amp;</span>alias_bytes[..alias_bytes.len().min(<span class="number">32</span>)];
+<a href=#115 id=115 data-nosnippet>115</a>        bytes[..truncated.len()].copy_from_slice(truncated);
+<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>node_alias = <span class="prelude-val">Some</span>(NodeAlias(bytes));
+<a href=#117 id=117 data-nosnippet>117</a>
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">let </span><span class="kw-2">mut </span>node_builder = ldk_node::Builder::from_config(ldk_node::config::Config {
+<a href=#119 id=119 data-nosnippet>119</a>            network,
+<a href=#120 id=120 data-nosnippet>120</a>            listening_addresses: <span class="prelude-val">Some</span>(<span class="macro">vec!</span>[SocketAddress::TcpIpV4 {
+<a href=#121 id=121 data-nosnippet>121</a>                addr: [<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>],
+<a href=#122 id=122 data-nosnippet>122</a>                port: lightning_port,
+<a href=#123 id=123 data-nosnippet>123</a>            }]),
+<a href=#124 id=124 data-nosnippet>124</a>            node_alias,
+<a href=#125 id=125 data-nosnippet>125</a>            ..Default::default()
+<a href=#126 id=126 data-nosnippet>126</a>        });
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a>        node_builder.set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>);
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="kw">let </span>bitcoind_rpc = create_bitcoind(<span class="kw-2">&amp;</span>chain_source_config.bitcoin_rpc_config())<span class="question-mark">?</span>;
+<a href=#131 id=131 data-nosnippet>131</a>
+<a href=#132 id=132 data-nosnippet>132</a>        <span class="kw">match </span>chain_source_config {
+<a href=#133 id=133 data-nosnippet>133</a>            GatewayLdkChainSourceConfig::Bitcoind { server_url } =&gt; {
+<a href=#134 id=134 data-nosnippet>134</a>                node_builder.set_chain_source_bitcoind_rpc(
+<a href=#135 id=135 data-nosnippet>135</a>                    server_url
+<a href=#136 id=136 data-nosnippet>136</a>                        .host_str()
+<a href=#137 id=137 data-nosnippet>137</a>                        .expect(<span class="string">"Could not retrieve host from bitcoind RPC url"</span>)
+<a href=#138 id=138 data-nosnippet>138</a>                        .to_string(),
+<a href=#139 id=139 data-nosnippet>139</a>                    server_url
+<a href=#140 id=140 data-nosnippet>140</a>                        .port()
+<a href=#141 id=141 data-nosnippet>141</a>                        .expect(<span class="string">"Could not retrieve port from bitcoind RPC url"</span>),
+<a href=#142 id=142 data-nosnippet>142</a>                    server_url.username().to_string(),
+<a href=#143 id=143 data-nosnippet>143</a>                    server_url.password().unwrap_or_default().to_string(),
+<a href=#144 id=144 data-nosnippet>144</a>                );
+<a href=#145 id=145 data-nosnippet>145</a>            }
+<a href=#146 id=146 data-nosnippet>146</a>            GatewayLdkChainSourceConfig::Esplora { server_url } =&gt; {
+<a href=#147 id=147 data-nosnippet>147</a>                node_builder.set_chain_source_esplora(server_url.to_string(), <span class="prelude-val">None</span>);
+<a href=#148 id=148 data-nosnippet>148</a>            }
+<a href=#149 id=149 data-nosnippet>149</a>        };
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(data_dir_str) = data_dir.to_str() <span class="kw">else </span>{
+<a href=#151 id=151 data-nosnippet>151</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid data dir path"</span>));
+<a href=#152 id=152 data-nosnippet>152</a>        };
+<a href=#153 id=153 data-nosnippet>153</a>        node_builder.set_storage_dir_path(data_dir_str.to_string());
+<a href=#154 id=154 data-nosnippet>154</a>
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span>node = Arc::new(node_builder.build()<span class="question-mark">?</span>);
+<a href=#156 id=156 data-nosnippet>156</a>        node.start_with_runtime(runtime).map_err(|err| {
+<a href=#157 id=157 data-nosnippet>157</a>            <span class="macro">crit!</span>(target: LOG_LIGHTNING, err = %err.fmt_compact(), <span class="string">"Failed to start LDK Node"</span>);
+<a href=#158 id=158 data-nosnippet>158</a>            LightningRpcError::FailedToConnect
+<a href=#159 id=159 data-nosnippet>159</a>        })<span class="question-mark">?</span>;
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">let </span>(htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(<span class="number">1024</span>);
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span>task_group = TaskGroup::new();
 <a href=#163 id=163 data-nosnippet>163</a>
-<a href=#164 id=164 data-nosnippet>164</a>        <span class="prelude-val">Ok</span>(GatewayLdkClient {
-<a href=#165 id=165 data-nosnippet>165</a>            node,
-<a href=#166 id=166 data-nosnippet>166</a>            bitcoind_rpc,
-<a href=#167 id=167 data-nosnippet>167</a>            task_group,
-<a href=#168 id=168 data-nosnippet>168</a>            htlc_stream_receiver_or: <span class="prelude-val">Some</span>(htlc_stream_receiver),
-<a href=#169 id=169 data-nosnippet>169</a>            outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
-<a href=#170 id=170 data-nosnippet>170</a>        })
-<a href=#171 id=171 data-nosnippet>171</a>    }
-<a href=#172 id=172 data-nosnippet>172</a>
-<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">async fn </span>handle_next_event(
-<a href=#174 id=174 data-nosnippet>174</a>        node: <span class="kw-2">&amp;</span>ldk_node::Node,
-<a href=#175 id=175 data-nosnippet>175</a>        htlc_stream_sender: <span class="kw-2">&amp;</span>Sender&lt;InterceptPaymentRequest&gt;,
-<a href=#176 id=176 data-nosnippet>176</a>        handle: <span class="kw-2">&amp;</span>TaskHandle,
-<a href=#177 id=177 data-nosnippet>177</a>    ) {
-<a href=#178 id=178 data-nosnippet>178</a>        <span class="comment">// We manually check for task termination in case we receive a payment while the
-<a href=#179 id=179 data-nosnippet>179</a>        // task is shutting down. In that case, we want to finish the payment
-<a href=#180 id=180 data-nosnippet>180</a>        // before shutting this task down.
-<a href=#181 id=181 data-nosnippet>181</a>        </span><span class="kw">let </span>event = <span class="macro">tokio::select!</span> {
-<a href=#182 id=182 data-nosnippet>182</a>            event = node.next_event_async() =&gt; {
-<a href=#183 id=183 data-nosnippet>183</a>                event
-<a href=#184 id=184 data-nosnippet>184</a>            }
-<a href=#185 id=185 data-nosnippet>185</a>            () = handle.make_shutdown_rx() =&gt; {
-<a href=#186 id=186 data-nosnippet>186</a>                <span class="kw">return</span>;
-<a href=#187 id=187 data-nosnippet>187</a>            }
-<a href=#188 id=188 data-nosnippet>188</a>        };
-<a href=#189 id=189 data-nosnippet>189</a>
-<a href=#190 id=190 data-nosnippet>190</a>        <span class="kw">if let </span>ldk_node::Event::PaymentClaimable {
-<a href=#191 id=191 data-nosnippet>191</a>            payment_id: <span class="kw">_</span>,
-<a href=#192 id=192 data-nosnippet>192</a>            payment_hash,
-<a href=#193 id=193 data-nosnippet>193</a>            claimable_amount_msat,
-<a href=#194 id=194 data-nosnippet>194</a>            claim_deadline,
-<a href=#195 id=195 data-nosnippet>195</a>        } = event
-<a href=#196 id=196 data-nosnippet>196</a>        {
-<a href=#197 id=197 data-nosnippet>197</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = htlc_stream_sender
-<a href=#198 id=198 data-nosnippet>198</a>                .send(InterceptPaymentRequest {
-<a href=#199 id=199 data-nosnippet>199</a>                    payment_hash: Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash.<span class="number">0</span>).expect(<span class="string">"Failed to create Hash"</span>),
-<a href=#200 id=200 data-nosnippet>200</a>                    amount_msat: claimable_amount_msat,
-<a href=#201 id=201 data-nosnippet>201</a>                    expiry: claim_deadline.unwrap_or_default(),
-<a href=#202 id=202 data-nosnippet>202</a>                    short_channel_id: <span class="prelude-val">None</span>,
-<a href=#203 id=203 data-nosnippet>203</a>                    incoming_chan_id: <span class="number">0</span>,
-<a href=#204 id=204 data-nosnippet>204</a>                    htlc_id: <span class="number">0</span>,
-<a href=#205 id=205 data-nosnippet>205</a>                })
-<a href=#206 id=206 data-nosnippet>206</a>                .<span class="kw">await
-<a href=#207 id=207 data-nosnippet>207</a>            </span>{
-<a href=#208 id=208 data-nosnippet>208</a>                <span class="macro">warn!</span>(target: LOG_LIGHTNING, err = %err.fmt_compact(), <span class="string">"Failed send InterceptHtlcRequest to stream"</span>);
-<a href=#209 id=209 data-nosnippet>209</a>            }
-<a href=#210 id=210 data-nosnippet>210</a>        }
-<a href=#211 id=211 data-nosnippet>211</a>
-<a href=#212 id=212 data-nosnippet>212</a>        <span class="comment">// The `PaymentClaimable` event is the only event type that we are interested
-<a href=#213 id=213 data-nosnippet>213</a>        // in. We can safely ignore all other events.
-<a href=#214 id=214 data-nosnippet>214</a>        </span>node.event_handled();
-<a href=#215 id=215 data-nosnippet>215</a>    }
-<a href=#216 id=216 data-nosnippet>216</a>
-<a href=#217 id=217 data-nosnippet>217</a>    <span class="doccomment">/// Converts a transaction outpoint to a short channel ID by querying the
-<a href=#218 id=218 data-nosnippet>218</a>    /// blockchain.
-<a href=#219 id=219 data-nosnippet>219</a>    </span><span class="kw">async fn </span>outpoint_to_scid(<span class="kw-2">&amp;</span><span class="self">self</span>, funding_txo: OutPoint) -&gt; anyhow::Result&lt;u64&gt; {
-<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">let </span>block_hash = <span class="self">self
-<a href=#221 id=221 data-nosnippet>221</a>            </span>.bitcoind_rpc
-<a href=#222 id=222 data-nosnippet>222</a>            .get_txout_proof(funding_txo.txid)
-<a href=#223 id=223 data-nosnippet>223</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#224 id=224 data-nosnippet>224</a>            </span>.block_header
-<a href=#225 id=225 data-nosnippet>225</a>            .block_hash();
-<a href=#226 id=226 data-nosnippet>226</a>
-<a href=#227 id=227 data-nosnippet>227</a>        <span class="kw">let </span>block_height = <span class="self">self
-<a href=#228 id=228 data-nosnippet>228</a>            </span>.bitcoind_rpc
-<a href=#229 id=229 data-nosnippet>229</a>            .get_tx_block_height(<span class="kw-2">&amp;</span>funding_txo.txid)
-<a href=#230 id=230 data-nosnippet>230</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#231 id=231 data-nosnippet>231</a>            </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to get block height"</span>))<span class="question-mark">?</span>;
-<a href=#232 id=232 data-nosnippet>232</a>
-<a href=#233 id=233 data-nosnippet>233</a>        <span class="kw">let </span>block = <span class="self">self</span>.bitcoind_rpc.get_block(<span class="kw-2">&amp;</span>block_hash).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span>node_clone = node.clone();
+<a href=#165 id=165 data-nosnippet>165</a>        task_group.spawn(<span class="string">"ldk lightning node event handler"</span>, |handle| <span class="kw">async move </span>{
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="kw">loop </span>{
+<a href=#167 id=167 data-nosnippet>167</a>                <span class="self">Self</span>::handle_next_event(<span class="kw-2">&amp;</span>node_clone, <span class="kw-2">&amp;</span>htlc_stream_sender, <span class="kw-2">&amp;</span>handle).<span class="kw">await</span>;
+<a href=#168 id=168 data-nosnippet>168</a>            }
+<a href=#169 id=169 data-nosnippet>169</a>        });
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a>        <span class="prelude-val">Ok</span>(GatewayLdkClient {
+<a href=#172 id=172 data-nosnippet>172</a>            node,
+<a href=#173 id=173 data-nosnippet>173</a>            bitcoind_rpc,
+<a href=#174 id=174 data-nosnippet>174</a>            task_group,
+<a href=#175 id=175 data-nosnippet>175</a>            htlc_stream_receiver_or: <span class="prelude-val">Some</span>(htlc_stream_receiver),
+<a href=#176 id=176 data-nosnippet>176</a>            outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
+<a href=#177 id=177 data-nosnippet>177</a>            outbound_offer_lock_pool: lockable::LockPool::new(),
+<a href=#178 id=178 data-nosnippet>178</a>        })
+<a href=#179 id=179 data-nosnippet>179</a>    }
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">async fn </span>handle_next_event(
+<a href=#182 id=182 data-nosnippet>182</a>        node: <span class="kw-2">&amp;</span>ldk_node::Node,
+<a href=#183 id=183 data-nosnippet>183</a>        htlc_stream_sender: <span class="kw-2">&amp;</span>Sender&lt;InterceptPaymentRequest&gt;,
+<a href=#184 id=184 data-nosnippet>184</a>        handle: <span class="kw-2">&amp;</span>TaskHandle,
+<a href=#185 id=185 data-nosnippet>185</a>    ) {
+<a href=#186 id=186 data-nosnippet>186</a>        <span class="comment">// We manually check for task termination in case we receive a payment while the
+<a href=#187 id=187 data-nosnippet>187</a>        // task is shutting down. In that case, we want to finish the payment
+<a href=#188 id=188 data-nosnippet>188</a>        // before shutting this task down.
+<a href=#189 id=189 data-nosnippet>189</a>        </span><span class="kw">let </span>event = <span class="macro">tokio::select!</span> {
+<a href=#190 id=190 data-nosnippet>190</a>            event = node.next_event_async() =&gt; {
+<a href=#191 id=191 data-nosnippet>191</a>                event
+<a href=#192 id=192 data-nosnippet>192</a>            }
+<a href=#193 id=193 data-nosnippet>193</a>            () = handle.make_shutdown_rx() =&gt; {
+<a href=#194 id=194 data-nosnippet>194</a>                <span class="kw">return</span>;
+<a href=#195 id=195 data-nosnippet>195</a>            }
+<a href=#196 id=196 data-nosnippet>196</a>        };
+<a href=#197 id=197 data-nosnippet>197</a>
+<a href=#198 id=198 data-nosnippet>198</a>        <span class="kw">if let </span>ldk_node::Event::PaymentClaimable {
+<a href=#199 id=199 data-nosnippet>199</a>            payment_id: <span class="kw">_</span>,
+<a href=#200 id=200 data-nosnippet>200</a>            payment_hash,
+<a href=#201 id=201 data-nosnippet>201</a>            claimable_amount_msat,
+<a href=#202 id=202 data-nosnippet>202</a>            claim_deadline,
+<a href=#203 id=203 data-nosnippet>203</a>        } = event
+<a href=#204 id=204 data-nosnippet>204</a>        {
+<a href=#205 id=205 data-nosnippet>205</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = htlc_stream_sender
+<a href=#206 id=206 data-nosnippet>206</a>                .send(InterceptPaymentRequest {
+<a href=#207 id=207 data-nosnippet>207</a>                    payment_hash: Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash.<span class="number">0</span>).expect(<span class="string">"Failed to create Hash"</span>),
+<a href=#208 id=208 data-nosnippet>208</a>                    amount_msat: claimable_amount_msat,
+<a href=#209 id=209 data-nosnippet>209</a>                    expiry: claim_deadline.unwrap_or_default(),
+<a href=#210 id=210 data-nosnippet>210</a>                    short_channel_id: <span class="prelude-val">None</span>,
+<a href=#211 id=211 data-nosnippet>211</a>                    incoming_chan_id: <span class="number">0</span>,
+<a href=#212 id=212 data-nosnippet>212</a>                    htlc_id: <span class="number">0</span>,
+<a href=#213 id=213 data-nosnippet>213</a>                })
+<a href=#214 id=214 data-nosnippet>214</a>                .<span class="kw">await
+<a href=#215 id=215 data-nosnippet>215</a>            </span>{
+<a href=#216 id=216 data-nosnippet>216</a>                <span class="macro">warn!</span>(target: LOG_LIGHTNING, err = %err.fmt_compact(), <span class="string">"Failed send InterceptHtlcRequest to stream"</span>);
+<a href=#217 id=217 data-nosnippet>217</a>            }
+<a href=#218 id=218 data-nosnippet>218</a>        }
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="comment">// The `PaymentClaimable` event is the only event type that we are interested
+<a href=#221 id=221 data-nosnippet>221</a>        // in. We can safely ignore all other events.
+<a href=#222 id=222 data-nosnippet>222</a>        </span>node.event_handled();
+<a href=#223 id=223 data-nosnippet>223</a>    }
+<a href=#224 id=224 data-nosnippet>224</a>
+<a href=#225 id=225 data-nosnippet>225</a>    <span class="doccomment">/// Converts a transaction outpoint to a short channel ID by querying the
+<a href=#226 id=226 data-nosnippet>226</a>    /// blockchain.
+<a href=#227 id=227 data-nosnippet>227</a>    </span><span class="kw">async fn </span>outpoint_to_scid(<span class="kw-2">&amp;</span><span class="self">self</span>, funding_txo: OutPoint) -&gt; anyhow::Result&lt;u64&gt; {
+<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">let </span>block_hash = <span class="self">self
+<a href=#229 id=229 data-nosnippet>229</a>            </span>.bitcoind_rpc
+<a href=#230 id=230 data-nosnippet>230</a>            .get_txout_proof(funding_txo.txid)
+<a href=#231 id=231 data-nosnippet>231</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#232 id=232 data-nosnippet>232</a>            </span>.block_header
+<a href=#233 id=233 data-nosnippet>233</a>            .block_hash();
 <a href=#234 id=234 data-nosnippet>234</a>
-<a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">let </span>tx_index = block
-<a href=#236 id=236 data-nosnippet>236</a>            .txdata
-<a href=#237 id=237 data-nosnippet>237</a>            .iter()
-<a href=#238 id=238 data-nosnippet>238</a>            .enumerate()
-<a href=#239 id=239 data-nosnippet>239</a>            .find(|(<span class="kw">_</span>, tx)| tx.compute_txid() == funding_txo.txid)
-<a href=#240 id=240 data-nosnippet>240</a>            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to find transaction"</span>))<span class="question-mark">?
-<a href=#241 id=241 data-nosnippet>241</a>            </span>.<span class="number">0 </span><span class="kw">as </span>u32;
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">let </span>block_height = <span class="self">self
+<a href=#236 id=236 data-nosnippet>236</a>            </span>.bitcoind_rpc
+<a href=#237 id=237 data-nosnippet>237</a>            .get_tx_block_height(<span class="kw-2">&amp;</span>funding_txo.txid)
+<a href=#238 id=238 data-nosnippet>238</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#239 id=239 data-nosnippet>239</a>            </span>.ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to get block height"</span>))<span class="question-mark">?</span>;
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a>        <span class="kw">let </span>block = <span class="self">self</span>.bitcoind_rpc.get_block(<span class="kw-2">&amp;</span>block_hash).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#242 id=242 data-nosnippet>242</a>
-<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">let </span>output_index = funding_txo.vout;
-<a href=#244 id=244 data-nosnippet>244</a>
-<a href=#245 id=245 data-nosnippet>245</a>        scid_from_parts(block_height, u64::from(tx_index), u64::from(output_index))
-<a href=#246 id=246 data-nosnippet>246</a>            .map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to convert to short channel ID: {e:?}"</span>))
-<a href=#247 id=247 data-nosnippet>247</a>    }
-<a href=#248 id=248 data-nosnippet>248</a>}
-<a href=#249 id=249 data-nosnippet>249</a>
-<a href=#250 id=250 data-nosnippet>250</a><span class="kw">impl </span>Drop <span class="kw">for </span>GatewayLdkClient {
-<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-<a href=#252 id=252 data-nosnippet>252</a>        <span class="self">self</span>.task_group.shutdown();
-<a href=#253 id=253 data-nosnippet>253</a>
-<a href=#254 id=254 data-nosnippet>254</a>        <span class="macro">info!</span>(target: LOG_LIGHTNING, <span class="string">"Stopping LDK Node..."</span>);
-<a href=#255 id=255 data-nosnippet>255</a>        <span class="kw">match </span><span class="self">self</span>.node.stop() {
-<a href=#256 id=256 data-nosnippet>256</a>            <span class="prelude-val">Err</span>(err) =&gt; {
-<a href=#257 id=257 data-nosnippet>257</a>                <span class="macro">warn!</span>(target: LOG_LIGHTNING, err = %err.fmt_compact(), <span class="string">"Failed to stop LDK Node"</span>);
-<a href=#258 id=258 data-nosnippet>258</a>            }
-<a href=#259 id=259 data-nosnippet>259</a>            <span class="kw">_ </span>=&gt; {
-<a href=#260 id=260 data-nosnippet>260</a>                <span class="macro">info!</span>(target: LOG_LIGHTNING, <span class="string">"LDK Node stopped."</span>);
-<a href=#261 id=261 data-nosnippet>261</a>            }
-<a href=#262 id=262 data-nosnippet>262</a>        }
-<a href=#263 id=263 data-nosnippet>263</a>    }
-<a href=#264 id=264 data-nosnippet>264</a>}
-<a href=#265 id=265 data-nosnippet>265</a>
-<a href=#266 id=266 data-nosnippet>266</a><span class="attr">#[async_trait]
-<a href=#267 id=267 data-nosnippet>267</a></span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>GatewayLdkClient {
-<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
-<a href=#269 id=269 data-nosnippet>269</a>        <span class="comment">// HACK: https://github.com/lightningdevkit/ldk-node/issues/339 when running in devimint
-<a href=#270 id=270 data-nosnippet>270</a>        // to speed up tests
-<a href=#271 id=271 data-nosnippet>271</a>        </span><span class="kw">if </span>is_env_var_set(<span class="string">"FM_IN_DEVIMINT"</span>) {
-<a href=#272 id=272 data-nosnippet>272</a>            block_in_place(|| {
-<a href=#273 id=273 data-nosnippet>273</a>                <span class="kw">let _ </span>= <span class="self">self</span>.node.sync_wallets();
-<a href=#274 id=274 data-nosnippet>274</a>            });
-<a href=#275 id=275 data-nosnippet>275</a>        }
-<a href=#276 id=276 data-nosnippet>276</a>        <span class="kw">let </span>node_status = <span class="self">self</span>.node.status();
-<a href=#277 id=277 data-nosnippet>277</a>
-<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw">let </span>chain_tip_block_height =
-<a href=#279 id=279 data-nosnippet>279</a>            u32::try_from(<span class="self">self</span>.bitcoind_rpc.get_block_count().<span class="kw">await</span>.map_err(|e| {
-<a href=#280 id=280 data-nosnippet>280</a>                LightningRpcError::FailedToGetNodeInfo {
-<a href=#281 id=281 data-nosnippet>281</a>                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get block count from chain source: {e}"</span>),
-<a href=#282 id=282 data-nosnippet>282</a>                }
-<a href=#283 id=283 data-nosnippet>283</a>            })<span class="question-mark">?</span>)
-<a href=#284 id=284 data-nosnippet>284</a>            .expect(<span class="string">"Failed to convert block count to u32"</span>)
-<a href=#285 id=285 data-nosnippet>285</a>                - <span class="number">1</span>;
-<a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">let </span>ldk_block_height = node_status.current_best_block.height;
-<a href=#287 id=287 data-nosnippet>287</a>        <span class="kw">let </span>synced_to_chain = chain_tip_block_height == ldk_block_height;
-<a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a>        <span class="macro">assert!</span>(
-<a href=#290 id=290 data-nosnippet>290</a>            chain_tip_block_height &gt;= ldk_block_height,
-<a href=#291 id=291 data-nosnippet>291</a>            <span class="string">"LDK Block Height is in the future"
-<a href=#292 id=292 data-nosnippet>292</a>        </span>);
-<a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>        <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
-<a href=#295 id=295 data-nosnippet>295</a>            pub_key: <span class="self">self</span>.node.node_id(),
-<a href=#296 id=296 data-nosnippet>296</a>            alias: <span class="kw">match </span><span class="self">self</span>.node.node_alias() {
-<a href=#297 id=297 data-nosnippet>297</a>                <span class="prelude-val">Some</span>(alias) =&gt; alias.to_string(),
-<a href=#298 id=298 data-nosnippet>298</a>                <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"LDK Fedimint Gateway Node {}"</span>, <span class="self">self</span>.node.node_id()),
-<a href=#299 id=299 data-nosnippet>299</a>            },
-<a href=#300 id=300 data-nosnippet>300</a>            network: <span class="self">self</span>.node.config().network.to_string(),
-<a href=#301 id=301 data-nosnippet>301</a>            block_height: ldk_block_height,
-<a href=#302 id=302 data-nosnippet>302</a>            synced_to_chain,
-<a href=#303 id=303 data-nosnippet>303</a>        })
-<a href=#304 id=304 data-nosnippet>304</a>    }
-<a href=#305 id=305 data-nosnippet>305</a>
-<a href=#306 id=306 data-nosnippet>306</a>    <span class="kw">async fn </span>routehints(
-<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#308 id=308 data-nosnippet>308</a>        _num_route_hints: usize,
-<a href=#309 id=309 data-nosnippet>309</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
-<a href=#310 id=310 data-nosnippet>310</a>        <span class="comment">// `ILnRpcClient::routehints()` is currently only ever used for LNv1 payment
-<a href=#311 id=311 data-nosnippet>311</a>        // receives and will be removed when we switch to LNv2. The LDK gateway will
-<a href=#312 id=312 data-nosnippet>312</a>        // never support LNv1 payment receives, only LNv2 payment receives, which
-<a href=#313 id=313 data-nosnippet>313</a>        // require that the gateway's lightning node generates invoices rather than the
-<a href=#314 id=314 data-nosnippet>314</a>        // fedimint client, so it is able to insert the proper route hints on its own.
-<a href=#315 id=315 data-nosnippet>315</a>        </span><span class="prelude-val">Ok</span>(GetRouteHintsResponse {
-<a href=#316 id=316 data-nosnippet>316</a>            route_hints: <span class="macro">vec!</span>[],
-<a href=#317 id=317 data-nosnippet>317</a>        })
-<a href=#318 id=318 data-nosnippet>318</a>    }
-<a href=#319 id=319 data-nosnippet>319</a>
-<a href=#320 id=320 data-nosnippet>320</a>    <span class="kw">async fn </span>pay(
-<a href=#321 id=321 data-nosnippet>321</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#322 id=322 data-nosnippet>322</a>        invoice: Bolt11Invoice,
-<a href=#323 id=323 data-nosnippet>323</a>        max_delay: u64,
-<a href=#324 id=324 data-nosnippet>324</a>        max_fee: Amount,
-<a href=#325 id=325 data-nosnippet>325</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-<a href=#326 id=326 data-nosnippet>326</a>        <span class="kw">let </span>payment_id = PaymentId(<span class="kw-2">*</span>invoice.payment_hash().as_byte_array());
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">let </span>tx_index = block
+<a href=#244 id=244 data-nosnippet>244</a>            .txdata
+<a href=#245 id=245 data-nosnippet>245</a>            .iter()
+<a href=#246 id=246 data-nosnippet>246</a>            .enumerate()
+<a href=#247 id=247 data-nosnippet>247</a>            .find(|(<span class="kw">_</span>, tx)| tx.compute_txid() == funding_txo.txid)
+<a href=#248 id=248 data-nosnippet>248</a>            .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to find transaction"</span>))<span class="question-mark">?
+<a href=#249 id=249 data-nosnippet>249</a>            </span>.<span class="number">0 </span><span class="kw">as </span>u32;
+<a href=#250 id=250 data-nosnippet>250</a>
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="kw">let </span>output_index = funding_txo.vout;
+<a href=#252 id=252 data-nosnippet>252</a>
+<a href=#253 id=253 data-nosnippet>253</a>        scid_from_parts(block_height, u64::from(tx_index), u64::from(output_index))
+<a href=#254 id=254 data-nosnippet>254</a>            .map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to convert to short channel ID: {e:?}"</span>))
+<a href=#255 id=255 data-nosnippet>255</a>    }
+<a href=#256 id=256 data-nosnippet>256</a>}
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a><span class="kw">impl </span>Drop <span class="kw">for </span>GatewayLdkClient {
+<a href=#259 id=259 data-nosnippet>259</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="self">self</span>.task_group.shutdown();
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="macro">info!</span>(target: LOG_LIGHTNING, <span class="string">"Stopping LDK Node..."</span>);
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">match </span><span class="self">self</span>.node.stop() {
+<a href=#264 id=264 data-nosnippet>264</a>            <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#265 id=265 data-nosnippet>265</a>                <span class="macro">warn!</span>(target: LOG_LIGHTNING, err = %err.fmt_compact(), <span class="string">"Failed to stop LDK Node"</span>);
+<a href=#266 id=266 data-nosnippet>266</a>            }
+<a href=#267 id=267 data-nosnippet>267</a>            <span class="kw">_ </span>=&gt; {
+<a href=#268 id=268 data-nosnippet>268</a>                <span class="macro">info!</span>(target: LOG_LIGHTNING, <span class="string">"LDK Node stopped."</span>);
+<a href=#269 id=269 data-nosnippet>269</a>            }
+<a href=#270 id=270 data-nosnippet>270</a>        }
+<a href=#271 id=271 data-nosnippet>271</a>    }
+<a href=#272 id=272 data-nosnippet>272</a>}
+<a href=#273 id=273 data-nosnippet>273</a>
+<a href=#274 id=274 data-nosnippet>274</a><span class="attr">#[async_trait]
+<a href=#275 id=275 data-nosnippet>275</a></span><span class="kw">impl </span>ILnRpcClient <span class="kw">for </span>GatewayLdkClient {
+<a href=#276 id=276 data-nosnippet>276</a>    <span class="kw">async fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetNodeInfoResponse, LightningRpcError&gt; {
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="comment">// HACK: https://github.com/lightningdevkit/ldk-node/issues/339 when running in devimint
+<a href=#278 id=278 data-nosnippet>278</a>        // to speed up tests
+<a href=#279 id=279 data-nosnippet>279</a>        </span><span class="kw">if </span>is_env_var_set(<span class="string">"FM_IN_DEVIMINT"</span>) {
+<a href=#280 id=280 data-nosnippet>280</a>            block_in_place(|| {
+<a href=#281 id=281 data-nosnippet>281</a>                <span class="kw">let _ </span>= <span class="self">self</span>.node.sync_wallets();
+<a href=#282 id=282 data-nosnippet>282</a>            });
+<a href=#283 id=283 data-nosnippet>283</a>        }
+<a href=#284 id=284 data-nosnippet>284</a>        <span class="kw">let </span>node_status = <span class="self">self</span>.node.status();
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">let </span>chain_tip_block_height =
+<a href=#287 id=287 data-nosnippet>287</a>            u32::try_from(<span class="self">self</span>.bitcoind_rpc.get_block_count().<span class="kw">await</span>.map_err(|e| {
+<a href=#288 id=288 data-nosnippet>288</a>                LightningRpcError::FailedToGetNodeInfo {
+<a href=#289 id=289 data-nosnippet>289</a>                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get block count from chain source: {e}"</span>),
+<a href=#290 id=290 data-nosnippet>290</a>                }
+<a href=#291 id=291 data-nosnippet>291</a>            })<span class="question-mark">?</span>)
+<a href=#292 id=292 data-nosnippet>292</a>            .expect(<span class="string">"Failed to convert block count to u32"</span>)
+<a href=#293 id=293 data-nosnippet>293</a>                - <span class="number">1</span>;
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="kw">let </span>ldk_block_height = node_status.current_best_block.height;
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>synced_to_chain = chain_tip_block_height == ldk_block_height;
+<a href=#296 id=296 data-nosnippet>296</a>
+<a href=#297 id=297 data-nosnippet>297</a>        <span class="macro">assert!</span>(
+<a href=#298 id=298 data-nosnippet>298</a>            chain_tip_block_height &gt;= ldk_block_height,
+<a href=#299 id=299 data-nosnippet>299</a>            <span class="string">"LDK Block Height is in the future"
+<a href=#300 id=300 data-nosnippet>300</a>        </span>);
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="prelude-val">Ok</span>(GetNodeInfoResponse {
+<a href=#303 id=303 data-nosnippet>303</a>            pub_key: <span class="self">self</span>.node.node_id(),
+<a href=#304 id=304 data-nosnippet>304</a>            alias: <span class="kw">match </span><span class="self">self</span>.node.node_alias() {
+<a href=#305 id=305 data-nosnippet>305</a>                <span class="prelude-val">Some</span>(alias) =&gt; alias.to_string(),
+<a href=#306 id=306 data-nosnippet>306</a>                <span class="prelude-val">None </span>=&gt; <span class="macro">format!</span>(<span class="string">"LDK Fedimint Gateway Node {}"</span>, <span class="self">self</span>.node.node_id()),
+<a href=#307 id=307 data-nosnippet>307</a>            },
+<a href=#308 id=308 data-nosnippet>308</a>            network: <span class="self">self</span>.node.config().network.to_string(),
+<a href=#309 id=309 data-nosnippet>309</a>            block_height: ldk_block_height,
+<a href=#310 id=310 data-nosnippet>310</a>            synced_to_chain,
+<a href=#311 id=311 data-nosnippet>311</a>        })
+<a href=#312 id=312 data-nosnippet>312</a>    }
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="kw">async fn </span>routehints(
+<a href=#315 id=315 data-nosnippet>315</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#316 id=316 data-nosnippet>316</a>        _num_route_hints: usize,
+<a href=#317 id=317 data-nosnippet>317</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetRouteHintsResponse, LightningRpcError&gt; {
+<a href=#318 id=318 data-nosnippet>318</a>        <span class="comment">// `ILnRpcClient::routehints()` is currently only ever used for LNv1 payment
+<a href=#319 id=319 data-nosnippet>319</a>        // receives and will be removed when we switch to LNv2. The LDK gateway will
+<a href=#320 id=320 data-nosnippet>320</a>        // never support LNv1 payment receives, only LNv2 payment receives, which
+<a href=#321 id=321 data-nosnippet>321</a>        // require that the gateway's lightning node generates invoices rather than the
+<a href=#322 id=322 data-nosnippet>322</a>        // fedimint client, so it is able to insert the proper route hints on its own.
+<a href=#323 id=323 data-nosnippet>323</a>        </span><span class="prelude-val">Ok</span>(GetRouteHintsResponse {
+<a href=#324 id=324 data-nosnippet>324</a>            route_hints: <span class="macro">vec!</span>[],
+<a href=#325 id=325 data-nosnippet>325</a>        })
+<a href=#326 id=326 data-nosnippet>326</a>    }
 <a href=#327 id=327 data-nosnippet>327</a>
-<a href=#328 id=328 data-nosnippet>328</a>        <span class="comment">// Lock by the payment hash to prevent multiple simultaneous calls with the same
-<a href=#329 id=329 data-nosnippet>329</a>        // invoice from executing. This prevents `ldk-node::Bolt11Payment::send()` from
-<a href=#330 id=330 data-nosnippet>330</a>        // being called multiple times with the same invoice. This is important because
-<a href=#331 id=331 data-nosnippet>331</a>        // `ldk-node::Bolt11Payment::send()` is not idempotent, but this function must
-<a href=#332 id=332 data-nosnippet>332</a>        // be idempotent.
-<a href=#333 id=333 data-nosnippet>333</a>        </span><span class="kw">let </span>_payment_lock_guard = <span class="self">self
-<a href=#334 id=334 data-nosnippet>334</a>            </span>.outbound_lightning_payment_lock_pool
-<a href=#335 id=335 data-nosnippet>335</a>            .async_lock(payment_id)
-<a href=#336 id=336 data-nosnippet>336</a>            .<span class="kw">await</span>;
-<a href=#337 id=337 data-nosnippet>337</a>
-<a href=#338 id=338 data-nosnippet>338</a>        <span class="comment">// If a payment is not known to the node we can initiate it, and if it is known
-<a href=#339 id=339 data-nosnippet>339</a>        // we can skip calling `ldk-node::Bolt11Payment::send()` and wait for the
-<a href=#340 id=340 data-nosnippet>340</a>        // payment to complete. The lock guard above guarantees that this block is only
-<a href=#341 id=341 data-nosnippet>341</a>        // executed once at a time for a given payment hash, ensuring that there is no
-<a href=#342 id=342 data-nosnippet>342</a>        // race condition between checking if a payment is known and initiating a new
-<a href=#343 id=343 data-nosnippet>343</a>        // payment if it isn't.
-<a href=#344 id=344 data-nosnippet>344</a>        </span><span class="kw">if </span><span class="self">self</span>.node.payment(<span class="kw-2">&amp;</span>payment_id).is_none() {
-<a href=#345 id=345 data-nosnippet>345</a>            <span class="macro">assert_eq!</span>(
-<a href=#346 id=346 data-nosnippet>346</a>                <span class="self">self</span>.node
-<a href=#347 id=347 data-nosnippet>347</a>                    .bolt11_payment()
-<a href=#348 id=348 data-nosnippet>348</a>                    .send(
-<a href=#349 id=349 data-nosnippet>349</a>                        <span class="kw-2">&amp;</span>invoice,
-<a href=#350 id=350 data-nosnippet>350</a>                        <span class="prelude-val">Some</span>(SendingParameters {
-<a href=#351 id=351 data-nosnippet>351</a>                            max_total_routing_fee_msat: <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(max_fee.msats)),
-<a href=#352 id=352 data-nosnippet>352</a>                            max_total_cltv_expiry_delta: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u32),
-<a href=#353 id=353 data-nosnippet>353</a>                            max_path_count: <span class="prelude-val">None</span>,
-<a href=#354 id=354 data-nosnippet>354</a>                            max_channel_saturation_power_of_half: <span class="prelude-val">None</span>,
-<a href=#355 id=355 data-nosnippet>355</a>                        }),
-<a href=#356 id=356 data-nosnippet>356</a>                    )
-<a href=#357 id=357 data-nosnippet>357</a>                    <span class="comment">// TODO: Investigate whether all error types returned by `Bolt11Payment::send()`
-<a href=#358 id=358 data-nosnippet>358</a>                    // result in idempotency.
-<a href=#359 id=359 data-nosnippet>359</a>                    </span>.map_err(|e| LightningRpcError::FailedPayment {
-<a href=#360 id=360 data-nosnippet>360</a>                        failure_reason: <span class="macro">format!</span>(<span class="string">"LDK payment failed to initialize: {e:?}"</span>),
-<a href=#361 id=361 data-nosnippet>361</a>                    })<span class="question-mark">?</span>,
-<a href=#362 id=362 data-nosnippet>362</a>                payment_id
-<a href=#363 id=363 data-nosnippet>363</a>            );
-<a href=#364 id=364 data-nosnippet>364</a>        }
-<a href=#365 id=365 data-nosnippet>365</a>
-<a href=#366 id=366 data-nosnippet>366</a>        <span class="comment">// TODO: Find a way to avoid looping/polling to know when a payment is
-<a href=#367 id=367 data-nosnippet>367</a>        // completed. `ldk-node` provides `PaymentSuccessful` and `PaymentFailed`
-<a href=#368 id=368 data-nosnippet>368</a>        // events, but interacting with the node event queue here isn't
-<a href=#369 id=369 data-nosnippet>369</a>        // straightforward.
-<a href=#370 id=370 data-nosnippet>370</a>        </span><span class="kw">loop </span>{
-<a href=#371 id=371 data-nosnippet>371</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(payment_details) = <span class="self">self</span>.node.payment(<span class="kw-2">&amp;</span>payment_id) {
-<a href=#372 id=372 data-nosnippet>372</a>                <span class="kw">match </span>payment_details.status {
-<a href=#373 id=373 data-nosnippet>373</a>                    PaymentStatus::Pending =&gt; {}
-<a href=#374 id=374 data-nosnippet>374</a>                    PaymentStatus::Succeeded =&gt; {
-<a href=#375 id=375 data-nosnippet>375</a>                        <span class="kw">if let </span>PaymentKind::Bolt11 {
-<a href=#376 id=376 data-nosnippet>376</a>                            preimage: <span class="prelude-val">Some</span>(preimage),
-<a href=#377 id=377 data-nosnippet>377</a>                            ..
-<a href=#378 id=378 data-nosnippet>378</a>                        } = payment_details.kind
-<a href=#379 id=379 data-nosnippet>379</a>                        {
-<a href=#380 id=380 data-nosnippet>380</a>                            <span class="kw">return </span><span class="prelude-val">Ok</span>(PayInvoiceResponse {
-<a href=#381 id=381 data-nosnippet>381</a>                                preimage: Preimage(preimage.<span class="number">0</span>),
-<a href=#382 id=382 data-nosnippet>382</a>                            });
-<a href=#383 id=383 data-nosnippet>383</a>                        }
-<a href=#384 id=384 data-nosnippet>384</a>                    }
-<a href=#385 id=385 data-nosnippet>385</a>                    PaymentStatus::Failed =&gt; {
-<a href=#386 id=386 data-nosnippet>386</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
-<a href=#387 id=387 data-nosnippet>387</a>                            failure_reason: <span class="string">"LDK payment failed"</span>.to_string(),
-<a href=#388 id=388 data-nosnippet>388</a>                        });
-<a href=#389 id=389 data-nosnippet>389</a>                    }
-<a href=#390 id=390 data-nosnippet>390</a>                }
-<a href=#391 id=391 data-nosnippet>391</a>            }
-<a href=#392 id=392 data-nosnippet>392</a>            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-<a href=#393 id=393 data-nosnippet>393</a>        }
-<a href=#394 id=394 data-nosnippet>394</a>    }
-<a href=#395 id=395 data-nosnippet>395</a>
-<a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#397 id=397 data-nosnippet>397</a>        <span class="kw-2">mut </span><span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
-<a href=#398 id=398 data-nosnippet>398</a>        _task_group: <span class="kw-2">&amp;</span>TaskGroup,
-<a href=#399 id=399 data-nosnippet>399</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
-<a href=#400 id=400 data-nosnippet>400</a>        <span class="kw">let </span>route_htlc_stream = <span class="kw">match </span><span class="self">self</span>.htlc_stream_receiver_or.take() {
-<a href=#401 id=401 data-nosnippet>401</a>            <span class="prelude-val">Some</span>(stream) =&gt; <span class="prelude-val">Ok</span>(Box::pin(ReceiverStream::new(stream))),
-<a href=#402 id=402 data-nosnippet>402</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToRouteHtlcs {
-<a href=#403 id=403 data-nosnippet>403</a>                failure_reason:
-<a href=#404 id=404 data-nosnippet>404</a>                    <span class="string">"Stream does not exist. Likely was already taken by calling `route_htlcs()`."
-<a href=#405 id=405 data-nosnippet>405</a>                        </span>.to_string(),
-<a href=#406 id=406 data-nosnippet>406</a>            }),
-<a href=#407 id=407 data-nosnippet>407</a>        }<span class="question-mark">?</span>;
-<a href=#408 id=408 data-nosnippet>408</a>
-<a href=#409 id=409 data-nosnippet>409</a>        <span class="prelude-val">Ok</span>((route_htlc_stream, Arc::new(<span class="kw-2">*</span><span class="self">self</span>)))
-<a href=#410 id=410 data-nosnippet>410</a>    }
-<a href=#411 id=411 data-nosnippet>411</a>
-<a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptPaymentResponse) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
-<a href=#413 id=413 data-nosnippet>413</a>        <span class="kw">let </span>InterceptPaymentResponse {
-<a href=#414 id=414 data-nosnippet>414</a>            action,
-<a href=#415 id=415 data-nosnippet>415</a>            payment_hash,
-<a href=#416 id=416 data-nosnippet>416</a>            incoming_chan_id: <span class="kw">_</span>,
-<a href=#417 id=417 data-nosnippet>417</a>            htlc_id: <span class="kw">_</span>,
-<a href=#418 id=418 data-nosnippet>418</a>        } = htlc;
+<a href=#328 id=328 data-nosnippet>328</a>    <span class="kw">async fn </span>pay(
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#330 id=330 data-nosnippet>330</a>        invoice: Bolt11Invoice,
+<a href=#331 id=331 data-nosnippet>331</a>        max_delay: u64,
+<a href=#332 id=332 data-nosnippet>332</a>        max_fee: Amount,
+<a href=#333 id=333 data-nosnippet>333</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
+<a href=#334 id=334 data-nosnippet>334</a>        <span class="kw">let </span>payment_id = PaymentId(<span class="kw-2">*</span>invoice.payment_hash().as_byte_array());
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a>        <span class="comment">// Lock by the payment hash to prevent multiple simultaneous calls with the same
+<a href=#337 id=337 data-nosnippet>337</a>        // invoice from executing. This prevents `ldk-node::Bolt11Payment::send()` from
+<a href=#338 id=338 data-nosnippet>338</a>        // being called multiple times with the same invoice. This is important because
+<a href=#339 id=339 data-nosnippet>339</a>        // `ldk-node::Bolt11Payment::send()` is not idempotent, but this function must
+<a href=#340 id=340 data-nosnippet>340</a>        // be idempotent.
+<a href=#341 id=341 data-nosnippet>341</a>        </span><span class="kw">let </span>_payment_lock_guard = <span class="self">self
+<a href=#342 id=342 data-nosnippet>342</a>            </span>.outbound_lightning_payment_lock_pool
+<a href=#343 id=343 data-nosnippet>343</a>            .async_lock(payment_id)
+<a href=#344 id=344 data-nosnippet>344</a>            .<span class="kw">await</span>;
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="comment">// If a payment is not known to the node we can initiate it, and if it is known
+<a href=#347 id=347 data-nosnippet>347</a>        // we can skip calling `ldk-node::Bolt11Payment::send()` and wait for the
+<a href=#348 id=348 data-nosnippet>348</a>        // payment to complete. The lock guard above guarantees that this block is only
+<a href=#349 id=349 data-nosnippet>349</a>        // executed once at a time for a given payment hash, ensuring that there is no
+<a href=#350 id=350 data-nosnippet>350</a>        // race condition between checking if a payment is known and initiating a new
+<a href=#351 id=351 data-nosnippet>351</a>        // payment if it isn't.
+<a href=#352 id=352 data-nosnippet>352</a>        </span><span class="kw">if </span><span class="self">self</span>.node.payment(<span class="kw-2">&amp;</span>payment_id).is_none() {
+<a href=#353 id=353 data-nosnippet>353</a>            <span class="macro">assert_eq!</span>(
+<a href=#354 id=354 data-nosnippet>354</a>                <span class="self">self</span>.node
+<a href=#355 id=355 data-nosnippet>355</a>                    .bolt11_payment()
+<a href=#356 id=356 data-nosnippet>356</a>                    .send(
+<a href=#357 id=357 data-nosnippet>357</a>                        <span class="kw-2">&amp;</span>invoice,
+<a href=#358 id=358 data-nosnippet>358</a>                        <span class="prelude-val">Some</span>(SendingParameters {
+<a href=#359 id=359 data-nosnippet>359</a>                            max_total_routing_fee_msat: <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(max_fee.msats)),
+<a href=#360 id=360 data-nosnippet>360</a>                            max_total_cltv_expiry_delta: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u32),
+<a href=#361 id=361 data-nosnippet>361</a>                            max_path_count: <span class="prelude-val">None</span>,
+<a href=#362 id=362 data-nosnippet>362</a>                            max_channel_saturation_power_of_half: <span class="prelude-val">None</span>,
+<a href=#363 id=363 data-nosnippet>363</a>                        }),
+<a href=#364 id=364 data-nosnippet>364</a>                    )
+<a href=#365 id=365 data-nosnippet>365</a>                    <span class="comment">// TODO: Investigate whether all error types returned by `Bolt11Payment::send()`
+<a href=#366 id=366 data-nosnippet>366</a>                    // result in idempotency.
+<a href=#367 id=367 data-nosnippet>367</a>                    </span>.map_err(|e| LightningRpcError::FailedPayment {
+<a href=#368 id=368 data-nosnippet>368</a>                        failure_reason: <span class="macro">format!</span>(<span class="string">"LDK payment failed to initialize: {e:?}"</span>),
+<a href=#369 id=369 data-nosnippet>369</a>                    })<span class="question-mark">?</span>,
+<a href=#370 id=370 data-nosnippet>370</a>                payment_id
+<a href=#371 id=371 data-nosnippet>371</a>            );
+<a href=#372 id=372 data-nosnippet>372</a>        }
+<a href=#373 id=373 data-nosnippet>373</a>
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="comment">// TODO: Find a way to avoid looping/polling to know when a payment is
+<a href=#375 id=375 data-nosnippet>375</a>        // completed. `ldk-node` provides `PaymentSuccessful` and `PaymentFailed`
+<a href=#376 id=376 data-nosnippet>376</a>        // events, but interacting with the node event queue here isn't
+<a href=#377 id=377 data-nosnippet>377</a>        // straightforward.
+<a href=#378 id=378 data-nosnippet>378</a>        </span><span class="kw">loop </span>{
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(payment_details) = <span class="self">self</span>.node.payment(<span class="kw-2">&amp;</span>payment_id) {
+<a href=#380 id=380 data-nosnippet>380</a>                <span class="kw">match </span>payment_details.status {
+<a href=#381 id=381 data-nosnippet>381</a>                    PaymentStatus::Pending =&gt; {}
+<a href=#382 id=382 data-nosnippet>382</a>                    PaymentStatus::Succeeded =&gt; {
+<a href=#383 id=383 data-nosnippet>383</a>                        <span class="kw">if let </span>PaymentKind::Bolt11 {
+<a href=#384 id=384 data-nosnippet>384</a>                            preimage: <span class="prelude-val">Some</span>(preimage),
+<a href=#385 id=385 data-nosnippet>385</a>                            ..
+<a href=#386 id=386 data-nosnippet>386</a>                        } = payment_details.kind
+<a href=#387 id=387 data-nosnippet>387</a>                        {
+<a href=#388 id=388 data-nosnippet>388</a>                            <span class="kw">return </span><span class="prelude-val">Ok</span>(PayInvoiceResponse {
+<a href=#389 id=389 data-nosnippet>389</a>                                preimage: Preimage(preimage.<span class="number">0</span>),
+<a href=#390 id=390 data-nosnippet>390</a>                            });
+<a href=#391 id=391 data-nosnippet>391</a>                        }
+<a href=#392 id=392 data-nosnippet>392</a>                    }
+<a href=#393 id=393 data-nosnippet>393</a>                    PaymentStatus::Failed =&gt; {
+<a href=#394 id=394 data-nosnippet>394</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+<a href=#395 id=395 data-nosnippet>395</a>                            failure_reason: <span class="string">"LDK payment failed"</span>.to_string(),
+<a href=#396 id=396 data-nosnippet>396</a>                        });
+<a href=#397 id=397 data-nosnippet>397</a>                    }
+<a href=#398 id=398 data-nosnippet>398</a>                }
+<a href=#399 id=399 data-nosnippet>399</a>            }
+<a href=#400 id=400 data-nosnippet>400</a>            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+<a href=#401 id=401 data-nosnippet>401</a>        }
+<a href=#402 id=402 data-nosnippet>402</a>    }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw-2">mut </span><span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
+<a href=#406 id=406 data-nosnippet>406</a>        _task_group: <span class="kw-2">&amp;</span>TaskGroup,
+<a href=#407 id=407 data-nosnippet>407</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
+<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">let </span>route_htlc_stream = <span class="kw">match </span><span class="self">self</span>.htlc_stream_receiver_or.take() {
+<a href=#409 id=409 data-nosnippet>409</a>            <span class="prelude-val">Some</span>(stream) =&gt; <span class="prelude-val">Ok</span>(Box::pin(ReceiverStream::new(stream))),
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToRouteHtlcs {
+<a href=#411 id=411 data-nosnippet>411</a>                failure_reason:
+<a href=#412 id=412 data-nosnippet>412</a>                    <span class="string">"Stream does not exist. Likely was already taken by calling `route_htlcs()`."
+<a href=#413 id=413 data-nosnippet>413</a>                        </span>.to_string(),
+<a href=#414 id=414 data-nosnippet>414</a>            }),
+<a href=#415 id=415 data-nosnippet>415</a>        }<span class="question-mark">?</span>;
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a>        <span class="prelude-val">Ok</span>((route_htlc_stream, Arc::new(<span class="kw-2">*</span><span class="self">self</span>)))
+<a href=#418 id=418 data-nosnippet>418</a>    }
 <a href=#419 id=419 data-nosnippet>419</a>
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">let </span>ph = PaymentHash(<span class="kw-2">*</span>payment_hash.clone().as_byte_array());
-<a href=#421 id=421 data-nosnippet>421</a>
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="comment">// TODO: Get the actual amount from the LDK node. Probably makes the
-<a href=#423 id=423 data-nosnippet>423</a>        // most sense to pipe it through the `InterceptHtlcResponse` struct.
-<a href=#424 id=424 data-nosnippet>424</a>        // This value is only used by `ldk-node` to ensure that the amount
-<a href=#425 id=425 data-nosnippet>425</a>        // claimed isn't less than the amount expected, but we've already
-<a href=#426 id=426 data-nosnippet>426</a>        // verified that the amount is correct when we intercepted the payment.
-<a href=#427 id=427 data-nosnippet>427</a>        </span><span class="kw">let </span>claimable_amount_msat = <span class="number">999_999_999_999_999</span>;
-<a href=#428 id=428 data-nosnippet>428</a>
-<a href=#429 id=429 data-nosnippet>429</a>        <span class="kw">let </span>ph_hex_str = hex::encode(payment_hash);
-<a href=#430 id=430 data-nosnippet>430</a>
-<a href=#431 id=431 data-nosnippet>431</a>        <span class="kw">if let </span>PaymentAction::Settle(preimage) = action {
-<a href=#432 id=432 data-nosnippet>432</a>            <span class="self">self</span>.node
-<a href=#433 id=433 data-nosnippet>433</a>                .bolt11_payment()
-<a href=#434 id=434 data-nosnippet>434</a>                .claim_for_hash(ph, claimable_amount_msat, PaymentPreimage(preimage.<span class="number">0</span>))
-<a href=#435 id=435 data-nosnippet>435</a>                .map_err(|<span class="kw">_</span>| LightningRpcError::FailedToCompleteHtlc {
-<a href=#436 id=436 data-nosnippet>436</a>                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to claim LDK payment with hash {ph_hex_str}"</span>),
-<a href=#437 id=437 data-nosnippet>437</a>                })<span class="question-mark">?</span>;
-<a href=#438 id=438 data-nosnippet>438</a>        } <span class="kw">else </span>{
-<a href=#439 id=439 data-nosnippet>439</a>            <span class="macro">warn!</span>(target: LOG_LIGHTNING, payment_hash = %ph_hex_str, <span class="string">"Unwinding payment because the action was not `Settle`"</span>);
-<a href=#440 id=440 data-nosnippet>440</a>            <span class="self">self</span>.node.bolt11_payment().fail_for_hash(ph).map_err(|<span class="kw">_</span>| {
-<a href=#441 id=441 data-nosnippet>441</a>                LightningRpcError::FailedToCompleteHtlc {
-<a href=#442 id=442 data-nosnippet>442</a>                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to unwind LDK payment with hash {ph_hex_str}"</span>),
-<a href=#443 id=443 data-nosnippet>443</a>                }
-<a href=#444 id=444 data-nosnippet>444</a>            })<span class="question-mark">?</span>;
-<a href=#445 id=445 data-nosnippet>445</a>        }
-<a href=#446 id=446 data-nosnippet>446</a>
-<a href=#447 id=447 data-nosnippet>447</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#448 id=448 data-nosnippet>448</a>    }
-<a href=#449 id=449 data-nosnippet>449</a>
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">async fn </span>create_invoice(
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#452 id=452 data-nosnippet>452</a>        create_invoice_request: CreateInvoiceRequest,
-<a href=#453 id=453 data-nosnippet>453</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
-<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw">let </span>payment_hash_or = <span class="kw">if let </span><span class="prelude-val">Some</span>(payment_hash) = create_invoice_request.payment_hash {
-<a href=#455 id=455 data-nosnippet>455</a>            <span class="kw">let </span>ph = PaymentHash(<span class="kw-2">*</span>payment_hash.as_byte_array());
-<a href=#456 id=456 data-nosnippet>456</a>            <span class="prelude-val">Some</span>(ph)
-<a href=#457 id=457 data-nosnippet>457</a>        } <span class="kw">else </span>{
-<a href=#458 id=458 data-nosnippet>458</a>            <span class="prelude-val">None
-<a href=#459 id=459 data-nosnippet>459</a>        </span>};
-<a href=#460 id=460 data-nosnippet>460</a>
-<a href=#461 id=461 data-nosnippet>461</a>        <span class="comment">// Currently `ldk-node` only supports direct descriptions.
-<a href=#462 id=462 data-nosnippet>462</a>        // See https://github.com/lightningdevkit/ldk-node/issues/325.
-<a href=#463 id=463 data-nosnippet>463</a>        // TODO: Once the above issue is resolved, we should support
-<a href=#464 id=464 data-nosnippet>464</a>        // description hashes as well.
-<a href=#465 id=465 data-nosnippet>465</a>        </span><span class="kw">let </span>description_str = <span class="kw">match </span>create_invoice_request.description {
-<a href=#466 id=466 data-nosnippet>466</a>            <span class="prelude-val">Some</span>(InvoiceDescription::Direct(desc)) =&gt; desc,
-<a href=#467 id=467 data-nosnippet>467</a>            <span class="kw">_ </span>=&gt; String::new(),
-<a href=#468 id=468 data-nosnippet>468</a>        };
-<a href=#469 id=469 data-nosnippet>469</a>
-<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">let </span>invoice = <span class="kw">match </span>payment_hash_or {
-<a href=#471 id=471 data-nosnippet>471</a>            <span class="prelude-val">Some</span>(payment_hash) =&gt; <span class="self">self</span>.node.bolt11_payment().receive_for_hash(
-<a href=#472 id=472 data-nosnippet>472</a>                create_invoice_request.amount_msat,
-<a href=#473 id=473 data-nosnippet>473</a>                description_str.as_str(),
-<a href=#474 id=474 data-nosnippet>474</a>                create_invoice_request.expiry_secs,
-<a href=#475 id=475 data-nosnippet>475</a>                payment_hash,
-<a href=#476 id=476 data-nosnippet>476</a>            ),
-<a href=#477 id=477 data-nosnippet>477</a>            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.node.bolt11_payment().receive(
-<a href=#478 id=478 data-nosnippet>478</a>                create_invoice_request.amount_msat,
-<a href=#479 id=479 data-nosnippet>479</a>                description_str.as_str(),
-<a href=#480 id=480 data-nosnippet>480</a>                create_invoice_request.expiry_secs,
-<a href=#481 id=481 data-nosnippet>481</a>            ),
-<a href=#482 id=482 data-nosnippet>482</a>        }
-<a href=#483 id=483 data-nosnippet>483</a>        .map_err(|e| LightningRpcError::FailedToGetInvoice {
-<a href=#484 id=484 data-nosnippet>484</a>            failure_reason: e.to_string(),
-<a href=#485 id=485 data-nosnippet>485</a>        })<span class="question-mark">?</span>;
-<a href=#486 id=486 data-nosnippet>486</a>
-<a href=#487 id=487 data-nosnippet>487</a>        <span class="prelude-val">Ok</span>(CreateInvoiceResponse {
-<a href=#488 id=488 data-nosnippet>488</a>            invoice: invoice.to_string(),
-<a href=#489 id=489 data-nosnippet>489</a>        })
-<a href=#490 id=490 data-nosnippet>490</a>    }
-<a href=#491 id=491 data-nosnippet>491</a>
-<a href=#492 id=492 data-nosnippet>492</a>    <span class="kw">async fn </span>get_ln_onchain_address(
-<a href=#493 id=493 data-nosnippet>493</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#494 id=494 data-nosnippet>494</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt; {
-<a href=#495 id=495 data-nosnippet>495</a>        <span class="self">self</span>.node
-<a href=#496 id=496 data-nosnippet>496</a>            .onchain_payment()
-<a href=#497 id=497 data-nosnippet>497</a>            .new_address()
-<a href=#498 id=498 data-nosnippet>498</a>            .map(|address| GetLnOnchainAddressResponse {
-<a href=#499 id=499 data-nosnippet>499</a>                address: address.to_string(),
-<a href=#500 id=500 data-nosnippet>500</a>            })
-<a href=#501 id=501 data-nosnippet>501</a>            .map_err(|e| LightningRpcError::FailedToGetLnOnchainAddress {
-<a href=#502 id=502 data-nosnippet>502</a>                failure_reason: e.to_string(),
-<a href=#503 id=503 data-nosnippet>503</a>            })
-<a href=#504 id=504 data-nosnippet>504</a>    }
-<a href=#505 id=505 data-nosnippet>505</a>
-<a href=#506 id=506 data-nosnippet>506</a>    <span class="kw">async fn </span>send_onchain(
-<a href=#507 id=507 data-nosnippet>507</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#508 id=508 data-nosnippet>508</a>        SendOnchainRequest {
-<a href=#509 id=509 data-nosnippet>509</a>            address,
-<a href=#510 id=510 data-nosnippet>510</a>            amount,
-<a href=#511 id=511 data-nosnippet>511</a>            <span class="comment">// TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
-<a href=#512 id=512 data-nosnippet>512</a>            // This work is planned to be in `ldk-node` v0.4 and is tracked here:
-<a href=#513 id=513 data-nosnippet>513</a>            // https://github.com/lightningdevkit/ldk-node/issues/176
-<a href=#514 id=514 data-nosnippet>514</a>            </span>fee_rate_sats_per_vbyte: <span class="kw">_</span>,
-<a href=#515 id=515 data-nosnippet>515</a>        }: SendOnchainRequest,
-<a href=#516 id=516 data-nosnippet>516</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;SendOnchainResponse, LightningRpcError&gt; {
-<a href=#517 id=517 data-nosnippet>517</a>        <span class="kw">let </span>onchain = <span class="self">self</span>.node.onchain_payment();
-<a href=#518 id=518 data-nosnippet>518</a>
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>txid = <span class="kw">match </span>amount {
-<a href=#520 id=520 data-nosnippet>520</a>            BitcoinAmountOrAll::All =&gt; onchain.send_all_to_address(<span class="kw-2">&amp;</span>address.assume_checked()),
-<a href=#521 id=521 data-nosnippet>521</a>            BitcoinAmountOrAll::Amount(amount_sats) =&gt; {
-<a href=#522 id=522 data-nosnippet>522</a>                onchain.send_to_address(<span class="kw-2">&amp;</span>address.assume_checked(), amount_sats.to_sat())
-<a href=#523 id=523 data-nosnippet>523</a>            }
-<a href=#524 id=524 data-nosnippet>524</a>        }
-<a href=#525 id=525 data-nosnippet>525</a>        .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
-<a href=#526 id=526 data-nosnippet>526</a>            failure_reason: e.to_string(),
-<a href=#527 id=527 data-nosnippet>527</a>        })<span class="question-mark">?</span>;
-<a href=#528 id=528 data-nosnippet>528</a>
-<a href=#529 id=529 data-nosnippet>529</a>        <span class="prelude-val">Ok</span>(SendOnchainResponse {
-<a href=#530 id=530 data-nosnippet>530</a>            txid: txid.to_string(),
-<a href=#531 id=531 data-nosnippet>531</a>        })
-<a href=#532 id=532 data-nosnippet>532</a>    }
-<a href=#533 id=533 data-nosnippet>533</a>
-<a href=#534 id=534 data-nosnippet>534</a>    <span class="kw">async fn </span>open_channel(
-<a href=#535 id=535 data-nosnippet>535</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#536 id=536 data-nosnippet>536</a>        OpenChannelRequest {
-<a href=#537 id=537 data-nosnippet>537</a>            pubkey,
-<a href=#538 id=538 data-nosnippet>538</a>            host,
-<a href=#539 id=539 data-nosnippet>539</a>            channel_size_sats,
-<a href=#540 id=540 data-nosnippet>540</a>            push_amount_sats,
-<a href=#541 id=541 data-nosnippet>541</a>        }: OpenChannelRequest,
-<a href=#542 id=542 data-nosnippet>542</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
-<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw">let </span>push_amount_msats_or = <span class="kw">if </span>push_amount_sats == <span class="number">0 </span>{
-<a href=#544 id=544 data-nosnippet>544</a>            <span class="prelude-val">None
-<a href=#545 id=545 data-nosnippet>545</a>        </span>} <span class="kw">else </span>{
-<a href=#546 id=546 data-nosnippet>546</a>            <span class="prelude-val">Some</span>(push_amount_sats * <span class="number">1000</span>)
-<a href=#547 id=547 data-nosnippet>547</a>        };
-<a href=#548 id=548 data-nosnippet>548</a>
-<a href=#549 id=549 data-nosnippet>549</a>        <span class="kw">let </span>user_channel_id = <span class="self">self
-<a href=#550 id=550 data-nosnippet>550</a>            </span>.node
-<a href=#551 id=551 data-nosnippet>551</a>            .open_announced_channel(
-<a href=#552 id=552 data-nosnippet>552</a>                pubkey,
-<a href=#553 id=553 data-nosnippet>553</a>                SocketAddress::from_str(<span class="kw-2">&amp;</span>host).map_err(|e| {
-<a href=#554 id=554 data-nosnippet>554</a>                    LightningRpcError::FailedToConnectToPeer {
-<a href=#555 id=555 data-nosnippet>555</a>                        failure_reason: e.to_string(),
-<a href=#556 id=556 data-nosnippet>556</a>                    }
-<a href=#557 id=557 data-nosnippet>557</a>                })<span class="question-mark">?</span>,
-<a href=#558 id=558 data-nosnippet>558</a>                channel_size_sats,
-<a href=#559 id=559 data-nosnippet>559</a>                push_amount_msats_or,
-<a href=#560 id=560 data-nosnippet>560</a>                <span class="prelude-val">None</span>,
-<a href=#561 id=561 data-nosnippet>561</a>            )
-<a href=#562 id=562 data-nosnippet>562</a>            .map_err(|e| LightningRpcError::FailedToOpenChannel {
-<a href=#563 id=563 data-nosnippet>563</a>                failure_reason: e.to_string(),
-<a href=#564 id=564 data-nosnippet>564</a>            })<span class="question-mark">?</span>;
-<a href=#565 id=565 data-nosnippet>565</a>
-<a href=#566 id=566 data-nosnippet>566</a>        <span class="comment">// The channel isn't always visible immediately, so we need to poll for it.
-<a href=#567 id=567 data-nosnippet>567</a>        </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
-<a href=#568 id=568 data-nosnippet>568</a>            <span class="kw">let </span>funding_txid_or = <span class="self">self
-<a href=#569 id=569 data-nosnippet>569</a>                </span>.node
-<a href=#570 id=570 data-nosnippet>570</a>                .list_channels()
-<a href=#571 id=571 data-nosnippet>571</a>                .iter()
-<a href=#572 id=572 data-nosnippet>572</a>                .find(|channel| channel.user_channel_id == user_channel_id)
-<a href=#573 id=573 data-nosnippet>573</a>                .and_then(|channel| channel.funding_txo)
-<a href=#574 id=574 data-nosnippet>574</a>                .map(|funding_txo| funding_txo.txid);
-<a href=#575 id=575 data-nosnippet>575</a>
-<a href=#576 id=576 data-nosnippet>576</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(funding_txid) = funding_txid_or {
-<a href=#577 id=577 data-nosnippet>577</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(OpenChannelResponse {
-<a href=#578 id=578 data-nosnippet>578</a>                    funding_txid: funding_txid.to_string(),
-<a href=#579 id=579 data-nosnippet>579</a>                });
-<a href=#580 id=580 data-nosnippet>580</a>            }
-<a href=#581 id=581 data-nosnippet>581</a>
-<a href=#582 id=582 data-nosnippet>582</a>            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-<a href=#583 id=583 data-nosnippet>583</a>        }
-<a href=#584 id=584 data-nosnippet>584</a>
-<a href=#585 id=585 data-nosnippet>585</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToOpenChannel {
-<a href=#586 id=586 data-nosnippet>586</a>            failure_reason: <span class="string">"Channel could not be opened"</span>.to_string(),
-<a href=#587 id=587 data-nosnippet>587</a>        })
-<a href=#588 id=588 data-nosnippet>588</a>    }
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="kw">async fn </span>complete_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: InterceptPaymentResponse) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>InterceptPaymentResponse {
+<a href=#422 id=422 data-nosnippet>422</a>            action,
+<a href=#423 id=423 data-nosnippet>423</a>            payment_hash,
+<a href=#424 id=424 data-nosnippet>424</a>            incoming_chan_id: <span class="kw">_</span>,
+<a href=#425 id=425 data-nosnippet>425</a>            htlc_id: <span class="kw">_</span>,
+<a href=#426 id=426 data-nosnippet>426</a>        } = htlc;
+<a href=#427 id=427 data-nosnippet>427</a>
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="kw">let </span>ph = PaymentHash(<span class="kw-2">*</span>payment_hash.clone().as_byte_array());
+<a href=#429 id=429 data-nosnippet>429</a>
+<a href=#430 id=430 data-nosnippet>430</a>        <span class="comment">// TODO: Get the actual amount from the LDK node. Probably makes the
+<a href=#431 id=431 data-nosnippet>431</a>        // most sense to pipe it through the `InterceptHtlcResponse` struct.
+<a href=#432 id=432 data-nosnippet>432</a>        // This value is only used by `ldk-node` to ensure that the amount
+<a href=#433 id=433 data-nosnippet>433</a>        // claimed isn't less than the amount expected, but we've already
+<a href=#434 id=434 data-nosnippet>434</a>        // verified that the amount is correct when we intercepted the payment.
+<a href=#435 id=435 data-nosnippet>435</a>        </span><span class="kw">let </span>claimable_amount_msat = <span class="number">999_999_999_999_999</span>;
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>        <span class="kw">let </span>ph_hex_str = hex::encode(payment_hash);
+<a href=#438 id=438 data-nosnippet>438</a>
+<a href=#439 id=439 data-nosnippet>439</a>        <span class="kw">if let </span>PaymentAction::Settle(preimage) = action {
+<a href=#440 id=440 data-nosnippet>440</a>            <span class="self">self</span>.node
+<a href=#441 id=441 data-nosnippet>441</a>                .bolt11_payment()
+<a href=#442 id=442 data-nosnippet>442</a>                .claim_for_hash(ph, claimable_amount_msat, PaymentPreimage(preimage.<span class="number">0</span>))
+<a href=#443 id=443 data-nosnippet>443</a>                .map_err(|<span class="kw">_</span>| LightningRpcError::FailedToCompleteHtlc {
+<a href=#444 id=444 data-nosnippet>444</a>                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to claim LDK payment with hash {ph_hex_str}"</span>),
+<a href=#445 id=445 data-nosnippet>445</a>                })<span class="question-mark">?</span>;
+<a href=#446 id=446 data-nosnippet>446</a>        } <span class="kw">else </span>{
+<a href=#447 id=447 data-nosnippet>447</a>            <span class="macro">warn!</span>(target: LOG_LIGHTNING, payment_hash = %ph_hex_str, <span class="string">"Unwinding payment because the action was not `Settle`"</span>);
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="self">self</span>.node.bolt11_payment().fail_for_hash(ph).map_err(|<span class="kw">_</span>| {
+<a href=#449 id=449 data-nosnippet>449</a>                LightningRpcError::FailedToCompleteHtlc {
+<a href=#450 id=450 data-nosnippet>450</a>                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to unwind LDK payment with hash {ph_hex_str}"</span>),
+<a href=#451 id=451 data-nosnippet>451</a>                }
+<a href=#452 id=452 data-nosnippet>452</a>            })<span class="question-mark">?</span>;
+<a href=#453 id=453 data-nosnippet>453</a>        }
+<a href=#454 id=454 data-nosnippet>454</a>
+<a href=#455 id=455 data-nosnippet>455</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#456 id=456 data-nosnippet>456</a>    }
+<a href=#457 id=457 data-nosnippet>457</a>
+<a href=#458 id=458 data-nosnippet>458</a>    <span class="kw">async fn </span>create_invoice(
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#460 id=460 data-nosnippet>460</a>        create_invoice_request: CreateInvoiceRequest,
+<a href=#461 id=461 data-nosnippet>461</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
+<a href=#462 id=462 data-nosnippet>462</a>        <span class="kw">let </span>payment_hash_or = <span class="kw">if let </span><span class="prelude-val">Some</span>(payment_hash) = create_invoice_request.payment_hash {
+<a href=#463 id=463 data-nosnippet>463</a>            <span class="kw">let </span>ph = PaymentHash(<span class="kw-2">*</span>payment_hash.as_byte_array());
+<a href=#464 id=464 data-nosnippet>464</a>            <span class="prelude-val">Some</span>(ph)
+<a href=#465 id=465 data-nosnippet>465</a>        } <span class="kw">else </span>{
+<a href=#466 id=466 data-nosnippet>466</a>            <span class="prelude-val">None
+<a href=#467 id=467 data-nosnippet>467</a>        </span>};
+<a href=#468 id=468 data-nosnippet>468</a>
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="comment">// Currently `ldk-node` only supports direct descriptions.
+<a href=#470 id=470 data-nosnippet>470</a>        // See https://github.com/lightningdevkit/ldk-node/issues/325.
+<a href=#471 id=471 data-nosnippet>471</a>        // TODO: Once the above issue is resolved, we should support
+<a href=#472 id=472 data-nosnippet>472</a>        // description hashes as well.
+<a href=#473 id=473 data-nosnippet>473</a>        </span><span class="kw">let </span>description_str = <span class="kw">match </span>create_invoice_request.description {
+<a href=#474 id=474 data-nosnippet>474</a>            <span class="prelude-val">Some</span>(InvoiceDescription::Direct(desc)) =&gt; desc,
+<a href=#475 id=475 data-nosnippet>475</a>            <span class="kw">_ </span>=&gt; String::new(),
+<a href=#476 id=476 data-nosnippet>476</a>        };
+<a href=#477 id=477 data-nosnippet>477</a>
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">let </span>invoice = <span class="kw">match </span>payment_hash_or {
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="prelude-val">Some</span>(payment_hash) =&gt; <span class="self">self</span>.node.bolt11_payment().receive_for_hash(
+<a href=#480 id=480 data-nosnippet>480</a>                create_invoice_request.amount_msat,
+<a href=#481 id=481 data-nosnippet>481</a>                description_str.as_str(),
+<a href=#482 id=482 data-nosnippet>482</a>                create_invoice_request.expiry_secs,
+<a href=#483 id=483 data-nosnippet>483</a>                payment_hash,
+<a href=#484 id=484 data-nosnippet>484</a>            ),
+<a href=#485 id=485 data-nosnippet>485</a>            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.node.bolt11_payment().receive(
+<a href=#486 id=486 data-nosnippet>486</a>                create_invoice_request.amount_msat,
+<a href=#487 id=487 data-nosnippet>487</a>                description_str.as_str(),
+<a href=#488 id=488 data-nosnippet>488</a>                create_invoice_request.expiry_secs,
+<a href=#489 id=489 data-nosnippet>489</a>            ),
+<a href=#490 id=490 data-nosnippet>490</a>        }
+<a href=#491 id=491 data-nosnippet>491</a>        .map_err(|e| LightningRpcError::FailedToGetInvoice {
+<a href=#492 id=492 data-nosnippet>492</a>            failure_reason: e.to_string(),
+<a href=#493 id=493 data-nosnippet>493</a>        })<span class="question-mark">?</span>;
+<a href=#494 id=494 data-nosnippet>494</a>
+<a href=#495 id=495 data-nosnippet>495</a>        <span class="prelude-val">Ok</span>(CreateInvoiceResponse {
+<a href=#496 id=496 data-nosnippet>496</a>            invoice: invoice.to_string(),
+<a href=#497 id=497 data-nosnippet>497</a>        })
+<a href=#498 id=498 data-nosnippet>498</a>    }
+<a href=#499 id=499 data-nosnippet>499</a>
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">async fn </span>get_ln_onchain_address(
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#502 id=502 data-nosnippet>502</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt; {
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="self">self</span>.node
+<a href=#504 id=504 data-nosnippet>504</a>            .onchain_payment()
+<a href=#505 id=505 data-nosnippet>505</a>            .new_address()
+<a href=#506 id=506 data-nosnippet>506</a>            .map(|address| GetLnOnchainAddressResponse {
+<a href=#507 id=507 data-nosnippet>507</a>                address: address.to_string(),
+<a href=#508 id=508 data-nosnippet>508</a>            })
+<a href=#509 id=509 data-nosnippet>509</a>            .map_err(|e| LightningRpcError::FailedToGetLnOnchainAddress {
+<a href=#510 id=510 data-nosnippet>510</a>                failure_reason: e.to_string(),
+<a href=#511 id=511 data-nosnippet>511</a>            })
+<a href=#512 id=512 data-nosnippet>512</a>    }
+<a href=#513 id=513 data-nosnippet>513</a>
+<a href=#514 id=514 data-nosnippet>514</a>    <span class="kw">async fn </span>send_onchain(
+<a href=#515 id=515 data-nosnippet>515</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#516 id=516 data-nosnippet>516</a>        SendOnchainRequest {
+<a href=#517 id=517 data-nosnippet>517</a>            address,
+<a href=#518 id=518 data-nosnippet>518</a>            amount,
+<a href=#519 id=519 data-nosnippet>519</a>            <span class="comment">// TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
+<a href=#520 id=520 data-nosnippet>520</a>            // This work is planned to be in `ldk-node` v0.4 and is tracked here:
+<a href=#521 id=521 data-nosnippet>521</a>            // https://github.com/lightningdevkit/ldk-node/issues/176
+<a href=#522 id=522 data-nosnippet>522</a>            </span>fee_rate_sats_per_vbyte: <span class="kw">_</span>,
+<a href=#523 id=523 data-nosnippet>523</a>        }: SendOnchainRequest,
+<a href=#524 id=524 data-nosnippet>524</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;SendOnchainResponse, LightningRpcError&gt; {
+<a href=#525 id=525 data-nosnippet>525</a>        <span class="kw">let </span>onchain = <span class="self">self</span>.node.onchain_payment();
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a>        <span class="kw">let </span>txid = <span class="kw">match </span>amount {
+<a href=#528 id=528 data-nosnippet>528</a>            BitcoinAmountOrAll::All =&gt; onchain.send_all_to_address(<span class="kw-2">&amp;</span>address.assume_checked()),
+<a href=#529 id=529 data-nosnippet>529</a>            BitcoinAmountOrAll::Amount(amount_sats) =&gt; {
+<a href=#530 id=530 data-nosnippet>530</a>                onchain.send_to_address(<span class="kw-2">&amp;</span>address.assume_checked(), amount_sats.to_sat())
+<a href=#531 id=531 data-nosnippet>531</a>            }
+<a href=#532 id=532 data-nosnippet>532</a>        }
+<a href=#533 id=533 data-nosnippet>533</a>        .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
+<a href=#534 id=534 data-nosnippet>534</a>            failure_reason: e.to_string(),
+<a href=#535 id=535 data-nosnippet>535</a>        })<span class="question-mark">?</span>;
+<a href=#536 id=536 data-nosnippet>536</a>
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="prelude-val">Ok</span>(SendOnchainResponse {
+<a href=#538 id=538 data-nosnippet>538</a>            txid: txid.to_string(),
+<a href=#539 id=539 data-nosnippet>539</a>        })
+<a href=#540 id=540 data-nosnippet>540</a>    }
+<a href=#541 id=541 data-nosnippet>541</a>
+<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">async fn </span>open_channel(
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#544 id=544 data-nosnippet>544</a>        OpenChannelRequest {
+<a href=#545 id=545 data-nosnippet>545</a>            pubkey,
+<a href=#546 id=546 data-nosnippet>546</a>            host,
+<a href=#547 id=547 data-nosnippet>547</a>            channel_size_sats,
+<a href=#548 id=548 data-nosnippet>548</a>            push_amount_sats,
+<a href=#549 id=549 data-nosnippet>549</a>        }: OpenChannelRequest,
+<a href=#550 id=550 data-nosnippet>550</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;OpenChannelResponse, LightningRpcError&gt; {
+<a href=#551 id=551 data-nosnippet>551</a>        <span class="kw">let </span>push_amount_msats_or = <span class="kw">if </span>push_amount_sats == <span class="number">0 </span>{
+<a href=#552 id=552 data-nosnippet>552</a>            <span class="prelude-val">None
+<a href=#553 id=553 data-nosnippet>553</a>        </span>} <span class="kw">else </span>{
+<a href=#554 id=554 data-nosnippet>554</a>            <span class="prelude-val">Some</span>(push_amount_sats * <span class="number">1000</span>)
+<a href=#555 id=555 data-nosnippet>555</a>        };
+<a href=#556 id=556 data-nosnippet>556</a>
+<a href=#557 id=557 data-nosnippet>557</a>        <span class="kw">let </span>user_channel_id = <span class="self">self
+<a href=#558 id=558 data-nosnippet>558</a>            </span>.node
+<a href=#559 id=559 data-nosnippet>559</a>            .open_announced_channel(
+<a href=#560 id=560 data-nosnippet>560</a>                pubkey,
+<a href=#561 id=561 data-nosnippet>561</a>                SocketAddress::from_str(<span class="kw-2">&amp;</span>host).map_err(|e| {
+<a href=#562 id=562 data-nosnippet>562</a>                    LightningRpcError::FailedToConnectToPeer {
+<a href=#563 id=563 data-nosnippet>563</a>                        failure_reason: e.to_string(),
+<a href=#564 id=564 data-nosnippet>564</a>                    }
+<a href=#565 id=565 data-nosnippet>565</a>                })<span class="question-mark">?</span>,
+<a href=#566 id=566 data-nosnippet>566</a>                channel_size_sats,
+<a href=#567 id=567 data-nosnippet>567</a>                push_amount_msats_or,
+<a href=#568 id=568 data-nosnippet>568</a>                <span class="prelude-val">None</span>,
+<a href=#569 id=569 data-nosnippet>569</a>            )
+<a href=#570 id=570 data-nosnippet>570</a>            .map_err(|e| LightningRpcError::FailedToOpenChannel {
+<a href=#571 id=571 data-nosnippet>571</a>                failure_reason: e.to_string(),
+<a href=#572 id=572 data-nosnippet>572</a>            })<span class="question-mark">?</span>;
+<a href=#573 id=573 data-nosnippet>573</a>
+<a href=#574 id=574 data-nosnippet>574</a>        <span class="comment">// The channel isn't always visible immediately, so we need to poll for it.
+<a href=#575 id=575 data-nosnippet>575</a>        </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10 </span>{
+<a href=#576 id=576 data-nosnippet>576</a>            <span class="kw">let </span>funding_txid_or = <span class="self">self
+<a href=#577 id=577 data-nosnippet>577</a>                </span>.node
+<a href=#578 id=578 data-nosnippet>578</a>                .list_channels()
+<a href=#579 id=579 data-nosnippet>579</a>                .iter()
+<a href=#580 id=580 data-nosnippet>580</a>                .find(|channel| channel.user_channel_id == user_channel_id)
+<a href=#581 id=581 data-nosnippet>581</a>                .and_then(|channel| channel.funding_txo)
+<a href=#582 id=582 data-nosnippet>582</a>                .map(|funding_txo| funding_txo.txid);
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(funding_txid) = funding_txid_or {
+<a href=#585 id=585 data-nosnippet>585</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(OpenChannelResponse {
+<a href=#586 id=586 data-nosnippet>586</a>                    funding_txid: funding_txid.to_string(),
+<a href=#587 id=587 data-nosnippet>587</a>                });
+<a href=#588 id=588 data-nosnippet>588</a>            }
 <a href=#589 id=589 data-nosnippet>589</a>
-<a href=#590 id=590 data-nosnippet>590</a>    <span class="kw">async fn </span>close_channels_with_peer(
-<a href=#591 id=591 data-nosnippet>591</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#592 id=592 data-nosnippet>592</a>        CloseChannelsWithPeerRequest { pubkey }: CloseChannelsWithPeerRequest,
-<a href=#593 id=593 data-nosnippet>593</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
-<a href=#594 id=594 data-nosnippet>594</a>        <span class="kw">let </span><span class="kw-2">mut </span>num_channels_closed = <span class="number">0</span>;
-<a href=#595 id=595 data-nosnippet>595</a>
-<a href=#596 id=596 data-nosnippet>596</a>        <span class="kw">for </span>channel_with_peer <span class="kw">in </span><span class="self">self
-<a href=#597 id=597 data-nosnippet>597</a>            </span>.node
-<a href=#598 id=598 data-nosnippet>598</a>            .list_channels()
-<a href=#599 id=599 data-nosnippet>599</a>            .iter()
-<a href=#600 id=600 data-nosnippet>600</a>            .filter(|channel| channel.counterparty_node_id == pubkey)
-<a href=#601 id=601 data-nosnippet>601</a>        {
-<a href=#602 id=602 data-nosnippet>602</a>            <span class="kw">if </span><span class="self">self
-<a href=#603 id=603 data-nosnippet>603</a>                </span>.node
-<a href=#604 id=604 data-nosnippet>604</a>                .close_channel(<span class="kw-2">&amp;</span>channel_with_peer.user_channel_id, pubkey)
-<a href=#605 id=605 data-nosnippet>605</a>                .is_ok()
-<a href=#606 id=606 data-nosnippet>606</a>            {
-<a href=#607 id=607 data-nosnippet>607</a>                num_channels_closed += <span class="number">1</span>;
-<a href=#608 id=608 data-nosnippet>608</a>            }
-<a href=#609 id=609 data-nosnippet>609</a>        }
-<a href=#610 id=610 data-nosnippet>610</a>
-<a href=#611 id=611 data-nosnippet>611</a>        <span class="prelude-val">Ok</span>(CloseChannelsWithPeerResponse {
-<a href=#612 id=612 data-nosnippet>612</a>            num_channels_closed,
-<a href=#613 id=613 data-nosnippet>613</a>        })
-<a href=#614 id=614 data-nosnippet>614</a>    }
-<a href=#615 id=615 data-nosnippet>615</a>
-<a href=#616 id=616 data-nosnippet>616</a>    <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ListActiveChannelsResponse, LightningRpcError&gt; {
-<a href=#617 id=617 data-nosnippet>617</a>        <span class="kw">let </span><span class="kw-2">mut </span>channels = Vec::new();
+<a href=#590 id=590 data-nosnippet>590</a>            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+<a href=#591 id=591 data-nosnippet>591</a>        }
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a>        <span class="prelude-val">Err</span>(LightningRpcError::FailedToOpenChannel {
+<a href=#594 id=594 data-nosnippet>594</a>            failure_reason: <span class="string">"Channel could not be opened"</span>.to_string(),
+<a href=#595 id=595 data-nosnippet>595</a>        })
+<a href=#596 id=596 data-nosnippet>596</a>    }
+<a href=#597 id=597 data-nosnippet>597</a>
+<a href=#598 id=598 data-nosnippet>598</a>    <span class="kw">async fn </span>close_channels_with_peer(
+<a href=#599 id=599 data-nosnippet>599</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#600 id=600 data-nosnippet>600</a>        CloseChannelsWithPeerRequest { pubkey }: CloseChannelsWithPeerRequest,
+<a href=#601 id=601 data-nosnippet>601</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
+<a href=#602 id=602 data-nosnippet>602</a>        <span class="kw">let </span><span class="kw-2">mut </span>num_channels_closed = <span class="number">0</span>;
+<a href=#603 id=603 data-nosnippet>603</a>
+<a href=#604 id=604 data-nosnippet>604</a>        <span class="kw">for </span>channel_with_peer <span class="kw">in </span><span class="self">self
+<a href=#605 id=605 data-nosnippet>605</a>            </span>.node
+<a href=#606 id=606 data-nosnippet>606</a>            .list_channels()
+<a href=#607 id=607 data-nosnippet>607</a>            .iter()
+<a href=#608 id=608 data-nosnippet>608</a>            .filter(|channel| channel.counterparty_node_id == pubkey)
+<a href=#609 id=609 data-nosnippet>609</a>        {
+<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">if </span><span class="self">self
+<a href=#611 id=611 data-nosnippet>611</a>                </span>.node
+<a href=#612 id=612 data-nosnippet>612</a>                .close_channel(<span class="kw-2">&amp;</span>channel_with_peer.user_channel_id, pubkey)
+<a href=#613 id=613 data-nosnippet>613</a>                .is_ok()
+<a href=#614 id=614 data-nosnippet>614</a>            {
+<a href=#615 id=615 data-nosnippet>615</a>                num_channels_closed += <span class="number">1</span>;
+<a href=#616 id=616 data-nosnippet>616</a>            }
+<a href=#617 id=617 data-nosnippet>617</a>        }
 <a href=#618 id=618 data-nosnippet>618</a>
-<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">for </span>channel_details <span class="kw">in </span><span class="self">self
-<a href=#620 id=620 data-nosnippet>620</a>            </span>.node
-<a href=#621 id=621 data-nosnippet>621</a>            .list_channels()
-<a href=#622 id=622 data-nosnippet>622</a>            .iter()
-<a href=#623 id=623 data-nosnippet>623</a>            .filter(|channel| channel.is_usable)
-<a href=#624 id=624 data-nosnippet>624</a>        {
-<a href=#625 id=625 data-nosnippet>625</a>            channels.push(ChannelInfo {
-<a href=#626 id=626 data-nosnippet>626</a>                remote_pubkey: channel_details.counterparty_node_id,
-<a href=#627 id=627 data-nosnippet>627</a>                channel_size_sats: channel_details.channel_value_sats,
-<a href=#628 id=628 data-nosnippet>628</a>                outbound_liquidity_sats: channel_details.outbound_capacity_msat / <span class="number">1000</span>,
-<a href=#629 id=629 data-nosnippet>629</a>                inbound_liquidity_sats: channel_details.inbound_capacity_msat / <span class="number">1000</span>,
-<a href=#630 id=630 data-nosnippet>630</a>                short_channel_id: <span class="kw">match </span>channel_details.funding_txo {
-<a href=#631 id=631 data-nosnippet>631</a>                    <span class="prelude-val">Some</span>(funding_txo) =&gt; <span class="self">self</span>.outpoint_to_scid(funding_txo).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>),
-<a href=#632 id=632 data-nosnippet>632</a>                    <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
-<a href=#633 id=633 data-nosnippet>633</a>                },
-<a href=#634 id=634 data-nosnippet>634</a>            });
-<a href=#635 id=635 data-nosnippet>635</a>        }
-<a href=#636 id=636 data-nosnippet>636</a>
-<a href=#637 id=637 data-nosnippet>637</a>        <span class="prelude-val">Ok</span>(ListActiveChannelsResponse { channels })
-<a href=#638 id=638 data-nosnippet>638</a>    }
-<a href=#639 id=639 data-nosnippet>639</a>
-<a href=#640 id=640 data-nosnippet>640</a>    <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
-<a href=#641 id=641 data-nosnippet>641</a>        <span class="kw">let </span>balances = <span class="self">self</span>.node.list_balances();
-<a href=#642 id=642 data-nosnippet>642</a>        <span class="kw">let </span>channel_lists = <span class="self">self
-<a href=#643 id=643 data-nosnippet>643</a>            </span>.node
-<a href=#644 id=644 data-nosnippet>644</a>            .list_channels()
-<a href=#645 id=645 data-nosnippet>645</a>            .into_iter()
-<a href=#646 id=646 data-nosnippet>646</a>            .filter(|chan| chan.is_usable)
-<a href=#647 id=647 data-nosnippet>647</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#648 id=648 data-nosnippet>648</a>        <span class="comment">// map and get the total inbound_capacity_msat in the channels
-<a href=#649 id=649 data-nosnippet>649</a>        </span><span class="kw">let </span>total_inbound_liquidity_balance_msat: u64 = channel_lists
-<a href=#650 id=650 data-nosnippet>650</a>            .iter()
-<a href=#651 id=651 data-nosnippet>651</a>            .map(|channel| channel.inbound_capacity_msat)
-<a href=#652 id=652 data-nosnippet>652</a>            .sum();
-<a href=#653 id=653 data-nosnippet>653</a>
-<a href=#654 id=654 data-nosnippet>654</a>        <span class="prelude-val">Ok</span>(GetBalancesResponse {
-<a href=#655 id=655 data-nosnippet>655</a>            onchain_balance_sats: balances.total_onchain_balance_sats,
-<a href=#656 id=656 data-nosnippet>656</a>            lightning_balance_msats: balances.total_lightning_balance_sats * <span class="number">1000</span>,
-<a href=#657 id=657 data-nosnippet>657</a>            inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
-<a href=#658 id=658 data-nosnippet>658</a>        })
-<a href=#659 id=659 data-nosnippet>659</a>    }
-<a href=#660 id=660 data-nosnippet>660</a>
-<a href=#661 id=661 data-nosnippet>661</a>    <span class="kw">async fn </span>get_invoice(
-<a href=#662 id=662 data-nosnippet>662</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#663 id=663 data-nosnippet>663</a>        get_invoice_request: GetInvoiceRequest,
-<a href=#664 id=664 data-nosnippet>664</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;, LightningRpcError&gt; {
-<a href=#665 id=665 data-nosnippet>665</a>        <span class="kw">let </span>invoices = <span class="self">self
-<a href=#666 id=666 data-nosnippet>666</a>            </span>.node
-<a href=#667 id=667 data-nosnippet>667</a>            .list_payments_with_filter(|details| {
-<a href=#668 id=668 data-nosnippet>668</a>                details.direction == PaymentDirection::Inbound
-<a href=#669 id=669 data-nosnippet>669</a>                    &amp;&amp; details.id == PaymentId(get_invoice_request.payment_hash.to_byte_array())
-<a href=#670 id=670 data-nosnippet>670</a>                    &amp;&amp; !<span class="macro">matches!</span>(details.kind, PaymentKind::Onchain)
-<a href=#671 id=671 data-nosnippet>671</a>            })
-<a href=#672 id=672 data-nosnippet>672</a>            .iter()
-<a href=#673 id=673 data-nosnippet>673</a>            .map(|details| {
-<a href=#674 id=674 data-nosnippet>674</a>                <span class="kw">let </span>(preimage, payment_hash, <span class="kw">_</span>) = get_preimage_and_payment_hash(<span class="kw-2">&amp;</span>details.kind);
-<a href=#675 id=675 data-nosnippet>675</a>                <span class="kw">let </span>status = <span class="kw">match </span>details.status {
-<a href=#676 id=676 data-nosnippet>676</a>                    PaymentStatus::Failed =&gt; fedimint_gateway_common::PaymentStatus::Failed,
-<a href=#677 id=677 data-nosnippet>677</a>                    PaymentStatus::Succeeded =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
-<a href=#678 id=678 data-nosnippet>678</a>                    PaymentStatus::Pending =&gt; fedimint_gateway_common::PaymentStatus::Pending,
-<a href=#679 id=679 data-nosnippet>679</a>                };
-<a href=#680 id=680 data-nosnippet>680</a>                GetInvoiceResponse {
-<a href=#681 id=681 data-nosnippet>681</a>                    preimage: preimage.map(|p| p.to_string()),
-<a href=#682 id=682 data-nosnippet>682</a>                    payment_hash,
-<a href=#683 id=683 data-nosnippet>683</a>                    amount: Amount::from_msats(
-<a href=#684 id=684 data-nosnippet>684</a>                        details
-<a href=#685 id=685 data-nosnippet>685</a>                            .amount_msat
-<a href=#686 id=686 data-nosnippet>686</a>                            .expect(<span class="string">"amountless invoices are not supported"</span>),
-<a href=#687 id=687 data-nosnippet>687</a>                    ),
-<a href=#688 id=688 data-nosnippet>688</a>                    created_at: UNIX_EPOCH + Duration::from_secs(details.latest_update_timestamp),
-<a href=#689 id=689 data-nosnippet>689</a>                    status,
-<a href=#690 id=690 data-nosnippet>690</a>                }
-<a href=#691 id=691 data-nosnippet>691</a>            })
-<a href=#692 id=692 data-nosnippet>692</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#693 id=693 data-nosnippet>693</a>
-<a href=#694 id=694 data-nosnippet>694</a>        <span class="prelude-val">Ok</span>(invoices.first().cloned())
-<a href=#695 id=695 data-nosnippet>695</a>    }
-<a href=#696 id=696 data-nosnippet>696</a>
-<a href=#697 id=697 data-nosnippet>697</a>    <span class="kw">async fn </span>list_transactions(
-<a href=#698 id=698 data-nosnippet>698</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#699 id=699 data-nosnippet>699</a>        start_secs: u64,
-<a href=#700 id=700 data-nosnippet>700</a>        end_secs: u64,
-<a href=#701 id=701 data-nosnippet>701</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ListTransactionsResponse, LightningRpcError&gt; {
-<a href=#702 id=702 data-nosnippet>702</a>        <span class="kw">let </span>transactions = <span class="self">self
-<a href=#703 id=703 data-nosnippet>703</a>            </span>.node
-<a href=#704 id=704 data-nosnippet>704</a>            .list_payments_with_filter(|details| {
-<a href=#705 id=705 data-nosnippet>705</a>                details.kind != PaymentKind::Onchain
-<a href=#706 id=706 data-nosnippet>706</a>                    &amp;&amp; details.latest_update_timestamp &gt;= start_secs
-<a href=#707 id=707 data-nosnippet>707</a>                    &amp;&amp; details.latest_update_timestamp &lt; end_secs
-<a href=#708 id=708 data-nosnippet>708</a>            })
-<a href=#709 id=709 data-nosnippet>709</a>            .iter()
-<a href=#710 id=710 data-nosnippet>710</a>            .map(|details| {
-<a href=#711 id=711 data-nosnippet>711</a>                <span class="kw">let </span>(preimage, payment_hash, payment_kind) =
-<a href=#712 id=712 data-nosnippet>712</a>                    get_preimage_and_payment_hash(<span class="kw-2">&amp;</span>details.kind);
-<a href=#713 id=713 data-nosnippet>713</a>                <span class="kw">let </span>direction = <span class="kw">match </span>details.direction {
-<a href=#714 id=714 data-nosnippet>714</a>                    PaymentDirection::Outbound =&gt; {
-<a href=#715 id=715 data-nosnippet>715</a>                        fedimint_gateway_common::PaymentDirection::Outbound
-<a href=#716 id=716 data-nosnippet>716</a>                    }
-<a href=#717 id=717 data-nosnippet>717</a>                    PaymentDirection::Inbound =&gt; fedimint_gateway_common::PaymentDirection::Inbound,
-<a href=#718 id=718 data-nosnippet>718</a>                };
-<a href=#719 id=719 data-nosnippet>719</a>                <span class="kw">let </span>status = <span class="kw">match </span>details.status {
-<a href=#720 id=720 data-nosnippet>720</a>                    PaymentStatus::Failed =&gt; fedimint_gateway_common::PaymentStatus::Failed,
-<a href=#721 id=721 data-nosnippet>721</a>                    PaymentStatus::Succeeded =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
-<a href=#722 id=722 data-nosnippet>722</a>                    PaymentStatus::Pending =&gt; fedimint_gateway_common::PaymentStatus::Pending,
-<a href=#723 id=723 data-nosnippet>723</a>                };
-<a href=#724 id=724 data-nosnippet>724</a>                fedimint_gateway_common::PaymentDetails {
-<a href=#725 id=725 data-nosnippet>725</a>                    payment_hash,
-<a href=#726 id=726 data-nosnippet>726</a>                    preimage: preimage.map(|p| p.to_string()),
-<a href=#727 id=727 data-nosnippet>727</a>                    payment_kind,
-<a href=#728 id=728 data-nosnippet>728</a>                    amount: Amount::from_msats(
-<a href=#729 id=729 data-nosnippet>729</a>                        details
-<a href=#730 id=730 data-nosnippet>730</a>                            .amount_msat
-<a href=#731 id=731 data-nosnippet>731</a>                            .expect(<span class="string">"amountless invoices are not supported"</span>),
-<a href=#732 id=732 data-nosnippet>732</a>                    ),
-<a href=#733 id=733 data-nosnippet>733</a>                    direction,
-<a href=#734 id=734 data-nosnippet>734</a>                    status,
-<a href=#735 id=735 data-nosnippet>735</a>                    timestamp_secs: details.latest_update_timestamp,
-<a href=#736 id=736 data-nosnippet>736</a>                }
-<a href=#737 id=737 data-nosnippet>737</a>            })
-<a href=#738 id=738 data-nosnippet>738</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#739 id=739 data-nosnippet>739</a>        <span class="prelude-val">Ok</span>(ListTransactionsResponse { transactions })
-<a href=#740 id=740 data-nosnippet>740</a>    }
-<a href=#741 id=741 data-nosnippet>741</a>}
-<a href=#742 id=742 data-nosnippet>742</a>
-<a href=#743 id=743 data-nosnippet>743</a><span class="doccomment">/// Maps LDK's `PaymentKind` to an optional preimage and an optional payment
-<a href=#744 id=744 data-nosnippet>744</a>/// hash depending on the type of payment.
-<a href=#745 id=745 data-nosnippet>745</a></span><span class="kw">fn </span>get_preimage_and_payment_hash(
-<a href=#746 id=746 data-nosnippet>746</a>    kind: <span class="kw-2">&amp;</span>PaymentKind,
-<a href=#747 id=747 data-nosnippet>747</a>) -&gt; (
-<a href=#748 id=748 data-nosnippet>748</a>    <span class="prelude-ty">Option</span>&lt;Preimage&gt;,
-<a href=#749 id=749 data-nosnippet>749</a>    <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;,
-<a href=#750 id=750 data-nosnippet>750</a>    fedimint_gateway_common::PaymentKind,
-<a href=#751 id=751 data-nosnippet>751</a>) {
-<a href=#752 id=752 data-nosnippet>752</a>    <span class="kw">match </span>kind {
-<a href=#753 id=753 data-nosnippet>753</a>        PaymentKind::Bolt11 {
-<a href=#754 id=754 data-nosnippet>754</a>            hash,
-<a href=#755 id=755 data-nosnippet>755</a>            preimage,
-<a href=#756 id=756 data-nosnippet>756</a>            secret: <span class="kw">_</span>,
-<a href=#757 id=757 data-nosnippet>757</a>        } =&gt; (
-<a href=#758 id=758 data-nosnippet>758</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
-<a href=#759 id=759 data-nosnippet>759</a>            <span class="prelude-val">Some</span>(sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
-<a href=#760 id=760 data-nosnippet>760</a>            fedimint_gateway_common::PaymentKind::Bolt11,
-<a href=#761 id=761 data-nosnippet>761</a>        ),
-<a href=#762 id=762 data-nosnippet>762</a>        PaymentKind::Bolt11Jit {
-<a href=#763 id=763 data-nosnippet>763</a>            hash,
-<a href=#764 id=764 data-nosnippet>764</a>            preimage,
-<a href=#765 id=765 data-nosnippet>765</a>            secret: <span class="kw">_</span>,
-<a href=#766 id=766 data-nosnippet>766</a>            lsp_fee_limits: <span class="kw">_</span>,
-<a href=#767 id=767 data-nosnippet>767</a>        } =&gt; (
-<a href=#768 id=768 data-nosnippet>768</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
-<a href=#769 id=769 data-nosnippet>769</a>            <span class="prelude-val">Some</span>(sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
-<a href=#770 id=770 data-nosnippet>770</a>            fedimint_gateway_common::PaymentKind::Bolt11,
-<a href=#771 id=771 data-nosnippet>771</a>        ),
-<a href=#772 id=772 data-nosnippet>772</a>        PaymentKind::Bolt12Offer {
-<a href=#773 id=773 data-nosnippet>773</a>            hash,
-<a href=#774 id=774 data-nosnippet>774</a>            preimage,
-<a href=#775 id=775 data-nosnippet>775</a>            secret: <span class="kw">_</span>,
-<a href=#776 id=776 data-nosnippet>776</a>            offer_id: <span class="kw">_</span>,
-<a href=#777 id=777 data-nosnippet>777</a>            payer_note: <span class="kw">_</span>,
-<a href=#778 id=778 data-nosnippet>778</a>            quantity: <span class="kw">_</span>,
-<a href=#779 id=779 data-nosnippet>779</a>        } =&gt; (
-<a href=#780 id=780 data-nosnippet>780</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
-<a href=#781 id=781 data-nosnippet>781</a>            hash.map(|h| sha256::Hash::from_slice(<span class="kw-2">&amp;</span>h.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
-<a href=#782 id=782 data-nosnippet>782</a>            fedimint_gateway_common::PaymentKind::Bolt12Offer,
-<a href=#783 id=783 data-nosnippet>783</a>        ),
-<a href=#784 id=784 data-nosnippet>784</a>        PaymentKind::Bolt12Refund {
-<a href=#785 id=785 data-nosnippet>785</a>            hash,
-<a href=#786 id=786 data-nosnippet>786</a>            preimage,
-<a href=#787 id=787 data-nosnippet>787</a>            secret: <span class="kw">_</span>,
-<a href=#788 id=788 data-nosnippet>788</a>            payer_note: <span class="kw">_</span>,
-<a href=#789 id=789 data-nosnippet>789</a>            quantity: <span class="kw">_</span>,
-<a href=#790 id=790 data-nosnippet>790</a>        } =&gt; (
-<a href=#791 id=791 data-nosnippet>791</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
-<a href=#792 id=792 data-nosnippet>792</a>            hash.map(|h| sha256::Hash::from_slice(<span class="kw-2">&amp;</span>h.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
-<a href=#793 id=793 data-nosnippet>793</a>            fedimint_gateway_common::PaymentKind::Bolt12Refund,
-<a href=#794 id=794 data-nosnippet>794</a>        ),
-<a href=#795 id=795 data-nosnippet>795</a>        PaymentKind::Spontaneous { hash, preimage } =&gt; (
-<a href=#796 id=796 data-nosnippet>796</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
-<a href=#797 id=797 data-nosnippet>797</a>            <span class="prelude-val">Some</span>(sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
-<a href=#798 id=798 data-nosnippet>798</a>            fedimint_gateway_common::PaymentKind::Bolt11,
-<a href=#799 id=799 data-nosnippet>799</a>        ),
-<a href=#800 id=800 data-nosnippet>800</a>        PaymentKind::Onchain =&gt; (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, fedimint_gateway_common::PaymentKind::Onchain),
-<a href=#801 id=801 data-nosnippet>801</a>    }
-<a href=#802 id=802 data-nosnippet>802</a>}</code></pre></div></section></main></body></html>
+<a href=#619 id=619 data-nosnippet>619</a>        <span class="prelude-val">Ok</span>(CloseChannelsWithPeerResponse {
+<a href=#620 id=620 data-nosnippet>620</a>            num_channels_closed,
+<a href=#621 id=621 data-nosnippet>621</a>        })
+<a href=#622 id=622 data-nosnippet>622</a>    }
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a>    <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ListActiveChannelsResponse, LightningRpcError&gt; {
+<a href=#625 id=625 data-nosnippet>625</a>        <span class="kw">let </span><span class="kw-2">mut </span>channels = Vec::new();
+<a href=#626 id=626 data-nosnippet>626</a>
+<a href=#627 id=627 data-nosnippet>627</a>        <span class="kw">for </span>channel_details <span class="kw">in </span><span class="self">self
+<a href=#628 id=628 data-nosnippet>628</a>            </span>.node
+<a href=#629 id=629 data-nosnippet>629</a>            .list_channels()
+<a href=#630 id=630 data-nosnippet>630</a>            .iter()
+<a href=#631 id=631 data-nosnippet>631</a>            .filter(|channel| channel.is_usable)
+<a href=#632 id=632 data-nosnippet>632</a>        {
+<a href=#633 id=633 data-nosnippet>633</a>            channels.push(ChannelInfo {
+<a href=#634 id=634 data-nosnippet>634</a>                remote_pubkey: channel_details.counterparty_node_id,
+<a href=#635 id=635 data-nosnippet>635</a>                channel_size_sats: channel_details.channel_value_sats,
+<a href=#636 id=636 data-nosnippet>636</a>                outbound_liquidity_sats: channel_details.outbound_capacity_msat / <span class="number">1000</span>,
+<a href=#637 id=637 data-nosnippet>637</a>                inbound_liquidity_sats: channel_details.inbound_capacity_msat / <span class="number">1000</span>,
+<a href=#638 id=638 data-nosnippet>638</a>                short_channel_id: <span class="kw">match </span>channel_details.funding_txo {
+<a href=#639 id=639 data-nosnippet>639</a>                    <span class="prelude-val">Some</span>(funding_txo) =&gt; <span class="self">self</span>.outpoint_to_scid(funding_txo).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>),
+<a href=#640 id=640 data-nosnippet>640</a>                    <span class="prelude-val">None </span>=&gt; <span class="number">0</span>,
+<a href=#641 id=641 data-nosnippet>641</a>                },
+<a href=#642 id=642 data-nosnippet>642</a>            });
+<a href=#643 id=643 data-nosnippet>643</a>        }
+<a href=#644 id=644 data-nosnippet>644</a>
+<a href=#645 id=645 data-nosnippet>645</a>        <span class="prelude-val">Ok</span>(ListActiveChannelsResponse { channels })
+<a href=#646 id=646 data-nosnippet>646</a>    }
+<a href=#647 id=647 data-nosnippet>647</a>
+<a href=#648 id=648 data-nosnippet>648</a>    <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
+<a href=#649 id=649 data-nosnippet>649</a>        <span class="kw">let </span>balances = <span class="self">self</span>.node.list_balances();
+<a href=#650 id=650 data-nosnippet>650</a>        <span class="kw">let </span>channel_lists = <span class="self">self
+<a href=#651 id=651 data-nosnippet>651</a>            </span>.node
+<a href=#652 id=652 data-nosnippet>652</a>            .list_channels()
+<a href=#653 id=653 data-nosnippet>653</a>            .into_iter()
+<a href=#654 id=654 data-nosnippet>654</a>            .filter(|chan| chan.is_usable)
+<a href=#655 id=655 data-nosnippet>655</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#656 id=656 data-nosnippet>656</a>        <span class="comment">// map and get the total inbound_capacity_msat in the channels
+<a href=#657 id=657 data-nosnippet>657</a>        </span><span class="kw">let </span>total_inbound_liquidity_balance_msat: u64 = channel_lists
+<a href=#658 id=658 data-nosnippet>658</a>            .iter()
+<a href=#659 id=659 data-nosnippet>659</a>            .map(|channel| channel.inbound_capacity_msat)
+<a href=#660 id=660 data-nosnippet>660</a>            .sum();
+<a href=#661 id=661 data-nosnippet>661</a>
+<a href=#662 id=662 data-nosnippet>662</a>        <span class="prelude-val">Ok</span>(GetBalancesResponse {
+<a href=#663 id=663 data-nosnippet>663</a>            onchain_balance_sats: balances.total_onchain_balance_sats,
+<a href=#664 id=664 data-nosnippet>664</a>            lightning_balance_msats: balances.total_lightning_balance_sats * <span class="number">1000</span>,
+<a href=#665 id=665 data-nosnippet>665</a>            inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
+<a href=#666 id=666 data-nosnippet>666</a>        })
+<a href=#667 id=667 data-nosnippet>667</a>    }
+<a href=#668 id=668 data-nosnippet>668</a>
+<a href=#669 id=669 data-nosnippet>669</a>    <span class="kw">async fn </span>get_invoice(
+<a href=#670 id=670 data-nosnippet>670</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#671 id=671 data-nosnippet>671</a>        get_invoice_request: GetInvoiceRequest,
+<a href=#672 id=672 data-nosnippet>672</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;, LightningRpcError&gt; {
+<a href=#673 id=673 data-nosnippet>673</a>        <span class="kw">let </span>invoices = <span class="self">self
+<a href=#674 id=674 data-nosnippet>674</a>            </span>.node
+<a href=#675 id=675 data-nosnippet>675</a>            .list_payments_with_filter(|details| {
+<a href=#676 id=676 data-nosnippet>676</a>                details.direction == PaymentDirection::Inbound
+<a href=#677 id=677 data-nosnippet>677</a>                    &amp;&amp; details.id == PaymentId(get_invoice_request.payment_hash.to_byte_array())
+<a href=#678 id=678 data-nosnippet>678</a>                    &amp;&amp; !<span class="macro">matches!</span>(details.kind, PaymentKind::Onchain)
+<a href=#679 id=679 data-nosnippet>679</a>            })
+<a href=#680 id=680 data-nosnippet>680</a>            .iter()
+<a href=#681 id=681 data-nosnippet>681</a>            .map(|details| {
+<a href=#682 id=682 data-nosnippet>682</a>                <span class="kw">let </span>(preimage, payment_hash, <span class="kw">_</span>) = get_preimage_and_payment_hash(<span class="kw-2">&amp;</span>details.kind);
+<a href=#683 id=683 data-nosnippet>683</a>                <span class="kw">let </span>status = <span class="kw">match </span>details.status {
+<a href=#684 id=684 data-nosnippet>684</a>                    PaymentStatus::Failed =&gt; fedimint_gateway_common::PaymentStatus::Failed,
+<a href=#685 id=685 data-nosnippet>685</a>                    PaymentStatus::Succeeded =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
+<a href=#686 id=686 data-nosnippet>686</a>                    PaymentStatus::Pending =&gt; fedimint_gateway_common::PaymentStatus::Pending,
+<a href=#687 id=687 data-nosnippet>687</a>                };
+<a href=#688 id=688 data-nosnippet>688</a>                GetInvoiceResponse {
+<a href=#689 id=689 data-nosnippet>689</a>                    preimage: preimage.map(|p| p.to_string()),
+<a href=#690 id=690 data-nosnippet>690</a>                    payment_hash,
+<a href=#691 id=691 data-nosnippet>691</a>                    amount: Amount::from_msats(
+<a href=#692 id=692 data-nosnippet>692</a>                        details
+<a href=#693 id=693 data-nosnippet>693</a>                            .amount_msat
+<a href=#694 id=694 data-nosnippet>694</a>                            .expect(<span class="string">"amountless invoices are not supported"</span>),
+<a href=#695 id=695 data-nosnippet>695</a>                    ),
+<a href=#696 id=696 data-nosnippet>696</a>                    created_at: UNIX_EPOCH + Duration::from_secs(details.latest_update_timestamp),
+<a href=#697 id=697 data-nosnippet>697</a>                    status,
+<a href=#698 id=698 data-nosnippet>698</a>                }
+<a href=#699 id=699 data-nosnippet>699</a>            })
+<a href=#700 id=700 data-nosnippet>700</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#701 id=701 data-nosnippet>701</a>
+<a href=#702 id=702 data-nosnippet>702</a>        <span class="prelude-val">Ok</span>(invoices.first().cloned())
+<a href=#703 id=703 data-nosnippet>703</a>    }
+<a href=#704 id=704 data-nosnippet>704</a>
+<a href=#705 id=705 data-nosnippet>705</a>    <span class="kw">async fn </span>list_transactions(
+<a href=#706 id=706 data-nosnippet>706</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#707 id=707 data-nosnippet>707</a>        start_secs: u64,
+<a href=#708 id=708 data-nosnippet>708</a>        end_secs: u64,
+<a href=#709 id=709 data-nosnippet>709</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ListTransactionsResponse, LightningRpcError&gt; {
+<a href=#710 id=710 data-nosnippet>710</a>        <span class="kw">let </span>transactions = <span class="self">self
+<a href=#711 id=711 data-nosnippet>711</a>            </span>.node
+<a href=#712 id=712 data-nosnippet>712</a>            .list_payments_with_filter(|details| {
+<a href=#713 id=713 data-nosnippet>713</a>                details.kind != PaymentKind::Onchain
+<a href=#714 id=714 data-nosnippet>714</a>                    &amp;&amp; details.latest_update_timestamp &gt;= start_secs
+<a href=#715 id=715 data-nosnippet>715</a>                    &amp;&amp; details.latest_update_timestamp &lt; end_secs
+<a href=#716 id=716 data-nosnippet>716</a>            })
+<a href=#717 id=717 data-nosnippet>717</a>            .iter()
+<a href=#718 id=718 data-nosnippet>718</a>            .map(|details| {
+<a href=#719 id=719 data-nosnippet>719</a>                <span class="kw">let </span>(preimage, payment_hash, payment_kind) =
+<a href=#720 id=720 data-nosnippet>720</a>                    get_preimage_and_payment_hash(<span class="kw-2">&amp;</span>details.kind);
+<a href=#721 id=721 data-nosnippet>721</a>                <span class="kw">let </span>direction = <span class="kw">match </span>details.direction {
+<a href=#722 id=722 data-nosnippet>722</a>                    PaymentDirection::Outbound =&gt; {
+<a href=#723 id=723 data-nosnippet>723</a>                        fedimint_gateway_common::PaymentDirection::Outbound
+<a href=#724 id=724 data-nosnippet>724</a>                    }
+<a href=#725 id=725 data-nosnippet>725</a>                    PaymentDirection::Inbound =&gt; fedimint_gateway_common::PaymentDirection::Inbound,
+<a href=#726 id=726 data-nosnippet>726</a>                };
+<a href=#727 id=727 data-nosnippet>727</a>                <span class="kw">let </span>status = <span class="kw">match </span>details.status {
+<a href=#728 id=728 data-nosnippet>728</a>                    PaymentStatus::Failed =&gt; fedimint_gateway_common::PaymentStatus::Failed,
+<a href=#729 id=729 data-nosnippet>729</a>                    PaymentStatus::Succeeded =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
+<a href=#730 id=730 data-nosnippet>730</a>                    PaymentStatus::Pending =&gt; fedimint_gateway_common::PaymentStatus::Pending,
+<a href=#731 id=731 data-nosnippet>731</a>                };
+<a href=#732 id=732 data-nosnippet>732</a>                fedimint_gateway_common::PaymentDetails {
+<a href=#733 id=733 data-nosnippet>733</a>                    payment_hash,
+<a href=#734 id=734 data-nosnippet>734</a>                    preimage: preimage.map(|p| p.to_string()),
+<a href=#735 id=735 data-nosnippet>735</a>                    payment_kind,
+<a href=#736 id=736 data-nosnippet>736</a>                    amount: Amount::from_msats(
+<a href=#737 id=737 data-nosnippet>737</a>                        details
+<a href=#738 id=738 data-nosnippet>738</a>                            .amount_msat
+<a href=#739 id=739 data-nosnippet>739</a>                            .expect(<span class="string">"amountless invoices are not supported"</span>),
+<a href=#740 id=740 data-nosnippet>740</a>                    ),
+<a href=#741 id=741 data-nosnippet>741</a>                    direction,
+<a href=#742 id=742 data-nosnippet>742</a>                    status,
+<a href=#743 id=743 data-nosnippet>743</a>                    timestamp_secs: details.latest_update_timestamp,
+<a href=#744 id=744 data-nosnippet>744</a>                }
+<a href=#745 id=745 data-nosnippet>745</a>            })
+<a href=#746 id=746 data-nosnippet>746</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#747 id=747 data-nosnippet>747</a>        <span class="prelude-val">Ok</span>(ListTransactionsResponse { transactions })
+<a href=#748 id=748 data-nosnippet>748</a>    }
+<a href=#749 id=749 data-nosnippet>749</a>
+<a href=#750 id=750 data-nosnippet>750</a>    <span class="kw">fn </span>create_offer(
+<a href=#751 id=751 data-nosnippet>751</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#752 id=752 data-nosnippet>752</a>        amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#753 id=753 data-nosnippet>753</a>        description: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#754 id=754 data-nosnippet>754</a>        expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#755 id=755 data-nosnippet>755</a>        quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#756 id=756 data-nosnippet>756</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, LightningRpcError&gt; {
+<a href=#757 id=757 data-nosnippet>757</a>        <span class="kw">let </span>description = description.unwrap_or_default();
+<a href=#758 id=758 data-nosnippet>758</a>        <span class="kw">let </span>offer = <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = amount {
+<a href=#759 id=759 data-nosnippet>759</a>            <span class="self">self</span>.node
+<a href=#760 id=760 data-nosnippet>760</a>                .bolt12_payment()
+<a href=#761 id=761 data-nosnippet>761</a>                .receive(amount.msats, <span class="kw-2">&amp;</span>description, expiry_secs, quantity)
+<a href=#762 id=762 data-nosnippet>762</a>                .map_err(|err| LightningRpcError::Bolt12Error {
+<a href=#763 id=763 data-nosnippet>763</a>                    failure_reason: err.to_string(),
+<a href=#764 id=764 data-nosnippet>764</a>                })<span class="question-mark">?
+<a href=#765 id=765 data-nosnippet>765</a>        </span>} <span class="kw">else </span>{
+<a href=#766 id=766 data-nosnippet>766</a>            <span class="self">self</span>.node
+<a href=#767 id=767 data-nosnippet>767</a>                .bolt12_payment()
+<a href=#768 id=768 data-nosnippet>768</a>                .receive_variable_amount(<span class="kw-2">&amp;</span>description, expiry_secs)
+<a href=#769 id=769 data-nosnippet>769</a>                .map_err(|err| LightningRpcError::Bolt12Error {
+<a href=#770 id=770 data-nosnippet>770</a>                    failure_reason: err.to_string(),
+<a href=#771 id=771 data-nosnippet>771</a>                })<span class="question-mark">?
+<a href=#772 id=772 data-nosnippet>772</a>        </span>};
+<a href=#773 id=773 data-nosnippet>773</a>
+<a href=#774 id=774 data-nosnippet>774</a>        <span class="prelude-val">Ok</span>(offer.to_string())
+<a href=#775 id=775 data-nosnippet>775</a>    }
+<a href=#776 id=776 data-nosnippet>776</a>
+<a href=#777 id=777 data-nosnippet>777</a>    <span class="kw">async fn </span>pay_offer(
+<a href=#778 id=778 data-nosnippet>778</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#779 id=779 data-nosnippet>779</a>        offer: String,
+<a href=#780 id=780 data-nosnippet>780</a>        quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#781 id=781 data-nosnippet>781</a>        amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#782 id=782 data-nosnippet>782</a>        payer_note: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#783 id=783 data-nosnippet>783</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningRpcError&gt; {
+<a href=#784 id=784 data-nosnippet>784</a>        <span class="kw">let </span>offer = Offer::from_str(<span class="kw-2">&amp;</span>offer).map_err(|<span class="kw">_</span>| LightningRpcError::Bolt12Error {
+<a href=#785 id=785 data-nosnippet>785</a>            failure_reason: <span class="string">"Failed to parse Bolt12 Offer"</span>.to_string(),
+<a href=#786 id=786 data-nosnippet>786</a>        })<span class="question-mark">?</span>;
+<a href=#787 id=787 data-nosnippet>787</a>
+<a href=#788 id=788 data-nosnippet>788</a>        <span class="kw">let </span>_offer_lock_guard = <span class="self">self
+<a href=#789 id=789 data-nosnippet>789</a>            </span>.outbound_offer_lock_pool
+<a href=#790 id=790 data-nosnippet>790</a>            .blocking_lock(LdkOfferId(offer.id()));
+<a href=#791 id=791 data-nosnippet>791</a>
+<a href=#792 id=792 data-nosnippet>792</a>        <span class="kw">let </span>payment_id = <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = amount {
+<a href=#793 id=793 data-nosnippet>793</a>            <span class="self">self</span>.node
+<a href=#794 id=794 data-nosnippet>794</a>                .bolt12_payment()
+<a href=#795 id=795 data-nosnippet>795</a>                .send_using_amount(<span class="kw-2">&amp;</span>offer, amount.msats, quantity, payer_note)
+<a href=#796 id=796 data-nosnippet>796</a>                .map_err(|err| LightningRpcError::Bolt12Error {
+<a href=#797 id=797 data-nosnippet>797</a>                    failure_reason: err.to_string(),
+<a href=#798 id=798 data-nosnippet>798</a>                })<span class="question-mark">?
+<a href=#799 id=799 data-nosnippet>799</a>        </span>} <span class="kw">else </span>{
+<a href=#800 id=800 data-nosnippet>800</a>            <span class="self">self</span>.node
+<a href=#801 id=801 data-nosnippet>801</a>                .bolt12_payment()
+<a href=#802 id=802 data-nosnippet>802</a>                .send(<span class="kw-2">&amp;</span>offer, quantity, payer_note)
+<a href=#803 id=803 data-nosnippet>803</a>                .map_err(|err| LightningRpcError::Bolt12Error {
+<a href=#804 id=804 data-nosnippet>804</a>                    failure_reason: err.to_string(),
+<a href=#805 id=805 data-nosnippet>805</a>                })<span class="question-mark">?
+<a href=#806 id=806 data-nosnippet>806</a>        </span>};
+<a href=#807 id=807 data-nosnippet>807</a>
+<a href=#808 id=808 data-nosnippet>808</a>        <span class="kw">loop </span>{
+<a href=#809 id=809 data-nosnippet>809</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(payment_details) = <span class="self">self</span>.node.payment(<span class="kw-2">&amp;</span>payment_id) {
+<a href=#810 id=810 data-nosnippet>810</a>                <span class="kw">match </span>payment_details.status {
+<a href=#811 id=811 data-nosnippet>811</a>                    PaymentStatus::Pending =&gt; {}
+<a href=#812 id=812 data-nosnippet>812</a>                    PaymentStatus::Succeeded =&gt; <span class="kw">match </span>payment_details.kind {
+<a href=#813 id=813 data-nosnippet>813</a>                        PaymentKind::Bolt12Offer {
+<a href=#814 id=814 data-nosnippet>814</a>                            preimage: <span class="prelude-val">Some</span>(preimage),
+<a href=#815 id=815 data-nosnippet>815</a>                            ..
+<a href=#816 id=816 data-nosnippet>816</a>                        } =&gt; {
+<a href=#817 id=817 data-nosnippet>817</a>                            <span class="macro">info!</span>(target: LOG_LIGHTNING, offer = %offer, payment_id = %payment_id, preimage = %preimage, <span class="string">"Successfully paid offer"</span>);
+<a href=#818 id=818 data-nosnippet>818</a>                            <span class="kw">return </span><span class="prelude-val">Ok</span>(Preimage(preimage.<span class="number">0</span>));
+<a href=#819 id=819 data-nosnippet>819</a>                        }
+<a href=#820 id=820 data-nosnippet>820</a>                        <span class="kw">_ </span>=&gt; {
+<a href=#821 id=821 data-nosnippet>821</a>                            <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+<a href=#822 id=822 data-nosnippet>822</a>                                failure_reason: <span class="string">"Unexpected payment kind"</span>.to_string(),
+<a href=#823 id=823 data-nosnippet>823</a>                            });
+<a href=#824 id=824 data-nosnippet>824</a>                        }
+<a href=#825 id=825 data-nosnippet>825</a>                    },
+<a href=#826 id=826 data-nosnippet>826</a>                    PaymentStatus::Failed =&gt; {
+<a href=#827 id=827 data-nosnippet>827</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
+<a href=#828 id=828 data-nosnippet>828</a>                            failure_reason: <span class="string">"Bolt12 payment failed"</span>.to_string(),
+<a href=#829 id=829 data-nosnippet>829</a>                        });
+<a href=#830 id=830 data-nosnippet>830</a>                    }
+<a href=#831 id=831 data-nosnippet>831</a>                }
+<a href=#832 id=832 data-nosnippet>832</a>            }
+<a href=#833 id=833 data-nosnippet>833</a>            fedimint_core::runtime::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+<a href=#834 id=834 data-nosnippet>834</a>        }
+<a href=#835 id=835 data-nosnippet>835</a>    }
+<a href=#836 id=836 data-nosnippet>836</a>}
+<a href=#837 id=837 data-nosnippet>837</a>
+<a href=#838 id=838 data-nosnippet>838</a><span class="doccomment">/// Maps LDK's `PaymentKind` to an optional preimage and an optional payment
+<a href=#839 id=839 data-nosnippet>839</a>/// hash depending on the type of payment.
+<a href=#840 id=840 data-nosnippet>840</a></span><span class="kw">fn </span>get_preimage_and_payment_hash(
+<a href=#841 id=841 data-nosnippet>841</a>    kind: <span class="kw-2">&amp;</span>PaymentKind,
+<a href=#842 id=842 data-nosnippet>842</a>) -&gt; (
+<a href=#843 id=843 data-nosnippet>843</a>    <span class="prelude-ty">Option</span>&lt;Preimage&gt;,
+<a href=#844 id=844 data-nosnippet>844</a>    <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;,
+<a href=#845 id=845 data-nosnippet>845</a>    fedimint_gateway_common::PaymentKind,
+<a href=#846 id=846 data-nosnippet>846</a>) {
+<a href=#847 id=847 data-nosnippet>847</a>    <span class="kw">match </span>kind {
+<a href=#848 id=848 data-nosnippet>848</a>        PaymentKind::Bolt11 {
+<a href=#849 id=849 data-nosnippet>849</a>            hash,
+<a href=#850 id=850 data-nosnippet>850</a>            preimage,
+<a href=#851 id=851 data-nosnippet>851</a>            secret: <span class="kw">_</span>,
+<a href=#852 id=852 data-nosnippet>852</a>        } =&gt; (
+<a href=#853 id=853 data-nosnippet>853</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
+<a href=#854 id=854 data-nosnippet>854</a>            <span class="prelude-val">Some</span>(sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
+<a href=#855 id=855 data-nosnippet>855</a>            fedimint_gateway_common::PaymentKind::Bolt11,
+<a href=#856 id=856 data-nosnippet>856</a>        ),
+<a href=#857 id=857 data-nosnippet>857</a>        PaymentKind::Bolt11Jit {
+<a href=#858 id=858 data-nosnippet>858</a>            hash,
+<a href=#859 id=859 data-nosnippet>859</a>            preimage,
+<a href=#860 id=860 data-nosnippet>860</a>            secret: <span class="kw">_</span>,
+<a href=#861 id=861 data-nosnippet>861</a>            lsp_fee_limits: <span class="kw">_</span>,
+<a href=#862 id=862 data-nosnippet>862</a>        } =&gt; (
+<a href=#863 id=863 data-nosnippet>863</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
+<a href=#864 id=864 data-nosnippet>864</a>            <span class="prelude-val">Some</span>(sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
+<a href=#865 id=865 data-nosnippet>865</a>            fedimint_gateway_common::PaymentKind::Bolt11,
+<a href=#866 id=866 data-nosnippet>866</a>        ),
+<a href=#867 id=867 data-nosnippet>867</a>        PaymentKind::Bolt12Offer {
+<a href=#868 id=868 data-nosnippet>868</a>            hash,
+<a href=#869 id=869 data-nosnippet>869</a>            preimage,
+<a href=#870 id=870 data-nosnippet>870</a>            secret: <span class="kw">_</span>,
+<a href=#871 id=871 data-nosnippet>871</a>            offer_id: <span class="kw">_</span>,
+<a href=#872 id=872 data-nosnippet>872</a>            payer_note: <span class="kw">_</span>,
+<a href=#873 id=873 data-nosnippet>873</a>            quantity: <span class="kw">_</span>,
+<a href=#874 id=874 data-nosnippet>874</a>        } =&gt; (
+<a href=#875 id=875 data-nosnippet>875</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
+<a href=#876 id=876 data-nosnippet>876</a>            hash.map(|h| sha256::Hash::from_slice(<span class="kw-2">&amp;</span>h.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
+<a href=#877 id=877 data-nosnippet>877</a>            fedimint_gateway_common::PaymentKind::Bolt12Offer,
+<a href=#878 id=878 data-nosnippet>878</a>        ),
+<a href=#879 id=879 data-nosnippet>879</a>        PaymentKind::Bolt12Refund {
+<a href=#880 id=880 data-nosnippet>880</a>            hash,
+<a href=#881 id=881 data-nosnippet>881</a>            preimage,
+<a href=#882 id=882 data-nosnippet>882</a>            secret: <span class="kw">_</span>,
+<a href=#883 id=883 data-nosnippet>883</a>            payer_note: <span class="kw">_</span>,
+<a href=#884 id=884 data-nosnippet>884</a>            quantity: <span class="kw">_</span>,
+<a href=#885 id=885 data-nosnippet>885</a>        } =&gt; (
+<a href=#886 id=886 data-nosnippet>886</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
+<a href=#887 id=887 data-nosnippet>887</a>            hash.map(|h| sha256::Hash::from_slice(<span class="kw-2">&amp;</span>h.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
+<a href=#888 id=888 data-nosnippet>888</a>            fedimint_gateway_common::PaymentKind::Bolt12Refund,
+<a href=#889 id=889 data-nosnippet>889</a>        ),
+<a href=#890 id=890 data-nosnippet>890</a>        PaymentKind::Spontaneous { hash, preimage } =&gt; (
+<a href=#891 id=891 data-nosnippet>891</a>            preimage.map(|p| Preimage(p.<span class="number">0</span>)),
+<a href=#892 id=892 data-nosnippet>892</a>            <span class="prelude-val">Some</span>(sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash.<span class="number">0</span>).expect(<span class="string">"Failed to convert payment hash"</span>)),
+<a href=#893 id=893 data-nosnippet>893</a>            fedimint_gateway_common::PaymentKind::Bolt11,
+<a href=#894 id=894 data-nosnippet>894</a>        ),
+<a href=#895 id=895 data-nosnippet>895</a>        PaymentKind::Onchain =&gt; (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, fedimint_gateway_common::PaymentKind::Onchain),
+<a href=#896 id=896 data-nosnippet>896</a>    }
+<a href=#897 id=897 data-nosnippet>897</a>}
+<a href=#898 id=898 data-nosnippet>898</a>
+<a href=#899 id=899 data-nosnippet>899</a><span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+<a href=#900 id=900 data-nosnippet>900</a></span><span class="kw">struct </span>LdkOfferId(OfferId);
+<a href=#901 id=901 data-nosnippet>901</a>
+<a href=#902 id=902 data-nosnippet>902</a><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>LdkOfferId {
+<a href=#903 id=903 data-nosnippet>903</a>    <span class="kw">fn </span>hash&lt;H: std::hash::Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+<a href=#904 id=904 data-nosnippet>904</a>        state.write(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0.0</span>);
+<a href=#905 id=905 data-nosnippet>905</a>    }
+<a href=#906 id=906 data-nosnippet>906</a>}</code></pre></div></section></main></body></html>
