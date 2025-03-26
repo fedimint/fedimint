@@ -7,4 +7,4 @@ source scripts/_common.sh
 build_workspace
 add_target_dir_to_path
 
-fedimint-lnv2-devimint-tests
+lnv2-module-tests

@@ -8,7 +8,7 @@ license = { workspace = true }
 publish = false
 
 [[bin]]
-name = "fedimint-lnv2-devimint-tests"
+name = "lnv2-module-tests"
 path = "bin/tests.rs"
 
 [[test]]
