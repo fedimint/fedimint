@@ -21,6 +21,7 @@ use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
 use lightning::ln::PaymentPreimage;
 use lightning::ln::channelmanager::PaymentId;
+use lightning::offers::offer::{Offer, OfferId};
 use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc::Sender;
@@ -75,6 +76,12 @@ pub struct GatewayLdkClient {
     /// doesn't allow for multiple simultaneous calls with the same invoice to
     /// execute in parallel. This helps ensure that the function is idempotent.
     outbound_lightning_payment_lock_pool: lockable::LockPool<PaymentId>,
+
+    /// Lock pool used to ensure that our implementation of
+    /// `ILnRpcClient::pay_offer` doesn't allow for multiple simultaneous
+    /// calls with the same offer to execute in parallel. This helps ensure
+    /// that the function is idempotent.
+    outbound_offer_lock_pool: lockable::LockPool<LdkOfferId>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -167,6 +174,7 @@ impl GatewayLdkClient {
             task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
             outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
+            outbound_offer_lock_pool: lockable::LockPool::new(),
         })
     }
 
@@ -738,6 +746,93 @@ impl ILnRpcClient for GatewayLdkClient {
             .collect::<Vec<_>>();
         Ok(ListTransactionsResponse { transactions })
     }
+
+    fn create_offer(
+        &self,
+        amount: Option<Amount>,
+        description: Option<String>,
+        expiry_secs: Option<u32>,
+        quantity: Option<u64>,
+    ) -> Result<String, LightningRpcError> {
+        let description = description.unwrap_or_default();
+        let offer = if let Some(amount) = amount {
+            self.node
+                .bolt12_payment()
+                .receive(amount.msats, &description, expiry_secs, quantity)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        } else {
+            self.node
+                .bolt12_payment()
+                .receive_variable_amount(&description, expiry_secs)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        };
+
+        Ok(offer.to_string())
+    }
+
+    async fn pay_offer(
+        &self,
+        offer: String,
+        quantity: Option<u64>,
+        amount: Option<Amount>,
+        payer_note: Option<String>,
+    ) -> Result<Preimage, LightningRpcError> {
+        let offer = Offer::from_str(&offer).map_err(|_| LightningRpcError::Bolt12Error {
+            failure_reason: "Failed to parse Bolt12 Offer".to_string(),
+        })?;
+
+        let _offer_lock_guard = self
+            .outbound_offer_lock_pool
+            .blocking_lock(LdkOfferId(offer.id()));
+
+        let payment_id = if let Some(amount) = amount {
+            self.node
+                .bolt12_payment()
+                .send_using_amount(&offer, amount.msats, quantity, payer_note)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        } else {
+            self.node
+                .bolt12_payment()
+                .send(&offer, quantity, payer_note)
+                .map_err(|err| LightningRpcError::Bolt12Error {
+                    failure_reason: err.to_string(),
+                })?
+        };
+
+        loop {
+            if let Some(payment_details) = self.node.payment(&payment_id) {
+                match payment_details.status {
+                    PaymentStatus::Pending => {}
+                    PaymentStatus::Succeeded => match payment_details.kind {
+                        PaymentKind::Bolt12Offer {
+                            preimage: Some(preimage),
+                            ..
+                        } => {
+                            info!(target: LOG_LIGHTNING, offer = %offer, payment_id = %payment_id, preimage = %preimage, "Successfully paid offer");
+                            return Ok(Preimage(preimage.0));
+                        }
+                        _ => {
+                            return Err(LightningRpcError::FailedPayment {
+                                failure_reason: "Unexpected payment kind".to_string(),
+                            });
+                        }
+                    },
+                    PaymentStatus::Failed => {
+                        return Err(LightningRpcError::FailedPayment {
+                            failure_reason: "Bolt12 payment failed".to_string(),
+                        });
+                    }
+                }
+            }
+            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+        }
+    }
 }
 
 /// Maps LDK's `PaymentKind` to an optional preimage and an optional payment
@@ -798,5 +893,14 @@ fn get_preimage_and_payment_hash(
             fedimint_gateway_common::PaymentKind::Bolt11,
         ),
         PaymentKind::Onchain => (None, None, fedimint_gateway_common::PaymentKind::Onchain),
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct LdkOfferId(OfferId);
+
+impl std::hash::Hash for LdkOfferId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.0.0);
     }
 }

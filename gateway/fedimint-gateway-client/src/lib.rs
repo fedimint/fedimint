@@ -4,16 +4,17 @@ use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, ChannelInfo, CloseChannelsWithPeerRequest,
-    CloseChannelsWithPeerResponse, ConfigPayload, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    FederationInfo, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
-    GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances, GatewayFedConfig,
-    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
-    ListTransactionsPayload, ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
-    OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload,
+    CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
+    ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConfigPayload,
+    ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
+    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances, GatewayFedConfig, GatewayInfo,
+    GetInvoiceRequest, GetInvoiceResponse, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, ListTransactionsResponse,
+    MNEMONIC_ENDPOINT, MnemonicResponse, OPEN_CHANNEL_ENDPOINT, OpenChannelRequest,
+    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
+    PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
     PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
     RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT,
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
@@ -289,6 +290,25 @@ impl GatewayRpcClient {
         let url = self
             .base_url
             .join(LIST_TRANSACTIONS_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn create_offer(
+        &self,
+        payload: CreateOfferPayload,
+    ) -> GatewayRpcResult<CreateOfferResponse> {
+        let url = self
+            .base_url
+            .join(CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn pay_offer(&self, payload: PayOfferPayload) -> GatewayRpcResult<PayOfferResponse> {
+        let url = self
+            .base_url
+            .join(PAY_OFFER_FOR_OPERATOR_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }

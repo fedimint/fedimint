@@ -67,11 +67,12 @@ use fedimint_core::{
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
     BackupPayload, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, DepositAddressPayload, DepositAddressRecheckPayload,
-    FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
-    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningMode,
-    ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse, OpenChannelRequest,
-    PayInvoiceForOperatorPayload, PaymentLogPayload, PaymentLogResponse, PaymentStats,
+    CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
+    DepositAddressPayload, DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig,
+    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
+    GetInvoiceResponse, LeaveFedPayload, LightningMode, ListTransactionsPayload,
+    ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
+    PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
     PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
     SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
     WithdrawPayload, WithdrawResponse,
@@ -1716,6 +1717,41 @@ impl Gateway {
             .list_transactions(payload.start_secs, payload.end_secs)
             .await?;
         Ok(response)
+    }
+
+    /// Creates a BOLT12 offer using the gateway's lightning node
+    pub async fn handle_create_offer_for_operator_msg(
+        &self,
+        payload: CreateOfferPayload,
+    ) -> AdminResult<CreateOfferResponse> {
+        let lightning_context = self.get_lightning_context().await?;
+        let offer = lightning_context.lnrpc.create_offer(
+            payload.amount,
+            payload.description,
+            payload.expiry_secs,
+            payload.quantity,
+        )?;
+        Ok(CreateOfferResponse { offer })
+    }
+
+    /// Pays a BOLT12 offer using the gateway's lightning node
+    pub async fn handle_pay_offer_for_operator_msg(
+        &self,
+        payload: PayOfferPayload,
+    ) -> AdminResult<PayOfferResponse> {
+        let lightning_context = self.get_lightning_context().await?;
+        let preimage = lightning_context
+            .lnrpc
+            .pay_offer(
+                payload.offer,
+                payload.quantity,
+                payload.amount,
+                payload.payer_note,
+            )
+            .await?;
+        Ok(PayOfferResponse {
+            preimage: preimage.to_string(),
+        })
     }
 
     /// Registers the gateway with each specified federation.
