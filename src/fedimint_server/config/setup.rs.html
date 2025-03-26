@@ -99,7 +99,7 @@
 <a href=#99 id=99 data-nosnippet>99</a>
 <a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">pub async fn </span>setup_status(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SetupStatus {
 <a href=#101 id=101 data-nosnippet>101</a>        <span class="kw">match </span><span class="self">self</span>.state.lock().<span class="kw">await</span>.local_params {
-<a href=#102 id=102 data-nosnippet>102</a>            <span class="prelude-val">Some</span>(..) =&gt; SetupStatus::SharingConnectionInfo,
+<a href=#102 id=102 data-nosnippet>102</a>            <span class="prelude-val">Some</span>(..) =&gt; SetupStatus::SharingConnectionCodes,
 <a href=#103 id=103 data-nosnippet>103</a>            <span class="prelude-val">None </span>=&gt; SetupStatus::AwaitingLocalParams,
 <a href=#104 id=104 data-nosnippet>104</a>        }
 <a href=#105 id=105 data-nosnippet>105</a>    }
