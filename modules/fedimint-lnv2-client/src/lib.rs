@@ -142,7 +142,7 @@ pub enum SendOperationState {
     /// We are waiting for the gateway to complete the payment.
     Funded,
     /// The payment was successful.
-    Success,
+    Success([u8; 32]),
     /// The payment has failed and we are refunding the contract.
     Refunding,
     /// The payment has been refunded.
@@ -626,7 +626,7 @@ impl LightningClientModule {
             // This will not block since we checked for active states and there were none,
             // so by definition a final state has to have been assumed already.
             while let Some(state) = stream.next().await {
-                if let SendOperationState::Success = state {
+                if let SendOperationState::Success(_) = state {
                     return Err(SendPaymentError::SuccessfulPreviousPayment(operation_id));
                 }
             }
@@ -656,7 +656,7 @@ impl LightningClientModule {
                                 // the preimage has been verified by the state machine previously
                                 assert!(state.common.contract.verify_preimage(&preimage));
 
-                                yield SendOperationState::Success;
+                                yield SendOperationState::Success(preimage);
                                 return;
                             },
                             SendSMState::Refunding(out_points) => {
@@ -675,7 +675,7 @@ impl LightningClientModule {
                                     0
                                 ).await {
                                     if state.common.contract.verify_preimage(&preimage) {
-                                        yield SendOperationState::Success;
+                                        yield SendOperationState::Success(preimage);
                                         return;
                                     }
                                 }
@@ -705,7 +705,7 @@ impl LightningClientModule {
             .into_stream()
             .filter_map(|state| {
                 futures::future::ready(match state {
-                    SendOperationState::Success => Some(FinalSendOperationState::Success),
+                    SendOperationState::Success(_) => Some(FinalSendOperationState::Success),
                     SendOperationState::Refunded => Some(FinalSendOperationState::Refunded),
                     SendOperationState::Failure => Some(FinalSendOperationState::Failure),
                     _ => None,
