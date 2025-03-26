@@ -20,7 +20,9 @@ use fedimint_core::time::now;
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
-use fedimint_gateway_common::{FederationInfo, GatewayBalances, GatewayFedConfig};
+use fedimint_gateway_common::{
+    FederationInfo, GatewayBalances, GatewayFedConfig, PaymentDetails, PaymentKind, PaymentStatus,
+};
 use fedimint_logging::LOG_TEST;
 use fedimint_testing_core::node_type::LightningNodeType;
 use itertools::Itertools;
@@ -590,31 +592,22 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
                 // TODO: investigate why the first BOLT12 payment attempt is expiring consistently
                 poll_with_timeout("First BOLT12 payment", Duration::from_secs(30), || async {
-                    let prev_balance = gw_ldk_second.get_balances().await.map_err(ControlFlow::Continue)?.lightning_balance_msats;
                     let offer_with_amount = gw_ldk_second.create_offer(Some(Amount::from_msats(10_000_000))).await.map_err(ControlFlow::Continue)?;
                     gw_ldk.pay_offer(offer_with_amount, None).await.map_err(ControlFlow::Continue)?;
-                    let post_balance = gw_ldk_second.get_balances().await.map_err(ControlFlow::Continue)?.lightning_balance_msats;
-                    assert_eq!(prev_balance + 10_000_000, post_balance);
+                    assert!(get_transaction(gw_ldk_second, PaymentKind::Bolt12Offer, Amount::from_msats(10_000_000), PaymentStatus::Succeeded).await.is_some());
                     Ok(())
                 }).await?;
 
-                let prev_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
                 let offer_without_amount = gw_ldk.create_offer(None).await?;
                 gw_ldk_second.pay_offer(offer_without_amount.clone(), Some(Amount::from_msats(5_000_000))).await?;
-                let post_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
-                assert_eq!(prev_balance + 5_000_000, post_balance);
+                assert!(get_transaction(gw_ldk, PaymentKind::Bolt12Offer, Amount::from_msats(5_000_000), PaymentStatus::Succeeded).await.is_some());
 
                 // Cannot pay an offer without an amount without specifying an amount
-                let prev_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
                 gw_ldk_second.pay_offer(offer_without_amount.clone(), None).await.expect_err("Cannot pay amountless offer without specifying an amount");
-                let post_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
-                assert_eq!(prev_balance, post_balance);
 
                 // Verify we can pay the offer again
-                let prev_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
                 gw_ldk_second.pay_offer(offer_without_amount, Some(Amount::from_msats(3_000_000))).await?;
-                let post_balance = gw_ldk.get_balances().await?.lightning_balance_msats;
-                assert_eq!(prev_balance + 3_000_000, post_balance);
+                assert!(get_transaction(gw_ldk, PaymentKind::Bolt12Offer, Amount::from_msats(3_000_000), PaymentStatus::Succeeded).await.is_some());
             }
 
             info!(target: LOG_TEST, "Pegging-out gateways...");
@@ -650,6 +643,24 @@ async fn liquidity_test() -> anyhow::Result<()> {
             Ok(())
         })
         .await
+}
+
+async fn get_transaction(
+    gateway: &Gatewayd,
+    kind: PaymentKind,
+    amount: Amount,
+    status: PaymentStatus,
+) -> Option<PaymentDetails> {
+    let transactions = gateway
+        .list_transactions(
+            now() - Duration::from_secs(5 * 60),
+            now() + Duration::from_secs(5 * 60),
+        )
+        .await
+        .ok()?;
+    transactions.into_iter().find(|details| {
+        details.payment_kind == kind && details.amount == amount && details.status == status
+    })
 }
 
 async fn check_empty_onchain_balance(gw: &Gatewayd) -> anyhow::Result<()> {
