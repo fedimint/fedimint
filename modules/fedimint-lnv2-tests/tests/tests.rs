@@ -76,7 +76,10 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     assert_eq!(sub.ok().await?, SendOperationState::Funding);
     assert_eq!(sub.ok().await?, SendOperationState::Funded);
-    assert_eq!(sub.ok().await?, SendOperationState::Success);
+    assert_eq!(
+        sub.ok().await?,
+        SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
+    );
 
     assert_eq!(
         client
@@ -226,7 +229,10 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         .await
         .expect("Failed to claim outgoing contract");
 
-    assert_eq!(sub.ok().await?, SendOperationState::Success);
+    assert_eq!(
+        sub.ok().await?,
+        SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
+    );
 
     Ok(())
 }
