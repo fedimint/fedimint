@@ -142,7 +142,7 @@
 <a href=#142 id=142 data-nosnippet>142</a>    <span class="doccomment">/// We are waiting for the gateway to complete the payment.
 <a href=#143 id=143 data-nosnippet>143</a>    </span>Funded,
 <a href=#144 id=144 data-nosnippet>144</a>    <span class="doccomment">/// The payment was successful.
-<a href=#145 id=145 data-nosnippet>145</a>    </span>Success,
+<a href=#145 id=145 data-nosnippet>145</a>    </span>Success([u8; <span class="number">32</span>]),
 <a href=#146 id=146 data-nosnippet>146</a>    <span class="doccomment">/// The payment has failed and we are refunding the contract.
 <a href=#147 id=147 data-nosnippet>147</a>    </span>Refunding,
 <a href=#148 id=148 data-nosnippet>148</a>    <span class="doccomment">/// The payment has been refunded.
@@ -626,7 +626,7 @@
 <a href=#626 id=626 data-nosnippet>626</a>            <span class="comment">// This will not block since we checked for active states and there were none,
 <a href=#627 id=627 data-nosnippet>627</a>            // so by definition a final state has to have been assumed already.
 <a href=#628 id=628 data-nosnippet>628</a>            </span><span class="kw">while let </span><span class="prelude-val">Some</span>(state) = stream.next().<span class="kw">await </span>{
-<a href=#629 id=629 data-nosnippet>629</a>                <span class="kw">if let </span>SendOperationState::Success = state {
+<a href=#629 id=629 data-nosnippet>629</a>                <span class="kw">if let </span>SendOperationState::Success(<span class="kw">_</span>) = state {
 <a href=#630 id=630 data-nosnippet>630</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::SuccessfulPreviousPayment(operation_id));
 <a href=#631 id=631 data-nosnippet>631</a>                }
 <a href=#632 id=632 data-nosnippet>632</a>            }
@@ -656,7 +656,7 @@
 <a href=#656 id=656 data-nosnippet>656</a>                                <span class="comment">// the preimage has been verified by the state machine previously
 <a href=#657 id=657 data-nosnippet>657</a>                                </span><span class="macro">assert!</span>(state.common.contract.verify_preimage(<span class="kw-2">&amp;</span>preimage));
 <a href=#658 id=658 data-nosnippet>658</a>
-<a href=#659 id=659 data-nosnippet>659</a>                                <span class="kw">yield </span>SendOperationState::Success;
+<a href=#659 id=659 data-nosnippet>659</a>                                <span class="kw">yield </span>SendOperationState::Success(preimage);
 <a href=#660 id=660 data-nosnippet>660</a>                                <span class="kw">return</span>;
 <a href=#661 id=661 data-nosnippet>661</a>                            },
 <a href=#662 id=662 data-nosnippet>662</a>                            SendSMState::Refunding(out_points) =&gt; {
@@ -675,7 +675,7 @@
 <a href=#675 id=675 data-nosnippet>675</a>                                    <span class="number">0
 <a href=#676 id=676 data-nosnippet>676</a>                                </span>).<span class="kw">await </span>{
 <a href=#677 id=677 data-nosnippet>677</a>                                    <span class="kw">if </span>state.common.contract.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
-<a href=#678 id=678 data-nosnippet>678</a>                                        <span class="kw">yield </span>SendOperationState::Success;
+<a href=#678 id=678 data-nosnippet>678</a>                                        <span class="kw">yield </span>SendOperationState::Success(preimage);
 <a href=#679 id=679 data-nosnippet>679</a>                                        <span class="kw">return</span>;
 <a href=#680 id=680 data-nosnippet>680</a>                                    }
 <a href=#681 id=681 data-nosnippet>681</a>                                }
@@ -705,7 +705,7 @@
 <a href=#705 id=705 data-nosnippet>705</a>            </span>.into_stream()
 <a href=#706 id=706 data-nosnippet>706</a>            .filter_map(|state| {
 <a href=#707 id=707 data-nosnippet>707</a>                futures::future::ready(<span class="kw">match </span>state {
-<a href=#708 id=708 data-nosnippet>708</a>                    SendOperationState::Success =&gt; <span class="prelude-val">Some</span>(FinalSendOperationState::Success),
+<a href=#708 id=708 data-nosnippet>708</a>                    SendOperationState::Success(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(FinalSendOperationState::Success),
 <a href=#709 id=709 data-nosnippet>709</a>                    SendOperationState::Refunded =&gt; <span class="prelude-val">Some</span>(FinalSendOperationState::Refunded),
 <a href=#710 id=710 data-nosnippet>710</a>                    SendOperationState::Failure =&gt; <span class="prelude-val">Some</span>(FinalSendOperationState::Failure),
 <a href=#711 id=711 data-nosnippet>711</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
