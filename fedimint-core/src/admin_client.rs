@@ -47,9 +47,10 @@ pub struct PeerServerParamsLegacy {
 /// The state of the server returned via APIs
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SetupStatus {
+    /// Waiting for guardian to set the local parameters
     AwaitingLocalParams,
-    /// Waiting for peers to share the config gen params
-    SharingConnectionInfo,
+    /// Sharing the connection codes with our peers
+    SharingConnectionCodes,
     /// Consensus is running
     ConsensusIsRunning,
 }
