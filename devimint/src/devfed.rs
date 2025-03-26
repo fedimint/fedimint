@@ -13,7 +13,7 @@ use crate::external::{
     Bitcoind, Electrs, Esplora, Lnd, NamedGateway, open_channels_between_gateways,
 };
 use crate::federation::{Client, Federation};
-use crate::gatewayd::Gatewayd;
+use crate::gatewayd::{Gatewayd, LdkChainSource};
 use crate::util::{ProcessManager, supports_lnv2};
 
 async fn spawn_drop<T>(t: T)
@@ -217,6 +217,7 @@ impl DevJitFed {
                         name: "gatewayd-ldk-0".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                         ldk_port: process_mgr.globals.FM_PORT_LDK,
+                        chain_source: LdkChainSource::Bitcoind,
                     },
                 )
                 .await?;
@@ -235,6 +236,7 @@ impl DevJitFed {
                         name: "gatewayd-ldk-1".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK2,
                         ldk_port: process_mgr.globals.FM_PORT_LDK2,
+                        chain_source: LdkChainSource::Bitcoind,
                     },
                 )
                 .await?;
