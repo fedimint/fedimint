@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["render","submit_meta_value"],"struct":["MetaValueForm"]};
