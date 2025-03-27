@@ -40,7 +40,7 @@ Below are some broad and general areas where you can contribute:
 - [Fedimint Modules](docs/architecture.md)
 - [Fedimint Database System](docs/database.md)
 - [Fedimint Lightning Gateway](docs/gateway.md)
-- [Fedimint Guardian & Lightning Gateway UI](https://github.com/fedimint/ui)
+- [Fedimint Guardian Dashboard UI](https://github.com/fedimint/fedimint/tree/master/fedimint-server-ui)
 - [Nix Build System](docs/nix-ci.md)
 - [Devimint](devimint/)
 - [Scripts](scripts/README.md)
