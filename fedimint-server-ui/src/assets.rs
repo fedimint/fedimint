@@ -37,6 +37,10 @@ where
             get(|| async move { get_static_js(include_str!("../assets/bootstrap.bundle.min.js")) }),
         )
         .route(
+            "/assets/htmx.org-2.0.4.min.js",
+            get(|| async move { get_static_js(include_str!("../assets/htmx.org-2.0.4.min.js")) }),
+        )
+        .route(
             "/assets/style.css",
             get(|| async move { get_static_css(include_str!("../assets/style.css")) }),
         )

@@ -30,7 +30,10 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
                     div class="card-body" {
                         // Consensus status information
                         div class="mb-4" {
-                            table class="table" {
+                            table
+                                class="table"
+                                id="lnv2-module-timers" hx-swap-oob=(true)
+                            {
                                 tr {
                                     th { "Consensus Block Count" }
                                     td { (consensus_block_count) }
@@ -59,7 +62,6 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
                                                 id="gateway-url"
                                                 name="gateway_url"
                                                 placeholder="Enter gateway URL"
-                                                pattern="https?:\\/\\/(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%_\\+.~#?&//=]*)"
                                                 required;
                                         }
                                     }
