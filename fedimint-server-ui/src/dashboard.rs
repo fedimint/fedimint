@@ -28,7 +28,7 @@ pub fn dashboard_layout(content: Markup) -> Markup {
                 (layout::common_head("Dashboard"))
             }
             body {
-                div class="container" style="max-width: 66%;" {
+                div class="container" {
                     header class="text-center" {
                         h1 class="header-title" { "Fedimint Guardian UI" }
                     }
