@@ -3863,6 +3863,7 @@ dependencies = [
  "chrono",
  "fedimint-core",
  "fedimint-lnv2-server",
+ "fedimint-meta-server",
  "fedimint-server-core",
  "fedimint-wallet-server",
  "maud",

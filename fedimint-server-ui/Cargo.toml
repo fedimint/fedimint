@@ -20,6 +20,7 @@ axum-extra = { version = "0.10.0", features = ["cookie"] }
 chrono = "0.4"
 fedimint-core = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
+fedimint-meta-server = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-wallet-server = { workspace = true }
 maud = "0.27.0"

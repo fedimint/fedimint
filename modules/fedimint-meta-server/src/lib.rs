@@ -1,5 +1,7 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::missing_errors_doc)]
 
 pub mod db;
 
@@ -17,13 +19,15 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, NonCommittable,
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    NonCommittable,
 };
 use fedimint_core::module::audit::Audit;
+use fedimint_core::module::serde_json::Value;
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
     InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmount, api_endpoint,
+    TransactionItemAmount, api_endpoint, serde_json,
 };
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
@@ -37,9 +41,9 @@ use fedimint_meta_common::endpoint::{
     SubmitRequest,
 };
 use fedimint_meta_common::{
-    MODULE_CONSENSUS_VERSION, MetaCommonInit, MetaConsensusItem, MetaConsensusValue, MetaInput,
-    MetaInputError, MetaKey, MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome,
-    MetaValue,
+    DEFAULT_META_KEY, MODULE_CONSENSUS_VERSION, MetaCommonInit, MetaConsensusItem,
+    MetaConsensusValue, MetaInput, MetaInputError, MetaKey, MetaModuleTypes, MetaOutput,
+    MetaOutputError, MetaOutputOutcome, MetaValue,
 };
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
@@ -141,6 +145,7 @@ impl ServerModuleInit for MetaInit {
             cfg: args.cfg().to_typed()?,
             our_peer_id: args.our_peer_id(),
             num_peers: args.num_peers(),
+            db: args.db().clone(),
         })
     }
 
@@ -212,6 +217,7 @@ pub struct Meta {
     pub cfg: MetaConfig,
     pub our_peer_id: PeerId,
     pub num_peers: NumPeers,
+    pub db: Database,
 }
 
 impl Meta {
@@ -527,5 +533,76 @@ impl Meta {
             .into_iter()
             .map(|(k, v)| (k.peer_id, v.value))
             .collect())
+    }
+}
+
+// UI Methods for Meta Module
+
+impl Meta {
+    /// UI helper to submit a value change with default auth
+    pub async fn handle_submit_request_ui(&self, value: Value) -> Result<(), ApiError> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        self.handle_submit_request(
+            &mut dbtx.to_ref_nc(),
+            &ApiAuth(String::new()),
+            &SubmitRequest {
+                key: DEFAULT_META_KEY,
+                value: MetaValue::from(serde_json::to_vec(&value).unwrap().as_slice()),
+            },
+        )
+        .await?;
+
+        dbtx.commit_tx_result()
+            .await
+            .map_err(|e| ApiError::server_error(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// UI helper to get consensus data as a key-value map
+    pub async fn handle_get_consensus_request_ui(&self) -> Result<Option<Value>, ApiError> {
+        self.handle_get_consensus_request(
+            &mut self.db.begin_transaction_nc().await,
+            &GetConsensusRequest(DEFAULT_META_KEY),
+        )
+        .await?
+        .map(|value| serde_json::from_slice(value.value.as_slice()))
+        .transpose()
+        .map_err(|e| ApiError::server_error(e.to_string()))
+    }
+
+    /// UI helper to get consensus revision
+    pub async fn handle_get_consensus_revision_request_ui(&self) -> Result<u64, ApiError> {
+        self.handle_get_consensus_revision_request(
+            &mut self.db.begin_transaction_nc().await,
+            &GetConsensusRequest(DEFAULT_META_KEY),
+        )
+        .await
+        .map(|r| r.unwrap_or(0))
+    }
+
+    /// Get the submissions for UI display,
+    pub async fn handle_get_submissions_request_ui(
+        &self,
+    ) -> Result<BTreeMap<PeerId, Value>, ApiError> {
+        let mut submissions = BTreeMap::new();
+
+        let mut dbtx = self.db.begin_transaction_nc().await;
+
+        for (peer_id, value) in self
+            .handle_get_submissions_request(
+                &mut dbtx.to_ref_nc(),
+                &ApiAuth(String::new()),
+                &GetSubmissionsRequest(DEFAULT_META_KEY),
+            )
+            .await?
+        {
+            if let Ok(value) = serde_json::from_slice(value.as_slice()) {
+                submissions.insert(peer_id, value);
+            }
+        }
+
+        Ok(submissions)
     }
 }

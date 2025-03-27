@@ -11,11 +11,11 @@ use fedimint_core::task::TaskHandle;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use maud::{DOCTYPE, Markup, html};
 use tokio::net::TcpListener;
-use {fedimint_lnv2_server, fedimint_wallet_server};
+use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
 use crate::{
     AuthState, LoginInput, audit, check_auth, common_styles, invite_code, latency, lnv2,
-    login_form_response, login_submit_response, wallet,
+    login_form_response, login_submit_response, meta, wallet,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -201,6 +201,14 @@ async fn dashboard_view(
         };
     }
 
+    // Conditionally add Meta UI if the module is available
+    if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
+        content = html! {
+            (content)
+            (meta::render(meta_module).await)
+        };
+    }
+
     Html(dashboard_layout(content).into_string()).into_response()
 }
 
@@ -222,6 +230,11 @@ pub fn start(
         app = app
             .route("/lnv2_gateway_add", post(lnv2::add_gateway))
             .route("/lnv2_gateway_remove", post(lnv2::remove_gateway));
+    }
+
+    // Only add Meta module routes if the module exists
+    if api.get_module::<fedimint_meta_server::Meta>().is_some() {
+        app = app.route("/meta/submit", post(meta::submit_meta_value))
     }
 
     // Finalize the router with state

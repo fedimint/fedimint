@@ -3,6 +3,7 @@ pub mod dashboard;
 pub mod invite_code;
 pub mod latency;
 pub mod lnv2;
+pub mod meta;
 pub mod setup;
 pub mod wallet;
 
