@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Gatewayd"]};
+window.SIDEBAR_ITEMS = {"enum":["LdkChainSource"],"struct":["Gatewayd"]};
