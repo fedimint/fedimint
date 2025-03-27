@@ -234,7 +234,7 @@ pub fn start(
 
     // Only add Meta module routes if the module exists
     if api.get_module::<fedimint_meta_server::Meta>().is_some() {
-        app = app.route("/meta/submit", post(meta::submit_meta_value));
+        app = app.route("/meta/submit", post(meta::submit_meta_value))
     }
 
     // Finalize the router with state

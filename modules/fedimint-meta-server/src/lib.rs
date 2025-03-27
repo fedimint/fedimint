@@ -540,22 +540,8 @@ impl Meta {
 
 impl Meta {
     /// UI helper to submit a value change with default auth
-    pub async fn handle_submit_request_ui(
-        &self,
-        key: String,
-        key_value: String,
-    ) -> Result<(), ApiError> {
+    pub async fn handle_submit_request_ui(&self, value: Value) -> Result<(), ApiError> {
         let mut dbtx = self.db.begin_transaction().await;
-
-        let mut value = dbtx
-            .get_value(&MetaConsensusKey(DEFAULT_META_KEY))
-            .await
-            .map(|cv| serde_json::from_slice(cv.value.as_slice()))
-            .transpose()
-            .map_err(|e| ApiError::server_error(e.to_string()))?
-            .unwrap_or(Value::default());
-
-        value[key] = Value::String(key_value);
 
         self.handle_submit_request(
             &mut dbtx.to_ref_nc(),
@@ -575,9 +561,7 @@ impl Meta {
     }
 
     /// UI helper to get consensus data as a key-value map
-    pub async fn handle_get_consensus_request_ui(
-        &self,
-    ) -> Result<Option<BTreeMap<String, String>>, ApiError> {
+    pub async fn handle_get_consensus_request_ui(&self) -> Result<Option<Value>, ApiError> {
         self.handle_get_consensus_request(
             &mut self.db.begin_transaction_nc().await,
             &GetConsensusRequest(DEFAULT_META_KEY),
@@ -598,49 +582,27 @@ impl Meta {
         .map(|r| r.unwrap_or(0))
     }
 
-    /// Get the submissions for UI display, but only return the key-value pairs
-    /// where the value differs from the current consensus value
-    pub async fn get_submissions_differing_from_consensus_ui(
+    /// Get the submissions for UI display,
+    pub async fn handle_get_submissions_request_ui(
         &self,
-    ) -> BTreeMap<PeerId, (String, String)> {
+    ) -> Result<BTreeMap<PeerId, Value>, ApiError> {
+        let mut submissions = BTreeMap::new();
+
         let mut dbtx = self.db.begin_transaction_nc().await;
-        let consensus_value = dbtx
-            .get_value(&MetaConsensusKey(DEFAULT_META_KEY))
-            .await
-            .map(|cv| serde_json::from_slice::<Value>(cv.value.as_slice()))
-            .transpose()
-            .expect("Failed to deserialize meta consensus value")
-            .unwrap_or(Value::default());
 
-        let submissions = dbtx
-            .find_by_prefix(&MetaSubmissionsByKeyPrefix(DEFAULT_META_KEY))
-            .await
-            .collect::<Vec<_>>()
-            .await;
-
-        let mut result = BTreeMap::new();
-        for (k, v) in submissions {
-            if let Ok(submission_json) = serde_json::from_slice::<Value>(v.value.as_slice()) {
-                // Find the first different key-value pair
-                for (key, value) in submission_json
-                    .as_object()
-                    .unwrap_or(&serde_json::Map::new())
-                {
-                    let consensus_val = consensus_value.get(key);
-                    // If the value in the submission is different from consensus or consensus
-                    // doesn't have this key
-                    if consensus_val.is_none() || consensus_val != Some(value) {
-                        // Insert the first difference found for this peer
-                        result.insert(
-                            k.peer_id,
-                            (key.clone(), value.as_str().unwrap_or_default().to_string()),
-                        );
-                        break;
-                    }
-                }
+        for (peer_id, value) in self
+            .handle_get_submissions_request(
+                &mut dbtx.to_ref_nc(),
+                &ApiAuth(String::new()),
+                &GetSubmissionsRequest(DEFAULT_META_KEY),
+            )
+            .await?
+        {
+            if let Ok(value) = serde_json::from_slice(value.as_slice()) {
+                submissions.insert(peer_id, value);
             }
         }
 
-        result
+        Ok(submissions)
     }
 }
