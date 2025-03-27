@@ -13,9 +13,11 @@ use maud::{DOCTYPE, Markup, html};
 use tokio::net::TcpListener;
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
+use crate::assets::WithStaticRoutesExt as _;
+use crate::layout::{self};
 use crate::{
-    AuthState, LoginInput, audit, check_auth, common_styles, invite_code, latency, lnv2,
-    login_form_response, login_submit_response, meta, wallet,
+    AuthState, LoginInput, audit, check_auth, invite_code, latency, lnv2, login_form_response,
+    login_submit_response, meta, wallet,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -23,63 +25,7 @@ pub fn dashboard_layout(content: Markup) -> Markup {
         (DOCTYPE)
         html {
             head {
-                meta charset="utf-8";
-                meta name="viewport" content="width=device-width, initial-scale=1.0";
-                title { "Guardian Dashboard"}
-                link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous";
-                style {
-                    (common_styles())
-                    r#"
-                    /* Dashboard-specific styles */
-                    
-                    /* Card header styling */
-                    .card-header.dashboard-header {
-                        font-size: 1.25rem;
-                        font-weight: 600;
-                        background-color: #f8f9fa;
-                        padding: 1rem 1.25rem;
-                    }
-                    
-                    /* Modal enhancements */
-                    .modal-header {
-                        border-bottom: 1px solid #dee2e6;
-                        background-color: #f8f9fa;
-                    }
-                    
-                    .modal-title {
-                        font-weight: 600;
-                    }
-                    
-                    .modal-footer {
-                        border-top: 1px solid #dee2e6;
-                    }
-                    
-                    /* Invite code text display */
-                    .user-select-all {
-                        user-select: all;
-                        font-size: 0.85rem;
-                        word-break: break-all;
-                    }
-                    
-                    /* For larger screens */
-                    @media (min-width: 1400px) {
-                        .container {
-                            max-width: 70% !important;
-                        }
-                    }
-                    
-                    /* QR Code Modal */
-                    #inviteCodeModal .modal-dialog {
-                        max-width: 360px;
-                    }
-                    
-                    /* Copy button styling */
-                    #copyInviteCodeBtn {
-                        padding: 0.5rem 1.5rem;
-                        font-size: 1rem;
-                    }
-                    "#
-                }
+                (layout::common_head("Dashboard"))
             }
             body {
                 div class="container" style="max-width: 66%;" {
@@ -89,7 +35,7 @@ pub fn dashboard_layout(content: Markup) -> Markup {
 
                     (content)
                 }
-                script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
+                script src="/assets/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
             }
         }
     }
@@ -220,7 +166,8 @@ pub fn start(
     // Create a basic router with core routes
     let mut app = Router::new()
         .route("/", get(dashboard_view))
-        .route("/login", get(login_form).post(login_submit));
+        .route("/login", get(login_form).post(login_submit))
+        .with_static_routes();
 
     // Only add LNv2 gateway routes if the module exists
     if api

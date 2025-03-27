@@ -14,8 +14,9 @@ use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
+use crate::assets::WithStaticRoutesExt as _;
 use crate::{
-    AuthState, LoginInput, check_auth, common_styles, login_form_response, login_submit_response,
+    AuthState, LoginInput, check_auth, layout, login_form_response, login_submit_response,
 };
 
 #[derive(Debug, Deserialize)]
@@ -37,13 +38,7 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
         (DOCTYPE)
         html {
             head {
-                meta charset="utf-8";
-                meta name="viewport" content="width=device-width, initial-scale=1.0";
-                title { (title) }
-                link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous";
-                style {
-                    (common_styles())
-                }
+                (layout::common_head(title))
             }
             body {
                 div class="container" {
@@ -353,6 +348,7 @@ pub fn start(
         .route("/add-connection-info", post(add_peer_handler))
         .route("/reset-connection-info", post(reset_peers_handler))
         .route("/start-dkg", post(start_dkg_handler))
+        .with_static_routes()
         .with_state(AuthState::new(api));
 
     Box::pin(async move {

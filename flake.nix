@@ -344,6 +344,8 @@
                   export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
                   export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${REPO_ROOT}/target-nix}"
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
+
+                  export FLAKEBOX_GIT_LS_IGNORE=fedimint-server-ui/assets/
                   [ -f "$REPO_ROOT/.shrc.local" ] && source "$REPO_ROOT/.shrc.local"
 
                   if [ ''${#TMPDIR} -ge 40 ]; then
@@ -387,7 +389,12 @@
               }
             );
 
-            lint = flakeboxLib.mkLintShell { nativeBuildInputs = [ pkgs.cargo-sort ]; };
+            lint = flakeboxLib.mkLintShell {
+              nativeBuildInputs = [ pkgs.cargo-sort ];
+              env = {
+                FLAKEBOX_GIT_LS_IGNORE = "fedimint-server-ui/assets/";
+              };
+            };
 
             # Like `cross` but only with wasm
             crossWasm = flakeboxLib.mkDevShell (
