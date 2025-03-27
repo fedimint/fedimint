@@ -26,6 +26,7 @@ use tonic_lnd::Client as LndClient;
 use tonic_lnd::lnrpc::GetInfoRequest;
 use tracing::{debug, info, trace};
 
+use crate::gatewayd::LdkChainSource;
 use crate::util::{ProcessHandle, ProcessManager, poll};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_5_0_ALPHA;
@@ -747,6 +748,7 @@ pub enum LightningNode {
         name: String,
         gw_port: u16,
         ldk_port: u16,
+        chain_source: LdkChainSource,
     },
 }
 
@@ -758,6 +760,7 @@ impl LightningNode {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
+                chain_source: _,
             } => LightningNodeType::Ldk,
         }
     }

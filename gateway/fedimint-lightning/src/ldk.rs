@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -39,9 +40,23 @@ use crate::{
     SendOnchainResponse,
 };
 
+#[derive(Clone)]
 pub enum GatewayLdkChainSourceConfig {
     Bitcoind { server_url: SafeUrl },
     Esplora { server_url: SafeUrl },
+}
+
+impl fmt::Display for GatewayLdkChainSourceConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GatewayLdkChainSourceConfig::Bitcoind { server_url } => {
+                write!(f, "Bitcoind source with URL: {}", server_url)
+            }
+            GatewayLdkChainSourceConfig::Esplora { server_url } => {
+                write!(f, "Esplora source with URL: {}", server_url)
+            }
+        }
+    }
 }
 
 impl GatewayLdkChainSourceConfig {
@@ -129,7 +144,7 @@ impl GatewayLdkClient {
 
         let bitcoind_rpc = create_bitcoind(&chain_source_config.bitcoin_rpc_config())?;
 
-        match chain_source_config {
+        match chain_source_config.clone() {
             GatewayLdkChainSourceConfig::Bitcoind { server_url } => {
                 node_builder.set_chain_source_bitcoind_rpc(
                     server_url
@@ -144,7 +159,15 @@ impl GatewayLdkClient {
                 );
             }
             GatewayLdkChainSourceConfig::Esplora { server_url } => {
-                node_builder.set_chain_source_esplora(server_url.to_string(), None);
+                // Esplora client cannot handle trailing slashes
+                let host = server_url
+                    .host_str()
+                    .ok_or(anyhow::anyhow!("Missing esplora host"))?;
+                let port = server_url
+                    .port()
+                    .ok_or(anyhow::anyhow!("Missing esplora port"))?;
+                let server_url = format!("{}://{}:{}", server_url.scheme(), host, port);
+                node_builder.set_chain_source_esplora(server_url, None);
             }
         };
         let Some(data_dir_str) = data_dir.to_str() else {
@@ -152,6 +175,7 @@ impl GatewayLdkClient {
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
+        info!(chain_source = %chain_source_config, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
         let node = Arc::new(node_builder.build()?);
         node.start_with_runtime(runtime).map_err(|err| {
             crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");
@@ -168,6 +192,7 @@ impl GatewayLdkClient {
             }
         });
 
+        info!("Successfully started LDK Gateway");
         Ok(GatewayLdkClient {
             node,
             bitcoind_rpc,

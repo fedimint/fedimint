@@ -34,6 +34,12 @@ use crate::vars::utf8;
 use crate::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 
 #[derive(Clone)]
+pub enum LdkChainSource {
+    Bitcoind,
+    Esplora,
+}
+
+#[derive(Clone)]
 pub struct Gatewayd {
     pub(crate) process: ProcessHandle,
     pub ln: LightningNode,
@@ -59,6 +65,7 @@ impl Gatewayd {
                 name,
                 gw_port,
                 ldk_port,
+                chain_source: _,
             } => (name.to_owned(), gw_port.to_owned(), ldk_port.to_owned()),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
@@ -86,6 +93,7 @@ impl Gatewayd {
         }
         if ln_type == LightningNodeType::Ldk {
             gateway_env.insert("FM_LDK_ALIAS".to_owned(), gw_name.clone());
+            Self::set_ldk_chain_source(&ln, &mut gateway_env, process_mgr);
         }
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let process = process_mgr
@@ -118,6 +126,37 @@ impl Gatewayd {
         Ok(gatewayd)
     }
 
+    fn set_ldk_chain_source(
+        ln: &LightningNode,
+        gateway_env: &mut HashMap<String, String>,
+        process_mgr: &ProcessManager,
+    ) {
+        if let LightningNode::Ldk {
+            name: _,
+            gw_port: _,
+            ldk_port: _,
+            chain_source,
+        } = ln
+        {
+            match chain_source {
+                LdkChainSource::Bitcoind => {
+                    let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
+                    gateway_env.insert(
+                        "FM_LDK_BITCOIND_RPC_URL".to_owned(),
+                        format!("http://bitcoin:bitcoin@127.0.0.1:{btc_rpc_port}"),
+                    );
+                }
+                LdkChainSource::Esplora => {
+                    let esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
+                    gateway_env.insert(
+                        "FM_LDK_ESPLORA_SERVER_URL".to_owned(),
+                        format!("http://localhost:{esplora_port}"),
+                    );
+                }
+            }
+        }
+    }
+
     fn is_forced_current(&self) -> bool {
         self.ln.ln_type() == LightningNodeType::Ldk && self.gatewayd_version < *VERSION_0_6_0_ALPHA
     }
@@ -148,6 +187,7 @@ impl Gatewayd {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
+                chain_source: _,
             } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
