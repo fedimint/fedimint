@@ -8,8 +8,7 @@ containers for:
 
 * `bitcoind`
 * `traefik`
-* `fedimintd`
-* `fedimint-ui`
+* `fedimintd` (includes built-in guardian dashboard UI)
 
 The `<domain>` needs to point at a fresh Ubuntu server.
 

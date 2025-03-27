@@ -202,7 +202,7 @@ The install script lets you install one or all of:
 
 and it'll start the services on the following ports:
 
-- Fedimintd Guardian Dashboard: http://your.ip.add.ress:3000
+- Fedimintd Guardian Dashboard: http://your.ip.add.ress:8175 (now built into fedimintd)
 - Lightning Gateway Dashboard: http://your.ip.add.ress:3001
 - RTL Lightning Node Management: http://your.ip.add.ress.198:3003
 
@@ -262,9 +262,9 @@ sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-
 
 ## Step 3. Forming the Federation
 
-Now that we have the fedimint processes running on each machine, we'll form the federation by connecting them together. We'll use the fedimint guardian dashboard to do this. Go to the dashboard url for each machine, it's running on port :3000 .
+Now that we have the fedimint processes running on each machine, we'll form the federation by connecting them together. We'll use the fedimint guardian dashboard to do this. Go to the dashboard url for each machine, it's running on port :8175 .
 
-> Note: If you're running on AWS = you'll need to open port 3000 in your security group to access the dashboard, and if you're running on google cloud you'll need to open both ports 3000 and 8174 in your firewall.
+> Note: If you're running on AWS = you'll need to open port 8175 in your security group to access the dashboard, and if you're running on google cloud you'll need to open both ports 8175 and 8174 in your firewall.
 
 ### Leader and Followers
 

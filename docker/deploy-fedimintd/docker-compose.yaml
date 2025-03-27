@@ -1,4 +1,4 @@
- # See the .env file for config options
+# See the .env file for config options
 
 services:
   traefik:
@@ -66,26 +66,14 @@ services:
       - "traefik.http.routers.fedimintd.rule=Host(`${FM_DOMAIN}`) && Path(`/ws/`)"
       - "traefik.http.routers.fedimintd.entrypoints=websecure"
       - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
+      # Add UI routes for the built-in guardian dashboard UI
+      - "traefik.http.services.fedimintd-ui.loadbalancer.server.port=8175"
+      - "traefik.http.routers.fedimintd-ui.rule=Host(`${FM_DOMAIN}`)"
+      - "traefik.http.routers.fedimintd-ui.entrypoints=websecure"
+      - "traefik.http.routers.fedimintd-ui.tls.certresolver=myresolver"
     networks:
       fedimint_network:
         ipv4_address: 172.20.0.11
-
-  guardian-ui:
-    image: fedimintui/guardian-ui:0.4.2
-    environment:
-      - PORT=80
-      - REACT_APP_FM_CONFIG_API=wss://${FM_DOMAIN}/ws/
-    depends_on:
-      - fedimintd
-    restart: always
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
-      - "traefik.http.routers.guardian-ui.rule=Host(`${FM_DOMAIN}`)"
-      - "traefik.http.routers.guardian-ui.entrypoints=websecure"
-      - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
-    networks:
-      - fedimint_network
 
 networks:
   fedimint_network:
