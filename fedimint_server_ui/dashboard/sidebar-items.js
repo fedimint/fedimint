@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dashboard_layout","dashboard_view","login_form","login_submit","start"]};
+window.SIDEBAR_ITEMS = {"fn":["dashboard_layout","dashboard_update","dashboard_view","login_form","login_submit","render_session_count","start"]};
