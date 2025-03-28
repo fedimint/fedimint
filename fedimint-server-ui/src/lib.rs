@@ -1,7 +1,9 @@
+pub(crate) mod assets;
 pub mod audit;
 pub mod dashboard;
 pub mod invite_code;
 pub mod latency;
+pub(crate) mod layout;
 pub mod lnv2;
 pub mod meta;
 pub mod setup;
@@ -38,110 +40,12 @@ impl<T> AuthState<T> {
     }
 }
 
-// Common CSS styling shared by all layouts
-pub fn common_styles() -> &'static str {
-    r#"
-    body {
-        background-color: #f8f9fa;
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-    }
-    
-    .header-title {
-        color: #0d6efd;
-        margin-bottom: 2rem;
-    }
-    
-    .card {
-        border: none;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-    }
-    
-    .card-body {
-        padding: 1.25rem;
-    }
-    
-    .card-header {
-        background-color: #fff;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.125);
-        padding: 1rem 1.25rem;
-    }
-    
-    /* Form elements */
-    .form-control {
-        padding: 0.75rem;
-    }
-    
-    .form-group {
-        margin-bottom: 1rem;
-    }
-    
-    .field-description {
-        font-size: 0.875rem;
-        color: #6c757d;
-        margin-top: 0.25rem;
-    }
-    
-    .button-container {
-        margin-top: 2rem;
-        text-align: center;
-    }
-    
-    /* Alert and status messages */
-    .error-message {
-        color: #dc3545;
-        margin-top: 1rem;
-        font-weight: 500;
-    }
-    
-    .alert-info {
-        background-color: #e8f4f8;
-        border-color: #bee5eb;
-    }
-    
-    /* Button styling */
-    .setup-btn {
-        width: auto;
-        min-width: 200px;
-        max-width: 300px;
-        padding: 0.5rem 1.5rem;
-        margin: 0 auto;
-    }
-    
-    /* Responsive adjustments */
-    @media (min-width: 992px) {
-        .narrow-container {
-            max-width: 500px;
-        }
-    }
-    
-    @media (max-width: 768px) {
-        .container {
-            padding-left: 15px;
-            padding-right: 15px;
-        }
-        
-        .card-body {
-            padding: 1rem;
-        }
-    }
-    "#
-}
-
 pub(crate) fn login_layout(title: &str, content: Markup) -> Markup {
     html! {
         (DOCTYPE)
         html {
             head {
-                meta charset="utf-8";
-                meta name="viewport" content="width=device-width, initial-scale=1.0";
-                title { (title) }
-                link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous";
-                style {
-                    (common_styles())
-                }
+                (layout::common_head(title))
             }
             body {
                 div class="container" {
@@ -159,7 +63,7 @@ pub(crate) fn login_layout(title: &str, content: Markup) -> Markup {
                         }
                     }
                 }
-                script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
+                script src="/assets/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
             }
         }
     }

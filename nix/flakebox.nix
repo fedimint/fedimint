@@ -79,6 +79,7 @@ let
         "db/migrations/.*"
         "devimint/src/cfg/.*"
         "docs/.*.md"
+        "fedimint-server-ui/assets/.*"
       ]
     ) src;
 
@@ -95,6 +96,7 @@ let
         "devimint/src/cfg/.*"
         "scripts/.*"
         "docs/.*.md"
+        "fedimint-server-ui/assets/.*"
       ]
     ) src;
 
