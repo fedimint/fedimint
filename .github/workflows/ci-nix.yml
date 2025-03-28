@@ -399,10 +399,21 @@ jobs:
 
   pkgs:
     if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
-    name: "Release packages: ${{ matrix.build.flake-output }}"
+    name: "Release packages: ${{ matrix.build.flake-output }} on ${{ matrix.platform }}"
 
     strategy:
       matrix:
+        platform:
+          - name: linux
+            runs-on: [self-hosted, linux]
+            timeout: 60
+            build-deb: true
+            build-rpm: true
+          - name: macos-aarch64
+            runs-on: macos-14
+            timeout: 90
+            build-deb: false
+            build-rpm: false
         build:
           - flake-output: fedimint-pkgs
             bins: fedimintd,fedimint-cli,fedimint-dbtool,fedimint-recoverytool
@@ -414,8 +425,8 @@ jobs:
             bins: devimint
             deb: devimint
 
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 60
+    runs-on: ${{ matrix.platform.runs-on }}
+    timeout-minutes: ${{ matrix.platform.timeout }}
 
     env:
       PRERELEASE_MESSAGE: |
@@ -500,7 +511,7 @@ jobs:
       - name: Upload Binaries
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.build.flake-output}}-linux-x86_64"
+          name: "${{ matrix.build.flake-output}}-${{ matrix.platform.name }}"
           path: "bins/**"
 
       - name: Release Binaries
@@ -512,6 +523,7 @@ jobs:
           body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Build DEB package
+        if: matrix.platform.build-deb
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
@@ -522,6 +534,7 @@ jobs:
           done
 
       - name: Build RPM package
+        if: matrix.platform.build-rpm
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
@@ -532,28 +545,30 @@ jobs:
           done
 
       - name: Upload DEB packages
+        if: matrix.platform.build-deb
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.build.flake-output }}-deb-bundle"
+          name: "${{ matrix.build.flake-output }}-${{ matrix.platform.name }}-deb-bundle"
           path: "debs/**.deb"
 
       - name: Release DEB packages
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-deb
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "debs/**.deb"
           prerelease: ${{ contains(github.ref, 'rc') }}
           body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Upload RPM packages
+        if: matrix.platform.build-rpm
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.build.flake-output }}-rpm-bundle"
+          name: "${{ matrix.build.flake-output }}-${{ matrix.platform.name }}-rpm-bundle"
           path: "rpms/**.rpm"
 
       - name: Release RPM packages
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-rpm
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ contains(github.ref, 'rc') }}
