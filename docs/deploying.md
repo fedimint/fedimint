@@ -10,7 +10,7 @@ You can also run Fedimint in **solo mode** with just one guardian. While this is
 is not recommended for real-world use since it lacks the resilience of a federation with multiple guardians.
 
 To support **Lightning payments**, Fedimint requires a **Lightning Gateway**. This is a participant in the federation
-that swaps ecash for sending and receiving Lightning payments. Note that the Lightning Gateway is not a guardian—it’s an
+that swaps ecash for sending and receiving Lightning payments. Note that the Lightning Gateway is not a guardian—it's an
 untrusted economic actor that interacts with the federation.
 
 ## Target audience
@@ -59,7 +59,6 @@ and solutions for variety of cases.
 
 * [`./docker` directory](../docker/README.md) - for information regarding Docker support.
 * [Fedimint NixOS Deployment Repo](https://github.com/fedimint/nixos-deployment) - an example template for setting up Fedimint using NixOS server.
-* [Fedimint Mutinynet Setup Guide](./deploying/docker-mutiny.md) - a detailed guide setting up both Fedimint and Lightning Gateway using `docker`.
 
 
 ## Hosted solutions

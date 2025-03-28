@@ -7,9 +7,9 @@
   project and is a great place to learn Rust, cryptography, networking, consensus, and bitcoin development. We have a
   lot of good first issues, are happy to mentor new developers, and are always looking for experienced Rust developers
   to help with the core codebase.
-- [UI](https://github.com/fedimint/ui): The default Fedimint Guardian and Lightning Gateway UIs. These are Typescript
-  and React projects. Contributing to this repo helps with UI/UX design and development to make Fedimint more user
-  friendly.
+- [Guardian Dashboard UI](https://github.com/fedimint/fedimint/tree/master/fedimint-server-ui): The Fedimint Guardian UI is now 
+  built into fedimintd as a server-side rendered UI using Rust and the Maud templating library. Contributing to the UI helps
+  make Fedimint more user friendly for guardians managing federations.
 - [Lightning Gateway](https://github.com/fedimint/fedimint/issues?q=is%3Aissue+is%3Aopen+label%3Alightning): Fedimint's
   Lightning Gateway is implemented as an HTLC interceptor and currently works with CLN, LND, and LDK's sample-node
   implementations. We are always looking for lightning developers to help with the Lightning Gateway, especially around
@@ -59,4 +59,4 @@ just mprocs
 You can then interact with the guardians and lightning gateway using the cli. For more details on how to use the cli,
 see the [Fedimint Developer Tutorial](https://github.com/fedimint/fedimint/blob/master/docs/tutorial.md).
 
-If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo for developer environment instructions.
+The Guardian Dashboard UI is automatically available at http://localhost:8175 when running the local development environment.
