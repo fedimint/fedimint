@@ -29,10 +29,6 @@ body {
 }
 
 /* Form elements */
-.form-control {
-  padding: 0.75rem;
-}
-
 .form-group {
   margin-bottom: 1rem;
 }
@@ -134,4 +130,10 @@ body {
 #copyInviteCodeBtn {
   padding: 0.5rem 1.5rem;
   font-size: 1rem;
+}
+
+
+/* Too small buttons look weird */
+.btn-min-width {
+  min-width: 100px;
 }
