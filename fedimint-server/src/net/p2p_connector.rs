@@ -290,6 +290,7 @@ impl IrohConnector {
         };
 
         let endpoint = builder.bind().await.expect("Could not bind to port");
+
         info!(
             target: LOG_NET_IROH,
             %bind_addr,
