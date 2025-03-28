@@ -331,7 +331,7 @@ async fn reset_peers_handler(
         return Redirect::to("/login").into_response();
     }
 
-    state.api.reset_peers().await;
+    state.api.reset_setup_codes().await;
 
     Redirect::to("/federation-setup").into_response()
 }

@@ -19,7 +19,7 @@ pub trait ISetupApi {
     async fn connected_peers(&self) -> Vec<String>;
 
     /// Reset the set of other guardians
-    async fn reset_peers(&self);
+    async fn reset_setup_codes(&self);
 
     /// Set local guardian parameters
     async fn set_local_parameters(

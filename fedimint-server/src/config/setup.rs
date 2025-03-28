@@ -12,8 +12,8 @@ use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
-    ADD_PEER_SETUP_CODE_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
-    START_DKG_ENDPOINT,
+    ADD_PEER_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::{
     FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
@@ -136,7 +136,7 @@ impl ISetupApi for SetupApi {
             .collect()
     }
 
-    async fn reset_peers(&self) {
+    async fn reset_setup_codes(&self) {
         self.state.lock().await.setup_codes.clear();
     }
 
@@ -386,6 +386,17 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                 config.add_peer_setup_code(info.clone())
                     .await
                     .map_err(|e|ApiError::bad_request(e.to_string()))
+            }
+        },
+        api_endpoint! {
+            RESET_PEER_SETUP_CODES_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |config: &SetupApi, context, _v: ()| -> () {
+                check_auth(context)?;
+
+                config.reset_setup_codes().await;
+
+                Ok(())
             }
         },
         api_endpoint! {
