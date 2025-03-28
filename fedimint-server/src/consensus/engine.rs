@@ -67,6 +67,7 @@ pub struct ConsensusEngine {
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
     pub connections: DynP2PConnections<P2PMessage>,
+    pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
@@ -614,6 +615,11 @@ impl ConsensusEngine {
             item = ?DebugConsensusItem(&item),
             "Processing consensus item"
         );
+
+        self.ci_status_senders
+            .get(&peer)
+            .expect("No ci status sender for peer {peer}")
+            .send_replace(Some(session_index));
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX
             .with_label_values(&[

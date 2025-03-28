@@ -156,6 +156,16 @@ pub async fn run(
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
     let (ord_latency_sender, ord_latency_receiver) = watch::channel(None);
 
+    let mut ci_status_senders = BTreeMap::new();
+    let mut ci_status_receivers = BTreeMap::new();
+
+    for peer in cfg.consensus.broadcast_public_keys.keys().copied() {
+        let (ci_sender, ci_receiver) = watch::channel(None);
+
+        ci_status_senders.insert(peer, ci_sender);
+        ci_status_receivers.insert(peer, ci_receiver);
+    }
+
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
         db: db.clone(),
@@ -169,6 +179,7 @@ pub async fn run(
             &module_init_registry,
         ),
         p2p_status_receivers,
+        ci_status_receivers,
         ord_latency_receiver,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
@@ -234,6 +245,7 @@ pub async fn run(
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,
+        ci_status_senders,
         submission_receiver,
         shutdown_receiver,
         modules: module_registry,

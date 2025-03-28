@@ -8,8 +8,11 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
-use fedimint_api_client::api::GuardianConfigBackup;
-use fedimint_core::admin_client::SetupStatus;
+use fedimint_api_client::api::{
+    GuardianConfigBackup, LegacyFederationStatus, LegacyP2PConnectionStatus, LegacyPeerStatus,
+    StatusResponse,
+};
+use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
@@ -29,8 +32,8 @@ use fedimint_core::endpoint_constants::{
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
     RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
     SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    VERSION_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -87,6 +90,7 @@ pub struct ConsensusApi {
     pub shutdown_sender: Sender<Option<u64>>,
     pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
     pub p2p_status_receivers: P2PStatusReceivers,
+    pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
 }
@@ -214,6 +218,54 @@ impl ConsensusApi {
                     .expect("There are no gaps in session outcomes"),
             ),
         }
+    }
+
+    pub async fn get_federation_status(&self) -> ApiResult<LegacyFederationStatus> {
+        let session_count = self.session_count().await;
+        let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
+
+        let status_by_peer = self
+            .p2p_status_receivers
+            .iter()
+            .map(|(peer, p2p_receiver)| {
+                let ci_receiver = self.ci_status_receivers.get(peer).unwrap();
+
+                let consensus_status = LegacyPeerStatus {
+                    connection_status: match *p2p_receiver.borrow() {
+                        Some(..) => LegacyP2PConnectionStatus::Connected,
+                        None => LegacyP2PConnectionStatus::Disconnected,
+                    },
+                    last_contribution: *ci_receiver.borrow(),
+                    flagged: ci_receiver.borrow().unwrap_or(0) + 1 < session_count,
+                };
+
+                (*peer, consensus_status)
+            })
+            .collect::<HashMap<PeerId, LegacyPeerStatus>>();
+
+        let peers_flagged = status_by_peer
+            .values()
+            .filter(|status| status.flagged)
+            .count() as u64;
+
+        let peers_online = status_by_peer
+            .values()
+            .filter(|status| status.connection_status == LegacyP2PConnectionStatus::Connected)
+            .count() as u64;
+
+        let peers_offline = status_by_peer
+            .values()
+            .filter(|status| status.connection_status == LegacyP2PConnectionStatus::Disconnected)
+            .count() as u64;
+
+        Ok(LegacyFederationStatus {
+            session_count,
+            status_by_peer,
+            peers_online,
+            peers_offline,
+            peers_flagged,
+            scheduled_shutdown,
+        })
     }
 
     fn shutdown(&self, index: Option<u64>) {
@@ -628,6 +680,15 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
                 Ok(legacy_consensus_config_hash(&fedimint.cfg.consensus))
             }
+        },
+        api_endpoint! {
+            STATUS_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
+                Ok(StatusResponse {
+                    server: ServerStatusLegacy::ConsensusRunning,
+                    federation: Some(fedimint.get_federation_status().await?)
+                })}
         },
         api_endpoint! {
             SETUP_STATUS_ENDPOINT,

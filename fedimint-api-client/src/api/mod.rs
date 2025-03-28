@@ -1335,9 +1335,9 @@ mod iroh {
 
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FederationStatus {
+pub struct LegacyFederationStatus {
     pub session_count: u64,
-    pub status_by_peer: HashMap<PeerId, PeerStatus>,
+    pub status_by_peer: HashMap<PeerId, LegacyPeerStatus>,
     pub peers_online: u64,
     pub peers_offline: u64,
     /// This should always be 0 if everything is okay, so a monitoring tool
@@ -1347,9 +1347,9 @@ pub struct FederationStatus {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PeerStatus {
+pub struct LegacyPeerStatus {
     pub last_contribution: Option<u64>,
-    pub connection_status: P2PConnectionStatus,
+    pub connection_status: LegacyP2PConnectionStatus,
     /// Indicates that this peer needs attention from the operator since
     /// it has not contributed to the consensus in a long time
     pub flagged: bool,
@@ -1357,7 +1357,7 @@ pub struct PeerStatus {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum P2PConnectionStatus {
+pub enum LegacyP2PConnectionStatus {
     #[default]
     Disconnected,
     Connected,
@@ -1366,7 +1366,7 @@ pub enum P2PConnectionStatus {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct StatusResponse {
     pub server: ServerStatusLegacy,
-    pub federation: Option<FederationStatus>,
+    pub federation: Option<LegacyFederationStatus>,
 }
 
 /// Archive of all the guardian config files that can be used to recover a lost
