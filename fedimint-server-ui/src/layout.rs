@@ -9,7 +9,11 @@ pub fn common_head(title: &str) -> Markup {
         link rel="stylesheet" type="text/css" href="/assets/style.css";
         link rel="icon" type="image/png" href="/assets/logo.png";
 
-        title { (title) }
+        // Note: this needs to be included in the header, so that web-page does not
+        // get in a state where htmx is not yet loaded. `deref` helps with blocking the load.
+        // Learned the hard way. --dpc
+        script defer src="/assets/htmx.org-2.0.4.min.js" {}
 
+        title { (title) }
     }
 }

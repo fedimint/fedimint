@@ -62,6 +62,14 @@ async fn login_submit(
     .into_response()
 }
 
+fn render_session_count(session_count: usize) -> Markup {
+    html! {
+
+        div id="session-count" class="alert alert-info" hx-swap-oob=(true) {
+            "Session Count: " strong { (session_count) }
+        }
+    }
+}
 // Main dashboard view
 async fn dashboard_view(
     State(state): State<AuthState<DynDashboardApi>>,
@@ -79,15 +87,34 @@ async fn dashboard_view(
     let invite_code = state.api.federation_invite_code().await;
     let audit_summary = state.api.federation_audit().await;
 
-    let mut content = html! {
+    // Conditionally add Lightning V2 UI if the module is available
+    let lightning_content = html! {
+        @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
+            (lnv2::render(lightning).await)
+        }
+    };
+
+    // Conditionally add Wallet UI if the module is available
+    let wallet_content = html! {
+        @if let Some(wallet_module) = state.api.get_module::<fedimint_wallet_server::Wallet>() {
+            (wallet::render(wallet_module).await)
+        }
+    };
+
+    // Conditionally add Meta UI if the module is available
+    let meta_content = html! {
+        @if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
+            (meta::render(meta_module).await)
+        }
+    };
+
+    let content = html! {
         div class="row gy-4" {
             div class="col-md-6" {
                 div class="card h-100" {
                     div class="card-header dashboard-header" { (federation_name) }
                     div class="card-body" {
-                        div class="alert alert-info" {
-                            "Session Count: " strong { (session_count) }
-                        }
+                        (render_session_count(session_count))
                         table class="table table-sm mb-0" {
                             thead {
                                 tr {
@@ -129,33 +156,47 @@ async fn dashboard_view(
                 (latency::render(consensus_ord_latency, &p2p_connection_status))
             }
         }
+
+        (lightning_content)
+        (wallet_content)
+        (meta_content)
+
+        // Every 15s fetch updates to the page
+        div hx-get="/dashboard/update" hx-trigger="every 15s" hx-swap="none" { }
     };
 
-    // Conditionally add Lightning V2 UI if the module is available
-    if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
-        content = html! {
-            (content)
-            (lnv2::render(lightning).await)
-        };
-    }
-
-    // Conditionally add Wallet UI if the module is available
-    if let Some(wallet_module) = state.api.get_module::<fedimint_wallet_server::Wallet>() {
-        content = html! {
-            (content)
-            (wallet::render(wallet_module).await)
-        };
-    }
-
-    // Conditionally add Meta UI if the module is available
-    if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
-        content = html! {
-            (content)
-            (meta::render(meta_module).await)
-        };
-    }
-
     Html(dashboard_layout(content).into_string()).into_response()
+}
+
+/// Periodic updated to the dashboard
+///
+/// We don't just replace the whole page, not to interfere with elements that
+/// might not like it.
+async fn dashboard_update(
+    State(state): State<AuthState<DynDashboardApi>>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
+        return Redirect::to("/login").into_response();
+    }
+
+    let session_count = state.api.session_count().await;
+    let consensus_ord_latency = state.api.consensus_ord_latency().await;
+    let p2p_connection_status = state.api.p2p_connection_status().await;
+
+    // each element has an `id` and `hx-swap-oob=true` which on htmx requests
+    // make them update themselves.
+    let content = html! {
+        (render_session_count(session_count))
+
+        (latency::render(consensus_ord_latency, &p2p_connection_status))
+
+        @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
+            (lnv2::render(lightning).await)
+        }
+    };
+
+    Html(content.into_string()).into_response()
 }
 
 pub fn start(
@@ -166,6 +207,7 @@ pub fn start(
     // Create a basic router with core routes
     let mut app = Router::new()
         .route("/", get(dashboard_view))
+        .route("/dashboard/update", get(dashboard_update))
         .route("/login", get(login_form).post(login_submit))
         .with_static_routes();
 

@@ -9,7 +9,9 @@ pub fn render(
     p2p_connection_status: &BTreeMap<PeerId, Option<Duration>>,
 ) -> Markup {
     html! {
-        div class="card h-100" {
+        div class="card h-100" hx-swap-oob=(true)
+            id="consensus-latency"
+        {
             div class="card-header dashboard-header" { "System Latency" }
             div class="card-body" {
                 @if let Some(duration) = consensus_ord_latency {
