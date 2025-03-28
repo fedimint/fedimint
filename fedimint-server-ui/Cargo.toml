@@ -15,7 +15,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-axum = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
 axum-extra = { version = "0.10.0", features = ["cookie"] }
 chrono = "0.4"
 fedimint-core = { workspace = true }
@@ -26,4 +26,7 @@ fedimint-wallet-server = { workspace = true }
 maud = "0.27.0"
 qrcode = { version = "0.12", features = ["svg"] }
 serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }

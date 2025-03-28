@@ -1,6 +1,7 @@
 pub(crate) mod assets;
 pub mod audit;
 pub mod dashboard;
+pub(crate) mod error;
 pub mod invite_code;
 pub mod latency;
 pub(crate) mod layout;
@@ -16,6 +17,8 @@ use fedimint_core::module::ApiAuth;
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
+
+pub(crate) const LOG_UI: &str = "fm::ui";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoginInput {
