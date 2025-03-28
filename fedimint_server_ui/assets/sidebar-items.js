@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_static_asset","get_static_css","get_static_js","get_static_png"],"trait":["WithStaticRoutesExt"]};
