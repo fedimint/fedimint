@@ -9,8 +9,9 @@ use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey, RecurringPaymentProtocol};
 use futures::stream::StreamExt;
-use lightning_invoice::Bolt11Invoice;
 use rand::Rng;
+
+use crate::PaymentCodeInvoice;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd, Encodable, Decodable)]
 pub struct FederationDbPrefix([u8; 16]);
@@ -170,8 +171,7 @@ pub struct PaymentCodeInvoicePrefix {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct PaymentCodeInvoiceEntry {
     pub operation_id: OperationId,
-    // TODO: use a more versatile type in the future to support BOLT12
-    pub invoice: Bolt11Invoice,
+    pub invoice: PaymentCodeInvoice,
 }
 
 impl_db_record!(

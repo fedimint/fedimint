@@ -7,6 +7,7 @@ use fedimint_client::{Client, ClientHandleArc, ClientModuleInstance};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped, IRawDatabase};
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::hashes::sha256;
 use fedimint_core::util::SafeUrl;
@@ -283,7 +284,7 @@ impl RecurringInvoiceServer {
             },
             &PaymentCodeInvoiceEntry {
                 operation_id,
-                invoice: invoice.clone(),
+                invoice: PaymentCodeInvoice::Bolt11(invoice.clone()),
             },
         )
         .await;
@@ -395,4 +396,9 @@ async fn await_invoice_confirmed(
     Err(RecurringPaymentError::Other(anyhow!(
         "BOLT11 invoice not confirmed"
     )))
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub enum PaymentCodeInvoice {
+    Bolt11(Bolt11Invoice),
 }

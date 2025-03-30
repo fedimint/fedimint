@@ -17,7 +17,7 @@ use fedimint_ln_client::recurring::api::{
 };
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey};
 use fedimint_logging::TracingSetup;
-use fedimint_recurringd::RecurringInvoiceServer;
+use fedimint_recurringd::{PaymentCodeInvoice, RecurringInvoiceServer};
 use fedimint_rocksdb::RocksDb;
 use lightning_invoice::Bolt11Invoice;
 use lnurl::pay::{LnURLPayInvoice, PayResponse};
@@ -144,12 +144,13 @@ async fn await_invoice(
     State(app_state): State<AppState>,
     Path((payment_code_root_key, invoice_index)): Path<(PaymentCodeRootKey, u64)>,
 ) -> Result<Json<Bolt11Invoice>, ApiError> {
-    let invoice_entry = app_state
+    let PaymentCodeInvoice::Bolt11(invoice) = app_state
         .recurring_invoice_server
         .await_invoice_index_generated(payment_code_root_key.to_payment_code_id(), invoice_index)
-        .await?;
+        .await?
+        .invoice;
 
-    Ok(Json(invoice_entry.invoice))
+    Ok(Json(invoice))
 }
 
 async fn list_federations(State(app_state): State<AppState>) -> Json<Vec<FederationId>> {
