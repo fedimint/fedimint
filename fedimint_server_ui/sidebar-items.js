@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["check_auth","login_form_response","login_layout","login_submit_response"],"mod":["assets","audit","dashboard","invite_code","latency","layout","lnv2","meta","setup","wallet"],"struct":["AuthState","LoginInput"]};
+window.SIDEBAR_ITEMS = {"constant":["LOG_UI"],"fn":["check_auth","login_form_response","login_layout","login_submit_response"],"mod":["assets","audit","dashboard","error","invite_code","latency","layout","lnv2","meta","setup","wallet"],"struct":["AuthState","LoginInput"]};

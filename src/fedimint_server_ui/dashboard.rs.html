@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a>                (layout::common_head(<span class="string">"Dashboard"</span>))
 <a href=#29 id=29 data-nosnippet>29</a>            }
 <a href=#30 id=30 data-nosnippet>30</a>            body {
-<a href=#31 id=31 data-nosnippet>31</a>                div class=<span class="string">"container" </span>style=<span class="string">"max-width: 66%;" </span>{
+<a href=#31 id=31 data-nosnippet>31</a>                div class=<span class="string">"container" </span>{
 <a href=#32 id=32 data-nosnippet>32</a>                    header class=<span class="string">"text-center" </span>{
 <a href=#33 id=33 data-nosnippet>33</a>                        h1 class=<span class="string">"header-title" </span>{ <span class="string">"Fedimint Guardian UI" </span>}
 <a href=#34 id=34 data-nosnippet>34</a>                    }
@@ -223,20 +223,24 @@
 <a href=#223 id=223 data-nosnippet>223</a>
 <a href=#224 id=224 data-nosnippet>224</a>    <span class="comment">// Only add Meta module routes if the module exists
 <a href=#225 id=225 data-nosnippet>225</a>    </span><span class="kw">if </span>api.get_module::&lt;fedimint_meta_server::Meta&gt;().is_some() {
-<a href=#226 id=226 data-nosnippet>226</a>        app = app.route(<span class="string">"/meta/submit"</span>, post(meta::submit_meta_value))
-<a href=#227 id=227 data-nosnippet>227</a>    }
-<a href=#228 id=228 data-nosnippet>228</a>
-<a href=#229 id=229 data-nosnippet>229</a>    <span class="comment">// Finalize the router with state
-<a href=#230 id=230 data-nosnippet>230</a>    </span><span class="kw">let </span>app = app.with_state(AuthState::new(api));
-<a href=#231 id=231 data-nosnippet>231</a>
-<a href=#232 id=232 data-nosnippet>232</a>    Box::pin(<span class="kw">async move </span>{
-<a href=#233 id=233 data-nosnippet>233</a>        <span class="kw">let </span>listener = TcpListener::bind(ui_bind)
-<a href=#234 id=234 data-nosnippet>234</a>            .<span class="kw">await
-<a href=#235 id=235 data-nosnippet>235</a>            </span>.expect(<span class="string">"Failed to bind dashboard UI"</span>);
-<a href=#236 id=236 data-nosnippet>236</a>
-<a href=#237 id=237 data-nosnippet>237</a>        axum::serve(listener, app.into_make_service())
-<a href=#238 id=238 data-nosnippet>238</a>            .with_graceful_shutdown(task_handle.make_shutdown_rx())
-<a href=#239 id=239 data-nosnippet>239</a>            .<span class="kw">await
-<a href=#240 id=240 data-nosnippet>240</a>            </span>.expect(<span class="string">"Failed to serve dashboard UI"</span>);
-<a href=#241 id=241 data-nosnippet>241</a>    })
-<a href=#242 id=242 data-nosnippet>242</a>}</code></pre></div></section></main></body></html>
+<a href=#226 id=226 data-nosnippet>226</a>        app = app
+<a href=#227 id=227 data-nosnippet>227</a>            .route(<span class="string">"/meta/submit"</span>, post(meta::post_submit))
+<a href=#228 id=228 data-nosnippet>228</a>            .route(<span class="string">"/meta/set"</span>, post(meta::post_set))
+<a href=#229 id=229 data-nosnippet>229</a>            .route(<span class="string">"/meta/reset"</span>, post(meta::post_reset))
+<a href=#230 id=230 data-nosnippet>230</a>            .route(<span class="string">"/meta/delete"</span>, post(meta::post_delete))
+<a href=#231 id=231 data-nosnippet>231</a>    }
+<a href=#232 id=232 data-nosnippet>232</a>
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="comment">// Finalize the router with state
+<a href=#234 id=234 data-nosnippet>234</a>    </span><span class="kw">let </span>app = app.with_state(AuthState::new(api));
+<a href=#235 id=235 data-nosnippet>235</a>
+<a href=#236 id=236 data-nosnippet>236</a>    Box::pin(<span class="kw">async move </span>{
+<a href=#237 id=237 data-nosnippet>237</a>        <span class="kw">let </span>listener = TcpListener::bind(ui_bind)
+<a href=#238 id=238 data-nosnippet>238</a>            .<span class="kw">await
+<a href=#239 id=239 data-nosnippet>239</a>            </span>.expect(<span class="string">"Failed to bind dashboard UI"</span>);
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a>        axum::serve(listener, app.into_make_service())
+<a href=#242 id=242 data-nosnippet>242</a>            .with_graceful_shutdown(task_handle.make_shutdown_rx())
+<a href=#243 id=243 data-nosnippet>243</a>            .<span class="kw">await
+<a href=#244 id=244 data-nosnippet>244</a>            </span>.expect(<span class="string">"Failed to serve dashboard UI"</span>);
+<a href=#245 id=245 data-nosnippet>245</a>    })
+<a href=#246 id=246 data-nosnippet>246</a>}</code></pre></div></section></main></body></html>
