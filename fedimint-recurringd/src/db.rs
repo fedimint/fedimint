@@ -5,7 +5,6 @@ use fedimint_core::core::OperationId;
 use fedimint_core::db::{AutocommitError, Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::rand::thread_rng;
-use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey, RecurringPaymentProtocol};
 use futures::stream::StreamExt;
@@ -165,7 +164,7 @@ pub struct PaymentCodeInvoiceKey {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct PaymentCodeInvoicePrefix {
-    payment_code_id: PublicKey,
+    payment_code_id: PaymentCodeId,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
