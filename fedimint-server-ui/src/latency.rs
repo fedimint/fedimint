@@ -5,6 +5,7 @@ use fedimint_core::PeerId;
 use maud::{Markup, html};
 
 pub fn render(
+    guardian_name: &BTreeMap<PeerId, String>,
     consensus_ord_latency: Option<Duration>,
     p2p_connection_status: &BTreeMap<PeerId, Option<Duration>>,
 ) -> Markup {
@@ -33,7 +34,7 @@ pub fn render(
                     table class="table table-striped" {
                         thead {
                             tr {
-                                th { "ID" }
+                                th { "Peer" }
                                 th { "Status" }
                                 th { "Round Trip" }
                             }
@@ -41,7 +42,15 @@ pub fn render(
                         tbody {
                             @for (peer_id, rtt) in p2p_connection_status {
                                 tr {
-                                    td { (peer_id.to_string()) }
+                                    td { (
+                                        format!("{} ({})",
+                                        peer_id,
+                                        guardian_name
+                                            .get(peer_id)
+                                            .map(AsRef::as_ref)
+                                            .unwrap_or("")
+                                        )
+                                    ) }
                                     td {
                                         @match rtt {
                                             Some(_) => {

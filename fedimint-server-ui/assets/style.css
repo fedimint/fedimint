@@ -132,6 +132,13 @@ body {
   font-size: 1rem;
 }
 
+/* in case of very wide metadata, allow breaking lines */
+pre code {
+  white-space: pre-wrap;
+  word-break: break-all;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
 
 /* Too small buttons look weird */
 .btn-min-width {

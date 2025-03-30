@@ -104,7 +104,10 @@ async fn dashboard_view(
     // Conditionally add Meta UI if the module is available
     let meta_content = html! {
         @if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
-            (meta::render(meta_module).await)
+            (meta::render(
+                meta_module,
+                &guardian_names,
+            ).await)
         }
     };
 
@@ -118,14 +121,14 @@ async fn dashboard_view(
                         table class="table table-sm mb-0" {
                             thead {
                                 tr {
-                                    th { "Guardian ID" }
+                                    th { "Peer ID" }
                                     th { "Guardian Name" }
                                 }
                             }
                             tbody {
-                                @for (guardian_id, name) in guardian_names {
+                                @for (guardian_id, name) in &guardian_names {
                                     tr {
-                                        td { (guardian_id.to_string()) }
+                                        td { (guardian_id) }
                                         td { (name) }
                                     }
                                 }
@@ -153,7 +156,7 @@ async fn dashboard_view(
 
             // Peer Connection Status Column
             div class="col-lg-6" {
-                (latency::render(consensus_ord_latency, &p2p_connection_status))
+                (latency::render(&guardian_names, consensus_ord_latency, &p2p_connection_status))
             }
         }
 
@@ -180,6 +183,7 @@ async fn dashboard_update(
         return Redirect::to("/login").into_response();
     }
 
+    let guardian_names = state.api.guardian_names().await;
     let session_count = state.api.session_count().await;
     let consensus_ord_latency = state.api.consensus_ord_latency().await;
     let p2p_connection_status = state.api.p2p_connection_status().await;
@@ -189,7 +193,11 @@ async fn dashboard_update(
     let content = html! {
         (render_session_count(session_count))
 
-        (latency::render(consensus_ord_latency, &p2p_connection_status))
+        (latency::render(
+            &guardian_names,
+            consensus_ord_latency,
+            &p2p_connection_status
+        ))
 
         @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
             (lnv2::render(lightning).await)

@@ -14,7 +14,7 @@ use crate::error::{RequestError, RequestResult};
 use crate::{AuthState, LOG_UI, check_auth};
 
 // Function to render the Meta module UI section
-pub async fn render(meta: &Meta) -> Markup {
+pub async fn render(meta: &Meta, guardian_names: &BTreeMap<PeerId, String>) -> Markup {
     // Get current consensus value
     let consensus_value = meta.handle_get_consensus_request_ui().await.ok().flatten();
     // Get current revision number
@@ -68,7 +68,11 @@ pub async fn render(meta: &Meta) -> Markup {
                         }
 
                         // Current Submissions Section
-                        (render_submissions_form(meta.our_peer_id, &submissions))
+                        (render_submissions_form(
+                            meta.our_peer_id,
+                            &guardian_names,
+                            &submissions
+                        ))
                     }
                 }
             }
@@ -76,7 +80,11 @@ pub async fn render(meta: &Meta) -> Markup {
     }
 }
 
-fn render_submissions_form(our_id: PeerId, submissions: &BTreeMap<PeerId, Value>) -> Markup {
+fn render_submissions_form(
+    our_id: PeerId,
+    guardian_names: &BTreeMap<PeerId, String>,
+    submissions: &BTreeMap<PeerId, Value>,
+) -> Markup {
     let mut submissions_by_value: HashMap<String, BTreeSet<PeerId>> = HashMap::new();
 
     for (peer_id, value) in submissions {
@@ -96,7 +104,7 @@ fn render_submissions_form(our_id: PeerId, submissions: &BTreeMap<PeerId, Value>
                     table class="table table-sm" {
                         thead {
                             tr {
-                                th { "Peer IDs" }
+                                th { "Peers" }
                                 th { "Submission" }
                                 th { "Actions" }
                             }
@@ -104,11 +112,17 @@ fn render_submissions_form(our_id: PeerId, submissions: &BTreeMap<PeerId, Value>
                         tbody {
                             @for (value_str, peer_ids) in submissions_by_value {
                                 tr {
-                                    td { (
-                                        peer_ids.iter()
-                                        .map(|n| n.to_string())
-                                        .collect::<Vec<String>>()
-                                        .join(", "))
+                                    td {
+                                        @for peer_id in peer_ids.iter() {
+                                            p {(
+                                                format!("{} ({})",
+                                                    peer_id,
+                                                    guardian_names.get(peer_id)
+                                                        .map(AsRef::as_ref)
+                                                        .unwrap_or(""))
+
+                                            )}
+                                        }
                                     }
                                     td {
                                         pre class="m-0 p-2 bg-light" style="max-height: 150px; overflow-y: auto;" {
@@ -178,6 +192,7 @@ pub async fn post_submit(
         return Ok(Redirect::to("/login").into_response());
     }
 
+    let guardian_names = state.api.guardian_names().await;
     let meta_module = state.api.get_module::<Meta>().unwrap();
 
     let top_level_keys = form.top_level_keys()?;
@@ -202,7 +217,11 @@ pub async fn post_submit(
 
         // Re-render submission with our submission added, as it will take couple of milliseconds
         // for it to get processed and it's confusing if it doesn't immediatel show up.
-        (render_submissions_form(meta_module.our_peer_id, &submissions))
+        (render_submissions_form(
+            meta_module.our_peer_id,
+            &guardian_names,
+            &submissions
+        ))
     };
     Ok(Html(content.into_string()).into_response())
 }
@@ -216,6 +235,7 @@ pub async fn post_reset(
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
         return Ok(Redirect::to("/login").into_response());
     }
+    let guardian_names = state.api.guardian_names().await;
 
     let meta_module = state.api.get_module::<Meta>().unwrap();
 
@@ -251,7 +271,11 @@ pub async fn post_reset(
 
         // Re-render submission with our submission added, as it will take couple of milliseconds
         // for it to get processed and it's confusing if it doesn't immediatel show up.
-        (render_submissions_form(meta_module.our_peer_id, &submissions))
+        (render_submissions_form(
+            meta_module.our_peer_id,
+            &guardian_names,
+            &submissions
+        ))
     };
     Ok(Html(content.into_string()).into_response())
 }
