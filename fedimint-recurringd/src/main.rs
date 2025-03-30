@@ -22,6 +22,7 @@ use fedimint_rocksdb::RocksDb;
 use lightning_invoice::Bolt11Invoice;
 use lnurl::pay::{LnURLPayInvoice, PayResponse};
 use tokio::net::TcpListener;
+use tracing::debug;
 
 #[derive(Debug, Parser)]
 struct CliOpts {
@@ -161,6 +162,8 @@ struct ApiError(anyhow::Error);
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response<Body> {
+        debug!("ApiError: {}", self.0);
+
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
