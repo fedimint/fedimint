@@ -188,7 +188,7 @@ impl RecurringInvoiceServer {
             &0,
         )
         .await;
-        dbtx.commit_tx().await;
+        dbtx.commit_tx_result().await?;
 
         Ok(payment_code)
     }
