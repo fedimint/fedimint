@@ -68,7 +68,7 @@ impl Recurringd {
 
         // Poll to ensure the service is ready by checking the /federations endpoint
         poll("waiting for recurringd to be ready", || async {
-            match get(format!("http://{}/federations", recurringd.addr)).await {
+            match get(format!("http://{}/lnv1/federations", recurringd.addr)).await {
                 Ok(response) if response.status().is_success() => Ok(()),
                 _ => {
                     sleep(tokio::time::Duration::from_millis(100)).await;
@@ -90,7 +90,7 @@ impl Recurringd {
 
     // Add a federation to recurringd
     pub async fn add_federation(&self, invite_code: &str) -> Result<String> {
-        let url = format!("http://{}/federations", self.addr);
+        let url = format!("http://{}/lnv1/federations", self.addr);
         let client = reqwest::Client::new();
         let response = client
             .put(&url)
@@ -105,7 +105,7 @@ impl Recurringd {
 
     // List federations registered with recurringd
     pub async fn list_federations(&self) -> Result<String> {
-        let url = format!("http://{}/federations", self.addr);
+        let url = format!("http://{}/lnv1/federations", self.addr);
         let client = reqwest::Client::new();
         let response = client
             .get(&url)

@@ -63,7 +63,8 @@ impl LightningClientModule {
 
                         let payment_code_root_key = self.get_payment_code_root_key(next_idx);
 
-                        let recurringd_client = RecurringdClient::new(recurringd_api_inner.clone());
+                        let recurringd_client =
+                            RecurringdClient::new(&recurringd_api_inner.clone());
                         let register_response = recurringd_client
                             .register_recurring_payment_code(
                                 self.client_ctx
@@ -151,7 +152,7 @@ impl LightningClientModule {
                 .await
                 .into_iter()
                 .map(|(payment_code_idx, payment_code)| Box::pin(async move {
-                    let client = RecurringdClient::new(payment_code.recurringd_api.clone());
+                    let client = RecurringdClient::new(&payment_code.recurringd_api.clone());
                     let invoice_index = payment_code.last_derivation_index + 1;
 
                     trace!(

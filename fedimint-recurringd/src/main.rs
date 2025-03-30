@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let db = RocksDb::open(cli_opts.data_dir).await?;
     let recurring_invoice_server = RecurringInvoiceServer::new(db, cli_opts.api_address).await?;
 
-    let app = axum::Router::new()
+    let api_v1 = axum::Router::new()
         .route("/federations", put(add_federation))
         .route("/federations", get(list_federations))
         .route("/paycodes", put(add_payment_code))
@@ -66,7 +66,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/paycodes/recipient/{payment_code_root_key}/generated/{invoice_index}",
             get(await_invoice),
-        )
+        );
+
+    let app = axum::Router::new()
+        .nest("/lnv1", api_v1)
         .with_state(AppState {
             recurring_invoice_server,
         });

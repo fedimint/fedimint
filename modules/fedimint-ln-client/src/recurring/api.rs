@@ -12,10 +12,11 @@ pub struct RecurringdClient {
 }
 
 impl RecurringdClient {
-    pub fn new(base_url: SafeUrl) -> Self {
+    pub fn new(base_url: &SafeUrl) -> Self {
         Self {
             client: reqwest::Client::new(),
-            base_url,
+            base_url: SafeUrl::parse(&format!("{base_url}lnv1/"))
+                .expect("failed to parse extended base url"),
         }
     }
 

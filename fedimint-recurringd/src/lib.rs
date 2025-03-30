@@ -194,7 +194,10 @@ impl RecurringInvoiceServer {
     }
 
     fn create_lnurl(&self, payment_code_id: PaymentCodeId) -> String {
-        let lnurl = LnUrl::from_url(format!("{}paycodes/{}", self.base_url, payment_code_id));
+        let lnurl = LnUrl::from_url(format!(
+            "{}lnv1/paycodes/{}",
+            self.base_url, payment_code_id
+        ));
         lnurl.encode()
     }
 
@@ -206,7 +209,7 @@ impl RecurringInvoiceServer {
         let PaymentCodeVariant::Lnurl { meta } = payment_code.variant;
 
         Ok(PayResponse {
-            callback: format!("{}paycodes/{}/invoice", self.base_url, payment_code_id),
+            callback: format!("{}lnv1/paycodes/{}/invoice", self.base_url, payment_code_id),
             max_sendable: 100000000000,
             min_sendable: 1,
             tag: Tag::PayRequest,
