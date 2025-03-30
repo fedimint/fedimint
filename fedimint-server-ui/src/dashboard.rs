@@ -137,12 +137,9 @@ async fn dashboard_view(
 
             // Invite Code Column
             div class="col-md-6" {
-                (invite_code::invite_code_card())
+                (invite_code::render(&invite_code))
             }
         }
-
-        // Render the invite code modal
-        (invite_code::invite_code_modal(&invite_code))
 
         // Second row: Audit Summary and Peer Status
         div class="row gy-4 mt-2" {

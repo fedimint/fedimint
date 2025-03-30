@@ -73,10 +73,7 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
                                 }
                             }
 
-                            // Gateway list
-                            @if gateways.is_empty() {
-                                div class="alert alert-info" { "No gateways configured yet." }
-                            } @else {
+                            @if !gateways.is_empty() {
                                 div class="table-responsive" {
                                     table class="table table-hover" {
                                         thead {
