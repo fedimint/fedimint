@@ -229,7 +229,7 @@ impl RecurringInvoiceServer {
         ))
     }
 
-    pub async fn create_bolt11_invoice(
+    async fn create_bolt11_invoice(
         &self,
         payment_code_id: PaymentCodeId,
         amount: Amount,
