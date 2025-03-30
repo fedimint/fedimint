@@ -62,13 +62,19 @@ async fn main() -> anyhow::Result<()> {
             dev_fed
                 .fed()
                 .await?
+                .send_to_address(address.to_string(), 50_000)
+                .await?;
+
+            dev_fed
+                .fed()
+                .await?
                 .send_to_address(address.to_string(), 100_000)
                 .await?;
 
             dev_fed
                 .fed()
                 .await?
-                .send_to_address(address.to_string(), 200_000)
+                .send_to_address(address.to_string(), 150_000)
                 .await?;
 
             let esplora = SafeUrl::parse(&format!(
@@ -77,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
             ))
             .expect("Failed to parse esplora api");
 
-            await_claimable_deposit_count(&client, &esplora, 2).await?;
+            await_claimable_deposit_count(&client, &esplora, 3).await?;
 
             loop {
                 if cmd!(client, "module", "walletv2", "receive-fee")
@@ -111,6 +117,24 @@ async fn main() -> anyhow::Result<()> {
                     .expect("JSON serialization failed"),
             );
 
+            await_claimable_deposit_count(&client, &esplora, 2).await?;
+
+            assert_eq!(
+                cmd!(
+                    client,
+                    "module",
+                    "walletv2",
+                    "receive",
+                    "0",
+                    "--esplora",
+                    esplora
+                )
+                .out_json()
+                .await?,
+                serde_json::to_value(FinalOperationState::Success)
+                    .expect("JSON serialization failed"),
+            );
+
             await_claimable_deposit_count(&client, &esplora, 1).await?;
 
             assert_eq!(
@@ -131,20 +155,14 @@ async fn main() -> anyhow::Result<()> {
 
             await_claimable_deposit_count(&client, &esplora, 0).await?;
 
-            // This is a temporary fix until we find out why the received balance is not
-            // available.
-            dev_fed.fed().await?.pegin_client(300_000, &client).await?;
-
             loop {
-                if client.balance().await? >= 280_000 {
+                if client.balance().await? >= 290_000_000 {
                     break;
                 }
 
-                sleep_in_test(
-                    "Waiting for balance to become available".to_string(),
-                    Duration::from_secs(1),
-                )
-                .await;
+                cmd!(client, "dev", "wait", "5").out_json().await?;
+
+                info!("Waiting for balance to become available");
             }
 
             assert_eq!(
@@ -154,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
                     "walletv2",
                     "send",
                     address,
-                    Amount::from_sat(250_000)
+                    Amount::from_sat(275_000)
                 )
                 .out_json()
                 .await?,
@@ -178,7 +196,7 @@ async fn main() -> anyhow::Result<()> {
                     "--esplora",
                     esplora,
                     "--fee",
-                    Amount::from_sat(200_000)
+                    Amount::from_sat(250_000)
                 )
                 .out_json()
                 .await?,
@@ -188,7 +206,7 @@ async fn main() -> anyhow::Result<()> {
 
             await_claimable_deposit_count(&client, &esplora, 0).await?;
 
-            sleep(Duration::from_secs(5)).await;
+            sleep(Duration::from_secs(10)).await;
 
             dev_fed.fed().await?.bitcoind.mine_blocks(21).await?;
 
