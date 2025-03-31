@@ -1,0 +1,127 @@
+id: fedimintd 
+title: "Fedimint"
+version: 0.7.0-alpha
+release-notes: |
+  TODO: link to v0.7.0 release on GH
+  This release includes support for sideloading fedimintd that runs on mutinynet.
+license: MIT
+wrapper-repo: "https://github.com/fedimint/fedimint/start9-wrapper"
+upstream-repo: "https://github.com/fedimint/fedimint"
+support-site: "https://github.com/fedimint/fedimint/issues"
+marketing-site: "https://fedimint.org/"
+build: ["make"]
+description:
+  short: Federated E-Cash Mint
+  long: |
+    Fedimint is a modular open source protocol to custody and transact bitcoin in a community context, built on a strong foundation of privacy.
+assets:
+  license: LICENSE
+  icon: icon.png
+  instructions: instructions.md
+main:
+  type: docker
+  image: main
+  entrypoint: "/docker_entrypoint.sh"
+  args: []
+  mounts:
+    main: /start-os
+    fedimintd: /fedimintd
+hardware-requirements:
+  arch:
+    - x86_64
+    - aarch64
+health-checks:
+  web-ui:
+    name: Web Interface
+    success-message: Guardian dashboard is accessible
+    type: docker
+    image: main
+    entrypoint: "check-web.sh"
+    args: []
+    inject: true
+    system: false
+    io-format: json
+config: ~
+properties: ~
+volumes:
+  main:
+    type: data
+  fedimintd:
+    type: data
+interfaces:
+  main:
+    name: Guardian Interface
+    description: Initial setup and dashboard for this guardian
+    tor-config:
+      port-mapping:
+        80: "8175"
+    lan-config:
+      443:
+        ssl: true
+        internal: 8175
+    ui: true
+    protocols:
+      - http
+      - tcp
+  # Peer interface does not need to be defined here for fedimintd to work with StartOS using Iroh.
+  # This explicit definition is for clarity.
+  peer:
+    name: Peer Interface
+    description: Peer-to-peer connections managed using Iroh.
+    tor-config:
+      port-mapping:
+        8173: "8173"
+    # lan-config requires http, which is not supported by the peer interface
+    ui: false
+    protocols:
+      - tcp
+      - udp
+      - iroh
+  # API interface does not need to be defined here for fedimintd to work with StartOS using Iroh.
+  # This explicit definition is for clarity.
+  api:
+    name: API Interface
+    description: WebSocket API and Iroh API endpoints. WebSocket and Iroh can share the same port, since WebSocket uses TCP and Iroh uses UDP.
+    tor-config:
+      port-mapping:
+        8174: "8174"
+    lan-config:
+      8174:
+        ssl: false
+        internal: 8174
+    ui: false
+    protocols:
+      - http
+      - ws
+      - tcp
+      - udp
+      - iroh
+dependencies: {}
+# TODO: backup/restore is not tested for mutinynet, however it will be prior to mainnet release
+backup:
+  create:
+    type: docker
+    image: compat
+    system: true 
+    entrypoint: compat 
+    args:
+      - duplicity
+      - create
+      - /mnt/backup
+      - /root/data
+    mounts:
+      BACKUP: "/mnt/backup" 
+      main: "/root/data"
+  restore:
+    type: docker
+    image: compat
+    system: true
+    entrypoint: compat
+    args:
+      - duplicity
+      - restore
+      - /mnt/backup
+      - /root/data
+    mounts:
+      BACKUP: "/mnt/backup"
+      main: "/root/data"
