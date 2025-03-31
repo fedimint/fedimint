@@ -221,14 +221,18 @@ impl ConsensusApi {
         let status_by_peer = self
             .status_receivers
             .iter()
-            .map(|(peer, (p2p_receiver, ci_receiver))| {
+            .filter_map(|(peer, (p2p_receiver, ci_receiver))| {
+                if *peer == self.cfg.local.identity {
+                    return None;
+                }
+
                 let consensus_status = PeerStatus {
                     connection_status: *p2p_receiver.borrow(),
                     last_contribution: *ci_receiver.borrow(),
                     flagged: ci_receiver.borrow().unwrap_or(0) + 1 < session_count,
                 };
 
-                (*peer, consensus_status)
+                Some((*peer, consensus_status))
             })
             .collect::<HashMap<PeerId, PeerStatus>>();
 
