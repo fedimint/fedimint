@@ -47,58 +47,59 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
 
                         // Gateway management
                         div {
-                            h5 { "Gateway Management" }
-                            // Add new gateway form
-                            div class="mb-4" {
-                                form action="/lnv2_gateway_add" method="post" class="row g-3" {
-                                    div class="col-md-9" {
-                                        div class="form-group" {
-                                            div class="text-muted mb-1" style="font-size: 0.875em;" {
-                                                "Please enter a valid URL starting with http:// or https://"
+                            div class="row" {
+                                // Left tile - Gateway list or message
+                                div class="col-lg-6 pe-lg-4 position-relative" {
+                                    div class="h-100" {
+                                        @if gateways.is_empty() {
+                                            div class="text-center p-4" {
+                                                p { "Configure a gateway to enable Lightning payments for your users." }
                                             }
-                                            input
-                                                type="url"
-                                                class="form-control"
-                                                id="gateway-url"
-                                                name="gateway_url"
-                                                placeholder="Enter gateway URL"
-                                                required;
-                                        }
-                                    }
-                                    div class="col-md-3" {
-                                        div style="margin-top: 24px;" {
-                                            button type="submit" class="btn btn-primary w-100 form-control" { "Add Gateway" }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Gateway list
-                            @if gateways.is_empty() {
-                                div class="alert alert-info" { "No gateways configured yet." }
-                            } @else {
-                                div class="table-responsive" {
-                                    table class="table table-hover" {
-                                        thead {
-                                            tr {
-                                                th { "Gateway URL" }
-                                                th class="text-end" { "Actions" }
-                                            }
-                                        }
-                                        tbody {
-                                            @for gateway in &gateways {
-                                                tr {
-                                                    td {
-                                                        a href=(gateway.to_string()) target="_blank" { (gateway.to_string()) }
-                                                    }
-                                                    td class="text-end" {
-                                                        form action="/lnv2_gateway_remove" method="post" style="display: inline;" {
-                                                            input type="hidden" name="gateway_url" value=(gateway.to_string());
-                                                            button type="submit" class="btn btn-sm btn-danger" {
-                                                                "Remove"
+                                        } @else {
+                                            div class="table-responsive" {
+                                                table class="table table-hover" {
+                                                    tbody {
+                                                        @for gateway in &gateways {
+                                                            tr {
+                                                                td { (gateway.to_string()) }
+                                                                td class="text-end" {
+                                                                    form action="/lnv2_gateway_remove" method="post" style="display: inline;" {
+                                                                        input type="hidden" name="gateway_url" value=(gateway.to_string());
+                                                                        button type="submit" class="btn btn-sm btn-danger" {
+                                                                            "Remove"
+                                                                        }
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Add vertical divider
+                                    div class="position-absolute end-0 top-0 bottom-0 d-none d-lg-block" style="width: 1px; background-color: #dee2e6;" {}
+                                }
+
+                                // Right tile - Add gateway form
+                                div class="col-lg-6 ps-lg-4" {
+                                    div class="d-flex flex-column align-items-center h-100" {
+                                        form action="/lnv2_gateway_add" method="post" class="w-100" style="max-width: 400px;" {
+                                            div class="mb-3" {
+                                                input
+                                                    type="url"
+                                                    class="form-control"
+                                                    id="gateway-url"
+                                                    name="gateway_url"
+                                                    placeholder="Enter gateway url"
+                                                    required;
+                                            }
+                                            div class="text-muted mb-3 text-center" style="font-size: 0.875em;" {
+                                                "Please enter a valid URL starting with http:// or https://"
+                                            }
+                                            div class="text-center" {
+                                                button type="submit" class="btn btn-primary" style="min-width: 150px;" {
+                                                    "Add Gateway"
                                                 }
                                             }
                                         }

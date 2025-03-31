@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::{Display, Formatter};
 
 use fedimint_core::core::ModuleInstanceId;
@@ -85,7 +85,7 @@ impl Display for AuditItem {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct AuditSummary {
     pub net_assets: i64,
-    pub module_summaries: HashMap<ModuleInstanceId, ModuleSummary>,
+    pub module_summaries: BTreeMap<ModuleInstanceId, ModuleSummary>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -117,7 +117,7 @@ impl AuditSummary {
 fn generate_module_summaries<'a>(
     audit_items: impl Iterator<Item = &'a AuditItem>,
     module_instance_id_to_kind: &HashMap<ModuleInstanceId, String>,
-) -> HashMap<ModuleInstanceId, ModuleSummary> {
+) -> BTreeMap<ModuleInstanceId, ModuleSummary> {
     audit_items
         .filter_map(|item| {
             item.module_instance_id
@@ -212,7 +212,7 @@ fn creates_audit_summary_from_audit() {
     );
     let expected_audit_summary = AuditSummary {
         net_assets: 0,
-        module_summaries: HashMap::from([
+        module_summaries: BTreeMap::from_iter([
             (
                 0,
                 ModuleSummary {
@@ -252,7 +252,7 @@ fn audit_summary_includes_placeholders() {
     );
     let expected_audit_summary = AuditSummary {
         net_assets: 0,
-        module_summaries: HashMap::from([
+        module_summaries: BTreeMap::from_iter([
             (
                 0,
                 ModuleSummary {
