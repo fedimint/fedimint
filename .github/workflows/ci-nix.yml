@@ -399,7 +399,7 @@ jobs:
 
   pkgs:
     if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
-    name: "Release packages: ${{ matrix.build.flake-output }} on ${{ matrix.platform }}"
+    name: "Release packages: ${{ matrix.build.flake-output }} on ${{ matrix.platform.name }}"
 
     strategy:
       matrix:
@@ -409,11 +409,15 @@ jobs:
             timeout: 60
             build-deb: true
             build-rpm: true
+            build-bundled: true
+            shasum-cmd: sha256sum
           - name: macos-aarch64
             runs-on: macos-14
             timeout: 90
             build-deb: false
             build-rpm: false
+            build-bundled: false
+            shasum-cmd: shasum -a 256
         build:
           - flake-output: fedimint-pkgs
             bins: fedimintd,fedimint-cli,fedimint-dbtool,fedimint-recoverytool
@@ -487,9 +491,11 @@ jobs:
                 cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
               fi
             fi
-            # Note: keep in sync with sign.sh
-            >&2 echo "Building bundled: $bin"
-            nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && sha256sum "bins/$bin-$BUILD_ID"
+            if [ "${{ matrix.build.build-bundled }}" = "true" ]; then
+              # Note: keep in sync with sign.sh
+              >&2 echo "Building bundled: $bin"
+              nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && ${{ matrix.platform.shasum-cmd }} "bins/$bin-$BUILD_ID"
+            fi
           done
 
       - name: Check version ${{ matrix.build.bins }}
@@ -505,7 +511,7 @@ jobs:
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
             >&2 echo "Checking sha256sum: $bin"
-            nix build -L .#$bin && sha256sum "./result/bin/$bin"
+            nix build -L .#$bin && ${{ matrix.platform.shasum-cmd }} "./result/bin/$bin"
           done
 
       - name: Upload Binaries
