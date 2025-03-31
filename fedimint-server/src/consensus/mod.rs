@@ -187,14 +187,6 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
 
-    let api_handler = start_consensus_api(
-        &cfg.local,
-        consensus_api.clone(),
-        force_api_secrets.clone(),
-        ws_api_bind_addr,
-    )
-    .await;
-
     if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
         Box::pin(start_iroh_api(
             iroh_api_sk,
@@ -202,6 +194,14 @@ pub async fn run(
             consensus_api.clone(),
             task_group,
         ))
+        .await;
+    } else {
+        start_consensus_api(
+            &cfg.local,
+            consensus_api.clone(),
+            force_api_secrets.clone(),
+            ws_api_bind_addr,
+        )
         .await;
     }
 
@@ -255,12 +255,6 @@ pub async fn run(
     }
     .run()
     .await?;
-
-    api_handler
-        .stop()
-        .expect("Consensus api should still be running");
-
-    api_handler.stopped().await;
 
     Ok(())
 }
