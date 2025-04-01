@@ -463,6 +463,7 @@
             fedimint-cli
             fedimintd
             fedimint-load-test-tool
+            fedimint-recurringd
             ;
           inherit (craneMultiBuild)
             client-pkgs

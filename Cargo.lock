@@ -2129,6 +2129,7 @@ dependencies = [
  "itertools 0.13.0",
  "nix 0.29.0",
  "rand 0.8.5",
+ "reqwest 0.12.9",
  "semver",
  "serde",
  "serde_json",
@@ -3743,6 +3744,31 @@ dependencies = [
  "futures",
  "hex",
  "miniscript",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-recurringd"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "axum 0.8.1",
+ "clap",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-derive-secret",
+ "fedimint-ln-client",
+ "fedimint-logging",
+ "fedimint-mint-client",
+ "fedimint-rocksdb",
+ "futures",
+ "lightning-invoice",
+ "lnurl-rs",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -6344,6 +6370,19 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "lnurlp"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "fedimint-core",
+ "lightning-invoice",
+ "lnurl-rs",
+ "reqwest 0.12.9",
+ "tokio",
 ]
 
 [[package]]
