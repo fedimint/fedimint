@@ -874,6 +874,11 @@ impl ClientModule for MintClientModule {
                     let value = self.await_spend_oob_refund(req.operation_id).await;
                     yield serde_json::to_value(value)?;
                 }
+                "note_counts_by_denomination" => {
+                    let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+                    let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
+                    yield serde_json::to_value(note_counts)?;
+                }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
                     unreachable!()

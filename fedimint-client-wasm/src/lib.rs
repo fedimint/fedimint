@@ -82,17 +82,6 @@ impl WasmClient {
         Ok(serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))?)
     }
 
-    #[wasm_bindgen]
-    pub async fn get_note_counts_by_denomination(&self) -> Result<String, JsError> {
-        let mint = self
-            .client
-            .get_first_module::<fedimint_mint_client::MintClientModule>()
-            .map_err(|e| JsError::new(&e.to_string()))?
-            .inner();
-        let note_counts = mint.get_note_counts_by_denomination().await.map_err(|e| JsError::new(&e.to_string()))?;
-        Ok(serde_json::to_string(&note_counts).unwrap())
-    }
-
     async fn client_builder(db: Database) -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
         let mut builder = fedimint_client::Client::builder(db).await?;
         builder.with_module(MintClientInit);
