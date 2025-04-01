@@ -354,4 +354,27 @@ mod tests {
         .await?;
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn test_preview_federation_integration() -> Result<()> {
+        // Get a real invite code from the test federation
+        let invite_code_str = faucet::invite_code().await?;
+        
+        // Test the preview_federation function
+        let preview_json = WasmClient::preview_federation(&invite_code_str).await?;
+        let preview: serde_json::Value = serde_json::from_str(&preview_json)?;
+        
+        // Verify the structure and content
+        assert!(preview.get("federationId").is_some());
+        assert!(preview.get("endpoints").is_some());
+        assert!(preview.get("metadata").is_some());
+        
+        // Compare with parse_invite_code results
+        let parsed_json = WasmClient::parse_invite_code(&invite_code_str)?;
+        let parsed: serde_json::Value = serde_json::from_str(&parsed_json)?;
+        
+        assert_eq!(preview["federationId"].as_str().unwrap(), parsed["federation_id"].as_str().unwrap());
+        
+        Ok(())
+    }
 }

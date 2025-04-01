@@ -36,3 +36,6 @@ wasm-bindgen = "=0.2.92"                      # must match the nix provided wasm
 wasm-bindgen-futures = "0.4.42"
 wasm-bindgen-test = "0.3.34"
 lightning-invoice = { workspace = true }
+
+[dependencies]
+web-sys = { version = "0.3", features = ["console", "Window"] }
