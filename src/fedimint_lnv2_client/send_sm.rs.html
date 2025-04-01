@@ -39,9 +39,9 @@
 <a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">pub struct </span>SendSMCommon {
 <a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">pub </span>operation_id: OperationId,
 <a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">pub </span>outpoint: OutPoint,
-<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">pub </span>gateway_api: SafeUrl,
-<a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">pub </span>contract: OutgoingContract,
-<a href=#44 id=44 data-nosnippet>44</a>    <span class="kw">pub </span>invoice: LightningInvoice,
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">pub </span>contract: OutgoingContract,
+<a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">pub </span>gateway_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+<a href=#44 id=44 data-nosnippet>44</a>    <span class="kw">pub </span>invoice: <span class="prelude-ty">Option</span>&lt;LightningInvoice&gt;,
 <a href=#45 id=45 data-nosnippet>45</a>    <span class="kw">pub </span>refund_keypair: Keypair,
 <a href=#46 id=46 data-nosnippet>46</a>}
 <a href=#47 id=47 data-nosnippet>47</a>
@@ -93,11 +93,11 @@
 <a href=#93 id=93 data-nosnippet>93</a>                <span class="macro">vec!</span>[
 <a href=#94 id=94 data-nosnippet>94</a>                    StateTransition::new(
 <a href=#95 id=95 data-nosnippet>95</a>                        <span class="self">Self</span>::gateway_send_payment(
-<a href=#96 id=96 data-nosnippet>96</a>                            <span class="self">self</span>.common.gateway_api.clone(),
+<a href=#96 id=96 data-nosnippet>96</a>                            <span class="self">self</span>.common.gateway_api.clone().unwrap(),
 <a href=#97 id=97 data-nosnippet>97</a>                            context.federation_id,
 <a href=#98 id=98 data-nosnippet>98</a>                            <span class="self">self</span>.common.outpoint,
 <a href=#99 id=99 data-nosnippet>99</a>                            <span class="self">self</span>.common.contract.clone(),
-<a href=#100 id=100 data-nosnippet>100</a>                            <span class="self">self</span>.common.invoice.clone(),
+<a href=#100 id=100 data-nosnippet>100</a>                            <span class="self">self</span>.common.invoice.clone().unwrap(),
 <a href=#101 id=101 data-nosnippet>101</a>                            <span class="self">self</span>.common.refund_keypair,
 <a href=#102 id=102 data-nosnippet>102</a>                            context.clone(),
 <a href=#103 id=103 data-nosnippet>103</a>                        ),
