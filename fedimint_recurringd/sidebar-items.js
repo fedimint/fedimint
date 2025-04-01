@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PaymentCodeInvoice"],"fn":["await_invoice_confirmed"],"mod":["db"],"struct":["RecurringInvoiceServer"]};

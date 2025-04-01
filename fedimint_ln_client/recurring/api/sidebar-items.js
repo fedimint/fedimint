@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ApiResult","RecurringdApiError"],"struct":["RecurringPaymentRegistrationRequest","RecurringPaymentRegistrationResponse","RecurringdClient"]};

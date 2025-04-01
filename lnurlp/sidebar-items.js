@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_invoice","main"],"struct":["Args"]};
