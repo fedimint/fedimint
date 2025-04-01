@@ -13,9 +13,8 @@ description = "fedimintd daemon for Fedimint"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default = ["telemetry", "iroh"]
+default = ["telemetry"]
 telemetry = ["fedimint-logging/telemetry"]
-iroh = ["fedimint-server/iroh"]
 
 [[bin]]
 name = "fedimintd"

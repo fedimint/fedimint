@@ -25,3 +25,5 @@ futures = { workspace = true }
 gloo-net = "0.6.0"
 rand = { workspace = true }
 wasm-bindgen-test = "0.3.42"
+# workaround https://github.com/n0-computer/iroh/issues/3252
+web-sys = { version = "0.3.77" }
