@@ -82,15 +82,6 @@ impl WasmClient {
         Ok(serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))?)
     }
 
-    async fn client_builder(db: Database) -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
-        let mut builder = fedimint_client::Client::builder(db).await?;
-        builder.with_module(MintClientInit);
-        builder.with_module(LightningClientInit::default());
-        // FIXME: wallet module?
-        builder.with_primary_module(1);
-        Ok(builder)
-    }
-
     #[wasm_bindgen]
     /// Parse a bolt11 invoice and extract its components
     /// without joining the federation
@@ -115,6 +106,24 @@ impl WasmClient {
             "memo": description,
         });
         Ok(serde_json::to_string(&response).map_err(|e| JsError::new(&e.to_string()))?)
+    }
+
+    #[wasm_bindgen]
+    /// Preview a federation by its invite code without joining it
+    /// Returns federation information including config, federation ID, and other metadata
+    pub async fn preview_federation(invite_code: &str) -> Result<String, JsError> {
+        Self::preview_federation_inner(invite_code)
+            .await
+            .map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    async fn client_builder(db: Database) -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
+        let mut builder = fedimint_client::Client::builder(db).await?;
+        builder.with_module(MintClientInit);
+        builder.with_module(LightningClientInit::default());
+        // FIXME: wallet module?
+        builder.with_primary_module(1);
+        Ok(builder)
     }
 
     async fn open_inner(client_name: String) -> anyhow::Result<Option<WasmClient>> {
@@ -207,38 +216,165 @@ impl WasmClient {
         method: &'a str,
         payload: String,
     ) -> impl futures::Stream<Item = anyhow::Result<serde_json::Value>> + 'a {
-        try_stream! {
-            let payload: serde_json::Value = serde_json::from_str(&payload)?;
+        async_stream::stream! {
+            // Parse the payload
+            let payload_result = serde_json::from_str::<serde_json::Value>(&payload);
+            if let Err(e) = payload_result {
+                yield Err(anyhow::format_err!("Failed to parse payload: {}", e));
+                return;
+            }
+            let payload = payload_result.unwrap();
+
             match module {
                 "" => {
-                    let mut stream = client.handle_global_rpc(method.to_owned(), payload);
-                    while let Some(item) = stream.next().await {
-                        yield item?;
+                    if method == "preview_federation" {
+                        // Extract invite code
+                        let invite_code = match payload.get("invite_code").and_then(|v| v.as_str()) {
+                            Some(code) => code,
+                            None => {
+                                yield Err(anyhow::format_err!("Missing or invalid invite_code parameter"));
+                                return;
+                            }
+                        };
+                        
+                        // Parse invite code
+                        let invite_code = match InviteCode::from_str(invite_code) {
+                            Ok(code) => code,
+                            Err(e) => {
+                                yield Err(anyhow::format_err!("Invalid invite code: {}", e));
+                                return;
+                            }
+                        };
+                        
+                        // Download config
+                        let connector = fedimint_api_client::api::net::Connector::default();
+                        let config = match connector.download_from_invite_code(&invite_code).await {
+                            Ok(config) => config,
+                            Err(e) => {
+                                yield Err(anyhow::format_err!("Failed to download federation config: {}", e));
+                                return;
+                            }
+                        };
+                        
+                        // Extract federation ID
+                        let federation_id = invite_code.federation_id().to_string();
+                        
+                        // Extract endpoints
+                        let endpoints = config.global.api_endpoints.iter()
+                            .map(|(_, url)| url.url.to_string())
+                            .collect::<Vec<String>>();
+                        
+                        // Extract metadata
+                        let metadata = match config.meta::<serde_json::Value>("metadata") {
+                            Ok(Some(meta)) => meta,
+                            Ok(None) => serde_json::json!({}),
+                            Err(_) => serde_json::json!({}),
+                        };
+                        
+                        // Serialize config
+                        let config_value = match serde_json::to_value(&config) {
+                            Ok(value) => value,
+                            Err(e) => {
+                                yield Err(anyhow::format_err!("Failed to serialize config: {}", e));
+                                return;
+                            }
+                        };
+                        
+                        // Create response
+                        let response = json!({
+                            "config": config_value,
+                            "federationId": federation_id,
+                            "endpoints": endpoints,
+                            "metadata": metadata,
+                        });
+                        
+                        yield Ok(response);
+                    } else {
+                        let mut stream = client.handle_global_rpc(method.to_owned(), payload);
+                        while let Some(item) = stream.next().await {
+                            yield item;
+                        }
                     }
                 }
                 "ln" => {
-                    let ln = client
-                        .get_first_module::<LightningClientModule>()?
-                        .inner();
-                    let mut stream = ln.handle_rpc(method.to_owned(), payload).await;
-                    while let Some(item) = stream.next().await {
-                        yield item?;
+                    match client.get_first_module::<LightningClientModule>() {
+                        Ok(ln) => {
+                            let mut stream = ln.inner().handle_rpc(method.to_owned(), payload).await;
+                            while let Some(item) = stream.next().await {
+                                yield item;
+                            }
+                        },
+                        Err(e) => {
+                            yield Err(anyhow::format_err!("Failed to get lightning module: {}", e));
+                        }
                     }
                 }
                 "mint" => {
-                    let mint = client
-                        .get_first_module::<fedimint_mint_client::MintClientModule>()?
-                        .inner();
-                    let mut stream = mint.handle_rpc(method.to_owned(), payload).await;
-                    while let Some(item) = stream.next().await {
-                        yield item?;
+                    match client.get_first_module::<fedimint_mint_client::MintClientModule>() {
+                        Ok(mint) => {
+                            let mut stream = mint.inner().handle_rpc(method.to_owned(), payload).await;
+                            while let Some(item) = stream.next().await {
+                                yield item;
+                            }
+                        },
+                        Err(e) => {
+                            yield Err(anyhow::format_err!("Failed to get mint module: {}", e));
+                        }
                     }
                 }
                 _ => {
-                    Err(anyhow::format_err!("module not found: {module}"))?;
-                    unreachable!()
+                    yield Err(anyhow::format_err!("Module not found: {}", module));
                 },
             }
         }
+    }
+
+    async fn preview_federation_inner(invite_code: &str) -> anyhow::Result<String> {
+        let invite_code = InviteCode::from_str(invite_code)?;
+        let connector = fedimint_api_client::api::net::Connector::default();
+        
+        // Download the configuration from the invite code
+        let config = connector.download_from_invite_code(&invite_code).await?;
+        
+        // Extract federation ID
+        let federation_id = invite_code.federation_id().to_string();
+        
+        // Extract endpoints
+        let endpoints = config.global.api_endpoints.iter()
+            .map(|(_, url)| url.url.to_string())
+            .collect::<Vec<String>>();
+        
+        // Extract metadata - fix: handle Option correctly
+        let metadata = match config.meta::<serde_json::Value>("metadata") {
+            Ok(Some(meta)) => meta,
+            Ok(None) => serde_json::json!({}),
+            Err(_) => serde_json::json!({}),
+        };
+        
+        // Create response JSON
+        let config_value = serde_json::to_value(&config)
+            .map_err(|e| anyhow::format_err!("Failed to serialize config: {}", e))?;
+        
+        let response = json!({
+            "config": config_value,
+            "federationId": federation_id,
+            "endpoints": endpoints,
+            "metadata": metadata,
+        });
+        
+        Ok(serde_json::to_string(&response)?)
+    }
+
+     fn handle_global_rpc_preview_federation(
+        invite_code: &str,
+    ) -> anyhow::Result<serde_json::Value> {
+        let invite_code = InviteCode::from_str(invite_code)?;
+        let federation_id = invite_code.federation_id().to_string();
+        let url = invite_code.url().to_string();
+        
+        Ok(json!({
+            "federationId": federation_id,
+            "url": url,
+        }))
     }
 }
