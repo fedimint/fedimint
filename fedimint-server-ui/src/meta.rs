@@ -376,6 +376,7 @@ pub fn render_meta_edit_form(
             }
             div class="input-group mb-2" {
                 select class="form-select"
+                    id="delete-key"
                     name="delete_key"
                 {
                     option value="" {}
@@ -386,6 +387,7 @@ pub fn render_meta_edit_form(
                 button class="btn btn-primary btn-min-width"
                     hx-post="/meta/delete"
                     hx-swap="none"
+                    hx-trigger="click, keypress[key=='Enter'] from:#delete-key"
                     title="Delete a value in a meta proposal"
                 { "Delete" }
             }
