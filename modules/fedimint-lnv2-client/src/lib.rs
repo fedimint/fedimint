@@ -101,18 +101,20 @@ impl SendOperationMeta {
 pub struct ReceiveOperationMeta {
     pub gateway: SafeUrl,
     pub contract: IncomingContract,
-    pub invoice: LightningInvoice,
+    pub invoice: Option<LightningInvoice>,
     pub custom_meta: Value,
 }
 
 impl ReceiveOperationMeta {
     /// Calculate the absolute fee paid to the gateway on success.
-    pub fn gateway_fee(&self) -> Amount {
+    /// Returns `None` if recovering an `IncomingContract`
+    pub fn gateway_fee(&self) -> Option<Amount> {
         match &self.invoice {
-            LightningInvoice::Bolt11(invoice) => {
+            Some(LightningInvoice::Bolt11(invoice)) => Some(
                 Amount::from_msats(invoice.amount_milli_satoshis().expect("Invoice has amount"))
-                    .saturating_sub(self.contract.commitment.amount)
-            }
+                    .saturating_sub(self.contract.commitment.amount),
+            ),
+            None => None,
         }
     }
 }
@@ -881,7 +883,7 @@ impl LightningClientModule {
                 LightningOperationMeta::Receive(ReceiveOperationMeta {
                     gateway,
                     contract,
-                    invoice: LightningInvoice::Bolt11(invoice),
+                    invoice: Some(LightningInvoice::Bolt11(invoice)),
                     custom_meta,
                 }),
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
