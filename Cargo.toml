@@ -290,5 +290,5 @@ opt-level = 1
 
 [profile.release]
 debug = "line-tables-only"
-lto = "fat"
+lto = true
 codegen-units = 4
