@@ -202,6 +202,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     let (contract, txid) = match operation.meta::<LightningOperationMeta>() {
         LightningOperationMeta::Send(meta) => (meta.contract, meta.change_outpoint_range.txid),
         LightningOperationMeta::Receive(..) => panic!("Operation Meta is a Receive variant"),
+        LightningOperationMeta::IncomingScan(..) => panic!("Operation Meta is a Receive variant"),
     };
 
     let client_input = ClientInput::<LightningInput> {

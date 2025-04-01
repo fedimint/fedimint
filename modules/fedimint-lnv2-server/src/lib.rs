@@ -40,7 +40,8 @@ use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, DECRYPTION_KEY_SHARE_ENDPOINT, GATEWAYS_ENDPOINT,
-    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    LIST_INCOMING_CONTRACTS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
@@ -637,6 +638,16 @@ impl ServerModule for Lightning {
                     let db = context.db();
 
                     Ok(Lightning::gateways(db).await)
+                }
+            },
+            api_endpoint! {
+                LIST_INCOMING_CONTRACTS_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Lightning, context, _params: ()| -> Vec<IncomingContract> {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    let incoming_contracts = dbtx.find_by_prefix(&IncomingContractPrefix).await.map(|(_, v)| v).collect::<Vec<_>>().await;
+                    Ok(incoming_contracts)
                 }
             },
         ]

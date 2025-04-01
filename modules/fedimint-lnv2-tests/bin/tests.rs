@@ -282,6 +282,62 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     // relative fee. Gateway receives: 1_000_000 payment.
     test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 1_000).await?;
 
+    test_payment_summary(gw_lnd, gw_ldk).await?;
+
+    test_scan_incoming(&client, federation.invite_code()?, gw_lnd, gw_ldk).await?;
+
+    Ok(())
+}
+
+async fn test_scan_incoming(
+    client: &Client,
+    invite_code: String,
+    gw_lnd: &Gatewayd,
+    gw_ldk: &Gatewayd,
+) -> anyhow::Result<()> {
+    info!("Testing scanning incoming contracts...");
+    let prev_balance = client.balance().await?;
+    // Generate invoice with client
+    let invoice = receive(client, &gw_lnd.addr, 1_000_000).await?.0;
+
+    // Pay the invoice
+    gw_ldk.pay_invoice(invoice).await?;
+
+    let secret = cmd!(client, "print-secret").out_json().await?["secret"]
+        .as_str()
+        .map(ToOwned::to_owned)
+        .unwrap();
+
+    let recover_client = devimint::federation::Client::create("restore-client").await?;
+    cmd!(
+        recover_client,
+        "restore",
+        "--mnemonic",
+        &secret,
+        "--invite-code",
+        &invite_code
+    )
+    .run()
+    .await?;
+
+    // Scan for incoming contracts to receive the paid invoice
+    assert_eq!(
+        cmd!(recover_client, "module", "lnv2", "scan-receive",)
+            .out_json()
+            .await?,
+        serde_json::to_value(true).expect("JSON serialization failed"),
+    );
+
+    let post_balance = recover_client.balance().await?;
+
+    // The balance should have increased by 1M (minus fees) after the recover client
+    // claimed the incoming contract
+    assert_eq!(prev_balance + 1_000_000 - 1_000 - 1_000, post_balance);
+
+    Ok(())
+}
+
+async fn test_payment_summary(gw_lnd: &Gatewayd, gw_ldk: &Gatewayd) -> anyhow::Result<()> {
     let gatewayd_version = util::Gatewayd::version_or_default().await;
     if gatewayd_version >= *VERSION_0_7_0_ALPHA {
         info!("Testing payment summary...");

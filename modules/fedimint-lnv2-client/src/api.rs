@@ -9,9 +9,11 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_lnv2_common::ContractId;
+use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, LIST_INCOMING_CONTRACTS_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT,
 };
 use rand::seq::SliceRandom;
 
@@ -34,6 +36,8 @@ pub trait LightningFederationApi {
     async fn add_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
 
     async fn remove_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
+
+    async fn list_incoming_contracts(&self) -> FederationResult<Vec<IncomingContract>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -133,5 +137,13 @@ where
             .await?;
 
         Ok(entry_existed)
+    }
+
+    async fn list_incoming_contracts(&self) -> FederationResult<Vec<IncomingContract>> {
+        self.request_current_consensus(
+            LIST_INCOMING_CONTRACTS_ENDPOINT.to_string(),
+            ApiRequestErased::new(()),
+        )
+        .await
     }
 }
