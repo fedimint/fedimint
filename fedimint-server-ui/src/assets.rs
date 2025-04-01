@@ -1,10 +1,15 @@
 use axum::Router;
-use axum::http::header::CONTENT_TYPE;
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
 pub(crate) fn get_static_asset(content_type: &'static str, body: &'static [u8]) -> Response {
-    ([(CONTENT_TYPE, content_type)], body).into_response()
+    (
+        [(CONTENT_TYPE, content_type)],
+        [(CACHE_CONTROL, format!("public, max-age={}", 60 * 60))],
+        body,
+    )
+        .into_response()
 }
 
 pub(crate) fn get_static_css(body: &'static str) -> Response {
