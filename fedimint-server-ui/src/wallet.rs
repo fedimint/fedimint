@@ -35,49 +35,26 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                 div class="card h-100" {
                     div class="card-header dashboard-header" { "Wallet" }
                     div class="card-body" {
-                        // Blockchain status information
-                        div class="mb-4" {
-                            h5 { "Blockchain Status" }
-                            table class="table" {
-                                tr {
-                                    th { "Consensus Block Count" }
-                                    td { (consensus_block_count) }
-                                }
-                                tr {
-                                    th { "Consensus Fee Rate" }
-                                    td { (consensus_fee_rate.sats_per_kvb) " sats/kvB" }
-                                }
+                        table class="table mb-4" {
+                            tr {
+                                th { "Consensus Block Count" }
+                                td { (consensus_block_count) }
                             }
-                        }
-
-                        // Wallet Balance Summary
-                        div class="mb-4" {
-                            h5 { "Balance Summary" }
-                            div class="row" {
-                                div class="col-md-4" {
-                                    div class="card bg-light mb-3" {
-                                        div class="card-body text-center" {
-                                            h6 class="card-title" { "Spendable Balance" }
-                                            p class="card-text fs-4" { (total_spendable) " sats" }
-                                        }
-                                    }
-                                }
-                                div class="col-md-4" {
-                                    div class="card bg-light mb-3" {
-                                        div class="card-body text-center" {
-                                            h6 class="card-title" { "Pending Outgoing" }
-                                            p class="card-text fs-4" { (total_pending_outgoing) " sats" }
-                                        }
-                                    }
-                                }
-                                div class="col-md-4" {
-                                    div class="card bg-light mb-3" {
-                                        div class="card-body text-center" {
-                                            h6 class="card-title" { "Pending Change" }
-                                            p class="card-text fs-4" { (total_pending_change) " sats" }
-                                        }
-                                    }
-                                }
+                            tr {
+                                th { "Consensus Fee Rate" }
+                                td { (consensus_fee_rate.sats_per_kvb) " sats/kvB" }
+                            }
+                            tr {
+                                th { "Spendable Balance" }
+                                td { (total_spendable) " sats" }
+                            }
+                            tr {
+                                th { "Pending Outgoing" }
+                                td { (total_pending_outgoing) " sats" }
+                            }
+                            tr {
+                                th { "Pending Change" }
+                                td { (total_pending_change) " sats" }
                             }
                         }
 
