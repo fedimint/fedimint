@@ -266,6 +266,7 @@
             "ci"
             "test"
             "release"
+            "release-heavy"
           ];
         };
 
