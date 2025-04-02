@@ -344,7 +344,7 @@ impl DevJitFed {
                 let fed = fed.get_try().await?.deref();
                 debug!(target: LOG_DEVIMINT, "Connecting recurringd to federation...");
                 let start_time = fedimint_core::time::now();
-                if !skip_setup {
+                if !skip_setup && !pre_dkg {
                     let invite_code = fed.invite_code()?;
                     recurringd.add_federation(&invite_code).await?;
                 }
