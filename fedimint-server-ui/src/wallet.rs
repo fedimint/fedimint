@@ -6,12 +6,12 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
     let consensus_fee_rate = wallet.consensus_feerate_ui().await;
     let wallet_summary = wallet.get_wallet_summary_ui().await;
     let total_spendable = wallet_summary.total_spendable_balance().to_sat();
-    let total_unsigned_outgoing = wallet_summary.total_unsigned_peg_out_balance().to_sat();
     let total_unsigned_change = wallet_summary.total_unsigned_change_balance().to_sat();
-    let total_unconfirmed_outgoing = wallet_summary.total_unconfirmed_peg_out_balance().to_sat();
     let total_unconfirmed_change = wallet_summary.total_unconfirmed_change_balance().to_sat();
     let total_available = total_spendable + total_unconfirmed_change + total_unsigned_change;
-  
+    let total_unsigned_outgoing = wallet_summary.total_unsigned_peg_out_balance().to_sat();
+    let total_unconfirmed_outgoing = wallet_summary.total_unconfirmed_peg_out_balance().to_sat();
+
     html! {
         div class="row gy-4 mt-2" {
             div class="col-12" {
@@ -50,6 +50,41 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                             tr {
                                 th { "Unconfirmed Outgoing Amount" }
                                 td { (total_unconfirmed_outgoing) " sats" }
+                            }
+                        }
+
+                        // Collapsible info section
+                        div class="mb-4" {
+                            p {
+                                button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#balanceInfo" aria-expanded="false" aria-controls="balanceInfo" {
+                                    "What do these amounts mean? "
+                                    i class="bi bi-info-circle" {}
+                                }
+                            }
+                            div class="collapse" id="balanceInfo" {
+                                div class="alert alert-info" {
+                                    dl class="row mb-0" {
+                                        dt class="col-sm-3" { "Spendable Amount" }
+                                        dd class="col-sm-9" { "UTXOs that are confirmed and are available to be spend by your users." }
+
+                                        dt class="col-sm-3" { "Change Amounts" }
+                                        dd class="col-sm-9" {
+                                            p class="mb-1" { strong { "Unsigned: " } "Change outputs from pegout transactions still waiting for guardian signatures." }
+                                            p class="mb-0" { strong { "Unconfirmed: " } "Change outputs with threshold of signatures, waiting for blockchain confirmations." }
+                                        }
+
+                                        dt class="col-sm-3" { "Total Available Balance" }
+                                        dd class="col-sm-9" {
+                                            "Sum of Spendable Amount and all Change amounts, both unsigned and unconfirmed. This represents all funds that will eventually be available to you once all transactions are confirmed."
+                                        }
+
+                                        dt class="col-sm-3" { "Outgoing Amounts" }
+                                        dd class="col-sm-9" {
+                                            p class="mb-1" { strong { "Unsigned: " } "Pegout outputs from pegout transactions still waiting for guardian signatures." }
+                                            p class="mb-0" { strong { "Unconfirmed: " } "Pegout outputs with threshold of signatures, waiting for blockchain confirmations." }
+                                        }
+                                    }
+                                }
                             }
                         }
 
