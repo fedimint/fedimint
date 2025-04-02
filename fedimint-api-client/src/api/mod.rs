@@ -1022,7 +1022,6 @@ impl ReconnectFederationApi {
             "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone())?.into_dyn(),
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
             "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
-            #[cfg(all(feature = "iroh", not(target_family = "wasm")))]
             "iroh" => iroh::IrohConnector::new(peers).await?.into_dyn(),
             scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
         };
@@ -1188,7 +1187,6 @@ impl ClientConnection {
     }
 }
 
-#[cfg(feature = "iroh")]
 mod iroh {
     use std::collections::{BTreeMap, BTreeSet};
     use std::str::FromStr;

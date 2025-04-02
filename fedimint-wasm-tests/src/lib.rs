@@ -1,5 +1,6 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::large_futures)]
+#![allow(dead_code)]
 
 use std::sync::Arc;
 
@@ -196,6 +197,7 @@ mod tests {
     // Tests that ChaCha20 crypto functions used for backup and recovery are
     // available in WASM at runtime. Related issue: https://github.com/fedimint/fedimint/issues/2843
     #[wasm_bindgen_test]
+    #[allow(clippy::unused_async)]
     async fn derive_chacha_key() {
         let root_secret = DerivableSecret::new_root(&[0x42; 32], &[0x2a; 32]);
         let key = root_secret.to_chacha20_poly1305_key();

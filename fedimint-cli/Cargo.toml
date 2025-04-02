@@ -13,9 +13,8 @@ description = "Fedimint client CLI interface"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default = ["tor", "iroh"]
+default = ["tor"]
 tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
-iroh = ["fedimint-client/iroh", "fedimint-api-client/iroh"]
 
 [[bin]]
 name = "fedimint-cli"
