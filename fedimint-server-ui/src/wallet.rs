@@ -2,6 +2,7 @@ use maud::{Markup, html};
 
 // Function to render the Wallet module UI section
 pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
+    let network = wallet.network_ui();
     let consensus_block_count = wallet.consensus_block_count_ui().await;
     let consensus_fee_rate = wallet.consensus_feerate_ui().await;
     let wallet_summary = wallet.get_wallet_summary_ui().await;
@@ -19,6 +20,10 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                     div class="card-header dashboard-header" { "Wallet" }
                     div class="card-body" {
                         table class="table mb-4" {
+                            tr {
+                                th { "Network" }
+                                td { (network.to_string()) }
+                            }
                             tr {
                                 th { "Consensus Block Count" }
                                 td { (consensus_block_count) }
