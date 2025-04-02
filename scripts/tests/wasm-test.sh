@@ -20,7 +20,7 @@ function run_tests() {
   export CARGO_BUILD_TARGET_DIR
   CARGO_BUILD_TARGET_DIR="${CARGO_BUILD_TARGET_DIR:-${PWD}/target}"
   CARGO_BUILD_TARGET_DIR="${CARGO_BUILD_TARGET_DIR}/pkgs/fedimint-wasm-tests"
-  WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --firefox --headless fedimint-wasm-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}}
+  WASM_BINDGEN_TEST_TIMEOUT=300 wasm-pack test --firefox --headless fedimint-wasm-tests ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} -- --nocapture
 }
 export -f run_tests
 
