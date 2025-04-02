@@ -53,7 +53,7 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
                                     div class="h-100" {
                                         @if gateways.is_empty() {
                                             div class="text-center p-4" {
-                                                p { "Configure a gateway to enable Lightning payments for your users." }
+                                                p { "You need a Lightning gateway to connect to your federation and then add its URL here in the dashboard to enable V2 Lightning payments for your users. You can either run your own gateway or reach out to the Fedimint team on " a href="https://chat.fedimint.org/" { "Discord" } " - we are running our own gateway and are happy to get you started." }
                                             }
                                         } @else {
                                             div class="table-responsive" {
@@ -91,7 +91,7 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
                                                     class="form-control"
                                                     id="gateway-url"
                                                     name="gateway_url"
-                                                    placeholder="Enter gateway url"
+                                                    placeholder="Enter gateway URL"
                                                     required;
                                             }
                                             div class="text-muted mb-3 text-center" style="font-size: 0.875em;" {
