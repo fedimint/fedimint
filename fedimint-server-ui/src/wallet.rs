@@ -5,30 +5,13 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
     let consensus_block_count = wallet.consensus_block_count_ui().await;
     let consensus_fee_rate = wallet.consensus_feerate_ui().await;
     let wallet_summary = wallet.get_wallet_summary_ui().await;
-
-    // Calculate total spendable balance
-    let total_spendable: u64 = wallet_summary
-        .spendable_utxos
-        .iter()
-        .map(|utxo| utxo.amount.to_sat())
-        .sum();
-
-    // Calculate pending outgoing (unsigned + unconfirmed)
-    let total_pending_outgoing: u64 = wallet_summary
-        .unsigned_peg_out_txos
-        .iter()
-        .chain(wallet_summary.unconfirmed_peg_out_txos.iter())
-        .map(|txo| txo.amount.to_sat())
-        .sum();
-
-    // Calculate pending incoming change
-    let total_pending_change: u64 = wallet_summary
-        .unsigned_change_utxos
-        .iter()
-        .chain(wallet_summary.unconfirmed_change_utxos.iter())
-        .map(|txo| txo.amount.to_sat())
-        .sum();
-
+    let total_spendable = wallet_summary.total_spendable_balance().to_sat();
+    let total_unsigned_outgoing = wallet_summary.total_unsigned_peg_out_balance().to_sat();
+    let total_unsigned_change = wallet_summary.total_unsigned_change_balance().to_sat();
+    let total_unconfirmed_outgoing = wallet_summary.total_unconfirmed_peg_out_balance().to_sat();
+    let total_unconfirmed_change = wallet_summary.total_unconfirmed_change_balance().to_sat();
+    let total_available = total_spendable + total_unconfirmed_change + total_unsigned_change;
+  
     html! {
         div class="row gy-4 mt-2" {
             div class="col-12" {
@@ -45,25 +28,36 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                                 td { (consensus_fee_rate.sats_per_kvb) " sats/kvB" }
                             }
                             tr {
-                                th { "Spendable Balance" }
+                                th { "Spendable Amount" }
                                 td { (total_spendable) " sats" }
                             }
                             tr {
-                                th { "Pending Outgoing" }
-                                td { (total_pending_outgoing) " sats" }
+                                th { "Unsigned Change Amount" }
+                                td { (total_unsigned_change) " sats" }
                             }
                             tr {
-                                th { "Pending Change" }
-                                td { (total_pending_change) " sats" }
+                                th { "Unconfirmed Change Amount" }
+                                td { (total_unconfirmed_change) " sats" }
+                            }
+                            tr {
+                                th { "Total Available Balance" }
+                                td { (total_available) " sats" }
+                            }
+                            tr {
+                                th { "Unsigned Outgoing Amount" }
+                                td { (total_unsigned_outgoing) " sats" }
+                            }
+                            tr {
+                                th { "Unconfirmed Outgoing Amount" }
+                                td { (total_unconfirmed_outgoing) " sats" }
                             }
                         }
 
                         // UTXO Tables
                         div class="mb-4" {
-                            // Pending Peg-out UTXOs Table
                             @if !wallet_summary.unconfirmed_peg_out_txos.is_empty() {
                                 div class="mb-4" {
-                                    h5 { "Pending Peg-out UTXOs" }
+                                    h5 { "Unconfirmed Pegout UTXOs" }
                                     div class="table-responsive" {
                                         table class="table table-sm" {
                                             thead {
@@ -94,7 +88,7 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                             // Pending Change UTXOs Table
                             @if !wallet_summary.unconfirmed_change_utxos.is_empty() {
                                 div class="mb-4" {
-                                    h5 { "Pending Change UTXOs" }
+                                    h5 { "Unconfirmed Change UTXOs" }
                                     div class="table-responsive" {
                                         table class="table table-sm" {
                                             thead {
