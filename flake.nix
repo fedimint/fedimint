@@ -98,7 +98,7 @@
             just.rules.clippy = {
               content = lib.mkForce ''
                 # run `cargo clippy` on everything
-                clippy *ARGS="--locked --offline --workspace --all-targets":
+                clippy *ARGS="--locked --offline --workspace --all-targets -- -D warnings":
                   cargo clippy {{ARGS}}
 
                 # run `cargo clippy --fix` on everything
