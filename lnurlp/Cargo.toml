@@ -20,6 +20,6 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 fedimint-core = { workspace = true }
 lightning-invoice = { workspace = true }
-lnurl-rs = { workspace = true }
+lnurl-rs = { workspace = true, features = ["async"] }
 reqwest = { workspace = true }
 tokio = { workspace = true }
