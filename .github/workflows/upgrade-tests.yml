@@ -58,9 +58,6 @@ jobs:
           VERSIONS="${{ github.event.inputs.versions }}"
           VERSIONS=${VERSIONS:="v0.4.0 v0.7.0-beta.0, v0.4.1 v0.7.0-beta.0, v0.4.2 v0.7.0-beta.0, v0.4.3 v0.7.0-beta.0, v0.4.4 v0.7.0-beta.0, v0.5.0 v0.7.0-beta.0, v0.5.1 v0.7.0-beta.0, v0.6.0 v0.7.0-beta.0, v0.6.1 v0.7.0-beta.0, v0.4.0 v0.4.1 v0.4.2 v0.4.3 v0.4.4 v0.5.0 v0.5.1 v0.6.0 v0.6.1 v0.7.0-beta.0"}
 
-          # if empty, defaults to all test kinds within script
-          export TEST_KINDS="${{ github.event.inputs.test_kinds }}"
-
           export FM_TEST_CI_ALL_JOBS
           export FM_TEST_UPGRADE_TIMEOUT
           FM_TEST_CI_ALL_JOBS="5"
@@ -76,21 +73,3 @@ jobs:
             nix develop -c \
             env -u RUSTC_WRAPPER \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/upgrade-test.sh "$VERSIONS"
-
-  notifications:
-    if: always() && github.repository == 'fedimint/fedimint'
-    name: "Notifications"
-    timeout-minutes: 1
-    runs-on: [self-hosted, linux]
-    needs: [ tests ]
-
-    steps:
-    - name: Discord notifications on failure
-      # https://stackoverflow.com/a/74562058/134409
-      if: ${{ always() && contains(needs.*.result, 'failure') }}
-      # https://github.com/marketplace/actions/actions-status-discord
-      uses: sarisia/actions-status-discord@v1
-      with:
-        webhook: ${{ secrets.DISCORD_WEBHOOK }}
-        # current job is a success, but that's not what we're interested in
-        status: failure
