@@ -21,7 +21,7 @@ if [ "${CARGO_PROFILE:-}" != "release" ]; then
 fi
 
 
-# substract some fixed amount for fixed overhead, then divide by
+# subtract some fixed amount for fixed overhead, then divide by
 # approximation of how much one heavy compilation unit needs,
 # add +1 to round up
 max_jobs_by_memory=$(((total_mbs - 10000) / 7000 + 1))
