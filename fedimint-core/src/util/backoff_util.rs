@@ -10,6 +10,10 @@ pub fn background_backoff() -> FibonacciBackoff {
     custom_backoff(Duration::from_secs(1), Duration::from_secs(60), None)
 }
 
+pub fn ln_send_backoff() -> FibonacciBackoff {
+    custom_backoff(Duration::from_secs(10), Duration::from_secs(10), Some(180))
+}
+
 /// A backoff strategy for relatively quick foreground operations.
 ///
 /// Starts at 200ms and increases to 5s. Will retry 10 times before giving up,
