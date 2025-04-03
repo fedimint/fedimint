@@ -45,7 +45,7 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                                 td { (total_unconfirmed_change) " sats" }
                             }
                             tr {
-                                th { "Total Available Balance" }
+                                th { "Total Amount in Custody" }
                                 td { (total_available) " sats" }
                             }
                             tr {
@@ -78,9 +78,9 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                                             p class="mb-0" { strong { "Unconfirmed: " } "Change outputs with threshold of signatures, waiting for blockchain confirmations." }
                                         }
 
-                                        dt class="col-sm-3" { "Total Available Balance" }
+                                        dt class="col-sm-3" { "Total Amount in Custody" }
                                         dd class="col-sm-9" {
-                                            "Sum of Spendable Amount and all Change amounts, both unsigned and unconfirmed. This represents all funds that will eventually be available to you once all transactions are confirmed."
+                                            "Sum of Spendable Amount and both unsigned and unconfirmed change amounts. This represents all funds that will eventually be available to you once all transactions are confirmed."
                                         }
 
                                         dt class="col-sm-3" { "Outgoing Amounts" }
