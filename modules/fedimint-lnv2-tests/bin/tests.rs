@@ -271,35 +271,45 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     )?;
 
     info!("Testing LNv2 lightning fees...");
+
     let fed_id = federation.calculate_federation_id();
+
     gw_lnd
         .set_federation_routing_fee(fed_id.clone(), 0, 0)
         .await?;
+
     gw_lnd
         .set_federation_transaction_fee(fed_id.clone(), 0, 0)
         .await?;
-    // Gateway pays: 1_000 msat LNv2 federation base fee, 1_000 msat LNv2 federation
+
+    // Gateway pays: 1_000 msat LNv2 federation base fee, 100 msat LNv2 federation
     // relative fee. Gateway receives: 1_000_000 payment.
-    test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 1_000).await?;
+    test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 100).await?;
 
     let gatewayd_version = util::Gatewayd::version_or_default().await;
+
     if gatewayd_version >= *VERSION_0_7_0_ALPHA {
         info!("Testing payment summary...");
+
         let lnd_payment_summary = gw_lnd.payment_summary().await?;
+
         assert_eq!(lnd_payment_summary.outgoing.total_success, 4);
         assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
         assert_eq!(lnd_payment_summary.incoming.total_success, 3);
         assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
+
         assert!(lnd_payment_summary.outgoing.median_latency.is_some());
         assert!(lnd_payment_summary.outgoing.average_latency.is_some());
         assert!(lnd_payment_summary.incoming.median_latency.is_some());
         assert!(lnd_payment_summary.incoming.average_latency.is_some());
 
         let ldk_payment_summary = gw_ldk.payment_summary().await?;
+
         assert_eq!(ldk_payment_summary.outgoing.total_success, 4);
         assert_eq!(ldk_payment_summary.outgoing.total_failure, 2);
         assert_eq!(ldk_payment_summary.incoming.total_success, 4);
         assert_eq!(ldk_payment_summary.incoming.total_failure, 0);
+
         assert!(ldk_payment_summary.outgoing.median_latency.is_some());
         assert!(ldk_payment_summary.outgoing.average_latency.is_some());
         assert!(ldk_payment_summary.incoming.median_latency.is_some());
@@ -317,7 +327,9 @@ async fn test_fees(
     expected_addition: u64,
 ) -> anyhow::Result<()> {
     let gw_lnd_ecash_prev = gw_lnd.ecash_balance(fed_id.clone()).await?;
+
     let (invoice, receive_op) = receive(client, &gw_ldk.addr, 1_000_000).await?;
+
     test_send(
         client,
         &gw_lnd.addr,
@@ -325,8 +337,11 @@ async fn test_fees(
         FinalSendOperationState::Success,
     )
     .await?;
+
     await_receive_claimed(client, receive_op).await?;
+
     let gw_lnd_ecash_after = gw_lnd.ecash_balance(fed_id.clone()).await?;
+
     assert_eq!(gw_lnd_ecash_prev + expected_addition, gw_lnd_ecash_after);
 
     Ok(())
