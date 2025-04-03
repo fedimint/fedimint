@@ -1658,6 +1658,11 @@ impl Wallet {
         });
     }
 
+    /// Get the bitcoin network for UI display
+    pub fn network_ui(&self) -> Network {
+        self.cfg.consensus.network.0
+    }
+
     /// Get the current consensus block count for UI display
     pub async fn consensus_block_count_ui(&self) -> u32 {
         self.consensus_block_count(&mut self.db.begin_transaction_nc().await)

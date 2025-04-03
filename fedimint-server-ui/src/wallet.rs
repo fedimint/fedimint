@@ -2,32 +2,16 @@ use maud::{Markup, html};
 
 // Function to render the Wallet module UI section
 pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
+    let network = wallet.network_ui();
     let consensus_block_count = wallet.consensus_block_count_ui().await;
     let consensus_fee_rate = wallet.consensus_feerate_ui().await;
     let wallet_summary = wallet.get_wallet_summary_ui().await;
-
-    // Calculate total spendable balance
-    let total_spendable: u64 = wallet_summary
-        .spendable_utxos
-        .iter()
-        .map(|utxo| utxo.amount.to_sat())
-        .sum();
-
-    // Calculate pending outgoing (unsigned + unconfirmed)
-    let total_pending_outgoing: u64 = wallet_summary
-        .unsigned_peg_out_txos
-        .iter()
-        .chain(wallet_summary.unconfirmed_peg_out_txos.iter())
-        .map(|txo| txo.amount.to_sat())
-        .sum();
-
-    // Calculate pending incoming change
-    let total_pending_change: u64 = wallet_summary
-        .unsigned_change_utxos
-        .iter()
-        .chain(wallet_summary.unconfirmed_change_utxos.iter())
-        .map(|txo| txo.amount.to_sat())
-        .sum();
+    let total_spendable = wallet_summary.total_spendable_balance().to_sat();
+    let total_unsigned_change = wallet_summary.total_unsigned_change_balance().to_sat();
+    let total_unconfirmed_change = wallet_summary.total_unconfirmed_change_balance().to_sat();
+    let total_available = total_spendable + total_unconfirmed_change + total_unsigned_change;
+    let total_unsigned_outgoing = wallet_summary.total_unsigned_peg_out_balance().to_sat();
+    let total_unconfirmed_outgoing = wallet_summary.total_unconfirmed_peg_out_balance().to_sat();
 
     html! {
         div class="row gy-4 mt-2" {
@@ -37,6 +21,10 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                     div class="card-body" {
                         table class="table mb-4" {
                             tr {
+                                th { "Network" }
+                                td { (network.to_string()) }
+                            }
+                            tr {
                                 th { "Consensus Block Count" }
                                 td { (consensus_block_count) }
                             }
@@ -45,143 +33,152 @@ pub async fn render(wallet: &fedimint_wallet_server::Wallet) -> Markup {
                                 td { (consensus_fee_rate.sats_per_kvb) " sats/kvB" }
                             }
                             tr {
-                                th { "Spendable Balance" }
+                                th { "Spendable Amount" }
                                 td { (total_spendable) " sats" }
                             }
                             tr {
-                                th { "Pending Outgoing" }
-                                td { (total_pending_outgoing) " sats" }
+                                th { "Unsigned Change Amount" }
+                                td { (total_unsigned_change) " sats" }
                             }
                             tr {
-                                th { "Pending Change" }
-                                td { (total_pending_change) " sats" }
+                                th { "Unconfirmed Change Amount" }
+                                td { (total_unconfirmed_change) " sats" }
+                            }
+                            tr {
+                                th { "Total Amount in Custody" }
+                                td { (total_available) " sats" }
+                            }
+                            tr {
+                                th { "Unsigned Outgoing Amount" }
+                                td { (total_unsigned_outgoing) " sats" }
+                            }
+                            tr {
+                                th { "Unconfirmed Outgoing Amount" }
+                                td { (total_unconfirmed_outgoing) " sats" }
                             }
                         }
 
-                        // UTXOs Breakdown
+                        // Collapsible info section
                         div class="mb-4" {
-                            h5 { "UTXO Details" }
-
-                            // Tabs for different UTXO categories
-                            ul class="nav nav-tabs" id="walletTabs" role="tablist" {
-                                li class="nav-item" role="presentation" {
-                                    button class="nav-link active" id="spendable-tab" data-bs-toggle="tab"
-                                        data-bs-target="#spendable" type="button" role="tab" aria-controls="spendable"
-                                        aria-selected="true" {
-                                        "Spendable UTXOs "
-                                        span class="badge bg-primary" { (wallet_summary.spendable_utxos.len()) }
-                                    }
+                            p {
+                                button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#balanceInfo" aria-expanded="false" aria-controls="balanceInfo" {
+                                    "What do these amounts mean? "
+                                    i class="bi bi-info-circle" {}
                                 }
-                                li class="nav-item" role="presentation" {
-                                    button class="nav-link" id="unsigned-tab" data-bs-toggle="tab"
-                                        data-bs-target="#unsigned" type="button" role="tab" aria-controls="unsigned"
-                                        aria-selected="false" {
-                                        "Unsigned Outputs "
-                                        span class="badge bg-secondary" {
-                                            (wallet_summary.unsigned_peg_out_txos.len() + wallet_summary.unsigned_change_utxos.len())
+                            }
+                            div class="collapse" id="balanceInfo" {
+                                div class="alert alert-info" {
+                                    dl class="row mb-0" {
+                                        dt class="col-sm-3" { "Spendable Amount" }
+                                        dd class="col-sm-9" { "UTXOs that are confirmed and are available to be spend by your users." }
+
+                                        dt class="col-sm-3" { "Change Amounts" }
+                                        dd class="col-sm-9" {
+                                            p class="mb-1" { strong { "Unsigned: " } "Change outputs from pegout transactions still waiting for guardian signatures." }
+                                            p class="mb-0" { strong { "Unconfirmed: " } "Change outputs with threshold of signatures, waiting for blockchain confirmations." }
+                                        }
+
+                                        dt class="col-sm-3" { "Total Amount in Custody" }
+                                        dd class="col-sm-9" {
+                                            "Sum of Spendable Amount and both unsigned and unconfirmed change amounts. This represents all funds that will eventually be available to you once all transactions are confirmed."
+                                        }
+
+                                        dt class="col-sm-3" { "Outgoing Amounts" }
+                                        dd class="col-sm-9" {
+                                            p class="mb-1" { strong { "Unsigned: " } "Pegout outputs from pegout transactions still waiting for guardian signatures." }
+                                            p class="mb-0" { strong { "Unconfirmed: " } "Pegout outputs with threshold of signatures, waiting for blockchain confirmations." }
                                         }
                                     }
                                 }
-                                li class="nav-item" role="presentation" {
-                                    button class="nav-link" id="unconfirmed-tab" data-bs-toggle="tab"
-                                        data-bs-target="#unconfirmed" type="button" role="tab" aria-controls="unconfirmed"
-                                        aria-selected="false" {
-                                        "Unconfirmed Outputs "
-                                        span class="badge bg-warning" {
-                                            (wallet_summary.unconfirmed_peg_out_txos.len() + wallet_summary.unconfirmed_change_utxos.len())
+                            }
+                        }
+
+                        // UTXO Tables
+                        div class="mb-4" {
+                            @if !wallet_summary.unconfirmed_peg_out_txos.is_empty() {
+                                div class="mb-4" {
+                                    h5 { "Unconfirmed Pegout UTXOs" }
+                                    div class="table-responsive" {
+                                        table class="table table-sm" {
+                                            thead {
+                                                tr {
+                                                    th { "Amount (sats)" }
+                                                    th { "Transaction" }
+                                                    th { "Vout" }
+                                                }
+                                            }
+                                            tbody {
+                                                @for txo in &wallet_summary.unconfirmed_peg_out_txos {
+                                                    tr {
+                                                        td { (txo.amount.to_sat()) }
+                                                        td {
+                                                            a href={ "https://mempool.space/tx/" (txo.outpoint.txid) } class="btn btn-sm btn-outline-primary" target="_blank" {
+                                                                "mempool.space"
+                                                            }
+                                                        }
+                                                        td { (txo.outpoint.vout) }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
 
-                            // Tab contents
-                            div class="tab-content pt-3" id="walletTabsContent" {
-                                div class="tab-pane fade show active" id="spendable" role="tabpanel" aria-labelledby="spendable-tab" {
-                                    @if wallet_summary.spendable_utxos.is_empty() {
-                                        p { "No spendable UTXOs available." }
-                                    } @else {
-                                        div class="table-responsive" {
-                                            table class="table table-sm" {
-                                                thead {
-                                                    tr {
-                                                        th { "Outpoint" }
-                                                        th { "Amount (sats)" }
-                                                    }
+                            // Pending Change UTXOs Table
+                            @if !wallet_summary.unconfirmed_change_utxos.is_empty() {
+                                div class="mb-4" {
+                                    h5 { "Unconfirmed Change UTXOs" }
+                                    div class="table-responsive" {
+                                        table class="table table-sm" {
+                                            thead {
+                                                tr {
+                                                    th { "Amount (sats)" }
+                                                    th { "Transaction" }
+                                                    th { "Vout" }
                                                 }
-                                                tbody {
-                                                    @for utxo in &wallet_summary.spendable_utxos {
-                                                        tr {
-                                                            td { (format!("{}:{}", utxo.outpoint.txid, utxo.outpoint.vout)) }
-                                                            td { (utxo.amount.to_sat()) }
+                                            }
+                                            tbody {
+                                                @for txo in &wallet_summary.unconfirmed_change_utxos {
+                                                    tr {
+                                                        td { (txo.amount.to_sat()) }
+                                                        td {
+                                                            a href={ "https://mempool.space/tx/" (txo.outpoint.txid) } class="btn btn-sm btn-outline-primary" target="_blank" {
+                                                                "mempool.space"
+                                                            }
                                                         }
+                                                        td { (txo.outpoint.vout) }
                                                     }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
 
-                                div class="tab-pane fade" id="unsigned" role="tabpanel" aria-labelledby="unsigned-tab" {
-                                    @if wallet_summary.unsigned_peg_out_txos.is_empty() && wallet_summary.unsigned_change_utxos.is_empty() {
-                                        p { "No unsigned outputs waiting for signatures." }
-                                    } @else {
-                                        div class="table-responsive" {
-                                            table class="table table-sm" {
-                                                thead {
-                                                    tr {
-                                                        th { "Type" }
-                                                        th { "Outpoint" }
-                                                        th { "Amount (sats)" }
-                                                    }
-                                                }
-                                                tbody {
-                                                    @for txo in &wallet_summary.unsigned_peg_out_txos {
-                                                        tr {
-                                                            td { "Peg-out" }
-                                                            td { (format!("{}:{}", txo.outpoint.txid, txo.outpoint.vout)) }
-                                                            td { (txo.amount.to_sat()) }
-                                                        }
-                                                    }
-                                                    @for txo in &wallet_summary.unsigned_change_utxos {
-                                                        tr {
-                                                            td { "Change" }
-                                                            td { (format!("{}:{}", txo.outpoint.txid, txo.outpoint.vout)) }
-                                                            td { (txo.amount.to_sat()) }
-                                                        }
-                                                    }
+                            // Spendable UTXOs Table
+                            @if !wallet_summary.spendable_utxos.is_empty() {
+                                div class="mb-4" {
+                                    h5 { "Spendable UTXOs" }
+                                    div class="table-responsive" {
+                                        table class="table table-sm" {
+                                            thead {
+                                                tr {
+                                                    th { "Amount (sats)" }
+                                                    th { "Transaction" }
+                                                    th { "Vout" }
                                                 }
                                             }
-                                        }
-                                    }
-                                }
-
-                                div class="tab-pane fade" id="unconfirmed" role="tabpanel" aria-labelledby="unconfirmed-tab" {
-                                    @if wallet_summary.unconfirmed_peg_out_txos.is_empty() && wallet_summary.unconfirmed_change_utxos.is_empty() {
-                                        p { "No unconfirmed outputs waiting for blockchain confirmation." }
-                                    } @else {
-                                        div class="table-responsive" {
-                                            table class="table table-sm" {
-                                                thead {
+                                            tbody {
+                                                @for utxo in &wallet_summary.spendable_utxos {
                                                     tr {
-                                                        th { "Type" }
-                                                        th { "Outpoint" }
-                                                        th { "Amount (sats)" }
-                                                    }
-                                                }
-                                                tbody {
-                                                    @for txo in &wallet_summary.unconfirmed_peg_out_txos {
-                                                        tr {
-                                                            td { "Peg-out" }
-                                                            td { (format!("{}:{}", txo.outpoint.txid, txo.outpoint.vout)) }
-                                                            td { (txo.amount.to_sat()) }
+                                                        td { (utxo.amount.to_sat()) }
+                                                        td {
+                                                            a href={ "https://mempool.space/tx/" (utxo.outpoint.txid) } class="btn btn-sm btn-outline-primary" target="_blank" {
+                                                                "mempool.space"
+                                                            }
                                                         }
-                                                    }
-                                                    @for txo in &wallet_summary.unconfirmed_change_utxos {
-                                                        tr {
-                                                            td { "Change" }
-                                                            td { (format!("{}:{}", txo.outpoint.txid, txo.outpoint.vout)) }
-                                                            td { (txo.amount.to_sat()) }
-                                                        }
+                                                        td { (utxo.outpoint.vout) }
                                                     }
                                                 }
                                             }

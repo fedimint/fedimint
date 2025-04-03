@@ -12,7 +12,7 @@ pub fn render(invite_code: &str) -> Markup {
 
                 div class="text-center mt-3" {
                     button type="button" class="btn btn-outline-primary" id="copyInviteCodeBtn"
-                        onclick=(format!("navigator.clipboard.writeText('{}'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy Invite Code', 2000);", invite_code)) {
+                        onclick=(format!("navigator.clipboard.writeText('{}');", invite_code)) {
                         "Copy to Clipboard"
                     }
                 }
