@@ -49,8 +49,8 @@ use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_IROH_ENV, FM_BIND_API_WS_ENV,
     FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
-    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV, FM_FINALITY_DELAY_ENV,
-    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -129,10 +129,6 @@ struct ServerOpts {
     /// The bitcoin network that fedimint will be running on
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
     network: bitcoin::network::Network,
-
-    /// The number of blocks the federation stays behind the blockchain tip
-    #[arg(long, env = FM_FINALITY_DELAY_ENV, default_value = "10")]
-    finality_delay: u32,
 
     #[arg(long, env = FM_BIND_METRICS_API_ENV)]
     bind_metrics_api: Option<SocketAddr>,
@@ -362,7 +358,6 @@ impl Fedimintd {
         let network = self.opts.network;
 
         let bitcoind_rpc = self.bitcoind_rpc.clone();
-        let finality_delay = self.opts.finality_delay;
         let s = self
             .with_module_kind(LightningInit)
             .with_module_instance(
@@ -396,9 +391,7 @@ impl Fedimintd {
                     },
                     consensus: WalletGenParamsConsensus {
                         network,
-                        // TODO this is not very elegant, but I'm planning to get rid of it in a
-                        // next commit anyway
-                        finality_delay,
+                        finality_delay: 10,
                         client_default_bitcoin_rpc: default_esplora_server(network),
                         fee_consensus:
                             fedimint_wallet_server::common::config::FeeConsensus::default(),

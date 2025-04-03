@@ -38,9 +38,6 @@ pub const FM_BIND_UI_ENV: &str = "FM_BIND_UI";
 pub const FM_BITCOIN_NETWORK_ENV: &str = "FM_BITCOIN_NETWORK";
 
 // Env variable to TODO
-pub const FM_FINALITY_DELAY_ENV: &str = "FM_FINALITY_DELAY";
-
-// Env variable to TODO
 pub const FM_BIND_METRICS_API_ENV: &str = "FM_BIND_METRICS_API";
 
 // Env variable to TODO
