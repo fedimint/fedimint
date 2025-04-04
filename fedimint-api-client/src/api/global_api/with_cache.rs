@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, format_err};
 use bitcoin::hashes::sha256;
-use bitcoin::secp256k1;
+use bitcoin::{Network, secp256k1};
 use fedimint_core::admin_client::{PeerServerParamsLegacy, SetLocalParamsRequest, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::ModuleInstanceId;
@@ -362,6 +362,7 @@ where
         &self,
         name: String,
         federation_name: Option<String>,
+        network: Option<Network>,
         auth: ApiAuth,
     ) -> FederationResult<String> {
         self.request_admin(
@@ -369,6 +370,7 @@ where
             ApiRequestErased::new(SetLocalParamsRequest {
                 name,
                 federation_name,
+                network,
             }),
             auth,
         )

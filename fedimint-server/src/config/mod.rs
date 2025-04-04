@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{Context, bail, ensure, format_err};
+use bitcoin::Network;
 use bitcoin::hashes::sha256;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
@@ -251,6 +252,8 @@ pub struct ConfigGenParams {
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
+    /// Bitcoin network set by the leader
+    pub network: Network,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
@@ -262,6 +265,8 @@ pub struct PeerSetupCode {
     pub endpoints: PeerEndpoints,
     /// Federation name set by the leader
     pub federation_name: Option<String>,
+    /// Bitcoin network set by the leader
+    pub network: Option<Network>,
 }
 
 impl PeerSetupCode {

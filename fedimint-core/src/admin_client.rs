@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use bitcoin::Network;
 use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
 
@@ -61,4 +62,6 @@ pub struct SetLocalParamsRequest {
     pub name: String,
     /// Federation name set by the leader
     pub federation_name: Option<String>,
+    /// Network of the federation set by the leader
+    pub network: Option<Network>,
 }

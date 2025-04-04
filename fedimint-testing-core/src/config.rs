@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
 
 use fedimint_core::PeerId;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::module::ApiAuth;
 use fedimint_server::config::{ConfigGenParams, PeerEndpoints, PeerSetupCode};
 use fedimint_server::net::p2p_connector::gen_cert_and_key;
@@ -44,6 +45,7 @@ pub fn local_config_gen_params(
                     cert: tls_keys[peer].0.clone().0,
                 },
                 federation_name: None,
+                network: None,
             };
             (*peer, params)
         })
@@ -60,6 +62,7 @@ pub fn local_config_gen_params(
                 iroh_p2p_sk: None,
                 peers: connections.clone(),
                 meta: BTreeMap::new(),
+                network: Network::Regtest,
             };
             Ok((*peer, params))
         })

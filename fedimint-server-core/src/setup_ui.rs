@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::module::ApiAuth;
 
 pub type DynSetupApi = Arc<dyn ISetupApi + Send + Sync + 'static>;
@@ -27,6 +28,7 @@ pub trait ISetupApi {
         auth: ApiAuth,
         name: String,
         federation_name: Option<String>,
+        network: Option<Network>,
     ) -> Result<String>;
 
     /// Add peer connection info
