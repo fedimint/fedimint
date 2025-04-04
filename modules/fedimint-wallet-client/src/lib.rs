@@ -534,7 +534,7 @@ impl ClientModule for WalletClientModule {
 }
 
 #[derive(Deserialize)]
-struct WalletSummaryRequest;
+struct WalletSummaryRequest {}
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {
