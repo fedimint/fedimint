@@ -389,7 +389,9 @@ in
         // {
           cargoArtifacts = deps;
           meta = { inherit mainProgram; };
-          cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE";
+          # it's easy to hit memory limits during release builds (many binaries linked at the same time),
+          # cap it at one binary at the time
+          cargoBuildCommand = "if [ $CARGO_PROFILE = \"release\" ]; then export CARGO_BUILD_JOBS=1; fi; runLowPrio cargo build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${pkgsArgs}";
 
           # If the build contains `devimint`, wrap it in a script that will set
