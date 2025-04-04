@@ -47,6 +47,6 @@ tracing = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-fedimint-bitcoind = { version = "=0.7.0-beta.0", path = "../../fedimint-bitcoind", default-features = false, features = [
+fedimint-bitcoind = { version = "=0.7.0-beta.1", path = "../../fedimint-bitcoind", default-features = false, features = [
   "esplora-client",
 ] }
