@@ -55,6 +55,7 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit,
     MultiApiVersion,
 };
+use fedimint_core::util::BoxStream;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{backoff_util, retry};
@@ -496,6 +497,33 @@ impl ClientModule for WalletClientModule {
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
         Some(self.cfg().fee_consensus.peg_out_abs)
+    }
+    
+    async fn handle_rpc(
+        &self,
+        method: String,
+        request: serde_json::Value,
+    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+        Box::pin(try_stream! {
+            match method.as_str() {
+                "get_wallet_summary" => {
+                    if !request.is_object() || !request.as_object().unwrap().is_empty() {
+                        Err(anyhow::format_err!("get_wallet_summary expects an empty object as payload"))?;
+                    }
+                    let wallet_summary = self.get_wallet_summary()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Failed to fetch wallet summary: {}", e))?;
+                    let result = serde_json::to_value(&wallet_summary)
+                        .map_err(|e| anyhow::anyhow!("Serialization error: {}", e))?;
+                    yield result;
+                }
+                _ => {
+                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                    unreachable!()
+                }
+                }
+            }
+        })
     }
 
     #[cfg(feature = "cli")]
