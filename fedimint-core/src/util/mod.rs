@@ -2,6 +2,7 @@ pub mod backoff_util;
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
 mod error;
+pub mod fmt_option;
 pub mod update_merge;
 
 use std::convert::Infallible;
