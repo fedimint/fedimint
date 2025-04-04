@@ -28,7 +28,6 @@ use fedimint_testing_core::config::local_config_gen_params;
 use fedimint_testing_core::node_type::LightningNodeType;
 use fedimint_wallet_client::WalletClientModule;
 use fedimint_wallet_client::config::WalletClientConfig;
-use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::{join_all, try_join_all};
 use rand::Rng;
@@ -37,7 +36,7 @@ use tokio::time::Instant;
 use tracing::{debug, info};
 
 use super::external::Bitcoind;
-use super::util::{Command, ProcessHandle, ProcessManager, cmd, parse_map};
+use super::util::{Command, ProcessHandle, ProcessManager, cmd};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_with_timeout};
@@ -1187,23 +1186,13 @@ async fn cli_set_config_gen_params(
         10,
         &fedimintd_version,
     );
-    // Since we are not actually calling `fedimintd` binary, parse and handle
-    // `FM_EXTRA_META_DATA` like it would do.
-    let extra_meta_data = parse_map(
-        &std::env::var(FM_EXTRA_DKG_META_ENV)
-            .ok()
-            .unwrap_or_default(),
-    )
-    .with_context(|| format!("Failed to parse {FM_EXTRA_DKG_META_ENV}"))
-    .expect("Failed");
-    let meta: BTreeMap<String, String> =
-        iter::once(("federation_name".to_string(), "testfed".to_string()))
-            .chain(extra_meta_data)
-            .collect();
+
+    let meta = iter::once(("federation_name".to_string(), "testfed".to_string())).collect();
 
     crate::util::FedimintCli
         .set_config_gen_params(auth, endpoint, meta, server_gen_params)
         .await?;
+
     Ok(())
 }
 
