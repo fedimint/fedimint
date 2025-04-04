@@ -2,9 +2,6 @@
 pub const FM_DISABLE_META_MODULE_ENV: &str = "FM_DISABLE_META_MODULE";
 
 // Env variable to TODO
-pub const FM_EXTRA_DKG_META_ENV: &str = "FM_EXTRA_DKG_META";
-
-// Env variable to TODO
 pub const FM_DATA_DIR_ENV: &str = "FM_DATA_DIR";
 
 // Env variable to TODO
