@@ -24,7 +24,6 @@ impl LightningGenParams {
             local: LightningGenParamsLocal { bitcoin_rpc },
             consensus: LightningGenParamsConsensus {
                 fee_consensus: FeeConsensus::new(1000).expect("Relative fee is within range"),
-                network: Network::Regtest,
             },
         }
     }
@@ -33,7 +32,6 @@ impl LightningGenParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParamsConsensus {
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

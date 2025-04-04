@@ -7,7 +7,6 @@ use std::time::Duration;
 use std::{env, fs, iter};
 
 use anyhow::{Context, Result, anyhow, bail};
-use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
@@ -1183,7 +1182,6 @@ async fn cli_set_config_gen_params(
     self::config::attach_default_module_init_params(
         &BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
-        Network::Regtest,
         10,
         &fedimintd_version,
     );

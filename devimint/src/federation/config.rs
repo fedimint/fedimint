@@ -1,4 +1,3 @@
-use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::envs::{BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set};
 use fedimint_ln_server::LightningInit;
@@ -15,7 +14,6 @@ use fedimint_wallet_client::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
 use fedimint_wallet_server::WalletInit;
-use fedimintd::default_esplora_server;
 use fedimintd::envs::FM_DISABLE_META_MODULE_ENV;
 use legacy_types::{LegacyFeeConsensus, LegacyMintGenParams, LegacyMintGenParamsConsensus};
 
@@ -26,7 +24,6 @@ use crate::version_constants::VERSION_0_5_0_ALPHA;
 pub fn attach_default_module_init_params(
     bitcoin_rpc: &BitcoinRpcConfig,
     module_init_params: &mut ServerModuleConfigGenParamsRegistry,
-    network: Network,
     finality_delay: u32,
     fedimintd_version: &semver::Version,
 ) {
@@ -36,7 +33,7 @@ pub fn attach_default_module_init_params(
             local: LightningGenParamsLocal {
                 bitcoin_rpc: bitcoin_rpc.clone(),
             },
-            consensus: LightningGenParamsConsensus { network },
+            consensus: LightningGenParamsConsensus,
         },
     );
 
@@ -71,9 +68,7 @@ pub fn attach_default_module_init_params(
                 bitcoin_rpc: bitcoin_rpc.clone(),
             },
             consensus: WalletGenParamsConsensus {
-                network,
                 finality_delay,
-                client_default_bitcoin_rpc: default_esplora_server(network),
                 fee_consensus: fedimint_wallet_client::config::FeeConsensus::default(),
             },
         },
@@ -89,7 +84,6 @@ pub fn attach_default_module_init_params(
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                     fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1000)
                         .expect("Relative fee is within range"),
-                    network,
                 },
             },
         );

@@ -32,6 +32,7 @@ fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
             ),
         })
         .unwrap(),
+        fedimint_core::bitcoin::Network::Regtest,
     );
     let client_cfg = ClientModuleConfig::from_typed(
         0,

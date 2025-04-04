@@ -59,7 +59,7 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, backoff_util, retry};
+use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry};
 use fedimint_core::{
     Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
     get_network_for_address, push_db_key_items, push_db_pair_items,
@@ -77,6 +77,7 @@ use fedimint_wallet_common::endpoint_constants::{
     PEG_OUT_FEES_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
     WALLET_SUMMARY_ENDPOINT,
 };
+use fedimint_wallet_common::envs::{FM_DEFAULT_ESPLORA_API_ENV, FM_PORT_ESPLORA_ENV};
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
@@ -254,6 +255,32 @@ impl ModuleInit for WalletInit {
     }
 }
 
+#[allow(clippy::map_unwrap_or)]
+fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
+    let url = std::env::var(FM_DEFAULT_ESPLORA_API_ENV)
+        .ok()
+        .map(|s| SafeUrl::parse(&s).expect("Failed to parse default esplora server"))
+        .unwrap_or(
+            match network {
+                Network::Bitcoin => SafeUrl::parse("https://mempool.space/api/"),
+                Network::Testnet => SafeUrl::parse("https://mempool.space/testnet/api/"),
+                Network::Signet => SafeUrl::parse("https://mempool.space/signet/api/"),
+                Network::Testnet4 => SafeUrl::parse("https://mempool.space/testnet4/api/"),
+                Network::Regtest => SafeUrl::parse(&format!(
+                    "http://127.0.0.1:{}/",
+                    std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
+                )),
+                _ => panic!("Unknown bitcoin network"),
+            }
+            .expect("Failed to parse default esplora server"),
+        );
+
+    BitcoinRpcConfig {
+        kind: "esplora".to_string(),
+        url,
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for WalletInit {
     type Module = Wallet;
@@ -304,6 +331,7 @@ impl ServerModuleInit for WalletInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let secp = bitcoin::secp256k1::Secp256k1::new();
@@ -323,10 +351,10 @@ impl ServerModuleInit for WalletInit {
                         .collect(),
                     *sk,
                     peers.to_num_peers().threshold(),
-                    params.consensus.network,
+                    network,
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
-                    params.consensus.client_default_bitcoin_rpc.clone(),
+                    default_esplora_server(network),
                     params.consensus.fee_consensus,
                 );
                 (*id, cfg)
@@ -343,6 +371,7 @@ impl ServerModuleInit for WalletInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
@@ -359,10 +388,10 @@ impl ServerModuleInit for WalletInit {
             peer_peg_in_keys,
             sk,
             peers.num_peers().threshold(),
-            params.consensus.network,
+            network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
-            params.consensus.client_default_bitcoin_rpc.clone(),
+            default_esplora_server(network),
             params.consensus.fee_consensus,
         );
 

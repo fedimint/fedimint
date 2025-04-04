@@ -20,17 +20,13 @@ impl LightningGenParams {
     pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
         Self {
             local: LightningGenParamsLocal { bitcoin_rpc },
-            consensus: LightningGenParamsConsensus {
-                network: Network::Regtest,
-            },
+            consensus: LightningGenParamsConsensus,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsConsensus {
-    pub network: Network,
-}
+pub struct LightningGenParamsConsensus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParamsLocal {

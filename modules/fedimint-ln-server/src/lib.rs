@@ -12,6 +12,7 @@ use anyhow::{Context, bail, format_err};
 use bitcoin_hashes::{Hash as BitcoinHash, sha256};
 use fedimint_bitcoind::create_bitcoind;
 use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -226,6 +227,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let sks = threshold_crypto::SecretKeySet::random(peers.to_num_peers().degree(), &mut OsRng);
@@ -245,7 +247,7 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
-                            network: NetworkLegacyEncodingWrapper(params.consensus.network),
+                            network: NetworkLegacyEncodingWrapper(network),
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -263,6 +265,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
@@ -275,7 +278,7 @@ impl ServerModuleInit for LightningInit {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: PublicKeySet::from(Commitment::from(polynomial)),
                 fee_consensus: FeeConsensus::default(),
-                network: NetworkLegacyEncodingWrapper(params.consensus.network),
+                network: NetworkLegacyEncodingWrapper(network),
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: SerdeSecret(SecretKeyShare::from_mut(&mut sks)),
@@ -1282,11 +1285,10 @@ mod tests {
                         url: "http://localhost:18332".parse().unwrap(),
                     },
                 },
-                consensus: LightningGenParamsConsensus {
-                    network: Network::Regtest,
-                },
+                consensus: LightningGenParamsConsensus,
             })
             .expect("valid config params"),
+            Network::Regtest,
         );
 
         let client_cfg = ServerModuleInit::get_client_config(

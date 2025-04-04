@@ -13,6 +13,7 @@ use db::{
     MetaConsensusKey, MetaDesiredKey, MetaDesiredValue, MetaSubmissionsByKeyPrefix,
     MetaSubmissionsKey,
 };
+use fedimint_core::bitcoin::Network;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -154,6 +155,7 @@ impl ServerModuleInit for MetaInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        _network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let _params = self.parse_params(params).unwrap();
         // Generate a config for each peer
@@ -175,6 +177,7 @@ impl ServerModuleInit for MetaInit {
         &self,
         _peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        _network: Network,
     ) -> anyhow::Result<ServerModuleConfig> {
         let _params = self.parse_params(params).unwrap();
 

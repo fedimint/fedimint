@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitcoin::Network;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientHandleArc};
@@ -241,6 +242,7 @@ impl FederationTestBuilder {
             &params,
             &self.server_init,
             &self.version_hash,
+            Network::Regtest,
         );
 
         let task_group = TaskGroup::new();

@@ -11,6 +11,7 @@ use anyhow::{Context, anyhow, ensure, format_err};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::create_bitcoind;
 use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -206,6 +207,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self
             .parse_params(params)
@@ -227,7 +229,7 @@ impl ServerModuleInit for LightningInit {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
                         fee_consensus: params.consensus.fee_consensus.clone(),
-                        network: params.consensus.network,
+                        network,
                     },
                     private: LightningConfigPrivate {
                         sk: dealer_sk(peers.to_num_peers(), *peer),
@@ -243,6 +245,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let (polynomial, sks) = peers.run_dkg_g1().await?;
@@ -259,7 +262,7 @@ impl ServerModuleInit for LightningInit {
                     .map(|peer| (peer, PublicKeyShare(eval_poly_g1(&polynomial, &peer))))
                     .collect(),
                 fee_consensus: params.consensus.fee_consensus.clone(),
-                network: params.consensus.network,
+                network,
             },
             private: LightningConfigPrivate {
                 sk: SecretKeyShare(sks),
