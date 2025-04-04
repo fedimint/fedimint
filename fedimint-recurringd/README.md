@@ -1,4 +1,4 @@
-# Recurrind
+# Recurringd
 
 `recurringd` is a service that allows Fedimint users to receive recurring payments. For now only LNURL is supported, but BOLT12 support is planned.
 The service is designed to run independently from guardians and gateways, but obviously can be colocated with any of these.

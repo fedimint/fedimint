@@ -17,7 +17,7 @@ pub struct FederationDbPrefix([u8; 16]);
 
 impl FederationDbPrefix {
     pub fn random() -> FederationDbPrefix {
-        FederationDbPrefix(thread_rng().gen())
+        FederationDbPrefix(thread_rng().r#gen())
     }
 
     fn prepend(&self, byte: u8) -> Vec<u8> {
