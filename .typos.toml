@@ -3,17 +3,17 @@ substituters = "substituters"
 # trips on some base64 string in the test
 wel = "wel"
 # common mistake that typos doesn't detect automatically
-reasponse= "response"
+reasponse = "response"
 # useful for "in/out" in the code
-inout="inout"
+inout = "inout"
 # multi-user-chat
-muc="muc"
+muc = "muc"
 
 # short for "backup"
-bck="bck"
+bck = "bck"
 
 # metric id that typos doesn't like
-"Fo"="Fo"
+"Fo" = "Fo"
 
 [files]
 extend-exclude = [
@@ -21,4 +21,5 @@ extend-exclude = [
   "hfuzz_target/**",
   "hfuzz_workspace/**",
   "releases/**",
+  "fedimint-server-ui/assets/**",
 ]

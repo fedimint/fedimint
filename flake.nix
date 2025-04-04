@@ -346,6 +346,7 @@
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
 
                   export FLAKEBOX_GIT_LS_IGNORE=fedimint-server-ui/assets/
+                  export FLAKEBOX_GIT_LS_TEXT_IGNORE=fedimint-server-ui/assets/
                   [ -f "$REPO_ROOT/.shrc.local" ] && source "$REPO_ROOT/.shrc.local"
 
                   if [ ''${#TMPDIR} -ge 40 ]; then
@@ -393,6 +394,7 @@
               nativeBuildInputs = [ pkgs.cargo-sort ];
               env = {
                 FLAKEBOX_GIT_LS_IGNORE = "fedimint-server-ui/assets/";
+                FLAKEBOX_GIT_LS_TEXT_IGNORE = "fedimint-server-ui/assets/";
               };
             };
 

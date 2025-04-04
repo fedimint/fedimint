@@ -389,7 +389,7 @@ in
         // {
           cargoArtifacts = deps;
           meta = { inherit mainProgram; };
-          cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE";
+          cargoBuildCommand = "runLowPrio bash ${./bin/cargo-with-memlimit.sh} build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${pkgsArgs}";
 
           # If the build contains `devimint`, wrap it in a script that will set
