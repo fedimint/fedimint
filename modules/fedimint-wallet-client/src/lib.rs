@@ -507,9 +507,7 @@ impl ClientModule for WalletClientModule {
         Box::pin(try_stream! {
             match method.as_str() {
                 "get_wallet_summary" => {
-                    if !request.is_object() || !request.as_object().unwrap().is_empty() {
-                        Err(anyhow::format_err!("get_wallet_summary expects an empty object as payload"))?;
-                    }
+                    let _req: WalletSummaryRequest = serde_json::from_value(request)?;
                     let wallet_summary = self.get_wallet_summary()
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to fetch wallet summary: {}", e))?;
@@ -534,6 +532,9 @@ impl ClientModule for WalletClientModule {
         cli::handle_cli_command(self, args).await
     }
 }
+
+#[derive(Deserialize)]
+struct WalletSummaryRequest;
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {
