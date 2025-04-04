@@ -20,16 +20,16 @@ use fedimint_ln_client::{LightningClientInit, LightningClientModule, LnReceiveSt
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Sha256};
+use lnurl::Tag;
 use lnurl::lnurl::LnUrl;
 use lnurl::pay::{LnURLPayInvoice, PayResponse};
-use lnurl::Tag;
 use tokio::sync::{Notify, RwLock};
 use tracing::{info, warn};
 
 use crate::db::{
-    load_federation_client_databases, open_client_db, try_add_federation_database,
     FederationDbPrefix, PaymentCodeEntry, PaymentCodeInvoiceEntry, PaymentCodeInvoiceKey,
     PaymentCodeKey, PaymentCodeNextInvoiceIndexKey, PaymentCodeVariant,
+    load_federation_client_databases, open_client_db, try_add_federation_database,
 };
 
 mod db;
