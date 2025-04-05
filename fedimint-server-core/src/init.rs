@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::{any, marker};
 
 use fedimint_api_client::api::DynModuleApi;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::config::{
     ClientModuleConfig, CommonModuleInitRegistry, ConfigGenModuleParams, ModuleInitParams,
     ModuleInitRegistry, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -61,12 +62,14 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
@@ -215,12 +218,14 @@ pub trait ServerModuleInit: ModuleInit + Sized {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
@@ -304,16 +309,18 @@ where
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, params)
+        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, params, network)
     }
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        network: Network,
     ) -> anyhow::Result<ServerModuleConfig> {
-        <Self as ServerModuleInit>::distributed_gen(self, peers, params).await
+        <Self as ServerModuleInit>::distributed_gen(self, peers, params, network).await
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {

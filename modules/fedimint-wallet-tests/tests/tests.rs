@@ -1053,12 +1053,11 @@ fn build_wallet_server_configs(
                 bitcoin_rpc: bitcoin_rpc.clone(),
             },
             consensus: fedimint_wallet_common::config::WalletGenParamsConsensus {
-                network: bitcoin::Network::Regtest,
                 finality_delay: 10,
-                client_default_bitcoin_rpc: bitcoin_rpc.clone(),
                 fee_consensus: Default::default(),
             },
         })?,
+        bitcoin::Network::Regtest,
     );
     let client_cfg = fedimint_core::config::ClientModuleConfig::from_typed(
         0,

@@ -25,6 +25,7 @@ use std::time::Duration;
 use std::{fs, result};
 
 use anyhow::{Context, format_err};
+use bitcoin::Network;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use client::ModuleSelector;
 #[cfg(feature = "tor")]
@@ -393,6 +394,8 @@ enum SetupAdminCmd {
         name: String,
         #[clap(long)]
         federation_name: Option<String>,
+        #[clap(long)]
+        network: Option<Network>,
     },
     AddPeer {
         info: String,
@@ -1263,9 +1266,10 @@ impl FedimintCli {
             SetupAdminCmd::SetLocalParams {
                 name,
                 federation_name,
+                network,
             } => {
                 let info = client
-                    .set_local_params(name.clone(), federation_name.clone(), cli.auth()?)
+                    .set_local_params(name.clone(), federation_name.clone(), *network, cli.auth()?)
                     .await?;
 
                 Ok(serde_json::to_value(info).expect("JSON serialization failed"))

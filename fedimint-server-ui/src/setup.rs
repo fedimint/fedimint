@@ -7,6 +7,7 @@ use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::TaskHandle;
 use fedimint_server_core::setup_ui::DynSetupApi;
@@ -26,6 +27,7 @@ pub(crate) struct SetupInput {
     #[serde(default)]
     pub is_lead: bool,
     pub federation_name: String,
+    pub network: Network,
 }
 
 #[derive(Debug, Deserialize)]
@@ -99,7 +101,17 @@ async fn setup_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoRes
                     }
 
                     div class="toggle-content mt-3" {
-                        input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
+                        input type="text" class="form-control mb-4" id="federation_name" name="federation_name" placeholder="Federation name";
+
+                        div class="form-group mb-4" {
+                            select class="form-control" id="network" name="network" {
+                                option value="bitcoin" { "Mainnet" }
+                                option value="testnet" { "Testnet" }
+                                option value="testnet4" { "Testnet4" }
+                                option value="signet" { "Signet" }
+                                option value="regtest" { "Regtest" }
+                            }
+                        }
                     }
                 }
             }
@@ -118,16 +130,28 @@ async fn setup_submit(
     State(state): State<AuthState<DynSetupApi>>,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
-    // Only use federation_name if is_lead is true
+    // Only use federation name if is_lead is true
     let federation_name = if input.is_lead {
         Some(input.federation_name)
     } else {
         None
     };
 
+    // Only use network if is_lead is true
+    let network = if input.is_lead {
+        Some(input.network)
+    } else {
+        None
+    };
+
     match state
         .api
-        .set_local_parameters(ApiAuth(input.password), input.name, federation_name)
+        .set_local_parameters(
+            ApiAuth(input.password),
+            input.name,
+            federation_name,
+            network,
+        )
         .await
     {
         Ok(_) => Redirect::to("/login").into_response(),

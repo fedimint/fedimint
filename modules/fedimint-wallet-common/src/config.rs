@@ -7,12 +7,10 @@ use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::serde_json;
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, PeerId, plugin_types_trait_impl_config};
 use miniscript::descriptor::{Wpkh, Wsh};
 use serde::{Deserialize, Serialize};
 
-use crate::envs::FM_PORT_ESPLORA_ENV;
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonInit};
 
@@ -31,16 +29,7 @@ impl WalletGenParams {
         WalletGenParams {
             local: WalletGenParamsLocal { bitcoin_rpc },
             consensus: WalletGenParamsConsensus {
-                network: Network::Regtest,
                 finality_delay: 10,
-                client_default_bitcoin_rpc: BitcoinRpcConfig {
-                    kind: "esplora".to_string(),
-                    url: SafeUrl::parse(&format!(
-                        "http://127.0.0.1:{}/",
-                        std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
-                    ))
-                    .expect("Failed to parse default esplora server"),
-                },
                 fee_consensus: FeeConsensus::default(),
             },
         }
@@ -54,10 +43,7 @@ pub struct WalletGenParamsLocal {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParamsConsensus {
-    pub network: Network,
     pub finality_delay: u32,
-    /// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
-    pub client_default_bitcoin_rpc: BitcoinRpcConfig,
     /// Fees to be charged for deposits and withdraws _by the federation_ in
     /// addition to any on-chain fees.
     ///

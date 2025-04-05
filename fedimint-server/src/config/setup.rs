@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
+use bitcoin::Network;
 use fedimint_core::PeerId;
 use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::config::META_FEDERATION_NAME_KEY;
@@ -62,6 +63,8 @@ pub struct LocalParams {
     name: String,
     /// Federation name set by the leader
     federation_name: Option<String>,
+    /// Bitcoin network set by the leader
+    network: Option<Network>,
 }
 
 impl LocalParams {
@@ -70,6 +73,7 @@ impl LocalParams {
             name: self.name.clone(),
             endpoints: self.endpoints.clone(),
             federation_name: self.federation_name.clone(),
+            network: self.network,
         }
     }
 }
@@ -145,6 +149,7 @@ impl ISetupApi for SetupApi {
         auth: ApiAuth,
         name: String,
         federation_name: Option<String>,
+        network: Option<Network>,
     ) -> anyhow::Result<String> {
         ensure!(!name.is_empty(), "The guardian name is empty");
 
@@ -192,6 +197,7 @@ impl ISetupApi for SetupApi {
                     },
                     name,
                     federation_name,
+                    network,
                 }
             }
             NetworkingStack::Iroh => {
@@ -225,6 +231,7 @@ impl ISetupApi for SetupApi {
                     },
                     name,
                     federation_name,
+                    network,
                 }
             }
         };
@@ -270,6 +277,18 @@ impl ISetupApi for SetupApi {
             );
         }
 
+        if let Some(network) = state
+            .setup_codes
+            .iter()
+            .chain(once(&local_params.setup_code()))
+            .find_map(|info| info.network)
+        {
+            ensure!(
+                info.network.is_none(),
+                "Federation bitcoin network has already been set to {network}"
+            );
+        }
+
         state.setup_codes.insert(info.clone());
 
         Ok(info.name)
@@ -298,6 +317,12 @@ impl ISetupApi for SetupApi {
             .find_map(|info| info.federation_name.clone())
             .context("We need one guardian to configure the federations name")?;
 
+        let network = state
+            .setup_codes
+            .iter()
+            .find_map(|info| info.network)
+            .context("We need one guardian to configure the federations name")?;
+
         let our_id = state
             .setup_codes
             .iter()
@@ -318,6 +343,7 @@ impl ISetupApi for SetupApi {
                 META_FEDERATION_NAME_KEY.to_string(),
                 federation_name,
             )]),
+            network,
         };
 
         self.sender
@@ -372,7 +398,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                 config.set_local_parameters(auth, request.name, request.federation_name)
+                 config.set_local_parameters(auth, request.name, request.federation_name, request.network)
                     .await
                     .map_err(|e| ApiError::bad_request(e.to_string()))
             }

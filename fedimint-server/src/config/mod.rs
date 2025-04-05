@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{Context, bail, ensure, format_err};
+use bitcoin::Network;
 use bitcoin::hashes::sha256;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
@@ -251,6 +252,8 @@ pub struct ConfigGenParams {
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
+    /// Bitcoin network set by the leader
+    pub network: Network,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
@@ -262,6 +265,8 @@ pub struct PeerSetupCode {
     pub endpoints: PeerEndpoints,
     /// Federation name set by the leader
     pub federation_name: Option<String>,
+    /// Bitcoin network set by the leader
+    pub network: Option<Network>,
 }
 
 impl PeerSetupCode {
@@ -367,7 +372,6 @@ impl ServerConfig {
     /// setup
     pub fn from(
         params: ConfigGenParams,
-        identity: PeerId,
         broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
         broadcast_secret_key: SecretKey,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
@@ -394,7 +398,7 @@ impl ServerConfig {
 
         let local = ServerConfigLocal {
             p2p_endpoints: params.p2p_urls(),
-            identity,
+            identity: params.identity,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             broadcast_round_delay_ms: if is_running_in_test_env() {
                 DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
@@ -538,6 +542,7 @@ impl ServerConfig {
         params: &HashMap<PeerId, ConfigGenParams>,
         registry: &ServerModuleInitRegistry,
         code_version_str: &str,
+        network: Network,
     ) -> BTreeMap<PeerId, Self> {
         let peer0 = &params[&PeerId::from(0)];
 
@@ -557,7 +562,7 @@ impl ServerConfig {
                     registry
                         .get(kind)
                         .expect("Module not registered")
-                        .trusted_dealer_gen(&peer0.peer_ids(), module_params),
+                        .trusted_dealer_gen(&peer0.peer_ids(), module_params, network),
                 )
             })
             .collect();
@@ -568,7 +573,6 @@ impl ServerConfig {
             .map(|&id| {
                 let config = ServerConfig::from(
                     params[&id].clone(),
-                    id,
                     broadcast_pks.clone(),
                     *broadcast_sks.get(&id).expect("We created this entry"),
                     module_configs
@@ -602,6 +606,7 @@ impl ServerConfig {
                 &HashMap::from([(params.identity, params.clone())]),
                 &registry,
                 &code_version_str,
+                params.network,
             );
             return Ok(server[&params.identity].clone());
         }
@@ -677,7 +682,7 @@ impl ServerConfig {
             let cfg = registry
                 .get(kind)
                 .context("Module of kind {kind} not found")?
-                .distributed_gen(&handle, module_params)
+                .distributed_gen(&handle, module_params, params.network)
                 .await?;
 
             module_cfgs.insert(module_id, cfg);
@@ -685,7 +690,6 @@ impl ServerConfig {
 
         let cfg = ServerConfig::from(
             params.clone(),
-            params.identity,
             broadcast_public_keys,
             broadcast_sk,
             module_cfgs,

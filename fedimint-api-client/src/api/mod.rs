@@ -13,7 +13,7 @@ use async_channel::bounded;
 use async_trait::async_trait;
 use base64::Engine as _;
 use bitcoin::hashes::sha256;
-use bitcoin::secp256k1;
+use bitcoin::{Network, secp256k1};
 pub use error::{FederationError, OutputOutcomeError, PeerError};
 use fedimint_core::admin_client::{PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
@@ -494,6 +494,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         name: String,
         federation_name: Option<String>,
+        network: Option<Network>,
         auth: ApiAuth,
     ) -> FederationResult<String>;
 

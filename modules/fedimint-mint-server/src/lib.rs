@@ -10,6 +10,7 @@ mod metrics;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::bail;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -155,6 +156,7 @@ impl ServerModuleInit for MintInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        _network: Network,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
@@ -215,6 +217,7 @@ impl ServerModuleInit for MintInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        _network: Network,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
