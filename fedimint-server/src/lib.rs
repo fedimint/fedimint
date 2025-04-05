@@ -35,6 +35,7 @@ use config::io::{PLAINTEXT_PASSWORD, read_server_config};
 use fedimint_aead::random_salt;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, TaskHandle};
@@ -97,6 +98,7 @@ pub async fn run(
     code_version_str: String,
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
+    bitcoin_rpc: BitcoinRpcConfig,
     dashboard_ui_handler: Option<DashboardUiHandler>,
     setup_ui_handler: Option<SetupUiHandler>,
 ) -> anyhow::Result<()> {
@@ -178,6 +180,7 @@ pub async fn run(
         force_api_secrets,
         data_dir,
         code_version_str,
+        bitcoin_rpc,
         settings.ui_bind,
         dashboard_ui_handler,
     ))
