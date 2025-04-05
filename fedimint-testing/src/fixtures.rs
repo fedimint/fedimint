@@ -161,6 +161,7 @@ impl Fixtures {
             ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_module_kind.clone(),
             num_offline,
+            self.bitcoin_server(),
         )
     }
 
