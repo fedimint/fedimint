@@ -1,12 +1,11 @@
 mod metrics;
 
-use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{Context, bail, format_err};
+use anyhow::{Context, bail};
 use clap::{Parser, Subcommand};
 use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry,
@@ -49,8 +48,8 @@ use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_IROH_ENV, FM_BIND_API_WS_ENV,
     FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
-    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV, FM_FINALITY_DELAY_ENV,
-    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
+    FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -130,17 +129,8 @@ struct ServerOpts {
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
     network: bitcoin::network::Network,
 
-    /// The number of blocks the federation stays behind the blockchain tip
-    #[arg(long, env = FM_FINALITY_DELAY_ENV, default_value = "10")]
-    finality_delay: u32,
-
     #[arg(long, env = FM_BIND_METRICS_API_ENV)]
     bind_metrics_api: Option<SocketAddr>,
-
-    /// List of default meta values to use during config generation (format:
-    /// `key1=value1,key2=value,...`)
-    #[arg(long, env = FM_EXTRA_DKG_META_ENV, value_parser = parse_map, default_value="")]
-    extra_dkg_meta: BTreeMap<String, String>,
 
     /// Comma separated list of API secrets.
     ///
@@ -176,43 +166,6 @@ enum DevSubcommand {
     ListApiVersions,
     /// List supported server database versions and exit
     ListDbVersions,
-}
-
-/// Parse a key-value map from a string.
-///
-/// The string should be a comma-separated list of key-value pairs, where each
-/// pair is separated by an equals sign. For example, `key1=value1,key2=value2`.
-/// The keys and values are trimmed of whitespace, so
-/// `key1 = value1, key2 = value2` would be parsed the same as the previous
-/// example.
-fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
-    let mut map = BTreeMap::new();
-
-    if s.is_empty() {
-        return Ok(map);
-    }
-
-    for pair in s.split(',') {
-        let parts: Vec<&str> = pair.split('=').collect();
-
-        if parts.len() != 2 {
-            return Err(format_err!(
-                "Invalid key-value pair in map: '{}'. Expected format: 'key=value'.",
-                pair
-            ));
-        }
-
-        let key = parts[0].trim();
-        let value = parts[1].trim();
-
-        if let Some(previous_value) = map.insert(key.to_string(), value.to_string()) {
-            return Err(format_err!(
-                "Duplicate key in map: '{key}' (found values '{previous_value}' and '{value}')",
-            ));
-        }
-    }
-
-    Ok(map)
 }
 
 /// `fedimintd` builder
@@ -362,7 +315,6 @@ impl Fedimintd {
         let network = self.opts.network;
 
         let bitcoind_rpc = self.bitcoind_rpc.clone();
-        let finality_delay = self.opts.finality_delay;
         let s = self
             .with_module_kind(LightningInit)
             .with_module_instance(
@@ -396,9 +348,7 @@ impl Fedimintd {
                     },
                     consensus: WalletGenParamsConsensus {
                         network,
-                        // TODO this is not very elegant, but I'm planning to get rid of it in a
-                        // next commit anyway
-                        finality_delay,
+                        finality_delay: 10,
                         client_default_bitcoin_rpc: default_esplora_server(network),
                         fee_consensus:
                             fedimint_wallet_server::common::config::FeeConsensus::default(),
@@ -592,7 +542,6 @@ async fn run(
         ui_bind: opts.bind_ui,
         p2p_url: opts.p2p_url,
         api_url: opts.api_url,
-        meta: opts.extra_dkg_meta.clone(),
         modules: module_inits_params.clone(),
         registry: module_inits.clone(),
         networking: if use_iroh {
