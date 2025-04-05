@@ -32,7 +32,7 @@ anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-axum = { version = "0.7.9", features = ["json"] }
+axum = { version = "0.8.1", features = ["json"] }
 bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
