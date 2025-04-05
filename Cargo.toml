@@ -122,7 +122,7 @@ bls12_381 = "0.8.0"
 bon = "3.3.2"
 bytes = "1.10.1"
 chrono = "0.4.40"
-clap = { version = "4.5.34", features = ["derive", "env"] }
+clap = { version = "4.5.35", features = ["derive", "env"] }
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.7.0-alpha" }
 erased-serde = "0.4"
@@ -193,7 +193,7 @@ jaq-json = { version = "1.1.1", features = ["serde_json"] }
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
 lnurl-rs = { version = "0.9.0", default-features = false }
-miniscript = "12.3.0"
+miniscript = "12.3.1"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
