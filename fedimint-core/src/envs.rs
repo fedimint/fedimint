@@ -108,22 +108,7 @@ pub struct BitcoinRpcConfig {
 
 impl BitcoinRpcConfig {
     pub fn get_defaults_from_env_vars() -> anyhow::Result<Self> {
-        Ok(Self {
-        kind: env::var(FM_FORCE_BITCOIN_RPC_KIND_ENV)
-            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_KIND_ENV))
-            .or_else(|_| env::var(FM_BITCOIN_RPC_KIND_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_KIND_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
-            }))
-            .or_else(|_| env::var(FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_FORCE_BITCOIN_RPC_KIND_ENV} instead");
-            }))
-            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
-            }))
-            .with_context(|| {
-                anyhow::anyhow!("failure looking up env var for Bitcoin RPC kind")
-            })?,
-        url: env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
+        let url: SafeUrl =  env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
             .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_URL_ENV))
             .or_else(|_| env::var(FM_BITCOIN_RPC_URL_ENV).inspect(|_v| {
                 warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_URL_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead");
@@ -140,8 +125,16 @@ impl BitcoinRpcConfig {
             .parse()
             .with_context(|| {
                 anyhow::anyhow!("failure parsing Bitcoin RPC URL")
-            })?,
-    })
+            })?;
+
+        Ok(Self {
+            kind: if url.password().is_some() {
+                "bitcoind".to_string()
+            } else {
+                "esplora".to_string()
+            },
+            url,
+        })
     }
 }
 
