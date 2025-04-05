@@ -9,6 +9,7 @@ pub mod lnv2;
 pub mod meta;
 pub mod setup;
 pub mod wallet;
+pub mod walletv2;
 
 use axum::response::{Html, IntoResponse, Redirect};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
