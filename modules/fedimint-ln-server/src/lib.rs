@@ -20,6 +20,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
@@ -219,7 +220,13 @@ impl ServerModuleInit for LightningInit {
         // Eagerly initialize metrics that trigger infrequently
         LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        Ok(Lightning::new(args.cfg().to_typed()?, args.our_peer_id(), &args.shared()).await?)
+        Ok(Lightning::new(
+            args.cfg().to_typed()?,
+            args.our_peer_id(),
+            args.bitcoin_rpc(),
+            &args.shared(),
+        )
+        .await?)
     }
 
     fn trusted_dealer_gen(
@@ -946,9 +953,10 @@ impl Lightning {
     async fn new(
         cfg: LightningConfig,
         our_peer_id: PeerId,
+        bitcoin_rpc: BitcoinRpcConfig,
         shared: &ServerModuleSharedBitcoin,
     ) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
+        let btc_rpc = create_bitcoind(&bitcoin_rpc)?;
         let block_count_rx = shared
             .block_count_receiver(cfg.consensus.network.0, btc_rpc.clone())
             .await;
@@ -1319,6 +1327,10 @@ mod tests {
         let server = Lightning::new(
             server_cfg[0].clone(),
             0.into(),
+            BitcoinRpcConfig {
+                kind: "esplora".to_string(),
+                url: "http://dummy.xyz".parse().unwrap(),
+            },
             &ServerModuleSharedBitcoin::new(task_group),
         )
         .await
@@ -1387,6 +1399,10 @@ mod tests {
         let server = Lightning::new(
             server_cfg[0].clone(),
             0.into(),
+            BitcoinRpcConfig {
+                kind: "esplora".to_string(),
+                url: "http://dummy.xyz".parse().unwrap(),
+            },
             &ServerModuleSharedBitcoin::new(task_group),
         )
         .await
@@ -1461,6 +1477,10 @@ mod tests {
         let server = Lightning::new(
             server_cfg[0].clone(),
             0.into(),
+            BitcoinRpcConfig {
+                kind: "esplora".to_string(),
+                url: "http://dummy.xyz".parse().unwrap(),
+            },
             &ServerModuleSharedBitcoin::new(task_group),
         )
         .await

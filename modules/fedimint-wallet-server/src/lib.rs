@@ -295,6 +295,7 @@ impl ServerModuleInit for WalletInit {
             args.task_group(),
             args.our_peer_id(),
             args.module_api().clone(),
+            args.bitcoin_rpc(),
             &args.shared(),
         )
         .await?)
@@ -1029,9 +1030,11 @@ impl Wallet {
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
+        bitcoin_rpc: BitcoinRpcConfig,
         shared_bitcoin: &ServerModuleSharedBitcoin,
     ) -> anyhow::Result<Wallet> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
+        let btc_rpc = create_bitcoind(&bitcoin_rpc)?;
+
         Ok(Self::new_with_bitcoind(
             cfg,
             db,

@@ -20,7 +20,7 @@ use fedimint_core::NumPeers;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
@@ -66,6 +66,7 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
+    bitcoin_rpc: BitcoinRpcConfig,
     ui_bind_addr: SocketAddr,
     dashboard_ui_handler: Option<crate::DashboardUiHandler>,
 ) -> anyhow::Result<()> {
@@ -139,6 +140,7 @@ pub async fn run(
                         cfg.local.identity,
                         global_api.with_module(*module_id),
                         shared_anymap.clone(),
+                        bitcoin_rpc.clone(),
                     )
                     .await?;
 

@@ -251,7 +251,7 @@ pub struct Fedimintd {
     code_version_hash: String,
     code_version_str: String,
     opts: ServerOpts,
-    bitcoind_rpc: BitcoinRpcConfig,
+    bitcoin_rpc: BitcoinRpcConfig,
 }
 
 impl Fedimintd {
@@ -316,7 +316,7 @@ impl Fedimintd {
 
         Ok(Self {
             opts,
-            bitcoind_rpc,
+            bitcoin_rpc: bitcoind_rpc,
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
             code_version_hash: code_version_hash.to_owned(),
@@ -361,7 +361,7 @@ impl Fedimintd {
     pub fn with_default_modules(self) -> anyhow::Result<Self> {
         let network = self.opts.network;
 
-        let bitcoind_rpc = self.bitcoind_rpc.clone();
+        let bitcoin_rpc = self.bitcoin_rpc.clone();
         let finality_delay = self.opts.finality_delay;
         let s = self
             .with_module_kind(LightningInit)
@@ -369,7 +369,7 @@ impl Fedimintd {
                 LightningInit::kind(),
                 LightningGenParams {
                     local: LightningGenParamsLocal {
-                        bitcoin_rpc: bitcoind_rpc.clone(),
+                        bitcoin_rpc: bitcoin_rpc.clone(),
                     },
                     consensus: LightningGenParamsConsensus { network },
                 },
@@ -392,7 +392,7 @@ impl Fedimintd {
                 WalletInit::kind(),
                 WalletGenParams {
                     local: WalletGenParamsLocal {
-                        bitcoin_rpc: bitcoind_rpc.clone(),
+                        bitcoin_rpc: bitcoin_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
                         network,
@@ -415,7 +415,7 @@ impl Fedimintd {
                     fedimint_lnv2_server::LightningInit::kind(),
                     fedimint_lnv2_common::config::LightningGenParams {
                         local: fedimint_lnv2_common::config::LightningGenParamsLocal {
-                            bitcoin_rpc: bitcoind_rpc.clone(),
+                            bitcoin_rpc: bitcoin_rpc.clone(),
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             // TODO: actually make the relative fee configurable
@@ -480,6 +480,7 @@ impl Fedimintd {
                 self.server_gens,
                 self.server_gen_params,
                 self.code_version_str,
+                self.bitcoin_rpc.clone(),
             )
             .await
             {
@@ -565,6 +566,7 @@ async fn run(
     module_inits: ServerModuleInitRegistry,
     module_inits_params: ServerModuleConfigGenParamsRegistry,
     code_version_str: String,
+    bitcoin_rpc: BitcoinRpcConfig,
 ) -> anyhow::Result<()> {
     if let Some(socket_addr) = opts.bind_metrics_api.as_ref() {
         task_group.spawn_cancellable("metrics-server", {
@@ -615,6 +617,7 @@ async fn run(
         code_version_str,
         &module_inits,
         task_group.clone(),
+        bitcoin_rpc,
         Some(Box::new(fedimint_server_ui::dashboard::start)),
         Some(Box::new(fedimint_server_ui::setup::start)),
     ))
