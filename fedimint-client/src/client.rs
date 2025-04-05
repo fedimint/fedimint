@@ -88,6 +88,7 @@ use crate::sm::executor::{
     ActiveModuleOperationStateKeyPrefix, ActiveOperationStateKeyPrefix, Executor,
     InactiveModuleOperationStateKeyPrefix, InactiveOperationStateKeyPrefix,
 };
+use fedimint_api_client::api::StatusResponse;
 
 pub(crate) mod builder;
 pub(crate) mod global_ctx;
@@ -260,6 +261,13 @@ impl Client {
 
     pub fn federation_id(&self) -> FederationId {
         self.federation_id
+    }
+
+    pub async fn get_guardian_status(&self)-> anyhow::Result<StatusResponse>
+        self.api()
+            .status()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch guardian status: {}", e))
     }
 
     fn context_gen(self: &Arc<Self>) -> ModuleGlobalContextGen {
@@ -1395,6 +1403,10 @@ impl Client {
                             "progress": progress
                         });
                     }
+                }
+                "guardian_status" => {
+                    let status=self.get_guardian_status().await?;
+                    yield serde_json::to_value(status);
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
