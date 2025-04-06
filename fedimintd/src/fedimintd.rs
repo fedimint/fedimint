@@ -13,7 +13,8 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, get_current_database_version};
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    BitcoinRpcConfig, FM_BITCOIN_RPC_KIND_ENV, FM_BITCOIN_RPC_URL_ENV, FM_ENABLE_MODULE_LNV2_ENV,
+    FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
@@ -67,6 +68,13 @@ struct ServerOpts {
     // the API
     #[arg(long, env = FM_PASSWORD_ENV)]
     password: Option<String>,
+
+    #[arg(long, env =  FM_BITCOIN_RPC_KIND_ENV)]
+    bitcoin_rpc_kind: String,
+
+    #[arg(long, env =  FM_BITCOIN_RPC_URL_ENV)]
+    bitcoin_rpc_url: SafeUrl,
+
     /// Enable tokio console logging
     #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
     tokio_console_bind: Option<SocketAddr>,
@@ -265,11 +273,12 @@ impl Fedimintd {
 
         info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
-        let bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()?;
-
         Ok(Self {
+            bitcoin_rpc: BitcoinRpcConfig {
+                kind: opts.bitcoin_rpc_kind.clone(),
+                url: opts.bitcoin_rpc_url.clone(),
+            },
             opts,
-            bitcoin_rpc: bitcoind_rpc,
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
             code_version_hash: code_version_hash.to_owned(),
