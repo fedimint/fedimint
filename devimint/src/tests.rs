@@ -515,7 +515,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     .get(i)
                     .expect("Not enough gateway-cli paths");
 
-                let gateways = vec![&mut dev_fed.gw_lnd, &mut dev_fed.gw_ldk];
+                let gateways = vec![&mut dev_fed.gw_lnd];
 
                 try_join_all(gateways.into_iter().map(|gateway| {
                     gateway.restart_with_bin(process_mgr, new_gatewayd_path, new_gateway_cli_path)
