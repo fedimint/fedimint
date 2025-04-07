@@ -11,13 +11,15 @@ use fedimint_core::task::TaskHandle;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use maud::{DOCTYPE, Markup, html};
 use tokio::net::TcpListener;
-use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
+use {
+    fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server, fedimint_walletv2_server,
+};
 
 use crate::assets::WithStaticRoutesExt as _;
 use crate::layout::{self};
 use crate::{
     AuthState, LoginInput, audit, check_auth, invite_code, latency, lnv2, login_form_response,
-    login_submit_response, meta, wallet,
+    login_submit_response, meta, wallet, walletv2,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -108,6 +110,13 @@ async fn dashboard_view(
         }
     };
 
+    // Conditionally add Wallet V2 UI if the module is available
+    let walletv2_content = html! {
+        @if let Some(walletv2_module) = state.api.get_module::<fedimint_walletv2_server::Wallet>() {
+            (walletv2::render(walletv2_module).await)
+        }
+    };
+
     let content = html! {
         div class="row gy-4" {
             div class="col-md-6" {
@@ -157,6 +166,7 @@ async fn dashboard_view(
         (lightning_content)
         (wallet_content)
         (meta_content)
+        (walletv2_content)
 
         // Every 15s fetch updates to the page
         div hx-get="/dashboard/update" hx-trigger="every 15s" hx-swap="none" { }

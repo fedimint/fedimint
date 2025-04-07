@@ -114,6 +114,11 @@ function lnv2_module() {
 }
 export -f lnv2_module
 
+function walletv2_module() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-module-test.sh
+}
+export -f walletv2_module
+
 function mint_client_sanity() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mint-client-sanity.sh
 }
@@ -329,6 +334,7 @@ tests_to_run_in_parallel+=(
   "gw_restore_test"
   "gw_liquidity_test"
   "lnv2_module"
+  "walletv2_module"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"
