@@ -519,7 +519,6 @@ impl ClientModule for WalletClientModule {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
                     unreachable!()
                 }
-                }
             }
         })
     }
