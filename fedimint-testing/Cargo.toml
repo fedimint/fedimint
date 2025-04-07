@@ -38,6 +38,8 @@ fedimint-logging = { workspace = true }
 fedimint-portalloc = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
+fedimint-server-bitcoin-rpc = { workspace = true }
+fedimint-server-core = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }

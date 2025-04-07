@@ -21,7 +21,7 @@ async-trait = { workspace = true }
 bitcoin = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-bitcoind = { workspace = true, features = ["fedimint-server"] }
+fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }

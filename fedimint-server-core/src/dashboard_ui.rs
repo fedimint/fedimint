@@ -3,10 +3,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_core::PeerId;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::module::audit::AuditSummary;
+use fedimint_core::util::SafeUrl;
+use fedimint_core::{Feerate, PeerId};
 
 use crate::{DynServerModule, ServerModule};
 
@@ -42,6 +44,12 @@ pub trait IDashboardApi {
     /// Get the federation audit summary
     async fn federation_audit(&self) -> AuditSummary;
 
+    /// Get the url of the bitcoin rpc
+    async fn bitcoin_rpc_url(&self) -> SafeUrl;
+
+    /// Get the status of the bitcoin backend
+    async fn bitcoin_rpc_status(&self) -> Option<ServerBitcoinRpcStatus>;
+
     /// Get reference to a server module instance by module kind
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule>;
 
@@ -66,4 +74,12 @@ impl DashboardApiModuleExt for DynDashboardApi {
             .as_any()
             .downcast_ref::<M>()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerBitcoinRpcStatus {
+    pub network: Network,
+    pub block_count: u64,
+    pub fee_rate: Feerate,
+    pub sync_percentage: Option<f64>,
 }
