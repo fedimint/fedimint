@@ -20,11 +20,11 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-bitcoind = { workspace = true, features = ["fedimint-server"] }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
+fedimint-server-bitcoin-rpc = { workspace = true }
 fedimint-server-core = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }

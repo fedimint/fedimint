@@ -54,7 +54,8 @@ use fedimint_core::transaction::{
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
-use fedimint_server_core::dashboard_ui::IDashboardApi;
+use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
+use fedimint_server_core::dashboard_ui::{IDashboardApi, ServerBitcoinRpcStatus};
 use fedimint_server_core::net::{GuardianAuthToken, check_auth};
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
@@ -91,6 +92,7 @@ pub struct ConsensusApi {
     pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
     pub p2p_status_receivers: P2PStatusReceivers,
     pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
+    pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
 }
@@ -587,6 +589,14 @@ impl IDashboardApi for ConsensusApi {
         self.get_federation_audit()
             .await
             .expect("Failed to get federation audit")
+    }
+
+    async fn bitcoin_rpc_url(&self) -> SafeUrl {
+        self.bitcoin_rpc_connection.url()
+    }
+
+    async fn bitcoin_rpc_status(&self) -> Option<ServerBitcoinRpcStatus> {
+        self.bitcoin_rpc_connection.status()
     }
 
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule> {

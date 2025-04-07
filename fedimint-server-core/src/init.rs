@@ -13,7 +13,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
-use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
     ModuleInit, SupportedModuleApiVersions,
@@ -21,6 +20,7 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 
+use crate::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use crate::config::PeerHandleOps;
 use crate::migration::{
     DynServerDbMigrationFn, ServerDbMigrationFnContext, ServerModuleDbMigrationContext,
@@ -53,8 +53,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
-        shared: SharedAnymap,
-        bitcoin_rpc: BitcoinRpcConfig,
+        server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
     ) -> anyhow::Result<DynServerModule>;
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
@@ -94,8 +93,6 @@ pub trait ServerModuleShared: any::Any + Send + Sync {
     fn new(task_group: TaskGroup) -> Self;
 }
 
-type SharedAnymap = Arc<std::sync::RwLock<BTreeMap<any::TypeId, Box<dyn any::Any + Send + Sync>>>>;
-
 pub struct ServerModuleInitArgs<S>
 where
     S: ServerModuleInit,
@@ -106,12 +103,7 @@ where
     our_peer_id: PeerId,
     num_peers: NumPeers,
     module_api: DynModuleApi,
-    bitcoin_rpc: BitcoinRpcConfig,
-    // Things that can be shared between modules
-    //
-    // If two modules can coordinate on using a shared type, they can
-    // share something e.g. for caching or resource usage purposes.
-    shared: SharedAnymap,
+    server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
     // ClientModuleInitArgs needs a bound because sometimes we need
     // to pass associated-types data, so let's just put it here right away
     _marker: marker::PhantomData<S>,
@@ -145,39 +137,8 @@ where
         &self.module_api
     }
 
-    pub fn bitcoin_rpc(&self) -> BitcoinRpcConfig {
-        self.bitcoin_rpc.clone()
-    }
-
-    pub fn with_shared<T, R>(&self, f: impl FnOnce(&T) -> R) -> R
-    where
-        T: ServerModuleShared,
-    {
-        let type_id = any::TypeId::of::<T>();
-        let mut write = self.shared.write().expect("Locking failed");
-
-        let _ = write
-            .entry(type_id)
-            .or_insert_with(|| Box::new(<T as ServerModuleShared>::new(self.task_group.clone())));
-        // TODO: When stabilized:
-        // let read = std::sync::RwLockWriteGuard::<'_, _>::downgrade(write);
-        drop(write);
-        let read = self.shared.read().expect("Locking failed");
-        let t: &T = read
-            .get(&type_id)
-            .expect("Must be there, just inserted")
-            .as_ref()
-            .downcast_ref()
-            .expect("Can't fail, must be of expected type");
-
-        f(t)
-    }
-
-    pub fn shared<T>(&self) -> T
-    where
-        T: ServerModuleShared + Clone,
-    {
-        self.with_shared::<T, T>(|t| t.clone())
+    pub fn server_bitcoin_rpc_monitor(&self) -> ServerBitcoinRpcMonitor {
+        self.server_bitcoin_rpc_monitor.clone()
     }
 }
 /// Module Generation trait with associated types
@@ -282,8 +243,7 @@ where
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
-        shared: SharedAnymap,
-        bitcoin_rpc: BitcoinRpcConfig,
+        server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
     ) -> anyhow::Result<DynServerModule> {
         let module = <Self as ServerModuleInit>::init(
             self,
@@ -295,8 +255,7 @@ where
                 our_peer_id,
                 _marker: PhantomData,
                 module_api,
-                shared,
-                bitcoin_rpc,
+                server_bitcoin_rpc_monitor,
             },
         )
         .await?;

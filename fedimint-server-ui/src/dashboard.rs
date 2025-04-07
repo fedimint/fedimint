@@ -16,8 +16,8 @@ use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 use crate::assets::WithStaticRoutesExt as _;
 use crate::layout::{self};
 use crate::{
-    AuthState, LoginInput, audit, check_auth, invite_code, latency, lnv2, login_form_response,
-    login_submit_response, meta, wallet,
+    AuthState, LoginInput, audit, bitcoin, check_auth, invite_code, latency, lnv2,
+    login_form_response, login_submit_response, meta, wallet,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -86,6 +86,8 @@ async fn dashboard_view(
     let p2p_connection_status = state.api.p2p_connection_status().await;
     let invite_code = state.api.federation_invite_code().await;
     let audit_summary = state.api.federation_audit().await;
+    let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
+    let bitcoin_rpc_status = state.api.bitcoin_rpc_status().await;
 
     // Conditionally add Lightning V2 UI if the module is available
     let lightning_content = html! {
@@ -151,6 +153,12 @@ async fn dashboard_view(
             // Peer Connection Status Column
             div class="col-lg-6" {
                 (latency::render(consensus_ord_latency, &p2p_connection_status))
+            }
+        }
+
+        div class="row gy-4 mt-2" {
+            div class="col-12" {
+                (bitcoin::render(bitcoin_rpc_url, &bitcoin_rpc_status))
             }
         }
 

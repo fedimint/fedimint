@@ -1,5 +1,6 @@
 pub(crate) mod assets;
 pub mod audit;
+pub mod bitcoin;
 pub mod dashboard;
 pub(crate) mod error;
 pub mod invite_code;

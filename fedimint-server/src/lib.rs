@@ -35,7 +35,6 @@ use config::io::{PLAINTEXT_PASSWORD, read_server_config};
 use fedimint_aead::random_salt;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
-use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::{TaskGroup, TaskHandle};
@@ -43,6 +42,7 @@ use fedimint_core::util::write_new;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
+use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 use fedimint_server_core::dashboard_ui::DynDashboardApi;
 use fedimint_server_core::setup_ui::{DynSetupApi, ISetupApi};
 use jsonrpsee::RpcModule;
@@ -98,7 +98,7 @@ pub async fn run(
     code_version_str: String,
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
-    bitcoin_rpc: BitcoinRpcConfig,
+    bitcoin_rpc: DynServerBitcoinRpc,
     dashboard_ui_handler: Option<DashboardUiHandler>,
     setup_ui_handler: Option<SetupUiHandler>,
 ) -> anyhow::Result<()> {

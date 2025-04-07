@@ -3319,11 +3319,11 @@ dependencies = [
  "async-trait",
  "bitcoin_hashes 0.14.0",
  "erased-serde 0.4.6",
- "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-logging",
  "fedimint-metrics",
+ "fedimint-server-bitcoin-rpc",
  "fedimint-server-core",
  "fedimint-threshold-crypto",
  "futures",
@@ -3790,7 +3790,6 @@ dependencies = [
  "fedimint-aead",
  "fedimint-aleph-bft",
  "fedimint-api-client",
- "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
  "fedimint-logging",
@@ -3824,6 +3823,21 @@ dependencies = [
  "tower 0.4.13",
  "tracing",
  "z32",
+]
+
+[[package]]
+name = "fedimint-server-bitcoin-rpc"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "esplora-client 0.10.0",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-server-core",
+ "tracing",
 ]
 
 [[package]]
@@ -3920,6 +3934,8 @@ dependencies = [
  "fedimint-portalloc",
  "fedimint-rocksdb",
  "fedimint-server",
+ "fedimint-server-bitcoin-rpc",
+ "fedimint-server-core",
  "fedimint-testing-core",
  "fs-lock",
  "lightning-invoice",
@@ -4175,6 +4191,7 @@ dependencies = [
  "fedimint-dummy-server",
  "fedimint-logging",
  "fedimint-server",
+ "fedimint-server-core",
  "fedimint-testing",
  "fedimint-testing-core",
  "fedimint-wallet-client",
@@ -4227,6 +4244,8 @@ dependencies = [
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
+ "fedimint-server-bitcoin-rpc",
+ "fedimint-server-core",
  "fedimint-server-ui",
  "fedimint-unknown-common",
  "fedimint-unknown-server",

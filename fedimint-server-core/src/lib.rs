@@ -5,6 +5,7 @@
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
 
+pub mod bitcoin_rpc;
 pub mod config;
 pub mod dashboard_ui;
 mod init;
