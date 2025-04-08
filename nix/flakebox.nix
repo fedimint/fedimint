@@ -876,6 +876,14 @@ in
           };
         };
 
+        fedimint-recurringd = pkgs.dockerTools.buildLayeredImage {
+          name = "fedimint-recurringd";
+          contents = [ fedimint-recurringd-pkgs ] ++ defaultPackages;
+          config = {
+            Cmd = [ "${fedimint-recurringd-pkgs}/bin/fedimint-recurringd" ];
+          };
+        };
+
         devtools = pkgs.dockerTools.buildLayeredImage {
           name = "fedimint-devtools";
           contents = [
