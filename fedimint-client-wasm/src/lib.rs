@@ -87,7 +87,6 @@ impl WasmClient {
         let mut builder = fedimint_client::Client::builder(db).await?;
         builder.with_module(MintClientInit);
         builder.with_module(LightningClientInit::default());
-        // FIXME: wallet module?
         builder.with_module(fedimint_wallet_client::WalletClientInit);
         builder.with_primary_module(1);
         Ok(builder)
