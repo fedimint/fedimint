@@ -523,7 +523,7 @@
 <a href=#523 id=523 data-nosnippet>523</a>                    .get(i)
 <a href=#524 id=524 data-nosnippet>524</a>                    .expect(<span class="string">"Not enough gateway-cli paths"</span>);
 <a href=#525 id=525 data-nosnippet>525</a>
-<a href=#526 id=526 data-nosnippet>526</a>                <span class="kw">let </span>gateways = <span class="macro">vec!</span>[<span class="kw-2">&amp;mut </span>dev_fed.gw_lnd, <span class="kw-2">&amp;mut </span>dev_fed.gw_ldk];
+<a href=#526 id=526 data-nosnippet>526</a>                <span class="kw">let </span>gateways = <span class="macro">vec!</span>[<span class="kw-2">&amp;mut </span>dev_fed.gw_lnd];
 <a href=#527 id=527 data-nosnippet>527</a>
 <a href=#528 id=528 data-nosnippet>528</a>                try_join_all(gateways.into_iter().map(|gateway| {
 <a href=#529 id=529 data-nosnippet>529</a>                    gateway.restart_with_bin(process_mgr, new_gatewayd_path, new_gateway_cli_path)
