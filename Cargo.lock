@@ -3759,6 +3759,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-recurringd-tests"
+version = "0.7.0-alpha"
+dependencies = [
+ "anyhow",
+ "devimint",
+ "lightning-invoice",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-rocksdb"
 version = "0.8.0-alpha"
 dependencies = [
