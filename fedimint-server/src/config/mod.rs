@@ -223,8 +223,6 @@ pub struct ConfigGenSettings {
     /// TODO: we might make it a part of the API  request when ready
     /// (move to `SetLocalParamsRequest`).
     pub networking: NetworkingStack,
-    /// Guardian-defined key-value pairs that will be passed to the client
-    pub meta: BTreeMap<String, String>,
     /// Set the params (if leader) or just the local params (if follower)
     pub modules: ServerModuleConfigGenParamsRegistry,
     /// Registry for config gen
