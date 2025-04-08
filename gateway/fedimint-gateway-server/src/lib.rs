@@ -484,6 +484,8 @@ impl Gateway {
                         crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
                     }
 
+                    self_copy.unannounce_from_all_federations().await;
+
                     match route_payments_response {
                         ReceivePaymentStreamAction::RetryAfterDelay => {
                             warn!(target: LOG_GATEWAY, retry_interval = %PAYMENT_STREAM_RETRY_SECONDS, "Disconnected from lightning node");
