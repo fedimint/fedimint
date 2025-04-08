@@ -354,6 +354,15 @@ jobs:
           fi
           echo "gateway-cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
+      - name: Build fedimint-recurringd container
+        run: |
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.fedimint-recurringd
+          else
+            nix build -L .#container.fedimint-recurringd
+          fi
+          echo "fedimint-recurringd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+
       - name: Build devtools container
         run: |
           if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
@@ -377,6 +386,7 @@ jobs:
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint-recurringd_container_tag }} && hub_tag="fedimint/fedimint-recurringd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish master tag
@@ -386,6 +396,7 @@ jobs:
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint-recurringd_container_tag }} && hub_tag="fedimint/fedimint-recurringd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish tagged release
@@ -395,6 +406,7 @@ jobs:
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint-recurringd_container_tag }} && hub_tag="fedimint/fedimint-recurringd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
