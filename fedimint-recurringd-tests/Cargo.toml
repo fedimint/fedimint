@@ -1,0 +1,19 @@
+[package]
+name = "fedimint-recurringd-tests"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+description = "fedimint-recurringd-tests contains integration tests for fedimint-recurringd"
+license = { workspace = true }
+publish = false
+
+[[bin]]
+name = "fedimint-recurringd-tests"
+path = "src/bin/fedimint-recurringd-tests.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+devimint = { workspace = true }
+lightning-invoice = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
