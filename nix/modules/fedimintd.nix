@@ -65,6 +65,11 @@ let
             default = true;
             description = lib.mdDoc "Opens port in firewall for fedimintd's p2p port";
           };
+          openFirewallIroh = mkOption {
+            type = types.bool;
+            default = false;
+            description = lib.mdDoc "Opens the UDP port in firewall for fedimintd's iroh p2p communication";
+          };
           port = mkOption {
             type = types.port;
             default = 8173;
@@ -92,7 +97,7 @@ let
             '';
           };
         };
-        api = {
+        api_ws = {
           openFirewall = mkOption {
             type = types.bool;
             default = false;
@@ -101,12 +106,12 @@ let
           port = mkOption {
             type = types.port;
             default = 8174;
-            description = lib.mdDoc "Port to bind on for API connections relied by the reverse proxy/tls terminator.";
+            description = lib.mdDoc "TCP Port to bind on for API connections relayed by the reverse proxy/tls terminator.";
           };
           bind = mkOption {
             type = types.str;
             default = "127.0.0.1";
-            description = lib.mdDoc "Address to bind on for API connections relied by the reverse proxy/tls terminator. Usually starting with `fedimint://`";
+            description = lib.mdDoc "Address to bind on for API connections relayed by the reverse proxy/tls terminator. Usually starting with `fedimint://`";
           };
           fqdn = mkOption {
             type = types.nullOr types.str;
@@ -122,6 +127,23 @@ let
 
               Typically you want to override `fqdn` instead.
             '';
+          };
+        };
+        api_iroh = {
+          openFirewall = mkOption {
+            type = types.bool;
+            default = false;
+            description = lib.mdDoc "Opens port in firewall for fedimintd's api port";
+          };
+          port = mkOption {
+            type = types.port;
+            default = 8174;
+            description = lib.mdDoc "UDP Port that the iroh-based API will be listening on";
+          };
+          bind = mkOption {
+            type = types.str;
+            default = "127.0.0.1";
+            description = lib.mdDoc "Address to bind on for API connections relied by the reverse proxy/tls terminator. Usually starting with `fedimint://`";
           };
         };
         bitcoin = {
@@ -212,7 +234,7 @@ in
           '';
         }
         {
-          assertion = cfg.api.address != null;
+          assertion = cfg.api_ws.address != null;
           message = ''
             `services.fedimintd.${fedimintdName}.api.address` must be set to address reachable by the clients, with TLS terminated by external service (typically nginx), and relayed to the fedimintd bind address.
 
@@ -222,13 +244,22 @@ in
       ]) eachFedimintd
     );
 
-    networking.firewall.allowedTCPPorts = flatten (
-      mapAttrsToList (
-        fedimintdName: cfg:
-        (if cfg.api.openFirewall then [ cfg.api.port ] else [ ])
-        ++ (if cfg.p2p.openFirewall then [ cfg.p2p.port ] else [ ])
-      ) eachFedimintd
-    );
+    networking.firewall = {
+      allowedTCPPorts = flatten (
+        mapAttrsToList (
+          fedimintdName: cfg:
+          (if cfg.api_ws.openFirewall then [ cfg.api_ws.port ] else [ ])
+          ++ (if cfg.p2p.openFirewall then [ cfg.p2p.port ] else [ ])
+        ) eachFedimintd
+      );
+      allowedUDPPorts = flatten (
+        mapAttrsToList (
+          fedimintdName: cfg:
+          (if cfg.api_iroh.openFirewall then [ cfg.api_iroh.port ] else [ ])
+          ++ (if cfg.p2p.openFirewallIroh then [ cfg.p2p.port ] else [ ])
+        ) eachFedimintd
+      );
+    };
 
     systemd.services = mapAttrs' (
       fedimintdName: cfg:
@@ -258,9 +289,10 @@ in
           environment = lib.mkMerge ([
             {
               FM_BIND_P2P = "${cfg.p2p.bind}:${builtins.toString cfg.p2p.port}";
-              FM_BIND_API = "${cfg.api.bind}:${builtins.toString cfg.api.port}";
+              FM_BIND_API_WS = "${cfg.api_ws.bind}:${builtins.toString cfg.api_ws.port}";
+              FM_BIND_API_IROH = "${cfg.api_iroh.bind}:${builtins.toString cfg.api_iroh.port}";
               FM_P2P_URL = cfg.p2p.address;
-              FM_API_URL = cfg.api.address;
+              FM_API_URL = cfg.api_ws.address;
               FM_DATA_DIR = cfg.dataDir;
               FM_BITCOIN_NETWORK = cfg.bitcoin.network;
               FM_DEFAULT_BITCOIN_RPC_URL = cfg.bitcoin.rpc.address;
@@ -293,6 +325,7 @@ in
             RestrictAddressFamilies = [
               "AF_INET"
               "AF_INET6"
+              "AF_NETLINK"
             ];
             RestrictNamespaces = true;
             RestrictRealtime = true;
@@ -331,7 +364,7 @@ in
 
     services.nginx.virtualHosts = mapAttrs' (
       fedimintdName: cfg:
-      (nameValuePair cfg.api.fqdn (
+      (nameValuePair cfg.api_ws.fqdn (
         lib.mkMerge [
 
           cfg.nginx.config
@@ -340,7 +373,7 @@ in
             enableACME = mkDefault true;
             forceSSL = mkDefault true;
             locations."/ws/" = {
-              proxyPass = "http://127.0.0.1:${builtins.toString cfg.api.port}/";
+              proxyPass = "http://127.0.0.1:${builtins.toString cfg.api_ws.port}/";
               proxyWebsockets = true;
               extraConfig = "proxy_pass_header Authorization;";
             };
