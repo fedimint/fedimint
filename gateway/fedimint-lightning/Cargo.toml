@@ -16,7 +16,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-fedimint-bip39 = { version = "=0.7.0-beta.2", path = "../../fedimint-bip39" }
+fedimint-bip39 = { version = "=0.7.0-rc.0", path = "../../fedimint-bip39" }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }

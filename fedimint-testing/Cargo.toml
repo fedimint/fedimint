@@ -31,8 +31,8 @@ fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
-fedimint-gateway-server = { package = "fedimint-gateway-server", path = "../gateway/fedimint-gateway-server", version = "=0.7.0-beta.2" }
-fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.7.0-beta.2" }
+fedimint-gateway-server = { package = "fedimint-gateway-server", path = "../gateway/fedimint-gateway-server", version = "=0.7.0-rc.0" }
+fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.7.0-rc.0" }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-portalloc = { workspace = true }
