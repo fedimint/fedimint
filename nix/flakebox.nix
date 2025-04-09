@@ -228,6 +228,10 @@ let
     nativeBuildInputs =
       with pkgs;
       [
+        # TODO: this may be the wrong approach but unblocks v0.7.0 release
+        # https://github.com/fedimint/fedimint/issues/7190
+        zlib
+
         pkg-config
         moreutils-ts
 
