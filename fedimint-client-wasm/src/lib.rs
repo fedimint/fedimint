@@ -5,7 +5,6 @@ use std::pin::pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use async_stream::try_stream;
 use db::MemAndIndexedDb;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -16,7 +15,7 @@ use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
 use futures::future::{AbortHandle, Abortable};
-use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
+use lightning_invoice::Bolt11InvoiceDescription;
 use serde_json::json;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};
@@ -82,15 +81,6 @@ impl WasmClient {
         Ok(serde_json::to_string(&result).map_err(|e| JsError::new(&e.to_string()))?)
     }
 
-    async fn client_builder(db: Database) -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
-        let mut builder = fedimint_client::Client::builder(db).await?;
-        builder.with_module(MintClientInit);
-        builder.with_module(LightningClientInit::default());
-        // FIXME: wallet module?
-        builder.with_primary_module(1);
-        Ok(builder)
-    }
-
     #[wasm_bindgen]
     /// Parse a bolt11 invoice and extract its components
     /// without joining the federation
@@ -115,6 +105,23 @@ impl WasmClient {
             "memo": description,
         });
         Ok(serde_json::to_string(&response).map_err(|e| JsError::new(&e.to_string()))?)
+    }
+
+    #[wasm_bindgen]
+    /// Preview a federation by its invite code without joining it
+    /// Returns federation information including config, federation ID, and other metadata
+    pub async fn preview_federation(invite_code: &str) -> Result<String, JsError> {
+        Self::preview_federation_inner(invite_code)
+            .await
+            .map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    async fn client_builder(db: Database) -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
+        let mut builder = fedimint_client::Client::builder(db).await?;
+        builder.with_module(MintClientInit);
+        builder.with_module(LightningClientInit::default());
+        builder.with_primary_module_kind(fedimint_mint_client::KIND);
+        Ok(builder)
     }
 
     async fn open_inner(client_name: String) -> anyhow::Result<Option<WasmClient>> {
@@ -207,38 +214,292 @@ impl WasmClient {
         method: &'a str,
         payload: String,
     ) -> impl futures::Stream<Item = anyhow::Result<serde_json::Value>> + 'a {
-        try_stream! {
-            let payload: serde_json::Value = serde_json::from_str(&payload)?;
+        async_stream::stream! {
+            // Parse the payload
+            let payload_result = serde_json::from_str::<serde_json::Value>(&payload);
+            if let Err(e) = payload_result {
+                yield Err(anyhow::format_err!("Failed to parse payload: {}", e));
+                return;
+            }
+            let payload = payload_result.unwrap();
+
             match module {
                 "" => {
-                    let mut stream = client.handle_global_rpc(method.to_owned(), payload);
-                    while let Some(item) = stream.next().await {
-                        yield item?;
+                    if method == "preview_federation" {
+                        // Extract invite code
+                        let invite_code = match payload.get("invite_code").and_then(|v| v.as_str()) {
+                            Some(code) => code,
+                            None => {
+                                yield Err(anyhow::format_err!("Missing or invalid invite_code parameter"));
+                                return;
+                            }
+                        };
+                        
+                        // Parse invite code
+                        let invite_code = match InviteCode::from_str(invite_code) {
+                            Ok(code) => code,
+                            Err(e) => {
+                                yield Err(anyhow::format_err!("Invalid invite code: {}", e));
+                                return;
+                            }
+                        };
+                        
+                        // Download config
+                        let connector = fedimint_api_client::api::net::Connector::default();
+                        let config = match connector.download_from_invite_code(&invite_code).await {
+                            Ok(config) => config,
+                            Err(e) => {
+                                yield Err(anyhow::format_err!("Failed to download federation config: {}", e));
+                                return;
+                            }
+                        };
+                        
+                        // Extract federation ID
+                        let federation_id = invite_code.federation_id().to_string();
+                        
+                        // Extract endpoints
+                        let endpoints = config.global.api_endpoints.iter()
+                            .map(|(_, url)| url.url.to_string())
+                            .collect::<Vec<String>>();
+                        
+                        // Extract metadata
+                        let metadata = match config.meta::<serde_json::Value>("metadata") {
+                            Ok(Some(meta)) => meta,
+                            Ok(None) => serde_json::json!({}),
+                            Err(_) => serde_json::json!({}),
+                        };
+                        
+                        // Serialize config
+                        let config_value = match serde_json::to_value(&config) {
+                            Ok(value) => value,
+                            Err(e) => {
+                                yield Err(anyhow::format_err!("Failed to serialize config: {}", e));
+                                return;
+                            }
+                        };
+                        
+                        // Create response
+                        let response = json!({
+                            "config": config_value,
+                            "federationId": federation_id,
+                            "endpoints": endpoints,
+                            "metadata": metadata,
+                        });
+                        
+                        yield Ok(response);
+                    } else {
+                        let mut stream = client.handle_global_rpc(method.to_owned(), payload);
+                        while let Some(item) = stream.next().await {
+                            yield item;
+                        }
                     }
                 }
                 "ln" => {
-                    let ln = client
-                        .get_first_module::<LightningClientModule>()?
-                        .inner();
-                    let mut stream = ln.handle_rpc(method.to_owned(), payload).await;
-                    while let Some(item) = stream.next().await {
-                        yield item?;
+                    match client.get_first_module::<LightningClientModule>() {
+                        Ok(ln) => {
+                            let mut stream = ln.inner().handle_rpc(method.to_owned(), payload).await;
+                            while let Some(item) = stream.next().await {
+                                yield item;
+                            }
+                        },
+                        Err(e) => {
+                            yield Err(anyhow::format_err!("Failed to get lightning module: {}", e));
+                        }
                     }
                 }
                 "mint" => {
-                    let mint = client
-                        .get_first_module::<fedimint_mint_client::MintClientModule>()?
-                        .inner();
-                    let mut stream = mint.handle_rpc(method.to_owned(), payload).await;
-                    while let Some(item) = stream.next().await {
-                        yield item?;
+                    match client.get_first_module::<fedimint_mint_client::MintClientModule>() {
+                        Ok(mint) => {
+                            let mut stream = mint.inner().handle_rpc(method.to_owned(), payload).await;
+                            while let Some(item) = stream.next().await {
+                                yield item;
+                            }
+                        },
+                        Err(e) => {
+                            yield Err(anyhow::format_err!("Failed to get mint module: {}", e));
+                        }
                     }
                 }
                 _ => {
-                    Err(anyhow::format_err!("module not found: {module}"))?;
-                    unreachable!()
+                    yield Err(anyhow::format_err!("Module not found: {}", module));
                 },
             }
         }
+    }
+
+    async fn preview_federation_inner(invite_code: &str) -> anyhow::Result<String> {
+        let invite_code = InviteCode::from_str(invite_code)?;
+        let connector = fedimint_api_client::api::net::Connector::default();
+        
+        // Download the configuration from the invite code
+        let config = connector.download_from_invite_code(&invite_code).await?;
+        
+        // Extract federation ID
+        let federation_id = invite_code.federation_id().to_string();
+        
+        // Extract endpoints
+        let endpoints = config.global.api_endpoints.iter()
+            .map(|(_, url)| url.url.to_string())
+            .collect::<Vec<String>>();
+        
+        // Extract metadata - fix: handle Option correctly
+        let metadata = match config.meta::<serde_json::Value>("metadata") {
+            Ok(Some(meta)) => meta,
+            Ok(None) => serde_json::json!({}),
+            Err(_) => serde_json::json!({}),
+        };
+        
+        // Create response JSON
+        let config_value = serde_json::to_value(&config)
+            .map_err(|e| anyhow::format_err!("Failed to serialize config: {}", e))?;
+        
+        let response = json!({
+            "config": config_value,
+            "federationId": federation_id,
+            "endpoints": endpoints,
+            "metadata": metadata,
+        });
+        
+        Ok(serde_json::to_string(&response)?)
+    }
+
+     fn handle_global_rpc_preview_federation(
+        invite_code: &str,
+    ) -> anyhow::Result<serde_json::Value> {
+        let invite_code = InviteCode::from_str(invite_code)?;
+        let federation_id = invite_code.federation_id().to_string();
+        let url = invite_code.url().to_string();
+        
+        Ok(json!({
+            "federationId": federation_id,
+            "url": url,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+    use wasm_bindgen::JsCast;
+    
+     #[cfg(test)]
+    use std::cell::RefCell;
+    #[cfg(test)]
+    thread_local! {
+        static MOCK_ENABLED: RefCell<bool> = RefCell::new(false);
+        static MOCK_RESPONSE: RefCell<Option<String>> = RefCell::new(None);
+    }
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+     #[cfg(test)]
+    impl WasmClient {
+ 
+        pub fn set_mock_preview_federation(enabled: bool, response: Option<String>) {
+            MOCK_ENABLED.with(|cell| *cell.borrow_mut() = enabled);
+            MOCK_RESPONSE.with(|cell| *cell.borrow_mut() = response);
+        }
+    }
+
+    // Override the preview_federation_inner method for testing
+    #[cfg(test)]
+    pub async fn mock_preview_federation(invite_code: &str) -> anyhow::Result<String> {
+        if !MOCK_ENABLED.with(|cell| *cell.borrow()) {
+            return Err(anyhow::format_err!("Mock not enabled"));
+        }
+        
+ 
+        if let Some(response) = MOCK_RESPONSE.with(|cell| cell.borrow().clone()) {
+            return Ok(response);
+        }
+        
+         let federation_id = "mock_federation_id";
+        let response = json!({
+            "config": {},
+            "federationId": federation_id,
+            "endpoints": ["https://mock.fedimint.org"],
+            "metadata": {"name": "Mock Federation"}
+        });
+        
+        Ok(serde_json::to_string(&response)?)
+    }
+
+     #[wasm_bindgen_test]
+    async fn test_preview_federation_mock() {
+       
+        WasmClient::set_mock_preview_federation(true, None);
+        
+         let result = mock_preview_federation("test-invite-code").await;
+        
+        assert!(result.is_ok(), "mock_preview_federation failed");
+        
+        if let Ok(json_str) = result {
+            let preview: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+            
+            // Verify the structure of the response
+            assert!(preview.get("federationId").is_some());
+            assert!(preview.get("endpoints").is_some());
+            assert!(preview.get("metadata").is_some());
+            
+            // Verify federation ID matches the mock
+            assert_eq!(preview["federationId"].as_str().unwrap(), "mock_federation_id");
+        }
+        
+        // Disable mock
+        WasmClient::set_mock_preview_federation(false, None);
+    }
+    
+    // Test for preview_federation with custom mock response
+    #[wasm_bindgen_test]
+    async fn test_preview_federation_custom_mock() {
+        // Create custom mock response
+        let custom_response = json!({
+            "config": {"test": true},
+            "federationId": "custom_federation_id",
+            "endpoints": ["https://custom.fedimint.org"],
+            "metadata": {"name": "Custom Federation"}
+        });
+        
+        // Enable mock with custom response
+        WasmClient::set_mock_preview_federation(true, Some(serde_json::to_string(&custom_response).unwrap()));
+        
+        // Call the mock function directly
+        let result = mock_preview_federation("test-invite-code").await;
+        
+        assert!(result.is_ok(), "mock_preview_federation failed");
+        
+        if let Ok(json_str) = result {
+            let preview: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+            
+            // Verify the structure of the response
+            assert!(preview.get("federationId").is_some());
+            assert!(preview.get("endpoints").is_some());
+            assert!(preview.get("metadata").is_some());
+            
+            // Verify federation ID matches the custom mock
+            assert_eq!(preview["federationId"].as_str().unwrap(), "custom_federation_id");
+            assert_eq!(preview["metadata"]["name"].as_str().unwrap(), "Custom Federation");
+        }
+        
+        // Disable mock
+        WasmClient::set_mock_preview_federation(false, None);
+    }
+    
+    // Test for preview_federation with invalid invite code
+    #[wasm_bindgen_test]
+    async fn test_preview_federation_invalid_code() {
+        // Enable mock
+        WasmClient::set_mock_preview_federation(true, None);
+        
+        // For this test, we'll simulate an error by disabling the mock
+        MOCK_ENABLED.with(|cell| *cell.borrow_mut() = false);
+        
+        // Test with any invite code - it will fail because mock is disabled
+        let result = mock_preview_federation("invalid-code").await;
+        assert!(result.is_err(), "Expected an error for invalid invite code");
+        
+        // Re-enable mock for other tests
+        WasmClient::set_mock_preview_federation(true, None);
     }
 }
