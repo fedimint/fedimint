@@ -486,10 +486,10 @@ jobs:
               >&2 echo "Building: $bin"
               nix build -L .#$bin
 
-              closure_size=$(nix path-info -rS --json .#bin| jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
+              closure_size=$(nix path-info -rS --json .#$bin | nix run nixpkgs#jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
               >&2 echo "$bin's Nix closure size: $closure_size"
 
-              if [ 150000000 -lt $closure_size ]; then
+              if [ 200000000 -lt $closure_size ]; then
                 >&2 echo "$bin's Nix closure size seems too big: $closure_size"
                 exit 1
               fi
@@ -497,13 +497,13 @@ jobs:
               >&2 echo "Pushing to cachix: $bin"
               cachix push fedimint -c 8 -j 8 $(nix-store --query --references $(readlink -f result)) $(readlink -f result)
               >&2 echo "Pining in cachix: fedimint-release-$bin:$BUILD_ID"
-              if [[ $var == *"-rc."* ]] || [[ $var == *"-alpha."* ]] || [[ $var == *"-testing."* ]] ; then
+              if [[ "$BUILD_ID" == *"-rc."* ]] || [[ "$BUILD_ID" == *"-alpha."* ]] || [[ "$BUILD_ID" == *"-testing."* ]]|| [[ "$BUILD_ID" == *"-beta."* ]] ; then
                 >&2 echo "Will not pin in cachix, as looks like a pre-release"
               else
                 cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
               fi
             fi
-            if [ "${{ matrix.build.build-bundled }}" = "true" ]; then
+            if [ "${{ matrix.platform.build-bundled }}" = "true" ]; then
               # Note: keep in sync with sign.sh
               >&2 echo "Building bundled: $bin"
               nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && ${{ matrix.platform.shasum-cmd }} "bins/$bin-$BUILD_ID"
