@@ -785,7 +785,7 @@
 <a href=#785 id=785 data-nosnippet>785</a>                <span class="kw">use </span><span class="macro-nonterminal">$crate::bitcoin::hashes::hex::DisplayHex</span>;
 <a href=#786 id=786 data-nosnippet>786</a>                <span class="kw">match </span><span class="self">self </span>{
 <a href=#787 id=787 data-nosnippet>787</a>                    <span class="macro-nonterminal">$name::V0</span>(v0) =&gt; {
-<a href=#788 id=788 data-nosnippet>788</a>                        v0.fmt(f)<span class="question-mark">?</span>;
+<a href=#788 id=788 data-nosnippet>788</a>                        std::fmt::Debug::fmt(v0, f)<span class="question-mark">?</span>;
 <a href=#789 id=789 data-nosnippet>789</a>                    }
 <a href=#790 id=790 data-nosnippet>790</a>                    <span class="macro-nonterminal">$name::Default </span>{ variant, bytes } =&gt; {
 <a href=#791 id=791 data-nosnippet>791</a>                        f.debug_struct(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))
