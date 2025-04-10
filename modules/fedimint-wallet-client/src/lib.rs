@@ -75,6 +75,7 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
 use tracing::{debug, instrument};
+use async_stream::try_stream;
 
 use crate::api::WalletFederationApi;
 use crate::backup::WalletRecovery;
