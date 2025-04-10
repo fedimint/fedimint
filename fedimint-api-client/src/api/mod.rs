@@ -1194,14 +1194,19 @@ mod iroh {
     use anyhow::Context;
     use async_trait::async_trait;
     use fedimint_core::PeerId;
-    use fedimint_core::envs::parse_kv_list_from_env;
+    use fedimint_core::envs::{
+        FM_IROH_CONNECT_OVERRIDES_ENV, FM_IROH_DNS_DISCOVERY_OVERRIDE_ENV,
+        FM_IROH_RELAY_OVERRIDE_ENV, parse_kv_list_from_env,
+    };
     use fedimint_core::module::{
         ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
     };
     use fedimint_core::util::SafeUrl;
     use fedimint_logging::LOG_NET_IROH;
+    #[cfg(not(target_family = "wasm"))]
+    use iroh::discovery::dns::DnsDiscovery;
     use iroh::endpoint::Connection;
-    use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
+    use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMap, RelayUrl};
     use iroh_base::ticket::NodeTicket;
     use serde_json::Value;
     use tracing::{debug, trace, warn};
@@ -1223,9 +1228,24 @@ mod iroh {
 
     impl IrohConnector {
         pub async fn new(peers: BTreeMap<PeerId, SafeUrl>) -> anyhow::Result<Self> {
-            const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
             warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-            let mut s = Self::new_no_overrides(peers).await?;
+
+            let custom_relay = if let Ok(url) = std::env::var(FM_IROH_RELAY_OVERRIDE_ENV) {
+                Some(RelayUrl::from(
+                    url::Url::from_str(&url).context("Parsing iroh custom relay URL")?,
+                ))
+            } else {
+                None
+            };
+            let custom_dns_discovery_origin =
+                if let Ok(origin_domain) = std::env::var(FM_IROH_DNS_DISCOVERY_OVERRIDE_ENV) {
+                    Some(origin_domain)
+                } else {
+                    None
+                };
+
+            let mut s =
+                Self::new_no_overrides(peers, custom_relay, custom_dns_discovery_origin).await?;
 
             for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
                 s = s.with_connection_override(k, v.into());
@@ -1234,7 +1254,11 @@ mod iroh {
             Ok(s)
         }
 
-        pub async fn new_no_overrides(peers: BTreeMap<PeerId, SafeUrl>) -> anyhow::Result<Self> {
+        pub async fn new_no_overrides(
+            peers: BTreeMap<PeerId, SafeUrl>,
+            custom_relay: Option<RelayUrl>,
+            custom_dns_discovery_origin: Option<String>,
+        ) -> anyhow::Result<Self> {
             let node_ids = peers
                 .into_iter()
                 .map(|(peer, url)| {
@@ -1249,6 +1273,24 @@ mod iroh {
             let builder = Endpoint::builder().discovery_n0();
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
+
+            let builder = if let Some(custom_relay) = custom_relay.clone() {
+                builder.relay_mode(iroh::RelayMode::Custom(RelayMap::from_url(custom_relay)))
+            } else {
+                builder.relay_mode(iroh::RelayMode::Default)
+            };
+
+            let builder = match (
+                custom_dns_discovery_origin.clone(),
+                cfg!(target_family = "wasm"),
+            ) {
+                #[cfg(not(target_family = "wasm"))]
+                (Some(custom_dns_discovery_origin), false) => {
+                    builder.add_discovery(|_| Some(DnsDiscovery::new(custom_dns_discovery_origin)))
+                }
+                (_, _) => builder.discovery_n0(),
+            };
+
             let endpoint = builder.bind().await?;
             debug!(
                 target: LOG_NET_IROH,

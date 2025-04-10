@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::str::FromStr as _;
 use std::sync::Arc;
 
 use anyhow::{Context, ensure};
@@ -11,11 +12,16 @@ use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{
+    FM_IROH_CONNECT_OVERRIDES_ENV, FM_IROH_DNS_DISCOVERY_OVERRIDE_ENV, FM_IROH_RELAY_OVERRIDE_ENV,
+    parse_kv_list_from_env,
+};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::util::fmt_option::AsFmtOption as _;
 use fedimint_logging::LOG_NET_IROH;
-use iroh::{Endpoint, NodeAddr, NodeId, SecretKey};
+use iroh::discovery::dns::DnsDiscovery;
+use iroh::{Endpoint, NodeAddr, NodeId, RelayMap, RelayUrl, SecretKey};
 use iroh_base::ticket::NodeTicket;
 use rustls::ServerName;
 use serde::Serialize;
@@ -258,7 +264,27 @@ impl IrohConnector {
         p2p_bind_addr: SocketAddr,
         node_ids: BTreeMap<PeerId, NodeId>,
     ) -> anyhow::Result<Self> {
-        let mut s = Self::new_no_overrides(secret_key, p2p_bind_addr, node_ids).await;
+        let custom_relay = if let Ok(url) = std::env::var(FM_IROH_RELAY_OVERRIDE_ENV) {
+            Some(RelayUrl::from(
+                url::Url::from_str(&url).context("Parsing iroh custom relay URL")?,
+            ))
+        } else {
+            None
+        };
+        let custom_dns_discovery_origin =
+            if let Ok(origin_domain) = std::env::var(FM_IROH_DNS_DISCOVERY_OVERRIDE_ENV) {
+                Some(origin_domain)
+            } else {
+                None
+            };
+        let mut s = Self::new_no_overrides(
+            secret_key,
+            p2p_bind_addr,
+            node_ids,
+            custom_relay,
+            custom_dns_discovery_origin,
+        )
+        .await;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -271,6 +297,8 @@ impl IrohConnector {
         secret_key: SecretKey,
         bind_addr: SocketAddr,
         node_ids: BTreeMap<PeerId, NodeId>,
+        custom_relay: Option<RelayUrl>,
+        custom_dns_discovery_origin: Option<String>,
     ) -> Self {
         let identity = *node_ids
             .iter()
@@ -278,8 +306,22 @@ impl IrohConnector {
             .expect("Our public key is not part of the keyset")
             .0;
 
-        let builder = Endpoint::builder()
-            .discovery_n0()
+        let builder = Endpoint::builder();
+
+        let builder = if let Some(custom_relay) = custom_relay.clone() {
+            builder.relay_mode(iroh::RelayMode::Custom(RelayMap::from_url(custom_relay)))
+        } else {
+            builder.relay_mode(iroh::RelayMode::Default)
+        };
+
+        let builder = if let Some(custom_dns_discovery_origin) = custom_dns_discovery_origin.clone()
+        {
+            builder.add_discovery(|_| Some(DnsDiscovery::new(custom_dns_discovery_origin)))
+        } else {
+            builder.discovery_n0()
+        };
+
+        let builder = builder
             .discovery_dht()
             .secret_key(secret_key)
             .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()]);
@@ -296,6 +338,7 @@ impl IrohConnector {
             %bind_addr,
             node_id = %endpoint.node_id(),
             node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+            custom_relay = %custom_relay.fmt_option(),
             "Iroh p2p server endpoint"
         );
 

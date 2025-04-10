@@ -9,10 +9,11 @@ use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::str::FromStr as _;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::bail;
+use anyhow::{Context as _, bail};
 use async_channel::Sender;
 use db::{ServerDbMigrationContext, get_global_database_migrations};
 use fedimint_api_client::api::DynGlobalApi;
@@ -20,20 +21,24 @@ use fedimint_core::NumPeers;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{
+    FM_IROH_DNS_DISCOVERY_OVERRIDE_ENV, FM_IROH_RELAY_OVERRIDE_ENV, is_running_in_test_env,
+};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::fmt_option::AsFmtOption as _;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API, LOG_NET_IROH};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
 use futures::FutureExt;
-use iroh::Endpoint;
+use iroh::discovery::dns::DnsDiscovery;
 use iroh::endpoint::{Incoming, RecvStream, SendStream};
+use iroh::{Endpoint, RelayMap, RelayUrl};
 use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
@@ -202,7 +207,7 @@ pub async fn run(
             consensus_api.clone(),
             task_group,
         ))
-        .await;
+        .await?;
     }
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
@@ -360,9 +365,36 @@ async fn start_iroh_api(
     bind_addr: SocketAddr,
     consensus_api: ConsensusApi,
     task_group: &TaskGroup,
-) {
-    let builder = Endpoint::builder()
-        .discovery_n0()
+) -> anyhow::Result<()> {
+    let custom_relay = if let Ok(url) = std::env::var(FM_IROH_RELAY_OVERRIDE_ENV) {
+        Some(RelayUrl::from(
+            url::Url::from_str(&url).context("Parsing iroh custom relay URL")?,
+        ))
+    } else {
+        None
+    };
+    let custom_dns_discovery_origin =
+        if let Ok(origin_domain) = std::env::var(FM_IROH_DNS_DISCOVERY_OVERRIDE_ENV) {
+            Some(origin_domain)
+        } else {
+            None
+        };
+
+    let builder = Endpoint::builder();
+
+    let builder = if let Some(custom_relay) = custom_relay.clone() {
+        builder.relay_mode(iroh::RelayMode::Custom(RelayMap::from_url(custom_relay)))
+    } else {
+        builder.relay_mode(iroh::RelayMode::Default)
+    };
+
+    let builder = if let Some(custom_dns_discovery_origin) = custom_dns_discovery_origin.clone() {
+        builder.add_discovery(|_| Some(DnsDiscovery::new(custom_dns_discovery_origin)))
+    } else {
+        builder.discovery_n0()
+    };
+
+    let builder = builder
         .discovery_dht()
         .secret_key(secret_key)
         .alpns(vec![FEDIMINT_API_ALPN.to_vec()]);
@@ -379,6 +411,7 @@ async fn start_iroh_api(
         %bind_addr,
         node_id = %endpoint.node_id(),
         node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+        custom_relay = %custom_relay.fmt_option(),
         "Iroh api server endpoint"
     );
 
@@ -386,6 +419,8 @@ async fn start_iroh_api(
         "iroh-api",
         run_iroh_api(consensus_api, endpoint, task_group.clone()),
     );
+
+    Ok(())
 }
 
 async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_group: TaskGroup) {

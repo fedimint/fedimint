@@ -66,6 +66,7 @@ tokio-rustls = { workspace = true }
 tokio-util = { version = "0.7.14", features = ["codec"] }
 tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
+url = { workspace = true }
 z32 = { workspace = true }
 
 [dev-dependencies]
