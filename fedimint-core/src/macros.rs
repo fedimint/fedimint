@@ -785,7 +785,7 @@ macro_rules! extensible_associated_module_type {
                 use $crate::bitcoin::hashes::hex::DisplayHex;
                 match self {
                     $name::V0(v0) => {
-                        v0.fmt(f)?;
+                        std::fmt::Debug::fmt(v0, f)?;
                     }
                     $name::Default { variant, bytes } => {
                         f.debug_struct(stringify!($name))
