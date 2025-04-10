@@ -65,15 +65,18 @@ services:
     restart: always
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.fedimintd.loadbalancer.server.port=8174"
-      - "traefik.http.routers.fedimintd.rule=Host(`${FM_DOMAIN}`) && Path(`/ws/`)"
-      - "traefik.http.routers.fedimintd.entrypoints=websecure"
-      - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
-      # Add UI routes for the built-in guardian dashboard UI
-      - "traefik.http.services.fedimintd-ui.loadbalancer.server.port=8175"
+      # API Service
+      - "traefik.http.routers.fedimintd-api.rule=Host(`${FM_DOMAIN}`) && Path(`/ws/`)"
+      - "traefik.http.routers.fedimintd-api.entrypoints=websecure"
+      - "traefik.http.routers.fedimintd-api.tls.certresolver=myresolver"
+      - "traefik.http.routers.fedimintd-api.service=fedimintd-api"
+      - "traefik.http.services.fedimintd-api.loadbalancer.server.port=8174"
+      # UI Service
       - "traefik.http.routers.fedimintd-ui.rule=Host(`${FM_DOMAIN}`)"
       - "traefik.http.routers.fedimintd-ui.entrypoints=websecure"
       - "traefik.http.routers.fedimintd-ui.tls.certresolver=myresolver"
+      - "traefik.http.routers.fedimintd-ui.service=fedimintd-ui"
+      - "traefik.http.services.fedimintd-ui.loadbalancer.server.port=8175"
     networks:
       fedimint_network:
         ipv4_address: 172.20.0.11
