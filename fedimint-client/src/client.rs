@@ -16,6 +16,7 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, FederationApiExt as _, IGlobalFederationApi,
 };
+use serde::{Serialize, Deserialize};
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientContextIface, ClientModule, ClientModuleRegistry, DynClientModule, FinalClientIface,
@@ -146,6 +147,18 @@ pub struct Client {
     request_hook: ApiRequestHook,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct FederationPreview {
+    config: ClientConfig,
+    federation_id: String,
+    endpoint_url: SafeUrl,
+}
+
+#[derive(Deserialize)]
+struct PreviewFederationRequest {
+    invite_code: String,
+}
+
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
@@ -228,6 +241,19 @@ impl Client {
                     .map_err(|e| anyhow!("Decoding failed: {e}"))?,
             ),
             None => None,
+        })
+    }
+
+    pub async fn preview_federation(&self, invite_code: &str) -> anyhow::Result<FederationPreview> {
+        let invite = InviteCode::decode_base32(invite_code)?;
+        let config = self.connector.download_from_invite_code(&invite).await?;
+        let federation_id = config.calculate_federation_id().to_string();
+        let endpoint_url = invite.url();
+        
+        Ok(FederationPreview {
+            config,
+            federation_id,
+            endpoint_url,
         })
     }
 
@@ -1395,6 +1421,11 @@ impl Client {
                             "progress": progress
                         });
                     }
+                }
+                "preview_federation" => {
+                    let req: PreviewFederationRequest = serde_json::from_value(params)?;
+                    let config = self.preview_federation(&req.invite_code).await?;
+                    yield serde_json::to_value(config)?;
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
