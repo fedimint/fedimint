@@ -425,7 +425,7 @@ jobs:
             shasum-cmd: sha256sum
           - name: macos-aarch64
             runs-on: macos-14
-            timeout: 90
+            timeout: 180
             build-deb: false
             build-rpm: false
             build-bundled: false
