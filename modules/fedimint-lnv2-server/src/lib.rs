@@ -7,10 +7,8 @@ mod db;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
-use anyhow::{Context, anyhow, ensure, format_err};
+use anyhow::{Context, anyhow, ensure};
 use bls12_381::{G1Projective, Scalar};
-use fedimint_bitcoind::create_bitcoind;
-use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -48,6 +46,7 @@ use fedimint_lnv2_common::{
     LightningOutputOutcome, LightningOutputV0, MODULE_CONSENSUS_VERSION, OutgoingWitness,
 };
 use fedimint_logging::LOG_MODULE_LNV2;
+use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
 use fedimint_server_core::net::check_auth;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
@@ -57,7 +56,6 @@ use group::ff::Field;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
-use tokio::sync::watch;
 use tpe::{
     AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, SecretKeyShare, derive_pk_share,
 };
@@ -199,7 +197,11 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(Lightning::new(args.cfg().to_typed()?, args.db(), &args.shared()).await?)
+        Ok(Lightning {
+            cfg: args.cfg().to_typed()?,
+            db: args.db().clone(),
+            server_bitcoin_rpc_monitor: args.server_bitcoin_rpc_monitor(),
+        })
     }
 
     fn trusted_dealer_gen(
@@ -336,8 +338,7 @@ fn coefficient(index: u64) -> Scalar {
 pub struct Lightning {
     cfg: LightningConfig,
     db: Database,
-    /// Block count updated periodically by a background task
-    block_count_rx: watch::Receiver<Option<u64>>,
+    server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -644,27 +645,11 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    async fn new(
-        cfg: LightningConfig,
-        db: &Database,
-        shared_bitcoin: &ServerModuleSharedBitcoin,
-    ) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        let block_count_rx = shared_bitcoin
-            .block_count_receiver(cfg.consensus.network, btc_rpc.clone())
-            .await;
-
-        Ok(Lightning {
-            cfg,
-            db: db.clone(),
-            block_count_rx,
-        })
-    }
-
     fn get_block_count(&self) -> anyhow::Result<u64> {
-        self.block_count_rx
-            .borrow()
-            .ok_or_else(|| format_err!("Block count not available yet"))
+        self.server_bitcoin_rpc_monitor
+            .status()
+            .map(|status| status.block_count)
+            .context("Block count not available yet")
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {

@@ -8,10 +8,8 @@ pub mod db;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
-use anyhow::{Context, bail, format_err};
+use anyhow::{Context, bail};
 use bitcoin_hashes::{Hash as BitcoinHash, sha256};
-use fedimint_bitcoind::create_bitcoind;
-use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -57,6 +55,7 @@ use fedimint_ln_common::{
     create_gateway_remove_message,
 };
 use fedimint_logging::LOG_MODULE_LN;
+use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
@@ -66,7 +65,6 @@ use strum::IntoEnumIterator;
 use threshold_crypto::poly::Commitment;
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::{PublicKeySet, SecretKeyShare};
-use tokio::sync::watch;
 use tracing::{debug, error, info, info_span, trace, warn};
 
 use crate::db::{
@@ -219,7 +217,11 @@ impl ServerModuleInit for LightningInit {
         // Eagerly initialize metrics that trigger infrequently
         LN_CANCEL_OUTGOING_CONTRACTS.get();
 
-        Ok(Lightning::new(args.cfg().to_typed()?, args.our_peer_id(), &args.shared()).await?)
+        Ok(Lightning {
+            cfg: args.cfg().to_typed()?,
+            our_peer_id: args.our_peer_id(),
+            server_bitcoin_rpc_monitor: args.server_bitcoin_rpc_monitor(),
+        })
     }
 
     fn trusted_dealer_gen(
@@ -339,8 +341,7 @@ impl ServerModuleInit for LightningInit {
 pub struct Lightning {
     cfg: LightningConfig,
     our_peer_id: PeerId,
-    /// Block count updated periodically by a background task
-    block_count_rx: watch::Receiver<Option<u64>>,
+    server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -943,26 +944,11 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    async fn new(
-        cfg: LightningConfig,
-        our_peer_id: PeerId,
-        shared: &ServerModuleSharedBitcoin,
-    ) -> anyhow::Result<Self> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        let block_count_rx = shared
-            .block_count_receiver(cfg.consensus.network.0, btc_rpc.clone())
-            .await;
-        Ok(Lightning {
-            cfg,
-            our_peer_id,
-            block_count_rx,
-        })
-    }
-
     fn get_block_count(&self) -> anyhow::Result<u64> {
-        self.block_count_rx
-            .borrow()
-            .ok_or_else(|| format_err!("Block count not available yet"))
+        self.server_bitcoin_rpc_monitor
+            .status()
+            .map(|status| status.block_count)
+            .context("Block count not available yet")
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
@@ -1236,9 +1222,11 @@ fn record_funded_contract_metric(updated_contract_account: &ContractAccount) {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use assert_matches::assert_matches;
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
-    use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
+    use fedimint_core::bitcoin::{Block, BlockHash};
     use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -1248,7 +1236,8 @@ mod tests {
     use fedimint_core::module::{InputMeta, TransactionItemAmount};
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
-    use fedimint_core::{Amount, InPoint, OutPoint, PeerId, TransactionId};
+    use fedimint_core::util::SafeUrl;
+    use fedimint_core::{Amount, Feerate, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
         LightningGenParamsLocal, Network,
@@ -1262,11 +1251,57 @@ mod tests {
         PreimageKey,
     };
     use fedimint_ln_common::{ContractAccount, LightningInput, LightningOutput};
-    use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleShared as _};
+    use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
+    use fedimint_server_core::{ServerModule, ServerModuleInit};
     use rand::rngs::OsRng;
 
     use crate::db::{ContractKey, LightningAuditItemKey};
     use crate::{Lightning, LightningInit};
+
+    #[derive(Debug)]
+    struct MockBitcoinServerRpc;
+
+    #[async_trait::async_trait]
+    impl IServerBitcoinRpc for MockBitcoinServerRpc {
+        fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+            BitcoinRpcConfig {
+                kind: "mock".to_string(),
+                url: "http://mock".parse().unwrap(),
+            }
+        }
+
+        fn get_url(&self) -> SafeUrl {
+            "http://mock".parse().unwrap()
+        }
+
+        async fn get_network(&self) -> anyhow::Result<Network> {
+            Err(anyhow::anyhow!("Mock network error"))
+        }
+
+        async fn get_block_count(&self) -> anyhow::Result<u64> {
+            Err(anyhow::anyhow!("Mock block count error"))
+        }
+
+        async fn get_block_hash(&self, _height: u64) -> anyhow::Result<BlockHash> {
+            Err(anyhow::anyhow!("Mock block hash error"))
+        }
+
+        async fn get_block(&self, _block_hash: &BlockHash) -> anyhow::Result<Block> {
+            Err(anyhow::anyhow!("Mock block error"))
+        }
+
+        async fn get_feerate(&self) -> anyhow::Result<Option<Feerate>> {
+            Err(anyhow::anyhow!("Mock feerate error"))
+        }
+
+        async fn submit_transaction(&self, _transaction: fedimint_core::bitcoin::Transaction) {
+            // No-op for mock
+        }
+
+        async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+            Err(anyhow::anyhow!("Mock sync percentage error"))
+        }
+    }
 
     const MINTS: u16 = 4;
 
@@ -1316,13 +1351,15 @@ mod tests {
         let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
 
-        let server = Lightning::new(
-            server_cfg[0].clone(),
-            0.into(),
-            &ServerModuleSharedBitcoin::new(task_group),
-        )
-        .await
-        .unwrap();
+        let server = Lightning {
+            cfg: server_cfg[0].clone(),
+            our_peer_id: 0.into(),
+            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
+                MockBitcoinServerRpc.into_dyn(),
+                Duration::from_secs(1),
+                &task_group,
+            ),
+        };
 
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
@@ -1384,13 +1421,16 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
-        let server = Lightning::new(
-            server_cfg[0].clone(),
-            0.into(),
-            &ServerModuleSharedBitcoin::new(task_group),
-        )
-        .await
-        .unwrap();
+
+        let server = Lightning {
+            cfg: server_cfg[0].clone(),
+            our_peer_id: 0.into(),
+            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
+                MockBitcoinServerRpc.into_dyn(),
+                Duration::from_secs(1),
+                &task_group,
+            ),
+        };
 
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -1458,13 +1498,16 @@ mod tests {
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
-        let server = Lightning::new(
-            server_cfg[0].clone(),
-            0.into(),
-            &ServerModuleSharedBitcoin::new(task_group),
-        )
-        .await
-        .unwrap();
+
+        let server = Lightning {
+            cfg: server_cfg[0].clone(),
+            our_peer_id: 0.into(),
+            server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
+                MockBitcoinServerRpc.into_dyn(),
+                Duration::from_secs(1),
+                &task_group,
+            ),
+        };
 
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();
