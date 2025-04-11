@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
+use futures::future::try_join_all;
 use lightning_invoice::Bolt11Invoice;
 use serde::Serialize;
 use serde_json::Value;
@@ -35,6 +36,9 @@ enum Opts {
     /// Gateway subcommands
     #[command(subcommand)]
     Gateways(GatewaysOpts),
+    /// Query the federation for outstanding incoming contracts and try to claim
+    /// them
+    ScanReceive,
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -123,6 +127,16 @@ pub(crate) async fn handle_cli_command(
                 json(lightning.module_api.remove_gateway(auth, gateway).await?)
             }
         },
+        Opts::ScanReceive => {
+            let operations = lightning.scan_incoming_contracts(Value::Null).await?;
+            let mut futures = Vec::new();
+            for operation_id in operations {
+                futures.push(lightning.await_final_receive_operation_state(operation_id));
+            }
+
+            try_join_all(futures).await?;
+            json(true)
+        }
     };
 
     Ok(value)

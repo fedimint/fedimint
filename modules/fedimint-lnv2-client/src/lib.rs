@@ -75,6 +75,7 @@ const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 pub enum LightningOperationMeta {
     Send(SendOperationMeta),
     Receive(ReceiveOperationMeta),
+    IncomingScan(IncomingScanOperationMeta),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +108,7 @@ pub struct ReceiveOperationMeta {
 
 impl ReceiveOperationMeta {
     /// Calculate the absolute fee paid to the gateway on success.
+    /// Returns `None` if recovering an `IncomingContract`
     pub fn gateway_fee(&self) -> Amount {
         match &self.invoice {
             LightningInvoice::Bolt11(invoice) => {
@@ -115,6 +117,12 @@ impl ReceiveOperationMeta {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IncomingScanOperationMeta {
+    pub contract: IncomingContract,
+    pub custom_meta: Value,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -747,12 +755,47 @@ impl LightningClientModule {
             )
             .await?;
 
+        let receive_meta = LightningOperationMeta::Receive(ReceiveOperationMeta {
+            gateway,
+            contract: contract.clone(),
+            invoice: LightningInvoice::Bolt11(invoice.clone()),
+            custom_meta,
+        });
+
         let operation_id = self
-            .receive_incoming_contract(gateway, contract, invoice.clone(), custom_meta)
+            .receive_incoming_contract(contract, receive_meta)
             .await
             .expect("The contract has been generated with our public key");
 
         Ok((invoice, operation_id))
+    }
+
+    /// Scans outstanding incoming contracts in the federation and spawns a
+    /// state machine for any incoming contract where the claim key matches
+    /// the client's public key.
+    pub async fn scan_incoming_contracts(
+        &self,
+        custom_meta: Value,
+    ) -> anyhow::Result<Vec<OperationId>> {
+        let incoming_contracts = self.module_api.list_incoming_contracts().await?;
+
+        let mut operations = Vec::new();
+        for incoming_contract in incoming_contracts {
+            if let Some(operation_id) = self
+                .receive_incoming_contract(
+                    incoming_contract.clone(),
+                    LightningOperationMeta::IncomingScan(IncomingScanOperationMeta {
+                        contract: incoming_contract,
+                        custom_meta: custom_meta.clone(),
+                    }),
+                )
+                .await
+            {
+                operations.push(operation_id);
+            }
+        }
+
+        Ok(operations)
     }
 
     /// Create an incoming contract locked to a public key derived from the
@@ -853,12 +896,14 @@ impl LightningClientModule {
     // static module public key.
     async fn receive_incoming_contract(
         &self,
-        gateway: SafeUrl,
         contract: IncomingContract,
-        invoice: Bolt11Invoice,
-        custom_meta: Value,
+        receive_meta: LightningOperationMeta,
     ) -> Option<OperationId> {
         let operation_id = OperationId::from_encodable(&contract.clone());
+
+        if self.client_ctx.operation_exists(operation_id).await {
+            return Some(operation_id);
+        }
 
         let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(&contract)?;
 
@@ -878,12 +923,7 @@ impl LightningClientModule {
             .manual_operation_start(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                LightningOperationMeta::Receive(ReceiveOperationMeta {
-                    gateway,
-                    contract,
-                    invoice: LightningInvoice::Bolt11(invoice),
-                    custom_meta,
-                }),
+                receive_meta,
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
             )
             .await
