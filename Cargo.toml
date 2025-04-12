@@ -111,7 +111,7 @@ assert_matches = "1.5.0"
 async-channel = "2.3.1"
 async-stream = "0.3.6"
 async-trait = "0.1.88"
-axum = "0.8.1"
+axum = "0.8.3"
 base64 = "0.22.1"
 base64-url = "3.0.0"
 bcrypt = "0.16.0"
@@ -120,10 +120,10 @@ bitcoin = { version = "0.32.5", features = ["serde"] }
 bitcoincore-rpc = "0.19.0"
 bitcoin_hashes = "0.14.0"
 bls12_381 = "0.8.0"
-bon = "3.5.1"
+bon = "3.5.2"
 bytes = "1.10.1"
 chrono = "0.4.40"
-clap = { version = "4.5.35", features = ["derive", "env"] }
+clap = { version = "4.5.36", features = ["derive", "env"] }
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.8.0-alpha" }
 erased-serde = "0.4"
@@ -187,7 +187,7 @@ hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.8.0-alpha" }
 hyper = "1.6"
 iroh = { version = "0.34.0", default-features = false }
-iroh-base = { version = "0.34.0", default-features = false }
+iroh-base = { version = "0.34.1", default-features = false }
 itertools = "0.13.0"
 jaq-core = "2.1.1"
 jaq-json = { version = "1.1.1", features = ["serde_json"] }
@@ -222,7 +222,7 @@ test-log = { version = "0.2", features = ["trace"], default-features = false }
 tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.8.0-alpha" }
 thiserror = "2.0.12"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
-tokio = "1.44.1"
+tokio = "1.44.2"
 tikv-jemallocator = "0.5"
 tokio-rustls = "0.24.1"
 tokio-stream = "0.1.17"

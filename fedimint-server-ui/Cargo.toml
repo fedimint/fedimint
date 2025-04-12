@@ -16,7 +16,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
-axum-extra = { version = "0.10.0", features = ["cookie"] }
+axum-extra = { version = "0.10.1", features = ["cookie"] }
 chrono = "0.4"
 fedimint-core = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
