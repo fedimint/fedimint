@@ -1,4 +1,44 @@
-# v0.7.0-alpha
+# v0.7.0
+
+* Partially automating docker setup testing https://github.com/fedimint/fedimint/pull/6742, https://github.com/fedimint/fedimint/pull/6922, https://github.com/fedimint/fedimint/pull/7059, https://github.com/fedimint/fedimint/pull/7042, https://github.com/fedimint/fedimint/pull/7069
+* Better typed RPC errors in `PeerError` https://github.com/fedimint/fedimint/pull/6748
+* Optimized fee estimation for lower on-chain fees https://github.com/fedimint/fedimint/pull/6749, https://github.com/fedimint/fedimint/pull/7012
+* No longer return written bytes from `Encodable` trait https://github.com/fedimint/fedimint/pull/6754
+* Logging verbosity adjustments https://github.com/fedimint/fedimint/pull/6773, https://github.com/fedimint/fedimint/pull/6772, https://github.com/fedimint/fedimint/pull/6775, https://github.com/fedimint/fedimint/pull/6786, https://github.com/fedimint/fedimint/pull/6787, https://github.com/fedimint/fedimint/pull/6792, https://github.com/fedimint/fedimint/pull/6809, https://github.com/fedimint/fedimint/pull/6847, https://github.com/fedimint/fedimint/pull/6859, https://github.com/fedimint/fedimint/pull/6984, https://github.com/fedimint/fedimint/pull/6997, https://github.com/fedimint/fedimint/pull/7017, https://github.com/fedimint/fedimint/pull/7028, https://github.com/fedimint/fedimint/pull/7082, https://github.com/fedimint/fedimint/pull/7092, https://github.com/fedimint/fedimint/pull/7153,
+* 24h LN gateway payment statistics https://github.com/fedimint/fedimint/pull/6581
+* Add timings to operation log entries https://github.com/fedimint/fedimint/pull/6771
+* More efficient querying of the bitcoin blockchain data source https://github.com/fedimint/fedimint/pull/6770, https://github.com/fedimint/fedimint/pull/6819, https://github.com/fedimint/fedimint/pull/6818
+* Ability to add API request hooks https://github.com/fedimint/fedimint/pull/6783
+* Add `InPoint` as argument to `ServerModule::process_input` to allow modules to uniquely identify inputs https://github.com/fedimint/fedimint/pull/6799
+* Make statistics about stored user backups available to guardians https://github.com/fedimint/fedimint/pull/6761, https://github.com/fedimint/fedimint/pull/7045
+* Restructuring gateway code to split it into multiple crates for v1, v2 and core https://github.com/fedimint/fedimint/pull/6790, https://github.com/fedimint/fedimint/pull/6797, https://github.com/fedimint/fedimint/pull/6815, https://github.com/fedimint/fedimint/pull/6888,
+* Document Lightning integration https://github.com/fedimint/fedimint/pull/6812, https://github.com/fedimint/fedimint/pull/6877
+* Splitting `fedimint-client` and `fedimint-server` for more efficient compilation https://github.com/fedimint/fedimint/pull/6853, https://github.com/fedimint/fedimint/pull/6862, https://github.com/fedimint/fedimint/pull/6891, https://github.com/fedimint/fedimint/pull/6831, https://github.com/fedimint/fedimint/pull/7029
+* More robust setup ceremony implementation https://github.com/fedimint/fedimint/pull/6827, https://github.com/fedimint/fedimint/pull/6940, https://github.com/fedimint/fedimint/pull/6702
+* Stabilization of LNv2 https://github.com/fedimint/fedimint/pull/6781, https://github.com/fedimint/fedimint/pull/6906, https://github.com/fedimint/fedimint/pull/7035, https://github.com/fedimint/fedimint/pull/7034, https://github.com/fedimint/fedimint/pull/7149
+* Beta support for the [Iroh overlay network](https://www.iroh.computer/), allowing to run `fedimintd` behind firewalls without opening ports https://github.com/fedimint/fedimint/pull/6878, https://github.com/fedimint/fedimint/pull/6915, https://github.com/fedimint/fedimint/pull/6901, https://github.com/fedimint/fedimint/pull/6917, https://github.com/fedimint/fedimint/pull/6926, https://github.com/fedimint/fedimint/pull/6923, https://github.com/fedimint/fedimint/pull/6929, https://github.com/fedimint/fedimint/pull/6942, https://github.com/fedimint/fedimint/pull/7150
+* Drop official support for the `v0.2` and `v0.3` release branches https://github.com/fedimint/fedimint/pull/6916
+* Fix memory leak in `TaskGroup` https://github.com/fedimint/fedimint/pull/6945
+* Make `fedimint-cli` more robust against user input errors https://github.com/fedimint/fedimint/pull/6968, https://github.com/fedimint/fedimint/pull/7058
+* Add DB integrity checks to detect potential invalid states early https://github.com/fedimint/fedimint/pull/6956
+* Retire some of the obsolete helper docker images published in the past https://github.com/fedimint/fedimint/pull/6981
+* Improved RPC error formatting https://github.com/fedimint/fedimint/pull/6979
+* Add new Fedimint wallet Vipr to wallet list https://github.com/fedimint/fedimint/pull/6973
+* Ability to override API endpoints of guardians using an environment variable https://github.com/fedimint/fedimint/pull/6978
+* Remove CLN from CI environment, reducing the dev env size https://github.com/fedimint/fedimint/pull/6952, https://github.com/fedimint/fedimint/pull/6928, https://github.com/fedimint/fedimint/pull/7015
+* Make DB migrations a closure instead of a function pointer, allowing capturing environment and abstract context https://github.com/fedimint/fedimint/pull/7016, https://github.com/fedimint/fedimint/pull/7022
+* Make `Module` type available in `ServerModuleInit` trait https://github.com/fedimint/fedimint/pull/7014
+* New integrated guardian UI https://github.com/fedimint/fedimint/pull/7033, https://github.com/fedimint/fedimint/pull/7041, https://github.com/fedimint/fedimint/pull/7093, https://github.com/fedimint/fedimint/pull/7103, https://github.com/fedimint/fedimint/pull/7098, https://github.com/fedimint/fedimint/pull/7104, https://github.com/fedimint/fedimint/pull/7115, https://github.com/fedimint/fedimint/pull/7122, https://github.com/fedimint/fedimint/pull/7133, https://github.com/fedimint/fedimint/pull/7130, https://github.com/fedimint/fedimint/pull/7146
+* Add API to list Gateway Lightning transactions https://github.com/fedimint/fedimint/pull/7040
+* Add `parse_invite_code` to client RPC to make it available in the WebSDK https://github.com/fedimint/fedimint/pull/7046
+* Improve DB locking https://github.com/fedimint/fedimint/pull/7052
+* Measure p2p and consus latency https://github.com/fedimint/fedimint/pull/7066
+* Add `parse_bolt11_invoice` to client RPC to make it available in the WebSDK https://github.com/fedimint/fedimint/pull/7079
+* Lightning Gateway operator BOLT12 support https://github.com/fedimint/fedimint/pull/7054
+* Add environment variable to override the esplora server to be used by the client to fetch blockchain data https://github.com/fedimint/fedimint/pull/7121
+* Recurring receive support (initially LNURL, with option to add BOLT12 in the future) https://github.com/fedimint/fedimint/pull/6855
+* Updated release process to have beta releases before RCs https://github.com/fedimint/fedimint/pull/7127, https://github.com/fedimint/fedimint/pull/7187
+* Various dependency upgrades and minor bug fixes
 
 # v0.6.2
 
