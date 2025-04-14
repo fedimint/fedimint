@@ -837,10 +837,37 @@ impl ClientModule for MintClientModule {
                             ..
                         })
                         | MintClientStateMachines::OOB(MintOOBStateMachine {
-                            state: MintOOBStates::Created(_),
+                            state: MintOOBStates::Created(_) | MintOOBStates::CreatedMulti(_),
                             ..
                         }) => Some(()),
-                        _ => None,
+                        // The negative cases are enumerated explicitly to avoid missing new
+                        // variants that need to trigger balance updates
+                        MintClientStateMachines::Output(MintOutputStateMachine {
+                            state:
+                                MintOutputStates::Created(_)
+                                | MintOutputStates::CreatedMulti(_)
+                                | MintOutputStates::Failed(_)
+                                | MintOutputStates::Aborted(_),
+                            ..
+                        })
+                        | MintClientStateMachines::Input(MintInputStateMachine {
+                            state:
+                                MintInputStates::Error(_)
+                                | MintInputStates::Success(_)
+                                | MintInputStates::Refund(_)
+                                | MintInputStates::RefundedBundle(_)
+                                | MintInputStates::RefundedPerNote(_)
+                                | MintInputStates::RefundSuccess(_),
+                            ..
+                        })
+                        | MintClientStateMachines::OOB(MintOOBStateMachine {
+                            state:
+                                MintOOBStates::TimeoutRefund(_)
+                                | MintOOBStates::UserRefund(_)
+                                | MintOOBStates::UserRefundMulti(_),
+                            ..
+                        })
+                        | MintClientStateMachines::Restore(_) => None,
                     }
                 }),
         )
