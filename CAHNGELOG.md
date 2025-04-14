@@ -32,7 +32,7 @@
 * Add API to list Gateway Lightning transactions https://github.com/fedimint/fedimint/pull/7040
 * Add `parse_invite_code` to client RPC to make it available in the WebSDK https://github.com/fedimint/fedimint/pull/7046
 * Improve DB locking https://github.com/fedimint/fedimint/pull/7052
-* Measure p2p and consus latency https://github.com/fedimint/fedimint/pull/7066
+* Measure p2p and consensus latency https://github.com/fedimint/fedimint/pull/7066
 * Add `parse_bolt11_invoice` to client RPC to make it available in the WebSDK https://github.com/fedimint/fedimint/pull/7079
 * Lightning Gateway operator BOLT12 support https://github.com/fedimint/fedimint/pull/7054
 * Add environment variable to override the esplora server to be used by the client to fetch blockchain data https://github.com/fedimint/fedimint/pull/7121
