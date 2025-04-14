@@ -2,8 +2,6 @@ use anyhow::{Context as _, Result};
 use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Federation;
-use devimint::util::FedimintCli;
-use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use fedimint_logging::LOG_DEVIMINT;
 use rand::Rng;
 use tracing::info;
@@ -35,12 +33,6 @@ async fn restore() -> anyhow::Result<()> {
 
 pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
     let client = fed.new_joined_client("restore-gap-test").await?;
-    let fedimint_cli_version = FedimintCli::version_or_default().await;
-
-    if fedimint_cli_version < *VERSION_0_5_0_ALPHA {
-        return Ok(());
-    }
-
     const PEGIN_SATS: u64 = 300000;
     fed.pegin_client(PEGIN_SATS, &client).await?;
 

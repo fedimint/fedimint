@@ -29,7 +29,6 @@ use tracing::{debug, info, trace};
 use crate::gatewayd::LdkChainSource;
 use crate::util::{ProcessHandle, ProcessManager, poll};
 use crate::vars::utf8;
-use crate::version_constants::VERSION_0_5_0_ALPHA;
 use crate::{Gatewayd, cmd};
 
 #[derive(Clone)]
@@ -554,14 +553,7 @@ impl Lnd {
             bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
             bitcoin::hashes::sha256::Hash::from_engine(engine)
         };
-        // TODO(support:v0.5): LNv1 cannot pay HOLD invoices with a CLTV expiry greater
-        // than 500 before v0.5
-        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-        let cltv_expiry = if fedimint_cli_version >= *VERSION_0_5_0_ALPHA {
-            650
-        } else {
-            100
-        };
+        let cltv_expiry = 650;
         let hold_request = self
             .invoices_client_lock()
             .await?
@@ -678,16 +670,7 @@ pub async fn open_channels_between_gateways(
             .open_channel(gw_b, sats_per_side * 2, Some(sats_per_side))
             .await?;
 
-        if let Some(txid) = txid {
-            bitcoind.poll_get_transaction(txid).await?;
-        }
-    }
-
-    // `open_channel` may not have sent out the channel funding transaction
-    // immediately. Since it didn't return a funding txid, we need to wait for
-    // it to get to the mempool.
-    if crate::util::Gatewayd::version_or_default().await < *VERSION_0_5_0_ALPHA {
-        fedimint_core::runtime::sleep(Duration::from_secs(5)).await;
+        bitcoind.poll_get_transaction(txid).await?;
     }
 
     bitcoind.mine_blocks(10).await?;

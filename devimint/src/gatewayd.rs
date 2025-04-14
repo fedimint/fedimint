@@ -32,7 +32,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 
 #[derive(Clone)]
 pub enum LdkChainSource {
@@ -317,39 +317,16 @@ impl Gatewayd {
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {
-        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-
-        // TODO(support:v0.4): `ecash pegin` was introduced in v0.5.0
-        // see: https://github.com/fedimint/fedimint/pull/6270
-        let address = if !self.is_forced_current() && gateway_cli_version < *VERSION_0_5_0_ALPHA {
-            cmd!(self, "address", "--federation-id={fed_id}")
-                .out_json()
-                .await?
-                .as_str()
-                .context("address must be a string")?
-                .to_owned()
-        } else {
-            cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
-                .out_json()
-                .await?
-                .as_str()
-                .context("address must be a string")?
-                .to_owned()
-        };
-        Ok(address)
+        Ok(cmd!(self, "ecash", "pegin", "--federation-id={fed_id}")
+            .out_json()
+            .await?
+            .as_str()
+            .context("address must be a string")?
+            .to_owned())
     }
 
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
-        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        let address = if !self.is_forced_current() && gateway_cli_version < *VERSION_0_5_0_ALPHA {
-            cmd!(self, "lightning", "get-funding-address")
-                .out_string()
-                .await?
-        } else {
-            cmd!(self, "onchain", "address").out_string().await?
-        };
-
-        Ok(address)
+        cmd!(self, "onchain", "address").out_string().await
     }
 
     pub async fn get_mnemonic(&self) -> Result<MnemonicResponse> {
@@ -421,27 +398,15 @@ impl Gatewayd {
 
     pub async fn ecash_balance(&self, federation_id: String) -> anyhow::Result<u64> {
         let federation_id = FederationId::from_str(&federation_id)?;
-        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        // TODO(support:v0.4): `get_balances` was introduced in v0.5.0
-        // see: https://github.com/fedimint/fedimint/pull/5823
-        if !self.is_forced_current() && gateway_cli_version < *VERSION_0_5_0_ALPHA {
-            let ecash_balance = cmd!(self, "balance", "--federation-id={federation_id}",)
-                .out_json()
-                .await?
-                .as_u64()
-                .unwrap();
-            Ok(ecash_balance)
-        } else {
-            let balances = self.get_balances().await?;
-            let ecash_balance = balances
-                .ecash_balances
-                .into_iter()
-                .find(|info| info.federation_id == federation_id)
-                .ok_or(anyhow::anyhow!("Gateway is not joined to federation"))?
-                .ecash_balance_msats
-                .msats;
-            Ok(ecash_balance)
-        }
+        let balances = self.get_balances().await?;
+        let ecash_balance = balances
+            .ecash_balances
+            .into_iter()
+            .find(|info| info.federation_id == federation_id)
+            .ok_or(anyhow::anyhow!("Gateway is not joined to federation"))?
+            .ecash_balance_msats
+            .msats;
+        Ok(ecash_balance)
     }
 
     pub async fn send_onchain(
@@ -487,18 +452,14 @@ impl Gatewayd {
         Ok(())
     }
 
-    /// Open a channel with the gateway's lightning node.
-    /// Returns the txid of the funding transaction if the gateway is a new
-    /// enough version to return it. Otherwise, returns `None`.
-    ///
-    /// TODO(support:v0.5): Remove the `Option<Txid>` return type and just
-    /// return `Txid`.
+    /// Open a channel with the gateway's lightning node, returning the funding
+    /// transaction txid.
     pub async fn open_channel(
         &self,
         gw: &Gatewayd,
         channel_size_sats: u64,
         push_amount_sats: Option<u64>,
-    ) -> Result<Option<Txid>> {
+    ) -> Result<Txid> {
         let pubkey = gw.lightning_pubkey().await?;
 
         let mut command = cmd!(
@@ -515,14 +476,7 @@ impl Gatewayd {
             push_amount_sats.unwrap_or(0)
         );
 
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        if gatewayd_version < *VERSION_0_5_0_ALPHA {
-            command.run().await?;
-
-            Ok(None)
-        } else {
-            Ok(Some(Txid::from_str(&command.out_string().await?)?))
-        }
+        Ok(Txid::from_str(&command.out_string().await?)?)
     }
 
     pub async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>> {
