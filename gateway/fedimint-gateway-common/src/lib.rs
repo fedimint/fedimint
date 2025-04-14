@@ -139,14 +139,6 @@ pub struct GatewayInfo {
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
     pub network: Network,
-    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
-    // should be able to remove it once 0.4.0 is released.
-    #[serde(default)]
-    pub block_height: Option<u32>,
-    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
-    // should be able to remove it once 0.4.0 is released.
-    #[serde(default)]
-    pub synced_to_chain: bool,
     pub api: SafeUrl,
     pub lightning_mode: LightningMode,
 }
@@ -300,7 +292,6 @@ pub struct ChannelInfo {
     pub channel_size_sats: u64,
     pub outbound_liquidity_sats: u64,
     pub inbound_liquidity_sats: u64,
-    pub short_channel_id: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -191,7 +191,7 @@ impl Fixtures {
 
         let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
 
-        let (lightning_public_key, lightning_alias, lightning_network, _, _) = ln_client
+        let (lightning_public_key, lightning_alias, lightning_network) = ln_client
             .parsed_node_info()
             .await
             .expect("Could not get Lightning info");

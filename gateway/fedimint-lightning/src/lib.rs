@@ -12,7 +12,6 @@ use fedimint_core::Amount;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{backoff_util, retry};
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
     GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
@@ -20,12 +19,10 @@ use fedimint_gateway_common::{
 use fedimint_ln_common::PrunedInvoice;
 pub use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_logging::LOG_LIGHTNING;
 use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{info, warn};
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
@@ -269,44 +266,17 @@ impl dyn ILnRpcClient {
     /// node.
     pub async fn parsed_node_info(
         &self,
-    ) -> std::result::Result<(PublicKey, String, Network, u32, bool), LightningRpcError> {
+    ) -> std::result::Result<(PublicKey, String, Network), LightningRpcError> {
         let GetNodeInfoResponse {
             pub_key,
             alias,
             network,
-            block_height,
-            synced_to_chain,
         } = self.info().await?;
         let network =
             Network::from_str(&network).map_err(|e| LightningRpcError::InvalidMetadata {
                 failure_reason: format!("Invalid network {network}: {e}"),
             })?;
-        Ok((pub_key, alias, network, block_height, synced_to_chain))
-    }
-
-    /// Waits for the Lightning node to be synced to the Bitcoin blockchain.
-    pub async fn wait_for_chain_sync(&self) -> std::result::Result<(), LightningRpcError> {
-        retry(
-            "Wait for chain sync",
-            backoff_util::background_backoff(),
-            || async {
-                let info = self.info().await?;
-                let block_height = info.block_height;
-                if info.synced_to_chain {
-                    Ok(())
-                } else {
-                    warn!(target: LOG_LIGHTNING, block_height = %block_height, "Lightning node is not synced yet");
-                    Err(anyhow::anyhow!("Not synced yet"))
-                }
-            },
-        )
-        .await
-        .map_err(|e| LightningRpcError::FailedToSyncToChain {
-            failure_reason: format!("Failed to sync to chain: {e:?}"),
-        })?;
-
-        info!(target: LOG_LIGHTNING, "Gateway successfully synced with the chain");
-        Ok(())
+        Ok((pub_key, alias, network))
     }
 }
 
@@ -315,8 +285,6 @@ pub struct GetNodeInfoResponse {
     pub pub_key: PublicKey,
     pub alias: String,
     pub network: String,
-    pub block_height: u32,
-    pub synced_to_chain: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

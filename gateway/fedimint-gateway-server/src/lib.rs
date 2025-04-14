@@ -38,7 +38,7 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;
 pub use config::GatewayParameters;
-use envs::{FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV};
+use envs::FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
@@ -505,42 +505,24 @@ impl Gateway {
         mut stream: RouteHtlcStream<'a>,
         ln_client: Arc<dyn ILnRpcClient>,
     ) -> ReceivePaymentStreamAction {
-        let (lightning_public_key, lightning_alias, lightning_network, synced_to_chain) =
-            match ln_client.parsed_node_info().await {
-                Ok((
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    _block_height,
-                    synced_to_chain,
-                )) => (
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    synced_to_chain,
-                ),
-                Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to retrieve Lightning info");
-                    return ReceivePaymentStreamAction::RetryAfterDelay;
-                }
-            };
+        let (lightning_public_key, lightning_alias, lightning_network) = match ln_client
+            .parsed_node_info()
+            .await
+        {
+            Ok((lightning_public_key, lightning_alias, lightning_network)) => {
+                (lightning_public_key, lightning_alias, lightning_network)
+            }
+            Err(err) => {
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to retrieve Lightning info");
+                return ReceivePaymentStreamAction::RetryAfterDelay;
+            }
+        };
 
         assert!(
             self.network == lightning_network,
             "Lightning node network does not match Gateway's network. LN: {lightning_network} Gateway: {}",
             self.network
         );
-
-        if synced_to_chain || is_env_var_set(FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV) {
-            info!(target: LOG_GATEWAY, "Gateway is already synced to chain");
-        } else {
-            self.set_gateway_state(GatewayState::Syncing).await;
-            info!(target: LOG_GATEWAY, "Waiting for chain sync");
-            if let Err(err) = ln_client.wait_for_chain_sync().await {
-                warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to wait for chain sync");
-                return ReceivePaymentStreamAction::RetryAfterDelay;
-            }
-        }
 
         let lightning_context = LightningContext {
             lnrpc: ln_client,
@@ -778,8 +760,6 @@ impl Gateway {
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
                 network: self.network,
-                block_height: None,
-                synced_to_chain: false,
                 api: self.versioned_api.clone(),
                 lightning_mode: self.lightning_mode.clone(),
             });
@@ -803,8 +783,6 @@ impl Gateway {
             })
             .collect();
 
-        let node_info = lightning_context.lnrpc.parsed_node_info().await?;
-
         Ok(GatewayInfo {
             federations,
             federation_fake_scids: Some(channels),
@@ -814,8 +792,6 @@ impl Gateway {
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
             network: self.network,
-            block_height: Some(node_info.3),
-            synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
             lightning_mode: self.lightning_mode.clone(),
         })

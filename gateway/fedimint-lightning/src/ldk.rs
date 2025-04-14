@@ -5,11 +5,10 @@ use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use async_trait::async_trait;
+use bitcoin::Network;
 use bitcoin::hashes::{Hash, sha256};
-use bitcoin::{Network, OutPoint};
 use fedimint_bip39::Mnemonic;
-use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
-use fedimint_core::envs::{BitcoinRpcConfig, is_env_var_set};
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
@@ -23,7 +22,6 @@ use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingPar
 use lightning::ln::PaymentPreimage;
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
-use lightning::util::scid_utils::scid_from_parts;
 use lightning_invoice::Bolt11Invoice;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
@@ -59,27 +57,9 @@ impl fmt::Display for GatewayLdkChainSourceConfig {
     }
 }
 
-impl GatewayLdkChainSourceConfig {
-    fn bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
-        match self {
-            Self::Bitcoind { server_url } => BitcoinRpcConfig {
-                kind: "bitcoind".to_string(),
-                url: server_url.clone(),
-            },
-            Self::Esplora { server_url } => BitcoinRpcConfig {
-                kind: "esplora".to_string(),
-                url: server_url.clone(),
-            },
-        }
-    }
-}
-
 pub struct GatewayLdkClient {
     /// The underlying lightning node.
     node: Arc<ldk_node::Node>,
-
-    /// The client for querying data about the blockchain.
-    bitcoind_rpc: DynBitcoindRpc,
 
     task_group: TaskGroup,
 
@@ -142,8 +122,6 @@ impl GatewayLdkClient {
 
         node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
 
-        let bitcoind_rpc = create_bitcoind(&chain_source_config.bitcoin_rpc_config())?;
-
         match chain_source_config.clone() {
             GatewayLdkChainSourceConfig::Bitcoind { server_url } => {
                 node_builder.set_chain_source_bitcoind_rpc(
@@ -195,7 +173,6 @@ impl GatewayLdkClient {
         info!("Successfully started LDK Gateway");
         Ok(GatewayLdkClient {
             node,
-            bitcoind_rpc,
             task_group,
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
             outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
@@ -246,38 +223,6 @@ impl GatewayLdkClient {
         // in. We can safely ignore all other events.
         node.event_handled();
     }
-
-    /// Converts a transaction outpoint to a short channel ID by querying the
-    /// blockchain.
-    async fn outpoint_to_scid(&self, funding_txo: OutPoint) -> anyhow::Result<u64> {
-        let block_hash = self
-            .bitcoind_rpc
-            .get_txout_proof(funding_txo.txid)
-            .await?
-            .block_header
-            .block_hash();
-
-        let block_height = self
-            .bitcoind_rpc
-            .get_tx_block_height(&funding_txo.txid)
-            .await?
-            .ok_or(anyhow::anyhow!("Failed to get block height"))?;
-
-        let block = self.bitcoind_rpc.get_block(&block_hash).await?;
-
-        let tx_index = block
-            .txdata
-            .iter()
-            .enumerate()
-            .find(|(_, tx)| tx.compute_txid() == funding_txo.txid)
-            .ok_or(anyhow::anyhow!("Failed to find transaction"))?
-            .0 as u32;
-
-        let output_index = funding_txo.vout;
-
-        scid_from_parts(block_height, u64::from(tx_index), u64::from(output_index))
-            .map_err(|e| anyhow::anyhow!("Failed to convert to short channel ID: {e:?}"))
-    }
 }
 
 impl Drop for GatewayLdkClient {
@@ -306,23 +251,6 @@ impl ILnRpcClient for GatewayLdkClient {
                 let _ = self.node.sync_wallets();
             });
         }
-        let node_status = self.node.status();
-
-        let chain_tip_block_height =
-            u32::try_from(self.bitcoind_rpc.get_block_count().await.map_err(|e| {
-                LightningRpcError::FailedToGetNodeInfo {
-                    failure_reason: format!("Failed to get block count from chain source: {e}"),
-                }
-            })?)
-            .expect("Failed to convert block count to u32")
-                - 1;
-        let ldk_block_height = node_status.current_best_block.height;
-        let synced_to_chain = chain_tip_block_height == ldk_block_height;
-
-        assert!(
-            chain_tip_block_height >= ldk_block_height,
-            "LDK Block Height is in the future"
-        );
 
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id(),
@@ -331,8 +259,6 @@ impl ILnRpcClient for GatewayLdkClient {
                 None => format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
             },
             network: self.node.config().network.to_string(),
-            block_height: ldk_block_height,
-            synced_to_chain,
         })
     }
 
@@ -660,10 +586,6 @@ impl ILnRpcClient for GatewayLdkClient {
                 channel_size_sats: channel_details.channel_value_sats,
                 outbound_liquidity_sats: channel_details.outbound_capacity_msat / 1000,
                 inbound_liquidity_sats: channel_details.inbound_capacity_msat / 1000,
-                short_channel_id: match channel_details.funding_txo {
-                    Some(funding_txo) => self.outpoint_to_scid(funding_txo).await.unwrap_or(0),
-                    None => 0,
-                },
             });
         }
 
