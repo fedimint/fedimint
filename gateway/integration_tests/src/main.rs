@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -26,7 +26,7 @@ use fedimint_gateway_common::{
 use fedimint_logging::LOG_TEST;
 use fedimint_testing_core::node_type::LightningNodeType;
 use itertools::Itertools;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 #[derive(Parser)]
 struct GatewayTestOpts {
@@ -81,12 +81,6 @@ async fn main() -> anyhow::Result<()> {
 async fn backup_restore_test() -> anyhow::Result<()> {
     Box::pin(
         devimint::run_devfed_test().call(|dev_fed, process_mgr| async move {
-            let gatewayd_version = util::Gatewayd::version_or_default().await;
-            if gatewayd_version < *VERSION_0_5_0_ALPHA {
-                warn!(target: LOG_TEST, "Gateway backup-restore is not supported below v0.5.0");
-                return Ok(());
-            }
-
             let gw = if devimint::util::supports_lnv2() {
                 dev_fed.gw_ldk_connected().await?
             } else {
@@ -224,13 +218,6 @@ async fn mnemonic_upgrade_test(
                 .restart_with_bin(&process_mgr, &new_gatewayd_path, &new_gateway_cli_path)
                 .await?;
 
-            // Gateway mnemonic is only support in >= v0.5.0
-            let new_gatewayd_version = util::Gatewayd::version_or_default().await;
-            if new_gatewayd_version < *VERSION_0_5_0_ALPHA {
-                warn!(target: LOG_TEST, "Gateway mnemonic test is not supported below v0.5.0");
-                return Ok(());
-            }
-
             // Verify that we have a legacy federation
             let mnemonic_response = gw_lnd.get_mnemonic().await?;
             assert!(
@@ -297,11 +284,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
         devimint::run_devfed_test()
             .num_feds(2)
             .call(|dev_fed, process_mgr| async move {
-                let gatewayd_version = util::Gatewayd::version_or_default().await;
-                if gatewayd_version < *VERSION_0_5_0_ALPHA && gw_type == LightningNodeType::Ldk {
-                    return Ok(());
-                }
-
                 let gw = match gw_type {
                     LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
                     LightningNodeType::Ldk => dev_fed.gw_ldk_connected().await?,
@@ -346,23 +328,18 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     "Gateway did not have one connected federation"
                 );
 
-                // TODO(support:v0.4): a bug calling `gateway-cli config` was fixed in v0.5.0
-                // see: https://github.com/fedimint/fedimint/pull/5803
-                if gatewayd_version >= *VERSION_0_5_0_ALPHA
-                    && gatewayd_version < *VERSION_0_6_0_ALPHA
-                {
-                    // Get the federation's config and verify it parses correctly
-                    let config_val = cmd!(gw, "config", "--federation-id", fed_id)
+                // Get the federation's config and verify it parses correctly
+                let config_val = if gatewayd_version < *VERSION_0_6_0_ALPHA {
+                    cmd!(gw, "config", "--federation-id", fed_id)
                         .out_json()
-                        .await?;
-                    serde_json::from_value::<GatewayFedConfig>(config_val)?;
-                } else if gatewayd_version >= *VERSION_0_6_0_ALPHA {
-                    // Get the federation's config and verify it parses correctly
-                    let config_val = cmd!(gw, "cfg", "client-config", "--federation-id", fed_id)
+                        .await?
+                } else {
+                    cmd!(gw, "cfg", "client-config", "--federation-id", fed_id)
                         .out_json()
-                        .await?;
-                    serde_json::from_value::<GatewayFedConfig>(config_val)?;
-                }
+                        .await?
+                };
+
+                serde_json::from_value::<GatewayFedConfig>(config_val)?;
 
                 // Spawn new federation
                 let bitcoind = dev_fed.bitcoind().await?;
@@ -707,12 +684,7 @@ async fn leave_federation(gw: &Gatewayd, fed_id: String, expected_scid: u64) -> 
     let federation_id: FederationId = serde_json::from_value(leave_fed["federation_id"].clone())?;
     assert_eq!(federation_id.to_string(), fed_id);
 
-    // TODO(support:v0.4): `federation_index` was introduced in v0.5.0
-    // see: https://github.com/fedimint/fedimint/pull/5971
-    let scid = if gatewayd_version < *VERSION_0_5_0_ALPHA {
-        let channel_id: Option<u64> = serde_json::from_value(leave_fed["channel_id"].clone())?;
-        channel_id.expect("must have channel id")
-    } else if gatewayd_version >= *VERSION_0_5_0_ALPHA && gatewayd_version < *VERSION_0_6_0_ALPHA {
+    let scid = if gatewayd_version < *VERSION_0_6_0_ALPHA {
         serde_json::from_value::<u64>(leave_fed["federation_index"].clone())?
     } else {
         serde_json::from_value::<u64>(leave_fed["config"]["federation_index"].clone())?

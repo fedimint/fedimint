@@ -1178,13 +1178,11 @@ async fn cli_set_config_gen_params(
     auth: &ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
-    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     self::config::attach_default_module_init_params(
         &BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,
-        &fedimintd_version,
     );
 
     let meta = iter::once(("federation_name".to_string(), "testfed".to_string())).collect();
