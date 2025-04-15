@@ -3243,7 +3243,6 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "fedimint-bip39",
- "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-gateway-common",
  "fedimint-ln-common",
