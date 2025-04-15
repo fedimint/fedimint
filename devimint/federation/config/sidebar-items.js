@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["attach_default_module_init_params"],"mod":["legacy_types"]};
+window.SIDEBAR_ITEMS = {"fn":["attach_default_module_init_params"]};

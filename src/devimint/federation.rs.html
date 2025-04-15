@@ -1178,43 +1178,41 @@
 <a href=#1178 id=1178 data-nosnippet>1178</a>    auth: <span class="kw-2">&amp;</span>ApiAuth,
 <a href=#1179 id=1179 data-nosnippet>1179</a>    <span class="kw-2">mut </span>server_gen_params: ServerModuleConfigGenParamsRegistry,
 <a href=#1180 id=1180 data-nosnippet>1180</a>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1181 id=1181 data-nosnippet>1181</a>    <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
-<a href=#1182 id=1182 data-nosnippet>1182</a>    <span class="self">self</span>::config::attach_default_module_init_params(
-<a href=#1183 id=1183 data-nosnippet>1183</a>        <span class="kw-2">&amp;</span>BitcoinRpcConfig::get_defaults_from_env_vars()<span class="question-mark">?</span>,
-<a href=#1184 id=1184 data-nosnippet>1184</a>        <span class="kw-2">&amp;mut </span>server_gen_params,
-<a href=#1185 id=1185 data-nosnippet>1185</a>        Network::Regtest,
-<a href=#1186 id=1186 data-nosnippet>1186</a>        <span class="number">10</span>,
-<a href=#1187 id=1187 data-nosnippet>1187</a>        <span class="kw-2">&amp;</span>fedimintd_version,
-<a href=#1188 id=1188 data-nosnippet>1188</a>    );
+<a href=#1181 id=1181 data-nosnippet>1181</a>    <span class="self">self</span>::config::attach_default_module_init_params(
+<a href=#1182 id=1182 data-nosnippet>1182</a>        <span class="kw-2">&amp;</span>BitcoinRpcConfig::get_defaults_from_env_vars()<span class="question-mark">?</span>,
+<a href=#1183 id=1183 data-nosnippet>1183</a>        <span class="kw-2">&amp;mut </span>server_gen_params,
+<a href=#1184 id=1184 data-nosnippet>1184</a>        Network::Regtest,
+<a href=#1185 id=1185 data-nosnippet>1185</a>        <span class="number">10</span>,
+<a href=#1186 id=1186 data-nosnippet>1186</a>    );
+<a href=#1187 id=1187 data-nosnippet>1187</a>
+<a href=#1188 id=1188 data-nosnippet>1188</a>    <span class="kw">let </span>meta = iter::once((<span class="string">"federation_name"</span>.to_string(), <span class="string">"testfed"</span>.to_string())).collect();
 <a href=#1189 id=1189 data-nosnippet>1189</a>
-<a href=#1190 id=1190 data-nosnippet>1190</a>    <span class="kw">let </span>meta = iter::once((<span class="string">"federation_name"</span>.to_string(), <span class="string">"testfed"</span>.to_string())).collect();
-<a href=#1191 id=1191 data-nosnippet>1191</a>
-<a href=#1192 id=1192 data-nosnippet>1192</a>    <span class="kw">crate</span>::util::FedimintCli
-<a href=#1193 id=1193 data-nosnippet>1193</a>        .set_config_gen_params(auth, endpoint, meta, server_gen_params)
-<a href=#1194 id=1194 data-nosnippet>1194</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1195 id=1195 data-nosnippet>1195</a>
-<a href=#1196 id=1196 data-nosnippet>1196</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1197 id=1197 data-nosnippet>1197</a>}
-<a href=#1198 id=1198 data-nosnippet>1198</a>
-<a href=#1199 id=1199 data-nosnippet>1199</a><span class="kw">async fn </span>cli_wait_server_status(endpoint: <span class="kw-2">&amp;</span>str, expected_status: ServerStatusLegacy) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1200 id=1200 data-nosnippet>1200</a>    poll(
-<a href=#1201 id=1201 data-nosnippet>1201</a>        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"waiting-server-status: {expected_status:?}"</span>),
-<a href=#1202 id=1202 data-nosnippet>1202</a>        || <span class="kw">async </span>{
-<a href=#1203 id=1203 data-nosnippet>1203</a>            <span class="kw">let </span>server_status = <span class="kw">crate</span>::util::FedimintCli
-<a href=#1204 id=1204 data-nosnippet>1204</a>                .ws_status(endpoint)
-<a href=#1205 id=1205 data-nosnippet>1205</a>                .<span class="kw">await
-<a href=#1206 id=1206 data-nosnippet>1206</a>                </span>.context(<span class="string">"server status"</span>)
-<a href=#1207 id=1207 data-nosnippet>1207</a>                .map_err(ControlFlow::Continue)<span class="question-mark">?
-<a href=#1208 id=1208 data-nosnippet>1208</a>                </span>.server;
-<a href=#1209 id=1209 data-nosnippet>1209</a>            <span class="kw">if </span>server_status == expected_status {
-<a href=#1210 id=1210 data-nosnippet>1210</a>                <span class="prelude-val">Ok</span>(())
-<a href=#1211 id=1211 data-nosnippet>1211</a>            } <span class="kw">else </span>{
-<a href=#1212 id=1212 data-nosnippet>1212</a>                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
-<a href=#1213 id=1213 data-nosnippet>1213</a>                    <span class="string">"expected status: {expected_status:?} current status: {server_status:?}"
-<a href=#1214 id=1214 data-nosnippet>1214</a>                </span>)))
-<a href=#1215 id=1215 data-nosnippet>1215</a>            }
-<a href=#1216 id=1216 data-nosnippet>1216</a>        },
-<a href=#1217 id=1217 data-nosnippet>1217</a>    )
-<a href=#1218 id=1218 data-nosnippet>1218</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1219 id=1219 data-nosnippet>1219</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1220 id=1220 data-nosnippet>1220</a>}</code></pre></div></section></main></body></html>
+<a href=#1190 id=1190 data-nosnippet>1190</a>    <span class="kw">crate</span>::util::FedimintCli
+<a href=#1191 id=1191 data-nosnippet>1191</a>        .set_config_gen_params(auth, endpoint, meta, server_gen_params)
+<a href=#1192 id=1192 data-nosnippet>1192</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1193 id=1193 data-nosnippet>1193</a>
+<a href=#1194 id=1194 data-nosnippet>1194</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1195 id=1195 data-nosnippet>1195</a>}
+<a href=#1196 id=1196 data-nosnippet>1196</a>
+<a href=#1197 id=1197 data-nosnippet>1197</a><span class="kw">async fn </span>cli_wait_server_status(endpoint: <span class="kw-2">&amp;</span>str, expected_status: ServerStatusLegacy) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1198 id=1198 data-nosnippet>1198</a>    poll(
+<a href=#1199 id=1199 data-nosnippet>1199</a>        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"waiting-server-status: {expected_status:?}"</span>),
+<a href=#1200 id=1200 data-nosnippet>1200</a>        || <span class="kw">async </span>{
+<a href=#1201 id=1201 data-nosnippet>1201</a>            <span class="kw">let </span>server_status = <span class="kw">crate</span>::util::FedimintCli
+<a href=#1202 id=1202 data-nosnippet>1202</a>                .ws_status(endpoint)
+<a href=#1203 id=1203 data-nosnippet>1203</a>                .<span class="kw">await
+<a href=#1204 id=1204 data-nosnippet>1204</a>                </span>.context(<span class="string">"server status"</span>)
+<a href=#1205 id=1205 data-nosnippet>1205</a>                .map_err(ControlFlow::Continue)<span class="question-mark">?
+<a href=#1206 id=1206 data-nosnippet>1206</a>                </span>.server;
+<a href=#1207 id=1207 data-nosnippet>1207</a>            <span class="kw">if </span>server_status == expected_status {
+<a href=#1208 id=1208 data-nosnippet>1208</a>                <span class="prelude-val">Ok</span>(())
+<a href=#1209 id=1209 data-nosnippet>1209</a>            } <span class="kw">else </span>{
+<a href=#1210 id=1210 data-nosnippet>1210</a>                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
+<a href=#1211 id=1211 data-nosnippet>1211</a>                    <span class="string">"expected status: {expected_status:?} current status: {server_status:?}"
+<a href=#1212 id=1212 data-nosnippet>1212</a>                </span>)))
+<a href=#1213 id=1213 data-nosnippet>1213</a>            }
+<a href=#1214 id=1214 data-nosnippet>1214</a>        },
+<a href=#1215 id=1215 data-nosnippet>1215</a>    )
+<a href=#1216 id=1216 data-nosnippet>1216</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1217 id=1217 data-nosnippet>1217</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1218 id=1218 data-nosnippet>1218</a>}</code></pre></div></section></main></body></html>
