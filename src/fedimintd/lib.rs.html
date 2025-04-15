@@ -15,29 +15,22 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">mod </span>fedimintd;
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">pub mod </span>envs;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DEFAULT_ESPLORA_API_ENV, FM_PORT_ESPLORA_ENV};
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span><span class="kw">crate</span>::envs::FM_PORT_ESPLORA_ENV;
 <a href=#19 id=19 data-nosnippet>19</a>
-<a href=#20 id=20 data-nosnippet>20</a><span class="attr">#[allow(clippy::map_unwrap_or)]
-<a href=#21 id=21 data-nosnippet>21</a></span><span class="kw">pub fn </span>default_esplora_server(network: Network) -&gt; BitcoinRpcConfig {
-<a href=#22 id=22 data-nosnippet>22</a>    <span class="kw">let </span>url = std::env::var(FM_DEFAULT_ESPLORA_API_ENV)
-<a href=#23 id=23 data-nosnippet>23</a>        .ok()
-<a href=#24 id=24 data-nosnippet>24</a>        .map(|s| SafeUrl::parse(<span class="kw-2">&amp;</span>s).expect(<span class="string">"Failed to parse default esplora server"</span>))
-<a href=#25 id=25 data-nosnippet>25</a>        .unwrap_or_else(|| <span class="kw">match </span>network {
-<a href=#26 id=26 data-nosnippet>26</a>            Network::Bitcoin =&gt; SafeUrl::parse(<span class="string">"https://blockstream.info/api/"</span>)
-<a href=#27 id=27 data-nosnippet>27</a>                .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#28 id=28 data-nosnippet>28</a>            Network::Testnet =&gt; SafeUrl::parse(<span class="string">"https://blockstream.info/testnet/api/"</span>)
-<a href=#29 id=29 data-nosnippet>29</a>                .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#30 id=30 data-nosnippet>30</a>            Network::Regtest =&gt; SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#31 id=31 data-nosnippet>31</a>                <span class="string">"http://127.0.0.1:{}/"</span>,
-<a href=#32 id=32 data-nosnippet>32</a>                std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
-<a href=#33 id=33 data-nosnippet>33</a>            ))
-<a href=#34 id=34 data-nosnippet>34</a>            .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#35 id=35 data-nosnippet>35</a>            Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://blockstream.info/signet/api/"</span>)
-<a href=#36 id=36 data-nosnippet>36</a>                .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#37 id=37 data-nosnippet>37</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#38 id=38 data-nosnippet>38</a>        });
-<a href=#39 id=39 data-nosnippet>39</a>    BitcoinRpcConfig {
-<a href=#40 id=40 data-nosnippet>40</a>        kind: <span class="string">"esplora"</span>.to_string(),
-<a href=#41 id=41 data-nosnippet>41</a>        url,
-<a href=#42 id=42 data-nosnippet>42</a>    }
-<a href=#43 id=43 data-nosnippet>43</a>}</code></pre></div></section></main></body></html>
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">pub fn </span>default_esplora_server(network: Network) -&gt; BitcoinRpcConfig {
+<a href=#21 id=21 data-nosnippet>21</a>    BitcoinRpcConfig {
+<a href=#22 id=22 data-nosnippet>22</a>        kind: <span class="string">"esplora"</span>.to_string(),
+<a href=#23 id=23 data-nosnippet>23</a>        url: <span class="kw">match </span>network {
+<a href=#24 id=24 data-nosnippet>24</a>            Network::Bitcoin =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/api/"</span>),
+<a href=#25 id=25 data-nosnippet>25</a>            Network::Testnet =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet/api/"</span>),
+<a href=#26 id=26 data-nosnippet>26</a>            Network::Testnet4 =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet4/api/"</span>),
+<a href=#27 id=27 data-nosnippet>27</a>            Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://mutinynet.com/api/"</span>),
+<a href=#28 id=28 data-nosnippet>28</a>            Network::Regtest =&gt; SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#29 id=29 data-nosnippet>29</a>                <span class="string">"http://127.0.0.1:{}/"</span>,
+<a href=#30 id=30 data-nosnippet>30</a>                std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
+<a href=#31 id=31 data-nosnippet>31</a>            )),
+<a href=#32 id=32 data-nosnippet>32</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Failed to parse default esplora server"</span>),
+<a href=#33 id=33 data-nosnippet>33</a>        }
+<a href=#34 id=34 data-nosnippet>34</a>        .expect(<span class="string">"Failed to parse default esplora server"</span>),
+<a href=#35 id=35 data-nosnippet>35</a>    }
+<a href=#36 id=36 data-nosnippet>36</a>}</code></pre></div></section></main></body></html>
