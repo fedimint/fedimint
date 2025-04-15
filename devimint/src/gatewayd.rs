@@ -501,9 +501,6 @@ impl Gatewayd {
                 let inbound_liquidity_sats = channel["inbound_liquidity_sats"]
                     .as_u64()
                     .context("inbound_liquidity_sats must be a u64")?;
-                let short_channel_id = channel["short_channel_id"]
-                    .as_u64()
-                    .context("short_channel_id must be a u64")?;
                 Ok(ChannelInfo {
                     remote_pubkey: remote_pubkey
                         .parse()
@@ -511,7 +508,6 @@ impl Gatewayd {
                     channel_size_sats,
                     outbound_liquidity_sats,
                     inbound_liquidity_sats,
-                    short_channel_id,
                 })
             })
             .collect::<Result<Vec<ChannelInfo>>>()?;
