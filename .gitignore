@@ -4,6 +4,7 @@
 /hfuzz_workspace/
 /target-comp-bench/
 /tmp/
+/db/migrations/*.lock
 # in case it's a symlink
 /target
 /target-nix

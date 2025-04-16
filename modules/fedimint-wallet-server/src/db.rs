@@ -29,6 +29,10 @@ pub enum DbKeyPrefix {
     ConsensusVersionVote = 0x40,
     UnspentTxOut = 0x41,
     ConsensusVersionVotingActivation = 0x42,
+    // Note: this key was added in 0.8, and it is not guaranteed
+    // to be present for all past processed blocks, unless Federation
+    // was started with fedimint 0.8 or later
+    BlockHashByHeight = 0x43,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -49,6 +53,27 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::BlockHash,
 );
 impl_db_lookup!(key = BlockHashKey, query_prefix = BlockHashKeyPrefix);
+
+/// Note: only added in 0.8 and not backfilled. See
+/// [`DbKeyPrefix::BlockHashByHeight`]
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct BlockHashByHeightKey(pub u32);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct BlockHashByHeightValue(pub BlockHash);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct BlockHashByHeightKeyPrefix;
+
+impl_db_record!(
+    key = BlockHashByHeightKey,
+    value = BlockHashByHeightValue,
+    db_prefix = DbKeyPrefix::BlockHashByHeight,
+);
+impl_db_lookup!(
+    key = BlockHashByHeightKey,
+    query_prefix = BlockHashByHeightKeyPrefix
+);
 
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
 pub struct UTXOKey(pub bitcoin::OutPoint);
