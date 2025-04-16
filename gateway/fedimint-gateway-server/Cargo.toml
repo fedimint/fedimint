@@ -49,7 +49,7 @@ fedimint-gateway-common = { workspace = true }
 fedimint-gateway-server-db = { workspace = true }
 fedimint-gw-client = { workspace = true }
 fedimint-gwv2-client = { workspace = true }
-fedimint-lightning = { path = "../fedimint-lightning", version = "=0.8.0-alpha" }
+fedimint-lightning = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
