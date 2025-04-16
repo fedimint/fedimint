@@ -1,12 +1,13 @@
-use std::env;
 use std::path::PathBuf;
 
-use anyhow::{anyhow as format_err, bail};
+use anyhow::{Context, anyhow, ensure};
 use bitcoin::{BlockHash, Network, Transaction};
+use bitcoincore_rpc::Error::JsonRpc;
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
-use bitcoincore_rpc::{Auth, RpcApi};
+use bitcoincore_rpc::jsonrpc::Error::Rpc;
+use bitcoincore_rpc::{Auth, Client, RpcApi};
 use fedimint_core::Feerate;
-use fedimint_core::envs::{BitcoinRpcConfig, FM_BITCOIND_COOKIE_FILE_ENV};
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_BITCOIND_CORE;
@@ -15,54 +16,37 @@ use tracing::info;
 
 #[derive(Debug)]
 pub struct BitcoindClient {
-    client: ::bitcoincore_rpc::Client,
+    client: Client,
     url: SafeUrl,
 }
 
 impl BitcoindClient {
-    pub fn new(url: &SafeUrl) -> anyhow::Result<Self> {
-        let safe_url = url.clone();
-        let (url, auth) = Self::from_url_to_url_auth(url)?;
-        Ok(Self {
-            client: ::bitcoincore_rpc::Client::new(&url, auth)?,
-            url: safe_url,
-        })
-    }
+    pub fn new(url: &SafeUrl, cookie: Option<PathBuf>) -> anyhow::Result<Self> {
+        let auth = match cookie {
+            Some(path) => {
+                ensure!(
+                    url.username().is_empty(),
+                    "When a bitcoind cookie file is provided, the Bitcoin Rpc Url auth must be empty."
+                );
 
-    fn from_url_to_url_auth(url: &SafeUrl) -> anyhow::Result<(String, Auth)> {
-        Ok((
-            (if let Some(port) = url.port() {
-                format!(
-                    "{}://{}:{port}",
-                    url.scheme(),
-                    url.host_str().unwrap_or("127.0.0.1")
-                )
-            } else {
-                format!(
-                    "{}://{}",
-                    url.scheme(),
-                    url.host_str().unwrap_or("127.0.0.1")
-                )
-            }),
-            match (
-                !url.username().is_empty(),
-                env::var(FM_BITCOIND_COOKIE_FILE_ENV),
-            ) {
-                (true, Ok(_)) => {
-                    bail!(
-                        "When {FM_BITCOIND_COOKIE_FILE_ENV} is set, the url auth part must be empty."
-                    )
-                }
-                (true, Err(_)) => Auth::UserPass(
-                    url.username().to_owned(),
-                    url.password()
-                        .ok_or_else(|| format_err!("Password missing for {}", url.username()))?
-                        .to_owned(),
-                ),
-                (false, Ok(path)) => Auth::CookieFile(PathBuf::from(path)),
-                (false, Err(_)) => Auth::None,
-            },
-        ))
+                Auth::CookieFile(path)
+            }
+            None => Auth::UserPass(
+                url.username().to_owned(),
+                url.password()
+                    .context("Bitcoin RPC URL is missing password")?
+                    .to_owned(),
+            ),
+        };
+
+        let url = url
+            .without_auth()
+            .map_err(|()| anyhow!("Failed to strip auth from Bitcoin Rpc Url"))?;
+
+        Ok(Self {
+            client: Client::new(url.as_str(), auth)?,
+            url,
+        })
     }
 }
 
@@ -114,8 +98,6 @@ impl IServerBitcoinRpc for BitcoindClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        use bitcoincore_rpc::Error::JsonRpc;
-        use bitcoincore_rpc::jsonrpc::Error::Rpc;
         match block_in_place(|| self.client.send_raw_transaction(&transaction)) {
             // Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
             // This is considered a success case, so we don't surface the error log.

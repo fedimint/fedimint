@@ -93,7 +93,9 @@ impl Fixtures {
             let bitcoin = RealBitcoinTest::new(&bitcoincore_url, dyn_bitcoin_rpc.clone());
 
             let bitcoin_rpc_connection = match rpc_config.kind.as_ref() {
-                "bitcoind" => BitcoindClient::new(&rpc_config.url).unwrap().into_dyn(),
+                "bitcoind" => BitcoindClient::new(&rpc_config.url, None)
+                    .unwrap()
+                    .into_dyn(),
                 "esplora" => EsploraClient::new(&rpc_config.url).unwrap().into_dyn(),
                 kind => panic!("Unknown bitcoin rpc kind {kind}"),
             };

@@ -13,8 +13,8 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, get_current_database_version};
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_BITCOIN_RPC_KIND_ENV, FM_BITCOIN_RPC_URL_ENV, FM_ENABLE_MODULE_LNV2_ENV,
-    FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    BitcoinRpcConfig, FM_BITCOIN_RPC_KIND_ENV, FM_BITCOIN_RPC_URL_ENV, FM_BITCOIND_COOKIE_FILE_ENV,
+    FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
@@ -81,6 +81,9 @@ struct ServerOpts {
 
     #[arg(long, env =  FM_BITCOIN_RPC_URL_ENV)]
     bitcoin_rpc_url: SafeUrl,
+
+    #[arg(long, env =  FM_BITCOIND_COOKIE_FILE_ENV)]
+    bitcoind_cookie_file: Option<PathBuf>,
 
     /// Enable tokio console logging
     #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
@@ -567,7 +570,9 @@ async fn run(
     );
 
     let dyn_server_bitcoin_rpc = match opts.bitcoin_rpc_kind.as_ref() {
-        "bitcoind" => BitcoindClient::new(&opts.bitcoin_rpc_url)?.into_dyn(),
+        "bitcoind" => {
+            BitcoindClient::new(&opts.bitcoin_rpc_url, opts.bitcoind_cookie_file)?.into_dyn()
+        }
         "esplora" => EsploraClient::new(&opts.bitcoin_rpc_url)?.into_dyn(),
         kind => bail!("Unknown bitcoin rpc kind {kind}"),
     };

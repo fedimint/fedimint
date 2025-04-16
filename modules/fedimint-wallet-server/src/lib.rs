@@ -911,7 +911,7 @@ impl ServerModule for Wallet {
                     let config = module.btc_rpc.get_bitcoin_rpc_config();
 
                     // we need to remove auth, otherwise we'll send over the wire
-                    let without_auth = config.url.clone().without_auth().map_err(|_| {
+                    let without_auth = config.url.clone().without_auth().map_err(|()| {
                         ApiError::server_error("Unable to remove auth from bitcoin config URL".to_string())
                     })?;
 

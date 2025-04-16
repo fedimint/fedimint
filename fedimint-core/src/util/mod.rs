@@ -19,7 +19,6 @@ pub use error::*;
 use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tracing::{Instrument, Span, debug, warn};
 use url::{Host, ParseError, Url};
@@ -85,12 +84,6 @@ where
 // nosemgrep: ban-raw-url
 pub struct SafeUrl(Url);
 
-#[derive(Debug, Error)]
-pub enum SafeUrlError {
-    #[error("Failed to remove auth from URL")]
-    WithoutAuthError,
-}
-
 impl SafeUrl {
     pub fn parse(url_str: &str) -> Result<Self, ParseError> {
         Url::parse(url_str).map(SafeUrl)
@@ -112,11 +105,12 @@ impl SafeUrl {
         self.0.set_password(password)
     }
 
-    pub fn without_auth(&self) -> Result<Self, SafeUrlError> {
+    #[allow(clippy::result_unit_err)] // just copying `url`'s API here
+    pub fn without_auth(&self) -> Result<Self, ()> {
         let mut url = self.clone();
-        url.set_username("")
-            .and_then(|()| url.set_password(None))
-            .map_err(|()| SafeUrlError::WithoutAuthError)?;
+
+        url.set_username("").and_then(|()| url.set_password(None))?;
+
         Ok(url)
     }
 
