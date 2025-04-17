@@ -89,27 +89,6 @@ async fn dashboard_view(
     let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
     let bitcoin_rpc_status = state.api.bitcoin_rpc_status().await;
 
-    // Conditionally add Lightning V2 UI if the module is available
-    let lightning_content = html! {
-        @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
-            (lnv2::render(lightning).await)
-        }
-    };
-
-    // Conditionally add Wallet UI if the module is available
-    let wallet_content = html! {
-        @if let Some(wallet_module) = state.api.get_module::<fedimint_wallet_server::Wallet>() {
-            (wallet::render(wallet_module).await)
-        }
-    };
-
-    // Conditionally add Meta UI if the module is available
-    let meta_content = html! {
-        @if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
-            (meta::render(meta_module).await)
-        }
-    };
-
     let content = html! {
         div class="row gy-4" {
             div class="col-md-6" {
@@ -162,9 +141,20 @@ async fn dashboard_view(
             }
         }
 
-        (lightning_content)
-        (wallet_content)
-        (meta_content)
+        // Conditionally add Lightning V2 UI if the module is available
+        @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
+            (lnv2::render(lightning).await)
+        }
+
+        // Conditionally add Wallet UI if the module is available
+        @if let Some(wallet_module) = state.api.get_module::<fedimint_wallet_server::Wallet>() {
+            (wallet::render(wallet_module).await)
+        }
+
+        // Conditionally add Meta UI if the module is available
+        @if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
+            (meta::render(meta_module).await)
+        }
 
         // Every 15s fetch updates to the page
         div hx-get="/dashboard/update" hx-trigger="every 15s" hx-swap="none" { }
