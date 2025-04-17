@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["CONFIRMATION_TARGET"],"struct":["ServerModuleSharedBitcoin","ServerModuleSharedBitcoinInner"],"type":["SharedKey"]};
