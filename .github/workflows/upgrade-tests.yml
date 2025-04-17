@@ -37,7 +37,7 @@ jobs:
   tests:
     if: github.repository == 'fedimint/fedimint'
     name: "Upgrade tests"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 120
 
     steps:
@@ -96,7 +96,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     needs: [ tests ]
 
     steps:

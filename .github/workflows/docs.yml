@@ -8,7 +8,7 @@ on:
 jobs:
   docs:
     name: Publish docs
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     needs: [ docs ]
 
     steps:
