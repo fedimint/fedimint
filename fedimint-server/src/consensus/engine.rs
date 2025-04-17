@@ -26,7 +26,7 @@ use fedimint_core::session_outcome::{
 };
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::util::FmtCompact as _;
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
 use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
@@ -402,17 +402,27 @@ impl ConsensusEngine {
                             }
                         }
 
-                        if let Ok(items) = Vec::<ConsensusItem>::consensus_decode_whole(&bytes, &self.decoders()){
-                            for item in items {
-                                if self.process_consensus_item(
-                                    session_index,
-                                    item_index,
-                                    item.clone(),
-                                    ordered_unit.creator
-                                ).await
-                                .is_ok() {
-                                    item_index += 1;
+                        match Vec::<ConsensusItem>::consensus_decode_whole(&bytes, &self.decoders()) {
+                            Ok(items) => {
+                                for item in items {
+                                    if let Ok(()) = self.process_consensus_item(
+                                        session_index,
+                                        item_index,
+                                        item.clone(),
+                                        ordered_unit.creator
+                                    ).await {
+                                        item_index += 1;
+                                    }
                                 }
+                            }
+                            Err(err) => {
+                                warn!(
+                                    target: LOG_CONSENSUS,
+                                    %session_index,
+                                    peer = %ordered_unit.creator,
+                                    err = %err.fmt_compact(),
+                                    "Failed to decode consensus items from peer"
+                                );
                             }
                         }
                     }
@@ -692,7 +702,17 @@ impl ConsensusEngine {
         }
 
         self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
-            .await?;
+            .await
+            .inspect_err(|err| {
+                // Rejected items are very common, so only trace level
+                trace!(
+                    target: LOG_CONSENSUS,
+                    %peer,
+                    item = ?DebugConsensusItem(&item),
+                    err = %err.fmt_compact_anyhow(),
+                    "Rejected consensus item"
+                );
+            })?;
 
         // After this point we have to commit the database transaction since the
         // item has been fully processed without errors
