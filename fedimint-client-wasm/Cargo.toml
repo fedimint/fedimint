@@ -34,5 +34,5 @@ rexie = { workspace = true }
 serde_json = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-wasm-bindgen-test = "0.3.43"
+wasm-bindgen-test = { workspace = true }
 lightning-invoice = { workspace = true }
