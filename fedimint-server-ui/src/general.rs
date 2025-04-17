@@ -14,7 +14,10 @@ pub fn render(
         div class="card h-100" {
             div class="card-header dashboard-header" { (federation_name) }
             div class="card-body" {
-                (render_session_count(session_count))
+                div id="session-count" class="alert alert-info" {
+                    "Session Count: " strong { (session_count) }
+                }
+
                 table class="table table-sm mb-0" {
                     thead {
                         tr {
@@ -32,15 +35,6 @@ pub fn render(
                     }
                 }
             }
-        }
-    }
-}
-
-/// Renders the session count information
-pub fn render_session_count(session_count: usize) -> Markup {
-    html! {
-        div id="session-count" class="alert alert-info" hx-swap-oob=(true) {
-            "Session Count: " strong { (session_count) }
         }
     }
 }

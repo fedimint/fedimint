@@ -134,47 +134,9 @@ async fn dashboard_view(
                 }
             }
         }
-
-        // Every 15s fetch updates to the page
-        div hx-get="/dashboard/update" hx-trigger="every 15s" hx-swap="none" { }
     };
 
     Html(dashboard_layout(content).into_string()).into_response()
-}
-
-/// Periodic updated to the dashboard
-///
-/// We don't just replace the whole page, not to interfere with elements that
-/// might not like it.
-async fn dashboard_update(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
-) -> impl IntoResponse {
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
-    }
-
-    let session_count = state.api.session_count().await;
-    let consensus_ord_latency = state.api.consensus_ord_latency().await;
-    let p2p_connection_status = state.api.p2p_connection_status().await;
-
-    // each element has an `id` and `hx-swap-oob=true` which on htmx requests
-    // make them update themselves.
-    let content = html! {
-        (general::render_session_count(session_count))
-
-        (latency::render(consensus_ord_latency, &p2p_connection_status))
-
-        @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
-            div class="row gy-4 mt-2" {
-                div class="col-12" {
-                    (lnv2::render(lightning).await)
-                }
-            }
-        }
-    };
-
-    Html(content.into_string()).into_response()
 }
 
 pub fn start(
@@ -185,7 +147,6 @@ pub fn start(
     // Create a basic router with core routes
     let mut app = Router::new()
         .route("/", get(dashboard_view))
-        .route("/dashboard/update", get(dashboard_update))
         .route("/login", get(login_form).post(login_submit))
         .with_static_routes();
 
