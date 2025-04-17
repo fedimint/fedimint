@@ -153,7 +153,11 @@ async fn dashboard_view(
 
         // Conditionally add Meta UI if the module is available
         @if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
-            (meta::render(meta_module).await)
+            div class="row gy-4 mt-2" {
+                div class="col-12" {
+                    (meta::render(meta_module).await)
+                }
+            }
         }
 
         // Every 15s fetch updates to the page
