@@ -16,8 +16,8 @@ use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 use crate::assets::WithStaticRoutesExt as _;
 use crate::layout::{self};
 use crate::{
-    AuthState, LoginInput, audit, bitcoin, check_auth, invite, latency, lnv2, login_form_response,
-    login_submit_response, meta, wallet,
+    AuthState, LoginInput, audit, bitcoin, check_auth, general, invite, latency, lnv2,
+    login_form_response, login_submit_response, meta, wallet,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -62,14 +62,6 @@ async fn login_submit(
     .into_response()
 }
 
-fn render_session_count(session_count: usize) -> Markup {
-    html! {
-
-        div id="session-count" class="alert alert-info" hx-swap-oob=(true) {
-            "Session Count: " strong { (session_count) }
-        }
-    }
-}
 // Main dashboard view
 async fn dashboard_view(
     State(state): State<AuthState<DynDashboardApi>>,
@@ -92,28 +84,7 @@ async fn dashboard_view(
     let content = html! {
         div class="row gy-4" {
             div class="col-md-6" {
-                div class="card h-100" {
-                    div class="card-header dashboard-header" { (federation_name) }
-                    div class="card-body" {
-                        (render_session_count(session_count))
-                        table class="table table-sm mb-0" {
-                            thead {
-                                tr {
-                                    th { "Guardian ID" }
-                                    th { "Guardian Name" }
-                                }
-                            }
-                            tbody {
-                                @for (guardian_id, name) in guardian_names {
-                                    tr {
-                                        td { (guardian_id.to_string()) }
-                                        td { (name) }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                (general::render(&federation_name, session_count, &guardian_names))
             }
 
             div class="col-md-6" {
@@ -190,7 +161,7 @@ async fn dashboard_update(
     // each element has an `id` and `hx-swap-oob=true` which on htmx requests
     // make them update themselves.
     let content = html! {
-        (render_session_count(session_count))
+        (general::render_session_count(session_count))
 
         (latency::render(consensus_ord_latency, &p2p_connection_status))
 

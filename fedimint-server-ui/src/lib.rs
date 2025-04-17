@@ -3,6 +3,7 @@ pub mod audit;
 pub mod bitcoin;
 pub mod dashboard;
 pub(crate) mod error;
+pub mod general;
 pub mod invite;
 pub mod latency;
 pub(crate) mod layout;
