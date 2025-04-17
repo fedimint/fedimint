@@ -67,7 +67,6 @@ pub async fn render(meta: &Meta) -> Markup {
     }
 }
 
-
 fn render_submissions_form(our_id: PeerId, submissions: &BTreeMap<PeerId, Value>) -> Markup {
     let mut submissions_by_value: HashMap<String, BTreeSet<PeerId>> = HashMap::new();
 

@@ -16,8 +16,8 @@ use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 use crate::assets::WithStaticRoutesExt as _;
 use crate::layout::{self};
 use crate::{
-    AuthState, LoginInput, audit, bitcoin, check_auth, invite_code, latency, lnv2,
-    login_form_response, login_submit_response, meta, wallet,
+    AuthState, LoginInput, audit, bitcoin, check_auth, invite, latency, lnv2, login_form_response,
+    login_submit_response, meta, wallet,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -116,20 +116,16 @@ async fn dashboard_view(
                 }
             }
 
-            // Invite Code Column
             div class="col-md-6" {
-                (invite_code::render(&invite_code))
+                (invite::render(&invite_code))
             }
         }
 
-        // Second row: Audit Summary and Peer Status
         div class="row gy-4 mt-2" {
-            // Audit Information Column
             div class="col-lg-6" {
                 (audit::render(&audit_summary))
             }
 
-            // Peer Connection Status Column
             div class="col-lg-6" {
                 (latency::render(consensus_ord_latency, &p2p_connection_status))
             }
