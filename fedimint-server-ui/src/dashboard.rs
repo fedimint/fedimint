@@ -143,12 +143,20 @@ async fn dashboard_view(
 
         // Conditionally add Lightning V2 UI if the module is available
         @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
-            (lnv2::render(lightning).await)
+            div class="row gy-4 mt-2" {
+                div class="col-12" {
+                    (lnv2::render(lightning).await)
+                }
+            }
         }
 
         // Conditionally add Wallet UI if the module is available
         @if let Some(wallet_module) = state.api.get_module::<fedimint_wallet_server::Wallet>() {
-            (wallet::render(wallet_module).await)
+            div class="row gy-4 mt-2" {
+                div class="col-12" {
+                    (wallet::render(wallet_module).await)
+                }
+            }
         }
 
         // Conditionally add Meta UI if the module is available
@@ -191,7 +199,11 @@ async fn dashboard_update(
         (latency::render(consensus_ord_latency, &p2p_connection_status))
 
         @if let Some(lightning) = state.api.get_module::<fedimint_lnv2_server::Lightning>() {
-            (lnv2::render(lightning).await)
+            div class="row gy-4 mt-2" {
+                div class="col-12" {
+                    (lnv2::render(lightning).await)
+                }
+            }
         }
     };
 

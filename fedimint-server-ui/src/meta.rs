@@ -52,11 +52,10 @@ pub async fn render(meta: &Meta) -> Markup {
                             code {
                                 (serde_json::to_string_pretty(value).unwrap_or_else(|_| "Invalid JSON".to_string()))
                             }
-                        } @else {
-                            div class="alert alert-secondary" { "No consensus value has been established yet." }
                         }
+                    } @else {
+                        div class="alert alert-secondary" { "No consensus value has been established yet." }
                     }
-
                     div class="mb-4" {
                         (render_meta_edit_form(current_meta_keys, false, MetaEditForm::default()))
                     }
