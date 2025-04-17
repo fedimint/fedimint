@@ -41,7 +41,7 @@ jobs:
 
   lint:
     name: "Lint"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: false
             timeout: 30
           - host: macos
@@ -126,7 +126,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: true
             timeout: 90
             run-tests: true
@@ -226,7 +226,7 @@ jobs:
   audit:
     if: github.repository == 'fedimint/fedimint'
     name: "Audit"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
     # sometimes we can't fix these immediately, yet
     # we don't want to stop the world because of it
@@ -321,7 +321,7 @@ jobs:
           - wasm32-unknown
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: true
             # TODO: debugging network issues, should reduce to 20 minutes
             # https://github.com/fedimint/fedimint/issues/4488
@@ -375,7 +375,7 @@ jobs:
   containers:
     if: github.repository == 'fedimint/fedimint'
     name: "Containers"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 60
     steps:
       - name: Checkout Code
@@ -491,7 +491,7 @@ jobs:
             bins: devimint,devimint-faucet
             deb: devimint
 
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 60
 
     env:
@@ -636,7 +636,7 @@ jobs:
     name: Status
     needs: [lint, shell, build, cross, ccov, containers, pkgs]
     if: ${{ always() }}
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     steps:
       - name: Check status of all jobs
         if: >-
@@ -650,7 +650,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
     needs: [ lint, build, shell, cross, ccov, containers, pkgs ]
