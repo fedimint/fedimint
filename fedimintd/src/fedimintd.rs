@@ -13,7 +13,8 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, get_current_database_version};
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    BitcoinRpcConfig, FM_BITCOIN_RPC_KIND_ENV, FM_BITCOIN_RPC_URL_ENV, FM_BITCOIND_COOKIE_FILE_ENV,
+    FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
@@ -35,6 +36,9 @@ use fedimint_server::config::{ConfigGenSettings, NetworkingStack, ServerConfig};
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_server::envs::FM_FORCE_IROH_ENV;
 use fedimint_server::net::api::ApiSecrets;
+use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
+use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
+use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
@@ -67,6 +71,20 @@ struct ServerOpts {
     // the API
     #[arg(long, env = FM_PASSWORD_ENV)]
     password: Option<String>,
+
+    /// The bitcoin network that fedimint will be running on
+    #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
+    network: bitcoin::network::Network,
+
+    #[arg(long, env =  FM_BITCOIN_RPC_KIND_ENV)]
+    bitcoin_rpc_kind: String,
+
+    #[arg(long, env =  FM_BITCOIN_RPC_URL_ENV)]
+    bitcoin_rpc_url: SafeUrl,
+
+    #[arg(long, env =  FM_BITCOIND_COOKIE_FILE_ENV)]
+    bitcoind_cookie_file: Option<PathBuf>,
+
     /// Enable tokio console logging
     #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
     tokio_console_bind: Option<SocketAddr>,
@@ -124,10 +142,6 @@ struct ServerOpts {
     /// bind port.
     #[arg(long, env = FM_BIND_UI_ENV, default_value = "127.0.0.1:8175")]
     bind_ui: SocketAddr,
-
-    /// The bitcoin network that fedimint will be running on
-    #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
-    network: bitcoin::network::Network,
 
     #[arg(long, env = FM_BIND_METRICS_API_ENV)]
     bind_metrics_api: Option<SocketAddr>,
@@ -204,7 +218,6 @@ pub struct Fedimintd {
     code_version_hash: String,
     code_version_str: String,
     opts: ServerOpts,
-    bitcoind_rpc: BitcoinRpcConfig,
 }
 
 impl Fedimintd {
@@ -265,11 +278,8 @@ impl Fedimintd {
 
         info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
-        let bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()?;
-
         Ok(Self {
             opts,
-            bitcoind_rpc,
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
             code_version_hash: code_version_hash.to_owned(),
@@ -314,14 +324,18 @@ impl Fedimintd {
     pub fn with_default_modules(self) -> anyhow::Result<Self> {
         let network = self.opts.network;
 
-        let bitcoind_rpc = self.bitcoind_rpc.clone();
+        let bitcoin_rpc_config = BitcoinRpcConfig {
+            kind: self.opts.bitcoin_rpc_kind.clone(),
+            url: self.opts.bitcoin_rpc_url.clone(),
+        };
+
         let s = self
             .with_module_kind(LightningInit)
             .with_module_instance(
                 LightningInit::kind(),
                 LightningGenParams {
                     local: LightningGenParamsLocal {
-                        bitcoin_rpc: bitcoind_rpc.clone(),
+                        bitcoin_rpc: bitcoin_rpc_config.clone(),
                     },
                     consensus: LightningGenParamsConsensus { network },
                 },
@@ -344,7 +358,7 @@ impl Fedimintd {
                 WalletInit::kind(),
                 WalletGenParams {
                     local: WalletGenParamsLocal {
-                        bitcoin_rpc: bitcoind_rpc.clone(),
+                        bitcoin_rpc: bitcoin_rpc_config.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
                         network,
@@ -365,7 +379,7 @@ impl Fedimintd {
                     fedimint_lnv2_server::LightningInit::kind(),
                     fedimint_lnv2_common::config::LightningGenParams {
                         local: fedimint_lnv2_common::config::LightningGenParamsLocal {
-                            bitcoin_rpc: bitcoind_rpc.clone(),
+                            bitcoin_rpc: bitcoin_rpc_config.clone(),
                         },
                         consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                             // TODO: actually make the relative fee configurable
@@ -517,11 +531,10 @@ async fn run(
     code_version_str: String,
 ) -> anyhow::Result<()> {
     if let Some(socket_addr) = opts.bind_metrics_api.as_ref() {
-        task_group.spawn_cancellable("metrics-server", {
-            let task_group = task_group.clone();
-            let socket_addr = *socket_addr;
-            async move { fedimint_metrics::run_api_server(socket_addr, task_group).await }
-        });
+        task_group.spawn_cancellable(
+            "metrics-server",
+            fedimint_metrics::run_api_server(*socket_addr, task_group.clone()),
+        );
     }
 
     let data_dir = opts.data_dir.context("data-dir option is not present")?;
@@ -556,6 +569,14 @@ async fn run(
         ModuleRegistry::default(),
     );
 
+    let dyn_server_bitcoin_rpc = match opts.bitcoin_rpc_kind.as_ref() {
+        "bitcoind" => {
+            BitcoindClient::new(&opts.bitcoin_rpc_url, opts.bitcoind_cookie_file)?.into_dyn()
+        }
+        "esplora" => EsploraClient::new(&opts.bitcoin_rpc_url)?.into_dyn(),
+        kind => bail!("Unknown bitcoin rpc kind {kind}"),
+    };
+
     Box::pin(fedimint_server::run(
         data_dir,
         opts.force_api_secrets,
@@ -564,6 +585,7 @@ async fn run(
         code_version_str,
         &module_inits,
         task_group.clone(),
+        dyn_server_bitcoin_rpc,
         Some(Box::new(fedimint_server_ui::dashboard::start)),
         Some(Box::new(fedimint_server_ui::setup::start)),
     ))

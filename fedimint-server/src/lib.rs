@@ -42,6 +42,7 @@ use fedimint_core::util::write_new;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
+use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 use fedimint_server_core::dashboard_ui::DynDashboardApi;
 use fedimint_server_core::setup_ui::{DynSetupApi, ISetupApi};
 use jsonrpsee::RpcModule;
@@ -97,6 +98,7 @@ pub async fn run(
     code_version_str: String,
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
+    bitcoin_rpc: DynServerBitcoinRpc,
     dashboard_ui_handler: Option<DashboardUiHandler>,
     setup_ui_handler: Option<SetupUiHandler>,
 ) -> anyhow::Result<()> {
@@ -178,6 +180,7 @@ pub async fn run(
         force_api_secrets,
         data_dir,
         code_version_str,
+        bitcoin_rpc,
         settings.ui_bind,
         dashboard_ui_handler,
     ))

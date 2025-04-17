@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
@@ -28,6 +28,7 @@ use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API, LOG_NET_IROH};
+use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
@@ -66,6 +67,7 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
+    dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
     ui_bind_addr: SocketAddr,
     dashboard_ui_handler: Option<crate::DashboardUiHandler>,
 ) -> anyhow::Result<()> {
@@ -99,7 +101,15 @@ pub async fn run(
     )
     .await?;
 
-    let shared_anymap = Arc::new(RwLock::new(BTreeMap::default()));
+    let server_bitcoin_rpc_monitor = ServerBitcoinRpcMonitor::new(
+        dyn_server_bitcoin_rpc,
+        if is_running_in_test_env() {
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(60)
+        },
+        task_group,
+    );
 
     for (module_id, module_cfg) in &cfg.consensus.modules {
         match module_init_registry.get(&module_cfg.kind) {
@@ -138,7 +148,7 @@ pub async fn run(
                         task_group,
                         cfg.local.identity,
                         global_api.with_module(*module_id),
-                        shared_anymap.clone(),
+                        server_bitcoin_rpc_monitor.clone(),
                     )
                     .await?;
 
@@ -181,6 +191,7 @@ pub async fn run(
         p2p_status_receivers,
         ci_status_receivers,
         ord_latency_receiver,
+        bitcoin_rpc_connection: server_bitcoin_rpc_monitor,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };

@@ -26,6 +26,7 @@ use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
+use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 use fedimint_testing_core::config::local_config_gen_params;
 use tracing::info;
 
@@ -177,6 +178,7 @@ pub struct FederationTestBuilder {
     modules: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
+    bitcoin_rpc_connection: DynServerBitcoinRpc,
 }
 
 impl FederationTestBuilder {
@@ -186,6 +188,7 @@ impl FederationTestBuilder {
         client_init: ClientModuleInitRegistry,
         primary_module_kind: ModuleKind,
         num_offline: u16,
+        bitcoin_rpc_connection: DynServerBitcoinRpc,
     ) -> FederationTestBuilder {
         let num_peers = 4;
         Self {
@@ -198,6 +201,7 @@ impl FederationTestBuilder {
             modules: params,
             server_init,
             client_init,
+            bitcoin_rpc_connection,
         }
     }
 
@@ -226,6 +230,7 @@ impl FederationTestBuilder {
         self
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn build(self) -> FederationTest {
         let num_offline = self.num_offline;
         assert!(
@@ -282,6 +287,8 @@ impl FederationTestBuilder {
             )
             .into_dyn();
 
+            let bitcoin_rpc_connection = self.bitcoin_rpc_connection.clone();
+
             task_group.spawn("fedimintd", move |_| async move {
                 Box::pin(consensus::run(
                     connections,
@@ -295,6 +302,7 @@ impl FederationTestBuilder {
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
+                    bitcoin_rpc_connection,
                     ui_bind,
                     None,
                 ))

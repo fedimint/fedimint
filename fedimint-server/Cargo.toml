@@ -31,7 +31,6 @@ bls12_381 = { workspace = true }
 bytes = { workspace = true }
 fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-bitcoind = { workspace = true, features = ["fedimint-server"] }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }

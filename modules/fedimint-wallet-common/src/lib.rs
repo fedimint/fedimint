@@ -476,16 +476,6 @@ plugin_types_trait_impl_common!(
     WalletOutputError
 );
 
-#[derive(Debug, Error, Clone)]
-pub enum WalletCreationError {
-    #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
-    WrongNetwork(NetworkLegacyEncodingWrapper, NetworkLegacyEncodingWrapper),
-    #[error("Error querying bitcoind: {0}")]
-    RpcError(String),
-    #[error("Feerate source error: {0}")]
-    FeerateSourceError(String),
-}
-
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
 pub enum WalletInputError {
     #[error("Unknown block hash in peg-in proof: {0}")]
