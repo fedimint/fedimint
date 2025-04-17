@@ -29,7 +29,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.47"
+clap_complete = { workspace = true }
 fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bip39 = { workspace = true }
@@ -52,7 +52,7 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-time = { version = "0.3.41", features = ["formatting"] }
+time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
 

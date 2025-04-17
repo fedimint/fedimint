@@ -27,5 +27,4 @@ fedimint-lnv2-common = { workspace = true }
 fedimint-meta-common = { workspace = true }
 fedimint-mint-common = { workspace = true }
 fedimint-wallet-common = { workspace = true }
-# needs to be pinned to the same version `cargo-fuzz` binary uses
-honggfuzz = { version = "=0.5.55", default-features = false }
+honggfuzz = { workspace = true }
