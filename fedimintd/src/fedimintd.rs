@@ -5,23 +5,21 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{Context, bail};
-use clap::{Parser, Subcommand};
+use anyhow::bail;
+use bitcoin::Network;
+use clap::Parser;
 use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::{Database, get_current_database_version};
+use fedimint_core::db::Database;
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_BITCOIN_RPC_KIND_ENV, FM_BITCOIN_RPC_URL_ENV, FM_BITCOIND_COOKIE_FILE_ENV,
     FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{
-    FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command, write_overwrite,
-};
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
 use fedimint_core::{crit, timing};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -31,8 +29,8 @@ use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::MintInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
-use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
-use fedimint_server::config::{ConfigGenSettings, NetworkingStack, ServerConfig};
+use fedimint_server::config::io::DB_FILE;
+use fedimint_server::config::{ConfigGenSettings, NetworkingStack};
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_server::envs::FM_FORCE_IROH_ENV;
 use fedimint_server::net::api::ApiSecrets;
@@ -53,7 +51,7 @@ use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_IROH_ENV, FM_BIND_API_WS_ENV,
     FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
     FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
-    FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -65,16 +63,11 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 struct ServerOpts {
     /// Path to folder containing federation config files
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
-    data_dir: Option<PathBuf>,
-    /// Password to encrypt sensitive config files
-    // TODO: should probably never send password to the server directly, rather send the hash via
-    // the API
-    #[arg(long, env = FM_PASSWORD_ENV)]
-    password: Option<String>,
+    data_dir: PathBuf,
 
     /// The bitcoin network that fedimint will be running on
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
-    network: bitcoin::network::Network,
+    network: Network,
 
     #[arg(long, env =  FM_BITCOIN_RPC_KIND_ENV)]
     bitcoin_rpc_kind: String,
@@ -162,24 +155,6 @@ struct ServerOpts {
     /// and defaults will be provided via `FM_DEFAULT_API_SECRETS`.
     #[arg(long, env = FM_FORCE_API_SECRETS_ENV, default_value = "")]
     force_api_secrets: ApiSecrets,
-
-    #[clap(subcommand)]
-    subcommand: Option<ServerSubcommand>,
-}
-
-#[derive(Subcommand)]
-enum ServerSubcommand {
-    /// Development-related commands
-    #[clap(subcommand)]
-    Dev(DevSubcommand),
-}
-
-#[derive(Subcommand)]
-enum DevSubcommand {
-    /// List supported server API versions and exit
-    ListApiVersions,
-    /// List supported server database versions and exit
-    ListDbVersions,
 }
 
 /// `fedimintd` builder
@@ -411,26 +386,6 @@ impl Fedimintd {
 
     /// Block thread and run a Fedimintd server
     pub async fn run(self) -> ! {
-        // handle optional subcommand
-        if let Some(subcommand) = &self.opts.subcommand {
-            match subcommand {
-                ServerSubcommand::Dev(DevSubcommand::ListApiVersions) => {
-                    let api_versions = self.get_server_api_versions();
-                    let api_versions = serde_json::to_string_pretty(&api_versions)
-                        .expect("API versions struct is serializable");
-                    println!("{api_versions}");
-                    std::process::exit(0);
-                }
-                ServerSubcommand::Dev(DevSubcommand::ListDbVersions) => {
-                    let db_versions = self.get_server_db_versions();
-                    let db_versions = serde_json::to_string_pretty(&db_versions)
-                        .expect("API versions struct is serializable");
-                    println!("{db_versions}");
-                    std::process::exit(0);
-                }
-            }
-        }
-
         let root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -478,49 +433,6 @@ impl Fedimintd {
         // Should we ever shut down without an error code?
         std::process::exit(-1);
     }
-
-    fn get_server_api_versions(&self) -> ServerApiVersionsSummary {
-        ServerApiVersionsSummary {
-            core: ServerConfig::supported_api_versions().api,
-            modules: self
-                .server_gens
-                .kinds()
-                .into_iter()
-                .map(|module_kind| {
-                    self.server_gens
-                        .get(&module_kind)
-                        .expect("module is present")
-                })
-                .map(|module_init| {
-                    (
-                        module_init.module_kind(),
-                        module_init.supported_api_versions().api,
-                    )
-                })
-                .collect(),
-        }
-    }
-
-    fn get_server_db_versions(&self) -> ServerDbVersionsSummary {
-        ServerDbVersionsSummary {
-            modules: self
-                .server_gens
-                .kinds()
-                .into_iter()
-                .map(|module_kind| {
-                    self.server_gens
-                        .get(&module_kind)
-                        .expect("module is present")
-                })
-                .map(|module_init| {
-                    (
-                        module_init.module_kind(),
-                        get_current_database_version(&module_init.get_database_migrations()),
-                    )
-                })
-                .collect(),
-        }
-    }
 }
 
 async fn run(
@@ -537,16 +449,6 @@ async fn run(
         );
     }
 
-    let data_dir = opts.data_dir.context("data-dir option is not present")?;
-
-    // TODO: Fedimintd should use the config gen API
-    // on each run we want to pass the currently passed password, so we need to
-    // overwrite
-    if let Some(password) = opts.password {
-        write_overwrite(data_dir.join(PLAINTEXT_PASSWORD), password)?;
-    };
-    let use_iroh = is_env_var_set(FM_FORCE_IROH_ENV);
-
     // TODO: meh, move, refactor
     let settings = ConfigGenSettings {
         p2p_bind: opts.bind_p2p,
@@ -557,7 +459,7 @@ async fn run(
         api_url: opts.api_url,
         modules: module_inits_params.clone(),
         registry: module_inits.clone(),
-        networking: if use_iroh {
+        networking: if is_env_var_set(FM_FORCE_IROH_ENV) {
             NetworkingStack::Iroh
         } else {
             NetworkingStack::default()
@@ -565,7 +467,7 @@ async fn run(
     };
 
     let db = Database::new(
-        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE)).await?,
+        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).await?,
         ModuleRegistry::default(),
     );
 
@@ -578,7 +480,7 @@ async fn run(
     };
 
     Box::pin(fedimint_server::run(
-        data_dir,
+        opts.data_dir,
         opts.force_api_secrets,
         settings,
         db,

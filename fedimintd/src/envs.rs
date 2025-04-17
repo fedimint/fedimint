@@ -5,9 +5,6 @@ pub const FM_DISABLE_META_MODULE_ENV: &str = "FM_DISABLE_META_MODULE";
 pub const FM_DATA_DIR_ENV: &str = "FM_DATA_DIR";
 
 // Env variable to TODO
-pub const FM_PASSWORD_ENV: &str = "FM_PASSWORD";
-
-// Env variable to TODO
 pub const FM_TOKIO_CONSOLE_BIND_ENV: &str = "FM_TOKIO_CONSOLE_BIND";
 
 // Env variable to TODO
