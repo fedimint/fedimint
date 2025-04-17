@@ -14,8 +14,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_BITCOIND_COOKIE_FILE_ENV, FM_ENABLE_MODULE_LNV2_ENV,
-    FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
@@ -84,10 +83,6 @@ struct ServerOpts {
     /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
     esplora_url: Option<SafeUrl>,
-
-    /// Optional path to the bitcoind cookie file
-    #[arg(long, env = FM_BITCOIND_COOKIE_FILE_ENV)]
-    bitcoind_cookie_file: Option<PathBuf>,
 
     /// Enable tokio console logging
     #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
@@ -494,7 +489,7 @@ async fn run(
     );
 
     let dyn_server_bitcoin_rpc = match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
-        (Some(url), None) => BitcoindClient::new(url, opts.bitcoind_cookie_file)?.into_dyn(),
+        (Some(url), None) => BitcoindClient::new(url)?.into_dyn(),
         (None, Some(url)) => EsploraClient::new(url)?.into_dyn(),
         _ => unreachable!("ArgGroup already enforced XOR relation"),
     };

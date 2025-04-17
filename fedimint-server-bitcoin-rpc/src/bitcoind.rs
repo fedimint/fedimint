@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, anyhow, ensure};
+use anyhow::{Context, anyhow};
 use bitcoin::{BlockHash, Network, Transaction};
 use bitcoincore_rpc::Error::JsonRpc;
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -21,23 +19,13 @@ pub struct BitcoindClient {
 }
 
 impl BitcoindClient {
-    pub fn new(url: &SafeUrl, cookie: Option<PathBuf>) -> anyhow::Result<Self> {
-        let auth = match cookie {
-            Some(path) => {
-                ensure!(
-                    url.username().is_empty(),
-                    "When a bitcoind cookie file is provided, the Bitcoin Rpc Url auth must be empty."
-                );
-
-                Auth::CookieFile(path)
-            }
-            None => Auth::UserPass(
-                url.username().to_owned(),
-                url.password()
-                    .context("Bitcoin RPC URL is missing password")?
-                    .to_owned(),
-            ),
-        };
+    pub fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+        let auth = Auth::UserPass(
+            url.username().to_owned(),
+            url.password()
+                .context("Bitcoin RPC URL is missing password")?
+                .to_owned(),
+        );
 
         let url = url
             .without_auth()
