@@ -44,7 +44,7 @@ fedimint-testing-core = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
-tempfile = "3.19.1"
+tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
 tracing = { workspace = true }

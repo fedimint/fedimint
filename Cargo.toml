@@ -106,59 +106,76 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 name = "fedimint"
 
 [workspace.dependencies]
+aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
 anyhow = "1.0.97"
 aquamarine = "0.5.0"
+argon2 = "0.5.3"
+arti-client = { package = "fedimint-arti-client", version = "0.20.0", default-features = false }
 assert_matches = "1.5.0"
 async-channel = "2.3.1"
+async-lock = "3.4"
+async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.88"
 axum = "0.8.3"
+axum-extra = "0.10.1"
+backon = { version = "1.5.0", default-features = false }
+backtrace = "0.3.74"
 base64 = "0.22.1"
 base64-url = "3.0.0"
 bcrypt = "0.16.0"
+bech32 = "0.11.0"
 bincode = "1.3.3"
-bitcoin = { version = "0.32.5", features = ["serde"] }
+bip39 = "2.1.0"
 bitcoincore-rpc = "0.19.0"
 bitcoin_hashes = "0.14.0"
+bitcoin-io = "0.1.2"
+bitcoin-units = "0.1.2"
+bitcoin = { version = "0.32.5", features = ["serde"] }
+bitvec = "1.0.1"
 bls12_381 = "0.8.0"
 bon = "3.5.2"
 bytes = "1.10.1"
 chrono = "0.4.40"
+clap_complete = "4.5.47"
 clap = { version = "4.5.36", features = ["derive", "env"] }
+console-subscriber = "0.4.1"
 criterion = "0.5.1"
+# We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
+# It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.
+curve25519-dalek = ">=4.1.3"
 devimint = { path = "./devimint", version = "=0.8.0-alpha" }
+dirs = "6.0.0"
 erased-serde = "0.4"
-esplora-client = { version = "0.10.0", default-features = false, features = [
-  "async-https-rustls",
-] }
-fedimintd = { path = "./fedimintd", version = "=0.8.0-alpha" }
+esplora-client = { version = "0.10.0", default-features = false, features = ["async-https-rustls"] }
 fedimint-aead = { path = "./crypto/aead", version = "=0.8.0-alpha" }
 fedimint-api-client = { path = "./fedimint-api-client", version = "=0.8.0-alpha" }
 fedimint-bip39 = { path = "./fedimint-bip39", version = "=0.8.0-alpha" }
 fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.8.0-alpha" }
 fedimint-build = { path = "./fedimint-build", version = "=0.8.0-alpha" }
-fedimint-client = { path = "./fedimint-client", version = "=0.8.0-alpha" }
 fedimint-client-module = { path = "./fedimint-client-module", version = "=0.8.0-alpha" }
+fedimint-client = { path = "./fedimint-client", version = "=0.8.0-alpha" }
 fedimint-core = { path = "./fedimint-core", version = "=0.8.0-alpha" }
 fedimint-derive = { path = "./fedimint-derive", version = "=0.8.0-alpha" }
 fedimint-derive-secret = { path = "./crypto/derive-secret", version = "=0.8.0-alpha" }
+fedimintd = { path = "./fedimintd", version = "=0.8.0-alpha" }
 fedimint-dummy-client = { path = "./modules/fedimint-dummy-client", version = "=0.8.0-alpha" }
 fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=0.8.0-alpha" }
 fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.8.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.8.0-alpha" }
 fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.8.0-alpha" }
 fedimint-gateway-common = { package = "fedimint-gateway-common", path = "./gateway/fedimint-gateway-common", version = "=0.8.0-alpha" }
-fedimint-gateway-server = { package = "fedimint-gateway-server", path = "./gateway/fedimint-gateway-server", version = "=0.8.0-alpha" }
 fedimint-gateway-server-db = { package = "fedimint-gateway-server-db", path = "./gateway/fedimint-gateway-server-db", version = "=0.8.0-alpha" }
+fedimint-gateway-server = { package = "fedimint-gateway-server", path = "./gateway/fedimint-gateway-server", version = "=0.8.0-alpha" }
 fedimint-gw-client = { path = "./modules/fedimint-gw-client", version = "=0.8.0-alpha" }
 fedimint-gwv2-client = { path = "./modules/fedimint-gwv2-client", version = "=0.8.0-alpha" }
 fedimint-lightning = { package = "fedimint-lightning", path = "./gateway/fedimint-lightning", version = "=0.8.0-alpha" }
-fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.8.0-alpha" }
-fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.8.0-alpha" }
-fedimint-lnv2-server = { path = "./modules/fedimint-lnv2-server", version = "=0.8.0-alpha" }
 fedimint-ln-client = { path = "./modules/fedimint-ln-client", version = "=0.8.0-alpha" }
 fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.8.0-alpha" }
 fedimint-ln-server = { path = "./modules/fedimint-ln-server", version = "=0.8.0-alpha" }
+fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.8.0-alpha" }
+fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.8.0-alpha" }
+fedimint-lnv2-server = { path = "./modules/fedimint-lnv2-server", version = "=0.8.0-alpha" }
 fedimint-logging = { path = "./fedimint-logging", version = "=0.8.0-alpha" }
 fedimint-meta-client = { path = "./modules/fedimint-meta-client", version = "=0.8.0-alpha" }
 fedimint-meta-common = { path = "./modules/fedimint-meta-common", version = "=0.8.0-alpha" }
@@ -169,37 +186,67 @@ fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.
 fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.8.0-alpha" }
 fedimint-portalloc = { path = "utils/portalloc", version = "=0.8.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.8.0-alpha" }
-fedimint-server = { path = "./fedimint-server", version = "=0.8.0-alpha" }
 fedimint-server-bitcoin-rpc = { path = "./fedimint-server-bitcoin-rpc", version = "=0.8.0-alpha" }
 fedimint-server-core = { path = "./fedimint-server-core", version = "=0.8.0-alpha" }
+fedimint-server = { path = "./fedimint-server", version = "=0.8.0-alpha" }
 fedimint-server-ui = { path = "./fedimint-server-ui", version = "=0.8.0-alpha" }
-fedimint-testing = { path = "./fedimint-testing", version = "=0.8.0-alpha" }
 fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.8.0-alpha" }
+fedimint-testing = { path = "./fedimint-testing", version = "=0.8.0-alpha" }
 fedimint-unknown-common = { path = "./modules/fedimint-unknown-common", version = "=0.8.0-alpha" }
 fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version = "=0.8.0-alpha" }
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.8.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.8.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.8.0-alpha" }
+ff = "0.13.1"
+fs2 = "0.4.3"
 fs-lock = "=0.1.8" # https://github.com/cargo-bins/cargo-binstall/issues/2090
 futures = "0.3.31"
 futures-util = "0.3.30"
+getrandom = "0.2.15"
+gloo-net = "0.6.0"
+gloo-timers = "0.3.0"
 group = "0.13.0"
 hex = "0.4.3"
 hex-conservative = "0.3.0"
 hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.8.0-alpha" }
+honggfuzz = { version = "=0.5.55", default-features = false } # needs to be pinned to the same version `cargo-fuzz` binary uses
 hyper = "1.6"
-iroh = { version = "0.34.0", default-features = false }
+imbl = "5.0.0"
+impl-tools = "0.10.3"
 iroh-base = { version = "0.34.1", default-features = false }
+iroh = { version = "0.34.0", default-features = false }
 itertools = "0.13.0"
 jaq-core = "2.1.1"
 jaq-json = { version = "1.1.1", features = ["serde_json"] }
+jsonrpsee = "0.24.9"
+jsonrpsee-core = "0.24.9"
+jsonrpsee-types = "0.24.8"
+jsonrpsee-wasm-client = "0.24.9"
+jsonrpsee-ws-client = { version = "0.24.9", default-features = false }
+js-sys = "0.3.69"
+ldk-node = "0.4.3"
 lightning = "0.0.125"
 lightning-invoice = { version = "0.32.0", features = ["std"] }
+lightning-types = "0.1.0"
 lnurl-rs = { version = "0.9.0", default-features = false }
+lockable = "0.1.1"
+lru = "0.13.0"
+macro_rules_attribute = "0.2.0"
+maud = "0.27.0"
 miniscript = "12.3.1"
+nix = "0.29.0"
+opentelemetry = "0.27.1"
+opentelemetry-jaeger = "0.22.0"
+parity-scale-codec = "3.7.4"
+pin-project = "1.1.10"
+proc-macro2 = "1.0"
+prometheus = "0.13.4"
+prost = "0.13.5"
+quote = "1.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
+rcgen = "=0.13.2"
 reqwest = { version = "0.12.9", features = [
   "json",
   "rustls-tls",
@@ -207,37 +254,56 @@ reqwest = { version = "0.12.9", features = [
   "http2",
   "stream",
 ], default-features = false }
+rexie = "0.6.2"
 ring = "0.17.14"
 rocksdb = { version = "0.22.0" }
+rustls-pki-types = { version = "1.11.0" }
 scopeguard = "1.2.0"
 secp256k1 = { version = "0.29.0", default-features = false }
 semver = "1.0.26"
-serde = { version = "1.0.219", features = ["derive"] }
-serdect = "0.2.0"
 serde-big-array = "0.5.1"
+serdect = "0.2.0"
 serde_json = "1.0.140"
-slotmap = "1.0.7"
+serde_millis = "0.1.1"
+serde = { version = "1.0.219", features = ["derive"] }
 sha3 = "0.10.8"
-strum = { version = "0.26", features = ["derive"] }
+slotmap = "1.0.7"
 strum_macros = "0.26"
+strum = { version = "0.26", features = ["derive"] }
+substring = "1.4.5"
 subtle = "2.6.1"
-test-log = { version = "0.2", features = ["trace"], default-features = false }
+syn = "2.0"
+tar = "0.4.44"
 tbs = { package = "fedimint-tbs", path = "./crypto/tbs", version = "=0.8.0-alpha" }
+tempfile = "3.19.1"
+test-log = { version = "0.2", features = ["trace"], default-features = false }
 thiserror = "2.0.12"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
-tokio = "1.44.2"
 tikv-jemallocator = "0.5"
+time = "0.3.41"
+tokio = "1.44.2"
 tokio-rustls = "0.24.1"
 tokio-stream = "0.1.17"
+tokio-test = "0.4.4"
+tokio-util = "0.7.14"
+tonic = "0.12.3"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
   "lightningrpc",
   "routerrpc",
 ] }
+tower-http = "0.6.2"
+tower = { version = "0.4.13", default-features = false }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.8.0-alpha" }
 tracing = "0.1.41"
+tracing-opentelemetry = "0.24.0"
 tracing-subscriber = "0.3.19"
 tracing-test = "0.2.5"
 url = "2.5.4"
+wasm-bindgen = "=0.2.100" # must match the nix provided wasm-bindgen-cli version
+wasm-bindgen-futures = "0.4.42"
+wasm-bindgen-test = "0.3.43"
+webpki-roots = "0.26.8"
+web-sys = "0.3.77"
 z32 = "1"
 
 [profile.dev]

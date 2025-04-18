@@ -37,7 +37,7 @@ fedimint-logging = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }
-serde_millis = "0.1.1"
+serde_millis = { workspace = true }
 thiserror = { workspace = true }
 tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
