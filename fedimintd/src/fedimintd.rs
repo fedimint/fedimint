@@ -72,9 +72,9 @@ struct ServerOpts {
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
     data_dir: PathBuf,
 
-    /// The bitcoin network that fedimint will be running on
+    /// The bitcoin network of the federation
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
-    network: Network,
+    bitcoin_network: Network,
 
     /// Bitcoind RPC URL, e.g. <http://user:pass@127.0.0.1:8332>
     #[arg(long, env = FM_BITCOIND_URL_ENV)]
@@ -304,7 +304,7 @@ impl Fedimintd {
 
     /// Attach default server modules to Fedimintd instance
     pub fn with_default_modules(self) -> anyhow::Result<Self> {
-        let network = self.opts.network;
+        let network = self.opts.bitcoin_network;
 
         let bitcoin_rpc_config = match (
             self.opts.bitcoind_url.as_ref(),
