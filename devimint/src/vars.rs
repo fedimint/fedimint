@@ -255,6 +255,7 @@ declare_vars! {
         FM_API_URL: String =  format!("ws://127.0.0.1:{}", overrides.api.port()); env: "FM_API_URL";
         FM_BIND_UI: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: "FM_BIND_UI";
         FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: "FM_BIND_METRICS_API";
+        FM_BIND_METRICS: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: "FM_BIND_METRICS";
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{federation_name}-{peer_id}"))).await?; env: "FM_DATA_DIR";
 
         FM_IROH_P2P_SECRET_KEY_OVERRIDE : String = overrides.p2p.secret_key(); env: FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV;

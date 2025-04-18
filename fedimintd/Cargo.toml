@@ -12,10 +12,6 @@ description = "fedimintd daemon for Fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[features]
-default = ["telemetry"]
-telemetry = ["fedimint-logging/telemetry"]
-
 [[bin]]
 name = "fedimintd"
 path = "src/bin/main.rs"
@@ -33,7 +29,7 @@ fedimint-ln-common = { workspace = true }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
-fedimint-logging = { workspace = true }
+fedimint-logging = { workspace = true, features = ["telemetry"] }
 fedimint-meta-server = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-mint-common = { workspace = true }

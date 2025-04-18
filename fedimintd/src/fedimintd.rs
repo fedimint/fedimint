@@ -46,9 +46,10 @@ use tracing::{debug, error, info};
 
 use crate::default_esplora_server;
 use crate::envs::{
-    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV,
-    FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
+    FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
+    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_P2P_URL_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -81,13 +82,6 @@ struct ServerOpts {
     /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
     esplora_url: Option<SafeUrl>,
-
-    /// Enable tokio console logging
-    #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
-    tokio_console_bind: Option<SocketAddr>,
-    /// Enable telemetry logging
-    #[arg(long, default_value = "false")]
-    with_telemetry: bool,
 
     /// Address we bind to for p2p consensus communication
     ///
@@ -127,8 +121,17 @@ struct ServerOpts {
     #[arg(long, env = FM_API_URL_ENV)]
     api_url: Option<SafeUrl>,
 
-    #[arg(long, env = FM_BIND_METRICS_API_ENV)]
-    bind_metrics_api: Option<SocketAddr>,
+    /// Enable tokio console logging
+    #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
+    bind_tokio_console: Option<SocketAddr>,
+
+    /// Enable jaeger for tokio console logging
+    #[arg(long, default_value = "false")]
+    with_jaeger: bool,
+
+    /// Enable prometheus metrics
+    #[arg(long, env = FM_BIND_METRCIS_ENV)]
+    bind_metrics: Option<SocketAddr>,
 
     /// Comma separated list of API secrets.
     ///
@@ -223,12 +226,9 @@ impl Fedimintd {
 
         let mut tracing_builder = TracingSetup::default();
 
-        #[cfg(feature = "telemetry")]
-        {
-            tracing_builder
-                .tokio_console_bind(opts.tokio_console_bind)
-                .with_jaeger(opts.with_telemetry);
-        }
+        tracing_builder
+            .tokio_console_bind(opts.bind_tokio_console)
+            .with_jaeger(opts.with_jaeger);
 
         tracing_builder.init().unwrap();
 
@@ -433,10 +433,10 @@ async fn run(
     module_inits_params: ServerModuleConfigGenParamsRegistry,
     code_version_str: String,
 ) -> anyhow::Result<()> {
-    if let Some(socket_addr) = opts.bind_metrics_api.as_ref() {
+    if let Some(bind_metrics) = opts.bind_metrics.as_ref() {
         task_group.spawn_cancellable(
             "metrics-server",
-            fedimint_metrics::run_api_server(*socket_addr, task_group.clone()),
+            fedimint_metrics::run_api_server(*bind_metrics, task_group.clone()),
         );
     }
 
