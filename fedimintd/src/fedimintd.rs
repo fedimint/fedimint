@@ -7,15 +7,14 @@ use std::time::Duration;
 
 use anyhow::bail;
 use bitcoin::Network;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use fedimint_core::config::{
     EmptyGenParams, ModuleInitParams, ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_BITCOIN_RPC_KIND_ENV, FM_BITCOIN_RPC_URL_ENV, FM_BITCOIND_COOKIE_FILE_ENV,
-    FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
@@ -50,8 +49,8 @@ use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_IROH_ENV, FM_BIND_API_WS_ENV,
     FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
-    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
-    FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_BITCOIND_URL_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ESPLORA_URL_ENV,
+    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -60,23 +59,30 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Parser)]
 #[command(version)]
+#[command(
+    group(
+        ArgGroup::new("bitcoin_rpc")
+            .required(true)
+            .multiple(false)
+            .args(["bitcoind_url", "esplora_url"])
+    )
+)]
 struct ServerOpts {
     /// Path to folder containing federation config files
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
     data_dir: PathBuf,
 
-    /// The bitcoin network that fedimint will be running on
+    /// The bitcoin network of the federation
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
-    network: Network,
+    bitcoin_network: Network,
 
-    #[arg(long, env =  FM_BITCOIN_RPC_KIND_ENV)]
-    bitcoin_rpc_kind: String,
+    /// Bitcoind RPC URL, e.g. <http://user:pass@127.0.0.1:8332>
+    #[arg(long, env = FM_BITCOIND_URL_ENV)]
+    bitcoind_url: Option<SafeUrl>,
 
-    #[arg(long, env =  FM_BITCOIN_RPC_URL_ENV)]
-    bitcoin_rpc_url: SafeUrl,
-
-    #[arg(long, env =  FM_BITCOIND_COOKIE_FILE_ENV)]
-    bitcoind_cookie_file: Option<PathBuf>,
+    /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
+    #[arg(long, env = FM_ESPLORA_URL_ENV)]
+    esplora_url: Option<SafeUrl>,
 
     /// Enable tokio console logging
     #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
@@ -238,7 +244,8 @@ impl Fedimintd {
                 FM_BIND_API_IROH_ENV,
             );
         }
-        let opts: ServerOpts = ServerOpts::parse();
+
+        let opts = ServerOpts::parse();
 
         let mut tracing_builder = TracingSetup::default();
 
@@ -297,11 +304,21 @@ impl Fedimintd {
 
     /// Attach default server modules to Fedimintd instance
     pub fn with_default_modules(self) -> anyhow::Result<Self> {
-        let network = self.opts.network;
+        let network = self.opts.bitcoin_network;
 
-        let bitcoin_rpc_config = BitcoinRpcConfig {
-            kind: self.opts.bitcoin_rpc_kind.clone(),
-            url: self.opts.bitcoin_rpc_url.clone(),
+        let bitcoin_rpc_config = match (
+            self.opts.bitcoind_url.as_ref(),
+            self.opts.esplora_url.as_ref(),
+        ) {
+            (Some(url), None) => BitcoinRpcConfig {
+                kind: "bitcoind".to_string(),
+                url: url.clone(),
+            },
+            (None, Some(url)) => BitcoinRpcConfig {
+                kind: "esplora".to_string(),
+                url: url.clone(),
+            },
+            _ => unreachable!("ArgGroup already enforced XOR relation"),
         };
 
         let s = self
@@ -471,12 +488,10 @@ async fn run(
         ModuleRegistry::default(),
     );
 
-    let dyn_server_bitcoin_rpc = match opts.bitcoin_rpc_kind.as_ref() {
-        "bitcoind" => {
-            BitcoindClient::new(&opts.bitcoin_rpc_url, opts.bitcoind_cookie_file)?.into_dyn()
-        }
-        "esplora" => EsploraClient::new(&opts.bitcoin_rpc_url)?.into_dyn(),
-        kind => bail!("Unknown bitcoin rpc kind {kind}"),
+    let dyn_server_bitcoin_rpc = match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
+        (Some(url), None) => BitcoindClient::new(url)?.into_dyn(),
+        (None, Some(url)) => EsploraClient::new(url)?.into_dyn(),
+        _ => unreachable!("ArgGroup already enforced XOR relation"),
     };
 
     Box::pin(fedimint_server::run(

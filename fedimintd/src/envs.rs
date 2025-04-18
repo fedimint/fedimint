@@ -39,3 +39,9 @@ pub const FM_PORT_ESPLORA_ENV: &str = "FM_PORT_ESPLORA";
 
 // Can be used to absolutely override the values stored in the db
 pub const FM_FORCE_API_SECRETS_ENV: &str = "FM_FORCE_API_SECRETS";
+
+// Env variable for the bitcoind URL
+pub const FM_BITCOIND_URL_ENV: &str = "FM_BITCOIND_URL";
+
+// Env variable for the Esplora URL
+pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";
