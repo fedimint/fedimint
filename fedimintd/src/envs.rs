@@ -5,7 +5,7 @@ pub const FM_DISABLE_META_MODULE_ENV: &str = "FM_DISABLE_META_MODULE";
 pub const FM_DATA_DIR_ENV: &str = "FM_DATA_DIR";
 
 // Env variable to TODO
-pub const FM_TOKIO_CONSOLE_BIND_ENV: &str = "FM_TOKIO_CONSOLE_BIND";
+pub const FM_BIND_TOKIO_CONSOLE_ENV: &str = "FM_BIND_TOKIO_CONSOLE";
 
 // Env variable to TODO
 pub const FM_BIND_P2P_ENV: &str = "FM_BIND_P2P";
@@ -32,7 +32,7 @@ pub const FM_BIND_UI_ENV: &str = "FM_BIND_UI";
 pub const FM_BITCOIN_NETWORK_ENV: &str = "FM_BITCOIN_NETWORK";
 
 // Env variable to TODO
-pub const FM_BIND_METRICS_API_ENV: &str = "FM_BIND_METRICS_API";
+pub const FM_BIND_METRCIS_ENV: &str = "FM_BIND_METRICS";
 
 // Env variable to TODO
 pub const FM_PORT_ESPLORA_ENV: &str = "FM_PORT_ESPLORA";
