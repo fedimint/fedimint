@@ -134,7 +134,7 @@ bitcoin-units = "0.1.2"
 bitcoin = { version = "0.32.5", features = ["serde"] }
 bitvec = "1.0.1"
 bls12_381 = "0.8.0"
-bon = "3.5.2"
+bon = "3.6.1"
 bytes = "1.10.1"
 chrono = "0.4.40"
 clap_complete = "4.5.47"
