@@ -58,8 +58,7 @@ const TRANSACTION_BUFFER: usize = 1000;
 pub async fn run(
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
-    ws_api_bind_addr: SocketAddr,
-    iroh_api_bind_addr: SocketAddr,
+    api_bind: SocketAddr,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -198,23 +197,27 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
 
-    let api_handler = start_consensus_api(
-        &cfg.local,
-        consensus_api.clone(),
-        force_api_secrets.clone(),
-        ws_api_bind_addr,
-    )
-    .await;
-
-    if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
+    let api_handler = if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
         Box::pin(start_iroh_api(
             iroh_api_sk,
-            iroh_api_bind_addr,
+            api_bind,
             consensus_api.clone(),
             task_group,
         ))
         .await;
-    }
+
+        None
+    } else {
+        let handler = start_consensus_api(
+            &cfg.local,
+            consensus_api.clone(),
+            force_api_secrets.clone(),
+            api_bind,
+        )
+        .await;
+
+        Some(handler)
+    };
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
 
@@ -267,11 +270,13 @@ pub async fn run(
     .run()
     .await?;
 
-    api_handler
-        .stop()
-        .expect("Consensus api should still be running");
+    if let Some(api_handler) = api_handler {
+        api_handler
+            .stop()
+            .expect("Consensus api should still be running");
 
-    api_handler.stopped().await;
+        api_handler.stopped().await;
+    }
 
     Ok(())
 }

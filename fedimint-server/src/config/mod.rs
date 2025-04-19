@@ -209,10 +209,8 @@ pub struct ServerConfigLocal {
 pub struct ConfigGenSettings {
     /// Bind address for our P2P connection (both iroh and tcp/tls)
     pub p2p_bind: SocketAddr,
-    /// Bind address for our websocket API connection
-    pub bind_api_ws: SocketAddr,
-    /// Bind address for our iroh API connection
-    pub bind_api_iroh: SocketAddr,
+    /// Bind address for our API
+    pub api_bind: SocketAddr,
     /// Bind address for our UI connection (always http)
     pub ui_bind: SocketAddr,
     /// URL for our P2P connection

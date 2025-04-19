@@ -171,8 +171,7 @@ pub async fn run(
     Box::pin(consensus::run(
         connections,
         p2p_status_receivers,
-        settings.bind_api_ws,
-        settings.bind_api_iroh,
+        settings.api_bind,
         cfg,
         db,
         module_init_registry.clone(),
@@ -256,7 +255,7 @@ pub async fn run_config_gen(
     let api_handler = net::api::spawn(
         "setup",
         // config gen always uses ws api
-        settings.bind_api_ws,
+        settings.api_bind,
         rpc_module,
         10,
         api_secrets.clone(),

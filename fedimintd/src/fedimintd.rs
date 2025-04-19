@@ -5,7 +5,6 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::bail;
 use bitcoin::Network;
 use clap::{ArgGroup, Parser};
 use fedimint_core::config::{
@@ -47,10 +46,9 @@ use tracing::{debug, error, info};
 
 use crate::default_esplora_server;
 use crate::envs::{
-    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_IROH_ENV, FM_BIND_API_WS_ENV,
-    FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
-    FM_BITCOIND_URL_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ESPLORA_URL_ENV,
-    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV,
+    FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV,
+    FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -98,41 +96,12 @@ struct ServerOpts {
     #[arg(long, env = FM_BIND_P2P_ENV, default_value = "0.0.0.0:8173")]
     bind_p2p: SocketAddr,
 
-    /// Our external address for communicating with our peers
+    /// Address we bind to for the API
     ///
-    /// `fedimint://<fqdn>:8173` for TCP/TLS p2p connectivity (legacy/standard).
-    ///
-    /// Ignored when Iroh stack is used. (newer/experimental)
-    #[arg(long, env = FM_P2P_URL_ENV)]
-    p2p_url: Option<SafeUrl>,
-
-    /// Address we bind to for the WebSocket API
-    ///
-    /// Typically `127.0.0.1:8174` as the API requests
-    /// are terminated by Nginx/Traefik/etc. and forwarded to the local port.
-    ///
-    /// NOTE: websocket and iroh APIs can use the same port, as
-    /// one is using TCP and the other UDP.
-    #[arg(long, env = FM_BIND_API_WS_ENV, default_value = "127.0.0.1:8174")]
-    bind_api_ws: SocketAddr,
-
-    /// Address we bind to for Iroh API endpoint
-    ///
-    /// Typically `0.0.0.0:8174`, and the port should be opened in
-    /// the firewall.
-    ///
-    /// NOTE: websocket and iroh APIs can share the same port, as
-    /// one is using TCP and the other UDP.
-    #[arg(long, env = FM_BIND_API_IROH_ENV, default_value = "0.0.0.0:8174" )]
-    bind_api_iroh: SocketAddr,
-
-    /// Our API address for clients to connect to us
-    ///
-    /// Typically `wss://<fqdn>/ws/` for TCP/TLS connectivity (legacy/standard)
-    ///
-    /// Ignored when Iroh stack is used. (newer/experimental)
-    #[arg(long, env = FM_API_URL_ENV)]
-    api_url: Option<SafeUrl>,
+    /// Should be `0.0.0.0:8174` most of the time, as api connectivity is public
+    /// and direct, and the port should be open it in the firewall.
+    #[arg(long, env = FM_BIND_API_ENV, default_value = "0.0.0.0:8174")]
+    bind_api: SocketAddr,
 
     /// Address we bind to for exposing the Web UI
     ///
@@ -141,6 +110,22 @@ struct ServerOpts {
     /// bind port.
     #[arg(long, env = FM_BIND_UI_ENV, default_value = "127.0.0.1:8175")]
     bind_ui: SocketAddr,
+
+    /// Our external address for communicating with our peers
+    ///
+    /// `fedimint://<fqdn>:8173` for TCP/TLS p2p connectivity (legacy/standard).
+    ///
+    /// Ignored when Iroh stack is used. (newer/experimental)
+    #[arg(long, env = FM_P2P_URL_ENV)]
+    p2p_url: Option<SafeUrl>,
+
+    /// Our API address for clients to connect to us
+    ///
+    /// Typically `wss://<fqdn>/ws/` for TCP/TLS connectivity (legacy/standard)
+    ///
+    /// Ignored when Iroh stack is used. (newer/experimental)
+    #[arg(long, env = FM_API_URL_ENV)]
+    api_url: Option<SafeUrl>,
 
     #[arg(long, env = FM_BIND_METRICS_API_ENV)]
     bind_metrics_api: Option<SocketAddr>,
@@ -233,17 +218,6 @@ impl Fedimintd {
         APP_START_TS
             .with_label_values(&[fedimint_version, code_version_hash])
             .set(fedimint_core::time::duration_since_epoch().as_secs() as i64);
-
-        // Note: someone might want to set both old and new version for backward compat.
-        // We do that in devimint.
-        if env::var(FM_BIND_API_ENV).is_ok() && env::var(FM_BIND_API_WS_ENV).is_err() {
-            bail!(
-                "{} environment variable was removed and replaced with two separate: {} and {}. Please unset it.",
-                FM_BIND_API_ENV,
-                FM_BIND_API_WS_ENV,
-                FM_BIND_API_IROH_ENV,
-            );
-        }
 
         let opts = ServerOpts::parse();
 
@@ -469,8 +443,7 @@ async fn run(
     // TODO: meh, move, refactor
     let settings = ConfigGenSettings {
         p2p_bind: opts.bind_p2p,
-        bind_api_ws: opts.bind_api_ws,
-        bind_api_iroh: opts.bind_api_iroh,
+        api_bind: opts.bind_api,
         ui_bind: opts.bind_ui,
         p2p_url: opts.p2p_url,
         api_url: opts.api_url,
