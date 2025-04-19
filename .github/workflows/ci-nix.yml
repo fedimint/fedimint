@@ -41,7 +41,7 @@ jobs:
 
   lint:
     name: "Lint"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: false
             timeout: 30
           - host: macos
@@ -126,7 +126,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: true
             timeout: 90
             run-tests: true
@@ -226,7 +226,7 @@ jobs:
   audit:
     if: github.repository == 'fedimint/fedimint'
     name: "Audit"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
     # sometimes we can't fix these immediately, yet
     # we don't want to stop the world because of it
@@ -254,57 +254,6 @@ jobs:
         run: |
           nix build -L .#ci.cargoDeny
 
-  # Code Coverage will build using a completely different profile (neither debug/release)
-  # Which means we can not reuse much from `build` job. Might as well run it as another
-  # build in parallel
-  ccov:
-    if: github.repository == 'fedimint/fedimint'
-    name: "Code coverage"
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare
-        uses: ./.github/actions/prepare
-      - uses: cachix/install-nix-action@v30
-        with:
-          nix_path: nixpkgs=channel:nixos-23.11
-          extra_nix_config: |
-            connect-timeout = 15
-            stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v15
-        with:
-          name: fedimint
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        continue-on-error: true
-
-      - name: Validate codecov.yaml configuration
-        run: nix run nixpkgs#curl -- --fail-with-body -X POST --data-binary @.codecov.yml https://codecov.io/validate
-
-      - name: Build and run tests with Code Coverage
-        run: |
-          env \
-            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
-              run \
-                --metric pq4AyxybSD--isFtVmPGpg \
-                --metadata "commit=${LAST_COMMIT_SHA}" \
-                -- \
-            nix build -L .#ci.workspaceTestCov
-
-      - name: Ensure lcov.info exists
-        run: test -f result/lcov.info
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: result/lcov.info
-
-      - name: Build and run tests with Code Coverage (5 times more)
-        if: github.event_name == 'merge_group'
-        run: nix build -L .#ci.workspaceTest5TimesCov
-
   cross:
     name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.toolchain }}"
     needs: [lint, shell]
@@ -321,7 +270,7 @@ jobs:
           - wasm32-unknown
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: true
             # TODO: debugging network issues, should reduce to 20 minutes
             # https://github.com/fedimint/fedimint/issues/4488
@@ -375,7 +324,7 @@ jobs:
   containers:
     if: github.repository == 'fedimint/fedimint'
     name: "Containers"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 60
     steps:
       - name: Checkout Code
@@ -491,7 +440,7 @@ jobs:
             bins: devimint,devimint-faucet
             deb: devimint
 
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 60
 
     env:
@@ -636,7 +585,7 @@ jobs:
     name: Status
     needs: [lint, shell, build, cross, ccov, containers, pkgs]
     if: ${{ always() }}
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     steps:
       - name: Check status of all jobs
         if: >-
@@ -650,7 +599,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
     needs: [ lint, build, shell, cross, ccov, containers, pkgs ]
