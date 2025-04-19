@@ -1,5 +1,3 @@
-mod config;
-
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
@@ -7,13 +5,11 @@ use std::time::Duration;
 use std::{env, fs, iter};
 
 use anyhow::{Context, Result, anyhow, bail};
-use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
-use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
+use fedimint_core::config::{ClientConfig, load_from_file};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::runtime::block_in_place;
@@ -988,15 +984,7 @@ pub async fn run_cli_dkg(
         .set_config_gen_connections(auth_for(leader_id), leader_endpoint, &leader_name, None)
         .await?;
 
-    let server_gen_params = ServerModuleConfigGenParamsRegistry::default();
-
     debug!(target: LOG_DEVIMINT, "calling set_config_gen_params for leader");
-    cli_set_config_gen_params(
-        leader_endpoint,
-        auth_for(leader_id),
-        server_gen_params.clone(),
-    )
-    .await?;
 
     let followers_names = followers
         .keys()
@@ -1021,8 +1009,6 @@ pub async fn run_cli_dkg(
         crate::util::FedimintCli
             .set_config_gen_connections(auth_for(peer_id), endpoint, name, Some(leader_endpoint))
             .await?;
-
-        cli_set_config_gen_params(endpoint, auth_for(peer_id), server_gen_params.clone()).await?;
     }
 
     debug!(target: LOG_DEVIMINT, "calling get_config_gen_peers for leader");
@@ -1169,27 +1155,6 @@ pub async fn run_cli_dkg_v2(
     }
 
     debug!(target: LOG_DEVIMINT, "Consensus is running...");
-
-    Ok(())
-}
-
-async fn cli_set_config_gen_params(
-    endpoint: &str,
-    auth: &ApiAuth,
-    mut server_gen_params: ServerModuleConfigGenParamsRegistry,
-) -> Result<()> {
-    self::config::attach_default_module_init_params(
-        &BitcoinRpcConfig::get_defaults_from_env_vars()?,
-        &mut server_gen_params,
-        Network::Regtest,
-        10,
-    );
-
-    let meta = iter::once(("federation_name".to_string(), "testfed".to_string())).collect();
-
-    crate::util::FedimintCli
-        .set_config_gen_params(auth, endpoint, meta, server_gen_params)
-        .await?;
 
     Ok(())
 }
