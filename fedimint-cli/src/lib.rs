@@ -25,7 +25,7 @@ use std::time::Duration;
 use std::{fs, result};
 
 use anyhow::{Context, format_err};
-use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use client::ModuleSelector;
 #[cfg(feature = "tor")]
 use envs::FM_USE_TOR_ENV;
@@ -358,7 +358,6 @@ enum AdminCmd {
     /// Download guardian config to back it up
     GuardianConfigBackup,
 
-    Setup(SetupAdminArgs),
     /// Sign and announce a new API endpoint. The previous one will be
     /// invalidated
     SignApiAnnouncement {
@@ -376,28 +375,6 @@ enum AdminCmd {
     },
     /// Show statistics about client backups stored by the federation
     BackupStatistics,
-}
-
-#[derive(Debug, Clone, Args)]
-struct SetupAdminArgs {
-    endpoint: SafeUrl,
-
-    #[clap(subcommand)]
-    subcommand: SetupAdminCmd,
-}
-
-#[derive(Debug, Clone, Subcommand)]
-enum SetupAdminCmd {
-    Status,
-    SetLocalParams {
-        name: String,
-        #[clap(long)]
-        federation_name: Option<String>,
-    },
-    AddPeer {
-        info: String,
-    },
-    StartDkg,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -863,11 +840,6 @@ impl FedimintCli {
                         .map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::Setup(dkg_args)) => self
-                .handle_admin_setup_command(cli, dkg_args)
-                .await
-                .map(CliOutput::Raw)
-                .map_err_cli_msg("Config Gen Error"),
             Command::Admin(AdminCmd::SignApiAnnouncement {
                 api_url,
                 override_url,
@@ -1243,44 +1215,6 @@ impl FedimintCli {
                 );
                 // HACK: prints true to stdout which is fine for shells
                 Ok(CliOutput::Raw(serde_json::Value::Bool(true)))
-            }
-        }
-    }
-
-    async fn handle_admin_setup_command(
-        &self,
-        cli: Opts,
-        args: SetupAdminArgs,
-    ) -> anyhow::Result<Value> {
-        let client = DynGlobalApi::from_setup_endpoint(args.endpoint.clone(), &None).await?;
-
-        match &args.subcommand {
-            SetupAdminCmd::Status => {
-                let status = client.setup_status(cli.auth()?).await?;
-
-                Ok(serde_json::to_value(status).expect("JSON serialization failed"))
-            }
-            SetupAdminCmd::SetLocalParams {
-                name,
-                federation_name,
-            } => {
-                let info = client
-                    .set_local_params(name.clone(), federation_name.clone(), cli.auth()?)
-                    .await?;
-
-                Ok(serde_json::to_value(info).expect("JSON serialization failed"))
-            }
-            SetupAdminCmd::AddPeer { info } => {
-                let name = client
-                    .add_peer_connection_info(info.clone(), cli.auth()?)
-                    .await?;
-
-                Ok(serde_json::to_value(name).expect("JSON serialization failed"))
-            }
-            SetupAdminCmd::StartDkg => {
-                client.start_dkg(cli.auth()?).await?;
-
-                Ok(Value::Null)
             }
         }
     }

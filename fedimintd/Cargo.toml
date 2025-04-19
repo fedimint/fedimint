@@ -22,6 +22,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+axum = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
 fedimint-core = { workspace = true }
@@ -43,6 +44,7 @@ fedimint-unknown-common = { workspace = true }
 fedimint-unknown-server = { workspace = true }
 fedimint-wallet-server = { workspace = true }
 futures = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

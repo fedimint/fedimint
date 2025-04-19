@@ -46,7 +46,7 @@ pub struct PeerServerParamsLegacy {
 
 /// The state of the server returned via APIs
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SetupStatus {
+pub enum LegacySetupStatus {
     /// Waiting for guardian to set the local parameters
     AwaitingLocalParams,
     /// Sharing the connection codes with our peers

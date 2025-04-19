@@ -12,7 +12,7 @@ use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::net::Connector;
 use fedimint_client_module::module::ClientModule;
-use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
+use fedimint_core::admin_client::{LegacySetupStatus, ServerStatusLegacy};
 use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -31,6 +31,9 @@ use fedimint_testing_core::config::local_config_gen_params;
 use fedimint_testing_core::node_type::LightningNodeType;
 use fedimint_wallet_client::WalletClientModule;
 use fedimint_wallet_client::config::WalletClientConfig;
+use fedimintd::devimint::{
+    ADD_SETUP_CODE_ROUTE, INIT_SETUP_ROUTE, InitSetupRequest, START_DKG_ROUTE,
+};
 use fs_lock::FileLock;
 use futures::future::{join_all, try_join_all};
 use rand::Rng;
@@ -43,7 +46,7 @@ use super::util::{Command, ProcessHandle, ProcessManager, cmd};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
-use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
 use crate::{poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
@@ -312,6 +315,7 @@ impl Federation {
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
+        let mut endpoints_ui: BTreeMap<PeerId, _> = BTreeMap::new();
         for peer_id in num_peers.peer_ids() {
             let peer_env_vars = vars::Fedimintd::init(
                 &process_mgr.globals,
@@ -340,6 +344,7 @@ impl Federation {
             )
             .await?;
             endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
+            endpoints_ui.insert(peer_id, peer_env_vars.FM_BIND_UI.clone());
             admin_clients.insert(peer_id, admin_client);
             peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);
         }
@@ -352,7 +357,9 @@ impl Federation {
 
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
-            if fedimint_cli_version >= *VERSION_0_7_0_ALPHA {
+            if fedimint_cli_version >= *VERSION_0_8_0_ALPHA {
+                run_devimint_setup_procedure(endpoints_ui).await?;
+            } else if fedimint_cli_version >= *VERSION_0_7_0_ALPHA {
                 run_cli_dkg_v2(params, endpoints).await?;
             } else {
                 run_cli_dkg(params, endpoints).await?;
@@ -1121,6 +1128,65 @@ pub async fn run_cli_dkg(
     Ok(())
 }
 
+pub async fn run_devimint_setup_procedure(endpoints: BTreeMap<PeerId, String>) -> Result<()> {
+    let client = reqwest::Client::new();
+
+    debug!(target: LOG_DEVIMINT, "Init setup...");
+
+    let mut setup_codes = BTreeMap::new();
+
+    for (peer, endpoint) in &endpoints {
+        let request = InitSetupRequest {
+            auth: ApiAuth("pass".to_string()),
+            name: format!("Guardian {peer}"),
+            federation_name: if peer.to_usize() == 0 {
+                Some("Devimint Federation".to_string())
+            } else {
+                None
+            },
+        };
+
+        let setup_code = poll_simple("init-setup", || async {
+            client
+                .post(format!("http://{endpoint}{INIT_SETUP_ROUTE}"))
+                .json(&request)
+                .send()
+                .await?
+                .text()
+                .await
+                .map_err(Into::into)
+        })
+        .await?;
+
+        setup_codes.insert(peer, setup_code);
+    }
+
+    debug!(target: LOG_DEVIMINT, "Exchanging peer setup codes...");
+
+    for (peer, setup_code) in setup_codes {
+        for (p, endpoint) in &endpoints {
+            if p != peer {
+                client
+                    .post(format!("http://{endpoint}{ADD_SETUP_CODE_ROUTE}"))
+                    .json(&setup_code)
+                    .send()
+                    .await?;
+            }
+        }
+    }
+
+    debug!(target: LOG_DEVIMINT, "Starting DKG...");
+
+    for endpoint in endpoints.values() {
+        client
+            .post(format!("http://{endpoint}{START_DKG_ROUTE}"))
+            .send()
+            .await?;
+    }
+
+    Ok(())
+}
+
 pub async fn run_cli_dkg_v2(
     params: HashMap<PeerId, ConfigGenParams>,
     endpoints: BTreeMap<PeerId, String>,
@@ -1137,7 +1203,7 @@ pub async fn run_cli_dkg_v2(
         .await
         .unwrap();
 
-        assert_eq!(status, SetupStatus::AwaitingLocalParams);
+        assert_eq!(status, LegacySetupStatus::AwaitingLocalParams);
     }
 
     debug!(target: LOG_DEVIMINT, "Setting local parameters...");

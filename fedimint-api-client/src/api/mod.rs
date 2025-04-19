@@ -15,7 +15,7 @@ use base64::Engine as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError, PeerError};
-use fedimint_core::admin_client::{PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus};
+use fedimint_core::admin_client::{PeerServerParamsLegacy, ServerStatusLegacy};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
@@ -488,21 +488,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Must be called first before any other calls to the API
     async fn set_password(&self, auth: ApiAuth) -> FederationResult<()>;
 
-    async fn setup_status(&self, auth: ApiAuth) -> FederationResult<SetupStatus>;
-
-    async fn set_local_params(
-        &self,
-        name: String,
-        federation_name: Option<String>,
-        auth: ApiAuth,
-    ) -> FederationResult<String>;
-
-    async fn add_peer_connection_info(
-        &self,
-        info: String,
-        auth: ApiAuth,
-    ) -> FederationResult<String>;
-
     /// During config gen, used for an API-to-API call that adds a peer's server
     /// connection info to the leader.
     ///
@@ -536,13 +521,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         auth: ApiAuth,
     ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>>;
-
-    /// Reads the configs from the disk, starts the consensus server, and shuts
-    /// down the config gen API to start the Fedimint API
-    ///
-    /// Clients may receive an error due to forced shutdown, should call the
-    /// `server_status` to see if consensus has started.
-    async fn start_consensus(&self, auth: ApiAuth) -> FederationResult<()>;
 
     /// Returns the status of the server
     async fn status(&self) -> FederationResult<StatusResponse>;

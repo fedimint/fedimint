@@ -3772,6 +3772,7 @@ dependencies = [
  "anyhow",
  "async-channel 2.3.1",
  "async-trait",
+ "axum 0.8.3",
  "base64 0.22.1",
  "bincode",
  "bitcoin",
@@ -4220,6 +4221,7 @@ name = "fedimintd"
 version = "0.8.0-alpha"
 dependencies = [
  "anyhow",
+ "axum 0.8.3",
  "bitcoin",
  "clap",
  "fedimint-build",
@@ -4242,6 +4244,7 @@ dependencies = [
  "fedimint-unknown-server",
  "fedimint-wallet-server",
  "futures",
+ "serde",
  "serde_json",
  "tikv-jemallocator",
  "tokio",

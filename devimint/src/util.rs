@@ -11,7 +11,7 @@ use std::{env, unreachable};
 use anyhow::{Context, Result, anyhow, bail, format_err};
 use fedimint_api_client::api::StatusResponse;
 use fedimint_core::PeerId;
-use fedimint_core::admin_client::{PeerServerParamsLegacy, SetupStatus};
+use fedimint_core::admin_client::{LegacySetupStatus, PeerServerParamsLegacy};
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::ApiAuth;
@@ -744,7 +744,7 @@ impl FedimintCli {
         .await
     }
 
-    pub async fn setup_status(self, auth: &ApiAuth, endpoint: &str) -> Result<SetupStatus> {
+    pub async fn setup_status(self, auth: &ApiAuth, endpoint: &str) -> Result<LegacySetupStatus> {
         let json = cmd!(
             self,
             "--password",

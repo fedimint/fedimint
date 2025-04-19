@@ -45,7 +45,6 @@ use fedimint_server_core::ServerModuleInitRegistry;
 use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 use fedimint_server_core::dashboard_ui::DynDashboardApi;
 use fedimint_server_core::setup_ui::{DynSetupApi, ISetupApi};
-use jsonrpsee::RpcModule;
 use net::api::ApiSecrets;
 use net::p2p::P2PStatusReceivers;
 use net::p2p_connector::IrohConnector;
@@ -99,8 +98,8 @@ pub async fn run(
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
     bitcoin_rpc: DynServerBitcoinRpc,
-    dashboard_ui_handler: Option<DashboardUiHandler>,
-    setup_ui_handler: Option<SetupUiHandler>,
+    setup_ui_handler: SetupUiHandler,
+    dashboard_ui_handler: DashboardUiHandler,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -181,7 +180,7 @@ pub async fn run(
         code_version_str,
         bitcoin_rpc,
         settings.ui_bind,
-        dashboard_ui_handler,
+        Some(dashboard_ui_handler),
     ))
     .await?;
 
@@ -234,7 +233,7 @@ pub async fn run_config_gen(
     task_group: &TaskGroup,
     code_version_str: String,
     api_secrets: ApiSecrets,
-    setup_ui_handler: Option<SetupUiHandler>,
+    setup_ui_handler: SetupUiHandler,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -244,46 +243,24 @@ pub async fn run_config_gen(
 
     initialize_gauge_metrics(task_group, &db).await;
 
+    let setup_task_group = TaskGroup::new();
+
     let (cgp_sender, mut cgp_receiver) = tokio::sync::mpsc::channel(1);
 
-    let config_gen = SetupApi::new(settings.clone(), db.clone(), cgp_sender);
+    let setup_api = SetupApi::new(settings.clone(), cgp_sender).into_dyn();
 
-    let mut rpc_module = RpcModule::new(config_gen.clone());
+    setup_task_group.spawn("web-ui", move |handle| {
+        setup_ui_handler(setup_api.clone(), settings.ui_bind, handle)
+    });
 
-    net::api::attach_endpoints(&mut rpc_module, config::setup::server_endpoints(), None);
-
-    let api_handler = net::api::spawn(
-        "setup",
-        // config gen always uses ws api
-        settings.api_bind,
-        rpc_module,
-        10,
-        api_secrets.clone(),
-    )
-    .await;
-
-    let ui_task_group = TaskGroup::new();
-
-    if let Some(setup_ui_handler) = setup_ui_handler {
-        ui_task_group.spawn("web-ui", move |handle| {
-            setup_ui_handler(config_gen.clone().into_dyn(), settings.ui_bind, handle)
-        });
-
-        info!(target: LOG_CONSENSUS, "Setup UI running at http://{} 🚀", settings.ui_bind);
-    }
+    info!(target: LOG_CONSENSUS, "Setup UI running at http://{} 🚀", settings.ui_bind);
 
     let cg_params = cgp_receiver
         .recv()
         .await
         .expect("Config gen params receiver closed unexpectedly");
 
-    api_handler
-        .stop()
-        .expect("Config api should still be running");
-
-    api_handler.stopped().await;
-
-    ui_task_group
+    setup_task_group
         .shutdown_join_all(None)
         .await
         .context("Failed to shutdown UI server after config gen")?;

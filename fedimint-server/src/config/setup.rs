@@ -7,22 +7,12 @@ use std::sync::Arc;
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
-use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::config::META_FEDERATION_NAME_KEY;
-use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::Database;
-use fedimint_core::endpoint_constants::{
-    ADD_PEER_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, START_DKG_ENDPOINT,
-};
 use fedimint_core::envs::{
     FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
 };
-use fedimint_core::module::{
-    ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
-};
+use fedimint_core::module::ApiAuth;
 use fedimint_logging::LOG_SERVER;
-use fedimint_server_core::net::check_auth;
 use fedimint_server_core::setup_ui::ISetupApi;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
@@ -33,7 +23,6 @@ use tracing::warn;
 
 use super::PeerEndpoints;
 use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerSetupCode};
-use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
@@ -81,26 +70,16 @@ pub struct SetupApi {
     settings: ConfigGenSettings,
     /// In-memory state machine
     state: Arc<Mutex<SetupState>>,
-    /// DB not really used
-    db: Database,
     /// Triggers the distributed key generation
     sender: Sender<ConfigGenParams>,
 }
 
 impl SetupApi {
-    pub fn new(settings: ConfigGenSettings, db: Database, sender: Sender<ConfigGenParams>) -> Self {
+    pub fn new(settings: ConfigGenSettings, sender: Sender<ConfigGenParams>) -> Self {
         Self {
             settings,
             state: Arc::new(Mutex::new(SetupState::default())),
-            db,
             sender,
-        }
-    }
-
-    pub async fn setup_status(&self) -> SetupStatus {
-        match self.state.lock().await.local_params {
-            Some(..) => SetupStatus::SharingConnectionCodes,
-            None => SetupStatus::AwaitingLocalParams,
         }
     }
 }
@@ -140,7 +119,7 @@ impl ISetupApi for SetupApi {
         self.state.lock().await.setup_codes.clear();
     }
 
-    async fn set_local_parameters(
+    async fn init_setup(
         &self,
         auth: ApiAuth,
         name: String,
@@ -234,7 +213,7 @@ impl ISetupApi for SetupApi {
         Ok(lp.setup_code().encode_base32())
     }
 
-    async fn add_peer_setup_code(&self, info: String) -> anyhow::Result<String> {
+    async fn add_setup_code(&self, info: String) -> anyhow::Result<String> {
         let info = PeerSetupCode::decode_base32(&info)?;
 
         let mut state = self.state.lock().await;
@@ -327,86 +306,4 @@ impl ISetupApi for SetupApi {
 
         Ok(())
     }
-}
-
-#[async_trait]
-impl HasApiContext<SetupApi> for SetupApi {
-    async fn context(
-        &self,
-        request: &ApiRequestErased,
-        id: Option<ModuleInstanceId>,
-    ) -> (&SetupApi, ApiEndpointContext<'_>) {
-        assert!(id.is_none());
-
-        let db = self.db.clone();
-        let dbtx = self.db.begin_transaction().await;
-
-        let is_authenticated = match self.state.lock().await.local_params {
-            None => false,
-            Some(ref params) => match request.auth.as_ref() {
-                Some(auth) => *auth == params.auth,
-                None => false,
-            },
-        };
-
-        let context = ApiEndpointContext::new(db, dbtx, is_authenticated, request.auth.clone());
-
-        (self, context)
-    }
-}
-
-pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
-    vec![
-        api_endpoint! {
-            SETUP_STATUS_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |config: &SetupApi, _c, _v: ()| -> SetupStatus {
-                Ok(config.setup_status().await)
-            }
-        },
-        api_endpoint! {
-            SET_LOCAL_PARAMS_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |config: &SetupApi, context, request: SetLocalParamsRequest| -> String {
-                let auth = context
-                    .request_auth()
-                    .ok_or(ApiError::bad_request("Missing password".to_string()))?;
-
-                 config.set_local_parameters(auth, request.name, request.federation_name)
-                    .await
-                    .map_err(|e| ApiError::bad_request(e.to_string()))
-            }
-        },
-        api_endpoint! {
-            ADD_PEER_SETUP_CODE_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |config: &SetupApi, context, info: String| -> String {
-                check_auth(context)?;
-
-                config.add_peer_setup_code(info.clone())
-                    .await
-                    .map_err(|e|ApiError::bad_request(e.to_string()))
-            }
-        },
-        api_endpoint! {
-            RESET_PEER_SETUP_CODES_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |config: &SetupApi, context, _v: ()| -> () {
-                check_auth(context)?;
-
-                config.reset_setup_codes().await;
-
-                Ok(())
-            }
-        },
-        api_endpoint! {
-            START_DKG_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |config: &SetupApi, context, _v: ()| -> () {
-                check_auth(context)?;
-
-                config.start_dkg().await.map_err(|e| ApiError::server_error(e.to_string()))
-            }
-        },
-    ]
 }

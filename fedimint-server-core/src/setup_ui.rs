@@ -21,16 +21,16 @@ pub trait ISetupApi {
     /// Reset the set of other guardians
     async fn reset_setup_codes(&self);
 
-    /// Set local guardian parameters
-    async fn set_local_parameters(
+    /// Set initial setup parameters for guardian
+    async fn init_setup(
         &self,
         auth: ApiAuth,
         name: String,
         federation_name: Option<String>,
     ) -> Result<String>;
 
-    /// Add peer connection info
-    async fn add_peer_setup_code(&self, info: String) -> Result<String>;
+    /// Add setup code from peer
+    async fn add_setup_code(&self, info: String) -> Result<String>;
 
     /// Start the distributed key generation process
     async fn start_dkg(&self) -> Result<()>;

@@ -12,9 +12,10 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::SafeUrl;
 pub use fedimintd::*;
 
+pub mod devimint;
+pub mod envs;
 mod fedimintd;
 
-pub mod envs;
 use crate::envs::FM_PORT_ESPLORA_ENV;
 
 pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {

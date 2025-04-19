@@ -14,6 +14,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    is_running_in_test_env,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
@@ -44,7 +45,6 @@ use fedimint_wallet_server::common::config::{
 use futures::FutureExt;
 use tracing::{debug, error, info};
 
-use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
@@ -52,6 +52,7 @@ use crate::envs::{
     FM_P2P_URL_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
+use crate::{default_esplora_server, devimint};
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -476,8 +477,12 @@ async fn run(
         &module_inits,
         task_group.clone(),
         dyn_server_bitcoin_rpc,
-        Some(Box::new(fedimint_server_ui::dashboard::start)),
-        Some(Box::new(fedimint_server_ui::setup::start)),
+        if is_running_in_test_env() {
+            Box::new(devimint::setup_start)
+        } else {
+            Box::new(fedimint_server_ui::setup::start)
+        },
+        Box::new(fedimint_server_ui::dashboard::start),
     ))
     .await
 }

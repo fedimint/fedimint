@@ -12,7 +12,7 @@ use fedimint_api_client::api::{
     GuardianConfigBackup, LegacyFederationStatus, LegacyP2PConnectionStatus, LegacyPeerStatus,
     StatusResponse,
 };
-use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
+use fedimint_core::admin_client::ServerStatusLegacy;
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
@@ -31,7 +31,7 @@ use fedimint_core::endpoint_constants::{
     CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
     RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SHUTDOWN_ENDPOINT,
     SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
@@ -699,13 +699,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                     server: ServerStatusLegacy::ConsensusRunning,
                     federation: Some(fedimint.get_federation_status().await?)
                 })}
-        },
-        api_endpoint! {
-            SETUP_STATUS_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |_f: &ConsensusApi, _c, _v: ()| -> SetupStatus {
-                Ok(SetupStatus::ConsensusIsRunning)
-            }
         },
         api_endpoint! {
             CONSENSUS_ORD_LATENCY_ENDPOINT,
