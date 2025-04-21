@@ -1,11 +1,11 @@
 use axum::extract::{Form, State};
 use axum::response::{IntoResponse, Redirect};
-use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::util::SafeUrl;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use maud::{Markup, html};
 
-use crate::{AuthState, LOGIN_ROUTE, ROOT_ROUTE, check_auth};
+use crate::auth::UserAuth;
+use crate::{ROOT_ROUTE, UiState};
 
 // LNv2 route constants
 pub const LNV2_ADD_ROUTE: &str = "/lnv2/add";
@@ -116,14 +116,10 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
 
 // Handler for adding a new gateway
 pub async fn post_add(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
+    State(state): State<UiState<DynDashboardApi>>,
+    _auth: UserAuth,
     Form(form): Form<GatewayForm>,
 ) -> impl IntoResponse {
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to(LOGIN_ROUTE).into_response();
-    }
-
     state
         .api
         .get_module::<fedimint_lnv2_server::Lightning>()
@@ -136,14 +132,10 @@ pub async fn post_add(
 
 // Handler for removing a gateway
 pub async fn post_remove(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
+    State(state): State<UiState<DynDashboardApi>>,
+    _auth: UserAuth,
     Form(form): Form<GatewayForm>,
 ) -> impl IntoResponse {
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to(LOGIN_ROUTE).into_response();
-    }
-
     state
         .api
         .get_module::<fedimint_lnv2_server::Lightning>()
