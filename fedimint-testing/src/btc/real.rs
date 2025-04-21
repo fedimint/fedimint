@@ -5,7 +5,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
-use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, sleep_in_test};
@@ -25,8 +24,6 @@ use crate::btc::BitcoinTest;
 #[derive(Clone)]
 struct RealBitcoinTestNoLock {
     client: Arc<Client>,
-    /// RPC used to connect to bitcoind, used for waiting for the RPC to sync
-    rpc: DynBitcoindRpc,
 }
 
 impl RealBitcoinTestNoLock {
@@ -52,16 +49,19 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                 .client
                 .get_block_header_info(block_hash)
                 .expect("rpc failed");
-            let expected_block_count = last_mined_block.height as u64 + 1;
+
+            let expected_block_height = last_mined_block.height as u64;
             // waits for the rpc client to catch up to bitcoind
+
             loop {
-                let current_block_count = self.rpc.get_block_count().await.expect("rpc failed");
-                if current_block_count < expected_block_count {
+                let current_block_height = self.client.get_block_count().unwrap();
+
+                if current_block_height < expected_block_height {
                     debug!(
                         target: LOG_TEST,
                         ?block_num,
-                        ?expected_block_count,
-                        ?current_block_count,
+                        ?expected_block_height,
+                        ?current_block_height,
                         "Waiting for blocks to be mined"
                     );
                     sleep_in_test("waiting for blocks to be mined", Duration::from_millis(200))
@@ -70,8 +70,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     debug!(
                         target: LOG_TEST,
                         ?block_num,
-                        ?expected_block_count,
-                        ?current_block_count,
+                        ?expected_block_height,
+                        ?current_block_height,
                         "Mined blocks"
                     );
                     break;
@@ -196,13 +196,13 @@ pub struct RealBitcoinTest {
 impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
-    pub fn new(url: &SafeUrl, rpc: DynBitcoindRpc) -> Self {
+    pub fn new(url: &SafeUrl) -> Self {
         let (host, auth) =
             fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect("correct url");
         let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));
 
         Self {
-            inner: RealBitcoinTestNoLock { client, rpc },
+            inner: RealBitcoinTestNoLock { client },
         }
     }
 }

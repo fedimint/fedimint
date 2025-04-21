@@ -86,11 +86,12 @@ impl Fixtures {
             };
 
             let dyn_bitcoin_rpc = create_bitcoind(&rpc_config).unwrap();
+
             let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect("Must have bitcoind RPC defined for real tests")
                 .parse()
                 .expect("Invalid bitcoind RPC URL");
-            let bitcoin = RealBitcoinTest::new(&bitcoincore_url, dyn_bitcoin_rpc.clone());
+            let bitcoin = RealBitcoinTest::new(&bitcoincore_url);
 
             let bitcoin_rpc_connection = match rpc_config.kind.as_ref() {
                 "bitcoind" => BitcoindClient::new(&rpc_config.url).unwrap().into_dyn(),
