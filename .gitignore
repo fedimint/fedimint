@@ -26,3 +26,7 @@
 
 .aider.*
 .aider*
+
+/src-tauri/.config
+/src-tauri/target/
+/src-tauri/gen/schemas
