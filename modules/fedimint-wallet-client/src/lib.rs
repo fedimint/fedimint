@@ -902,6 +902,22 @@ impl WalletClientModule {
         }))
     }
 
+    pub async fn list_peg_in_tweak_idxes(
+        &self,
+    ) -> anyhow::Result<BTreeMap<TweakIdx, PegInTweakIndexData>> {
+        Ok(self
+            .client_ctx
+            .module_db()
+            .clone()
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&PegInTweakIndexPrefix)
+            .await
+            .map(|(key, data)| (key.0, data))
+            .collect()
+            .await)
+    }
+
     pub async fn find_tweak_idx_by_address(
         &self,
         address: bitcoin::Address<NetworkUnchecked>,
