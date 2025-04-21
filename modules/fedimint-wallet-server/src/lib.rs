@@ -32,13 +32,11 @@ use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxI
 use common::config::WalletConfigConsensus;
 use common::{
     DEPRECATED_RBF_ERROR, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
-    TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput,
-    WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, proprietary_tweak_key,
+    TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes,
+    WalletOutput, WalletOutputOutcome, WalletSummary, proprietary_tweak_key,
 };
 use envs::get_feerate_multiplier;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
-use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
-use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -65,6 +63,7 @@ use fedimint_core::{
     get_network_for_address, push_db_key_items, push_db_pair_items,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
+use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::net::check_auth;
@@ -295,7 +294,7 @@ impl ServerModuleInit for WalletInit {
             args.task_group(),
             args.our_peer_id(),
             args.module_api().clone(),
-            &args.shared(),
+            args.server_bitcoin_rpc_monitor(),
         )
         .await?)
     }
@@ -912,7 +911,7 @@ impl ServerModule for Wallet {
                     let config = module.btc_rpc.get_bitcoin_rpc_config();
 
                     // we need to remove auth, otherwise we'll send over the wire
-                    let without_auth = config.url.clone().without_auth().map_err(|_| {
+                    let without_auth = config.url.clone().without_auth().map_err(|()| {
                         ApiError::server_error("Unable to remove auth from bitcoin config URL".to_string())
                     })?;
 
@@ -1005,16 +1004,10 @@ pub struct Wallet {
     cfg: WalletConfig,
     db: Database,
     secp: Secp256k1<All>,
-    btc_rpc: DynBitcoindRpc,
+    btc_rpc: ServerBitcoinRpcMonitor,
     our_peer_id: PeerId,
-    /// Block count updated periodically by a background task
-    block_count_rx: watch::Receiver<Option<u64>>,
-    /// Fee rate updated periodically by a background task
-    fee_rate_rx: watch::Receiver<Option<Feerate>>,
-
     /// Broadcasting pending txes can be triggered immediately with this
     broadcast_pending: Arc<Notify>,
-
     task_group: TaskGroup,
     /// Maximum consensus version supported by *all* our peers. Used to
     /// automatically activate new consensus versions as soon as everyone
@@ -1029,67 +1022,36 @@ impl Wallet {
         task_group: &TaskGroup,
         our_peer_id: PeerId,
         module_api: DynModuleApi,
-        shared_bitcoin: &ServerModuleSharedBitcoin,
+        server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
     ) -> anyhow::Result<Wallet> {
-        let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc)?;
-        Ok(Self::new_with_bitcoind(
-            cfg,
-            db,
-            btc_rpc,
-            task_group,
-            our_peer_id,
-            module_api,
-            shared_bitcoin,
-        )
-        .await?)
-    }
-
-    pub async fn new_with_bitcoind(
-        cfg: WalletConfig,
-        db: &Database,
-        btc_rpc: DynBitcoindRpc,
-        task_group: &TaskGroup,
-        our_peer_id: PeerId,
-        module_api: DynModuleApi,
-        shared_bitcoin: &ServerModuleSharedBitcoin,
-    ) -> Result<Wallet, WalletCreationError> {
-        let fee_rate_rx = shared_bitcoin
-            .feerate_receiver(cfg.consensus.network.0, btc_rpc.clone())
-            .await
-            .map_err(|e| {
-                WalletCreationError::FeerateSourceError(e.fmt_compact_anyhow().to_string())
-            })?;
-        let block_count_rx = shared_bitcoin
-            .block_count_receiver(cfg.consensus.network.0, btc_rpc.clone())
-            .await;
         let broadcast_pending = Arc::new(Notify::new());
-        Self::spawn_broadcast_pending_task(task_group, &btc_rpc, db, broadcast_pending.clone());
+        Self::spawn_broadcast_pending_task(
+            task_group,
+            &server_bitcoin_rpc_monitor,
+            db,
+            broadcast_pending.clone(),
+        );
 
         let peer_supported_consensus_version =
             Self::spawn_peer_supported_consensus_version_task(module_api, task_group, our_peer_id);
 
-        let bitcoind_net = NetworkLegacyEncodingWrapper(
-            retry("verify network", backoff_util::aggressive_backoff(), || {
-                btc_rpc.get_network()
-            })
-            .await
-            .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
-        );
-        if bitcoind_net != cfg.consensus.network {
-            return Err(WalletCreationError::WrongNetwork(
-                cfg.consensus.network,
-                bitcoind_net,
-            ));
-        }
+        let status = retry("verify network", backoff_util::aggressive_backoff(), || {
+            std::future::ready(
+                server_bitcoin_rpc_monitor
+                    .status()
+                    .context("No connection to bitcoin rpc"),
+            )
+        })
+        .await?;
+
+        ensure!(status.network == cfg.consensus.network.0, "Wrong Network");
 
         let wallet = Wallet {
             cfg,
             db: db.clone(),
             secp: Default::default(),
-            btc_rpc,
+            btc_rpc: server_bitcoin_rpc_monitor,
             our_peer_id,
-            block_count_rx,
-            fee_rate_rx,
             task_group: task_group.clone(),
             peer_supported_consensus_version,
             broadcast_pending,
@@ -1200,11 +1162,12 @@ impl Wallet {
     }
 
     fn get_block_count(&self) -> anyhow::Result<u32> {
-        self.block_count_rx
-            .borrow()
-            .ok_or_else(|| format_err!("Block count not available yet"))
-            .and_then(|block_count| {
-                block_count
+        self.btc_rpc
+            .status()
+            .context("No bitcoin rpc connection")
+            .and_then(|status| {
+                status
+                    .block_count
                     .try_into()
                     .map_err(|_| format_err!("Block count exceeds u32 limits"))
             })
@@ -1217,9 +1180,9 @@ impl Wallet {
         #[allow(clippy::cast_sign_loss)]
         Feerate {
             sats_per_kvb: ((self
-                .fee_rate_rx
-                .borrow()
-                .unwrap_or(self.cfg.consensus.default_fee)
+                .btc_rpc
+                .status()
+                .map_or(self.cfg.consensus.default_fee, |status| status.fee_rate)
                 .sats_per_kvb as f64
                 * get_feerate_multiplier())
             .round()) as u64,
@@ -1334,16 +1297,16 @@ impl Wallet {
             .await
             .expect("bitcoind rpc to get block hash");
 
+            let block = retry("get_block", backoff_util::background_backoff(), || {
+                self.btc_rpc.get_block(&block_hash)
+            })
+            .await
+            .expect("bitcoind rpc to get block");
+
             if self.consensus_module_consensus_version(dbtx).await
                 >= ModuleConsensusVersion::new(2, 2)
             {
-                let block = retry("get_block", backoff_util::background_backoff(), || {
-                    self.btc_rpc.get_block(&block_hash)
-                })
-                .await
-                .expect("bitcoind rpc to get block");
-
-                for transaction in block.txdata {
+                for transaction in block.txdata.clone() {
                     // We maintain the subset of unspent P2WSH transaction outputs created
                     // since the module was running on the new consensus version, which might be
                     // the same time as the genesis session.
@@ -1388,15 +1351,7 @@ impl Wallet {
                 "Recognizing change UTXOs"
             );
             for (txid, tx) in &pending_transactions {
-                let is_tx_in_block =
-                    retry("is_tx_in_block", backoff_util::background_backoff(), || {
-                        self.btc_rpc
-                            .is_tx_in_block(txid, &block_hash, u64::from(height))
-                    })
-                    .await
-                    .unwrap_or_else(|_| {
-                        panic!("Failed checking if tx is in block height {height}")
-                    });
+                let is_tx_in_block = block.txdata.iter().any(|tx| tx.compute_txid() == *txid);
 
                 if is_tx_in_block {
                     debug!(
@@ -1647,14 +1602,14 @@ impl Wallet {
 
     fn spawn_broadcast_pending_task(
         task_group: &TaskGroup,
-        bitcoind: &DynBitcoindRpc,
+        server_bitcoin_rpc_monitor: &ServerBitcoinRpcMonitor,
         db: &Database,
         broadcast_pending_notify: Arc<Notify>,
     ) {
         task_group.spawn_cancellable("broadcast pending", {
-            let bitcoind = bitcoind.clone();
+            let btc_rpc = server_bitcoin_rpc_monitor.clone();
             let db = db.clone();
-            run_broadcast_pending_tx(db, bitcoind, broadcast_pending_notify)
+            run_broadcast_pending_tx(db, btc_rpc, broadcast_pending_notify)
         });
     }
 
@@ -1827,7 +1782,11 @@ impl Wallet {
 }
 
 #[instrument(target = LOG_MODULE_WALLET, level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, broadcast: Arc<Notify>) {
+pub async fn run_broadcast_pending_tx(
+    db: Database,
+    rpc: ServerBitcoinRpcMonitor,
+    broadcast: Arc<Notify>,
+) {
     loop {
         // Unless something new happened, we broadcast once a minute
         let _ = tokio::time::timeout(Duration::from_secs(60), broadcast.notified()).await;
@@ -1835,7 +1794,10 @@ pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, broadca
     }
 }
 
-pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBitcoindRpc) {
+pub async fn broadcast_pending_tx(
+    mut dbtx: DatabaseTransaction<'_>,
+    rpc: &ServerBitcoinRpcMonitor,
+) {
     let pending_tx: Vec<PendingTransaction> = dbtx
         .find_by_prefix(&PendingTransactionPrefixKey)
         .await

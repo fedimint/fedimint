@@ -19,7 +19,7 @@ name = "fedimint_server"
 path = "src/lib.rs"
 
 [dependencies]
-aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
+aleph-bft = { workspace = true }
 anyhow = { workspace = true }
 async-channel = { workspace = true }
 async-trait = { workspace = true }
@@ -31,7 +31,6 @@ bls12_381 = { workspace = true }
 bytes = { workspace = true }
 fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-bitcoind = { workspace = true, features = ["fedimint-server"] }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
@@ -47,24 +46,24 @@ iroh-base = { workspace = true, default-features = false, features = [
   "ticket",
 ] }
 itertools = { workspace = true }
-jsonrpsee = { version = "0.24.9", features = ["server"] }
-parity-scale-codec = "3.7.4"
-pin-project = "1.1.10"
+jsonrpsee = { workspace = true, features = ["server"] }
+parity-scale-codec = { workspace = true }
+pin-project = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }
-rcgen = "=0.13.2"
+rcgen = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha3 = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 subtle = { workspace = true }
-tar = "0.4.44"
+tar = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
-tokio-util = { version = "0.7.14", features = ["codec"] }
-tower = { version = "0.4.13", default-features = false }
+tokio-util = { workspace = true, features = ["codec"] }
+tower = { workspace = true }
 tracing = { workspace = true }
 z32 = { workspace = true }
 

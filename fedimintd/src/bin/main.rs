@@ -1,9 +1,9 @@
 use fedimint_core::fedimint_build_code_version_env;
 use fedimintd::Fedimintd;
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(any(target_env = "msvc", target_os = "ios")))]
 use tikv_jemallocator::Jemalloc;
 
-#[cfg(not(target_env = "msvc"))]
+#[cfg(not(any(target_env = "msvc", target_os = "ios")))]
 #[global_allocator]
 // rocksdb suffers from memory fragmentation when using standard allocator
 static GLOBAL: Jemalloc = Jemalloc;

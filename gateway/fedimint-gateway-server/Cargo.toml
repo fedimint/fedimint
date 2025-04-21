@@ -32,7 +32,7 @@ anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-axum = { version = "0.8.3", features = ["json"] }
+axum = { workspace = true, features = ["json"] }
 bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
@@ -49,7 +49,7 @@ fedimint-gateway-common = { workspace = true }
 fedimint-gateway-server-db = { workspace = true }
 fedimint-gw-client = { workspace = true }
 fedimint-gwv2-client = { workspace = true }
-fedimint-lightning = { path = "../fedimint-lightning", version = "=0.8.0-alpha" }
+fedimint-lightning = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
@@ -62,8 +62,8 @@ futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
 lightning-invoice = { workspace = true }
-lockable = "0.1.1"
-prost = "0.13.5"
+lockable = { workspace = true }
+prost = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
@@ -73,9 +73,9 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-tonic = { version = "0.12.3", features = ["transport", "tls"] }
+tonic = { workspace = true, features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }
-tower-http = { version = "0.6.2", features = ["cors", "auth"] }
+tower-http = { workspace = true, features = ["cors", "auth"] }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true, features = ["serde"] }
 
@@ -95,5 +95,5 @@ tpe = { workspace = true }
 [build-dependencies]
 fedimint-build = { workspace = true }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
 tikv-jemallocator = { workspace = true }

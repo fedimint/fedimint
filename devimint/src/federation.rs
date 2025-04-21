@@ -3,17 +3,20 @@ mod config;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 use std::{env, fs, iter};
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::net::Connector;
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::runtime::block_in_place;
@@ -39,7 +42,7 @@ use super::external::Bitcoind;
 use super::util::{Command, ProcessHandle, ProcessManager, cmd};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
-use crate::util::{FedimintdCmd, poll, poll_with_timeout};
+use crate::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
 use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 use crate::{poll_eq, vars};
 
@@ -362,8 +365,27 @@ impl Federation {
             let client_dir = utf8(&process_mgr.globals.FM_CLIENT_DIR);
             let invite_code_filename_original = "invite-code";
 
+            for peer_env_vars in peer_to_env_vars_map.values() {
+                let peer_data_dir = utf8(&peer_env_vars.FM_DATA_DIR);
+
+                let invite_code = poll_simple("awaiting-invite-code", || async {
+                    tokio::fs::read_to_string(format!(
+                        "{peer_data_dir}/{invite_code_filename_original}"
+                    ))
+                    .await
+                    .map_err(Into::into)
+                })
+                .await
+                .context("Awaiting invite code file")?;
+
+                Connector::default()
+                    .download_from_invite_code(&InviteCode::from_str(&invite_code)?)
+                    .await?;
+            }
+
             // copy over invite-code file to client directory
             let peer_data_dir = utf8(&peer_to_env_vars_map[&0].FM_DATA_DIR);
+
             tokio::fs::copy(
                 format!("{peer_data_dir}/{invite_code_filename_original}"),
                 format!("{client_dir}/{invite_code_filename_original}"),
@@ -385,6 +407,7 @@ impl Federation {
                 .await
                 .context("moving invite-code file")?;
             }
+
             debug!("Moved invite-code files to client data directory");
         }
 
@@ -1155,21 +1178,6 @@ pub async fn run_cli_dkg_v2(
             .await?;
     }
 
-    for (peer, endpoint) in &endpoints {
-        let status = poll("awaiting-setup-status-consensus-is-running", || async {
-            crate::util::FedimintCli
-                .setup_status(auth_for(peer), endpoint)
-                .await
-                .map_err(ControlFlow::Continue)
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(status, SetupStatus::ConsensusIsRunning);
-    }
-
-    debug!(target: LOG_DEVIMINT, "Consensus is running...");
-
     Ok(())
 }
 
@@ -1178,13 +1186,11 @@ async fn cli_set_config_gen_params(
     auth: &ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
-    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     self::config::attach_default_module_init_params(
         &BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,
-        &fedimintd_version,
     );
 
     let meta = iter::once(("federation_name".to_string(), "testfed".to_string())).collect();

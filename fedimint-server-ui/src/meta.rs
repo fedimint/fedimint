@@ -42,34 +42,25 @@ pub async fn render(meta: &Meta) -> Markup {
     };
 
     html! {
-        // Meta Configuration Card
-        div class="row gy-4 mt-2" {
-            div class="col-12" {
-                div class="card h-100" {
-                    div class="card-header dashboard-header" { "Meta Configuration" }
-                    div class="card-body" {
-                        // Current Consensus Section
-                        div class="mb-4" {
-                            h5 { "Current Consensus (Revision: " (revision) ")" }
-                            @if let Some(value) = &consensus_value {
-                                pre class="bg-light p-3 user-select-all" {
-                                    code {
-                                        (serde_json::to_string_pretty(value).unwrap_or_else(|_| "Invalid JSON".to_string()))
-                                    }
-                                }
-                            } @else {
-                                div class="alert alert-secondary" { "No consensus value has been established yet." }
+        div class="card h-100" {
+            div class="card-header dashboard-header" { "Meta Configuration" }
+            div class="card-body" {
+                div class="mb-4" {
+                    h5 { "Current Consensus (Revision: " (revision) ")" }
+                    @if let Some(value) = &consensus_value {
+                        pre class="bg-light p-3 user-select-all" {
+                            code {
+                                (serde_json::to_string_pretty(value).unwrap_or_else(|_| "Invalid JSON".to_string()))
                             }
                         }
-
-                        // Submission Form
-                        div class="mb-4" {
-                            (render_meta_edit_form(current_meta_keys, false, MetaEditForm::default()))
-                        }
-
-                        // Current Submissions Section
-                        (render_submissions_form(meta.our_peer_id, &submissions))
+                    } @else {
+                        div class="alert alert-secondary" { "No consensus value has been established yet." }
                     }
+                    div class="mb-4" {
+                        (render_meta_edit_form(current_meta_keys, false, MetaEditForm::default()))
+                    }
+
+                    (render_submissions_form(meta.our_peer_id, &submissions))
                 }
             }
         }

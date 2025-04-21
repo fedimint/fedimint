@@ -29,11 +29,11 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.47"
+clap_complete = { workspace = true }
 fedimint-aead = { workspace = true }
-fedimint-api-client = { path = "../fedimint-api-client", version = "=0.8.0-alpha" }
+fedimint-api-client = { workspace = true }
 fedimint-bip39 = { workspace = true }
-fedimint-client = { path = "../fedimint-client", version = "=0.8.0-alpha" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
@@ -52,12 +52,12 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-time = { version = "0.3.41", features = ["formatting"] }
+time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
 tikv-jemallocator = { workspace = true }

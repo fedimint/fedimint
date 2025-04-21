@@ -22,11 +22,14 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fs-lock = { workspace = true }
 futures = { workspace = true }
-rocksdb = { version = "0.22.0", features = ["jemalloc"] }
+rocksdb = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.19.1"
+tempfile = { workspace = true }
+
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
+rocksdb = { workspace = true, features = ["jemalloc"] }
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
 tokio = { workspace = true, features = [

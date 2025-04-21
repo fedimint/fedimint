@@ -20,6 +20,7 @@ use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, Feerate};
+use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use rand::rngs::OsRng;
 use tracing::debug;
 
@@ -431,4 +432,77 @@ fn output_sum(tx: &Transaction) -> u64 {
 
 fn inputs(tx: &Transaction) -> Vec<OutPoint> {
     tx.input.iter().map(|input| input.previous_output).collect()
+}
+
+#[async_trait::async_trait]
+impl IServerBitcoinRpc for FakeBitcoinTest {
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        BitcoinRpcConfig {
+            kind: "mock_kind".to_string(),
+            url: "http://mock".parse().unwrap(),
+        }
+    }
+
+    fn get_url(&self) -> SafeUrl {
+        "http://mock".parse().unwrap()
+    }
+
+    async fn get_network(&self) -> Result<bitcoin::Network> {
+        Ok(bitcoin::Network::Regtest)
+    }
+
+    async fn get_block_count(&self) -> Result<u64> {
+        Ok(self.inner.read().unwrap().blocks.len() as u64)
+    }
+
+    async fn get_block_hash(&self, height: u64) -> Result<bitcoin::BlockHash> {
+        self.inner
+            .read()
+            .unwrap()
+            .blocks
+            .get(height as usize)
+            .map(|block| block.header.block_hash())
+            .context("No block with that height found")
+    }
+
+    async fn get_block(&self, block_hash: &bitcoin::BlockHash) -> Result<bitcoin::Block> {
+        self.inner
+            .read()
+            .unwrap()
+            .blocks
+            .iter()
+            .find(|block| block.header.block_hash() == *block_hash)
+            .context("No block with that hash found")
+            .cloned()
+    }
+
+    async fn get_feerate(&self) -> Result<Option<Feerate>> {
+        Ok(Some(Feerate { sats_per_kvb: 2000 }))
+    }
+
+    async fn submit_transaction(&self, transaction: bitcoin::Transaction) {
+        let mut inner = self.inner.write().unwrap();
+        inner.pending.push(transaction);
+
+        let mut filtered = BTreeMap::<Vec<OutPoint>, bitcoin::Transaction>::new();
+
+        // Simulate the mempool keeping txs with higher fees (less output)
+        // TODO: This looks borked, should remove from `filtered` on higher fee or
+        // something, and check per-input anyway. Probably doesn't matter, and I
+        // don't want to touch it.
+        for tx in &inner.pending {
+            match filtered.get(&inputs(tx)) {
+                Some(found) if output_sum(tx) > output_sum(found) => {}
+                _ => {
+                    filtered.insert(inputs(tx), tx.clone());
+                }
+            }
+        }
+
+        inner.pending = filtered.into_values().collect();
+    }
+
+    async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+        Ok(None)
+    }
 }
