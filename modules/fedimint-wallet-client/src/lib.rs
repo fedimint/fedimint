@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context as AnyhowContext, anyhow, bail, ensure};
-use async_stream::stream;
+use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
@@ -55,10 +55,9 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit,
     MultiApiVersion,
 };
-use fedimint_core::util::BoxStream;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items, runtime,
     secp256k1,
@@ -75,7 +74,6 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
 use tracing::{debug, instrument};
-use async_stream::try_stream;
 
 use crate::api::WalletFederationApi;
 use crate::backup::WalletRecovery;
@@ -499,7 +497,7 @@ impl ClientModule for WalletClientModule {
     ) -> Option<Amount> {
         Some(self.cfg().fee_consensus.peg_out_abs)
     }
-    
+
     async fn handle_rpc(
         &self,
         method: String,
