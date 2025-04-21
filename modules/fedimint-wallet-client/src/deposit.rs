@@ -1,4 +1,3 @@
-use std::cmp;
 use std::time::{Duration, SystemTime};
 
 use fedimint_client_module::DynGlobalClientContext;
@@ -10,6 +9,7 @@ use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::WalletInput;
@@ -106,20 +106,16 @@ async fn await_created_btc_transaction_submitted(
         .wallet_descriptor
         .tweak(&tweak.public_key(), &context.secp)
         .script_pubkey();
+
+    let mut backoff = background_backoff();
     loop {
         match context.rpc.watch_script_history(&script).await {
             Ok(()) => break,
             Err(e) => warn!("Error while awaiting btc tx submitting: {e}"),
         }
-        sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
+        sleep(backoff.next().unwrap_or_default()).await;
     }
-    for attempt in 0u32.. {
-        sleep(cmp::min(
-            TRANSACTION_STATUS_FETCH_INTERVAL * attempt,
-            Duration::from_secs(60 * 15),
-        ))
-        .await;
-
+    loop {
         match context.rpc.get_script_history(&script).await {
             Ok(received) => {
                 // TODO: fix
@@ -141,9 +137,9 @@ async fn await_created_btc_transaction_submitted(
                 warn!("Error fetching transaction history for {script:?}: {e}");
             }
         }
-    }
 
-    unreachable!()
+        sleep(backoff.next().unwrap_or_default()).await;
+    }
 }
 
 fn transition_tx_seen(
