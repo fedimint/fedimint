@@ -2780,6 +2780,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-mint-client",
+ "fedimint-wallet-client",
  "futures",
  "imbl",
  "js-sys",
