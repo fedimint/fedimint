@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod bitcoin;
+pub(crate) mod consensus_explorer;
 pub mod general;
 pub mod invite;
 pub mod latency;
@@ -10,6 +11,7 @@ use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
+use consensus_explorer::consensus_explorer_view;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use maud::{DOCTYPE, Markup, html};
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
@@ -18,8 +20,8 @@ use crate::assets::WithStaticRoutesExt as _;
 use crate::auth::UserAuth;
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
-    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, common_head, login_form_response,
-    login_submit_response,
+    EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, common_head,
+    login_form_response, login_submit_response,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -141,6 +143,8 @@ pub fn router(api: DynDashboardApi) -> Router {
     let mut app = Router::new()
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
+        .route(EXPLORER_ROUTE, get(consensus_explorer_view))
+        .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
         .with_static_routes();
 
     // routeradd LNv2 gateway routes if the module exists

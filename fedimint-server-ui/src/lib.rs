@@ -8,6 +8,7 @@ use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use fedimint_core::hex::ToHex;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
+use fedimint_server_core::dashboard_ui::DynDashboardApi;
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
@@ -16,6 +17,8 @@ pub(crate) const LOG_UI: &str = "fm::ui";
 // Common route constants
 pub const ROOT_ROUTE: &str = "/";
 pub const LOGIN_ROUTE: &str = "/login";
+pub const EXPLORER_IDX_ROUTE: &str = "/explorer";
+pub const EXPLORER_ROUTE: &str = "/explorer/{session_idx}";
 
 pub fn common_head(title: &str) -> Markup {
     html! {
@@ -41,8 +44,10 @@ pub(crate) struct LoginInput {
 }
 
 /// Generic state for both setup and dashboard UIs
+///
+/// Most of code is written for dashboard, so `T` defaults to `DynDashboardApi`
 #[derive(Clone)]
-pub struct UiState<T> {
+pub struct UiState<T = DynDashboardApi> {
     pub(crate) api: T,
     pub(crate) auth_cookie_name: String,
     pub(crate) auth_cookie_value: String,
