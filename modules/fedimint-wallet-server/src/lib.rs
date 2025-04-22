@@ -35,6 +35,7 @@ use common::{
     TxOutputSummary, WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes,
     WalletOutput, WalletOutputOutcome, WalletSummary, proprietary_tweak_key,
 };
+use db::{BlockHashByHeightKey, BlockHashByHeightKeyPrefix, BlockHashByHeightValue};
 use envs::get_feerate_multiplier;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 use fedimint_core::config::{
@@ -130,6 +131,15 @@ impl ModuleInit for WalletInit {
             match table {
                 DbKeyPrefix::BlockHash => {
                     push_db_key_items!(dbtx, BlockHashKeyPrefix, BlockHashKey, wallet, "Blocks");
+                }
+                DbKeyPrefix::BlockHashByHeight => {
+                    push_db_key_items!(
+                        dbtx,
+                        BlockHashByHeightKeyPrefix,
+                        BlockHashByHeightKey,
+                        wallet,
+                        "Blocks by height"
+                    );
                 }
                 DbKeyPrefix::PegOutBitcoinOutPoint => {
                     push_db_pair_items!(
@@ -1303,10 +1313,28 @@ impl Wallet {
             .await
             .expect("bitcoind rpc to get block");
 
+            if let Some(prev_block_height) = height.checked_sub(1) {
+                if let Some(hash) = dbtx
+                    .get_value(&BlockHashByHeightKey(prev_block_height))
+                    .await
+                {
+                    assert_eq!(block.header.prev_blockhash, hash.0);
+                } else {
+                    warn!(
+                        target: LOG_MODULE_WALLET,
+                        %height,
+                        %block_hash,
+                        %prev_block_height,
+                        prev_blockhash = %block.header.prev_blockhash,
+                        "Missing previous block hash. This should only happen on the first processed block height."
+                    );
+                }
+            }
+
             if self.consensus_module_consensus_version(dbtx).await
                 >= ModuleConsensusVersion::new(2, 2)
             {
-                for transaction in block.txdata.clone() {
+                for transaction in &block.txdata {
                     // We maintain the subset of unspent P2WSH transaction outputs created
                     // since the module was running on the new consensus version, which might be
                     // the same time as the genesis session.
@@ -1371,6 +1399,11 @@ impl Wallet {
             }
 
             dbtx.insert_new_entry(&BlockHashKey(block_hash), &()).await;
+            dbtx.insert_new_entry(
+                &BlockHashByHeightKey(height),
+                &BlockHashByHeightValue(block_hash),
+            )
+            .await;
         }
     }
 

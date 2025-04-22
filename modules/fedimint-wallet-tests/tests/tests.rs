@@ -1106,14 +1106,15 @@ mod fedimint_migration_tests {
         PegOutFees, Rbf, SpendableUTXO, WalletCommonInit, WalletOutputOutcome,
     };
     use fedimint_wallet_server::db::{
-        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
-        ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
-        ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
-        ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
-        PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
-        PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-        PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-        UnsignedTransactionPrefixKey, UnspentTxOutKey, UnspentTxOutPrefix,
+        BlockCountVoteKey, BlockCountVotePrefix, BlockHashByHeightKey, BlockHashByHeightKeyPrefix,
+        BlockHashByHeightValue, BlockHashKey, BlockHashKeyPrefix, ClaimedPegInOutpointKey,
+        ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey, ConsensusVersionVotePrefix,
+        ConsensusVersionVotingActivationKey, ConsensusVersionVotingActivationPrefix, DbKeyPrefix,
+        FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
+        PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
+        PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
+        UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
+        UnspentTxOutPrefix,
     };
     use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
@@ -1322,6 +1323,12 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&ClaimedPegInOutpointKey(bitcoin::OutPoint::null()), &())
             .await;
 
+        dbtx.insert_new_entry(
+            &BlockHashByHeightKey(13),
+            &BlockHashByHeightValue(BlockHash::from_byte_array(BYTE_32)),
+        )
+        .await;
+
         dbtx.commit_tx().await;
     }
 
@@ -1358,6 +1365,19 @@ mod fedimint_migration_tests {
                             "validate_migrations was not able to read any BlockHashes"
                         );
                         info!("Validated BlockHash");
+                    }
+                    DbKeyPrefix::BlockHashByHeight => {
+                        let blocks = dbtx
+                            .find_by_prefix(&BlockHashByHeightKeyPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_blocks = blocks.len();
+                        ensure!(
+                            num_blocks == 1,
+                            "validate_migrations was not able to read any BlockHashByHeightes"
+                        );
+                        info!("Validated BlockHashByHeight");
                     }
                     DbKeyPrefix::PegOutBitcoinOutPoint => {
                         let outpoints = dbtx

@@ -264,8 +264,9 @@ async fn get_temp_database(
                 .file_name()
                 .into_string()
                 .map_err(|_e| format_err!("Invalid path name"))?;
-            if name.starts_with(db_prefix) {
+            if name.starts_with(db_prefix) && !name.ends_with("lock") {
                 let temp_path = format!("{}-{}", name.as_str(), OsRng.next_u64());
+
                 let temp_db = open_temp_db_and_copy(&temp_path, &file.path(), decoders.clone())
                     .await
                     .with_context(|| {
