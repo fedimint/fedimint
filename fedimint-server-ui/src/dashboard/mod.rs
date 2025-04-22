@@ -1,3 +1,10 @@
+pub mod audit;
+pub mod bitcoin;
+pub mod general;
+pub mod invite;
+pub mod latency;
+pub mod modules;
+
 use axum::Router;
 use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse, Redirect};
@@ -8,10 +15,9 @@ use maud::{DOCTYPE, Markup, html};
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
 use crate::assets::WithStaticRoutesExt as _;
-use crate::layout::{self};
+use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
-    AuthState, LoginInput, audit, bitcoin, check_auth, general, invite, latency, lnv2,
-    login_form_response, login_submit_response, meta, wallet,
+    AuthState, LoginInput, check_auth, common_head, login_form_response, login_submit_response,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -19,7 +25,7 @@ pub fn dashboard_layout(content: Markup) -> Markup {
         (DOCTYPE)
         html {
             head {
-                (layout::common_head("Dashboard"))
+                (common_head("Dashboard"))
             }
             body {
                 div class="container" {

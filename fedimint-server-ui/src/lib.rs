@@ -1,16 +1,6 @@
-pub(crate) mod assets;
-pub mod audit;
-pub mod bitcoin;
+pub mod assets;
 pub mod dashboard;
-pub(crate) mod error;
-pub mod general;
-pub mod invite;
-pub mod latency;
-pub(crate) mod layout;
-pub mod lnv2;
-pub mod meta;
 pub mod setup;
-pub mod wallet;
 
 use axum::response::{Html, IntoResponse, Redirect};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
@@ -21,6 +11,24 @@ use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
 pub(crate) const LOG_UI: &str = "fm::ui";
+
+pub fn common_head(title: &str) -> Markup {
+    html! {
+        meta charset="utf-8";
+        meta name="viewport" content="width=device-width, initial-scale=1.0";
+        title { "Guardian Dashboard"}
+        link rel="stylesheet" href="/assets/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous";
+        link rel="stylesheet" type="text/css" href="/assets/style.css";
+        link rel="icon" type="image/png" href="/assets/logo.png";
+
+        // Note: this needs to be included in the header, so that web-page does not
+        // get in a state where htmx is not yet loaded. `deref` helps with blocking the load.
+        // Learned the hard way. --dpc
+        script defer src="/assets/htmx.org-2.0.4.min.js" {}
+
+        title { (title) }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoginInput {
@@ -50,7 +58,7 @@ pub(crate) fn login_layout(title: &str, content: Markup) -> Markup {
         (DOCTYPE)
         html {
             head {
-                (layout::common_head(title))
+                (common_head(title))
             }
             body {
                 div class="container" {

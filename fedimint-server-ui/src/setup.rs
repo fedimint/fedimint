@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use crate::assets::WithStaticRoutesExt as _;
 use crate::{
-    AuthState, LoginInput, check_auth, layout, login_form_response, login_submit_response,
+    AuthState, LoginInput, check_auth, common_head, login_form_response, login_submit_response,
 };
 
 #[derive(Debug, Deserialize)]
@@ -32,7 +32,7 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
         (DOCTYPE)
         html {
             head {
-                (layout::common_head(title))
+                (common_head(title))
             }
             body {
                 div class="container" {
