@@ -38,6 +38,7 @@ use iroh::endpoint::{Incoming, RecvStream, SendStream};
 use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
+use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -49,7 +50,7 @@ use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::P2PStatusReceivers;
-use crate::{net, update_server_info_version_dbtx};
+use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -67,8 +68,8 @@ pub async fn run(
     data_dir: PathBuf,
     code_version_str: String,
     dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
-    ui_bind_addr: SocketAddr,
-    dashboard_ui_handler: Option<crate::DashboardUiHandler>,
+    ui_bind: SocketAddr,
+    dashboard_ui_router: DashboardUiRouter,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -242,13 +243,20 @@ pub async fn run(
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
-    if let Some(dashboard_ui_handler) = dashboard_ui_handler {
-        task_group.spawn("dashboard-ui", move |handle| {
-            dashboard_ui_handler(consensus_api.clone().into_dyn(), ui_bind_addr, handle)
-        });
+    let ui_service = dashboard_ui_router(consensus_api.clone().into_dyn()).into_make_service();
 
-        info!(target: LOG_CONSENSUS, "Dashboard UI running at http://{ui_bind_addr} 🚀");
-    }
+    let ui_listener = TcpListener::bind(ui_bind)
+        .await
+        .expect("Failed to bind dashboard UI");
+
+    task_group.spawn("dashboard-ui", move |handle| async move {
+        axum::serve(ui_listener, ui_service)
+            .with_graceful_shutdown(handle.make_shutdown_rx())
+            .await
+            .expect("Failed to serve dashboard UI");
+    });
+
+    info!(target: LOG_CONSENSUS, "Dashboard UI running at http://{ui_bind} 🚀");
 
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!

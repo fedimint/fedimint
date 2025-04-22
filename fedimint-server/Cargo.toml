@@ -23,6 +23,7 @@ aleph-bft = { workspace = true }
 anyhow = { workspace = true }
 async-channel = { workspace = true }
 async-trait = { workspace = true }
+axum = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }

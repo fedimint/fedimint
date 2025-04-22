@@ -476,8 +476,8 @@ async fn run(
         &module_inits,
         task_group.clone(),
         dyn_server_bitcoin_rpc,
-        Some(Box::new(fedimint_server_ui::dashboard::start)),
-        Some(Box::new(fedimint_server_ui::setup::start)),
+        Box::new(fedimint_server_ui::setup::router),
+        Box::new(fedimint_server_ui::dashboard::router),
     ))
     .await
 }
