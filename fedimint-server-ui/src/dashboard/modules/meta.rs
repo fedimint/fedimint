@@ -13,7 +13,13 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, warn};
 
-use crate::{AuthState, LOG_UI, check_auth};
+use crate::{AuthState, LOG_UI, LOGIN_ROUTE, check_auth};
+
+// Meta route constants
+pub const META_SUBMIT_ROUTE: &str = "/meta/submit";
+pub const META_SET_ROUTE: &str = "/meta/set";
+pub const META_RESET_ROUTE: &str = "/meta/reset";
+pub const META_DELETE_ROUTE: &str = "/meta/delete";
 
 // Function to render the Meta module UI section
 pub async fn render(meta: &Meta) -> Markup {
@@ -113,7 +119,7 @@ fn render_submissions_form(our_id: PeerId, submissions: &BTreeMap<PeerId, Value>
                                     @if !peer_ids.contains(&our_id) {
                                         td {
                                             form method="post"
-                                                hx-post="/meta/submit"
+                                                hx-post=(META_SUBMIT_ROUTE)
                                                 hx-swap="none"
                                             {
                                                 input type="hidden" name="json_content"
@@ -168,7 +174,7 @@ pub async fn post_submit(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let meta_module = state.api.get_module::<Meta>().unwrap();
@@ -207,7 +213,7 @@ pub async fn post_reset(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let meta_module = state.api.get_module::<Meta>().unwrap();
@@ -256,7 +262,7 @@ pub async fn post_set(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let mut top_level_object = form.top_level_keys()?;
@@ -281,7 +287,7 @@ pub async fn post_delete(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let mut top_level_json = form.top_level_keys()?;
@@ -362,7 +368,7 @@ pub fn render_meta_edit_form(
                 button class="btn btn-primary btn-min-width"
                     type="button" id="button-set"
                     title="Set a value in a meta proposal"
-                    hx-post="/meta/set"
+                    hx-post=(META_SET_ROUTE)
                     hx-swap="none"
                     hx-trigger="click, keypress[key=='Enter'] from:#add-value, keypress[key=='Enter'] from:#add-key"
                 { "Set" }
@@ -378,7 +384,7 @@ pub fn render_meta_edit_form(
                     }
                 }
                 button class="btn btn-primary btn-min-width"
-                    hx-post="/meta/delete"
+                    hx-post=(META_DELETE_ROUTE)
                     hx-swap="none"
                     hx-trigger="click, keypress[key=='Enter'] from:#delete-key"
                     title="Delete a value in a meta proposal"
@@ -387,11 +393,11 @@ pub fn render_meta_edit_form(
             div class="d-flex justify-content-between btn-min-width" {
                 button class="btn btn-outline-warning me-5"
                     title="Reset to current consensus"
-                    hx-post="/meta/reset"
+                    hx-post=(META_RESET_ROUTE)
                     hx-swap="none"
                 { "Reset" }
                 button class="btn btn-success btn-min-width"
-                    hx-post="/meta/submit"
+                    hx-post=(META_SUBMIT_ROUTE)
                     hx-swap="none"
                     title="Submit new meta document for approval of other peers"
                 { "Submit" }

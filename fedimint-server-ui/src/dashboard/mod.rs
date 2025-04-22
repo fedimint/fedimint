@@ -17,7 +17,8 @@ use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 use crate::assets::WithStaticRoutesExt as _;
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
-    AuthState, LoginInput, check_auth, common_head, login_form_response, login_submit_response,
+    AuthState, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, check_auth, common_head, login_form_response,
+    login_submit_response,
 };
 
 pub fn dashboard_layout(content: Markup) -> Markup {
@@ -68,7 +69,7 @@ async fn dashboard_view(
     jar: CookieJar,
 ) -> impl IntoResponse {
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
+        return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
     let guardian_names = state.api.guardian_names().await;
@@ -141,8 +142,8 @@ async fn dashboard_view(
 
 pub fn router(api: DynDashboardApi) -> Router {
     let mut app = Router::new()
-        .route("/", get(dashboard_view))
-        .route("/login", get(login_form).post(login_submit))
+        .route(ROOT_ROUTE, get(dashboard_view))
+        .route(LOGIN_ROUTE, get(login_form).post(login_submit))
         .with_static_routes();
 
     // routeradd LNv2 gateway routes if the module exists
@@ -151,17 +152,17 @@ pub fn router(api: DynDashboardApi) -> Router {
         .is_some()
     {
         app = app
-            .route("/lnv2_gateway_add", post(lnv2::add_gateway))
-            .route("/lnv2_gateway_remove", post(lnv2::remove_gateway));
+            .route(lnv2::LNV2_ADD_ROUTE, post(lnv2::post_add))
+            .route(lnv2::LNV2_REMOVE_ROUTE, post(lnv2::post_remove));
     }
 
     // Only add Meta module routes if the module exists
     if api.get_module::<fedimint_meta_server::Meta>().is_some() {
         app = app
-            .route("/meta/submit", post(meta::post_submit))
-            .route("/meta/set", post(meta::post_set))
-            .route("/meta/reset", post(meta::post_reset))
-            .route("/meta/delete", post(meta::post_delete))
+            .route(meta::META_SUBMIT_ROUTE, post(meta::post_submit))
+            .route(meta::META_SET_ROUTE, post(meta::post_set))
+            .route(meta::META_RESET_ROUTE, post(meta::post_reset))
+            .route(meta::META_DELETE_ROUTE, post(meta::post_delete));
     }
 
     // Finalize the router with state
