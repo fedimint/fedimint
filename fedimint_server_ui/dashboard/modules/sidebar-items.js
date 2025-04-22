@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["lnv2","meta","wallet"]};

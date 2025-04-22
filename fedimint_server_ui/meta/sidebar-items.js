@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["WELL_KNOWN_KEYS"],"fn":["post_delete","post_reset","post_set","post_submit","render","render_meta_edit_form","render_submissions_form"],"struct":["MetaEditForm"]};

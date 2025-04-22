@@ -476,8 +476,8 @@
 <a href=#476 id=476 data-nosnippet>476</a>        <span class="kw-2">&amp;</span>module_inits,
 <a href=#477 id=477 data-nosnippet>477</a>        task_group.clone(),
 <a href=#478 id=478 data-nosnippet>478</a>        dyn_server_bitcoin_rpc,
-<a href=#479 id=479 data-nosnippet>479</a>        <span class="prelude-val">Some</span>(Box::new(fedimint_server_ui::dashboard::start)),
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="prelude-val">Some</span>(Box::new(fedimint_server_ui::setup::start)),
+<a href=#479 id=479 data-nosnippet>479</a>        Box::new(fedimint_server_ui::setup::router),
+<a href=#480 id=480 data-nosnippet>480</a>        Box::new(fedimint_server_ui::dashboard::router),
 <a href=#481 id=481 data-nosnippet>481</a>    ))
 <a href=#482 id=482 data-nosnippet>482</a>    .<span class="kw">await
 <a href=#483 id=483 data-nosnippet>483</a></span>}</code></pre></div></section></main></body></html>
