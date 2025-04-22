@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["add_gateway","remove_gateway","render"],"struct":["GatewayForm"]};
+window.SIDEBAR_ITEMS = {"constant":["LNV2_ADD_ROUTE","LNV2_REMOVE_ROUTE"],"fn":["post_add","post_remove","render"],"struct":["GatewayForm"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["add_peer_handler","federation_setup","login_form","login_submit","reset_peers_handler","router","setup_form","setup_layout","setup_submit","start_dkg_handler"],"struct":["PeerInfoInput","SetupInput"]};
+window.SIDEBAR_ITEMS = {"constant":["ADD_SETUP_CODE_ROUTE","FEDERATION_SETUP_ROUTE","RESET_SETUP_CODES_ROUTE","START_DKG_ROUTE"],"fn":["federation_setup","login_form","login_submit","post_add_setup_code","post_reset_setup_codes","post_start_dkg","router","setup_form","setup_layout","setup_submit"],"struct":["PeerInfoInput","SetupInput"]};

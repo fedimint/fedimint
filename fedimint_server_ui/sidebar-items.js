@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["LOG_UI"],"fn":["check_auth","common_head","login_form_response","login_layout","login_submit_response"],"mod":["assets","dashboard","setup"],"struct":["AuthState","LoginInput"]};
+window.SIDEBAR_ITEMS = {"constant":["LOGIN_ROUTE","LOG_UI","ROOT_ROUTE"],"fn":["check_auth","common_head","login_form_response","login_layout","login_submit_response"],"mod":["assets","dashboard","setup"],"struct":["AuthState","LoginInput"]};
