@@ -9,6 +9,7 @@ pub const BOOTSTRAP_JS_ROUTE: &str = "/assets/bootstrap.bundle.min.js";
 pub const HTMX_JS_ROUTE: &str = "/assets/htmx.org-2.0.4.min.js";
 pub const STYLE_CSS_ROUTE: &str = "/assets/style.css";
 pub const LOGO_PNG_ROUTE: &str = "/assets/logo.png";
+pub const NOSTR_PNG_ROUTE: &str = "/assets/nostr.png";
 
 pub(crate) fn get_static_asset(content_type: &'static str, body: &'static [u8]) -> Response {
     (
@@ -59,6 +60,10 @@ where
         .route(
             LOGO_PNG_ROUTE,
             get(|| async move { get_static_png(include_bytes!("../assets/logo.png")) }),
+        )
+        .route(
+            NOSTR_PNG_ROUTE,
+            get(|| async move { get_static_png(include_bytes!("../assets/nostr.png")) }),
         )
     }
 }

@@ -599,6 +599,13 @@ impl IDashboardApi for ConsensusApi {
         self.bitcoin_rpc_connection.status()
     }
 
+    fn supported_modules(&self) -> Vec<String> {
+        self.modules
+            .iter_modules_id_kind()
+            .map(|(_, k)| k.to_string())
+            .collect()
+    }
+
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule> {
         self.modules
             .iter_modules()

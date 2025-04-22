@@ -24,6 +24,7 @@ fedimint-meta-server = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-wallet-server = { workspace = true }
 maud = { workspace = true }
+nostr-sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

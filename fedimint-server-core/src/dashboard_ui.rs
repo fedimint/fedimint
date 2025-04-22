@@ -53,6 +53,9 @@ pub trait IDashboardApi {
     /// Get reference to a server module instance by module kind
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule>;
 
+    /// Get a list of modules supported by the server
+    fn supported_modules(&self) -> Vec<String>;
+
     /// Create a trait object
     fn into_dyn(self) -> DynDashboardApi
     where

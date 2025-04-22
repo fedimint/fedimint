@@ -4,6 +4,7 @@ pub mod general;
 pub mod invite;
 pub mod latency;
 pub mod modules;
+pub mod nostr;
 
 use axum::Router;
 use axum::extract::{Form, State};
@@ -135,6 +136,15 @@ async fn dashboard_view(
                 }
             }
         }
+
+        // Conditionally add Nostr UI if the Wallet module is available
+        @if let Some(_wallet_module) = state.api.get_module::<fedimint_wallet_server::Wallet>() {
+            div class="row gy-4 mt-2" {
+                div class="col-12" {
+                    (nostr::render().await)
+                }
+            }
+        }
     };
 
     Html(dashboard_layout(content).into_string()).into_response()
@@ -163,6 +173,11 @@ pub fn router(api: DynDashboardApi) -> Router {
             .route(meta::META_SET_ROUTE, post(meta::post_set))
             .route(meta::META_RESET_ROUTE, post(meta::post_reset))
             .route(meta::META_DELETE_ROUTE, post(meta::post_delete));
+    }
+
+    // Broadcasting via nostr requires the Wallet module
+    if api.get_module::<fedimint_wallet_server::Wallet>().is_some() {
+        app = app.route(nostr::NOSTR_BROADCAST, post(nostr::post_broadcast));
     }
 
     // Finalize the router with state
