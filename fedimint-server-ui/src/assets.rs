@@ -3,6 +3,13 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
+// Asset route constants
+pub const BOOTSTRAP_CSS_ROUTE: &str = "/assets/bootstrap.min.css";
+pub const BOOTSTRAP_JS_ROUTE: &str = "/assets/bootstrap.bundle.min.js";
+pub const HTMX_JS_ROUTE: &str = "/assets/htmx.org-2.0.4.min.js";
+pub const STYLE_CSS_ROUTE: &str = "/assets/style.css";
+pub const LOGO_PNG_ROUTE: &str = "/assets/logo.png";
+
 pub(crate) fn get_static_asset(content_type: &'static str, body: &'static [u8]) -> Response {
     (
         [(CONTENT_TYPE, content_type)],
@@ -34,23 +41,23 @@ where
 {
     fn with_static_routes(self) -> Self {
         self.route(
-            "/assets/bootstrap.min.css",
+            BOOTSTRAP_CSS_ROUTE,
             get(|| async move { get_static_css(include_str!("../assets/bootstrap.min.css")) }),
         )
         .route(
-            "/assets/bootstrap.bundle.min.js",
+            BOOTSTRAP_JS_ROUTE,
             get(|| async move { get_static_js(include_str!("../assets/bootstrap.bundle.min.js")) }),
         )
         .route(
-            "/assets/htmx.org-2.0.4.min.js",
+            HTMX_JS_ROUTE,
             get(|| async move { get_static_js(include_str!("../assets/htmx.org-2.0.4.min.js")) }),
         )
         .route(
-            "/assets/style.css",
+            STYLE_CSS_ROUTE,
             get(|| async move { get_static_css(include_str!("../assets/style.css")) }),
         )
         .route(
-            "/assets/logo.png",
+            LOGO_PNG_ROUTE,
             get(|| async move { get_static_png(include_bytes!("../assets/logo.png")) }),
         )
     }

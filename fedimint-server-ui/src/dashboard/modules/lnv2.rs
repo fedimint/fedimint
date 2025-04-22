@@ -5,7 +5,11 @@ use fedimint_core::util::SafeUrl;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use maud::{Markup, html};
 
-use crate::{AuthState, check_auth};
+use crate::{AuthState, LOGIN_ROUTE, ROOT_ROUTE, check_auth};
+
+// LNv2 route constants
+pub const LNV2_ADD_ROUTE: &str = "/lnv2/add";
+pub const LNV2_REMOVE_ROUTE: &str = "/lnv2/remove";
 
 // Form for gateway management
 #[derive(serde::Deserialize)]
@@ -61,7 +65,7 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
                                                     tr {
                                                         td { (gateway.to_string()) }
                                                         td class="text-end" {
-                                                            form action="/lnv2_gateway_remove" method="post" style="display: inline;" {
+                                                            form action=(LNV2_REMOVE_ROUTE) method="post" style="display: inline;" {
                                                                 input type="hidden" name="gateway_url" value=(gateway.to_string());
                                                                 button type="submit" class="btn btn-sm btn-danger" {
                                                                     "Remove"
@@ -82,7 +86,7 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
                         // Right tile - Add gateway form
                         div class="col-lg-6 ps-lg-4" {
                             div class="d-flex flex-column align-items-center h-100" {
-                                form action="/lnv2_gateway_add" method="post" class="w-100" style="max-width: 400px;" {
+                                form action=(LNV2_ADD_ROUTE) method="post" class="w-100" style="max-width: 400px;" {
                                     div class="mb-3" {
                                         input
                                             type="url"
@@ -111,13 +115,13 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
 }
 
 // Handler for adding a new gateway
-pub async fn add_gateway(
+pub async fn post_add(
     State(state): State<AuthState<DynDashboardApi>>,
     jar: CookieJar,
     Form(form): Form<GatewayForm>,
 ) -> impl IntoResponse {
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
+        return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
     state
@@ -127,17 +131,17 @@ pub async fn add_gateway(
         .add_gateway_ui(form.gateway_url)
         .await;
 
-    Redirect::to("/").into_response()
+    Redirect::to(ROOT_ROUTE).into_response()
 }
 
 // Handler for removing a gateway
-pub async fn remove_gateway(
+pub async fn post_remove(
     State(state): State<AuthState<DynDashboardApi>>,
     jar: CookieJar,
     Form(form): Form<GatewayForm>,
 ) -> impl IntoResponse {
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
+        return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
     state
@@ -147,5 +151,5 @@ pub async fn remove_gateway(
         .remove_gateway_ui(form.gateway_url)
         .await;
 
-    Redirect::to("/").into_response()
+    Redirect::to(ROOT_ROUTE).into_response()
 }

@@ -12,6 +12,10 @@ use serde::Deserialize;
 
 pub(crate) const LOG_UI: &str = "fm::ui";
 
+// Common route constants
+pub const ROOT_ROUTE: &str = "/";
+pub const LOGIN_ROUTE: &str = "/login";
+
 pub fn common_head(title: &str) -> Markup {
     html! {
         meta charset="utf-8";
