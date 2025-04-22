@@ -24,10 +24,7 @@ extern crate fedimint_core;
 pub mod db;
 
 use std::fs;
-use std::future::Future;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 
 use anyhow::Context;
 use config::ServerConfig;
@@ -37,7 +34,7 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::net::peers::DynP2PConnections;
-use fedimint_core::task::{TaskGroup, TaskHandle};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 pub use fedimint_server_core as core;
@@ -49,6 +46,7 @@ use jsonrpsee::RpcModule;
 use net::api::ApiSecrets;
 use net::p2p::P2PStatusReceivers;
 use net::p2p_connector::IrohConnector;
+use tokio::net::TcpListener;
 use tracing::{info, warn};
 
 use crate::config::ConfigGenSettings;
@@ -74,20 +72,10 @@ pub mod net;
 pub mod config;
 
 /// A function/closure type for handling dashboard UI
-pub type DashboardUiHandler = Box<
-    dyn Fn(DynDashboardApi, SocketAddr, TaskHandle) -> Pin<Box<dyn Future<Output = ()> + Send>>
-        + Send
-        + Sync
-        + 'static,
->;
+pub type DashboardUiRouter = Box<dyn Fn(DynDashboardApi) -> axum::Router + Send>;
 
 /// A function/closure type for handling setup UI
-pub type SetupUiHandler = Box<
-    dyn Fn(DynSetupApi, SocketAddr, TaskHandle) -> Pin<Box<dyn Future<Output = ()> + Send>>
-        + Send
-        + Sync
-        + 'static,
->;
+pub type SetupUiRouter = Box<dyn Fn(DynSetupApi) -> axum::Router + Send>;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
@@ -99,8 +87,8 @@ pub async fn run(
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
     bitcoin_rpc: DynServerBitcoinRpc,
-    dashboard_ui_handler: Option<DashboardUiHandler>,
-    setup_ui_handler: Option<SetupUiHandler>,
+    setup_ui_router: SetupUiRouter,
+    dashboard_ui_router: DashboardUiRouter,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -147,7 +135,7 @@ pub async fn run(
                 &task_group,
                 code_version_str.clone(),
                 force_api_secrets.clone(),
-                setup_ui_handler,
+                setup_ui_router,
             ))
             .await?
         }
@@ -181,7 +169,7 @@ pub async fn run(
         code_version_str,
         bitcoin_rpc,
         settings.ui_bind,
-        dashboard_ui_handler,
+        dashboard_ui_router,
     ))
     .await?;
 
@@ -234,7 +222,7 @@ pub async fn run_config_gen(
     task_group: &TaskGroup,
     code_version_str: String,
     api_secrets: ApiSecrets,
-    setup_ui_handler: Option<SetupUiHandler>,
+    setup_ui_handler: SetupUiRouter,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -246,9 +234,9 @@ pub async fn run_config_gen(
 
     let (cgp_sender, mut cgp_receiver) = tokio::sync::mpsc::channel(1);
 
-    let config_gen = SetupApi::new(settings.clone(), db.clone(), cgp_sender);
+    let setup_api = SetupApi::new(settings.clone(), db.clone(), cgp_sender);
 
-    let mut rpc_module = RpcModule::new(config_gen.clone());
+    let mut rpc_module = RpcModule::new(setup_api.clone());
 
     net::api::attach_endpoints(&mut rpc_module, config::setup::server_endpoints(), None);
 
@@ -264,13 +252,20 @@ pub async fn run_config_gen(
 
     let ui_task_group = TaskGroup::new();
 
-    if let Some(setup_ui_handler) = setup_ui_handler {
-        ui_task_group.spawn("web-ui", move |handle| {
-            setup_ui_handler(config_gen.clone().into_dyn(), settings.ui_bind, handle)
-        });
+    let ui_service = setup_ui_handler(setup_api.clone().into_dyn()).into_make_service();
 
-        info!(target: LOG_CONSENSUS, "Setup UI running at http://{} 🚀", settings.ui_bind);
-    }
+    let ui_listener = TcpListener::bind(settings.ui_bind)
+        .await
+        .expect("Failed to bind setup UI");
+
+    ui_task_group.spawn("setup-ui", move |handle| async move {
+        axum::serve(ui_listener, ui_service)
+            .with_graceful_shutdown(handle.make_shutdown_rx())
+            .await
+            .expect("Failed to serve setup UI");
+    });
+
+    info!(target: LOG_CONSENSUS, "Setup UI running at http://{} 🚀", settings.ui_bind);
 
     let cg_params = cgp_receiver
         .recv()

@@ -1,18 +1,12 @@
-use std::future::Future;
-use std::net::SocketAddr;
-use std::pin::Pin;
-
 use axum::Router;
 use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::module::ApiAuth;
-use fedimint_core::task::TaskHandle;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
-use tokio::net::TcpListener;
 
 use crate::assets::WithStaticRoutesExt as _;
 use crate::{
@@ -336,12 +330,8 @@ async fn reset_peers_handler(
     Redirect::to("/federation-setup").into_response()
 }
 
-pub fn start(
-    api: DynSetupApi,
-    ui_bind: SocketAddr,
-    task_handle: TaskHandle,
-) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    let app = Router::new()
+pub fn router(api: DynSetupApi) -> Router {
+    Router::new()
         .route("/", get(setup_form).post(setup_submit))
         .route("/login", get(login_form).post(login_submit))
         .route("/federation-setup", get(federation_setup))
@@ -349,16 +339,5 @@ pub fn start(
         .route("/reset-connection-info", post(reset_peers_handler))
         .route("/start-dkg", post(start_dkg_handler))
         .with_static_routes()
-        .with_state(AuthState::new(api));
-
-    Box::pin(async move {
-        let listener = TcpListener::bind(ui_bind)
-            .await
-            .expect("Failed to bind setup UI");
-
-        axum::serve(listener, app.into_make_service())
-            .with_graceful_shutdown(task_handle.make_shutdown_rx())
-            .await
-            .expect("Failed to serve setup UI");
-    })
+        .with_state(AuthState::new(api))
 }

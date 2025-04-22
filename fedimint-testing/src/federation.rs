@@ -24,6 +24,7 @@ use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
+use fedimint_server::net::api::ApiSecrets;
 use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
@@ -298,12 +299,12 @@ impl FederationTestBuilder {
                     db.clone(),
                     module_init_registry,
                     &subgroup,
-                    fedimint_server::net::api::ApiSecrets::default(),
+                    ApiSecrets::default(),
                     checkpoint_dir,
                     code_version_str.to_string(),
                     bitcoin_rpc_connection,
                     ui_bind,
-                    None,
+                    Box::new(|_| axum::Router::new()),
                 ))
                 .await
                 .expect("Could not initialise consensus");
