@@ -139,7 +139,19 @@ pub enum LightningConsensusItem {
 
 impl std::fmt::Display for LightningConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LightningConsensusItem")
+        match self {
+            LightningConsensusItem::BlockCountVote(c) => {
+                write!(f, "LNv2 Block Count {c}")
+            }
+            LightningConsensusItem::UnixTimeVote(t) => {
+                write!(f, "LNv2 Unix Time {t}")
+            }
+            LightningConsensusItem::Default { variant, bytes } => write!(
+                f,
+                "LNv2 Unknown - variant: {variant}, bytes_len: {}",
+                bytes.len()
+            ),
+        }
     }
 }
 
