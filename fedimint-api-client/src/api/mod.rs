@@ -1212,7 +1212,8 @@ mod iroh {
     #[derive(Debug, Clone)]
     pub struct IrohConnector {
         node_ids: BTreeMap<PeerId, NodeId>,
-        endpoint: Endpoint,
+        endpoint_a: Endpoint,
+        endpoint_b: Endpoint,
     }
 
     impl IrohConnector {
@@ -1237,16 +1238,31 @@ mod iroh {
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
 
-            let endpoint = builder.bind().await?;
+            let endpoint_a = builder.bind().await?;
+
+            let builder = Endpoint::builder()
+                .relay_mode(RelayMode::Disabled)
+                .discovery_n0();
+
+            #[cfg(not(target_family = "wasm"))]
+            let builder = builder.discovery_dht();
+
+            let endpoint_b = builder.bind().await?;
 
             debug!(
                 target: LOG_NET_IROH,
-                node_id = %endpoint.node_id(),
-                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                node_id_a = %endpoint_a.node_id(),
+                node_id_pkarr_a = %z32::encode(endpoint_a.node_id().as_bytes()),
+                node_id_b = %endpoint_a.node_id(),
+                node_id_pkarr_b = %z32::encode(endpoint_b.node_id().as_bytes()),
                 "Iroh api client endpoint"
             );
 
-            Ok(Self { node_ids, endpoint })
+            Ok(Self {
+                node_ids,
+                endpoint_a,
+                endpoint_b,
+            })
         }
     }
 
@@ -1262,13 +1278,16 @@ mod iroh {
                 .get(&peer_id)
                 .ok_or(PeerError::InvalidPeerId { peer_id })?;
 
-            let connection = self
-                .endpoint
-                .connect(node_id, FEDIMINT_API_ALPN)
-                .await
-                .map_err(PeerError::Connection)?;
+            let connection = tokio::select! {
+                c = self.endpoint_a.connect(node_id, FEDIMINT_API_ALPN)  => {
+                    c.map_err(PeerError::Connection)?.into_dyn()
+                }
+                c = self.endpoint_b.connect(node_id, FEDIMINT_API_ALPN)  => {
+                    c.map_err(PeerError::Connection)?.into_dyn()
+                }
+            };
 
-            Ok(connection.into_dyn())
+            Ok(connection)
         }
     }
 
