@@ -22,7 +22,7 @@ use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::block_on;
 use fedimint_core::task::jit::JitTryAnyhow;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{SafeUrl, backoff_util, retry};
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
@@ -230,7 +230,13 @@ impl Client {
     }
 
     pub async fn await_deposit(&self, operation_id: &str) -> Result<()> {
-        cmd!(self, "await-deposit", operation_id).run().await
+        retry(
+            "await-deposit",
+            backoff_util::aggressive_backoff(),
+            || async { cmd!(self, "await-deposit", operation_id).run().await },
+        )
+        .await
+        .context("Failed to await-deposit")
     }
 
     pub fn cmd(&self) -> Command {
