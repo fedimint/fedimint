@@ -53,7 +53,6 @@ impl MintGenParamsConsensus {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
-    pub local: MintConfigLocal,
     pub private: MintConfigPrivate,
     pub consensus: MintConfigConsensus,
 }
@@ -103,7 +102,6 @@ plugin_types_trait_impl_config!(
     EmptyGenParams,
     MintGenParamsConsensus,
     MintConfig,
-    MintConfigLocal,
     MintConfigPrivate,
     MintConfigConsensus,
     MintClientConfig

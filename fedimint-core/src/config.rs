@@ -777,35 +777,23 @@ impl ClientModuleConfig {
 /// See [`ClientModuleConfig`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ServerModuleConfig {
-    pub local: JsonWithKind,
     pub private: JsonWithKind,
     pub consensus: ServerModuleConsensusConfig,
 }
 
 impl ServerModuleConfig {
-    pub fn from(
-        local: JsonWithKind,
-        private: JsonWithKind,
-        consensus: ServerModuleConsensusConfig,
-    ) -> Self {
-        Self {
-            local,
-            private,
-            consensus,
-        }
+    pub fn from(private: JsonWithKind, consensus: ServerModuleConsensusConfig) -> Self {
+        Self { private, consensus }
     }
 
     pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
-        let local = serde_json::from_value(self.local.value().clone())?;
         let private = serde_json::from_value(self.private.value().clone())?;
         let consensus = <T::Consensus>::consensus_decode_whole(
             &self.consensus.config[..],
             &ModuleRegistry::default(),
         )?;
 
-        Ok(TypedServerModuleConfig::from_parts(
-            local, private, consensus,
-        ))
+        Ok(TypedServerModuleConfig::from_parts(private, consensus))
     }
 }
 
@@ -827,8 +815,6 @@ pub trait TypedServerModuleConsensusConfig:
 
 /// Module (server side) config, typed
 pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
-    /// Local non-consensus, not security-sensitive settings
-    type Local: DeserializeOwned + Serialize;
     /// Private for this federation member data that are security sensitive and
     /// will be encrypted at rest
     type Private: DeserializeOwned + Serialize;
@@ -836,20 +822,16 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
     type Consensus: TypedServerModuleConsensusConfig;
 
     /// Assemble from the three functionally distinct parts
-    fn from_parts(local: Self::Local, private: Self::Private, consensus: Self::Consensus) -> Self;
+    fn from_parts(private: Self::Private, consensus: Self::Consensus) -> Self;
 
-    /// Split the config into its three functionally distinct parts
-    fn to_parts(self) -> (ModuleKind, Self::Local, Self::Private, Self::Consensus);
+    /// Split the config into its two functionally distinct parts
+    fn to_parts(self) -> (ModuleKind, Self::Private, Self::Consensus);
 
     /// Turn the typed config into type-erased version
     fn to_erased(self) -> ServerModuleConfig {
-        let (kind, local, private, consensus) = self.to_parts();
+        let (kind, private, consensus) = self.to_parts();
 
         ServerModuleConfig {
-            local: JsonWithKind::new(
-                kind.clone(),
-                serde_json::to_value(local).expect("serialization can't fail"),
-            ),
             private: JsonWithKind::new(
                 kind,
                 serde_json::to_value(private).expect("serialization can't fail"),

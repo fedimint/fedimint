@@ -200,8 +200,6 @@ pub struct ServerConfigLocal {
     /// consensus items confirmed. This is only relevant for byzantine
     /// faults.
     pub broadcast_round_delay_ms: u16,
-    /// Non-consensus, non-private configuration from modules
-    pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
 }
 
 /// All the info we configure prior to config gen starting
@@ -397,10 +395,6 @@ impl ServerConfig {
             } else {
                 DEFAULT_BROADCAST_ROUND_DELAY_MS
             },
-            modules: modules
-                .iter()
-                .map(|(peer, cfg)| (*peer, cfg.local.clone()))
-                .collect(),
         };
 
         let private = ServerConfigPrivate {
@@ -442,7 +436,6 @@ impl ServerConfig {
         &self,
         id: ModuleInstanceId,
     ) -> anyhow::Result<T> {
-        let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
         let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
         let consensus = self
             .consensus
@@ -450,7 +443,7 @@ impl ServerConfig {
             .get(&id)
             .ok_or_else(|| format_err!("Module {id} not found"))?
             .clone();
-        let module = ServerModuleConfig::from(local, private, consensus);
+        let module = ServerModuleConfig::from(private, consensus);
 
         module.to_typed()
     }
@@ -470,7 +463,6 @@ impl ServerConfig {
 
     /// Constructs a module config by id
     pub fn get_module_config(&self, id: ModuleInstanceId) -> anyhow::Result<ServerModuleConfig> {
-        let local = Self::get_module_cfg_by_instance_id(&self.local.modules, id)?;
         let private = Self::get_module_cfg_by_instance_id(&self.private.modules, id)?;
         let consensus = self
             .consensus
@@ -478,7 +470,7 @@ impl ServerConfig {
             .get(&id)
             .ok_or_else(|| format_err!("Module {id} not found"))?
             .clone();
-        Ok(ServerModuleConfig::from(local, private, consensus))
+        Ok(ServerModuleConfig::from(private, consensus))
     }
 
     fn get_module_cfg_by_instance_id(

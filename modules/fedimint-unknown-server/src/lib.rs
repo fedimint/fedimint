@@ -23,8 +23,8 @@ use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 pub use fedimint_unknown_common as common;
 use fedimint_unknown_common::config::{
-    UnknownClientConfig, UnknownConfig, UnknownConfigConsensus, UnknownConfigLocal,
-    UnknownConfigPrivate, UnknownGenParams,
+    UnknownClientConfig, UnknownConfig, UnknownConfigConsensus, UnknownConfigPrivate,
+    UnknownGenParams,
 };
 use fedimint_unknown_common::{
     MODULE_CONSENSUS_VERSION, UnknownCommonInit, UnknownConsensusItem, UnknownInput,
@@ -89,7 +89,6 @@ impl ServerModuleInit for UnknownInit {
             .iter()
             .map(|&peer| {
                 let config = UnknownConfig {
-                    local: UnknownConfigLocal {},
                     private: UnknownConfigPrivate,
                     consensus: UnknownConfigConsensus {},
                 };
@@ -107,7 +106,6 @@ impl ServerModuleInit for UnknownInit {
         let _params = self.parse_params(params).unwrap();
 
         Ok(UnknownConfig {
-            local: UnknownConfigLocal {},
             private: UnknownConfigPrivate,
             consensus: UnknownConfigConsensus {},
         }
