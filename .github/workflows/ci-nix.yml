@@ -256,9 +256,7 @@ jobs:
           - host: linux
             runs-on: [self-hosted, linux, x64]
             build-in-pr: true
-            # TODO: debugging network issues, should reduce to 20 minutes
-            # https://github.com/fedimint/fedimint/issues/4488
-            timeout: 60
+            timeout: 20
           - host: macos
             runs-on: macos-14
             build-in-pr: false
