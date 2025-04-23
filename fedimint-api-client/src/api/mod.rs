@@ -503,6 +503,9 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         auth: ApiAuth,
     ) -> FederationResult<String>;
 
+    /// Reset the peer setup codes during the federation setup process
+    async fn reset_peer_setup_codes(&self, auth: ApiAuth) -> FederationResult<()>;
+
     /// During config gen, used for an API-to-API call that adds a peer's server
     /// connection info to the leader.
     ///
