@@ -45,3 +45,6 @@ pub const FM_BITCOIND_URL_ENV: &str = "FM_BITCOIND_URL";
 
 // Env variable for the Esplora URL
 pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";
+
+/// Use iroh for networking
+pub const FM_ENABLE_IROH_ENV: &str = "FM_ENABLE_IROH";

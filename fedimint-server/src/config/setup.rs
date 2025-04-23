@@ -32,7 +32,7 @@ use tokio_rustls::rustls;
 use tracing::warn;
 
 use super::PeerEndpoints;
-use crate::config::{ConfigGenParams, ConfigGenSettings, NetworkingStack, PeerSetupCode};
+use crate::config::{ConfigGenParams, ConfigGenSettings, PeerSetupCode};
 use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
 
@@ -166,66 +166,60 @@ impl ISetupApi for SetupApi {
             "Local parameters have already been set"
         );
 
-        let lp = match self.settings.networking {
-            NetworkingStack::Tcp => {
-                let (tls_cert, tls_key) = gen_cert_and_key(&name)
-                    .expect("Failed to generate TLS for given guardian name");
+        let lp = if self.settings.enable_iroh {
+            warn!(target: LOG_SERVER, "Iroh support is experimental");
 
-                LocalParams {
-                    auth,
-                    tls_key: Some(tls_key),
-                    iroh_api_sk: None,
-                    iroh_p2p_sk: None,
-                    endpoints: PeerEndpoints::Tcp {
-                        api_url: self
-                            .settings
-                            .api_url
-                            .clone()
-                            .ok_or_else(|| anyhow::format_err!("Api URL must be configured"))?,
-                        p2p_url: self
-                            .settings
-                            .p2p_url
-                            .clone()
-                            .ok_or_else(|| anyhow::format_err!("P2P URL must be configured"))?,
+            let iroh_api_sk = if let Ok(var) = std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV) {
+                SecretKey::from_str(&var)
+                    .with_context(|| format!("Parsing {FM_IROH_API_SECRET_KEY_OVERRIDE_ENV}"))?
+            } else {
+                SecretKey::generate(&mut OsRng)
+            };
 
-                        cert: tls_cert.0,
-                    },
-                    name,
-                    federation_name,
-                }
+            let iroh_p2p_sk = if let Ok(var) = std::env::var(FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV) {
+                SecretKey::from_str(&var)
+                    .with_context(|| format!("Parsing {FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV}"))?
+            } else {
+                SecretKey::generate(&mut OsRng)
+            };
+
+            LocalParams {
+                auth,
+                tls_key: None,
+                iroh_api_sk: Some(iroh_api_sk.clone()),
+                iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
+                endpoints: PeerEndpoints::Iroh {
+                    api_pk: iroh_api_sk.public(),
+                    p2p_pk: iroh_p2p_sk.public(),
+                },
+                name,
+                federation_name,
             }
-            NetworkingStack::Iroh => {
-                warn!(target: LOG_SERVER, "Iroh support is experimental");
-                let iroh_api_sk = if let Ok(var) =
-                    std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV)
-                {
-                    SecretKey::from_str(&var)
-                        .with_context(|| format!("Parsing {FM_IROH_API_SECRET_KEY_OVERRIDE_ENV}"))?
-                } else {
-                    SecretKey::generate(&mut OsRng)
-                };
+        } else {
+            let (tls_cert, tls_key) =
+                gen_cert_and_key(&name).expect("Failed to generate TLS for given guardian name");
 
-                let iroh_p2p_sk = if let Ok(var) =
-                    std::env::var(FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV)
-                {
-                    SecretKey::from_str(&var)
-                        .with_context(|| format!("Parsing {FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV}"))?
-                } else {
-                    SecretKey::generate(&mut OsRng)
-                };
+            LocalParams {
+                auth,
+                tls_key: Some(tls_key),
+                iroh_api_sk: None,
+                iroh_p2p_sk: None,
+                endpoints: PeerEndpoints::Tcp {
+                    api_url: self
+                        .settings
+                        .api_url
+                        .clone()
+                        .ok_or_else(|| anyhow::format_err!("Api URL must be configured"))?,
+                    p2p_url: self
+                        .settings
+                        .p2p_url
+                        .clone()
+                        .ok_or_else(|| anyhow::format_err!("P2P URL must be configured"))?,
 
-                LocalParams {
-                    auth,
-                    tls_key: None,
-                    iroh_api_sk: Some(iroh_api_sk.clone()),
-                    iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
-                    endpoints: PeerEndpoints::Iroh {
-                        api_pk: iroh_api_sk.public(),
-                        p2p_pk: iroh_p2p_sk.public(),
-                    },
-                    name,
-                    federation_name,
-                }
+                    cert: tls_cert.0,
+                },
+                name,
+                federation_name,
             }
         };
 

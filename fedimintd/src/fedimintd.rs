@@ -27,10 +27,9 @@ use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::MintInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
+use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::DB_FILE;
-use fedimint_server::config::{ConfigGenSettings, NetworkingStack};
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
-use fedimint_server::envs::FM_FORCE_IROH_ENV;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
@@ -48,8 +47,8 @@ use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
-    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
-    FM_P2P_URL_ENV,
+    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV,
+    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -120,6 +119,9 @@ struct ServerOpts {
     /// Ignored when Iroh stack is used. (newer/experimental)
     #[arg(long, env = FM_API_URL_ENV)]
     api_url: Option<SafeUrl>,
+
+    #[arg(long, env = FM_ENABLE_IROH_ENV)]
+    enable_iroh: bool,
 
     /// Enable tokio console logging
     #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
@@ -447,13 +449,9 @@ async fn run(
         ui_bind: opts.bind_ui,
         p2p_url: opts.p2p_url,
         api_url: opts.api_url,
+        enable_iroh: opts.enable_iroh,
         modules: module_inits_params.clone(),
         registry: module_inits.clone(),
-        networking: if is_env_var_set(FM_FORCE_IROH_ENV) {
-            NetworkingStack::Iroh
-        } else {
-            NetworkingStack::default()
-        },
     };
 
     let db = Database::new(
