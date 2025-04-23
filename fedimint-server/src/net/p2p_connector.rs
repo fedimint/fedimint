@@ -14,7 +14,8 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
-use iroh::{Endpoint, NodeId, SecretKey};
+use iroh::discovery::pkarr::{N0_DNS_PKARR_RELAY_PROD, PkarrPublisher, PkarrResolver};
+use iroh::{Endpoint, NodeId, RelayMap, RelayMode, RelayUrl, SecretKey};
 use rustls::ServerName;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -249,8 +250,10 @@ const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";
 impl IrohConnector {
     pub async fn new(
         secret_key: SecretKey,
-        p2p_bind_addr: SocketAddr,
         node_ids: BTreeMap<PeerId, NodeId>,
+        p2p_bind: SocketAddr,
+        iroh_dns: Option<SafeUrl>,
+        iroh_relay: Option<SafeUrl>,
     ) -> Self {
         let identity = *node_ids
             .iter()
@@ -258,22 +261,35 @@ impl IrohConnector {
             .expect("Our public key is not part of the keyset")
             .0;
 
+        let iroh_dns_a = iroh_dns
+            .clone()
+            .map_or(N0_DNS_PKARR_RELAY_PROD.parse().unwrap(), SafeUrl::to_unsafe);
+        let iroh_dns_b = iroh_dns
+            .clone()
+            .map_or(N0_DNS_PKARR_RELAY_PROD.parse().unwrap(), SafeUrl::to_unsafe);
+
+        let relay_mode = iroh_relay.map_or(RelayMode::Default, |url| {
+            RelayMode::Custom(RelayMap::from_url(RelayUrl::from(url.to_unsafe())))
+        });
+
         let builder = Endpoint::builder()
-            .discovery_n0()
+            .add_discovery(|sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns_a)))
+            .add_discovery(|_| Some(PkarrResolver::new(iroh_dns_b)))
             .discovery_dht()
+            .relay_mode(relay_mode)
             .secret_key(secret_key)
             .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()]);
 
-        let builder = match p2p_bind_addr {
+        let builder = match p2p_bind {
             SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
             SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
         };
 
-        let endpoint = builder.bind().await.expect("Could not bind to port");
+        let endpoint = builder.bind().await.expect("Failed to bind to p2p port");
 
         info!(
             target: LOG_NET_IROH,
-            %p2p_bind_addr,
+            %p2p_bind,
             node_id = %endpoint.node_id(),
             node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
             "Iroh p2p server endpoint"

@@ -209,6 +209,10 @@ pub struct ConfigGenSettings {
     pub api_url: Option<SafeUrl>,
     /// Enable iroh for networking
     pub enable_iroh: bool,
+    /// Optional URL of the Iroh DNS server
+    pub iroh_dns: Option<SafeUrl>,
+    /// Optional URLs of the Iroh relays
+    pub iroh_relay: Option<SafeUrl>,
     /// Set the params (if leader) or just the local params (if follower)
     pub modules: ServerModuleConfigGenParamsRegistry,
     /// Registry for config gen
