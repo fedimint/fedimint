@@ -84,7 +84,7 @@ pub async fn run(
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
-    module_init_registry: &ServerModuleInitRegistry,
+    module_init_registry: ServerModuleInitRegistry,
     task_group: TaskGroup,
     bitcoin_rpc: DynServerBitcoinRpc,
     setup_ui_router: SetupUiRouter,
