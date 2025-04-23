@@ -21,8 +21,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigLocal, DummyConfigPrivate,
-    DummyGenParams,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate, DummyGenParams,
 };
 use fedimint_dummy_common::{
     DummyCommonInit, DummyConsensusItem, DummyInput, DummyInputError, DummyModuleTypes,
@@ -130,7 +129,6 @@ impl ServerModuleInit for DummyInit {
             .iter()
             .map(|&peer| {
                 let config = DummyConfig {
-                    local: DummyConfigLocal {},
                     private: DummyConfigPrivate,
                     consensus: DummyConfigConsensus {
                         tx_fee: params.consensus.tx_fee,
@@ -150,7 +148,6 @@ impl ServerModuleInit for DummyInit {
         let params = self.parse_params(params).unwrap();
 
         Ok(DummyConfig {
-            local: DummyConfigLocal {},
             private: DummyConfigPrivate,
             consensus: DummyConfigConsensus {
                 tx_fee: params.consensus.tx_fee,

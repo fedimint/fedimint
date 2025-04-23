@@ -32,7 +32,6 @@ impl Default for EmptyGenParams {
 /// Contains all the configuration for the server
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmptyConfig {
-    pub local: EmptyConfigLocal,
     pub private: EmptyConfigPrivate,
     pub consensus: EmptyConfigConsensus,
 }
@@ -40,10 +39,6 @@ pub struct EmptyConfig {
 /// Contains all the configuration for the client
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
 pub struct EmptyClientConfig {}
-
-/// Locally unencrypted config unique to each member
-#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct EmptyConfigLocal {}
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
@@ -60,7 +55,6 @@ plugin_types_trait_impl_config!(
     EmptyGenParamsLocal,
     EmptyGenParamsConsensus,
     EmptyConfig,
-    EmptyConfigLocal,
     EmptyConfigPrivate,
     EmptyConfigConsensus,
     EmptyClientConfig

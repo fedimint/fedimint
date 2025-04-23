@@ -31,8 +31,8 @@ use fedimint_core::{
     push_db_pair_items,
 };
 use fedimint_lnv2_common::config::{
-    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
-    LightningConfigPrivate, LightningGenParams,
+    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
+    LightningGenParams,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -222,9 +222,6 @@ impl ServerModuleInit for LightningInit {
             .iter()
             .map(|peer| {
                 let cfg = LightningConfig {
-                    local: LightningConfigLocal {
-                        bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-                    },
                     consensus: LightningConfigConsensus {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
@@ -250,9 +247,6 @@ impl ServerModuleInit for LightningInit {
         let (polynomial, sks) = peers.run_dkg_g1().await?;
 
         let server = LightningConfig {
-            local: LightningConfigLocal {
-                bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-            },
             consensus: LightningConfigConsensus {
                 tpe_agg_pk: tpe::AggregatePublicKey(polynomial[0].to_affine()),
                 tpe_pks: peers

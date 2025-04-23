@@ -39,7 +39,6 @@ pub struct LightningGenParamsLocal {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
-    pub local: LightningConfigLocal,
     pub private: LightningConfigPrivate,
     pub consensus: LightningConfigConsensus,
 }
@@ -97,7 +96,6 @@ plugin_types_trait_impl_config!(
     LightningGenParamsLocal,
     LightningGenParamsConsensus,
     LightningConfig,
-    LightningConfigLocal,
     LightningConfigPrivate,
     LightningConfigConsensus,
     LightningClientConfig

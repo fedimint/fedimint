@@ -13,10 +13,7 @@ use fedimint_server_core::{ServerModule, ServerModuleInit};
 use tbs::blind_message;
 
 use crate::common::config::MintGenParamsConsensus;
-use crate::{
-    Mint, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate, MintGenParams,
-    MintInit,
-};
+use crate::{Mint, MintConfig, MintConfigConsensus, MintConfigPrivate, MintGenParams, MintInit};
 
 const MINTS: u16 = 5;
 
@@ -53,7 +50,6 @@ fn test_new_panic_without_own_pub_key() {
     let (mint_server_cfg2, _) = build_configs();
 
     Mint::new(MintConfig {
-        local: MintConfigLocal,
         consensus: MintConfigConsensus {
             peer_tbs_pks: mint_server_cfg2[0]
                 .to_typed::<MintConfig>()

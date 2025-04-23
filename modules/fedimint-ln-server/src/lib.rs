@@ -33,7 +33,7 @@ use fedimint_core::{
 pub use fedimint_ln_common as common;
 use fedimint_ln_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
+    LightningConfigPrivate, LightningGenParams,
 };
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::{
@@ -241,9 +241,6 @@ impl ServerModuleInit for LightningInit {
                 (
                     peer,
                     LightningConfig {
-                        local: LightningConfigLocal {
-                            bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-                        },
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
@@ -271,9 +268,6 @@ impl ServerModuleInit for LightningInit {
         let (polynomial, mut sks) = peers.run_dkg_g1().await?;
 
         let server = LightningConfig {
-            local: LightningConfigLocal {
-                bitcoin_rpc: params.local.bitcoin_rpc.clone(),
-            },
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: PublicKeySet::from(Commitment::from(polynomial)),
                 fee_consensus: FeeConsensus::default(),
