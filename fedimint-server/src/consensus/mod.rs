@@ -6,7 +6,6 @@ pub mod engine;
 pub mod transaction;
 
 use std::collections::BTreeMap;
-use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -46,7 +45,6 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
-use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::P2PStatusReceivers;
@@ -70,6 +68,7 @@ pub async fn run(
     dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
     ui_bind: SocketAddr,
     dashboard_ui_router: DashboardUiRouter,
+    db_checkpoint_retention: u64,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -233,12 +232,6 @@ pub async fn run(
         );
     }
 
-    let checkpoint_retention: String = env::var(FM_DB_CHECKPOINT_RETENTION_ENV)
-        .unwrap_or(FM_DB_CHECKPOINT_RETENTION_DEFAULT.to_string());
-    let checkpoint_retention = checkpoint_retention.parse().unwrap_or_else(|_| {
-        panic!("FM_DB_CHECKPOINT_RETENTION_ENV var is invalid: {checkpoint_retention}")
-    });
-
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
@@ -273,7 +266,7 @@ pub async fn run(
         modules: module_registry,
         task_group: task_group.clone(),
         data_dir,
-        checkpoint_retention,
+        db_checkpoint_retention,
     }
     .run()
     .await?;

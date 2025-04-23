@@ -17,7 +17,7 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
+use fedimint_core::util::{SafeUrl, handle_version_hash_command};
 use fedimint_core::{crit, timing};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -27,10 +27,10 @@ use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::MintInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
+use fedimint_rocksdb::RocksDb;
+use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::DB_FILE;
-use fedimint_server::config::{ConfigGenSettings, NetworkingStack};
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
-use fedimint_server::envs::FM_FORCE_IROH_ENV;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
@@ -41,15 +41,14 @@ use fedimint_wallet_server::WalletInit;
 use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
-use futures::FutureExt;
 use tracing::{debug, error, info};
 
 use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
-    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
-    FM_P2P_URL_ENV,
+    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
+    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -121,6 +120,9 @@ struct ServerOpts {
     #[arg(long, env = FM_API_URL_ENV)]
     api_url: Option<SafeUrl>,
 
+    #[arg(long, env = FM_ENABLE_IROH_ENV)]
+    enable_iroh: bool,
+
     /// Enable tokio console logging
     #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
     bind_tokio_console: Option<SocketAddr>,
@@ -132,6 +134,10 @@ struct ServerOpts {
     /// Enable prometheus metrics
     #[arg(long, env = FM_BIND_METRCIS_ENV)]
     bind_metrics: Option<SocketAddr>,
+
+    /// Number of checkpoints from the current session to retain on disk
+    #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
+    db_checkpoint_retention: u64,
 
     /// Comma separated list of API secrets.
     ///
@@ -377,43 +383,70 @@ impl Fedimintd {
 
     /// Block thread and run a Fedimintd server
     pub async fn run(self) -> ! {
-        let root_task_group = TaskGroup::new();
-        root_task_group.install_kill_handler();
-
         let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
 
-        let task_group = root_task_group.clone();
-        root_task_group.spawn_cancellable("main", async move {
-            match run(
-                self.opts,
-                &task_group,
-                self.server_gens,
-                self.server_gen_params,
-                self.code_version_str,
-            )
-            .await
-            {
-                Ok(()) => {}
-                Err(error) => {
-                    crit!(target: LOG_SERVER, err = %error.fmt_compact_anyhow(), "Main task returned error, shutting down");
-                    task_group.shutdown();
-                }
-            }
-        });
+        let root_task_group = TaskGroup::new();
 
-        let shutdown_future = root_task_group
-            .make_handle()
-            .make_shutdown_rx()
-            .then(|()| async {
-                info!(target: LOG_CORE, "Shutdown called");
-            });
-
-        shutdown_future.await;
-        debug!(target: LOG_CORE, "Terminating main task");
-
-        if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
-            error!(target: LOG_CORE, ?err, "Error while shutting down task group");
+        if let Some(bind_metrics) = self.opts.bind_metrics.as_ref() {
+            root_task_group.spawn_cancellable(
+                "metrics-server",
+                fedimint_metrics::run_api_server(*bind_metrics, root_task_group.clone()),
+            );
         }
+
+        let settings = ConfigGenSettings {
+            p2p_bind: self.opts.bind_p2p,
+            api_bind: self.opts.bind_api,
+            ui_bind: self.opts.bind_ui,
+            p2p_url: self.opts.p2p_url,
+            api_url: self.opts.api_url,
+            enable_iroh: self.opts.enable_iroh,
+            modules: self.server_gen_params.clone(),
+            registry: self.server_gens.clone(),
+        };
+
+        let db = Database::new(
+            RocksDb::open(self.opts.data_dir.join(DB_FILE))
+                .await
+                .unwrap(),
+            ModuleRegistry::default(),
+        );
+
+        let dyn_server_bitcoin_rpc = match (
+            self.opts.bitcoind_url.as_ref(),
+            self.opts.esplora_url.as_ref(),
+        ) {
+            (Some(url), None) => BitcoindClient::new(url).unwrap().into_dyn(),
+            (None, Some(url)) => EsploraClient::new(url).unwrap().into_dyn(),
+            _ => unreachable!("ArgGroup already enforced XOR relation"),
+        };
+
+        root_task_group.install_kill_handler();
+
+        fedimint_server::run(
+            self.opts.data_dir,
+            self.opts.force_api_secrets,
+            settings,
+            db,
+            self.code_version_str,
+            self.server_gens,
+            root_task_group.clone(),
+            dyn_server_bitcoin_rpc,
+            Box::new(fedimint_server_ui::setup::router),
+            Box::new(fedimint_server_ui::dashboard::router),
+            self.opts.db_checkpoint_retention,
+        )
+        .await
+        .inspect_err(|e| crit!(target: LOG_SERVER, ?e, "Main task returned error"))
+        .ok();
+
+        info!(target: LOG_CORE, "Awaiting shutdown of root task group");
+
+        root_task_group
+            .join_all(Some(SHUTDOWN_TIMEOUT))
+            .await
+            .inspect_err(|e| error!(target: LOG_CORE, ?e, "Error while shutting down task group"))
+            .ok();
 
         debug!(target: LOG_CORE, "Shutdown complete");
 
@@ -424,60 +457,4 @@ impl Fedimintd {
         // Should we ever shut down without an error code?
         std::process::exit(-1);
     }
-}
-
-async fn run(
-    opts: ServerOpts,
-    task_group: &TaskGroup,
-    module_inits: ServerModuleInitRegistry,
-    module_inits_params: ServerModuleConfigGenParamsRegistry,
-    code_version_str: String,
-) -> anyhow::Result<()> {
-    if let Some(bind_metrics) = opts.bind_metrics.as_ref() {
-        task_group.spawn_cancellable(
-            "metrics-server",
-            fedimint_metrics::run_api_server(*bind_metrics, task_group.clone()),
-        );
-    }
-
-    // TODO: meh, move, refactor
-    let settings = ConfigGenSettings {
-        p2p_bind: opts.bind_p2p,
-        api_bind: opts.bind_api,
-        ui_bind: opts.bind_ui,
-        p2p_url: opts.p2p_url,
-        api_url: opts.api_url,
-        modules: module_inits_params.clone(),
-        registry: module_inits.clone(),
-        networking: if is_env_var_set(FM_FORCE_IROH_ENV) {
-            NetworkingStack::Iroh
-        } else {
-            NetworkingStack::default()
-        },
-    };
-
-    let db = Database::new(
-        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).await?,
-        ModuleRegistry::default(),
-    );
-
-    let dyn_server_bitcoin_rpc = match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
-        (Some(url), None) => BitcoindClient::new(url)?.into_dyn(),
-        (None, Some(url)) => EsploraClient::new(url)?.into_dyn(),
-        _ => unreachable!("ArgGroup already enforced XOR relation"),
-    };
-
-    Box::pin(fedimint_server::run(
-        opts.data_dir,
-        opts.force_api_secrets,
-        settings,
-        db,
-        code_version_str,
-        &module_inits,
-        task_group.clone(),
-        dyn_server_bitcoin_rpc,
-        Box::new(fedimint_server_ui::setup::router),
-        Box::new(fedimint_server_ui::dashboard::router),
-    ))
-    .await
 }

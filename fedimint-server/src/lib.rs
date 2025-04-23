@@ -59,7 +59,6 @@ use crate::net::api::announcement::start_api_announcement_service;
 use crate::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 
-pub mod envs;
 pub mod metrics;
 
 /// The actual implementation of consensus
@@ -84,11 +83,12 @@ pub async fn run(
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
-    module_init_registry: &ServerModuleInitRegistry,
+    module_init_registry: ServerModuleInitRegistry,
     task_group: TaskGroup,
     bitcoin_rpc: DynServerBitcoinRpc,
     setup_ui_router: SetupUiRouter,
     dashboard_ui_router: DashboardUiRouter,
+    db_checkpoint_retention: u64,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -170,6 +170,7 @@ pub async fn run(
         bitcoin_rpc,
         settings.ui_bind,
         dashboard_ui_router,
+        db_checkpoint_retention,
     ))
     .await?;
 
