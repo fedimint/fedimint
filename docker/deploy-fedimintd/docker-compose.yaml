@@ -61,7 +61,6 @@ services:
       - FM_API_URL=wss://${FM_DOMAIN}/ws/
       - FM_BIND_API_WS=172.20.0.11:8174
       - FM_BIND_UI=172.20.0.11:8175
-      - FM_REL_NOTES_ACK=0_4_xyz
     restart: always
     labels:
       - "traefik.enable=true"

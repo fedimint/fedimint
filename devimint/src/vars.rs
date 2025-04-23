@@ -128,7 +128,6 @@ declare_vars! {
         FM_API_SECRET: Option<String> = std::env::var("FM_API_SECRET").ok().or_else(|| FM_FORCE_API_SECRETS.get_active()); env: "FM_API_SECRET";
 
         FM_IN_DEVIMINT: String = "1".to_string(); env: FM_IN_DEVIMINT_ENV;
-        FM_SKIP_REL_NOTES_ACK: String = "1".to_string(); env: "FM_SKIP_REL_NOTES_ACK";
 
         FM_FED_SIZE: usize = fed_size; env: "FM_FED_SIZE";
         FM_NUM_FEDS: usize = num_feds; env: "FM_NUM_FEDS";
