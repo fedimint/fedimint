@@ -134,3 +134,20 @@ pub const FM_DEVIMINT_STATIC_DATA_DIR_ENV: &str = "FM_DEVIMINT_STATIC_DATA_DIR";
 
 /// Override LDK's Lightning port
 pub const FM_PORT_LDK_ENV: &str = "FM_PORT_LDK";
+
+// recurringd.rs
+
+// Env variable for recurringd bind address
+pub const FM_RECURRING_BIND_ADDRESS_ENV: &str = "FM_RECURRING_BIND_ADDRESS";
+
+// Env variable for recurringd API address
+pub const FM_RECURRING_API_ADDRESS_ENV: &str = "FM_RECURRING_API_ADDRESS";
+
+// Env variable for recurringd data directory
+pub const FM_RECURRING_DATA_DIR_ENV: &str = "FM_RECURRING_DATA_DIR";
+
+// Env variable for recurringd API bearer token
+pub const FM_RECURRING_API_BEARER_TOKEN_ENV: &str = "FM_RECURRING_API_BEARER_TOKEN";
+
+// Env variable to override recurringd binary set:
+pub const FM_RECURRINGD_BASE_EXECUTABLE_ENV: &str = "FM_RECURRINGD_BASE_EXECUTABLE";

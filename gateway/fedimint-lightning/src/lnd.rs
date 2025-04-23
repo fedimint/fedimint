@@ -1328,7 +1328,6 @@ impl ILnRpcClient for GatewayLndClient {
                             channel_size_sats,
                             outbound_liquidity_sats,
                             inbound_liquidity_sats,
-                            short_channel_id: channel.chan_id,
                         }
                     })
                     .collect(),

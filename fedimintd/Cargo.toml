@@ -12,11 +12,6 @@ description = "fedimintd daemon for Fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[features]
-default = ["telemetry", "iroh"]
-telemetry = ["fedimint-logging/telemetry"]
-iroh = ["fedimint-server/iroh"]
-
 [[bin]]
 name = "fedimintd"
 path = "src/bin/main.rs"
@@ -34,13 +29,15 @@ fedimint-ln-common = { workspace = true }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
-fedimint-logging = { workspace = true }
+fedimint-logging = { workspace = true, features = ["telemetry"] }
 fedimint-meta-server = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-mint-common = { workspace = true }
 fedimint-mint-server = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
+fedimint-server-bitcoin-rpc = { workspace = true }
+fedimint-server-core = { workspace = true }
 fedimint-server-ui = { workspace = true }
 fedimint-unknown-common = { workspace = true }
 fedimint-unknown-server = { workspace = true }
@@ -53,5 +50,5 @@ tracing = { workspace = true }
 [build-dependencies]
 fedimint-build = { workspace = true }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
 tikv-jemallocator = { workspace = true }

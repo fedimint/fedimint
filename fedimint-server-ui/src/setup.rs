@@ -1,23 +1,24 @@
-use std::future::Future;
-use std::net::SocketAddr;
-use std::pin::Pin;
-
 use axum::Router;
 use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::module::ApiAuth;
-use fedimint_core::task::TaskHandle;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
-use tokio::net::TcpListener;
 
 use crate::assets::WithStaticRoutesExt as _;
 use crate::{
-    AuthState, LoginInput, check_auth, layout, login_form_response, login_submit_response,
+    AuthState, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, check_auth, common_head, login_form_response,
+    login_submit_response,
 };
+
+// Setup route constants
+pub const FEDERATION_SETUP_ROUTE: &str = "/federation_setup";
+pub const ADD_SETUP_CODE_ROUTE: &str = "/add_setup_code";
+pub const RESET_SETUP_CODES_ROUTE: &str = "/reset_setup_codes";
+pub const START_DKG_ROUTE: &str = "/start_dkg";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SetupInput {
@@ -38,7 +39,7 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
         (DOCTYPE)
         html {
             head {
-                (layout::common_head(title))
+                (common_head(title))
             }
             body {
                 div class="container" {
@@ -65,11 +66,11 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
 // GET handler for the /setup route (display the setup form)
 async fn setup_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
     if state.api.setup_code().await.is_some() {
-        return Redirect::to("/federation-setup").into_response();
+        return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
 
     let content = html! {
-        form method="post" action="/" {
+        form method="post" action=(ROOT_ROUTE) {
             style {
                 r#"
                 .toggle-content {
@@ -130,12 +131,12 @@ async fn setup_submit(
         .set_local_parameters(ApiAuth(input.password), input.name, federation_name)
         .await
     {
-        Ok(_) => Redirect::to("/login").into_response(),
+        Ok(_) => Redirect::to(LOGIN_ROUTE).into_response(),
         Err(e) => {
             let content = html! {
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/" class="btn btn-primary setup-btn" { "Return to Setup" }
+                    a href=(ROOT_ROUTE) class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -147,7 +148,7 @@ async fn setup_submit(
 // GET handler for the /login route (display the login form)
 async fn login_form(State(state): State<AuthState<DynSetupApi>>) -> impl IntoResponse {
     if state.api.setup_code().await.is_none() {
-        return Redirect::to("/").into_response();
+        return Redirect::to(ROOT_ROUTE).into_response();
     }
 
     login_form_response().into_response()
@@ -161,7 +162,7 @@ async fn login_submit(
 ) -> impl IntoResponse {
     let auth = match state.api.auth().await {
         Some(auth) => auth,
-        None => return Redirect::to("/").into_response(),
+        None => return Redirect::to(ROOT_ROUTE).into_response(),
     };
 
     login_submit_response(
@@ -180,7 +181,7 @@ async fn federation_setup(
     jar: CookieJar,
 ) -> impl IntoResponse {
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
+        return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
     let our_connection_info = state
@@ -214,7 +215,7 @@ async fn federation_setup(
                 }
             }
 
-            form method="post" action="/add-connection-info" {
+            form method="post" action=(ADD_SETUP_CODE_ROUTE) {
                 div class="mb-3" {
                     input type="text" class="form-control mb-2" id="peer_info" name="peer_info"
                         placeholder="Paste setup code from fellow guardian" required;
@@ -233,7 +234,7 @@ async fn federation_setup(
                 }
             }
 
-            form id="reset-form" method="post" action="/reset-connection-info" class="d-none" {}
+            form id="reset-form" method="post" action=(RESET_SETUP_CODES_ROUTE) class="d-none" {}
         }
 
         hr class="my-4" {}
@@ -244,7 +245,7 @@ async fn federation_setup(
             }
 
             div class="text-center" {
-                form method="post" action="/start-dkg" {
+                form method="post" action=(START_DKG_ROUTE) {
                     button type="submit" class="btn btn-warning setup-btn" {
                         "🚀 Launch Federation"
                     }
@@ -257,22 +258,22 @@ async fn federation_setup(
 }
 
 // POST handler for adding peer connection info
-async fn add_peer_handler(
+async fn post_add_setup_code(
     State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
     Form(input): Form<PeerInfoInput>,
 ) -> impl IntoResponse {
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
+        return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
     match state.api.add_peer_setup_code(input.peer_info).await {
-        Ok(..) => Redirect::to("/federation-setup").into_response(),
+        Ok(..) => Redirect::to(FEDERATION_SETUP_ROUTE).into_response(),
         Err(e) => {
             let content = html! {
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Return to Setup" }
+                    a href=(FEDERATION_SETUP_ROUTE) class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -282,12 +283,12 @@ async fn add_peer_handler(
 }
 
 // POST handler for starting the DKG process
-async fn start_dkg_handler(
+async fn post_start_dkg(
     State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
+        return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
     match state.api.start_dkg().await {
@@ -301,7 +302,7 @@ async fn start_dkg_handler(
                     "Once the distributed key generation completes, the Guardian Dashboard will become available at the root URL."
                 }
                 div class="button-container mt-4" {
-                    a href="/" class="btn btn-primary setup-btn" {
+                    a href=(ROOT_ROUTE) class="btn btn-primary setup-btn" {
                         "Go to Dashboard"
                     }
                 }
@@ -313,7 +314,7 @@ async fn start_dkg_handler(
             let content = html! {
                 div class="alert alert-danger" { (e.to_string()) }
                 div class="button-container" {
-                    a href="/federation-setup" class="btn btn-primary setup-btn" { "Return to Setup" }
+                    a href=(FEDERATION_SETUP_ROUTE) class="btn btn-primary setup-btn" { "Return to Setup" }
                 }
             };
 
@@ -323,42 +324,27 @@ async fn start_dkg_handler(
 }
 
 // POST handler for resetting peer connection info
-async fn reset_peers_handler(
+async fn post_reset_setup_codes(
     State(state): State<AuthState<DynSetupApi>>,
     jar: CookieJar,
 ) -> impl IntoResponse {
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to("/login").into_response();
+        return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
     state.api.reset_setup_codes().await;
 
-    Redirect::to("/federation-setup").into_response()
+    Redirect::to(FEDERATION_SETUP_ROUTE).into_response()
 }
 
-pub fn start(
-    api: DynSetupApi,
-    ui_bind: SocketAddr,
-    task_handle: TaskHandle,
-) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-    let app = Router::new()
-        .route("/", get(setup_form).post(setup_submit))
-        .route("/login", get(login_form).post(login_submit))
-        .route("/federation-setup", get(federation_setup))
-        .route("/add-connection-info", post(add_peer_handler))
-        .route("/reset-connection-info", post(reset_peers_handler))
-        .route("/start-dkg", post(start_dkg_handler))
+pub fn router(api: DynSetupApi) -> Router {
+    Router::new()
+        .route(ROOT_ROUTE, get(setup_form).post(setup_submit))
+        .route(LOGIN_ROUTE, get(login_form).post(login_submit))
+        .route(FEDERATION_SETUP_ROUTE, get(federation_setup))
+        .route(ADD_SETUP_CODE_ROUTE, post(post_add_setup_code))
+        .route(RESET_SETUP_CODES_ROUTE, post(post_reset_setup_codes))
+        .route(START_DKG_ROUTE, post(post_start_dkg))
         .with_static_routes()
-        .with_state(AuthState::new(api));
-
-    Box::pin(async move {
-        let listener = TcpListener::bind(ui_bind)
-            .await
-            .expect("Failed to bind setup UI");
-
-        axum::serve(listener, app.into_make_service())
-            .with_graceful_shutdown(task_handle.make_shutdown_rx())
-            .await
-            .expect("Failed to serve setup UI");
-    })
+        .with_state(AuthState::new(api))
 }

@@ -8,7 +8,7 @@ name: Daily check
 
 jobs:
   audit:
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - name: Run cargo audit
@@ -20,7 +20,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     needs: [ audit ]
 
     steps:

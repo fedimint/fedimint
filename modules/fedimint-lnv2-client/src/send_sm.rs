@@ -39,9 +39,9 @@ impl SendStateMachine {
 pub struct SendSMCommon {
     pub operation_id: OperationId,
     pub outpoint: OutPoint,
-    pub gateway_api: SafeUrl,
     pub contract: OutgoingContract,
-    pub invoice: LightningInvoice,
+    pub gateway_api: Option<SafeUrl>,
+    pub invoice: Option<LightningInvoice>,
     pub refund_keypair: Keypair,
 }
 
@@ -93,11 +93,11 @@ impl State for SendStateMachine {
                 vec![
                     StateTransition::new(
                         Self::gateway_send_payment(
-                            self.common.gateway_api.clone(),
+                            self.common.gateway_api.clone().unwrap(),
                             context.federation_id,
                             self.common.outpoint,
                             self.common.contract.clone(),
-                            self.common.invoice.clone(),
+                            self.common.invoice.clone().unwrap(),
                             self.common.refund_keypair,
                             context.clone(),
                         ),

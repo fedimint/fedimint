@@ -7,20 +7,20 @@ use anyhow::{Context, anyhow, bail};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_bitcoind::shared::ServerModuleSharedBitcoin;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::serde_json;
-use fedimint_core::task::sleep_in_test;
+use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
 use fedimint_core::{Amount, BitcoinHash, Feerate, InPoint, PeerId, TransactionId, sats};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
-use fedimint_server::core::{ServerModule, ServerModuleShared as _};
+use fedimint_server::core::ServerModule;
+use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
 use fedimint_testing::federation::FederationTest;
@@ -669,6 +669,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let bitcoin = fixtures.bitcoin();
     let server_bitcoin_rpc_config = fixtures.bitcoin_server();
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    let bitcoin_rpc_connection = fixtures.bitcoin_rpc_connection();
     let db = MemDatabase::new().into_database();
     let task_group = fedimint_core::task::TaskGroup::new();
     info!("Starting test peg_ins_that_are_unconfirmed_are_rejected");
@@ -689,10 +690,9 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         .tweak(&pk, secp256k1::SECP256K1)
         .address(wallet_config.consensus.network.0)?;
 
-    let mut wallet = fedimint_wallet_server::Wallet::new_with_bitcoind(
+    let mut wallet = fedimint_wallet_server::Wallet::new(
         wallet_server_cfg[0].to_typed()?,
         &db,
-        dyn_bitcoin_rpc.clone(),
         &task_group,
         PeerId::from(0),
         // FIXME: use proper mock
@@ -705,7 +705,11 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         )
         .await?
         .with_module(module_instance_id),
-        &ServerModuleSharedBitcoin::new(task_group.clone()),
+        ServerBitcoinRpcMonitor::new(
+            bitcoin_rpc_connection.clone(),
+            Duration::from_secs(1),
+            &TaskGroup::new(),
+        ),
     )
     .await?;
 
@@ -1102,14 +1106,15 @@ mod fedimint_migration_tests {
         PegOutFees, Rbf, SpendableUTXO, WalletCommonInit, WalletOutputOutcome,
     };
     use fedimint_wallet_server::db::{
-        BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
-        ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey,
-        ConsensusVersionVotePrefix, ConsensusVersionVotingActivationKey,
-        ConsensusVersionVotingActivationPrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
-        PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
-        PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-        PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-        UnsignedTransactionPrefixKey, UnspentTxOutKey, UnspentTxOutPrefix,
+        BlockCountVoteKey, BlockCountVotePrefix, BlockHashByHeightKey, BlockHashByHeightKeyPrefix,
+        BlockHashByHeightValue, BlockHashKey, BlockHashKeyPrefix, ClaimedPegInOutpointKey,
+        ClaimedPegInOutpointPrefixKey, ConsensusVersionVoteKey, ConsensusVersionVotePrefix,
+        ConsensusVersionVotingActivationKey, ConsensusVersionVotingActivationPrefix, DbKeyPrefix,
+        FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
+        PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
+        PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
+        UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey, UnspentTxOutKey,
+        UnspentTxOutPrefix,
     };
     use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
@@ -1318,6 +1323,12 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&ClaimedPegInOutpointKey(bitcoin::OutPoint::null()), &())
             .await;
 
+        dbtx.insert_new_entry(
+            &BlockHashByHeightKey(13),
+            &BlockHashByHeightValue(BlockHash::from_byte_array(BYTE_32)),
+        )
+        .await;
+
         dbtx.commit_tx().await;
     }
 
@@ -1354,6 +1365,19 @@ mod fedimint_migration_tests {
                             "validate_migrations was not able to read any BlockHashes"
                         );
                         info!("Validated BlockHash");
+                    }
+                    DbKeyPrefix::BlockHashByHeight => {
+                        let blocks = dbtx
+                            .find_by_prefix(&BlockHashByHeightKeyPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+                        let num_blocks = blocks.len();
+                        ensure!(
+                            num_blocks == 1,
+                            "validate_migrations was not able to read any BlockHashByHeightes"
+                        );
+                        info!("Validated BlockHashByHeight");
                     }
                     DbKeyPrefix::PegOutBitcoinOutPoint => {
                         let outpoints = dbtx

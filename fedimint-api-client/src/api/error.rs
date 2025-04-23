@@ -55,21 +55,21 @@ pub enum PeerError {
     InvalidResponse(anyhow::Error),
 
     /// Server returned an internal error, suggesting something is wrong with it
-    #[error("Unspecified server error")]
+    #[error("Unspecified server error: {0}")]
     ServerError(anyhow::Error),
 
     /// Some condition on the response this not match
     ///
     /// Typically expected, and often used in `FilterMap` query strategy to
     /// reject responses that don't match some criteria.
-    #[error("Unspecified server error")]
+    #[error("Unspecified condition error: {0}")]
     ConditionFailed(anyhow::Error),
 
     /// An internal client error
     ///
     /// Things that shouldn't happen (better than panicking), logical errors,
     /// malfunctions caused by internal issues.
-    #[error("Unspecified internal client")]
+    #[error("Unspecified internal client error: {0}")]
     InternalClientError(anyhow::Error),
 }
 

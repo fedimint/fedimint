@@ -503,6 +503,9 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         auth: ApiAuth,
     ) -> FederationResult<String>;
 
+    /// Reset the peer setup codes during the federation setup process
+    async fn reset_peer_setup_codes(&self, auth: ApiAuth) -> FederationResult<()>;
+
     /// During config gen, used for an API-to-API call that adds a peer's server
     /// connection info to the leader.
     ///
@@ -1022,7 +1025,6 @@ impl ReconnectFederationApi {
             "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone())?.into_dyn(),
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
             "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
-            #[cfg(all(feature = "iroh", not(target_family = "wasm")))]
             "iroh" => iroh::IrohConnector::new(peers).await?.into_dyn(),
             scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
         };
@@ -1188,7 +1190,6 @@ impl ClientConnection {
     }
 }
 
-#[cfg(feature = "iroh")]
 mod iroh {
     use std::collections::{BTreeMap, BTreeSet};
     use std::str::FromStr;

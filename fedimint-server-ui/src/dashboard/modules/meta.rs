@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use axum::extract::{Form, State};
+use axum::extract::{Form, FromRequest, State};
+use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::PeerId;
@@ -8,10 +9,17 @@ use fedimint_core::module::serde_json::{self, Value};
 use fedimint_meta_server::Meta;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use maud::{Markup, html};
-use tracing::warn;
+use serde::Serialize;
+use thiserror::Error;
+use tracing::{debug, warn};
 
-use crate::error::{RequestError, RequestResult};
-use crate::{AuthState, LOG_UI, check_auth};
+use crate::{AuthState, LOG_UI, LOGIN_ROUTE, check_auth};
+
+// Meta route constants
+pub const META_SUBMIT_ROUTE: &str = "/meta/submit";
+pub const META_SET_ROUTE: &str = "/meta/set";
+pub const META_RESET_ROUTE: &str = "/meta/reset";
+pub const META_DELETE_ROUTE: &str = "/meta/delete";
 
 // Function to render the Meta module UI section
 pub async fn render(meta: &Meta) -> Markup {
@@ -42,34 +50,25 @@ pub async fn render(meta: &Meta) -> Markup {
     };
 
     html! {
-        // Meta Configuration Card
-        div class="row gy-4 mt-2" {
-            div class="col-12" {
-                div class="card h-100" {
-                    div class="card-header dashboard-header" { "Meta Configuration" }
-                    div class="card-body" {
-                        // Current Consensus Section
-                        div class="mb-4" {
-                            h5 { "Current Consensus (Revision: " (revision) ")" }
-                            @if let Some(value) = &consensus_value {
-                                pre class="bg-light p-3 user-select-all" {
-                                    code {
-                                        (serde_json::to_string_pretty(value).unwrap_or_else(|_| "Invalid JSON".to_string()))
-                                    }
-                                }
-                            } @else {
-                                div class="alert alert-secondary" { "No consensus value has been established yet." }
+        div class="card h-100" {
+            div class="card-header dashboard-header" { "Meta Configuration" }
+            div class="card-body" {
+                div class="mb-4" {
+                    h5 { "Current Consensus (Revision: " (revision) ")" }
+                    @if let Some(value) = &consensus_value {
+                        pre class="bg-light p-3 user-select-all" {
+                            code {
+                                (serde_json::to_string_pretty(value).unwrap_or_else(|_| "Invalid JSON".to_string()))
                             }
                         }
-
-                        // Submission Form
-                        div class="mb-4" {
-                            (render_meta_edit_form(current_meta_keys, false, MetaEditForm::default()))
-                        }
-
-                        // Current Submissions Section
-                        (render_submissions_form(meta.our_peer_id, &submissions))
+                    } @else {
+                        div class="alert alert-secondary" { "No consensus value has been established yet." }
                     }
+                    div class="mb-4" {
+                        (render_meta_edit_form(current_meta_keys, false, MetaEditForm::default()))
+                    }
+
+                    (render_submissions_form(meta.our_peer_id, &submissions))
                 }
             }
         }
@@ -120,7 +119,7 @@ fn render_submissions_form(our_id: PeerId, submissions: &BTreeMap<PeerId, Value>
                                     @if !peer_ids.contains(&our_id) {
                                         td {
                                             form method="post"
-                                                hx-post="/meta/submit"
+                                                hx-post=(META_SUBMIT_ROUTE)
                                                 hx-swap="none"
                                             {
                                                 input type="hidden" name="json_content"
@@ -175,7 +174,7 @@ pub async fn post_submit(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let meta_module = state.api.get_module::<Meta>().unwrap();
@@ -214,7 +213,7 @@ pub async fn post_reset(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let meta_module = state.api.get_module::<Meta>().unwrap();
@@ -263,7 +262,7 @@ pub async fn post_set(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let mut top_level_object = form.top_level_keys()?;
@@ -288,7 +287,7 @@ pub async fn post_delete(
 ) -> RequestResult<Response> {
     // Check authentication
     if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to("/login").into_response());
+        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
     }
 
     let mut top_level_json = form.top_level_keys()?;
@@ -369,7 +368,7 @@ pub fn render_meta_edit_form(
                 button class="btn btn-primary btn-min-width"
                     type="button" id="button-set"
                     title="Set a value in a meta proposal"
-                    hx-post="/meta/set"
+                    hx-post=(META_SET_ROUTE)
                     hx-swap="none"
                     hx-trigger="click, keypress[key=='Enter'] from:#add-value, keypress[key=='Enter'] from:#add-key"
                 { "Set" }
@@ -385,7 +384,7 @@ pub fn render_meta_edit_form(
                     }
                 }
                 button class="btn btn-primary btn-min-width"
-                    hx-post="/meta/delete"
+                    hx-post=(META_DELETE_ROUTE)
                     hx-swap="none"
                     hx-trigger="click, keypress[key=='Enter'] from:#delete-key"
                     title="Delete a value in a meta proposal"
@@ -394,15 +393,64 @@ pub fn render_meta_edit_form(
             div class="d-flex justify-content-between btn-min-width" {
                 button class="btn btn-outline-warning me-5"
                     title="Reset to current consensus"
-                    hx-post="/meta/reset"
+                    hx-post=(META_RESET_ROUTE)
                     hx-swap="none"
                 { "Reset" }
                 button class="btn btn-success btn-min-width"
-                    hx-post="/meta/submit"
+                    hx-post=(META_SUBMIT_ROUTE)
                     hx-swap="none"
                     title="Submit new meta document for approval of other peers"
                 { "Submit" }
             }
         }
     }
+}
+
+/// Wrapper over `T` to make it a json request response
+#[derive(FromRequest)]
+#[from_request(via(axum::Json), rejection(RequestError))]
+struct AppJson<T>(pub T);
+
+impl<T> IntoResponse for AppJson<T>
+where
+    axum::Json<T>: IntoResponse,
+{
+    fn into_response(self) -> Response {
+        axum::Json(self.0).into_response()
+    }
+}
+
+/// Whatever can go wrong with a request
+#[derive(Debug, Error)]
+pub enum RequestError {
+    #[error("Bad request: {source}")]
+    BadRequest { source: anyhow::Error },
+    #[error("Internal Error")]
+    InternalError,
+}
+
+pub type RequestResult<T> = std::result::Result<T, RequestError>;
+
+impl IntoResponse for RequestError {
+    fn into_response(self) -> Response {
+        debug!(target: LOG_UI, err=%self, "Request Error");
+
+        let (status_code, message) = match self {
+            Self::BadRequest { source } => {
+                (StatusCode::BAD_REQUEST, format!("Bad Request: {source}"))
+            }
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal Service Error".to_owned(),
+            ),
+        };
+
+        (status_code, AppJson(UserErrorResponse { message })).into_response()
+    }
+}
+
+// How we want user errors responses to be serialized
+#[derive(Serialize)]
+pub struct UserErrorResponse {
+    pub message: String,
 }

@@ -18,6 +18,6 @@ path = "./src/lib.rs"
 anyhow = { workspace = true, features = ["backtrace"] }
 axum = { workspace = true }
 fedimint-core = { workspace = true }
-prometheus = "0.13.4"
+prometheus = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

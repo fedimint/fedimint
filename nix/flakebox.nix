@@ -228,6 +228,8 @@ let
     nativeBuildInputs =
       with pkgs;
       [
+        zlib
+
         pkg-config
         moreutils-ts
 
@@ -389,7 +391,7 @@ in
         // {
           cargoArtifacts = deps;
           meta = { inherit mainProgram; };
-          cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE";
+          cargoBuildCommand = "runLowPrio bash ${./bin/cargo-with-memlimit.sh} build --profile $CARGO_PROFILE";
           cargoExtraArgs = "${pkgsArgs}";
 
           # If the build contains `devimint`, wrap it in a script that will set
@@ -809,6 +811,16 @@ in
       bin = "fedimint-recoverytool";
     };
 
+    fedimint-recurringd-pkgs = fedimintBuildPackageGroup {
+      pname = "fedimint-recurringd-pkgs";
+      packages = [ "fedimint-recurringd" ];
+    };
+
+    fedimint-recurringd = flakeboxLib.pickBinary {
+      pkg = fedimint-recurringd-pkgs;
+      bin = "fedimint-recurringd";
+    };
+
     container =
       let
         entrypointScript = pkgs.writeShellScriptBin "entrypoint" ''
@@ -863,6 +875,14 @@ in
           contents = [ gateway-pkgs ] ++ defaultPackages;
           config = {
             Cmd = [ "${gateway-pkgs}/bin/gateway-cli" ];
+          };
+        };
+
+        fedimint-recurringd = pkgs.dockerTools.buildLayeredImage {
+          name = "fedimint-recurringd";
+          contents = [ fedimint-recurringd-pkgs ] ++ defaultPackages;
+          config = {
+            Cmd = [ "${fedimint-recurringd-pkgs}/bin/fedimint-recurringd" ];
           };
         };
 

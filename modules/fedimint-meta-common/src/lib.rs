@@ -276,6 +276,6 @@ impl fmt::Display for MetaOutputOutcome {
 
 impl fmt::Display for MetaConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "MetaConsensusItem")
+        write!(f, "Meta - len: {}", self.value.0.len())
     }
 }

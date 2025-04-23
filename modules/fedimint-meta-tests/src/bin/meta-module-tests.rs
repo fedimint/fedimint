@@ -2,10 +2,9 @@ use std::future::Future;
 
 use anyhow::{Result, bail};
 use clap::Parser;
+use devimint::cmd;
 use devimint::federation::Client;
 use devimint::util::poll_simple;
-use devimint::version_constants::VERSION_0_5_0_ALPHA;
-use devimint::{cmd, util};
 use fedimint_core::PeerId;
 use serde_json::json;
 use tracing::{info, warn};
@@ -27,8 +26,6 @@ async fn main() -> anyhow::Result<()> {
 async fn sanity_tests() -> anyhow::Result<()> {
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
-            let fedimint_cli_version = util::FedimintCli::version_or_default().await;
-
             let client = dev_fed
                 .fed()
                 .await?
@@ -185,20 +182,16 @@ async fn sanity_tests() -> anyhow::Result<()> {
             )
             .await?;
 
-            // TODO(support:v0.4): meta fields were introduced in v0.5.0
-            // see: https://github.com/fedimint/fedimint/pull/5781
-            if fedimint_cli_version >= *VERSION_0_5_0_ALPHA {
-                let meta_fields = get_meta_fields(&client).await?;
-                assert_eq!(
-                    meta_fields,
-                    json! {
-                        {
-                            "revision": 0,
-                            "values": submission_value,
-                        }
+            let meta_fields = get_meta_fields(&client).await?;
+            assert_eq!(
+                meta_fields,
+                json! {
+                    {
+                        "revision": 0,
+                        "values": submission_value,
                     }
-                );
-            }
+                }
+            );
 
             Ok(())
         })

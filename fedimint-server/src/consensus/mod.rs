@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::bail;
@@ -28,6 +28,7 @@ use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API, LOG_NET_IROH};
+use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
 use fedimint_server_core::{DynServerModule, ServerModuleInitRegistry};
@@ -37,6 +38,7 @@ use iroh::endpoint::{Incoming, RecvStream, SendStream};
 use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
+use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tracing::{info, warn};
 
@@ -48,7 +50,7 @@ use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::P2PStatusReceivers;
-use crate::{net, update_server_info_version_dbtx};
+use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -57,8 +59,7 @@ const TRANSACTION_BUFFER: usize = 1000;
 pub async fn run(
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
-    ws_api_bind_addr: SocketAddr,
-    iroh_api_bind_addr: SocketAddr,
+    api_bind: SocketAddr,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -66,8 +67,9 @@ pub async fn run(
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
     code_version_str: String,
-    ui_bind_addr: SocketAddr,
-    dashboard_ui_handler: Option<crate::DashboardUiHandler>,
+    dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
+    ui_bind: SocketAddr,
+    dashboard_ui_router: DashboardUiRouter,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -99,7 +101,15 @@ pub async fn run(
     )
     .await?;
 
-    let shared_anymap = Arc::new(RwLock::new(BTreeMap::default()));
+    let server_bitcoin_rpc_monitor = ServerBitcoinRpcMonitor::new(
+        dyn_server_bitcoin_rpc,
+        if is_running_in_test_env() {
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(60)
+        },
+        task_group,
+    );
 
     for (module_id, module_cfg) in &cfg.consensus.modules {
         match module_init_registry.get(&module_cfg.kind) {
@@ -138,7 +148,7 @@ pub async fn run(
                         task_group,
                         cfg.local.identity,
                         global_api.with_module(*module_id),
-                        shared_anymap.clone(),
+                        server_bitcoin_rpc_monitor.clone(),
                     )
                     .await?;
 
@@ -181,29 +191,34 @@ pub async fn run(
         p2p_status_receivers,
         ci_status_receivers,
         ord_latency_receiver,
+        bitcoin_rpc_connection: server_bitcoin_rpc_monitor,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
     };
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
 
-    let api_handler = start_consensus_api(
-        &cfg.local,
-        consensus_api.clone(),
-        force_api_secrets.clone(),
-        ws_api_bind_addr,
-    )
-    .await;
-
-    if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
+    let api_handler = if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
         Box::pin(start_iroh_api(
             iroh_api_sk,
-            iroh_api_bind_addr,
+            api_bind,
             consensus_api.clone(),
             task_group,
         ))
         .await;
-    }
+
+        None
+    } else {
+        let handler = start_consensus_api(
+            &cfg.local,
+            consensus_api.clone(),
+            force_api_secrets.clone(),
+            api_bind,
+        )
+        .await;
+
+        Some(handler)
+    };
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
 
@@ -228,13 +243,20 @@ pub async fn run(
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
-    if let Some(dashboard_ui_handler) = dashboard_ui_handler {
-        task_group.spawn("dashboard-ui", move |handle| {
-            dashboard_ui_handler(consensus_api.clone().into_dyn(), ui_bind_addr, handle)
-        });
+    let ui_service = dashboard_ui_router(consensus_api.clone().into_dyn()).into_make_service();
 
-        info!(target: LOG_CONSENSUS, "Dashboard UI running at http://{ui_bind_addr} 🚀");
-    }
+    let ui_listener = TcpListener::bind(ui_bind)
+        .await
+        .expect("Failed to bind dashboard UI");
+
+    task_group.spawn("dashboard-ui", move |handle| async move {
+        axum::serve(ui_listener, ui_service)
+            .with_graceful_shutdown(handle.make_shutdown_rx())
+            .await
+            .expect("Failed to serve dashboard UI");
+    });
+
+    info!(target: LOG_CONSENSUS, "Dashboard UI running at http://{ui_bind} 🚀");
 
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!
@@ -256,11 +278,13 @@ pub async fn run(
     .run()
     .await?;
 
-    api_handler
-        .stop()
-        .expect("Consensus api should still be running");
+    if let Some(api_handler) = api_handler {
+        api_handler
+            .stop()
+            .expect("Consensus api should still be running");
 
-    api_handler.stopped().await;
+        api_handler.stopped().await;
+    }
 
     Ok(())
 }

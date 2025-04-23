@@ -1,6 +1,6 @@
 services:
   fedimintd:
-    image: fedimint/fedimintd:da61291173e71a11358e1cd4154e649cf413d9e9
+    image: fedimint/fedimintd:v0.7.0
     ports:
       - 8173:8173/tcp # p2p tls
       - 8173:8173/udp # p2p iroh
@@ -13,6 +13,7 @@ services:
       - FM_BITCOIN_NETWORK=signet
       - FM_BITCOIN_RPC_KIND=esplora
       - FM_BITCOIN_RPC_URL=https://mutinynet.com/api
+      - FM_DEFAULT_ESPLORA_API=https://mutinynet.com/api
       - FM_BIND_P2P=0.0.0.0:8173
       - FM_BIND_API_IROH=0.0.0.0:8174
       - FM_BIND_API_WS=172.25.0.11:8174

@@ -41,7 +41,7 @@ jobs:
 
   lint:
     name: "Lint"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +78,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: false
             timeout: 30
           - host: macos
@@ -115,7 +115,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: true
             timeout: 90
             run-tests: true
@@ -215,7 +215,7 @@ jobs:
   audit:
     if: github.repository == 'fedimint/fedimint'
     name: "Audit"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
     # sometimes we can't fix these immediately, yet
     # we don't want to stop the world because of it
@@ -254,7 +254,7 @@ jobs:
           - wasm32-unknown
         include:
           - host: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             build-in-pr: true
             # TODO: debugging network issues, should reduce to 20 minutes
             # https://github.com/fedimint/fedimint/issues/4488
@@ -303,7 +303,7 @@ jobs:
   containers:
     if: github.repository == 'fedimint/fedimint'
     name: "Containers"
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     timeout-minutes: 60
     steps:
       - name: Checkout Code
@@ -354,6 +354,15 @@ jobs:
           fi
           echo "gateway-cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
+      - name: Build fedimint-recurringd container
+        run: |
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
+            nix build -L .#ci.container.fedimint-recurringd
+          else
+            nix build -L .#container.fedimint-recurringd
+          fi
+          echo "fedimint-recurringd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+
       - name: Build devtools container
         run: |
           if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
@@ -377,6 +386,7 @@ jobs:
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint-recurringd_container_tag }} && hub_tag="fedimint/fedimint-recurringd:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish master tag
@@ -386,6 +396,7 @@ jobs:
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint-recurringd_container_tag }} && hub_tag="fedimint/fedimint-recurringd:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish tagged release
@@ -395,6 +406,7 @@ jobs:
           nix_tag=${{ env.fedimint_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gatewayd_container_tag }} && hub_tag="fedimint/gatewayd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.gateway-cli_container_tag }} && hub_tag="fedimint/gateway-cli:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.fedimint-recurringd_container_tag }} && hub_tag="fedimint/fedimint-recurringd:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.devtools_container_tag }} && hub_tag="fedimint/devtools:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
@@ -405,7 +417,7 @@ jobs:
       matrix:
         platform:
           - name: linux
-            runs-on: [self-hosted, linux]
+            runs-on: [self-hosted, linux, x64]
             timeout: 60
             build-deb: true
             build-rpm: true
@@ -413,7 +425,7 @@ jobs:
             shasum-cmd: sha256sum
           - name: macos-aarch64
             runs-on: macos-14
-            timeout: 90
+            timeout: 180
             build-deb: false
             build-rpm: false
             build-bundled: false
@@ -433,6 +445,10 @@ jobs:
     timeout-minutes: ${{ matrix.platform.timeout }}
 
     env:
+      IS_PRERELEASE: ${{
+          startsWith(github.ref, 'refs/tags/')
+          && (contains(github.ref, 'beta') || contains(github.ref, 'rc'))
+        }}
       PRERELEASE_MESSAGE: |
         ⚠️ **Pre-release Notice**
 
@@ -474,10 +490,10 @@ jobs:
               >&2 echo "Building: $bin"
               nix build -L .#$bin
 
-              closure_size=$(nix path-info -rS --json .#bin| jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
+              closure_size=$(nix path-info -rS --json .#$bin | nix run nixpkgs#jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
               >&2 echo "$bin's Nix closure size: $closure_size"
 
-              if [ 150000000 -lt $closure_size ]; then
+              if [ 200000000 -lt $closure_size ]; then
                 >&2 echo "$bin's Nix closure size seems too big: $closure_size"
                 exit 1
               fi
@@ -485,13 +501,13 @@ jobs:
               >&2 echo "Pushing to cachix: $bin"
               cachix push fedimint -c 8 -j 8 $(nix-store --query --references $(readlink -f result)) $(readlink -f result)
               >&2 echo "Pining in cachix: fedimint-release-$bin:$BUILD_ID"
-              if [[ $var == *"-rc."* ]] || [[ $var == *"-alpha."* ]] || [[ $var == *"-testing."* ]] ; then
+              if [[ "$BUILD_ID" == *"-rc."* ]] || [[ "$BUILD_ID" == *"-alpha."* ]] || [[ "$BUILD_ID" == *"-testing."* ]]|| [[ "$BUILD_ID" == *"-beta."* ]] ; then
                 >&2 echo "Will not pin in cachix, as looks like a pre-release"
               else
                 cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
               fi
             fi
-            if [ "${{ matrix.build.build-bundled }}" = "true" ]; then
+            if [ "${{ matrix.platform.build-bundled }}" = "true" ]; then
               # Note: keep in sync with sign.sh
               >&2 echo "Building bundled: $bin"
               nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && ${{ matrix.platform.shasum-cmd }} "bins/$bin-$BUILD_ID"
@@ -525,8 +541,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "bins/**"
-          prerelease: ${{ contains(github.ref, 'rc') }}
-          body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
+          prerelease: ${{ env.IS_PRERELEASE }}
+          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Build DEB package
         if: matrix.platform.build-deb
@@ -562,8 +578,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: "debs/**.deb"
-          prerelease: ${{ contains(github.ref, 'rc') }}
-          body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
+          prerelease: ${{ env.IS_PRERELEASE }}
+          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Upload RPM packages
         if: matrix.platform.build-rpm
@@ -577,14 +593,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: "rpms/**.rpm"
-          prerelease: ${{ contains(github.ref, 'rc') }}
-          body: ${{ contains(github.ref, 'rc') && env.PRERELEASE_MESSAGE || '' }}
+          prerelease: ${{ env.IS_PRERELEASE }}
+          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
 
   status:
     name: Status
     needs: [lint, shell, build, cross, containers, pkgs]
     if: ${{ always() }}
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     steps:
       - name: Check status of all jobs
         if: >-
@@ -598,7 +614,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux, x64]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
     needs: [ lint, build, shell, cross, containers, pkgs ]

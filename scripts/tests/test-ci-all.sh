@@ -249,6 +249,11 @@ function wasm_test() {
 }
 export -f wasm_test
 
+function recurringd_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/recurringd-test.sh
+}
+export -f recurringd_test
+
 function always_success_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/always-success-test.sh
 }
@@ -336,6 +341,7 @@ tests_to_run_in_parallel+=(
   "circular_deposit"
   "wallet_recovery"
   "wallet_recovery_2"
+  "recurringd_test"
 )
 done
 

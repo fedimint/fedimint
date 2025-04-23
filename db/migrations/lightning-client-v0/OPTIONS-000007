@@ -5,7 +5,7 @@
 #
 
 [Version]
-  rocksdb_version=8.10.0
+  rocksdb_version=8.11.4
   options_file_version=1.1
 
 [DBOptions]

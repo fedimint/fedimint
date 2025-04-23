@@ -16,14 +16,14 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
-axum-extra = { version = "0.10.0", features = ["cookie"] }
-chrono = "0.4"
+axum-extra = { workspace = true, features = ["cookie"] }
+chrono = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-meta-server = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-wallet-server = { workspace = true }
-maud = "0.27.0"
+maud = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

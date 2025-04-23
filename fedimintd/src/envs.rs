@@ -2,16 +2,10 @@
 pub const FM_DISABLE_META_MODULE_ENV: &str = "FM_DISABLE_META_MODULE";
 
 // Env variable to TODO
-pub const FM_EXTRA_DKG_META_ENV: &str = "FM_EXTRA_DKG_META";
-
-// Env variable to TODO
 pub const FM_DATA_DIR_ENV: &str = "FM_DATA_DIR";
 
 // Env variable to TODO
-pub const FM_PASSWORD_ENV: &str = "FM_PASSWORD";
-
-// Env variable to TODO
-pub const FM_TOKIO_CONSOLE_BIND_ENV: &str = "FM_TOKIO_CONSOLE_BIND";
+pub const FM_BIND_TOKIO_CONSOLE_ENV: &str = "FM_BIND_TOKIO_CONSOLE";
 
 // Env variable to TODO
 pub const FM_BIND_P2P_ENV: &str = "FM_BIND_P2P";
@@ -38,16 +32,16 @@ pub const FM_BIND_UI_ENV: &str = "FM_BIND_UI";
 pub const FM_BITCOIN_NETWORK_ENV: &str = "FM_BITCOIN_NETWORK";
 
 // Env variable to TODO
-pub const FM_FINALITY_DELAY_ENV: &str = "FM_FINALITY_DELAY";
-
-// Env variable to TODO
-pub const FM_BIND_METRICS_API_ENV: &str = "FM_BIND_METRICS_API";
+pub const FM_BIND_METRCIS_ENV: &str = "FM_BIND_METRICS";
 
 // Env variable to TODO
 pub const FM_PORT_ESPLORA_ENV: &str = "FM_PORT_ESPLORA";
 
-/// Bitcoin API communicated to fedimint clients to use for deposits
-pub const FM_DEFAULT_ESPLORA_API_ENV: &str = "FM_DEFAULT_ESPLORA_API";
-
 // Can be used to absolutely override the values stored in the db
 pub const FM_FORCE_API_SECRETS_ENV: &str = "FM_FORCE_API_SECRETS";
+
+// Env variable for the bitcoind URL
+pub const FM_BITCOIND_URL_ENV: &str = "FM_BITCOIND_URL";
+
+// Env variable for the Esplora URL
+pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";

@@ -4,22 +4,29 @@ The release process evolves each cycle, so don't hesitate to make frequent edits
 
 ### Steps
 
-- For release candidates
+- For beta releases
+  - Beta releases are only for new major releases, skip to creating the release candidate for the minor/patch version
   - If this is a new major release but there isn't a `releases/v*` branch (e.g. `releases/v0.4`)
     - Create a new `releases/v*` branch off of `master`
-    - Add a new commit bumping the version from `*-alpha` to the release candidate (e.g. `0.4.0-alpha -> 0.4.0-rc.0`)
+    - Add a new commit bumping the version from `*-alpha` to the beta release (e.g. `0.4.0-alpha -> 0.4.0-beta.0`)
     - Push the release branch to `upstream`
     - Add branch protection rules to the release branch in GH
     - Push a signed tag to GH
     - Create a PR that bumps master to a new `*-alpha` (e.g. `0.4.0-alpha -> 0.5.0-alpha`)
   - If there is already a `releases/v*` branch
-    - Bump the cargo version to a new release candidate (e.g `0.4.3-rc.0`)
+    - Bump the cargo version to a new beta version (e.g `0.4.3-beta.1`)
     - Open a PR targeting the `releases/v*` branch
     - Once this PR is merged, pull the release branch locally and push a new signed tag to GH
   - Start upgrade tests using the new tag
     - https://github.com/fedimint/fedimint/actions/workflows/upgrade-tests.yml
     - The upgrade paths and upgrade test kinds varies based on the release (coordinated shutdown vs staggered, etc)
   - Publish to crates.io
+- For release candidates
+  - Once the beta releases have passed initial testing and the release is considered production ready
+    - Bump the version to the release candidate (e.g. `0.4.0-beta.0 -> 0.4.0-rc.0`)
+    - Open a PR targeting the `releases/v*` branch
+    - Once this PR is merged, pull the release branch locally and push a new signed tag to GH
+    - After releasing `rc.0`, commit to supporting backwards compatibility
 - For final releases
   - Bump the cargo version to a final release (e.g. `0.4.3`)
   - Create a new branch off of `releases/v*` with the final release tag (e.g. `releases/v0.4.3`)

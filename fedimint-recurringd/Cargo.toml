@@ -1,0 +1,35 @@
+[package]
+name = "fedimint-recurringd"
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+readme = { workspace = true }
+description = "recurringd is a service that allows Fedimint users to receive recurring payments"
+
+[[bin]]
+name = "fedimint-recurringd"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+clap = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
+fedimint-ln-client = { workspace = true }
+fedimint-logging = { workspace = true }
+fedimint-mint-client = { workspace = true }
+fedimint-rocksdb = { workspace = true }
+futures = { workspace = true }
+lightning-invoice = { workspace = true }
+lnurl-rs = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

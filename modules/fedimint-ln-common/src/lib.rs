@@ -384,11 +384,11 @@ impl std::fmt::Display for LightningConsensusItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LightningConsensusItem::DecryptPreimage(contract_id, _) => {
-                write!(f, "LN Decryption Share for contract {contract_id}")
+                write!(f, "LN Decryption Share - contract_id: {contract_id}")
             }
-            LightningConsensusItem::BlockCount(count) => write!(f, "LN block count {count}"),
+            LightningConsensusItem::BlockCount(count) => write!(f, "LN Block Count {count}"),
             LightningConsensusItem::Default { variant, .. } => {
-                write!(f, "Unknown LN CI variant={variant}")
+                write!(f, "LN Unknown - variant={variant}")
             }
         }
     }

@@ -22,6 +22,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
+axum = { workspace = true }
 bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
@@ -31,18 +32,20 @@ fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
-fedimint-gateway-server = { package = "fedimint-gateway-server", path = "../gateway/fedimint-gateway-server", version = "=0.7.0-alpha" }
-fedimint-lightning = { package = "fedimint-lightning", path = "../gateway/fedimint-lightning", version = "=0.7.0-alpha" }
+fedimint-gateway-server = { workspace = true }
+fedimint-lightning = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-portalloc = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { workspace = true }
+fedimint-server-bitcoin-rpc = { workspace = true }
+fedimint-server-core = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
-tempfile = "3.17.1"
+tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
 tracing = { workspace = true }

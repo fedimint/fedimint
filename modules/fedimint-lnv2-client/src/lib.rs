@@ -565,9 +565,9 @@ impl LightningClientModule {
                     common: SendSMCommon {
                         operation_id,
                         outpoint: range.into_iter().next().unwrap(),
-                        gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
-                        invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
+                        gateway_api: Some(gateway_api_clone.clone()),
+                        invoice: Some(LightningInvoice::Bolt11(invoice_clone.clone())),
                         refund_keypair,
                     },
                     state: SendSMState::Funding,

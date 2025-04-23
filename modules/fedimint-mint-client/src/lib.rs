@@ -346,19 +346,10 @@ impl FromStr for OOBNotes {
 }
 
 impl Display for OOBNotes {
-    /// Base64 encode a set of e-cash notes for out-of-band spending.
-    ///
-    /// Defaults to standard base64 for backwards compatibility.
-    /// For URL-safe base64 as alternative display use:
-    /// `format!("{:#}", oob_notes)`
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let bytes = Encodable::consensus_encode_to_vec(self);
 
-        if f.alternate() {
-            f.write_str(&BASE64_URL_SAFE.encode(&bytes))
-        } else {
-            f.write_str(&base64::engine::general_purpose::STANDARD.encode(&bytes))
-        }
+        f.write_str(&BASE64_URL_SAFE.encode(&bytes))
     }
 }
 
@@ -791,10 +782,37 @@ impl ClientModule for MintClientModule {
                             ..
                         })
                         | MintClientStateMachines::OOB(MintOOBStateMachine {
-                            state: MintOOBStates::Created(_),
+                            state: MintOOBStates::Created(_) | MintOOBStates::CreatedMulti(_),
                             ..
                         }) => Some(()),
-                        _ => None,
+                        // The negative cases are enumerated explicitly to avoid missing new
+                        // variants that need to trigger balance updates
+                        MintClientStateMachines::Output(MintOutputStateMachine {
+                            state:
+                                MintOutputStates::Created(_)
+                                | MintOutputStates::CreatedMulti(_)
+                                | MintOutputStates::Failed(_)
+                                | MintOutputStates::Aborted(_),
+                            ..
+                        })
+                        | MintClientStateMachines::Input(MintInputStateMachine {
+                            state:
+                                MintInputStates::Error(_)
+                                | MintInputStates::Success(_)
+                                | MintInputStates::Refund(_)
+                                | MintInputStates::RefundedBundle(_)
+                                | MintInputStates::RefundedPerNote(_)
+                                | MintInputStates::RefundSuccess(_),
+                            ..
+                        })
+                        | MintClientStateMachines::OOB(MintOOBStateMachine {
+                            state:
+                                MintOOBStates::TimeoutRefund(_)
+                                | MintOOBStates::UserRefund(_)
+                                | MintOOBStates::UserRefundMulti(_),
+                            ..
+                        })
+                        | MintClientStateMachines::Restore(_) => None,
                     }
                 }),
         )
@@ -873,6 +891,11 @@ impl ClientModule for MintClientModule {
                     let req: AwaitSpendOobRefundRequest = serde_json::from_value(request)?;
                     let value = self.await_spend_oob_refund(req.operation_id).await;
                     yield serde_json::to_value(value)?;
+                }
+                "note_counts_by_denomination" => {
+                    let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+                    let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
+                    yield serde_json::to_value(note_counts)?;
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;

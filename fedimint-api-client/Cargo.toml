@@ -19,7 +19,6 @@ tor = [
   "arti-client/rustls",
   "arti-client/onion-service-client",
 ]
-iroh = ["dep:iroh", "dep:iroh-base", "dep:z32"]
 
 [lib]
 name = "fedimint_api_client"
@@ -34,41 +33,37 @@ bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
-iroh = { workspace = true, optional = true, default-features = false }
-iroh-base = { workspace = true, optional = true, default-features = false, features = [
+iroh = { workspace = true, default-features = false }
+iroh-base = { workspace = true, default-features = false, features = [
   "ticket",
 ] }
 itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.9" }
-jsonrpsee-types = { version = "0.24.8" }
-lru = "0.13.0"
+jsonrpsee-core = { workspace = true }
+jsonrpsee-types = { workspace = true }
+lru = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-z32 = { workspace = true, optional = true }
+z32 = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.24.9", features = [
-  "tls",
-], default-features = false }
+jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
 tokio-rustls = { version = "0.26.0", default-features = false, features = [
   "logging",
   "tls12",
   "ring",
 ] }
-webpki-roots = { version = "0.26.8" }
-rustls-pki-types = { version = "1.11.0" }
-arti-client = { version = "0.20.0", default-features = false, package = "fedimint-arti-client", optional = true }
+webpki-roots = { workspace = true }
+rustls-pki-types = { workspace = true }
+arti-client = { workspace = true, optional = true }
 strum = { workspace = true, optional = true }
-# We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
-# It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.
-curve25519-dalek = { version = ">=4.1.3", optional = true }
-iroh = { workspace = true, optional = true, default-features = false, features = [
+curve25519-dalek = { workspace = true, optional = true }
+iroh = { workspace = true, default-features = false, features = [
   "discovery-pkarr-dht",
 ] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = "0.24.9"
+jsonrpsee-wasm-client = { workspace = true }

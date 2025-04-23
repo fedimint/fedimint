@@ -31,7 +31,7 @@ use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASS
 use crate::federation::Client;
 use crate::gatewayd::LdkChainSource;
 use crate::util::{LoadTestTool, ProcessManager, poll};
-use crate::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
@@ -523,7 +523,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     .get(i)
                     .expect("Not enough gateway-cli paths");
 
-                let gateways = vec![&mut dev_fed.gw_lnd, &mut dev_fed.gw_ldk];
+                let gateways = vec![&mut dev_fed.gw_lnd];
 
                 try_join_all(gateways.into_iter().map(|gateway| {
                     gateway.restart_with_bin(process_mgr, new_gatewayd_path, new_gateway_cli_path)
@@ -621,8 +621,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .set_federation_routing_fee(fed_id.clone(), 0, 0)
         .await?;
     cmd!(client, "list-gateways").run().await?;
-
-    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
 
     let invite_code = cmd!(client, "dev", "decode", "invite-code", invite.clone())
         .out_json()
@@ -863,23 +861,19 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
 
     // # peer-version command
+    let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")
+        .out_json()
+        .await?
+        .get("version")
+        .expect("Output didn't contain version")
+        .as_str()
+        .unwrap()
+        .to_owned();
 
-    // TODO(support:v0.4): peer-version command was introduced in 0.5
-    if fedimintd_version >= *VERSION_0_5_0_ALPHA && fedimint_cli_version >= *VERSION_0_5_0_ALPHA {
-        let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")
-            .out_json()
-            .await?
-            .get("version")
-            .expect("Output didn't contain version")
-            .as_str()
-            .unwrap()
-            .to_owned();
-
-        assert_eq!(
-            semver::Version::parse(&peer_0_fedimintd_version)?,
-            fedimintd_version
-        );
-    }
+    assert_eq!(
+        semver::Version::parse(&peer_0_fedimintd_version)?,
+        fedimintd_version
+    );
 
     // # API URL announcements
     let initial_announcements = serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
@@ -960,10 +954,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
 pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
-    if crate::util::Gatewayd::version_or_default().await < *VERSION_0_5_0_ALPHA {
-        info!("Skipping load test because gatewayd is lower than v0.5.0");
-        return Ok(());
-    }
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let load_test_temp = PathBuf::from(data_dir).join("load-test-temp");
     dev_fed

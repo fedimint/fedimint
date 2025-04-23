@@ -19,19 +19,19 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-async-channel = "2.3.1"
-async-recursion = "1.1.1"
+async-channel = { workspace = true }
+async-recursion = { workspace = true }
 async-trait = { workspace = true }
-backon = { version = "1.4.1", default-features = false }
-backtrace = "0.3.74"
+backon = { workspace = true }
+backtrace = { workspace = true }
 base64 = { workspace = true }
 base64-url = { workspace = true }
-bech32 = "0.11.0"
+bech32 = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
-bitcoin-io = "0.1.2"
-bitcoin-units = "0.1.2"
-bitvec = "1.0.1"
+bitcoin-io = { workspace = true }
+bitcoin-units = { workspace = true }
+bitvec = { workspace = true }
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-derive = { workspace = true }
@@ -40,16 +40,16 @@ futures = { workspace = true }
 group = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
-imbl = "5.0.0"
-iroh-base = { workspace = true, default-features = false, features = ["key"] }
+imbl = { workspace = true }
+iroh-base = { workspace = true, features = ["key"] }
 itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.9", features = ["client"] }
+jsonrpsee-core = { workspace = true, features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
-lightning-types = "0.1.0"
-macro_rules_attribute = "0.2.0"
+lightning-types = { workspace = true }
+macro_rules_attribute = { workspace = true }
 miniscript = { workspace = true, features = ["serde"] }
-parity-scale-codec = { version = "3.7.4", features = ["derive"] }
+parity-scale-codec = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 scopeguard = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
@@ -66,22 +66,22 @@ url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 test-log = { workspace = true }
-tokio-test = "0.4.4"
+tokio-test = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-async-lock = "3.4"
+async-lock = { workspace = true }
 tokio = { workspace = true, features = ["io-util"] }
 futures-util = { workspace = true }
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
-getrandom = { version = "0.2.15", features = ["js"] }
-gloo-timers = { version = "0.3.0", features = ["futures"] }
-wasm-bindgen-futures = "0.4.42"
-js-sys = "0.3.69"
+getrandom = { workspace = true, features = ["js"] }
+gloo-timers = { workspace = true, features = ["futures"] }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
 # enable lowmemory for better bundle size
 secp256k1 = { workspace = true, features = ["lowmemory"] }

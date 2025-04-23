@@ -1,0 +1,96 @@
+id: fedimintd-mutinynet
+title: "Fedimint - Mutinynet"
+version: 0.7.0
+release-notes: |
+  https://github.com/fedimint/fedimint/releases/tag/v0.7.0
+  This release includes support for sideloading fedimintd that runs on Mutinynet.
+license: MIT
+wrapper-repo: "https://github.com/fedimint/fedimint/fedimint-start9"
+upstream-repo: "https://github.com/fedimint/fedimint"
+support-site: "https://github.com/fedimint/fedimint/issues"
+marketing-site: "https://fedimint.org/"
+build: ["make"]
+description:
+  short: Federated E-Cash Mint
+  long: |
+    Fedimint is a federated Chaumian E-Cash Mint to custody and transact bitcoin in a community.
+
+    This Start9 package supports only Mutinynet, which is a test environment where coins have no value.
+assets:
+  license: LICENSE
+  icon: icon.png
+  instructions: instructions.md
+main:
+  type: docker
+  image: main
+  entrypoint: "/docker_entrypoint.sh"
+  args: []
+  mounts:
+    main: /start-os
+    fedimintd: /fedimintd
+hardware-requirements:
+  arch:
+    - x86_64
+    - aarch64
+health-checks:
+  web-ui:
+    name: Web Interface
+    success-message: Guardian dashboard is available
+    type: docker
+    image: main
+    entrypoint: "check-web.sh"
+    args: []
+    inject: true
+    system: false
+    io-format: json
+config: ~
+properties: ~
+volumes:
+  main:
+    type: data
+  fedimintd:
+    type: data
+interfaces:
+  main:
+    name: Guardian Interface
+    description: Initial setup and dashboard for this guardian
+    tor-config:
+      port-mapping:
+        80: "8175"
+    lan-config:
+      443:
+        ssl: true
+        internal: 8175
+    ui: true
+    protocols:
+      - http
+      - tcp
+dependencies: {}
+# TODO: backup/restore is not tested for mutinynet, however it will be prior to mainnet release
+backup:
+  create:
+    type: docker
+    image: compat
+    system: true
+    entrypoint: compat
+    args:
+      - duplicity
+      - create
+      - /mnt/backup
+      - /root/data
+    mounts:
+      BACKUP: "/mnt/backup"
+      main: "/root/data"
+  restore:
+    type: docker
+    image: compat
+    system: true
+    entrypoint: compat
+    args:
+      - duplicity
+      - restore
+      - /mnt/backup
+      - /root/data
+    mounts:
+      BACKUP: "/mnt/backup"
+      main: "/root/data"
