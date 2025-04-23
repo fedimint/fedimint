@@ -105,6 +105,8 @@ pub async fn run(
                 IrohConnector::new(
                     cfg.private.iroh_p2p_sk.clone().unwrap(),
                     settings.p2p_bind,
+                    settings.iroh_dns.clone(),
+                    settings.iroh_relays.clone(),
                     cfg.consensus
                         .iroh_endpoints
                         .iter()
@@ -160,6 +162,8 @@ pub async fn run(
         connections,
         p2p_status_receivers,
         settings.api_bind,
+        settings.iroh_dns,
+        settings.iroh_relays,
         cfg,
         db,
         module_init_registry.clone(),
@@ -297,6 +301,8 @@ pub async fn run_config_gen(
         IrohConnector::new(
             cg_params.iroh_p2p_sk.clone().unwrap(),
             settings.p2p_bind,
+            settings.iroh_dns,
+            settings.iroh_relays,
             cg_params
                 .iroh_endpoints()
                 .iter()

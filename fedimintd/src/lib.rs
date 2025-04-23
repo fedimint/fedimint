@@ -130,6 +130,18 @@ struct ServerOpts {
     #[arg(long, env = FM_ENABLE_IROH_ENV)]
     enable_iroh: bool,
 
+    /// Optional URL of the Iroh DNS server
+    #[arg(long, env = "FM_IROH_DNS", requires = "enable_iroh")]
+    iroh_dns: Option<SafeUrl>,
+
+    /// Optional URLs of the Iroh relays to use for registering
+    #[arg(long, env = "FM_IROH_RELAY", requires = "enable_iroh")]
+    iroh_relays: Vec<SafeUrl>,
+
+    /// Number of checkpoints from the current session to retain on disk
+    #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
+    db_checkpoint_retention: u64,
+
     /// Enable tokio console logging
     #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
     bind_tokio_console: Option<SocketAddr>,
@@ -141,10 +153,6 @@ struct ServerOpts {
     /// Enable prometheus metrics
     #[arg(long, env = FM_BIND_METRCIS_ENV)]
     bind_metrics: Option<SocketAddr>,
-
-    /// Number of checkpoints from the current session to retain on disk
-    #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
-    db_checkpoint_retention: u64,
 
     /// Comma separated list of API secrets.
     ///
@@ -241,6 +249,8 @@ pub async fn run(
         p2p_url: server_opts.p2p_url,
         api_url: server_opts.api_url,
         enable_iroh: server_opts.enable_iroh,
+        iroh_dns: server_opts.iroh_dns,
+        iroh_relays: server_opts.iroh_relays,
         modules: server_gen_params.clone(),
         registry: server_gens.clone(),
     };

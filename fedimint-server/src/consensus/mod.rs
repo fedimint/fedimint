@@ -25,8 +25,8 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API, LOG_NET_IROH};
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::dashboard_ui::IDashboardApi;
 use fedimint_server_core::migration::apply_migrations_server_dbtx;
@@ -48,6 +48,7 @@ use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::P2PStatusReceivers;
+use crate::net::p2p_connector::build_iroh_endpoint;
 use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
@@ -58,6 +59,8 @@ pub async fn run(
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
     api_bind: SocketAddr,
+    iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -201,10 +204,12 @@ pub async fn run(
         Box::pin(start_iroh_api(
             iroh_api_sk,
             api_bind,
+            iroh_dns,
+            iroh_relays,
             consensus_api.clone(),
             task_group,
         ))
-        .await;
+        .await?;
 
         None
     } else {
@@ -374,35 +379,26 @@ fn submit_module_ci_proposals(
 
 async fn start_iroh_api(
     secret_key: iroh::SecretKey,
-    bind_addr: SocketAddr,
+    api_bind: SocketAddr,
+    iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
     consensus_api: ConsensusApi,
     task_group: &TaskGroup,
-) {
-    let builder = Endpoint::builder()
-        .discovery_n0()
-        .discovery_dht()
-        .secret_key(secret_key)
-        .alpns(vec![FEDIMINT_API_ALPN.to_vec()]);
-
-    let builder = match bind_addr {
-        SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
-        SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
-    };
-
-    let endpoint = builder.bind().await.expect("Failed to bind iroh api");
-
-    info!(
-        target: LOG_NET_IROH,
-        %bind_addr,
-        node_id = %endpoint.node_id(),
-        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-        "Iroh api server endpoint"
-    );
-
+) -> anyhow::Result<()> {
+    let endpoint = build_iroh_endpoint(
+        secret_key,
+        api_bind,
+        iroh_dns,
+        iroh_relays,
+        FEDIMINT_API_ALPN,
+    )
+    .await?;
     task_group.spawn_cancellable(
         "iroh-api",
         run_iroh_api(consensus_api, endpoint, task_group.clone()),
     );
+
+    Ok(())
 }
 
 async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_group: TaskGroup) {
