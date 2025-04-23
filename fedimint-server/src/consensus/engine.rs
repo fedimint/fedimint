@@ -71,7 +71,7 @@ pub struct ConsensusEngine {
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
-    pub checkpoint_retention: u64,
+    pub db_checkpoint_retention: u64,
 }
 
 impl ConsensusEngine {
@@ -536,8 +536,8 @@ impl ConsensusEngine {
                 // Validate that the directory is a session index
                 if let Ok(file_name) = checkpoint.file_name().into_string() {
                     if let Ok(session) = file_name.parse::<u64>() {
-                        if current_session >= self.checkpoint_retention
-                            && session < current_session - self.checkpoint_retention
+                        if current_session >= self.db_checkpoint_retention
+                            && session < current_session - self.db_checkpoint_retention
                         {
                             fs::remove_dir_all(checkpoint.path())?;
                         }
@@ -557,7 +557,7 @@ impl ConsensusEngine {
     fn checkpoint_database(&self, session_index: u64) {
         // If `checkpoint_retention` has been turned off, don't checkpoint the database
         // at all.
-        if self.checkpoint_retention == 0 {
+        if self.db_checkpoint_retention == 0 {
             return;
         }
 
@@ -592,11 +592,11 @@ impl ConsensusEngine {
         session_index: u64,
         checkpoint_dir: &Path,
     ) -> anyhow::Result<()> {
-        if self.checkpoint_retention > session_index {
+        if self.db_checkpoint_retention > session_index {
             return Ok(());
         }
 
-        let delete_session_index = session_index - self.checkpoint_retention;
+        let delete_session_index = session_index - self.db_checkpoint_retention;
         let checkpoint_to_delete = checkpoint_dir.join(delete_session_index.to_string());
         if checkpoint_to_delete.exists() {
             fs::remove_dir_all(checkpoint_to_delete)?;

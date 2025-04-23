@@ -47,8 +47,8 @@ use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
-    FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV,
-    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
+    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
+    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -134,6 +134,10 @@ struct ServerOpts {
     /// Enable prometheus metrics
     #[arg(long, env = FM_BIND_METRCIS_ENV)]
     bind_metrics: Option<SocketAddr>,
+
+    /// Number of checkpoints from the current session to retain on disk
+    #[arg(long, env = FM_DB_CHECKPOINT_RETENTION_ENV, default_value = "1")]
+    db_checkpoint_retention: u64,
 
     /// Comma separated list of API secrets.
     ///
@@ -430,6 +434,7 @@ impl Fedimintd {
             dyn_server_bitcoin_rpc,
             Box::new(fedimint_server_ui::setup::router),
             Box::new(fedimint_server_ui::dashboard::router),
+            self.opts.db_checkpoint_retention,
         )
         .await
         .inspect_err(

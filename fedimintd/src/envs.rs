@@ -48,3 +48,7 @@ pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";
 
 /// Use iroh for networking
 pub const FM_ENABLE_IROH_ENV: &str = "FM_ENABLE_IROH";
+
+/// Environment variable for the session count determining when to cleanup old
+/// checkpoints.
+pub const FM_DB_CHECKPOINT_RETENTION_ENV: &str = "FM_DB_CHECKPOINT_RETENTION";
