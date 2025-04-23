@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["default_esplora_server"],"mod":["envs","fedimintd"],"struct":["Fedimintd"]};
+window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"fn":["default_esplora_server","default_modules","run"],"mod":["envs","metrics"],"struct":["ServerOpts"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"mod":["metrics"],"struct":["Fedimintd","ServerOpts"]};
