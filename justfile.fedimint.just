@@ -139,10 +139,6 @@ mprocs *PARAMS:
 exit-mprocs:
   mprocs --ctl '{c: quit}' --server 127.0.0.1:4050
 
-# start tmuxinator with dev federation setup
-tmuxinator:
-  ./scripts/dev/tmuxinator/run.sh
-
 devimint-env *PARAMS:
   ./scripts/dev/devimint-env.sh {{PARAMS}}
 
@@ -167,10 +163,6 @@ devimint-env-tmux *PARAMS:
 
 devimint-env-mprocs *PARAMS:
   ./scripts/dev/mprocs/run.sh {{PARAMS}}
-
-# exit tmuxinator session
-exit-tmuxinator:
-  tmux kill-session -t fedimint-dev
 
 # backport a PR
 backport-pr pr:
