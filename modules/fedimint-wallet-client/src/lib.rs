@@ -22,11 +22,12 @@ mod withdraw;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context as AnyhowContext, anyhow, bail, ensure};
-use async_stream::stream;
+use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
@@ -57,7 +58,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items, runtime,
     secp256k1,
@@ -498,6 +499,37 @@ impl ClientModule for WalletClientModule {
         Some(self.cfg().fee_consensus.peg_out_abs)
     }
 
+    async fn handle_rpc(
+        &self,
+        method: String,
+        request: serde_json::Value,
+    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+        Box::pin(try_stream! {
+            match method.as_str() {
+                "peg_in" => {
+                    let req: PegInRequest = serde_json::from_value(request)?;
+                    let response = self.peg_in(req)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("peg_in failed: {}", e))?;
+                    let result = serde_json::to_value(&response)?;
+                    yield result;
+                },
+                "peg_out" => {
+                    let req: PegOutRequest = serde_json::from_value(request)?;
+                    let response = self.peg_out(req)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e))?;
+                    let result = serde_json::to_value(&response)?;
+                    yield result;
+                }
+                _ => {
+                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                    unreachable!()
+                }
+            }
+        })
+    }
+
     #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
@@ -514,6 +546,28 @@ pub struct WalletClientContext {
     wallet_decoder: Decoder,
     secp: Secp256k1<All>,
     pub client_ctx: ClientContext<WalletClientModule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegInRequest {
+    pub amount_msat: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegInResponse {
+    pub deposit_address: String,
+    pub operation_id: OperationId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegOutRequest {
+    pub amount_msat: u64,
+    pub destination_address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegOutResponse {
+    pub operation_id: OperationId,
 }
 
 impl Context for WalletClientContext {
@@ -628,6 +682,62 @@ impl WalletClientModule {
                 state_machines: Arc::new(sm_gen),
             }],
         ))
+    }
+
+    pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
+        let amount = Amount::from_msats(req.amount_msat);
+        if amount == Amount::ZERO {
+            return Err(anyhow::anyhow!("Peg-in amount must be greater than zero"));
+        }
+        let db = self.client_ctx.module_db().clone();
+        let mut dbtx = db.begin_transaction_nc().await;
+
+        let (operation_id, address, _tweak_idx) =
+            self.allocate_deposit_address_inner(&mut dbtx).await;
+        self.pegin_monitor_wakeup_sender
+            .send(())
+            .context("Failed to wake up peg-in monitor")?;
+
+        Ok(PegInResponse {
+            deposit_address: address.to_string(),
+            operation_id,
+        })
+    }
+
+    pub async fn peg_out(&self, req: PegOutRequest) -> anyhow::Result<PegOutResponse> {
+        let amount_msats: Amount = Amount::from_msats(req.amount_msat);
+        if amount_msats == Amount::ZERO {
+            return Err(anyhow::anyhow!("Peg-out amount must be greater than zero"));
+        }
+        let amount: bitcoin::Amount = bitcoin::Amount::from_sat(amount_msats.msats / 1000);
+        let destination: Address = Address::from_str(&req.destination_address)
+            .context("Invalid destination address")?
+            .require_network(self.get_network())?;
+
+        let available_balance_msats: Amount = self
+            .get_wallet_summary()
+            .await?
+            .total_spendable_balance()
+            .into();
+        let available_balance: bitcoin::Amount =
+            bitcoin::Amount::from_sat(available_balance_msats.msats / 1000);
+        let fees: PegOutFees = self.get_withdraw_fees(&destination, amount).await?;
+        let total_cost: bitcoin::Amount = amount + fees.amount();
+
+        if available_balance < total_cost {
+            return Err(anyhow::anyhow!(
+                "Insufficient balance: available {}, required {}",
+                available_balance.to_sat(),
+                total_cost.to_sat()
+            ));
+        }
+
+        let operation_id = self
+            .withdraw(&destination, amount, fees, serde_json::Value::Null)
+            .await
+            .context("Failed to initiate withdraw")?;
+
+        Ok(PegOutResponse { operation_id })
     }
 
     pub fn create_rbf_withdraw_output(
