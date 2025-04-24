@@ -508,13 +508,12 @@ impl ClientModule for WalletClientModule {
                 let _req: WalletSummaryRequest = serde_json::from_value(request)?;
                 let wallet_summary = self.get_wallet_summary()
                     .await
-                    .map_err(|e| anyhow::anyhow!("Failed to fetch wallet summary: {}", e))?;
+                    .expect("Failed to fetch wallet summary");
                 let result = serde_json::to_value(&wallet_summary)
-                    .map_err(|e| anyhow::anyhow!("Serialization error: {}", e))?;
+                    .expect("Serialization error");
                 yield result;
             } else {
                 Err(anyhow::format_err!("Unknown method: {}", method))?;
-                unreachable!()
             }
         })
     }
