@@ -1,4 +1,5 @@
 pub mod assets;
+pub(crate) mod auth;
 pub mod dashboard;
 pub mod setup;
 
@@ -41,13 +42,13 @@ pub(crate) struct LoginInput {
 
 /// Generic state for both setup and dashboard UIs
 #[derive(Clone)]
-pub struct AuthState<T> {
+pub struct UiState<T> {
     pub(crate) api: T,
     pub(crate) auth_cookie_name: String,
     pub(crate) auth_cookie_value: String,
 }
 
-impl<T> AuthState<T> {
+impl<T> UiState<T> {
     pub fn new(api: T) -> Self {
         Self {
             api,
@@ -125,15 +126,4 @@ pub(crate) fn login_submit_response(
     };
 
     Html(login_layout("Login Failed", content).into_string()).into_response()
-}
-
-pub(crate) async fn check_auth(
-    auth_cookie_name: &str,
-    auth_cookie_value: &str,
-    jar: &CookieJar,
-) -> bool {
-    match jar.get(auth_cookie_name) {
-        Some(cookie) => cookie.value() == auth_cookie_value,
-        None => false,
-    }
 }

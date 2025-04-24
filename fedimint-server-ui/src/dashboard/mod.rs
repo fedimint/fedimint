@@ -7,7 +7,7 @@ pub mod modules;
 
 use axum::Router;
 use axum::extract::{Form, State};
-use axum::response::{Html, IntoResponse, Redirect};
+use axum::response::{Html, IntoResponse};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
@@ -15,9 +15,10 @@ use maud::{DOCTYPE, Markup, html};
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
 use crate::assets::WithStaticRoutesExt as _;
+use crate::auth::UserAuth;
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
-    AuthState, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, check_auth, common_head, login_form_response,
+    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, common_head, login_form_response,
     login_submit_response,
 };
 
@@ -43,13 +44,13 @@ pub fn dashboard_layout(content: Markup) -> Markup {
 }
 
 // Dashboard login form handler
-async fn login_form(State(_state): State<AuthState<DynDashboardApi>>) -> impl IntoResponse {
+async fn login_form(State(_state): State<UiState<DynDashboardApi>>) -> impl IntoResponse {
     login_form_response()
 }
 
 // Dashboard login submit handler
 async fn login_submit(
-    State(state): State<AuthState<DynDashboardApi>>,
+    State(state): State<UiState<DynDashboardApi>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
@@ -65,13 +66,9 @@ async fn login_submit(
 
 // Main dashboard view
 async fn dashboard_view(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
+    State(state): State<UiState<DynDashboardApi>>,
+    _auth: UserAuth,
 ) -> impl IntoResponse {
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Redirect::to(LOGIN_ROUTE).into_response();
-    }
-
     let guardian_names = state.api.guardian_names().await;
     let federation_name = state.api.federation_name().await;
     let session_count = state.api.session_count().await;
@@ -166,5 +163,5 @@ pub fn router(api: DynDashboardApi) -> Router {
     }
 
     // Finalize the router with state
-    app.with_state(AuthState::new(api))
+    app.with_state(UiState::new(api))
 }

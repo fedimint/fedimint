@@ -2,8 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use axum::extract::{Form, FromRequest, State};
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum_extra::extract::cookie::CookieJar;
+use axum::response::{Html, IntoResponse, Response};
 use fedimint_core::PeerId;
 use fedimint_core::module::serde_json::{self, Value};
 use fedimint_meta_server::Meta;
@@ -13,7 +12,8 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, warn};
 
-use crate::{AuthState, LOG_UI, LOGIN_ROUTE, check_auth};
+use crate::auth::UserAuth;
+use crate::{LOG_UI, UiState};
 
 // Meta route constants
 pub const META_SUBMIT_ROUTE: &str = "/meta/submit";
@@ -168,15 +168,10 @@ impl MetaEditForm {
 }
 
 pub async fn post_submit(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
+    State(state): State<UiState<DynDashboardApi>>,
+    _auth: UserAuth,
     Form(form): Form<MetaEditForm>,
 ) -> RequestResult<Response> {
-    // Check authentication
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
-    }
-
     let meta_module = state.api.get_module::<Meta>().unwrap();
 
     let top_level_keys = form.top_level_keys()?;
@@ -207,15 +202,10 @@ pub async fn post_submit(
 }
 
 pub async fn post_reset(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
+    State(state): State<UiState<DynDashboardApi>>,
+    _auth: UserAuth,
     Form(_form): Form<MetaEditForm>,
 ) -> RequestResult<Response> {
-    // Check authentication
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
-    }
-
     let meta_module = state.api.get_module::<Meta>().unwrap();
 
     let consensus_value = meta_module
@@ -256,15 +246,9 @@ pub async fn post_reset(
 }
 
 pub async fn post_set(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
+    _auth: UserAuth,
     Form(mut form): Form<MetaEditForm>,
 ) -> RequestResult<Response> {
-    // Check authentication
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
-    }
-
     let mut top_level_object = form.top_level_keys()?;
 
     let key = form.add_key.trim();
@@ -281,15 +265,9 @@ pub async fn post_set(
 }
 
 pub async fn post_delete(
-    State(state): State<AuthState<DynDashboardApi>>,
-    jar: CookieJar,
+    _auth: UserAuth,
     Form(mut form): Form<MetaEditForm>,
 ) -> RequestResult<Response> {
-    // Check authentication
-    if !check_auth(&state.auth_cookie_name, &state.auth_cookie_value, &jar).await {
-        return Ok(Redirect::to(LOGIN_ROUTE).into_response());
-    }
-
     let mut top_level_json = form.top_level_keys()?;
 
     let key = form.delete_key.trim();
