@@ -11,18 +11,17 @@ pub use fedimint_core::config::{
     serde_binary_human_readable,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
 };
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{NumPeersExt, PeerId, base32, secp256k1, timing};
+use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::PeerHandleOpsExt as _;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
@@ -235,55 +234,6 @@ pub struct ConfigGenParams {
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
-/// Connection information sent between peers in order to start config gen
-pub struct PeerSetupCode {
-    /// Name of the peer, used in TLS auth
-    pub name: String,
-    /// The peer's api and p2p endpoint
-    pub endpoints: PeerEndpoints,
-    /// Federation name set by the leader
-    pub federation_name: Option<String>,
-}
-
-impl PeerSetupCode {
-    pub fn encode_base32(&self) -> String {
-        format!(
-            "fedimint{}",
-            base32::encode(&self.consensus_encode_to_vec())
-        )
-    }
-
-    pub fn decode_base32(s: &str) -> anyhow::Result<Self> {
-        ensure!(s.starts_with("fedimint"), "Invalid Prefix");
-
-        let params = Self::consensus_decode_whole(
-            &base32::decode(&s[8..])?,
-            &ModuleDecoderRegistry::default(),
-        )?;
-
-        Ok(params)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
-pub enum PeerEndpoints {
-    Tcp {
-        /// Url for our websocket api endpoint
-        api_url: SafeUrl,
-        /// Url for our websocket p2p endpoint
-        p2p_url: SafeUrl,
-        /// TLS certificate for our websocket p2p endpoint       
-        cert: Vec<u8>,
-    },
-    Iroh {
-        /// Public key for our iroh api endpoint
-        api_pk: iroh::PublicKey,
-        /// Public key for our iroh p2p endpoint
-        p2p_pk: iroh::PublicKey,
-    },
 }
 
 impl ServerConfigConsensus {

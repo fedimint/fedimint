@@ -44,6 +44,7 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
+use fedimint_core::setup_code::PeerSetupCode;
 use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, retry};
 use fedimint_core::{Amount, PeerId, TieredMulti, fedimint_build_code_version_env, runtime};
 use fedimint_eventlog::EventLogId;
@@ -106,6 +107,10 @@ enum CliOutput {
     ConfigDecrypt,
 
     ConfigEncrypt,
+
+    SetupCode {
+        setup_code: PeerSetupCode,
+    },
 
     Raw(serde_json::Value),
 }
@@ -408,6 +413,9 @@ enum DecodeType {
     Notes { notes: OOBNotes },
     /// Decode a transaction hex string and print it to stdout
     Transaction { hex_string: String },
+    /// Decode a setup code (as shared during a federation setup ceremony)
+    /// string into a JSON representation
+    SetupCode { setup_code: String },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -1066,6 +1074,12 @@ impl FedimintCli {
                     Ok(CliOutput::DecodeTransaction {
                         transaction: (format!("{tx:?}")),
                     })
+                }
+                DecodeType::SetupCode { setup_code } => {
+                    let setup_code = PeerSetupCode::decode_base32(&setup_code)
+                        .map_err_cli_msg("failed to decode setup code")?;
+
+                    Ok(CliOutput::SetupCode { setup_code })
                 }
             },
             Command::Dev(DevCmd::Encode { encode_type }) => match encode_type {

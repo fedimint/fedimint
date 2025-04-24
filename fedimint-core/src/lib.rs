@@ -99,6 +99,8 @@ pub mod net;
 mod peer_id;
 /// Runtime (wasm32 vs native) differences handling
 pub mod runtime;
+/// Peer setup code for setup ceremony
+pub mod setup_code;
 /// Task handling, including wasm safe logic
 pub mod task;
 /// Types handling per-denomination values
