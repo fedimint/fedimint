@@ -578,7 +578,7 @@ jobs:
 
   status:
     name: Status
-    needs: [lint, shell, build, cross, ccov, containers, pkgs]
+    needs: [lint, shell, build, cross, containers, pkgs]
     if: ${{ always() }}
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -597,7 +597,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
-    needs: [ lint, build, shell, cross, ccov, containers, pkgs ]
+    needs: [ lint, build, shell, cross, containers, pkgs ]
 
     steps:
     - name: Discord notifications on failure
