@@ -301,10 +301,13 @@ jobs:
   containers:
     if: github.repository == 'fedimint/fedimint'
     name: "Containers"
-    runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 60
     strategy:
       matrix:
+        platform:
+          - arch: x86_64-linux
+            runs-on: [self-hosted, linux, x64]
+          - arch: aarch64-linux
+            runs-on: [self-hosted, linux, arm64]
         container:
           - name: fedimintd
             image: fedimint/fedimintd
@@ -318,6 +321,8 @@ jobs:
             image: fedimint/fedimint-recurringd
           - name: devtools
             image: fedimint/devtools
+    runs-on: ${{ matrix.platform.runs-on }}
+    timeout-minutes: 60
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -331,12 +336,12 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
         continue-on-error: true
 
-      - name: Build ${{ matrix.container.name }} container
+      - name: Build ${{ matrix.container.name }} container for ${{ matrix.platform.arch }}
         run: |
           if [ "$GITHUB_EVENT_NAME" == "pull_request" ] || [ "$GITHUB_EVENT_NAME" == "merge_group" ]; then
-            nix build -L .#ci.container.${{ matrix.container.name }}
+            nix build -L .#ci.container.${{ matrix.container.name }} --system ${{ matrix.platform.arch }}
           else
-            nix build -L .#container.${{ matrix.container.name }}
+            nix build -L .#container.${{ matrix.container.name }} --system ${{ matrix.platform.arch }}
           fi
           echo "container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
@@ -350,17 +355,17 @@ jobs:
       - name: Publish
         if: github.ref == 'refs/heads/master'
         run: |
-          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${LAST_COMMIT_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${LAST_COMMIT_SHA}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish master tag
         if: github.ref == 'refs/heads/master'
         run: |
-          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:master" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:master-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
       - name: Publish tagged release
         if: github.ref_type == 'tag'
         run: |
-          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${GITHUB_REF_NAME}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${GITHUB_REF_NAME}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   pkgs:
     if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
