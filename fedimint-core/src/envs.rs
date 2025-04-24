@@ -190,7 +190,7 @@ where
             };
 
             map.insert(k, v);
-        };
+        }
     }
 
     Ok(map)

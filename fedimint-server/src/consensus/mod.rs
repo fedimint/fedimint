@@ -154,7 +154,7 @@ pub async fn run(
                 modules.insert(*module_id, (module_cfg.kind.clone(), module));
             }
             None => bail!("Detected configuration for unsupported module id: {module_id}"),
-        };
+        }
     }
 
     let module_registry = ModuleRegistry::from(modules);

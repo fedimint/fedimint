@@ -575,7 +575,7 @@ async fn get_required_notes(
             Err(e) => {
                 info!("Unable to get more notes: '{e}', will try to proceed without them");
             }
-        };
+        }
     } else {
         info!(
             "Current balance of {current_balance} already covers the minimum required of {minimum_amount_required}"
@@ -693,7 +693,7 @@ async fn do_load_test_user_task(
                 None => {
                     break;
                 }
-            };
+            }
             if generated_invoices_per_user_iterator.peek().is_some() {
                 // Only sleep while there are more invoices to pay
                 fedimint_core::task::sleep(ln_payment_sleep).await;
@@ -898,7 +898,7 @@ async fn run_two_gateways_strategy(
             )
             .await?;
         }
-    };
+    }
     Ok(())
 }
 

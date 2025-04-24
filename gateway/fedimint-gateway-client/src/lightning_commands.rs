@@ -211,7 +211,7 @@ impl LightningCommands {
                     .await?;
                 print_response(response);
             }
-        };
+        }
 
         Ok(())
     }

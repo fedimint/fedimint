@@ -584,7 +584,7 @@ impl Gateway {
                             "Gateway isn't in a running state, cannot handle incoming payments."
                         );
                         break;
-                    };
+                    }
                 }
             })
             .await
@@ -1067,7 +1067,7 @@ impl Gateway {
                 other => {
                     debug!(target: LOG_GATEWAY, state = ?other, contract_id = %contract_id, "Got state while paying invoice");
                 }
-            };
+            }
         }
 
         Err(PublicGatewayError::LNv1(LNv1Error::OutgoingPayment(
@@ -2529,7 +2529,6 @@ impl IGatewayClientV1 for Gateway {
                 Err(err) => {
                     warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
                     sleep(Duration::from_secs(5)).await;
-                    continue;
                 }
             }
         };

@@ -1964,7 +1964,7 @@ impl LightningClientModule {
                     debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
                 }
             }
-        };
+        }
         bail!("Lightning Payment failed")
     }
 }
@@ -2167,7 +2167,7 @@ pub async fn get_invoice(
                     bail!("We don't support invoices without an amount")
                 }
                 _ => {}
-            };
+            }
             Ok(invoice)
         }
         Err(e) => {

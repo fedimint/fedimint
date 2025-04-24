@@ -1752,7 +1752,7 @@ impl MintClientModule {
             MintOperationMetaVariant::SpendOOB { .. }
         ) {
             bail!("Operation is not a out-of-band spend");
-        };
+        }
 
         let client_ctx = self.client_ctx.clone();
 

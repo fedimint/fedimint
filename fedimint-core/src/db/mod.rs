@@ -3001,7 +3001,7 @@ mod test_utils {
                         assert!(value.eq(&TestVal(102)));
                     }
                     _ => {}
-                };
+                }
                 returned_keys + 1
             })
             .await;
@@ -3026,7 +3026,7 @@ mod test_utils {
                         assert!(value.eq(&TestVal(102)));
                     }
                     _ => {}
-                };
+                }
                 returned_keys + 1
             })
             .await;
@@ -3114,7 +3114,7 @@ mod test_utils {
                         assert!(value.eq(&TestVal(102)));
                     }
                     _ => {}
-                };
+                }
                 returned_keys + 1
             })
             .await;
@@ -3165,7 +3165,7 @@ mod test_utils {
                         assert!(value.eq(&TestVal(102)));
                     }
                     _ => {}
-                };
+                }
                 returned_keys + 1
             })
             .await;
@@ -3240,7 +3240,7 @@ mod test_utils {
                         assert!(value.eq(&TestVal(102)));
                     }
                     _ => {}
-                };
+                }
                 returned_keys + 1
             })
             .await;

@@ -114,7 +114,7 @@ impl FederationManager {
                             let lnv1 = client.value().get_first_module::<GatewayClientModule>()?;
                             lnv1.await_completion(op_id).await;
                         }
-                        _ => continue,
+                        _ => {}
                     }
                 }
             }
