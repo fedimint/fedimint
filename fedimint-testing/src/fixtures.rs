@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_bitcoind};
+use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -268,14 +268,13 @@ impl Fixtures {
 
     pub fn client_esplora_rpc(&self) -> DynBitcoindRpc {
         if Fixtures::is_real_test() {
-            create_bitcoind(&BitcoinRpcConfig {
-                kind: "esplora".to_string(),
-                url: SafeUrl::parse(&format!(
+            create_esplora_rpc(
+                &SafeUrl::parse(&format!(
                     "http://127.0.0.1:{}/",
                     env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
                 ))
                 .expect("Failed to parse default esplora server"),
-            })
+            )
             .unwrap()
         } else {
             self.fake_bitcoin_rpc.clone().unwrap()

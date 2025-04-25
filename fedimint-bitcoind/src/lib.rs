@@ -13,18 +13,17 @@ use std::sync::Arc;
 use anyhow::{Result, format_err};
 use bitcoin::{ScriptBuf, Transaction, Txid};
 use esplora_client::{AsyncClient, Builder};
-use fedimint_core::envs::{BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_URL_ENV};
+use fedimint_core::envs::FM_FORCE_BITCOIN_RPC_URL_ENV;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
 
-/// Create a bitcoin RPC of a given kind
-pub fn create_bitcoind(config: &BitcoinRpcConfig) -> Result<DynBitcoindRpc> {
+pub fn create_esplora_rpc(url: &SafeUrl) -> Result<DynBitcoindRpc> {
     let url = env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
         .ok()
         .map(|s| SafeUrl::parse(&s))
         .transpose()?
-        .unwrap_or_else(|| config.url.clone());
+        .unwrap_or_else(|| url.clone());
 
     Ok(EsploraClient::new(&url)?.into_dyn())
 }
