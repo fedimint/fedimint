@@ -15,24 +15,17 @@ use fedimint_core::{Feerate, apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_BITCOIND_CORE, LOG_CORE};
 use tracing::{info, warn};
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
+use crate::IBitcoindRpc;
 
 #[derive(Debug)]
-pub struct BitcoindFactory;
-
-impl IBitcoindRpcFactory for BitcoindFactory {
-    fn create_connection(&self, url: &SafeUrl) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(BitcoindClient::new(url)?.into_dyn())
-    }
-}
-
-#[derive(Debug)]
+#[allow(unused)]
 struct BitcoindClient {
     client: ::bitcoincore_rpc::Client,
     url: SafeUrl,
 }
 
 impl BitcoindClient {
+    #[allow(unused)]
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
         let safe_url = url.clone();
         let (url, auth) = from_url_to_url_auth(url)?;
@@ -74,7 +67,6 @@ impl IBitcoindRpc for BitcoindClient {
             sats_per_kvb: per_kb.to_sat(),
         }))
     }
-
     async fn submit_transaction(&self, transaction: Transaction) {
         use bitcoincore_rpc::Error::JsonRpc;
         use bitcoincore_rpc::jsonrpc::Error::Rpc;

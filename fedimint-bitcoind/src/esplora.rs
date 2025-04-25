@@ -9,25 +9,16 @@ use fedimint_core::{Feerate, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_BITCOIND_ESPLORA;
 use tracing::info;
 
-use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory};
+use crate::IBitcoindRpc;
 
 #[derive(Debug)]
-pub struct EsploraFactory;
-
-impl IBitcoindRpcFactory for EsploraFactory {
-    fn create_connection(&self, url: &SafeUrl) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(EsploraClient::new(url)?.into_dyn())
-    }
-}
-
-#[derive(Debug)]
-struct EsploraClient {
+pub struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
 }
 
 impl EsploraClient {
-    fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+    pub fn new(url: &SafeUrl) -> anyhow::Result<Self> {
         // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');
 

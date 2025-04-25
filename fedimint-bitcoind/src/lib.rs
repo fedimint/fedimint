@@ -6,21 +6,16 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::similar_names)]
 
-use std::collections::BTreeMap;
 use std::env;
 use std::fmt::Debug;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bitcoin::{Block, BlockHash, ScriptBuf, Transaction, Txid};
-use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
-};
+use fedimint_core::envs::{BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_URL_ENV};
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Feerate, apply, async_trait_maybe_send, dyn_newtype_define};
-use fedimint_logging::LOG_CORE;
-use tracing::debug;
+use fedimint_core::{Feerate, apply, async_trait_maybe_send};
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
@@ -30,6 +25,8 @@ mod feerate_source;
 
 #[cfg(feature = "fedimint-server")]
 pub mod shared;
+
+use crate::esplora::EsploraClient;
 
 // <https://blockstream.info/api/block-height/0>
 const MAINNET_GENESIS_BLOCK_HASH: &str =
@@ -45,56 +42,15 @@ const SIGNET_GENESIS_BLOCK_HASH: &str =
 const REGTEST_GENESIS_BLOCK_HASH: &str =
     "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206";
 
-/// Global factories for creating bitcoin RPCs
-static BITCOIN_RPC_REGISTRY: LazyLock<Mutex<BTreeMap<String, DynBitcoindRpcFactory>>> =
-    LazyLock::new(|| {
-        Mutex::new(BTreeMap::from([
-            #[cfg(feature = "esplora-client")]
-            ("esplora".to_string(), esplora::EsploraFactory.into()),
-            #[cfg(feature = "bitcoincore-rpc")]
-            ("bitcoind".to_string(), bitcoincore::BitcoindFactory.into()),
-        ]))
-    });
-
 /// Create a bitcoin RPC of a given kind
 pub fn create_bitcoind(config: &BitcoinRpcConfig) -> Result<DynBitcoindRpc> {
-    let registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
-
-    let kind = env::var(FM_FORCE_BITCOIN_RPC_KIND_ENV)
-        .ok()
-        .unwrap_or_else(|| config.kind.clone());
     let url = env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
         .ok()
         .map(|s| SafeUrl::parse(&s))
         .transpose()?
         .unwrap_or_else(|| config.url.clone());
-    debug!(target: LOG_CORE, %kind, %url, "Starting bitcoin rpc");
-    let maybe_factory = registry.get(&kind);
-    let factory = maybe_factory.with_context(|| {
-        anyhow::anyhow!(
-            "{} rpc not registered, available options: {:?}",
-            config.kind,
-            registry.keys()
-        )
-    })?;
-    factory.create_connection(&url)
-}
 
-/// Register a new factory for creating bitcoin RPCs
-pub fn register_bitcoind(kind: String, factory: DynBitcoindRpcFactory) {
-    let mut registry = BITCOIN_RPC_REGISTRY.lock().expect("lock poisoned");
-    registry.insert(kind, factory);
-}
-
-/// Trait for creating new bitcoin RPC clients
-pub trait IBitcoindRpcFactory: Debug + Send + Sync {
-    /// Creates a new bitcoin RPC client connection
-    fn create_connection(&self, url: &SafeUrl) -> Result<DynBitcoindRpc>;
-}
-
-dyn_newtype_define! {
-    #[derive(Clone)]
-    pub DynBitcoindRpcFactory(Arc<IBitcoindRpcFactory>)
+    Ok(EsploraClient::new(&url)?.into_dyn())
 }
 
 pub type DynBitcoindRpc = Arc<dyn IBitcoindRpc + Send + Sync>;

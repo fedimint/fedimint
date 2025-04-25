@@ -29,7 +29,7 @@ use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use fedimint_testing_core::test_dir;
 
 use crate::btc::BitcoinTest;
-use crate::btc::mock::FakeBitcoinFactory;
+use crate::btc::mock::FakeBitcoinTest;
 use crate::btc::real::RealBitcoinTest;
 use crate::envs::{
     FM_PORT_ESPLORA_ENV, FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV,
@@ -99,7 +99,12 @@ impl Fixtures {
 
             (Arc::new(bitcoin), rpc_config, server_bitcoin_rpc, None)
         } else {
-            let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
+            let bitcoin = FakeBitcoinTest::new();
+
+            let config = BitcoinRpcConfig {
+                kind: format!("test_btc-{}", rand::random::<u64>()),
+                url: "http://ignored".parse().unwrap(),
+            };
 
             let dyn_bitcoin_rpc = IBitcoindRpc::into_dyn(bitcoin.clone());
 

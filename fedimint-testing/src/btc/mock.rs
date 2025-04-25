@@ -14,7 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, register_bitcoind};
+use fedimint_bitcoind::IBitcoindRpc;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
@@ -25,34 +25,6 @@ use rand::rngs::OsRng;
 use tracing::debug;
 
 use super::BitcoinTest;
-
-#[derive(Debug, Clone)]
-pub struct FakeBitcoinFactory {
-    pub bitcoin: FakeBitcoinTest,
-    pub config: BitcoinRpcConfig,
-}
-
-impl FakeBitcoinFactory {
-    /// Registers a fake bitcoin rpc factory for testing
-    pub fn register_new() -> FakeBitcoinFactory {
-        let kind = format!("test_btc-{}", rand::random::<u64>());
-        let factory = FakeBitcoinFactory {
-            bitcoin: FakeBitcoinTest::new(),
-            config: BitcoinRpcConfig {
-                kind: kind.clone(),
-                url: "http://ignored".parse().unwrap(),
-            },
-        };
-        register_bitcoind(kind, factory.clone().into());
-        factory
-    }
-}
-
-impl IBitcoindRpcFactory for FakeBitcoinFactory {
-    fn create_connection(&self, _url: &SafeUrl) -> Result<DynBitcoindRpc> {
-        Ok(IBitcoindRpc::into_dyn(self.bitcoin.clone()))
-    }
-}
 
 #[derive(Debug)]
 struct FakeBitcoinTestInner {
