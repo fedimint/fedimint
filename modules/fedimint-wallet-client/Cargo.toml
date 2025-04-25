@@ -28,6 +28,7 @@ bitcoin = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
+fedimint-bitcoind = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
@@ -42,11 +43,3 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-fedimint-bitcoind = { workspace = true }
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-fedimint-bitcoind = { version = "=0.8.0-alpha", path = "../../fedimint-bitcoind", default-features = false, features = [
-  "esplora-client",
-] }

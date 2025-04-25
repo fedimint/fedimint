@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::Context;
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
-use bitcoincore_rpc::{Client, RpcApi};
+use bitcoincore_rpc::{Auth, Client, RpcApi};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, sleep_in_test};
@@ -197,8 +197,13 @@ impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
     pub fn new(url: &SafeUrl, rpc: DynServerBitcoinRpc) -> Self {
-        let (host, auth) =
-            fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect("correct url");
+        let auth = Auth::UserPass(
+            url.username().to_owned(),
+            url.password().unwrap().to_owned(),
+        );
+
+        let host = url.without_auth().unwrap().to_string();
+
         let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));
 
         Self {

@@ -5,14 +5,14 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::hashes::{Hash, sha256};
-use bitcoincore_rpc::RpcApi;
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 use bitcoincore_rpc::jsonrpc::error::RpcError;
+use bitcoincore_rpc::{Auth, RpcApi};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, sleep, timeout};
-use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, SafeUrl, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
 use futures::StreamExt;
@@ -58,9 +58,22 @@ impl Bitcoind {
             )
             .await?;
 
-        let url = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
+        let url: SafeUrl = processmgr.globals.FM_BITCOIN_RPC_URL.parse()?;
+
         debug!("Parsed FM_BITCOIN_RPC_URL: {:?}", &url);
-        let (host, auth) = fedimint_bitcoind::bitcoincore::from_url_to_url_auth(&url)?;
+
+        let auth = Auth::UserPass(
+            url.username().to_owned(),
+            url.password()
+                .context("Bitcoin RPC URL is missing password")?
+                .to_owned(),
+        );
+
+        let host = url
+            .without_auth()
+            .map_err(|()| anyhow!("Failed to strip auth from Bitcoin Rpc Url"))?
+            .to_string();
+
         debug!("bitcoind host: {:?}, auth: {:?}", &host, auth);
         let client =
             Self::new_bitcoin_rpc(&host, auth.clone()).context("Failed to connect to bitcoind")?;
