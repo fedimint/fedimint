@@ -10,7 +10,7 @@ nix run nixpkgs#stress-ng -- \
   --cpu "$(nproc)" \
   --cpu-load 80 \
   --vm 1 --vm-bytes 60% \
-  --timeout 300s \
+  --timeout 1200s \
   --metrics-brief \
   &
 

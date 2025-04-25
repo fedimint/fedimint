@@ -163,6 +163,18 @@ parallel_args+=(
   --nice 15
 )
 
+nix run nixpkgs#stress-ng -- \
+  --cpu "$(nproc)" \
+  --cpu-load 80 \
+  --vm 1 --vm-bytes 60% \
+  --timeout 1200s \
+  --metrics-brief \
+  &
+
+echo "started stress-ng in background"
+
+sleep 5
+
 >&2 echo "## Starting all tests in parallel..."
 >&2 echo "parallel ${parallel_args[*]}"
 
