@@ -65,7 +65,18 @@ FM_RUN_TEST_TIMEOUT_SOFT=${FM_RUN_TEST_TIMEOUT:-310}
 
 command time -q --format="$time_fmt" -o "$time_out_path" \
     timeout -k 10 "$FM_RUN_TEST_TIMEOUT_SOFT" \
-    "$@" 2>&1 | ts -i "%.S" | ts -s "%M:%S" > "$test_out_path"
+    "$@" 2>&1 | ts -i "%.S" | ts -s "%M:%S" > "$test_out_path"; exit_status=$?
+
+if [ $exit_status -ne 0 ]; then
+    if grep -q "please upgrade to gatewayd" "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-lnd.log 2>/dev/null; then
+        echo "## RERUN $test_name$version_str - known old gatewayd bug."
+        command time -q --format="$time_fmt" -o "$time_out_path" \
+            timeout -k 10 "$FM_RUN_TEST_TIMEOUT_SOFT" \
+            "$@" 2>&1 | ts -i "%.S" | ts -s "%M:%S" > "$test_out_path"
+    else
+      exit $exit_status
+    fi
+fi
 
 awk 'BEGIN {FS="\t"} {printf "## STAT: %8.2fs %8dB %8dW %8dc\n", $1, $2, $3, $4}' < "$time_out_path"
 echo "## DONE $test_name$version_str."
