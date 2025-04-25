@@ -4,7 +4,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -50,8 +49,7 @@ pub struct Fixtures {
     params: ServerModuleConfigGenParamsRegistry,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
-    dyn_bitcoin_rpc: DynBitcoindRpc,
-    bitcoin_rpc_connection: DynServerBitcoinRpc,
+    server_bitcoin_rpc: DynServerBitcoinRpc,
     primary_module_kind: ModuleKind,
     id: ModuleInstanceId,
 }
@@ -65,8 +63,7 @@ impl Fixtures {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
-        let (dyn_bitcoin_rpc, bitcoin, config, bitcoin_rpc_connection): (
-            DynBitcoindRpc,
+        let (bitcoin, config, bitcoin_rpc_connection): (
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
             DynServerBitcoinRpc,
@@ -97,23 +94,15 @@ impl Fixtures {
                 .expect("Invalid bitcoind RPC URL");
             let bitcoin = RealBitcoinTest::new(&bitcoincore_url, server_bitcoin_rpc.clone());
 
-            let dyn_bitcoin_rpc = create_bitcoind(&rpc_config).unwrap();
-
-            (
-                dyn_bitcoin_rpc,
-                Arc::new(bitcoin),
-                rpc_config,
-                server_bitcoin_rpc,
-            )
+            (Arc::new(bitcoin), rpc_config, server_bitcoin_rpc)
         } else {
             let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
-            let dyn_bitcoin_rpc = DynBitcoindRpc::from(bitcoin.clone());
 
             let bitcoin_rpc_connection = bitcoin.clone().into_dyn();
 
             let bitcoin = Arc::new(bitcoin);
 
-            (dyn_bitcoin_rpc, bitcoin, config, bitcoin_rpc_connection)
+            (bitcoin, config, bitcoin_rpc_connection)
         };
 
         Self {
@@ -122,8 +111,7 @@ impl Fixtures {
             params: ModuleRegistry::default(),
             bitcoin_rpc: config,
             bitcoin,
-            dyn_bitcoin_rpc,
-            bitcoin_rpc_connection,
+            server_bitcoin_rpc: bitcoin_rpc_connection,
             primary_module_kind: IClientModuleInit::module_kind(&client),
             id: 0,
         }
@@ -183,7 +171,7 @@ impl Fixtures {
             ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_module_kind.clone(),
             num_offline,
-            self.bitcoin_rpc_connection(),
+            self.server_bitcoin_rpc(),
         )
     }
 
@@ -285,11 +273,7 @@ impl Fixtures {
         self.bitcoin.clone()
     }
 
-    pub fn dyn_bitcoin_rpc(&self) -> DynBitcoindRpc {
-        self.dyn_bitcoin_rpc.clone()
-    }
-
-    pub fn bitcoin_rpc_connection(&self) -> DynServerBitcoinRpc {
-        self.bitcoin_rpc_connection.clone()
+    pub fn server_bitcoin_rpc(&self) -> DynServerBitcoinRpc {
+        self.server_bitcoin_rpc.clone()
     }
 }
