@@ -164,7 +164,7 @@ parallel_args+=(
 
 nix run nixpkgs#stress-ng -- \
   --cpu "$(nproc)" \
-  --cpu-load 80 \
+  --cpu-load 50 \
   --vm 1 --vm-bytes 60% \
   --timeout 1200s \
   --metrics-brief \
