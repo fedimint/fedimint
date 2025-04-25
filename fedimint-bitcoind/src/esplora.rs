@@ -16,7 +16,7 @@ pub struct EsploraFactory;
 
 impl IBitcoindRpcFactory for EsploraFactory {
     fn create_connection(&self, url: &SafeUrl) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(EsploraClient::new(url)?.into())
+        Ok(EsploraClient::new(url)?.into_dyn())
     }
 }
 

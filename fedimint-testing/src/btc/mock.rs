@@ -50,7 +50,7 @@ impl FakeBitcoinFactory {
 
 impl IBitcoindRpcFactory for FakeBitcoinFactory {
     fn create_connection(&self, _url: &SafeUrl) -> Result<DynBitcoindRpc> {
-        Ok(self.bitcoin.clone().into())
+        Ok(IBitcoindRpc::into_dyn(self.bitcoin.clone()))
     }
 }
 

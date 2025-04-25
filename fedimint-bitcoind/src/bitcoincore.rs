@@ -22,7 +22,7 @@ pub struct BitcoindFactory;
 
 impl IBitcoindRpcFactory for BitcoindFactory {
     fn create_connection(&self, url: &SafeUrl) -> anyhow::Result<DynBitcoindRpc> {
-        Ok(BitcoindClient::new(url)?.into())
+        Ok(BitcoindClient::new(url)?.into_dyn())
     }
 }
 

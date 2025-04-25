@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
+use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_bitcoind};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -101,9 +101,9 @@ impl Fixtures {
         } else {
             let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
 
-            let dyn_bitcoin_rpc = DynBitcoindRpc::from(bitcoin.clone());
+            let dyn_bitcoin_rpc = IBitcoindRpc::into_dyn(bitcoin.clone());
 
-            let server_bitcoin_rpc = bitcoin.clone().into_dyn();
+            let server_bitcoin_rpc = IServerBitcoinRpc::into_dyn(bitcoin.clone());
 
             let bitcoin = Arc::new(bitcoin);
 

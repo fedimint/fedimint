@@ -22,7 +22,9 @@ const FEERATE_SOURCE_MIN_FEERATE_SATS_PER_VB: f64 = 1.0;
 
 #[apply(async_trait_maybe_send!)]
 pub trait FeeRateSource: MaybeSend + MaybeSync {
+    #[allow(unused)]
     fn name(&self) -> String;
+    #[allow(unused)]
     async fn fetch(&self, confirmation_target: u16) -> Result<Feerate>;
 }
 
@@ -45,6 +47,7 @@ pub struct FetchJson {
 }
 
 impl FetchJson {
+    #[allow(unused)]
     pub fn from_str(source_str: &str) -> Result<Self> {
         let (source_url, code) = {
             let (url, code) = match source_str.split_once('#') {

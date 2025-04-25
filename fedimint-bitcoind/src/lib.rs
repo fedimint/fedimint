@@ -7,27 +7,20 @@
 #![allow(clippy::similar_names)]
 
 use std::collections::BTreeMap;
+use std::env;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::Duration;
-use std::{env, iter};
 
 use anyhow::{Context, Result};
-use bitcoin::{Block, BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin::{Block, BlockHash, ScriptBuf, Transaction, Txid};
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_BITCOIN_POLLING_INTERVAL_SECS_ENV, FM_FORCE_BITCOIN_RPC_KIND_ENV,
-    FM_FORCE_BITCOIN_RPC_URL_ENV, FM_WALLET_FEERATE_SOURCES_ENV, is_running_in_test_env,
+    BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
-use fedimint_core::task::TaskGroup;
-use fedimint_core::time::now;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow, SafeUrl, get_median};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, apply, async_trait_maybe_send, dyn_newtype_define};
-use fedimint_logging::{LOG_BITCOIND, LOG_CORE};
-use feerate_source::{FeeRateSource, FetchJson};
-use tokio::time::Interval;
-use tracing::{debug, trace, warn};
+use fedimint_logging::LOG_CORE;
+use tracing::debug;
 
 #[cfg(feature = "bitcoincore-rpc")]
 pub mod bitcoincore;
@@ -104,11 +97,13 @@ dyn_newtype_define! {
     pub DynBitcoindRpcFactory(Arc<IBitcoindRpcFactory>)
 }
 
+pub type DynBitcoindRpc = Arc<dyn IBitcoindRpc + Send + Sync>;
+
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if the bitcoind node is not reachable.
 #[apply(async_trait_maybe_send!)]
-pub trait IBitcoindRpc: Debug + Send {
+pub trait IBitcoindRpc: Debug + Send + Sync + 'static {
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 
@@ -188,166 +183,11 @@ pub trait IBitcoindRpc: Debug + Send {
 
     /// Returns the Bitcoin RPC config
     fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig;
-}
 
-dyn_newtype_define! {
-    #[derive(Clone)]
-    pub DynBitcoindRpc(Arc<IBitcoindRpc>)
-}
-
-impl DynBitcoindRpc {
-    /// Spawns a background task that queries the block count
-    /// periodically and sends over the returned channel.
-    pub fn spawn_block_count_update_task(
-        self,
-        task_group: &TaskGroup,
-        on_update: impl Fn(u64) + Send + Sync + 'static,
-    ) {
-        let mut desired_interval = get_bitcoin_polling_interval();
-
-        // Note: atomic only to workaround Send+Sync async closure limitation
-        let last_block_count = AtomicU64::new(0);
-
-        task_group.spawn_cancellable("block count background task", {
-            async move {
-                trace!(target: LOG_BITCOIND, "Fetching block count from bitcoind");
-
-                let update_block_count = || async {
-                    let res = self
-                        .get_block_count()
-                        .await;
-
-                    match res {
-                        Ok(block_count) => {
-                            if last_block_count.load(Ordering::SeqCst) != block_count {
-                                on_update(block_count);
-                                last_block_count.store(block_count, Ordering::SeqCst);
-                            }
-                        },
-                        Err(err) => {
-                            warn!(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), "Unable to get block count from the node");
-                        }
-                    }
-                };
-
-                loop {
-                    let start = now();
-                    update_block_count().await;
-                    let duration = now().duration_since(start).unwrap_or_default();
-                    if Duration::from_secs(10) < duration {
-                        warn!(target: LOG_BITCOIND, duration_secs=duration.as_secs(), "Updating block count from bitcoind slow");
-                    }
-                    desired_interval.tick().await;
-                }
-            }
-        });
+    fn into_dyn(self) -> DynBitcoindRpc
+    where
+        Self: Sized,
+    {
+        Arc::new(self)
     }
-
-    /// Spawns a background task that queries the feerate periodically and sends
-    /// over the returned channel.
-    pub fn spawn_fee_rate_update_task(
-        self,
-        task_group: &TaskGroup,
-        network: Network,
-        confirmation_target: u16,
-        on_update: impl Fn(Feerate) + Send + Sync + 'static,
-    ) -> anyhow::Result<()> {
-        let sources = std::env::var(FM_WALLET_FEERATE_SOURCES_ENV)
-            .unwrap_or_else(|_| match network {
-                Network::Bitcoin => "https://mempool.space/api/v1/fees/recommended#.hourFee;https://blockstream.info/api/fee-estimates#.\"1\"".to_owned(),
-                _ => String::new(),
-            })
-            .split(';')
-            .filter(|s| !s.is_empty())
-            .map(|s| Ok(Box::new(FetchJson::from_str(s)?) as Box<dyn FeeRateSource>))
-            .chain(iter::once(Ok(
-                Box::new(self.clone()) as Box<dyn FeeRateSource>
-            )))
-            .collect::<anyhow::Result<Vec<Box<dyn FeeRateSource>>>>()?;
-        let feerates = Arc::new(std::sync::Mutex::new(vec![None; sources.len()]));
-
-        let mut desired_interval = get_bitcoin_polling_interval();
-
-        task_group.spawn_cancellable("feerate background task", async move {
-            trace!(target: LOG_BITCOIND, "Fetching feerate from sources");
-
-            // Note: atomic only to workaround Send+Sync async closure limitation
-            let last_feerate = AtomicU64::new(0);
-
-            let update_fee_rate = || async {
-                trace!(target: LOG_BITCOIND, "Updating bitcoin fee rate");
-
-                let feerates_new = futures::future::join_all(sources.iter().map(|s| async { (s.name(), s.fetch(confirmation_target).await) } )).await;
-
-                let mut feerates = feerates.lock().expect("lock poisoned");
-                for (i, (name, res)) in feerates_new.into_iter().enumerate() {
-                    match res {
-                        Ok(ok) => feerates[i] = Some(ok),
-                        Err(err) => {
-                            // Regtest node never returns fee rate, so no point spamming about it
-                            if !is_running_in_test_env() {
-                                warn!(target: LOG_BITCOIND, err = %err.fmt_compact_anyhow(), %name, "Error getting feerate from source");
-                            }
-                        },
-                    }
-                }
-
-                let mut available_feerates : Vec<_> = feerates.iter().filter_map(Clone::clone).map(|r| r.sats_per_kvb).collect();
-
-                available_feerates.sort_unstable();
-
-                if let Some(feerate) = get_median(&available_feerates) {
-                    if feerate != last_feerate.load(Ordering::SeqCst) {
-                        on_update(Feerate { sats_per_kvb: feerate });
-                        last_feerate.store(feerate, Ordering::SeqCst);
-                    }
-                } else {
-                    // During tests (regtest) we never get any real feerate, so no point spamming about it
-                    if !is_running_in_test_env() {
-                        warn!(target: LOG_BITCOIND, "Unable to calculate any fee rate");
-                    }
-                }
-            };
-
-            loop {
-                let start = now();
-                update_fee_rate().await;
-                let duration = now().duration_since(start).unwrap_or_default();
-                if Duration::from_secs(10) < duration {
-                    warn!(target: LOG_BITCOIND, duration_secs=duration.as_secs(), "Updating feerate from bitcoind slow");
-                }
-                desired_interval.tick().await;
-            }
-        });
-
-        Ok(())
-    }
-}
-
-fn get_bitcoin_polling_interval() -> Interval {
-    fn get_bitcoin_polling_period() -> Duration {
-        if let Ok(s) = env::var(FM_BITCOIN_POLLING_INTERVAL_SECS_ENV) {
-            use std::str::FromStr;
-            match u64::from_str(&s) {
-                Ok(secs) => return Duration::from_secs(secs),
-                Err(err) => {
-                    warn!(
-                        target: LOG_BITCOIND,
-                        err = %err.fmt_compact(),
-                        env = FM_BITCOIN_POLLING_INTERVAL_SECS_ENV,
-                        "Could not parse env variable"
-                    );
-                }
-            }
-        };
-        if is_running_in_test_env() {
-            // In devimint, the setup is blocked by detecting block height changes,
-            // and polling more often is not an issue.
-            debug!(target: LOG_BITCOIND, "Running in devimint, using fast node polling");
-            Duration::from_millis(100)
-        } else {
-            Duration::from_secs(60)
-        }
-    }
-    tokio::time::interval(get_bitcoin_polling_period())
 }
