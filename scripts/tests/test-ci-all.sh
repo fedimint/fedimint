@@ -389,8 +389,6 @@ fi
 
 parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-360}")
 
-parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc)))}")
-
 # --delay to let nix start extracting and bump the load
 # usually not needed, as '--jobs' will keep a cap on the load anyway
 parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-.5}")
