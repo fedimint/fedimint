@@ -108,7 +108,7 @@ dyn_newtype_define! {
 ///
 /// Functions may panic if the bitcoind node is not reachable.
 #[apply(async_trait_maybe_send!)]
-pub trait IBitcoindRpc: Debug {
+pub trait IBitcoindRpc: Debug + Send {
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> Result<bitcoin::Network>;
 

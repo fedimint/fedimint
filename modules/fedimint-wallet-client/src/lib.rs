@@ -149,10 +149,10 @@ where
 
 #[derive(Debug, Clone, Default)]
 // TODO: should probably move to DB
-pub struct WalletClientInit(pub Option<BitcoinRpcConfig>);
+pub struct WalletClientInit(pub Option<DynBitcoindRpc>);
 
 impl WalletClientInit {
-    pub fn new(rpc: BitcoinRpcConfig) -> Self {
+    pub fn new(rpc: DynBitcoindRpc) -> Self {
         Self(Some(rpc))
     }
 }
@@ -240,14 +240,14 @@ impl ClientModuleInit for WalletClientInit {
             module_root_secret: args.module_root_secret().clone(),
         };
 
-        let rpc_config = self
-            .0
-            .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
         let db = args.db().clone();
 
-        let btc_rpc = create_bitcoind(&rpc_config)?;
+        let btc_rpc =
+            self.0
+                .clone()
+                .unwrap_or(create_bitcoind(&WalletClientModule::get_rpc_config(
+                    args.cfg(),
+                ))?);
         let module_api = args.module_api().clone();
 
         let (pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());

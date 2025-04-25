@@ -41,7 +41,7 @@ use tracing::{info, warn};
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
     let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_server());
-    let wallet_client = WalletClientInit::new(fixtures.bitcoin_client());
+    let wallet_client = WalletClientInit::new(fixtures.client_esplora_rpc());
     fixtures.with_module(wallet_client, WalletInit, wallet_params)
 }
 

@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -49,6 +50,7 @@ pub struct Fixtures {
     params: ServerModuleConfigGenParamsRegistry,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
+    fake_bitcoin_rpc: Option<DynBitcoindRpc>,
     server_bitcoin_rpc: DynServerBitcoinRpc,
     primary_module_kind: ModuleKind,
     id: ModuleInstanceId,
@@ -63,10 +65,11 @@ impl Fixtures {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
-        let (bitcoin, config, bitcoin_rpc_connection): (
+        let (bitcoin, config, bitcoin_rpc_connection, fake_bitcoin_rpc): (
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
             DynServerBitcoinRpc,
+            Option<DynBitcoindRpc>,
         ) = if real_testing {
             // `backend-test.sh` overrides which Bitcoin RPC to use for electrs and esplora
             // backend tests
@@ -94,15 +97,22 @@ impl Fixtures {
                 .expect("Invalid bitcoind RPC URL");
             let bitcoin = RealBitcoinTest::new(&bitcoincore_url, server_bitcoin_rpc.clone());
 
-            (Arc::new(bitcoin), rpc_config, server_bitcoin_rpc)
+            (Arc::new(bitcoin), rpc_config, server_bitcoin_rpc, None)
         } else {
             let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
 
-            let bitcoin_rpc_connection = bitcoin.clone().into_dyn();
+            let dyn_bitcoin_rpc = DynBitcoindRpc::from(bitcoin.clone());
+
+            let server_bitcoin_rpc = bitcoin.clone().into_dyn();
 
             let bitcoin = Arc::new(bitcoin);
 
-            (bitcoin, config, bitcoin_rpc_connection)
+            (
+                bitcoin.clone(),
+                config,
+                server_bitcoin_rpc,
+                Some(dyn_bitcoin_rpc),
+            )
         };
 
         Self {
@@ -110,6 +120,7 @@ impl Fixtures {
             servers: vec![],
             params: ModuleRegistry::default(),
             bitcoin_rpc: config,
+            fake_bitcoin_rpc,
             bitcoin,
             server_bitcoin_rpc: bitcoin_rpc_connection,
             primary_module_kind: IClientModuleInit::module_kind(&client),
@@ -250,21 +261,19 @@ impl Fixtures {
         self.bitcoin_rpc.clone()
     }
 
-    /// Get a client bitcoin RPC config
-    // TODO: Right now we only support mocks or esplora, we should support others in
-    // the future
-    pub fn bitcoin_client(&self) -> BitcoinRpcConfig {
+    pub fn client_esplora_rpc(&self) -> DynBitcoindRpc {
         if Fixtures::is_real_test() {
-            BitcoinRpcConfig {
+            create_bitcoind(&BitcoinRpcConfig {
                 kind: "esplora".to_string(),
                 url: SafeUrl::parse(&format!(
                     "http://127.0.0.1:{}/",
                     env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
                 ))
                 .expect("Failed to parse default esplora server"),
-            }
+            })
+            .unwrap()
         } else {
-            self.bitcoin_rpc.clone()
+            self.fake_bitcoin_rpc.clone().unwrap()
         }
     }
 
