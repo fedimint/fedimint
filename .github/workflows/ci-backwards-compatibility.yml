@@ -46,14 +46,7 @@ jobs:
 
       - name: Backwards-compatibility tests
         run: |
-          # run a slimmed down back-compat test for PR push or each major version for merge queue
-          if [[ "${{ github.event_name }}" == "merge_group" ]]; then
-            PERFIT_METRIC="90S3yoXDQ-SXB0UbXG4qHQ"
-            VERSIONS_TO_TEST="v0.5.1 v0.6.2 v0.7.0"
-          else
-            PERFIT_METRIC="aPuCAjrFT7uE5Oax_T4sMw"
-            VERSIONS_TO_TEST="v0.7.0"
-          fi
+          VERSIONS_TO_TEST="v0.5.1 v0.6.2 v0.7.0"
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
@@ -64,11 +57,6 @@ jobs:
             CARGO_PROFILE=ci \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix develop -c \
-            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
-              run \
-                --metric "$PERFIT_METRIC" \
-                --metadata "commit=${LAST_COMMIT_SHA}" \
-                -- \
             env -u RUSTC_WRAPPER \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/test-ci-all-backcompat.sh "$VERSIONS_TO_TEST"
 
