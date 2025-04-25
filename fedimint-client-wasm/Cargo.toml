@@ -27,6 +27,7 @@ fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-mint-client = { workspace = true }
+fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 imbl = { workspace = true }
 js-sys = { workspace = true }
