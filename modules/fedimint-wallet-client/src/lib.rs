@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context as AnyhowContext, anyhow, bail, ensure};
-use async_stream::stream;
+use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
@@ -57,7 +57,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items, runtime,
     secp256k1,
@@ -498,6 +498,26 @@ impl ClientModule for WalletClientModule {
         Some(self.cfg().fee_consensus.peg_out_abs)
     }
 
+    async fn handle_rpc(
+        &self,
+        method: String,
+        request: serde_json::Value,
+    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+        Box::pin(try_stream! {
+            if method.as_str() == "get_wallet_summary" {
+                let _req: WalletSummaryRequest = serde_json::from_value(request)?;
+                let wallet_summary = self.get_wallet_summary()
+                    .await
+                    .expect("Failed to fetch wallet summary");
+                let result = serde_json::to_value(&wallet_summary)
+                    .expect("Serialization error");
+                yield result;
+            } else {
+                Err(anyhow::format_err!("Unknown method: {}", method))?;
+            }
+        })
+    }
+
     #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
@@ -506,6 +526,9 @@ impl ClientModule for WalletClientModule {
         cli::handle_cli_command(self, args).await
     }
 }
+
+#[derive(Deserialize)]
+struct WalletSummaryRequest {}
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {

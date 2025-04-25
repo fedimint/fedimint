@@ -14,6 +14,7 @@ use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_mint_client::MintClientInit;
+use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::StreamExt;
 use futures::future::{AbortHandle, Abortable};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
@@ -86,7 +87,7 @@ impl WasmClient {
         let mut builder = fedimint_client::Client::builder(db).await?;
         builder.with_module(MintClientInit);
         builder.with_module(LightningClientInit::default());
-        // FIXME: wallet module?
+        builder.with_module(WalletClientInit(None));
         builder.with_primary_module(1);
         Ok(builder)
     }
@@ -230,6 +231,15 @@ impl WasmClient {
                         .get_first_module::<fedimint_mint_client::MintClientModule>()?
                         .inner();
                     let mut stream = mint.handle_rpc(method.to_owned(), payload).await;
+                    while let Some(item) = stream.next().await {
+                        yield item?;
+                    }
+                }
+                "wallet" => {
+                    let wallet = client
+                        .get_first_module::<WalletClientModule>()?
+                        .inner();
+                    let mut stream = wallet.handle_rpc(method.to_owned(), payload).await;
                     while let Some(item) = stream.next().await {
                         yield item?;
                     }
