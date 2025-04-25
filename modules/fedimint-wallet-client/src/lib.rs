@@ -22,7 +22,6 @@ mod withdraw;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -550,19 +549,20 @@ pub struct WalletClientContext {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PegInRequest {
-    pub amount_msat: u64,
+    pub extra_meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PegInResponse {
-    pub deposit_address: String,
+    pub deposit_address: Address<NetworkUnchecked>,
     pub operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PegOutRequest {
-    pub amount_msat: u64,
-    pub destination_address: String,
+    pub amount_sat: u64,
+    pub destination_address: Address<NetworkUnchecked>,
+    pub extra_meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -685,55 +685,28 @@ impl WalletClientModule {
     }
 
     pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
-        let amount = Amount::from_msats(req.amount_msat);
-        if amount == Amount::ZERO {
-            return Err(anyhow::anyhow!("Peg-in amount must be greater than zero"));
-        }
-        let db = self.client_ctx.module_db().clone();
-        let mut dbtx = db.begin_transaction_nc().await;
-
-        let (operation_id, address, _tweak_idx) =
-            self.allocate_deposit_address_inner(&mut dbtx).await;
+        let (operation_id, address, _) = self.safe_allocate_deposit_address(req.extra_meta).await?;
         self.pegin_monitor_wakeup_sender
             .send(())
             .context("Failed to wake up peg-in monitor")?;
 
         Ok(PegInResponse {
-            deposit_address: address.to_string(),
+            deposit_address: Address::from_script(&address.script_pubkey(), self.get_network())?
+                .as_unchecked()
+                .clone(),
             operation_id,
         })
     }
 
     pub async fn peg_out(&self, req: PegOutRequest) -> anyhow::Result<PegOutResponse> {
-        let amount_msats: Amount = Amount::from_msats(req.amount_msat);
-        if amount_msats == Amount::ZERO {
-            return Err(anyhow::anyhow!("Peg-out amount must be greater than zero"));
-        }
-        let amount: bitcoin::Amount = bitcoin::Amount::from_sat(amount_msats.msats / 1000);
-        let destination: Address = Address::from_str(&req.destination_address)
-            .context("Invalid destination address")?
+        let amount = bitcoin::Amount::from_sat(req.amount_sat);
+        let destination = req
+            .destination_address
             .require_network(self.get_network())?;
 
-        let available_balance_msats: Amount = self
-            .get_wallet_summary()
-            .await?
-            .total_spendable_balance()
-            .into();
-        let available_balance: bitcoin::Amount =
-            bitcoin::Amount::from_sat(available_balance_msats.msats / 1000);
-        let fees: PegOutFees = self.get_withdraw_fees(&destination, amount).await?;
-        let total_cost: bitcoin::Amount = amount + fees.amount();
-
-        if available_balance < total_cost {
-            return Err(anyhow::anyhow!(
-                "Insufficient balance: available {}, required {}",
-                available_balance.to_sat(),
-                total_cost.to_sat()
-            ));
-        }
-
+        let fees = self.get_withdraw_fees(&destination, amount).await?;
         let operation_id = self
-            .withdraw(&destination, amount, fees, serde_json::Value::Null)
+            .withdraw(&destination, amount, fees, req.extra_meta)
             .await
             .context("Failed to initiate withdraw")?;
 
