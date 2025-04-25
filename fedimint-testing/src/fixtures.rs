@@ -85,24 +85,25 @@ impl Fixtures {
                     .expect("must provide valid default env vars"),
             };
 
-            let dyn_bitcoin_rpc = create_bitcoind(&rpc_config).unwrap();
-            let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
-                .expect("Must have bitcoind RPC defined for real tests")
-                .parse()
-                .expect("Invalid bitcoind RPC URL");
-            let bitcoin = RealBitcoinTest::new(&bitcoincore_url, dyn_bitcoin_rpc.clone());
-
-            let bitcoin_rpc_connection = match rpc_config.kind.as_ref() {
+            let server_bitcoin_rpc = match rpc_config.kind.as_ref() {
                 "bitcoind" => BitcoindClient::new(&rpc_config.url).unwrap().into_dyn(),
                 "esplora" => EsploraClient::new(&rpc_config.url).unwrap().into_dyn(),
                 kind => panic!("Unknown bitcoin rpc kind {kind}"),
             };
 
+            let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
+                .expect("Must have bitcoind RPC defined for real tests")
+                .parse()
+                .expect("Invalid bitcoind RPC URL");
+            let bitcoin = RealBitcoinTest::new(&bitcoincore_url, server_bitcoin_rpc.clone());
+
+            let dyn_bitcoin_rpc = create_bitcoind(&rpc_config).unwrap();
+
             (
                 dyn_bitcoin_rpc,
                 Arc::new(bitcoin),
                 rpc_config,
-                bitcoin_rpc_connection,
+                server_bitcoin_rpc,
             )
         } else {
             let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();

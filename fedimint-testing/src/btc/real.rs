@@ -5,7 +5,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
-use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{block_in_place, sleep_in_test};
@@ -13,6 +12,7 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, task};
 use fedimint_logging::LOG_TEST;
+use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 use tracing::{debug, trace};
 
 use crate::btc::BitcoinTest;
@@ -26,7 +26,7 @@ use crate::btc::BitcoinTest;
 struct RealBitcoinTestNoLock {
     client: Arc<Client>,
     /// RPC used to connect to bitcoind, used for waiting for the RPC to sync
-    rpc: DynBitcoindRpc,
+    rpc: DynServerBitcoinRpc,
 }
 
 impl RealBitcoinTestNoLock {
@@ -196,7 +196,7 @@ pub struct RealBitcoinTest {
 impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
-    pub fn new(url: &SafeUrl, rpc: DynBitcoindRpc) -> Self {
+    pub fn new(url: &SafeUrl, rpc: DynServerBitcoinRpc) -> Self {
         let (host, auth) =
             fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect("correct url");
         let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));
