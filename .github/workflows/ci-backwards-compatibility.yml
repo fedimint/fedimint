@@ -46,6 +46,8 @@ jobs:
 
       - name: Backwards-compatibility tests
         run: |
+          echo "Runner name: ${{ runner.name }}"
+          echo "Runner name: ${{ toJSON(runner.labels) }}"
           VERSIONS_TO_TEST="v0.5.1 v0.6.2 v0.7.0"
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
