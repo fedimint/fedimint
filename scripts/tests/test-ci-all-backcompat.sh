@@ -11,8 +11,9 @@ nix run nixpkgs#stress-ng -- \
   --vm 1 --vm-bytes 60% \
   --timeout 300s \
   --metrics-brief \
-  --bg \
-&& echo "stress-ng is consuming resources to try to repro flake"
+  &
+
+echo "started stress-ng in background"
 
 sleep 5
 
