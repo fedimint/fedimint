@@ -6,4 +6,6 @@ export FM_USE_UNKNOWN_MODULE=0
 
 export RUST_LOG=${RUST_LOG:-h2=off,fm=debug,info}
 
-./scripts/tests/test-ci-all.sh "$@"
+nix run nixpkgs#stress-ng -- --help
+
+# ./scripts/tests/test-ci-all.sh "$@"

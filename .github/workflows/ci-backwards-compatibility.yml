@@ -46,26 +46,21 @@ jobs:
 
       - name: Backwards-compatibility tests
         run: |
+          echo "Runner name: ${{ runner.name }}"
+          echo "Runner name: ${{ toJSON(runner.labels) }}"
           VERSIONS_TO_TEST="v0.5.1 v0.6.2 v0.7.0"
-          nix develop -c bash -lc '
-            export TMPDIR=/tmp
-            export CARGO_PROFILE=ci
 
-            nix run nixpkgs#stress-ng -- \
-              --cpu "$(nproc)" \
-              --vm 1 --vm-bytes 60% \
-              --timeout 300s \
-              --metrics-brief \
-              --bg \
-            && echo "stress-ng is trying to repro the failure"
-
-            sleep 5
-
+          # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
+          # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
+          # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
+          # it doesn't benefit us much here anyway.
+          env \
+            TMPDIR=/tmp \
+            CARGO_PROFILE=ci \
+            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
+            nix develop -c \
             env -u RUSTC_WRAPPER \
-              scripts/tests/run-with-nix-workspace-ci.sh \
-              ./scripts/tests/test-ci-all-backcompat.sh \
-              "$VERSIONS_TO_TEST"
-          '
+            scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/test-ci-all-backcompat.sh "$VERSIONS_TO_TEST"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
