@@ -337,7 +337,6 @@ impl RecoveryFromHistory for WalletRecovery {
 
                     let use_decoy = || async {
                         if let Some(decoy) = decoy.as_ref() {
-                            btc_rpc.watch_script_history(decoy).await?;
                             let _ = btc_rpc.get_script_history(decoy).await?;
                         }
                         Ok::<_, anyhow::Error>(())
@@ -346,7 +345,6 @@ impl RecoveryFromHistory for WalletRecovery {
                     if use_decoy_before_real_query {
                         use_decoy().await?;
                     }
-                    btc_rpc.watch_script_history(&script).await?;
                     let history = btc_rpc.get_script_history(&script).await?;
 
                     if !use_decoy_before_real_query {

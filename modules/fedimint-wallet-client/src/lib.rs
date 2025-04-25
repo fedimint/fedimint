@@ -772,10 +772,6 @@ impl WalletClientModule {
 
                         debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
 
-                        // Begin watching the script address
-                        self.rpc
-                            .watch_script_history(&address.script_pubkey())
-                            .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
                         dbtx.on_commit(move || {
@@ -862,11 +858,6 @@ impl WalletClientModule {
             stream! {
                 yield DepositStateV2::WaitingForTransaction;
 
-                retry(
-                    "subscribe script history",
-                    background_backoff(),
-                    || stream_rpc.watch_script_history(&stream_script_pub_key)
-                ).await.expect("Will never give up");
                 let (btc_out_point, btc_deposited) = retry(
                     "fetch history",
                     background_backoff(),

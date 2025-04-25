@@ -324,7 +324,6 @@ async fn check_idx_pegins(
 ) -> Result<Vec<CheckOutcome>, anyhow::Error> {
     let current_consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
     let (script, address, tweak_key, operation_id) = data.derive_peg_in_script(tweak_idx);
-    btc_rpc.watch_script_history(&script).await?;
 
     let history = btc_rpc.get_script_history(&script).await?;
 

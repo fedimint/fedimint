@@ -37,22 +37,9 @@ pub type DynBitcoindRpc = Arc<dyn IBitcoindRpc + Send + Sync>;
 #[apply(async_trait_maybe_send!)]
 pub trait IBitcoindRpc: Debug + Send + Sync + 'static {
     /// If a transaction is included in a block, returns the block height.
-    /// Note: calling this method with bitcoind as a backend must first call
-    /// `watch_script_history` or run bitcoind with txindex enabled.
     async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>>;
 
-    /// Watches for a script and returns any transactions associated with it
-    ///
-    /// Should be called at least prior to transactions being submitted or
-    /// watching may not occur on backends that need it
-    /// TODO: bitcoind backend is broken
-    /// `<https://github.com/fedimint/fedimint/issues/5329>`
-    async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()>;
-
     /// Get script transaction history
-    ///
-    /// Note: should call `watch_script_history` at least once, before calling
-    /// this.
     async fn get_script_history(&self, script: &ScriptBuf) -> Result<Vec<Transaction>>;
 
     /// Returns a proof that a tx is included in the bitcoin blockchain
@@ -89,11 +76,6 @@ impl IBitcoindRpc for EsploraClient {
             .await?
             .block_height
             .map(u64::from))
-    }
-
-    async fn watch_script_history(&self, _: &ScriptBuf) -> anyhow::Result<()> {
-        // no watching needed, has all the history already
-        Ok(())
     }
 
     async fn get_script_history(

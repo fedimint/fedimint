@@ -298,10 +298,6 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(None)
     }
 
-    async fn watch_script_history(&self, _: &bitcoin::ScriptBuf) -> Result<()> {
-        Ok(())
-    }
-
     async fn get_script_history(
         &self,
         script: &bitcoin::ScriptBuf,
