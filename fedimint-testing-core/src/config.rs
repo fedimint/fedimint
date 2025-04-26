@@ -3,7 +3,8 @@ use std::sync::LazyLock;
 
 use fedimint_core::PeerId;
 use fedimint_core::module::ApiAuth;
-use fedimint_server::config::{ConfigGenParams, PeerEndpoints, PeerSetupCode};
+use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
+use fedimint_server::config::ConfigGenParams;
 use fedimint_server::net::p2p_connector::gen_cert_and_key;
 use tokio_rustls::rustls;
 

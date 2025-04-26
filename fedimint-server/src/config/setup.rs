@@ -21,6 +21,7 @@ use fedimint_core::envs::{
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
 };
+use fedimint_core::setup_code::PeerEndpoints;
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::net::check_auth;
 use fedimint_server_core::setup_ui::ISetupApi;
@@ -31,7 +32,6 @@ use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
 use tracing::warn;
 
-use super::PeerEndpoints;
 use crate::config::{ConfigGenParams, ConfigGenSettings, PeerSetupCode};
 use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
