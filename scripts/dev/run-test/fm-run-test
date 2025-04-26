@@ -63,9 +63,13 @@ trap on_exit EXIT
 
 FM_RUN_TEST_TIMEOUT_SOFT=${FM_RUN_TEST_TIMEOUT:-310}
 
+set +e
+
 command time -q --format="$time_fmt" -o "$time_out_path" \
     timeout -k 10 "$FM_RUN_TEST_TIMEOUT_SOFT" \
     "$@" 2>&1 | ts -i "%.S" | ts -s "%M:%S" > "$test_out_path"; exit_status=$?
+
+set -e
 
 if [ $exit_status -ne 0 ]; then
     if grep -q "please upgrade to gatewayd" "$FM_RUN_TEST_TMPDIR"/devimint-*/logs/gatewayd-lnd.log 2>/dev/null; then
