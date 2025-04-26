@@ -501,16 +501,35 @@ impl ClientModule for WalletClientModule {
         request: serde_json::Value,
     ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
         Box::pin(try_stream! {
-            if method.as_str() == "get_wallet_summary" {
-                let _req: WalletSummaryRequest = serde_json::from_value(request)?;
-                let wallet_summary = self.get_wallet_summary()
-                    .await
-                    .expect("Failed to fetch wallet summary");
-                let result = serde_json::to_value(&wallet_summary)
-                    .expect("Serialization error");
-                yield result;
-            } else {
-                Err(anyhow::format_err!("Unknown method: {}", method))?;
+            match method.as_str() {
+                "get_wallet_summary" => {
+                    let _req: WalletSummaryRequest = serde_json::from_value(request)?;
+                    let wallet_summary = self.get_wallet_summary()
+                        .await
+                        .expect("Failed to fetch wallet summary");
+                    let result = serde_json::to_value(&wallet_summary)
+                        .expect("Serialization error");
+                    yield result;
+                }
+                "peg_in" => {
+                    let req: PegInRequest = serde_json::from_value(request)?;
+                    let response = self.peg_in(req)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("peg_in failed: {}", e))?;
+                    let result = serde_json::to_value(&response)?;
+                    yield result;
+                },
+                "peg_out" => {
+                    let req: PegOutRequest = serde_json::from_value(request)?;
+                    let response = self.peg_out(req)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e))?;
+                    let result = serde_json::to_value(&response)?;
+                    yield result;
+                }
+                _ => {
+                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                }
             }
         })
     }
@@ -534,6 +553,29 @@ pub struct WalletClientContext {
     wallet_decoder: Decoder,
     secp: Secp256k1<All>,
     pub client_ctx: ClientContext<WalletClientModule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegInRequest {
+    pub extra_meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegInResponse {
+    pub deposit_address: Address<NetworkUnchecked>,
+    pub operation_id: OperationId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegOutRequest {
+    pub amount_sat: u64,
+    pub destination_address: Address<NetworkUnchecked>,
+    pub extra_meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegOutResponse {
+    pub operation_id: OperationId,
 }
 
 impl Context for WalletClientContext {
@@ -648,6 +690,35 @@ impl WalletClientModule {
                 state_machines: Arc::new(sm_gen),
             }],
         ))
+    }
+
+    pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
+        let (operation_id, address, _) = self.safe_allocate_deposit_address(req.extra_meta).await?;
+        self.pegin_monitor_wakeup_sender
+            .send(())
+            .context("Failed to wake up peg-in monitor")?;
+
+        Ok(PegInResponse {
+            deposit_address: Address::from_script(&address.script_pubkey(), self.get_network())?
+                .as_unchecked()
+                .clone(),
+            operation_id,
+        })
+    }
+
+    pub async fn peg_out(&self, req: PegOutRequest) -> anyhow::Result<PegOutResponse> {
+        let amount = bitcoin::Amount::from_sat(req.amount_sat);
+        let destination = req
+            .destination_address
+            .require_network(self.get_network())?;
+
+        let fees = self.get_withdraw_fees(&destination, amount).await?;
+        let operation_id = self
+            .withdraw(&destination, amount, fees, req.extra_meta)
+            .await
+            .context("Failed to initiate withdraw")?;
+
+        Ok(PegOutResponse { operation_id })
     }
 
     pub fn create_rbf_withdraw_output(
