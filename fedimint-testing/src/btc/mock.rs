@@ -14,13 +14,13 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::IBitcoindRpc;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, Feerate};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
+use fedimint_wallet_client::esplora::IEsploraRpc;
 use rand::rngs::OsRng;
 use tracing::debug;
 
@@ -288,7 +288,7 @@ impl BitcoinTest for FakeBitcoinTest {
 }
 
 #[async_trait]
-impl IBitcoindRpc for FakeBitcoinTest {
+impl IEsploraRpc for FakeBitcoinTest {
     async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> Result<Option<u64>> {
         for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
             if block.txdata.iter().any(|tx| &tx.compute_txid() == txid) {

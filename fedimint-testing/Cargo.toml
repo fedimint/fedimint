@@ -27,7 +27,6 @@ bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
@@ -42,6 +41,7 @@ fedimint-server = { workspace = true }
 fedimint-server-bitcoin-rpc = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-testing-core = { workspace = true }
+fedimint-wallet-client = { workspace = true }
 fs-lock = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }

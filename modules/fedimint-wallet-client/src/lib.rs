@@ -12,6 +12,9 @@ mod cli;
 mod backup;
 
 pub mod client_db;
+
+pub mod esplora;
+
 /// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
 /// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
@@ -33,7 +36,6 @@ use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -82,6 +84,7 @@ use crate::client_db::{
     PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
+use crate::esplora::{DynEsploradRpc, create_esplora_rpc};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
@@ -149,10 +152,10 @@ where
 
 #[derive(Debug, Clone, Default)]
 // TODO: should probably move to DB
-pub struct WalletClientInit(pub Option<DynBitcoindRpc>);
+pub struct WalletClientInit(pub Option<DynEsploradRpc>);
 
 impl WalletClientInit {
-    pub fn new(rpc: DynBitcoindRpc) -> Self {
+    pub fn new(rpc: DynEsploradRpc) -> Self {
         Self(Some(rpc))
     }
 }
@@ -389,7 +392,7 @@ pub struct WalletClientModule {
     db: Database,
     module_api: DynModuleApi,
     notifier: ModuleNotifier<WalletClientStates>,
-    rpc: DynBitcoindRpc,
+    rpc: DynEsploradRpc,
     client_ctx: ClientContext<Self>,
     /// Updated to wake up pegin monitor
     pegin_monitor_wakeup_sender: watch::Sender<()>,
@@ -507,7 +510,7 @@ impl ClientModule for WalletClientModule {
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {
-    rpc: DynBitcoindRpc,
+    rpc: DynEsploradRpc,
     wallet_descriptor: PegInDescriptor,
     wallet_decoder: Decoder,
     secp: Secp256k1<All>,

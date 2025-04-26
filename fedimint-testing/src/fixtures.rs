@@ -4,7 +4,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -27,6 +26,7 @@ use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use fedimint_testing_core::test_dir;
+use fedimint_wallet_client::esplora::{DynEsploradRpc, IEsploraRpc, create_esplora_rpc};
 
 use crate::btc::BitcoinTest;
 use crate::btc::mock::FakeBitcoinTest;
@@ -50,7 +50,7 @@ pub struct Fixtures {
     params: ServerModuleConfigGenParamsRegistry,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
-    fake_bitcoin_rpc: Option<DynBitcoindRpc>,
+    fake_bitcoin_rpc: Option<DynEsploradRpc>,
     server_bitcoin_rpc: DynServerBitcoinRpc,
     primary_module_kind: ModuleKind,
     id: ModuleInstanceId,
@@ -69,7 +69,7 @@ impl Fixtures {
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
             DynServerBitcoinRpc,
-            Option<DynBitcoindRpc>,
+            Option<DynEsploradRpc>,
         ) = if real_testing {
             // `backend-test.sh` overrides which Bitcoin RPC to use for electrs and esplora
             // backend tests
@@ -106,7 +106,7 @@ impl Fixtures {
                 url: "http://ignored".parse().unwrap(),
             };
 
-            let dyn_bitcoin_rpc = IBitcoindRpc::into_dyn(bitcoin.clone());
+            let dyn_bitcoin_rpc = IEsploraRpc::into_dyn(bitcoin.clone());
 
             let server_bitcoin_rpc = IServerBitcoinRpc::into_dyn(bitcoin.clone());
 
@@ -266,7 +266,7 @@ impl Fixtures {
         self.bitcoin_rpc.clone()
     }
 
-    pub fn client_esplora_rpc(&self) -> DynBitcoindRpc {
+    pub fn client_esplora_rpc(&self) -> DynEsploradRpc {
         if Fixtures::is_real_test() {
             create_esplora_rpc(
                 &SafeUrl::parse(&format!(

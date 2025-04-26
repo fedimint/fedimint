@@ -2607,19 +2607,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-bitcoind"
-version = "0.8.0-alpha"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitcoin",
- "esplora-client 0.10.0",
- "fedimint-core",
- "fedimint-logging",
- "tracing",
-]
-
-[[package]]
 name = "fedimint-build"
 version = "0.8.0-alpha"
 dependencies = [
@@ -3904,7 +3891,6 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "fedimint-api-client",
- "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",
@@ -3919,6 +3905,7 @@ dependencies = [
  "fedimint-server-bitcoin-rpc",
  "fedimint-server-core",
  "fedimint-testing-core",
+ "fedimint-wallet-client",
  "fs-lock",
  "lightning-invoice",
  "rand 0.8.5",
@@ -4089,8 +4076,8 @@ dependencies = [
  "bitcoin",
  "clap",
  "erased-serde 0.4.6",
+ "esplora-client 0.10.0",
  "fedimint-api-client",
- "fedimint-bitcoind",
  "fedimint-client-module",
  "fedimint-core",
  "fedimint-derive-secret",

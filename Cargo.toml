@@ -9,7 +9,6 @@ members = [
   "docs",
   "fedimint-api-client",
   "fedimint-bip39",
-  "fedimint-bitcoind",
   "fedimint-build",
   "fedimint-cli",
   "fedimint-client",
@@ -151,7 +150,6 @@ esplora-client = { version = "0.10.0", default-features = false, features = ["as
 fedimint-aead = { path = "./crypto/aead", version = "=0.8.0-alpha" }
 fedimint-api-client = { path = "./fedimint-api-client", version = "=0.8.0-alpha" }
 fedimint-bip39 = { path = "./fedimint-bip39", version = "=0.8.0-alpha" }
-fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.8.0-alpha" }
 fedimint-build = { path = "./fedimint-build", version = "=0.8.0-alpha" }
 fedimint-client-module = { path = "./fedimint-client-module", version = "=0.8.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.8.0-alpha" }

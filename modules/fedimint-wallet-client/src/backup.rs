@@ -3,7 +3,6 @@ mod recovery_history_tracker;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
@@ -25,6 +24,7 @@ use crate::client_db::{
     NextPegInTweakIndexKey, PegInTweakIndexData, PegInTweakIndexKey, RecoveryFinalizedKey,
     RecoveryStateKey, TweakIdx,
 };
+use crate::esplora::{DynEsploradRpc, create_esplora_rpc};
 use crate::{WalletClientInit, WalletClientModule, WalletClientModuleData};
 
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
@@ -124,7 +124,7 @@ pub enum WalletRecoveryState {
 pub struct WalletRecovery {
     state: WalletRecoveryStateV1,
     data: WalletClientModuleData,
-    btc_rpc: DynBitcoindRpc,
+    btc_rpc: DynEsploradRpc,
 }
 
 #[apply(async_trait_maybe_send!)]

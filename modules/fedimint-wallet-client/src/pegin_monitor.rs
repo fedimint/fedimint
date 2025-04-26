@@ -3,7 +3,6 @@ use std::time::{Duration, SystemTime};
 
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
@@ -28,6 +27,7 @@ use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
+use crate::esplora::DynEsploradRpc;
 use crate::events::DepositConfirmed;
 use crate::{WalletClientModule, WalletClientModuleData};
 
@@ -90,7 +90,7 @@ impl NextActions {
 pub(crate) async fn run_peg_in_monitor(
     client_ctx: ClientContext<WalletClientModule>,
     db: Database,
-    btc_rpc: DynBitcoindRpc,
+    btc_rpc: DynEsploradRpc,
     module_api: DynModuleApi,
     data: WalletClientModuleData,
     pegin_claimed_sender: watch::Sender<()>,
@@ -144,7 +144,7 @@ pub(crate) async fn run_peg_in_monitor(
 async fn check_for_deposits(
     db: &Database,
     data: &WalletClientModuleData,
-    btc_rpc: &DynBitcoindRpc,
+    btc_rpc: &DynEsploradRpc,
     module_api: &DynModuleApi,
     client_ctx: &ClientContext<WalletClientModule>,
     pengin_claimed_sender: &watch::Sender<()>,
@@ -172,7 +172,7 @@ async fn check_for_deposits(
 async fn check_and_claim_idx_pegins(
     data: &WalletClientModuleData,
     due_key: PegInTweakIndexKey,
-    btc_rpc: &DynBitcoindRpc,
+    btc_rpc: &DynEsploradRpc,
     module_api: &DynModuleApi,
     db: &Database,
     client_ctx: &ClientContext<WalletClientModule>,
@@ -317,7 +317,7 @@ impl CheckOutcome {
 async fn check_idx_pegins(
     data: &WalletClientModuleData,
     tweak_idx: TweakIdx,
-    btc_rpc: &DynBitcoindRpc,
+    btc_rpc: &DynEsploradRpc,
     module_rpc: &DynModuleApi,
     db: &Database,
     client_ctx: &ClientContext<WalletClientModule>,
