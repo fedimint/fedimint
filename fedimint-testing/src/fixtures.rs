@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
+use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -29,7 +29,7 @@ use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use fedimint_testing_core::test_dir;
 
 use crate::btc::BitcoinTest;
-use crate::btc::mock::FakeBitcoinFactory;
+use crate::btc::mock::FakeBitcoinTest;
 use crate::btc::real::RealBitcoinTest;
 use crate::envs::{
     FM_PORT_ESPLORA_ENV, FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV,
@@ -50,8 +50,8 @@ pub struct Fixtures {
     params: ServerModuleConfigGenParamsRegistry,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
-    dyn_bitcoin_rpc: DynBitcoindRpc,
-    bitcoin_rpc_connection: DynServerBitcoinRpc,
+    fake_bitcoin_rpc: Option<DynBitcoindRpc>,
+    server_bitcoin_rpc: DynServerBitcoinRpc,
     primary_module_kind: ModuleKind,
     id: ModuleInstanceId,
 }
@@ -65,11 +65,11 @@ impl Fixtures {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
         let real_testing = Fixtures::is_real_test();
-        let (dyn_bitcoin_rpc, bitcoin, config, bitcoin_rpc_connection): (
-            DynBitcoindRpc,
+        let (bitcoin, config, bitcoin_rpc_connection, fake_bitcoin_rpc): (
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
             DynServerBitcoinRpc,
+            Option<DynBitcoindRpc>,
         ) = if real_testing {
             // `backend-test.sh` overrides which Bitcoin RPC to use for electrs and esplora
             // backend tests
@@ -85,34 +85,39 @@ impl Fixtures {
                     .expect("must provide valid default env vars"),
             };
 
-            let dyn_bitcoin_rpc = create_bitcoind(&rpc_config).unwrap();
-            let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
-                .expect("Must have bitcoind RPC defined for real tests")
-                .parse()
-                .expect("Invalid bitcoind RPC URL");
-            let bitcoin = RealBitcoinTest::new(&bitcoincore_url, dyn_bitcoin_rpc.clone());
-
-            let bitcoin_rpc_connection = match rpc_config.kind.as_ref() {
+            let server_bitcoin_rpc = match rpc_config.kind.as_ref() {
                 "bitcoind" => BitcoindClient::new(&rpc_config.url).unwrap().into_dyn(),
                 "esplora" => EsploraClient::new(&rpc_config.url).unwrap().into_dyn(),
                 kind => panic!("Unknown bitcoin rpc kind {kind}"),
             };
 
-            (
-                dyn_bitcoin_rpc,
-                Arc::new(bitcoin),
-                rpc_config,
-                bitcoin_rpc_connection,
-            )
-        } else {
-            let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
-            let dyn_bitcoin_rpc = DynBitcoindRpc::from(bitcoin.clone());
+            let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
+                .expect("Must have bitcoind RPC defined for real tests")
+                .parse()
+                .expect("Invalid bitcoind RPC URL");
+            let bitcoin = RealBitcoinTest::new(&bitcoincore_url, server_bitcoin_rpc.clone());
 
-            let bitcoin_rpc_connection = bitcoin.clone().into_dyn();
+            (Arc::new(bitcoin), rpc_config, server_bitcoin_rpc, None)
+        } else {
+            let bitcoin = FakeBitcoinTest::new();
+
+            let config = BitcoinRpcConfig {
+                kind: format!("test_btc-{}", rand::random::<u64>()),
+                url: "http://ignored".parse().unwrap(),
+            };
+
+            let dyn_bitcoin_rpc = IBitcoindRpc::into_dyn(bitcoin.clone());
+
+            let server_bitcoin_rpc = IServerBitcoinRpc::into_dyn(bitcoin.clone());
 
             let bitcoin = Arc::new(bitcoin);
 
-            (dyn_bitcoin_rpc, bitcoin, config, bitcoin_rpc_connection)
+            (
+                bitcoin.clone(),
+                config,
+                server_bitcoin_rpc,
+                Some(dyn_bitcoin_rpc),
+            )
         };
 
         Self {
@@ -120,9 +125,9 @@ impl Fixtures {
             servers: vec![],
             params: ModuleRegistry::default(),
             bitcoin_rpc: config,
+            fake_bitcoin_rpc,
             bitcoin,
-            dyn_bitcoin_rpc,
-            bitcoin_rpc_connection,
+            server_bitcoin_rpc: bitcoin_rpc_connection,
             primary_module_kind: IClientModuleInit::module_kind(&client),
             id: 0,
         }
@@ -182,7 +187,7 @@ impl Fixtures {
             ClientModuleInitRegistry::from(self.clients.clone()),
             self.primary_module_kind.clone(),
             num_offline,
-            self.bitcoin_rpc_connection(),
+            self.server_bitcoin_rpc(),
         )
     }
 
@@ -261,21 +266,18 @@ impl Fixtures {
         self.bitcoin_rpc.clone()
     }
 
-    /// Get a client bitcoin RPC config
-    // TODO: Right now we only support mocks or esplora, we should support others in
-    // the future
-    pub fn bitcoin_client(&self) -> BitcoinRpcConfig {
+    pub fn client_esplora_rpc(&self) -> DynBitcoindRpc {
         if Fixtures::is_real_test() {
-            BitcoinRpcConfig {
-                kind: "esplora".to_string(),
-                url: SafeUrl::parse(&format!(
+            create_esplora_rpc(
+                &SafeUrl::parse(&format!(
                     "http://127.0.0.1:{}/",
                     env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
                 ))
                 .expect("Failed to parse default esplora server"),
-            }
+            )
+            .unwrap()
         } else {
-            self.bitcoin_rpc.clone()
+            self.fake_bitcoin_rpc.clone().unwrap()
         }
     }
 
@@ -284,11 +286,7 @@ impl Fixtures {
         self.bitcoin.clone()
     }
 
-    pub fn dyn_bitcoin_rpc(&self) -> DynBitcoindRpc {
-        self.dyn_bitcoin_rpc.clone()
-    }
-
-    pub fn bitcoin_rpc_connection(&self) -> DynServerBitcoinRpc {
-        self.bitcoin_rpc_connection.clone()
+    pub fn server_bitcoin_rpc(&self) -> DynServerBitcoinRpc {
+        self.server_bitcoin_rpc.clone()
     }
 }

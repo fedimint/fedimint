@@ -3,7 +3,7 @@ mod recovery_history_tracker;
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
+use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
@@ -137,12 +137,9 @@ impl RecoveryFromHistory for WalletRecovery {
         snapshot: Option<&WalletModuleBackup>,
     ) -> anyhow::Result<(Self, u64)> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Starting new recovery");
-        let rpc_config = init
-            .0
-            .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
-        let btc_rpc = create_bitcoind(&rpc_config)?;
+        let btc_rpc = init.0.clone().unwrap_or(create_esplora_rpc(
+            &WalletClientModule::get_rpc_config(args.cfg()).url,
+        )?);
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
@@ -218,12 +215,9 @@ impl RecoveryFromHistory for WalletRecovery {
         args: &ClientModuleRecoverArgs<Self::Init>,
     ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Loading recovery state");
-        let rpc_config = init
-            .0
-            .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
-        let btc_rpc = create_bitcoind(&rpc_config)?;
+        let btc_rpc = init.0.clone().unwrap_or(create_esplora_rpc(
+            &WalletClientModule::get_rpc_config(args.cfg()).url,
+        )?);
 
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
@@ -337,7 +331,6 @@ impl RecoveryFromHistory for WalletRecovery {
 
                     let use_decoy = || async {
                         if let Some(decoy) = decoy.as_ref() {
-                            btc_rpc.watch_script_history(decoy).await?;
                             let _ = btc_rpc.get_script_history(decoy).await?;
                         }
                         Ok::<_, anyhow::Error>(())
@@ -346,7 +339,6 @@ impl RecoveryFromHistory for WalletRecovery {
                     if use_decoy_before_real_query {
                         use_decoy().await?;
                     }
-                    btc_rpc.watch_script_history(&script).await?;
                     let history = btc_rpc.get_script_history(&script).await?;
 
                     if !use_decoy_before_real_query {

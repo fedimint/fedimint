@@ -106,13 +106,7 @@ async fn await_created_btc_transaction_submitted(
         .wallet_descriptor
         .tweak(&tweak.public_key(), &context.secp)
         .script_pubkey();
-    loop {
-        match context.rpc.watch_script_history(&script).await {
-            Ok(()) => break,
-            Err(e) => warn!("Error while awaiting btc tx submitting: {e}"),
-        }
-        sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
-    }
+
     for attempt in 0u32.. {
         sleep(cmp::min(
             TRANSACTION_STATUS_FETCH_INTERVAL * attempt,

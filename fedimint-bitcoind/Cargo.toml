@@ -11,12 +11,6 @@ repository = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[features]
-default = ["bitcoincore-rpc", "esplora-client"]
-# the code behind this flag is server-side only, interfers with wasm builds
-# and should just live in some `fedimint-bitcoind-server` or something (TODO)
-fedimint-server = ["dep:fedimint-server-core"]
-
 [lib]
 name = "fedimint_bitcoind"
 path = "src/lib.rs"
@@ -25,16 +19,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-bitcoincore-rpc = { workspace = true, optional = true }
-esplora-client = { workspace = true, optional = true }
+esplora-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-server-core = { workspace = true, optional = true }
-futures = { workspace = true }
-hex = { workspace = true }
-jaq-core = { workspace = true }
-jaq-json = { workspace = true }
-reqwest = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }

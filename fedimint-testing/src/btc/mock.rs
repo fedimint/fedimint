@@ -14,7 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, register_bitcoind};
+use fedimint_bitcoind::IBitcoindRpc;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
@@ -25,34 +25,6 @@ use rand::rngs::OsRng;
 use tracing::debug;
 
 use super::BitcoinTest;
-
-#[derive(Debug, Clone)]
-pub struct FakeBitcoinFactory {
-    pub bitcoin: FakeBitcoinTest,
-    pub config: BitcoinRpcConfig,
-}
-
-impl FakeBitcoinFactory {
-    /// Registers a fake bitcoin rpc factory for testing
-    pub fn register_new() -> FakeBitcoinFactory {
-        let kind = format!("test_btc-{}", rand::random::<u64>());
-        let factory = FakeBitcoinFactory {
-            bitcoin: FakeBitcoinTest::new(),
-            config: BitcoinRpcConfig {
-                kind: kind.clone(),
-                url: "http://ignored".parse().unwrap(),
-            },
-        };
-        register_bitcoind(kind, factory.clone().into());
-        factory
-    }
-}
-
-impl IBitcoindRpcFactory for FakeBitcoinFactory {
-    fn create_connection(&self, _url: &SafeUrl) -> Result<DynBitcoindRpc> {
-        Ok(self.bitcoin.clone().into())
-    }
-}
 
 #[derive(Debug)]
 struct FakeBitcoinTestInner {
@@ -317,61 +289,6 @@ impl BitcoinTest for FakeBitcoinTest {
 
 #[async_trait]
 impl IBitcoindRpc for FakeBitcoinTest {
-    async fn get_network(&self) -> Result<bitcoin::Network> {
-        Ok(bitcoin::Network::Regtest)
-    }
-
-    async fn get_block_count(&self) -> Result<u64> {
-        Ok(self.inner.read().unwrap().blocks.len() as u64)
-    }
-
-    async fn get_block_hash(&self, height: u64) -> Result<bitcoin::BlockHash> {
-        self.inner
-            .read()
-            .unwrap()
-            .blocks
-            .get(height as usize)
-            .map(|block| block.header.block_hash())
-            .context("No block with that height found")
-    }
-
-    async fn get_block(&self, block_hash: &bitcoin::BlockHash) -> Result<bitcoin::Block> {
-        self.inner
-            .read()
-            .unwrap()
-            .blocks
-            .iter()
-            .find(|block| block.header.block_hash() == *block_hash)
-            .context("No block with that hash found")
-            .cloned()
-    }
-
-    async fn get_fee_rate(&self, _confirmation_target: u16) -> Result<Option<Feerate>> {
-        Ok(Some(Feerate { sats_per_kvb: 2000 }))
-    }
-
-    async fn submit_transaction(&self, transaction: bitcoin::Transaction) {
-        let mut inner = self.inner.write().unwrap();
-        inner.pending.push(transaction);
-
-        let mut filtered = BTreeMap::<Vec<OutPoint>, bitcoin::Transaction>::new();
-
-        // Simulate the mempool keeping txs with higher fees (less output)
-        // TODO: This looks borked, should remove from `filtered` on higher fee or
-        // something, and check per-input anyway. Probably doesn't matter, and I
-        // don't want to touch it.
-        for tx in &inner.pending {
-            match filtered.get(&inputs(tx)) {
-                Some(found) if output_sum(tx) > output_sum(found) => {}
-                _ => {
-                    filtered.insert(inputs(tx), tx.clone());
-                }
-            }
-        }
-
-        inner.pending = filtered.into_values().collect();
-    }
-
     async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> Result<Option<u64>> {
         for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
             if block.txdata.iter().any(|tx| &tx.compute_txid() == txid) {
@@ -379,25 +296,6 @@ impl IBitcoindRpc for FakeBitcoinTest {
             }
         }
         Ok(None)
-    }
-
-    async fn is_tx_in_block(
-        &self,
-        txid: &bitcoin::Txid,
-        block_hash: &bitcoin::BlockHash,
-        block_height: u64,
-    ) -> Result<bool> {
-        let block = &self.inner.read().unwrap().blocks[block_height as usize];
-        assert!(
-            &block.block_hash() == block_hash,
-            "Block height for hash does not match expected height"
-        );
-
-        Ok(block.txdata.iter().any(|tx| &tx.compute_txid() == txid))
-    }
-
-    async fn watch_script_history(&self, _: &bitcoin::ScriptBuf) -> Result<()> {
-        Ok(())
     }
 
     async fn get_script_history(
@@ -412,17 +310,6 @@ impl IBitcoindRpc for FakeBitcoinTest {
         let inner = self.inner.read().unwrap();
         let proof = inner.proofs.get(&txid);
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
-    }
-
-    async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
-        Ok(None)
-    }
-
-    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
-        BitcoinRpcConfig {
-            kind: "mock_kind".to_string(),
-            url: "http://mock".parse().unwrap(),
-        }
     }
 }
 

@@ -33,7 +33,7 @@ use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{DynBitcoindRpc, create_bitcoind};
+use fedimint_bitcoind::{DynBitcoindRpc, create_esplora_rpc};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -149,10 +149,10 @@ where
 
 #[derive(Debug, Clone, Default)]
 // TODO: should probably move to DB
-pub struct WalletClientInit(pub Option<BitcoinRpcConfig>);
+pub struct WalletClientInit(pub Option<DynBitcoindRpc>);
 
 impl WalletClientInit {
-    pub fn new(rpc: BitcoinRpcConfig) -> Self {
+    pub fn new(rpc: DynBitcoindRpc) -> Self {
         Self(Some(rpc))
     }
 }
@@ -240,14 +240,12 @@ impl ClientModuleInit for WalletClientInit {
             module_root_secret: args.module_root_secret().clone(),
         };
 
-        let rpc_config = self
-            .0
-            .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
         let db = args.db().clone();
 
-        let btc_rpc = create_bitcoind(&rpc_config)?;
+        let btc_rpc = self.0.clone().unwrap_or(create_esplora_rpc(
+            &WalletClientModule::get_rpc_config(args.cfg()).url,
+        )?);
+
         let module_api = args.module_api().clone();
 
         let (pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());
@@ -795,10 +793,6 @@ impl WalletClientModule {
 
                         debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
 
-                        // Begin watching the script address
-                        self.rpc
-                            .watch_script_history(&address.script_pubkey())
-                            .await?;
 
                         let sender = self.pegin_monitor_wakeup_sender.clone();
                         dbtx.on_commit(move || {
@@ -885,11 +879,6 @@ impl WalletClientModule {
             stream! {
                 yield DepositStateV2::WaitingForTransaction;
 
-                retry(
-                    "subscribe script history",
-                    background_backoff(),
-                    || stream_rpc.watch_script_history(&stream_script_pub_key)
-                ).await.expect("Will never give up");
                 let (btc_out_point, btc_deposited) = retry(
                     "fetch history",
                     background_backoff(),

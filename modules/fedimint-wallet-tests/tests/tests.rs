@@ -41,7 +41,7 @@ use tracing::{info, warn};
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
     let wallet_params = WalletGenParams::regtest(fixtures.bitcoin_server());
-    let wallet_client = WalletClientInit::new(fixtures.bitcoin_client());
+    let wallet_client = WalletClientInit::new(fixtures.client_esplora_rpc());
     fixtures.with_module(wallet_client, WalletInit, wallet_params)
 }
 
@@ -180,7 +180,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let bitcoin = fixtures.bitcoin();
     // Avoid other tests from interfering here
     let bitcoin = bitcoin.lock_exclusive().await;
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    let dyn_bitcoin_rpc = fixtures.server_bitcoin_rpc();
     info!("Starting test sanity_check_bitcoin_blocks");
 
     let finality_delay = 10; // TODO: get from config
@@ -587,7 +587,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     // This test has many assumptions about bitcoin L1 blocks
     // and FM epochs, so we just lock the node
     let bitcoin = bitcoin.lock_exclusive().await;
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    let dyn_bitcoin_rpc = fixtures.server_bitcoin_rpc();
     info!("Starting test peg_outs_must_wait_for_available_utxos");
 
     let finality_delay = 10;
@@ -668,8 +668,8 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let bitcoin = fixtures.bitcoin();
     let server_bitcoin_rpc_config = fixtures.bitcoin_server();
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
-    let bitcoin_rpc_connection = fixtures.bitcoin_rpc_connection();
+    let dyn_bitcoin_rpc = fixtures.server_bitcoin_rpc();
+    let bitcoin_rpc_connection = fixtures.server_bitcoin_rpc();
     let db = MemDatabase::new().into_database();
     let task_group = fedimint_core::task::TaskGroup::new();
     info!("Starting test peg_ins_that_are_unconfirmed_are_rejected");
@@ -1586,7 +1586,7 @@ mod fedimint_migration_tests {
 #[test]
 fn verify_bitcoind_backend() {
     let fixtures = fixtures();
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    let dyn_bitcoin_rpc = fixtures.server_bitcoin_rpc();
     let bitcoin_rpc_kind = dyn_bitcoin_rpc.get_bitcoin_rpc_config().kind;
 
     assert_eq!(
