@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use aleph_bft::Keychain as KeychainTrait;
-use anyhow::{anyhow, bail};
+use anyhow::{Context as _, anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerError};
 use fedimint_api_client::query::FilterMap;
@@ -330,7 +330,7 @@ impl ConsensusEngine {
         loop {
             tokio::select! {
                 ordered_unit = ordered_unit_receiver.recv() => {
-                    let ordered_unit = ordered_unit?;
+                    let ordered_unit = ordered_unit.with_context(|| format!("Alepbft task exited prematurely. session_idx: {session_index}, item_idx: {item_index}"))?;
 
                     if ordered_unit.round >= self.cfg.consensus.broadcast_rounds_per_session {
                         break;

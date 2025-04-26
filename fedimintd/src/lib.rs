@@ -23,7 +23,7 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{SafeUrl, handle_version_hash_command};
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
 use fedimint_core::{crit, timing};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
@@ -276,7 +276,9 @@ pub async fn run(
         server_opts.db_checkpoint_retention,
     )
     .await
-    .inspect_err(|e| crit!(target: LOG_SERVER, ?e, "Main task returned error"))
+    .inspect_err(
+        |err| crit!(target: LOG_SERVER, err = %err.fmt_compact_anyhow(), "Main task returned error"),
+    )
     .ok();
 
     info!(target: LOG_CORE, "Awaiting shutdown of root task group");
