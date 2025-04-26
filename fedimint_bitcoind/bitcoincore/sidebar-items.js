@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["from_url_to_url_auth"],"struct":["BitcoindClient","BitcoindFactory"]};

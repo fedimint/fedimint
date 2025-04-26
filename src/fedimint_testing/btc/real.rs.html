@@ -4,15 +4,15 @@
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>anyhow::Context;
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>async_trait::async_trait;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoin::{Address, Transaction, Txid};
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>bitcoincore_rpc::{Client, RpcApi};
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_bitcoind::DynBitcoindRpc;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::encoding::Decodable;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test};
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::{Amount, task};
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_logging::LOG_TEST;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>bitcoincore_rpc::{Auth, Client, RpcApi};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::encoding::Decodable;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::{Amount, task};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_logging::LOG_TEST;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>tracing::{debug, trace};
 <a href=#17 id=17 data-nosnippet>17</a>
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span><span class="kw">crate</span>::btc::BitcoinTest;
@@ -26,7 +26,7 @@
 <a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">struct </span>RealBitcoinTestNoLock {
 <a href=#27 id=27 data-nosnippet>27</a>    client: Arc&lt;Client&gt;,
 <a href=#28 id=28 data-nosnippet>28</a>    <span class="doccomment">/// RPC used to connect to bitcoind, used for waiting for the RPC to sync
-<a href=#29 id=29 data-nosnippet>29</a>    </span>rpc: DynBitcoindRpc,
+<a href=#29 id=29 data-nosnippet>29</a>    </span>rpc: DynServerBitcoinRpc,
 <a href=#30 id=30 data-nosnippet>30</a>}
 <a href=#31 id=31 data-nosnippet>31</a>
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">impl </span>RealBitcoinTestNoLock {
@@ -196,145 +196,150 @@
 <a href=#196 id=196 data-nosnippet>196</a><span class="kw">impl </span>RealBitcoinTest {
 <a href=#197 id=197 data-nosnippet>197</a>    <span class="kw">const </span>ERROR: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="string">"Bitcoin RPC returned an error"</span>;
 <a href=#198 id=198 data-nosnippet>198</a>
-<a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">pub fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl, rpc: DynBitcoindRpc) -&gt; <span class="self">Self </span>{
-<a href=#200 id=200 data-nosnippet>200</a>        <span class="kw">let </span>(host, auth) =
-<a href=#201 id=201 data-nosnippet>201</a>            fedimint_bitcoind::bitcoincore::from_url_to_url_auth(url).expect(<span class="string">"correct url"</span>);
-<a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">let </span>client = Arc::new(Client::new(<span class="kw-2">&amp;</span>host, auth).expect(<span class="self">Self</span>::ERROR));
-<a href=#203 id=203 data-nosnippet>203</a>
-<a href=#204 id=204 data-nosnippet>204</a>        <span class="self">Self </span>{
-<a href=#205 id=205 data-nosnippet>205</a>            inner: RealBitcoinTestNoLock { client, rpc },
-<a href=#206 id=206 data-nosnippet>206</a>        }
-<a href=#207 id=207 data-nosnippet>207</a>    }
-<a href=#208 id=208 data-nosnippet>208</a>}
-<a href=#209 id=209 data-nosnippet>209</a>
-<a href=#210 id=210 data-nosnippet>210</a><span class="doccomment">/// Fixture implementing bitcoin node under test by talking to a `bitcoind` -
-<a href=#211 id=211 data-nosnippet>211</a>/// locked version - locks the global lock during construction
-<a href=#212 id=212 data-nosnippet>212</a></span><span class="kw">pub struct </span>RealBitcoinTestLocked {
-<a href=#213 id=213 data-nosnippet>213</a>    inner: RealBitcoinTestNoLock,
-<a href=#214 id=214 data-nosnippet>214</a>    _guard: fs_lock::FileLock,
-<a href=#215 id=215 data-nosnippet>215</a>}
-<a href=#216 id=216 data-nosnippet>216</a>
-<a href=#217 id=217 data-nosnippet>217</a><span class="attr">#[async_trait]
-<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTest {
-<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
-<a href=#220 id=220 data-nosnippet>220</a>        <span class="macro">trace!</span>(<span class="string">"Trying to acquire global bitcoin lock"</span>);
-<a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">let </span>_guard = block_in_place(|| {
-<a href=#222 id=222 data-nosnippet>222</a>            <span class="kw">let </span>lock_file_path = std::env::temp_dir().join(<span class="string">"fm-test-bitcoind-lock"</span>);
-<a href=#223 id=223 data-nosnippet>223</a>            fs_lock::FileLock::new_exclusive(
-<a href=#224 id=224 data-nosnippet>224</a>                std::fs::OpenOptions::new()
-<a href=#225 id=225 data-nosnippet>225</a>                    .write(<span class="bool-val">true</span>)
-<a href=#226 id=226 data-nosnippet>226</a>                    .create(<span class="bool-val">true</span>)
-<a href=#227 id=227 data-nosnippet>227</a>                    .truncate(<span class="bool-val">true</span>)
-<a href=#228 id=228 data-nosnippet>228</a>                    .open(<span class="kw-2">&amp;</span>lock_file_path)
-<a href=#229 id=229 data-nosnippet>229</a>                    .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to open {}"</span>, lock_file_path.display()))<span class="question-mark">?</span>,
-<a href=#230 id=230 data-nosnippet>230</a>            )
-<a href=#231 id=231 data-nosnippet>231</a>            .context(<span class="string">"Failed to acquire exclusive lock file"</span>)
-<a href=#232 id=232 data-nosnippet>232</a>        })
-<a href=#233 id=233 data-nosnippet>233</a>        .expect(<span class="string">"Failed to lock"</span>);
-<a href=#234 id=234 data-nosnippet>234</a>        <span class="macro">trace!</span>(<span class="string">"Acquired global bitcoin lock"</span>);
-<a href=#235 id=235 data-nosnippet>235</a>        Box::new(RealBitcoinTestLocked {
-<a href=#236 id=236 data-nosnippet>236</a>            inner: <span class="self">self</span>.inner.clone(),
-<a href=#237 id=237 data-nosnippet>237</a>            _guard,
-<a href=#238 id=238 data-nosnippet>238</a>        })
-<a href=#239 id=239 data-nosnippet>239</a>    }
-<a href=#240 id=240 data-nosnippet>240</a>
-<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
-<a href=#242 id=242 data-nosnippet>242</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#243 id=243 data-nosnippet>243</a>        <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await
-<a href=#244 id=244 data-nosnippet>244</a>    </span>}
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">pub fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl, rpc: DynServerBitcoinRpc) -&gt; <span class="self">Self </span>{
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="kw">let </span>auth = Auth::UserPass(
+<a href=#201 id=201 data-nosnippet>201</a>            url.username().to_owned(),
+<a href=#202 id=202 data-nosnippet>202</a>            url.password().unwrap().to_owned(),
+<a href=#203 id=203 data-nosnippet>203</a>        );
+<a href=#204 id=204 data-nosnippet>204</a>
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>host = url.without_auth().unwrap().to_string();
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a>        <span class="kw">let </span>client = Arc::new(Client::new(<span class="kw-2">&amp;</span>host, auth).expect(<span class="self">Self</span>::ERROR));
+<a href=#208 id=208 data-nosnippet>208</a>
+<a href=#209 id=209 data-nosnippet>209</a>        <span class="self">Self </span>{
+<a href=#210 id=210 data-nosnippet>210</a>            inner: RealBitcoinTestNoLock { client, rpc },
+<a href=#211 id=211 data-nosnippet>211</a>        }
+<a href=#212 id=212 data-nosnippet>212</a>    }
+<a href=#213 id=213 data-nosnippet>213</a>}
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a><span class="doccomment">/// Fixture implementing bitcoin node under test by talking to a `bitcoind` -
+<a href=#216 id=216 data-nosnippet>216</a>/// locked version - locks the global lock during construction
+<a href=#217 id=217 data-nosnippet>217</a></span><span class="kw">pub struct </span>RealBitcoinTestLocked {
+<a href=#218 id=218 data-nosnippet>218</a>    inner: RealBitcoinTestNoLock,
+<a href=#219 id=219 data-nosnippet>219</a>    _guard: fs_lock::FileLock,
+<a href=#220 id=220 data-nosnippet>220</a>}
+<a href=#221 id=221 data-nosnippet>221</a>
+<a href=#222 id=222 data-nosnippet>222</a><span class="attr">#[async_trait]
+<a href=#223 id=223 data-nosnippet>223</a></span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTest {
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="macro">trace!</span>(<span class="string">"Trying to acquire global bitcoin lock"</span>);
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">let </span>_guard = block_in_place(|| {
+<a href=#227 id=227 data-nosnippet>227</a>            <span class="kw">let </span>lock_file_path = std::env::temp_dir().join(<span class="string">"fm-test-bitcoind-lock"</span>);
+<a href=#228 id=228 data-nosnippet>228</a>            fs_lock::FileLock::new_exclusive(
+<a href=#229 id=229 data-nosnippet>229</a>                std::fs::OpenOptions::new()
+<a href=#230 id=230 data-nosnippet>230</a>                    .write(<span class="bool-val">true</span>)
+<a href=#231 id=231 data-nosnippet>231</a>                    .create(<span class="bool-val">true</span>)
+<a href=#232 id=232 data-nosnippet>232</a>                    .truncate(<span class="bool-val">true</span>)
+<a href=#233 id=233 data-nosnippet>233</a>                    .open(<span class="kw-2">&amp;</span>lock_file_path)
+<a href=#234 id=234 data-nosnippet>234</a>                    .with_context(|| <span class="macro">format!</span>(<span class="string">"Failed to open {}"</span>, lock_file_path.display()))<span class="question-mark">?</span>,
+<a href=#235 id=235 data-nosnippet>235</a>            )
+<a href=#236 id=236 data-nosnippet>236</a>            .context(<span class="string">"Failed to acquire exclusive lock file"</span>)
+<a href=#237 id=237 data-nosnippet>237</a>        })
+<a href=#238 id=238 data-nosnippet>238</a>        .expect(<span class="string">"Failed to lock"</span>);
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="macro">trace!</span>(<span class="string">"Acquired global bitcoin lock"</span>);
+<a href=#240 id=240 data-nosnippet>240</a>        Box::new(RealBitcoinTestLocked {
+<a href=#241 id=241 data-nosnippet>241</a>            inner: <span class="self">self</span>.inner.clone(),
+<a href=#242 id=242 data-nosnippet>242</a>            _guard,
+<a href=#243 id=243 data-nosnippet>243</a>        })
+<a href=#244 id=244 data-nosnippet>244</a>    }
 <a href=#245 id=245 data-nosnippet>245</a>
-<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
 <a href=#247 id=247 data-nosnippet>247</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#248 id=248 data-nosnippet>248</a>        <span class="self">self</span>.inner.prepare_funding_wallet().<span class="kw">await</span>;
-<a href=#249 id=249 data-nosnippet>249</a>    }
+<a href=#248 id=248 data-nosnippet>248</a>        <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await
+<a href=#249 id=249 data-nosnippet>249</a>    </span>}
 <a href=#250 id=250 data-nosnippet>250</a>
-<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">async fn </span>send_and_mine_block(
-<a href=#252 id=252 data-nosnippet>252</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#253 id=253 data-nosnippet>253</a>        address: <span class="kw-2">&amp;</span>Address,
-<a href=#254 id=254 data-nosnippet>254</a>        amount: bitcoin::Amount,
-<a href=#255 id=255 data-nosnippet>255</a>    ) -&gt; (TxOutProof, Transaction) {
-<a href=#256 id=256 data-nosnippet>256</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#257 id=257 data-nosnippet>257</a>        <span class="self">self</span>.inner.send_and_mine_block(address, amount).<span class="kw">await
-<a href=#258 id=258 data-nosnippet>258</a>    </span>}
-<a href=#259 id=259 data-nosnippet>259</a>
-<a href=#260 id=260 data-nosnippet>260</a>    <span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address {
+<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#252 id=252 data-nosnippet>252</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="self">self</span>.inner.prepare_funding_wallet().<span class="kw">await</span>;
+<a href=#254 id=254 data-nosnippet>254</a>    }
+<a href=#255 id=255 data-nosnippet>255</a>
+<a href=#256 id=256 data-nosnippet>256</a>    <span class="kw">async fn </span>send_and_mine_block(
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#258 id=258 data-nosnippet>258</a>        address: <span class="kw-2">&amp;</span>Address,
+<a href=#259 id=259 data-nosnippet>259</a>        amount: bitcoin::Amount,
+<a href=#260 id=260 data-nosnippet>260</a>    ) -&gt; (TxOutProof, Transaction) {
 <a href=#261 id=261 data-nosnippet>261</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#262 id=262 data-nosnippet>262</a>        <span class="self">self</span>.inner.get_new_address().<span class="kw">await
+<a href=#262 id=262 data-nosnippet>262</a>        <span class="self">self</span>.inner.send_and_mine_block(address, amount).<span class="kw">await
 <a href=#263 id=263 data-nosnippet>263</a>    </span>}
 <a href=#264 id=264 data-nosnippet>264</a>
-<a href=#265 id=265 data-nosnippet>265</a>    <span class="kw">async fn </span>mine_block_and_get_received(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; Amount {
+<a href=#265 id=265 data-nosnippet>265</a>    <span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address {
 <a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#267 id=267 data-nosnippet>267</a>        <span class="self">self</span>.inner.mine_block_and_get_received(address).<span class="kw">await
+<a href=#267 id=267 data-nosnippet>267</a>        <span class="self">self</span>.inner.get_new_address().<span class="kw">await
 <a href=#268 id=268 data-nosnippet>268</a>    </span>}
 <a href=#269 id=269 data-nosnippet>269</a>
-<a href=#270 id=270 data-nosnippet>270</a>    <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
+<a href=#270 id=270 data-nosnippet>270</a>    <span class="kw">async fn </span>mine_block_and_get_received(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; Amount {
 <a href=#271 id=271 data-nosnippet>271</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#272 id=272 data-nosnippet>272</a>        <span class="self">self</span>.inner.get_mempool_tx_fee(txid).<span class="kw">await
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="self">self</span>.inner.mine_block_and_get_received(address).<span class="kw">await
 <a href=#273 id=273 data-nosnippet>273</a>    </span>}
 <a href=#274 id=274 data-nosnippet>274</a>
-<a href=#275 id=275 data-nosnippet>275</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#275 id=275 data-nosnippet>275</a>    <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
 <a href=#276 id=276 data-nosnippet>276</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await
+<a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.inner.get_mempool_tx_fee(txid).<span class="kw">await
 <a href=#278 id=278 data-nosnippet>278</a>    </span>}
 <a href=#279 id=279 data-nosnippet>279</a>
-<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
 <a href=#281 id=281 data-nosnippet>281</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#282 id=282 data-nosnippet>282</a>        <span class="self">self</span>.inner.get_block_count().<span class="kw">await
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await
 <a href=#283 id=283 data-nosnippet>283</a>    </span>}
 <a href=#284 id=284 data-nosnippet>284</a>
-<a href=#285 id=285 data-nosnippet>285</a>    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+<a href=#285 id=285 data-nosnippet>285</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
 <a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-<a href=#287 id=287 data-nosnippet>287</a>        <span class="self">self</span>.inner.get_mempool_tx(txid).<span class="kw">await
+<a href=#287 id=287 data-nosnippet>287</a>        <span class="self">self</span>.inner.get_block_count().<span class="kw">await
 <a href=#288 id=288 data-nosnippet>288</a>    </span>}
-<a href=#289 id=289 data-nosnippet>289</a>}
-<a href=#290 id=290 data-nosnippet>290</a>
-<a href=#291 id=291 data-nosnippet>291</a><span class="attr">#[async_trait]
-<a href=#292 id=292 data-nosnippet>292</a></span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTestLocked {
-<a href=#293 id=293 data-nosnippet>293</a>    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
-<a href=#294 id=294 data-nosnippet>294</a>        <span class="macro">panic!</span>(<span class="string">"Double-locking would lead to a hang"</span>);
-<a href=#295 id=295 data-nosnippet>295</a>    }
-<a href=#296 id=296 data-nosnippet>296</a>
-<a href=#297 id=297 data-nosnippet>297</a>    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
-<a href=#298 id=298 data-nosnippet>298</a>        <span class="kw">let </span>pre = <span class="self">self</span>.inner.client.get_block_count().unwrap();
-<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw">let </span>mined_block_hashes = <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await</span>;
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">let </span>post = <span class="self">self</span>.inner.client.get_block_count().unwrap();
-<a href=#301 id=301 data-nosnippet>301</a>        <span class="macro">assert_eq!</span>(post - pre, block_num);
-<a href=#302 id=302 data-nosnippet>302</a>        mined_block_hashes
-<a href=#303 id=303 data-nosnippet>303</a>    }
-<a href=#304 id=304 data-nosnippet>304</a>
-<a href=#305 id=305 data-nosnippet>305</a>    <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-<a href=#306 id=306 data-nosnippet>306</a>        <span class="self">self</span>.inner.prepare_funding_wallet().<span class="kw">await</span>;
-<a href=#307 id=307 data-nosnippet>307</a>    }
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">async fn </span>send_and_mine_block(
-<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#311 id=311 data-nosnippet>311</a>        address: <span class="kw-2">&amp;</span>Address,
-<a href=#312 id=312 data-nosnippet>312</a>        amount: bitcoin::Amount,
-<a href=#313 id=313 data-nosnippet>313</a>    ) -&gt; (TxOutProof, Transaction) {
-<a href=#314 id=314 data-nosnippet>314</a>        <span class="self">self</span>.inner.send_and_mine_block(address, amount).<span class="kw">await
-<a href=#315 id=315 data-nosnippet>315</a>    </span>}
-<a href=#316 id=316 data-nosnippet>316</a>
-<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address {
-<a href=#318 id=318 data-nosnippet>318</a>        <span class="self">self</span>.inner.get_new_address().<span class="kw">await
-<a href=#319 id=319 data-nosnippet>319</a>    </span>}
-<a href=#320 id=320 data-nosnippet>320</a>
-<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">async fn </span>mine_block_and_get_received(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; Amount {
-<a href=#322 id=322 data-nosnippet>322</a>        <span class="self">self</span>.inner.mine_block_and_get_received(address).<span class="kw">await
-<a href=#323 id=323 data-nosnippet>323</a>    </span>}
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a>    <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
-<a href=#326 id=326 data-nosnippet>326</a>        <span class="self">self</span>.inner.get_mempool_tx_fee(txid).<span class="kw">await
-<a href=#327 id=327 data-nosnippet>327</a>    </span>}
-<a href=#328 id=328 data-nosnippet>328</a>
-<a href=#329 id=329 data-nosnippet>329</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-<a href=#330 id=330 data-nosnippet>330</a>        <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await
-<a href=#331 id=331 data-nosnippet>331</a>    </span>}
-<a href=#332 id=332 data-nosnippet>332</a>
-<a href=#333 id=333 data-nosnippet>333</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-<a href=#334 id=334 data-nosnippet>334</a>        <span class="self">self</span>.inner.get_block_count().<span class="kw">await
-<a href=#335 id=335 data-nosnippet>335</a>    </span>}
-<a href=#336 id=336 data-nosnippet>336</a>
-<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
-<a href=#338 id=338 data-nosnippet>338</a>        <span class="self">self</span>.inner.get_mempool_tx(txid).<span class="kw">await
-<a href=#339 id=339 data-nosnippet>339</a>    </span>}
-<a href=#340 id=340 data-nosnippet>340</a>}</code></pre></div></section></main></body></html>
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
+<a href=#292 id=292 data-nosnippet>292</a>        <span class="self">self</span>.inner.get_mempool_tx(txid).<span class="kw">await
+<a href=#293 id=293 data-nosnippet>293</a>    </span>}
+<a href=#294 id=294 data-nosnippet>294</a>}
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a><span class="attr">#[async_trait]
+<a href=#297 id=297 data-nosnippet>297</a></span><span class="kw">impl </span>BitcoinTest <span class="kw">for </span>RealBitcoinTestLocked {
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="kw">async fn </span>lock_exclusive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>BitcoinTest + Send + Sync&gt; {
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="macro">panic!</span>(<span class="string">"Double-locking would lead to a hang"</span>);
+<a href=#300 id=300 data-nosnippet>300</a>    }
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="kw">let </span>pre = <span class="self">self</span>.inner.client.get_block_count().unwrap();
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw">let </span>mined_block_hashes = <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await</span>;
+<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw">let </span>post = <span class="self">self</span>.inner.client.get_block_count().unwrap();
+<a href=#306 id=306 data-nosnippet>306</a>        <span class="macro">assert_eq!</span>(post - pre, block_num);
+<a href=#307 id=307 data-nosnippet>307</a>        mined_block_hashes
+<a href=#308 id=308 data-nosnippet>308</a>    }
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="self">self</span>.inner.prepare_funding_wallet().<span class="kw">await</span>;
+<a href=#312 id=312 data-nosnippet>312</a>    }
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="kw">async fn </span>send_and_mine_block(
+<a href=#315 id=315 data-nosnippet>315</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#316 id=316 data-nosnippet>316</a>        address: <span class="kw-2">&amp;</span>Address,
+<a href=#317 id=317 data-nosnippet>317</a>        amount: bitcoin::Amount,
+<a href=#318 id=318 data-nosnippet>318</a>    ) -&gt; (TxOutProof, Transaction) {
+<a href=#319 id=319 data-nosnippet>319</a>        <span class="self">self</span>.inner.send_and_mine_block(address, amount).<span class="kw">await
+<a href=#320 id=320 data-nosnippet>320</a>    </span>}
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address {
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="self">self</span>.inner.get_new_address().<span class="kw">await
+<a href=#324 id=324 data-nosnippet>324</a>    </span>}
+<a href=#325 id=325 data-nosnippet>325</a>
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">async fn </span>mine_block_and_get_received(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; Amount {
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="self">self</span>.inner.mine_block_and_get_received(address).<span class="kw">await
+<a href=#328 id=328 data-nosnippet>328</a>    </span>}
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>    <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
+<a href=#331 id=331 data-nosnippet>331</a>        <span class="self">self</span>.inner.get_mempool_tx_fee(txid).<span class="kw">await
+<a href=#332 id=332 data-nosnippet>332</a>    </span>}
+<a href=#333 id=333 data-nosnippet>333</a>
+<a href=#334 id=334 data-nosnippet>334</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#335 id=335 data-nosnippet>335</a>        <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await
+<a href=#336 id=336 data-nosnippet>336</a>    </span>}
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#339 id=339 data-nosnippet>339</a>        <span class="self">self</span>.inner.get_block_count().<span class="kw">await
+<a href=#340 id=340 data-nosnippet>340</a>    </span>}
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="self">self</span>.inner.get_mempool_tx(txid).<span class="kw">await
+<a href=#344 id=344 data-nosnippet>344</a>    </span>}
+<a href=#345 id=345 data-nosnippet>345</a>}</code></pre></div></section></main></body></html>

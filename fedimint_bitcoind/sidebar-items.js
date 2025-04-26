@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAINNET_GENESIS_BLOCK_HASH","REGTEST_GENESIS_BLOCK_HASH","SIGNET_GENESIS_BLOCK_HASH","TESTNET_GENESIS_BLOCK_HASH"],"fn":["create_bitcoind","get_bitcoin_polling_interval","register_bitcoind"],"mod":["bitcoincore","esplora","feerate_source"],"static":["BITCOIN_RPC_REGISTRY"],"struct":["DynBitcoindRpc","DynBitcoindRpcFactory"],"trait":["IBitcoindRpc","IBitcoindRpcFactory"]};
+window.SIDEBAR_ITEMS = {"fn":["create_esplora_rpc"],"struct":["EsploraClient"],"trait":["IBitcoindRpc"],"type":["DynBitcoindRpc"]};

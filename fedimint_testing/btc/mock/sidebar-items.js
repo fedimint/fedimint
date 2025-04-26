@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["inputs","output_sum"],"struct":["FakeBitcoinFactory","FakeBitcoinTest","FakeBitcoinTestInner"]};
+window.SIDEBAR_ITEMS = {"fn":["inputs","output_sum"],"struct":["FakeBitcoinTest","FakeBitcoinTestInner"]};
