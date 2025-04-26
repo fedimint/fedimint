@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>std::time::{Duration, Instant};
 <a href=#6 id=6 data-nosnippet>6</a>
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>anyhow::{anyhow, bail};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>anyhow::{Context <span class="kw">as _</span>, anyhow, bail};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>async_channel::Receiver;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerError};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_api_client::query::FilterMap;
@@ -330,7 +330,7 @@
 <a href=#330 id=330 data-nosnippet>330</a>        </span><span class="kw">loop </span>{
 <a href=#331 id=331 data-nosnippet>331</a>            <span class="macro">tokio::select!</span> {
 <a href=#332 id=332 data-nosnippet>332</a>                ordered_unit = ordered_unit_receiver.recv() =&gt; {
-<a href=#333 id=333 data-nosnippet>333</a>                    <span class="kw">let </span>ordered_unit = ordered_unit<span class="question-mark">?</span>;
+<a href=#333 id=333 data-nosnippet>333</a>                    <span class="kw">let </span>ordered_unit = ordered_unit.with_context(|| <span class="macro">format!</span>(<span class="string">"Alepbft task exited prematurely. session_idx: {session_index}, item_idx: {item_index}"</span>))<span class="question-mark">?</span>;
 <a href=#334 id=334 data-nosnippet>334</a>
 <a href=#335 id=335 data-nosnippet>335</a>                    <span class="kw">if </span>ordered_unit.round &gt;= <span class="self">self</span>.cfg.consensus.broadcast_rounds_per_session {
 <a href=#336 id=336 data-nosnippet>336</a>                        <span class="kw">break</span>;
