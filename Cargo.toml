@@ -134,7 +134,7 @@ bitcoin-units = "0.1.2"
 bitcoin = { version = "0.32.5", features = ["serde"] }
 bitvec = "1.0.1"
 bls12_381 = "0.8.0"
-bon = "3.6.1"
+bon = "3.6.3"
 bytes = "1.10.1"
 chrono = "0.4.40"
 clap_complete = "4.5.47"
@@ -285,7 +285,7 @@ tokio = "1.44.2"
 tokio-rustls = "0.24.1"
 tokio-stream = "0.1.17"
 tokio-test = "0.4.4"
-tokio-util = "0.7.14"
+tokio-util = "0.7.15"
 tonic = "0.12.3"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
   "lightningrpc",
