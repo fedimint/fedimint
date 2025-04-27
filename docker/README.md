@@ -13,6 +13,24 @@ of this directory in the past releases for more info.
 For help please try [Fedimint Github Discussions](https://github.com/fedimint/fedimint/discussions)
 or `#mint-ops` channel on [Fedimint's Discord server](https://chat.fedimint.org/).
 
+## System Requirements
+### 3-of-4 Federation with remote Bitcoin backend
+* Memory: 1GB minimum, 2GB recommended
+* Disk: 10GB minimum
+* CPU: 1 core minimum, 2 cores recommended
+
+Notably, we did successfully test a 3-of-4 federation with one guardian on a Raspberry Pi Zero 2 W **with only 500MB of
+memory and 500MB of swap space**, which is likely the lowest power device one can run Fedimint on, but it's not
+advisable for production deployments.
+
+### 3-of-4 Federation with local Bitcoin backend
+* Memory: 2GB minimum, 4GB recommended
+* Disk: 1TB recommended (50GB if running pruned, but there be dragons)
+* CPU: 2 cores minimum, 4 cores recommended
+
+Worst-case memory consumption scales with the number of guardians (about 250MB per guardian), while this is only a
+worst-case number for adversarial scenarios, please keep it in mind for larger federations (5-of-7, 7-of-10, …).
+
 ## Iroh (Experimental)
 
 To try the experimental Iroh integration with Mutinynet, use the provided Docker Compose setup:
