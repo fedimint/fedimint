@@ -347,7 +347,7 @@ pub fn default_modules(
             },
             consensus: WalletGenParamsConsensus {
                 network,
-                finality_delay: 10,
+                finality_delay: default_finality_delay(network),
                 client_default_bitcoin_rpc: default_esplora_server(network),
                 fee_consensus: fedimint_wallet_server::common::config::FeeConsensus::default(),
             },
@@ -403,5 +403,15 @@ pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
             _ => panic!("Failed to parse default esplora server"),
         }
         .expect("Failed to parse default esplora server"),
+    }
+}
+
+/// For real Bitcoin we want to have a responsible default, while for demos
+/// nobody wants to wait multiple minutes
+fn default_finality_delay(network: Network) -> u32 {
+    match network {
+        Network::Bitcoin | Network::Regtest => 10,
+        Network::Testnet | Network::Signet | Network::Testnet4 => 2,
+        _ => panic!("Unsupported network"),
     }
 }
