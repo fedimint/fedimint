@@ -347,7 +347,7 @@
 <a href=#347 id=347 data-nosnippet>347</a>            },
 <a href=#348 id=348 data-nosnippet>348</a>            consensus: WalletGenParamsConsensus {
 <a href=#349 id=349 data-nosnippet>349</a>                network,
-<a href=#350 id=350 data-nosnippet>350</a>                finality_delay: <span class="number">10</span>,
+<a href=#350 id=350 data-nosnippet>350</a>                finality_delay: default_finality_delay(network),
 <a href=#351 id=351 data-nosnippet>351</a>                client_default_bitcoin_rpc: default_esplora_server(network),
 <a href=#352 id=352 data-nosnippet>352</a>                fee_consensus: fedimint_wallet_server::common::config::FeeConsensus::default(),
 <a href=#353 id=353 data-nosnippet>353</a>            },
@@ -404,4 +404,14 @@
 <a href=#404 id=404 data-nosnippet>404</a>        }
 <a href=#405 id=405 data-nosnippet>405</a>        .expect(<span class="string">"Failed to parse default esplora server"</span>),
 <a href=#406 id=406 data-nosnippet>406</a>    }
-<a href=#407 id=407 data-nosnippet>407</a>}</code></pre></div></section></main></body></html>
+<a href=#407 id=407 data-nosnippet>407</a>}
+<a href=#408 id=408 data-nosnippet>408</a>
+<a href=#409 id=409 data-nosnippet>409</a><span class="doccomment">/// For real Bitcoin we want to have a responsible default, while for demos
+<a href=#410 id=410 data-nosnippet>410</a>/// nobody wants to wait multiple minutes
+<a href=#411 id=411 data-nosnippet>411</a></span><span class="kw">fn </span>default_finality_delay(network: Network) -&gt; u32 {
+<a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">match </span>network {
+<a href=#413 id=413 data-nosnippet>413</a>        Network::Bitcoin | Network::Regtest =&gt; <span class="number">10</span>,
+<a href=#414 id=414 data-nosnippet>414</a>        Network::Testnet | Network::Signet | Network::Testnet4 =&gt; <span class="number">2</span>,
+<a href=#415 id=415 data-nosnippet>415</a>        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Unsupported network"</span>),
+<a href=#416 id=416 data-nosnippet>416</a>    }
+<a href=#417 id=417 data-nosnippet>417</a>}</code></pre></div></section></main></body></html>
