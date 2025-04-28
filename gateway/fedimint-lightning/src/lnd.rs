@@ -1365,8 +1365,10 @@ impl ILnRpcClient for GatewayLndClient {
         let pending_outbound = channel_balance_response
             .pending_open_local_balance
             .unwrap_or_default();
-        let lightning_balance_msats =
-            total_outbound.msat - unsettled_outbound.msat - pending_outbound.msat;
+        let lightning_balance_msats = total_outbound
+            .msat
+            .saturating_sub(unsettled_outbound.msat)
+            .saturating_sub(pending_outbound.msat);
 
         let total_inbound = channel_balance_response.remote_balance.unwrap_or_default();
         let unsettled_inbound = channel_balance_response
@@ -1375,8 +1377,10 @@ impl ILnRpcClient for GatewayLndClient {
         let pending_inbound = channel_balance_response
             .pending_open_remote_balance
             .unwrap_or_default();
-        let inbound_lightning_liquidity_msats =
-            total_inbound.msat - unsettled_inbound.msat - pending_inbound.msat;
+        let inbound_lightning_liquidity_msats = total_inbound
+            .msat
+            .saturating_sub(unsettled_inbound.msat)
+            .saturating_sub(pending_inbound.msat);
 
         Ok(GetBalancesResponse {
             onchain_balance_sats: (wallet_balance_response.total_balance
