@@ -330,7 +330,24 @@ impl ConsensusEngine {
         loop {
             tokio::select! {
                 ordered_unit = ordered_unit_receiver.recv() => {
-                    let ordered_unit = ordered_unit.with_context(|| format!("Alepbft task exited prematurely. session_idx: {session_index}, item_idx: {item_index}"))?;
+                    let ordered_unit = ordered_unit.with_context(|| format!("Alepbft task exited prematurely. session_idx: {session_index}, item_idx: {item_index}")) ;
+                    let ordered_unit = match ordered_unit {
+                        Ok(o) => o,
+                        Err(err) => {
+                            // Chances are that alephbft is gone, because everything is shutting down
+                            //
+                            // If that's the case, yielding will simply not return, as our task
+                            // will not get executed anymore. This saves us from returning some "canceled"
+                            // state upwards, without reporting an error that isn't caused by this
+                            // task.
+                            while self.task_group.is_shutting_down() {
+                                info!(target: LOG_CONSENSUS, "Shutdown detected");
+                                sleep(Duration::from_millis(100)).await;
+                            }
+                            // Otherwise, just return the error upwards
+                            return Err(err);
+                        },
+                    };
 
                     if ordered_unit.round >= self.cfg.consensus.broadcast_rounds_per_session {
                         break;
