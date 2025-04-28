@@ -18,9 +18,7 @@ use bitcoin::Network;
 use clap::{ArgGroup, Parser};
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::db::Database;
-use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
-};
+use fedimint_core::envs::{BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
@@ -379,7 +377,7 @@ pub fn default_modules(
         server_gen_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams::default());
     };
 
-    if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+    if network == Network::Regtest {
         server_gens.attach(UnknownInit);
         server_gen_params
             .attach_config_gen_params(UnknownInit::kind(), UnknownGenParams::default());
