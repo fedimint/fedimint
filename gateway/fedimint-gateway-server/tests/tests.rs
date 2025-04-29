@@ -903,7 +903,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         let funded = receive_sub.ok().await?;
         assert_matches!(funded, LnReceiveState::Funded);
         let waiting_funds = receive_sub.ok().await?;
-        assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds { .. });
+        assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds);
         let claimed = receive_sub.ok().await?;
         assert_matches!(claimed, LnReceiveState::Claimed);
         assert_eq!(client2.get_balance().await, invoice_amt);

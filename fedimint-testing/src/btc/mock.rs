@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::iter::repeat;
+use std::iter::repeat_n;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -74,7 +74,7 @@ impl FakeBitcoinTest {
             .iter()
             .map(Transaction::compute_txid)
             .collect::<Vec<Txid>>();
-        let matches = repeat(true).take(txs.len()).collect::<Vec<bool>>();
+        let matches = repeat_n(true, txs.len()).collect::<Vec<bool>>();
         PartialMerkleTree::from_txids(txs.as_slice(), matches.as_slice())
     }
 

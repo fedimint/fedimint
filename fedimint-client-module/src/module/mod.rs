@@ -820,7 +820,6 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ///   takes the transaction id of the transaction in which the output was
     ///   used and the output index as input since these cannot be known at time
     ///   of calling `create_change_output` and have to be injected later.
-
     async fn create_final_inputs_and_outputs(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,

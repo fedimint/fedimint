@@ -77,7 +77,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     break;
                 }
             }
-        };
+        }
 
         mined_block_hashes
     }

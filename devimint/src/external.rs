@@ -275,7 +275,7 @@ impl Bitcoind {
             Ok(None) => {}
             // The RPC failed, or the transaction was found in the mempool. Return the result.
             other => return other,
-        };
+        }
 
         let block_height = self.get_block_count().await? - 1;
 
@@ -295,10 +295,10 @@ impl Bitcoind {
             match tx_or {
                 // The RPC succeeded, and the transaction was not found in the block. Continue to
                 // the next block.
-                Ok(None) => continue,
+                Ok(None) => {}
                 // The RPC failed, or the transaction was found in the block. Return the result.
                 other => return other,
-            };
+            }
         }
 
         // The transaction was not found in the mempool or any block.

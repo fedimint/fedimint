@@ -384,7 +384,7 @@ pub fn default_modules(
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         server_gens.attach(MetaInit);
         server_gen_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams::default());
-    };
+    }
 
     if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
         server_gens.attach(UnknownInit);

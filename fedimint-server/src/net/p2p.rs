@@ -298,7 +298,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                          self.incoming_sender.send(message).await.ok()?;
                     },
                     Err(e) => return Some(self.disconnect(e)),
-                };
+                }
 
                 Some(P2PConnectionSMState::Connected(connection))
             },
