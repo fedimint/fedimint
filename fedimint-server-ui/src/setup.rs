@@ -16,6 +16,7 @@ use crate::{
 };
 
 // Setup route constants
+pub const LOCAL_SETUP_ROUTE: &str = "/local_setup";
 pub const FEDERATION_SETUP_ROUTE: &str = "/federation_setup";
 pub const ADD_SETUP_CODE_ROUTE: &str = "/add_setup_code";
 pub const RESET_SETUP_CODES_ROUTE: &str = "/reset_setup_codes";
@@ -33,6 +34,18 @@ pub(crate) struct SetupInput {
 #[derive(Debug, Deserialize)]
 pub(crate) struct PeerInfoInput {
     pub peer_info: String,
+}
+
+async fn root(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
+    if state.api.auth().await.is_some() {
+        return Redirect::to(LOGIN_ROUTE).into_response();
+    }
+
+    if state.api.setup_code().await.is_some() {
+        return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
+    }
+
+    Redirect::to(LOCAL_SETUP_ROUTE).into_response()
 }
 
 pub fn setup_layout(title: &str, content: Markup) -> Markup {
@@ -66,12 +79,12 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
 
 // GET handler for the /setup route (display the setup form)
 async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.setup_code().await.is_some() {
-        return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
+    if state.api.setup_code().await.is_some() || state.api.auth().await.is_some() {
+        return Redirect::to(ROOT_ROUTE).into_response();
     }
 
     let content = html! {
-        form method="post" action=(ROOT_ROUTE) {
+        form method="post" action=(LOCAL_SETUP_ROUTE) {
             style {
                 r#"
                 .toggle-content {
@@ -324,7 +337,8 @@ async fn post_reset_setup_codes(
 
 pub fn router(api: DynSetupApi) -> Router {
     Router::new()
-        .route(ROOT_ROUTE, get(setup_form).post(setup_submit))
+        .route(ROOT_ROUTE, get(root))
+        .route(LOCAL_SETUP_ROUTE, get(setup_form).post(setup_submit))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
         .route(FEDERATION_SETUP_ROUTE, get(federation_setup))
         .route(ADD_SETUP_CODE_ROUTE, post(post_add_setup_code))
