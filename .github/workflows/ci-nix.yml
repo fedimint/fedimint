@@ -29,7 +29,7 @@ concurrency:
 jobs:
   self-care:
     name: Flake self-check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - name: Check Nix flake inputs

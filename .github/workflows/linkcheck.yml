@@ -4,7 +4,7 @@ name: Markdown Link Check
 
 jobs:
   markdown-link-check:
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux, x64]
     continue-on-error: true # can fail for external reasons, so don't be a blocker
     steps:
       - uses: actions/checkout@v4
@@ -18,12 +18,4 @@ jobs:
           restore-keys: cache-lychee-
 
       - name: Check links
-        uses: lycheeverse/lychee-action@v2
-        with:
-          # TODO: add:
-          # --include-fragments
-          # when it is supported in lychee: https://github.com/lycheeverse/lychee/issues/1613
-          args: |
-            --no-progress
-            --cache
-            docs README.md
+        run: nix run nixpkgs#lychee -- --verbose docs README.md
