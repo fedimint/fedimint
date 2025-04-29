@@ -23,13 +23,13 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::timing;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
-use fedimint_core::{crit, timing};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
 use fedimint_ln_server::LightningInit;
-use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
+use fedimint_logging::{LOG_CORE, TracingSetup};
 use fedimint_meta_server::{MetaGenParams, MetaInit};
 use fedimint_mint_server::MintInit;
 use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus};
@@ -47,6 +47,7 @@ use fedimint_wallet_server::WalletInit;
 use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
+use futures::FutureExt as _;
 use tracing::{debug, error, info};
 
 use crate::envs::{
@@ -262,32 +263,38 @@ pub async fn run(
 
     root_task_group.install_kill_handler();
 
-    fedimint_server::run(
-        server_opts.data_dir,
-        server_opts.force_api_secrets,
-        settings,
-        db,
-        code_version_str,
-        server_gens,
-        root_task_group.clone(),
-        dyn_server_bitcoin_rpc,
-        Box::new(fedimint_server_ui::setup::router),
-        Box::new(fedimint_server_ui::dashboard::router),
-        server_opts.db_checkpoint_retention,
-    )
-    .await
-    .inspect_err(
-        |err| crit!(target: LOG_SERVER, err = %err.fmt_compact_anyhow(), "Main task returned error"),
-    )
-    .ok();
-
-    info!(target: LOG_CORE, "Awaiting shutdown of root task group");
-
-    root_task_group
-        .join_all(Some(SHUTDOWN_TIMEOUT))
+    let task_group = root_task_group.clone();
+    root_task_group.spawn_cancellable("main", async move {
+        fedimint_server::run(
+            server_opts.data_dir,
+            server_opts.force_api_secrets,
+            settings,
+            db,
+            code_version_str,
+            server_gens,
+            task_group,
+            dyn_server_bitcoin_rpc,
+            Box::new(fedimint_server_ui::setup::router),
+            Box::new(fedimint_server_ui::dashboard::router),
+            server_opts.db_checkpoint_retention,
+        )
         .await
-        .inspect_err(|e| error!(target: LOG_CORE, ?e, "Error while shutting down task group"))
-        .ok();
+        .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));
+    });
+
+    let shutdown_future = root_task_group
+        .make_handle()
+        .make_shutdown_rx()
+        .then(|()| async {
+            info!(target: LOG_CORE, "Shutdown called");
+        });
+
+    shutdown_future.await;
+    debug!(target: LOG_CORE, "Terminating main task");
+
+    if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
+        error!(target: LOG_CORE, ?err, "Error while shutting down task group");
+    }
 
     debug!(target: LOG_CORE, "Shutdown complete");
 

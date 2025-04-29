@@ -69,6 +69,11 @@ impl TaskGroup {
         new_tg
     }
 
+    /// Is task group shutting down?
+    pub fn is_shutting_down(&self) -> bool {
+        self.inner.is_shutting_down()
+    }
+
     /// Tell all tasks in the group to shut down. This only initiates the
     /// shutdown process, it does not wait for the tasks to shut down.
     pub fn shutdown(&self) {
