@@ -285,16 +285,35 @@ impl DevJitFed {
             }
         });
 
+        let fed_epoch_generated = JitTryAnyhow::new_try({
+            let fed = fed.clone();
+            move || async move {
+                let fed = fed.get_try().await?.deref().clone();
+                debug!(target: LOG_DEVIMINT, "Generating federation epoch...");
+                let start_time = fedimint_core::time::now();
+                if !skip_setup && !pre_dkg {
+                    fed.mine_then_wait_blocks_sync(10).await?;
+                }
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Generated federation epoch");
+                Ok(Arc::new(()))
+            }
+        });
+
         let channel_opened = JitTryAnyhow::new_try({
             let gw_lnd = gw_lnd.clone();
             let gw_ldk = gw_ldk.clone();
             let gw_ldk_second = gw_ldk_second.clone();
             let bitcoind = bitcoind.clone();
+            let fed_epoch_generated = fed_epoch_generated.clone();
             move || async move {
                 // Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
+
+                // Wait for an epoch to occur since that mines blocks, which can cause opening
+                // channels to be racy
+                fed_epoch_generated.get_try().await?;
 
                 let gw_ldk_second = gw_ldk_second.get_try().await?.deref();
                 let gw_ldk = gw_ldk.get_try().await?.deref();
@@ -307,20 +326,6 @@ impl DevJitFed {
                 open_channels_between_gateways(&bitcoind, gateways).await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Opened channels between gateways");
 
-                Ok(Arc::new(()))
-            }
-        });
-
-        let fed_epoch_generated = JitTryAnyhow::new_try({
-            let fed = fed.clone();
-            move || async move {
-                let fed = fed.get_try().await?.deref().clone();
-                debug!(target: LOG_DEVIMINT, "Generating federation epoch...");
-                let start_time = fedimint_core::time::now();
-                if !skip_setup && !pre_dkg {
-                    fed.mine_then_wait_blocks_sync(10).await?;
-                }
-                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Generated federation epoch");
                 Ok(Arc::new(()))
             }
         });
