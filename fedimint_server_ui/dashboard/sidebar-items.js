@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dashboard_layout","dashboard_view","login_form","login_submit","router"],"mod":["audit","bitcoin","general","invite","latency","modules"]};
+window.SIDEBAR_ITEMS = {"fn":["dashboard_layout","dashboard_view","login_form","login_submit","router"],"mod":["audit","bitcoin","consensus_explorer","general","invite","latency","modules"]};

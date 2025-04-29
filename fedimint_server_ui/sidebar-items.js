@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["LOGIN_ROUTE","LOG_UI","ROOT_ROUTE"],"fn":["common_head","login_form_response","login_layout","login_submit_response"],"mod":["assets","auth","dashboard","setup"],"struct":["LoginInput","UiState"]};
+window.SIDEBAR_ITEMS = {"constant":["EXPLORER_IDX_ROUTE","EXPLORER_ROUTE","LOGIN_ROUTE","LOG_UI","ROOT_ROUTE"],"fn":["common_head","login_form_response","login_layout","login_submit_response"],"mod":["assets","auth","dashboard","setup"],"struct":["LoginInput","UiState"]};

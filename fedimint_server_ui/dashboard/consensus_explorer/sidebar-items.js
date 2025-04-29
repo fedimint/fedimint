@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["consensus_explorer_view","format_item_details","format_item_type"]};
