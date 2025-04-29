@@ -7,6 +7,7 @@ use fedimint_core::bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::module::audit::AuditSummary;
+use fedimint_core::session_outcome::SessionStatusV2;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, PeerId};
 
@@ -30,7 +31,10 @@ pub trait IDashboardApi {
     async fn federation_name(&self) -> String;
 
     /// Get the current active session count
-    async fn session_count(&self) -> usize;
+    async fn session_count(&self) -> u64;
+
+    /// Get items in a given session
+    async fn get_session_status(&self, session_idx: u64) -> SessionStatusV2;
 
     /// The time it took to order our last proposal in the current session
     async fn consensus_ord_latency(&self) -> Option<Duration>;

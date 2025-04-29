@@ -564,8 +564,12 @@ impl IDashboardApi for ConsensusApi {
             .expect("Federation name must be set")
     }
 
-    async fn session_count(&self) -> usize {
-        self.session_count().await as usize
+    async fn session_count(&self) -> u64 {
+        self.session_count().await
+    }
+
+    async fn get_session_status(&self, session_idx: u64) -> SessionStatusV2 {
+        self.session_status(session_idx).await
     }
 
     async fn consensus_ord_latency(&self) -> Option<Duration> {

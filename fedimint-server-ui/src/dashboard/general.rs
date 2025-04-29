@@ -7,7 +7,7 @@ use maud::{Markup, html};
 /// guardian list
 pub fn render(
     federation_name: &str,
-    session_count: usize,
+    session_count: u64,
     guardian_names: &BTreeMap<PeerId, String>,
 ) -> Markup {
     html! {
