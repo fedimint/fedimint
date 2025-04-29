@@ -115,15 +115,13 @@ impl<R> ThresholdConsensus<R> {
     }
 }
 
-impl<R: Eq> QueryStrategy<R> for ThresholdConsensus<R> {
+impl<R: Eq + Clone> QueryStrategy<R> for ThresholdConsensus<R> {
     fn process(&mut self, peer: PeerId, response: R) -> QueryStep<R> {
-        let current_count = self.responses.values().filter(|r| **r == response).count();
+        self.responses.insert(peer, response.clone());
 
-        if current_count + 1 >= self.threshold {
+        if self.responses.values().filter(|r| **r == response).count() == self.threshold {
             return QueryStep::Success(response);
         }
-
-        self.responses.insert(peer, response);
 
         assert!(self.retry.insert(peer));
 
