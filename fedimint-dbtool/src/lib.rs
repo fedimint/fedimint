@@ -6,14 +6,25 @@
 
 pub mod envs;
 
+use std::collections::HashMap;
+use std::iter::once;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result, anyhow};
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
-use fedimint_client::module_init::ClientModuleInitRegistry;
+use fedimint_client::module_init::{ClientModuleInitRegistry, IClientModuleInit};
+use fedimint_client::sm::executor::{ActiveStateKeyPrefix, InactiveStateKeyPrefix};
 use fedimint_client_module::module::init::ClientModuleInit;
-use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
+use fedimint_client_module::transaction::{
+    TRANSACTION_SUBMISSION_MODULE_INSTANCE, tx_submission_sm_decoder,
+};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::db::{
+    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
+};
+use fedimint_core::encoding::Encodable;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_ln_server::LightningInit;
@@ -27,6 +38,7 @@ use fedimint_wallet_client::WalletClientInit;
 use fedimint_wallet_server::WalletInit;
 use futures::StreamExt;
 use hex::ToHex;
+use serde_json::json;
 
 use crate::dump::DatabaseDump;
 use crate::envs::{FM_DBTOOL_CONFIG_DIR_ENV, FM_DBTOOL_DATABASE_ENV, FM_PASSWORD_ENV};
@@ -90,6 +102,21 @@ enum DbCommand {
         #[arg(long, required = false)]
         prefixes: Option<String>,
     },
+
+    /// Dump state machine states from a client DB
+    DumpStates {
+        #[clap(long, default_value = "0=ln,1=mint,2=wallet,3=meta", value_parser = parse_module_instance_ids)]
+        modules: HashMap<ModuleInstanceId, ModuleKind>,
+    },
+}
+
+fn parse_module_instance_ids(s: &str) -> Result<HashMap<ModuleInstanceId, ModuleKind>> {
+    let mut map = HashMap::new();
+    for module in s.split(',') {
+        let (id, kind) = module.split_once('=').context("Syntax: id=kind")?;
+        map.insert(id.parse()?, ModuleKind::clone_from_str(kind));
+    }
+    Ok(map)
 }
 
 fn hex_parser(hex: &str) -> Result<Bytes> {
@@ -231,6 +258,9 @@ impl FedimintDBTool {
                 .await?;
                 dbdump.dump_database().await?;
             }
+            DbCommand::DumpStates { modules } => {
+                self.run_dump_states(options, modules).await?;
+            }
             DbCommand::DeletePrefix { prefix } => {
                 let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
@@ -238,6 +268,72 @@ impl FedimintDBTool {
                 dbtx.commit_tx().await;
             }
         }
+
+        Ok(())
+    }
+
+    async fn run_dump_states(
+        &self,
+        options: &Options,
+        modules: &HashMap<ModuleInstanceId, ModuleKind>,
+    ) -> Result<()> {
+        let module_decoders = modules
+            .iter()
+            .map(|(instance_id, module_kind)| {
+                let (_, module_init) = self
+                    .client_module_inits
+                    .iter()
+                    .find(|&(kind, _)| module_kind == kind)
+                    .context(anyhow!("Unknown module kind: {module_kind}"))?;
+                let dyn_client_init: &dyn IClientModuleInit = module_init.as_ref();
+                let decoder = IClientModuleInit::decoder(dyn_client_init);
+                Result::<_, anyhow::Error>::Ok((*instance_id, module_kind.clone(), decoder))
+            })
+            .chain(once(Ok((
+                TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+                ModuleKind::from_static_str("tx_submission"),
+                tx_submission_sm_decoder(),
+            ))))
+            .collect::<Result<Vec<_>, _>>()?;
+        let decoder_registry = ModuleDecoderRegistry::new(module_decoders);
+
+        let rocksdb = open_db(options).await.with_decoders(decoder_registry);
+        let mut dbtx = rocksdb.begin_transaction_nc().await;
+
+        let active_states = dbtx
+            .find_by_prefix(&ActiveStateKeyPrefix)
+            .await
+            .map(|(active_state, state_meta)| {
+                json!({
+                    "operation_id": active_state.0.operation_id,
+                    "state": format!("{:?}", active_state.0.state),
+                    "state_raw": active_state.0.state.consensus_encode_to_hex(),
+                    "meta": format!("{:?}", state_meta),
+                })
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        let inactive_states = dbtx
+            .find_by_prefix(&InactiveStateKeyPrefix)
+            .await
+            .map(|(inactive_state, state_meta)| {
+                json!({
+                    "operation_id": inactive_state.0.operation_id,
+                    "state": format!("{:?}", inactive_state.0.state),
+                    "state_raw": inactive_state.0.state.consensus_encode_to_hex(),
+                    "meta": format!("{:?}", state_meta),
+                })
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        let states = json!({
+            "active_states": active_states,
+            "inactive_states": inactive_states,
+        });
+
+        serde_json::to_writer(std::io::stdout(), &states).context("Failed to serialize states")?;
 
         Ok(())
     }
