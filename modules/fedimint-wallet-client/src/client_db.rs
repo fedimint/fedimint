@@ -120,10 +120,15 @@ pub struct PegInTweakIndexPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct PegInTweakIndexData {
+    /// [`OperationId`] corresponding to this peg-in address.
     pub operation_id: OperationId,
+    /// Time the address was allocated (created)
     pub creation_time: SystemTime,
+    /// Last time the client checked the address for pegins
     pub last_check_time: Option<SystemTime>,
+    /// Next time client is going to checked the address for pegins
     pub next_check_time: Option<SystemTime>,
+    /// All previous on chain outputs claimed for this peg-in address.
     pub claimed: Vec<bitcoin::OutPoint>,
 }
 
