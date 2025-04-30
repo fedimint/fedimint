@@ -132,3 +132,34 @@ impl<R: Eq + Clone> QueryStrategy<R> for ThresholdConsensus<R> {
         }
     }
 }
+
+#[test]
+fn test_threshold_consensus() {
+    let mut consensus = ThresholdConsensus::<u64>::new(NumPeers::from(4));
+
+    assert!(matches!(
+        consensus.process(PeerId::from(0), 1),
+        QueryStep::Continue
+    ));
+    assert!(matches!(
+        consensus.process(PeerId::from(1), 1),
+        QueryStep::Continue
+    ));
+    assert!(matches!(
+        consensus.process(PeerId::from(2), 0),
+        QueryStep::Retry(..)
+    ));
+
+    assert!(matches!(
+        consensus.process(PeerId::from(0), 1),
+        QueryStep::Continue
+    ));
+    assert!(matches!(
+        consensus.process(PeerId::from(1), 1),
+        QueryStep::Continue
+    ));
+    assert!(matches!(
+        consensus.process(PeerId::from(2), 1),
+        QueryStep::Success(1)
+    ));
+}
