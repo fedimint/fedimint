@@ -411,7 +411,7 @@ impl_db_record!(
 );
 
 #[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct MetaFieldPrefix;
+pub(crate) struct MetaFieldPrefix;
 
 #[derive(Encodable, Decodable, Debug)]
 pub struct MetaServiceInfoKey;
@@ -425,10 +425,10 @@ pub struct MetaServiceInfo {
 #[derive(
     Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize,
 )]
-pub struct MetaFieldKey(pub fedimint_client_module::meta::MetaFieldKey);
+pub(crate) struct MetaFieldKey(pub fedimint_client_module::meta::MetaFieldKey);
 
 #[derive(Encodable, Decodable, Debug, Clone, Serialize, Deserialize)]
-pub struct MetaFieldValue(pub fedimint_client_module::meta::MetaFieldValue);
+pub(crate) struct MetaFieldValue(pub fedimint_client_module::meta::MetaFieldValue);
 
 impl_db_record!(
     key = MetaFieldKey,
