@@ -53,7 +53,8 @@ where
 
 #[macro_export]
 macro_rules! sm_enum_variant_translation {
-    ($sm:expr_2021, $enum_variant:path) => {
+    ($sm:expr_2021, $enum_variant:path) => {{
+        use $crate::sm::util::MapStateTransitions;
         $sm.map(
             |sm| $enum_variant(sm),
             |sm| match sm {
@@ -61,5 +62,5 @@ macro_rules! sm_enum_variant_translation {
                 _ => panic!("Incorrectly dispatched state"),
             },
         )
-    };
+    }};
 }

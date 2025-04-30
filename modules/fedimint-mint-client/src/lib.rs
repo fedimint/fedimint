@@ -50,7 +50,6 @@ use fedimint_client_module::module::init::{
 };
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
-use fedimint_client_module::sm::util::MapStateTransitions;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
