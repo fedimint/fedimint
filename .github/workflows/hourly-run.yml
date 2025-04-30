@@ -10,7 +10,7 @@ jobs:
   self-care:
     name: Flake self-check
     # no one is in the rush for this to funish, so use default (free) Ubuntu instances
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
       - name: Check Nix flake inputs
