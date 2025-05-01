@@ -85,6 +85,9 @@
           # customizations will go here in the future
           config = {
             direnv.enable = false;
+            github.ci = {
+              workflows.flakebox-flakehub-publish.enable = false;
+            };
 
             toolchain.components = [
               "rustc"
