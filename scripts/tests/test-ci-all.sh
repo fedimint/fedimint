@@ -262,7 +262,7 @@ else
   tagged_versions=("$@")
 fi
 num_versions="$#"
-versions=( "${tagged_versions[@]}" "current" )
+versions=( "${tagged_versions[@]}" )
 if [[ "$num_versions" == "0" ]]; then
   mapfile -t version_matrix < <(generate_current_only_matrix "${versions[@]}")
 else

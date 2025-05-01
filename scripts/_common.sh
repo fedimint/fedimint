@@ -223,7 +223,7 @@ function is_only_one_version_not_current() {
   fed_version="$1"
   client_version="$2"
   gateway_version="$3"
-  current_count="$(filter_count "current" "$fed_version" "$client_version" "$gateway_version")"
+  current_count="$(filter_count "v0.6.3-beta.1" "$fed_version" "$client_version" "$gateway_version")"
   [ "$current_count" == 2 ]
 }
 

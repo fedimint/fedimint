@@ -51,16 +51,7 @@ jobs:
 
       - name: Backwards-compatibility tests
         run: |
-          # TODO: should we create a separate perfit metric for merge queue vs pr push?
-
-          # run a slimmed down back-compat test for PR push or each major version for merge queue
-          if [[ "${{ github.event_name }}" == "merge_group" ]]; then
-            PERFIT_METRIC="90S3yoXDQ-SXB0UbXG4qHQ"
-            VERSIONS_TO_TEST="v0.3.4-rc.1 v0.4.4 v0.5.0"
-          else
-            PERFIT_METRIC="aPuCAjrFT7uE5Oax_T4sMw"
-            VERSIONS_TO_TEST="v0.5.0"
-          fi
+          VERSIONS_TO_TEST="v0.3.4-rc.1 v0.4.0 v0.4.1 v0.4.2 v0.4.3 v0.4.4 v0.5.0 v0.5.1 v0.6.0 v0.6.1 v0.6.2 v0.6.3-beta.1"
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
@@ -69,13 +60,7 @@ jobs:
           env \
             TMPDIR=/tmp \
             CARGO_PROFILE=ci \
-            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix develop -c \
-            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
-              run \
-                --metric "$PERFIT_METRIC" \
-                --metadata "commit=${LAST_COMMIT_SHA}" \
-                -- \
             env -u RUSTC_WRAPPER \
             env FM_DEVIMINT_DISABLE_MODULE_LNV2=1 \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/test-ci-all-backcompat.sh "$VERSIONS_TO_TEST"
