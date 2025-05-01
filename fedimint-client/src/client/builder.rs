@@ -191,7 +191,13 @@ impl ClientBuilder {
         self.meta_service = meta_service;
     }
 
-    async fn migrate_database(&self, db: &Database) -> anyhow::Result<()> {
+    /// Migrate client module databases
+    ///
+    /// Note: Client core db migration are done immediately in
+    /// [`Client::builder`], to ensure db matches the code at all times,
+    /// while migrating modules requires figuring out what modules actually
+    /// are first.
+    async fn migrate_module_dbs(&self, db: &Database) -> anyhow::Result<()> {
         // Only apply the client database migrations if the database has been
         // initialized.
         // This only works as long as you don't change the client config
@@ -562,7 +568,7 @@ impl ClientBuilder {
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
-        self.migrate_database(&db).await?;
+        self.migrate_module_dbs(&db).await?;
 
         let init_state = Self::load_init_state(&db).await;
 
