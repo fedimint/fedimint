@@ -73,15 +73,18 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     strategy:
       matrix:
-        # TODO: try to reintroduce macos build
-        # https://github.com/fedimint/fedimint/issues/7346
         host:
           - linux
+          - macos
         include:
           - host: linux
             runs-on: [self-hosted, linux, x64]
             build-in-pr: false
             timeout: 30
+          - host: macos
+            runs-on: macos-14
+            build-in-pr: false
+            timeout: 60
 
     name: "Dev Shell on ${{ matrix.host }}"
     runs-on: ${{ matrix.runs-on }}
@@ -107,16 +110,21 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     strategy:
       matrix:
-        # TODO: try to reintroduce macos build
-        # https://github.com/fedimint/fedimint/issues/7346
         host:
           - linux
+          - macos
         include:
           - host: linux
             runs-on: [self-hosted, linux, x64]
             build-in-pr: true
             timeout: 90
             run-tests: true
+          - host: macos
+            runs-on: macos-14
+            build-in-pr: false
+            # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
+            timeout: 75
+            run-tests: false
 
     name: "Build on ${{ matrix.host }}"
     runs-on: ${{ matrix.runs-on }}
@@ -236,8 +244,6 @@ jobs:
 
     strategy:
       matrix:
-        # TODO: try to reintroduce macos build
-        # https://github.com/fedimint/fedimint/issues/7346
         host:
           - linux
         toolchain:
@@ -394,8 +400,6 @@ jobs:
 
     strategy:
       matrix:
-        # TODO: try to reintroduce macos build
-        # https://github.com/fedimint/fedimint/issues/7346
         platform:
           - name: linux
             runs-on: [self-hosted, linux, x64]
@@ -404,6 +408,13 @@ jobs:
             build-rpm: true
             build-bundled: true
             shasum-cmd: sha256sum
+          - name: macos-aarch64
+            runs-on: macos-14
+            timeout: 180
+            build-deb: false
+            build-rpm: false
+            build-bundled: false
+            shasum-cmd: shasum -a 256
         build:
           - flake-output: fedimint-pkgs
             bins: fedimintd,fedimint-cli,fedimint-dbtool,fedimint-recoverytool
