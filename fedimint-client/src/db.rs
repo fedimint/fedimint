@@ -56,6 +56,7 @@ pub enum DbKeyPrefix {
     ApiUrlAnnouncement = 0x38,
     EventLog = fedimint_eventlog::DB_KEY_PREFIX_EVENT_LOG,
     UnorderedEventLog = fedimint_eventlog::DB_KEY_PREFIX_UNORDERED_EVENT_LOG,
+    ClientModuleRecovery = 0x40,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
@@ -351,29 +352,9 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientRecoverySnapshot;
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientRecoverySnapshotPrefix;
-
-impl_db_record!(
-    key = ClientRecoverySnapshot,
-    value = Option<ClientBackup>,
-    db_prefix = DbKeyPrefix::ClientInitState
-);
-
-impl_db_lookup!(
-    key = ClientRecoverySnapshot,
-    query_prefix = ClientRecoverySnapshotPrefix
-);
-
-#[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientModuleRecovery {
     pub module_instance_id: ModuleInstanceId,
 }
-
-#[derive(Debug, Encodable)]
-pub struct ClientModuleRecoveryPrefix;
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct ClientModuleRecoveryState {
@@ -389,12 +370,25 @@ impl ClientModuleRecoveryState {
 impl_db_record!(
     key = ClientModuleRecovery,
     value = ClientModuleRecoveryState,
-    db_prefix = DbKeyPrefix::ClientInitState,
+    db_prefix = DbKeyPrefix::ClientModuleRecovery,
 );
 
-impl_db_lookup!(
-    key = ClientModuleRecovery,
-    query_prefix = ClientModuleRecoveryPrefix
+/// Old (incorrect) version of the [`ClientModuleRecoveryState`]
+/// that used the wrong prefix.
+///
+/// See <https://github.com/fedimint/fedimint/issues/7367>.
+///
+/// Used only for the migration.
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ClientModuleRecoveryIncorrectDoNotUse {
+    pub module_instance_id: ModuleInstanceId,
+}
+
+impl_db_record!(
+    key = ClientModuleRecoveryIncorrectDoNotUse,
+    value = ClientModuleRecoveryState,
+    // This was wrong and we keep it wrong for a migration.
+    db_prefix = DbKeyPrefix::ClientInitState,
 );
 
 /// Last valid backup the client attempted to make
@@ -642,9 +636,41 @@ pub fn get_core_client_database_migrations()
             })
         }),
     );
+
+    // Fix #7367
+    migrations.insert(
+        DatabaseVersion(3),
+        Box::new(|mut ctx: fedimint_core::db::DbMigrationFnContext<'_, _>| {
+            Box::pin(async move {
+                let mut dbtx = ctx.dbtx();
+
+                for module_id in 0..u16::MAX {
+                    let old_key = ClientModuleRecoveryIncorrectDoNotUse {
+                        module_instance_id: module_id,
+                    };
+                    let new_key = ClientModuleRecovery {
+                        module_instance_id: module_id,
+                    };
+                    let Some(value) = dbtx.get_value(&old_key).await else {
+                        debug!(target: LOG_CLIENT_DB, %module_id, "No more ClientModuleRecovery keys found for migartion");
+                        break;
+                    };
+
+                    debug!(target: LOG_CLIENT_DB, %module_id, "Migrating old ClientModuleRecovery key");
+                    dbtx.remove_entry(&old_key).await.expect("Is there.");
+                    assert!(dbtx.insert_entry(&new_key, &value).await.is_none());
+                }
+
+                Ok(())
+            })
+        }),
+    );
     migrations
 }
 
+/// Apply core client database migrations
+///
+/// TODO: This should be private.
 pub async fn apply_migrations_core_client_dbtx(
     dbtx: &mut DatabaseTransaction<'_>,
     kind: String,
