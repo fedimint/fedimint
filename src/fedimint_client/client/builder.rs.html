@@ -191,757 +191,763 @@
 <a href=#191 id=191 data-nosnippet>191</a>        <span class="self">self</span>.meta_service = meta_service;
 <a href=#192 id=192 data-nosnippet>192</a>    }
 <a href=#193 id=193 data-nosnippet>193</a>
-<a href=#194 id=194 data-nosnippet>194</a>    <span class="kw">async fn </span>migrate_database(<span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#195 id=195 data-nosnippet>195</a>        <span class="comment">// Only apply the client database migrations if the database has been
-<a href=#196 id=196 data-nosnippet>196</a>        // initialized.
-<a href=#197 id=197 data-nosnippet>197</a>        // This only works as long as you don't change the client config
-<a href=#198 id=198 data-nosnippet>198</a>        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(client_config) = <span class="self">self</span>.load_existing_config().<span class="kw">await </span>{
-<a href=#199 id=199 data-nosnippet>199</a>            <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span>client_config.modules {
-<a href=#200 id=200 data-nosnippet>200</a>                <span class="kw">let </span>kind = module_cfg.kind.clone();
-<a href=#201 id=201 data-nosnippet>201</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
-<a href=#202 id=202 data-nosnippet>202</a>                    <span class="comment">// normal, expected and already logged about when building the client
-<a href=#203 id=203 data-nosnippet>203</a>                    </span><span class="kw">continue</span>;
-<a href=#204 id=204 data-nosnippet>204</a>                };
-<a href=#205 id=205 data-nosnippet>205</a>
-<a href=#206 id=206 data-nosnippet>206</a>                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-<a href=#207 id=207 data-nosnippet>207</a>                apply_migrations_client_module_dbtx(
-<a href=#208 id=208 data-nosnippet>208</a>                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
-<a href=#209 id=209 data-nosnippet>209</a>                    kind.to_string(),
-<a href=#210 id=210 data-nosnippet>210</a>                    init.get_database_migrations(),
-<a href=#211 id=211 data-nosnippet>211</a>                    module_id,
-<a href=#212 id=212 data-nosnippet>212</a>                )
-<a href=#213 id=213 data-nosnippet>213</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#214 id=214 data-nosnippet>214</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(used_db_prefixes) = init.used_db_prefixes() {
-<a href=#215 id=215 data-nosnippet>215</a>                    <span class="kw">if </span>is_running_in_test_env() {
-<a href=#216 id=216 data-nosnippet>216</a>                        verify_module_db_integrity_dbtx(
-<a href=#217 id=217 data-nosnippet>217</a>                            <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
-<a href=#218 id=218 data-nosnippet>218</a>                            module_id,
-<a href=#219 id=219 data-nosnippet>219</a>                            kind,
-<a href=#220 id=220 data-nosnippet>220</a>                            <span class="kw-2">&amp;</span>used_db_prefixes,
-<a href=#221 id=221 data-nosnippet>221</a>                        )
-<a href=#222 id=222 data-nosnippet>222</a>                        .<span class="kw">await</span>;
-<a href=#223 id=223 data-nosnippet>223</a>                    }
-<a href=#224 id=224 data-nosnippet>224</a>                }
-<a href=#225 id=225 data-nosnippet>225</a>                dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#226 id=226 data-nosnippet>226</a>            }
-<a href=#227 id=227 data-nosnippet>227</a>        }
-<a href=#228 id=228 data-nosnippet>228</a>
-<a href=#229 id=229 data-nosnippet>229</a>        <span class="prelude-val">Ok</span>(())
-<a href=#230 id=230 data-nosnippet>230</a>    }
-<a href=#231 id=231 data-nosnippet>231</a>
-<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">pub fn </span>db_no_decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
-<a href=#233 id=233 data-nosnippet>233</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders
-<a href=#234 id=234 data-nosnippet>234</a>    }
-<a href=#235 id=235 data-nosnippet>235</a>
-<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">pub async fn </span>load_existing_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-<a href=#237 id=237 data-nosnippet>237</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await else </span>{
-<a href=#238 id=238 data-nosnippet>238</a>            <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
-<a href=#239 id=239 data-nosnippet>239</a>        };
-<a href=#240 id=240 data-nosnippet>240</a>
-<a href=#241 id=241 data-nosnippet>241</a>        <span class="prelude-val">Ok</span>(config)
-<a href=#242 id=242 data-nosnippet>242</a>    }
-<a href=#243 id=243 data-nosnippet>243</a>
-<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">pub fn </span>set_admin_creds(<span class="kw-2">&amp;mut </span><span class="self">self</span>, creds: AdminCreds) {
-<a href=#245 id=245 data-nosnippet>245</a>        <span class="self">self</span>.admin_creds = <span class="prelude-val">Some</span>(creds);
-<a href=#246 id=246 data-nosnippet>246</a>    }
-<a href=#247 id=247 data-nosnippet>247</a>
-<a href=#248 id=248 data-nosnippet>248</a>    <span class="kw">pub fn </span>with_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>, connector: Connector) {
-<a href=#249 id=249 data-nosnippet>249</a>        <span class="self">self</span>.connector = connector;
-<a href=#250 id=250 data-nosnippet>250</a>    }
-<a href=#251 id=251 data-nosnippet>251</a>
-<a href=#252 id=252 data-nosnippet>252</a>    <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
-<a href=#253 id=253 data-nosnippet>253</a>    </span><span class="kw">pub fn </span>with_tor_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-<a href=#254 id=254 data-nosnippet>254</a>        <span class="self">self</span>.with_connector(Connector::tor());
-<a href=#255 id=255 data-nosnippet>255</a>    }
-<a href=#256 id=256 data-nosnippet>256</a>
-<a href=#257 id=257 data-nosnippet>257</a>    <span class="kw">async fn </span>init(
-<a href=#258 id=258 data-nosnippet>258</a>        <span class="self">self</span>,
-<a href=#259 id=259 data-nosnippet>259</a>        pre_root_secret: DerivableSecret,
-<a href=#260 id=260 data-nosnippet>260</a>        config: ClientConfig,
-<a href=#261 id=261 data-nosnippet>261</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#262 id=262 data-nosnippet>262</a>        init_mode: InitMode,
-<a href=#263 id=263 data-nosnippet>263</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-<a href=#264 id=264 data-nosnippet>264</a>        <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await </span>{
-<a href=#265 id=265 data-nosnippet>265</a>            <span class="macro">bail!</span>(<span class="string">"Client database already initialized"</span>)
-<a href=#266 id=266 data-nosnippet>266</a>        }
-<a href=#267 id=267 data-nosnippet>267</a>
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="comment">// Note: It's important all client initialization is performed as one big
-<a href=#269 id=269 data-nosnippet>269</a>        // transaction to avoid half-initialized client state.
-<a href=#270 id=270 data-nosnippet>270</a>        </span>{
-<a href=#271 id=271 data-nosnippet>271</a>            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Initializing client database"</span>);
-<a href=#272 id=272 data-nosnippet>272</a>            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db_no_decoders.begin_transaction().<span class="kw">await</span>;
-<a href=#273 id=273 data-nosnippet>273</a>            <span class="comment">// Save config to DB
-<a href=#274 id=274 data-nosnippet>274</a>            </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span><span class="kw">crate</span>::db::ClientConfigKey, <span class="kw-2">&amp;</span>config)
-<a href=#275 id=275 data-nosnippet>275</a>                .<span class="kw">await</span>;
-<a href=#276 id=276 data-nosnippet>276</a>            dbtx.insert_entry(
-<a href=#277 id=277 data-nosnippet>277</a>                <span class="kw-2">&amp;</span>ClientPreRootSecretHashKey,
-<a href=#278 id=278 data-nosnippet>278</a>                <span class="kw-2">&amp;</span>pre_root_secret.derive_pre_root_secret_hash(),
-<a href=#279 id=279 data-nosnippet>279</a>            )
-<a href=#280 id=280 data-nosnippet>280</a>            .<span class="kw">await</span>;
-<a href=#281 id=281 data-nosnippet>281</a>
-<a href=#282 id=282 data-nosnippet>282</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret.as_ref() {
-<a href=#283 id=283 data-nosnippet>283</a>                dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ApiSecretKey, api_secret).<span class="kw">await</span>;
-<a href=#284 id=284 data-nosnippet>284</a>            }
-<a href=#285 id=285 data-nosnippet>285</a>
-<a href=#286 id=286 data-nosnippet>286</a>            <span class="kw">let </span>init_state = InitState::Pending(init_mode);
-<a href=#287 id=287 data-nosnippet>287</a>            dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientInitStateKey, <span class="kw-2">&amp;</span>init_state).<span class="kw">await</span>;
-<a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a>            <span class="kw">let </span>metadata = init_state
-<a href=#290 id=290 data-nosnippet>290</a>                .does_require_recovery()
-<a href=#291 id=291 data-nosnippet>291</a>                .flatten()
-<a href=#292 id=292 data-nosnippet>292</a>                .map_or(Metadata::empty(), |s| s.metadata);
-<a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientMetadataKey, <span class="kw-2">&amp;</span>metadata).<span class="kw">await</span>;
-<a href=#295 id=295 data-nosnippet>295</a>
-<a href=#296 id=296 data-nosnippet>296</a>            dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#297 id=297 data-nosnippet>297</a>        }
-<a href=#298 id=298 data-nosnippet>298</a>
-<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="self">self</span>.build(pre_root_secret, config, api_secret, stopped)
-<a href=#301 id=301 data-nosnippet>301</a>            .<span class="kw">await
-<a href=#302 id=302 data-nosnippet>302</a>    </span>}
-<a href=#303 id=303 data-nosnippet>303</a>
-<a href=#304 id=304 data-nosnippet>304</a>    <span class="doccomment">/// Join a new Federation
-<a href=#305 id=305 data-nosnippet>305</a>    ///
-<a href=#306 id=306 data-nosnippet>306</a>    /// When a user wants to connect to a new federation this function fetches
-<a href=#307 id=307 data-nosnippet>307</a>    /// the federation config and initializes the client database. If a user
-<a href=#308 id=308 data-nosnippet>308</a>    /// already joined the federation in the past and has a preexisting database
-<a href=#309 id=309 data-nosnippet>309</a>    /// use [`ClientBuilder::open`] instead.
-<a href=#310 id=310 data-nosnippet>310</a>    ///
-<a href=#311 id=311 data-nosnippet>311</a>    /// **Warning**: Calling `join` with a `root_secret` key that was used
-<a href=#312 id=312 data-nosnippet>312</a>    /// previous to `join` a Federation will lead to all sorts of malfunctions
-<a href=#313 id=313 data-nosnippet>313</a>    /// including likely loss of funds.
-<a href=#314 id=314 data-nosnippet>314</a>    ///
-<a href=#315 id=315 data-nosnippet>315</a>    /// This should be generally called only if the `root_secret` key is known
-<a href=#316 id=316 data-nosnippet>316</a>    /// not to have been used before (e.g. just randomly generated). For keys
-<a href=#317 id=317 data-nosnippet>317</a>    /// that might have been previous used (e.g. provided by the user),
-<a href=#318 id=318 data-nosnippet>318</a>    /// it's safer to call [`Self::recover`] which will attempt to recover
-<a href=#319 id=319 data-nosnippet>319</a>    /// client module states for the Federation.
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="doccomment">/// Migrate client module databases
+<a href=#195 id=195 data-nosnippet>195</a>    ///
+<a href=#196 id=196 data-nosnippet>196</a>    /// Note: Client core db migration are done immediately in
+<a href=#197 id=197 data-nosnippet>197</a>    /// [`Client::builder`], to ensure db matches the code at all times,
+<a href=#198 id=198 data-nosnippet>198</a>    /// while migrating modules requires figuring out what modules actually
+<a href=#199 id=199 data-nosnippet>199</a>    /// are first.
+<a href=#200 id=200 data-nosnippet>200</a>    </span><span class="kw">async fn </span>migrate_module_dbs(<span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#201 id=201 data-nosnippet>201</a>        <span class="comment">// Only apply the client database migrations if the database has been
+<a href=#202 id=202 data-nosnippet>202</a>        // initialized.
+<a href=#203 id=203 data-nosnippet>203</a>        // This only works as long as you don't change the client config
+<a href=#204 id=204 data-nosnippet>204</a>        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(client_config) = <span class="self">self</span>.load_existing_config().<span class="kw">await </span>{
+<a href=#205 id=205 data-nosnippet>205</a>            <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span>client_config.modules {
+<a href=#206 id=206 data-nosnippet>206</a>                <span class="kw">let </span>kind = module_cfg.kind.clone();
+<a href=#207 id=207 data-nosnippet>207</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
+<a href=#208 id=208 data-nosnippet>208</a>                    <span class="comment">// normal, expected and already logged about when building the client
+<a href=#209 id=209 data-nosnippet>209</a>                    </span><span class="kw">continue</span>;
+<a href=#210 id=210 data-nosnippet>210</a>                };
+<a href=#211 id=211 data-nosnippet>211</a>
+<a href=#212 id=212 data-nosnippet>212</a>                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+<a href=#213 id=213 data-nosnippet>213</a>                apply_migrations_client_module_dbtx(
+<a href=#214 id=214 data-nosnippet>214</a>                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
+<a href=#215 id=215 data-nosnippet>215</a>                    kind.to_string(),
+<a href=#216 id=216 data-nosnippet>216</a>                    init.get_database_migrations(),
+<a href=#217 id=217 data-nosnippet>217</a>                    module_id,
+<a href=#218 id=218 data-nosnippet>218</a>                )
+<a href=#219 id=219 data-nosnippet>219</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#220 id=220 data-nosnippet>220</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(used_db_prefixes) = init.used_db_prefixes() {
+<a href=#221 id=221 data-nosnippet>221</a>                    <span class="kw">if </span>is_running_in_test_env() {
+<a href=#222 id=222 data-nosnippet>222</a>                        verify_module_db_integrity_dbtx(
+<a href=#223 id=223 data-nosnippet>223</a>                            <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
+<a href=#224 id=224 data-nosnippet>224</a>                            module_id,
+<a href=#225 id=225 data-nosnippet>225</a>                            kind,
+<a href=#226 id=226 data-nosnippet>226</a>                            <span class="kw-2">&amp;</span>used_db_prefixes,
+<a href=#227 id=227 data-nosnippet>227</a>                        )
+<a href=#228 id=228 data-nosnippet>228</a>                        .<span class="kw">await</span>;
+<a href=#229 id=229 data-nosnippet>229</a>                    }
+<a href=#230 id=230 data-nosnippet>230</a>                }
+<a href=#231 id=231 data-nosnippet>231</a>                dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#232 id=232 data-nosnippet>232</a>            }
+<a href=#233 id=233 data-nosnippet>233</a>        }
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="prelude-val">Ok</span>(())
+<a href=#236 id=236 data-nosnippet>236</a>    }
+<a href=#237 id=237 data-nosnippet>237</a>
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">pub fn </span>db_no_decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders
+<a href=#240 id=240 data-nosnippet>240</a>    }
+<a href=#241 id=241 data-nosnippet>241</a>
+<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">pub async fn </span>load_existing_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await else </span>{
+<a href=#244 id=244 data-nosnippet>244</a>            <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
+<a href=#245 id=245 data-nosnippet>245</a>        };
+<a href=#246 id=246 data-nosnippet>246</a>
+<a href=#247 id=247 data-nosnippet>247</a>        <span class="prelude-val">Ok</span>(config)
+<a href=#248 id=248 data-nosnippet>248</a>    }
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">pub fn </span>set_admin_creds(<span class="kw-2">&amp;mut </span><span class="self">self</span>, creds: AdminCreds) {
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="self">self</span>.admin_creds = <span class="prelude-val">Some</span>(creds);
+<a href=#252 id=252 data-nosnippet>252</a>    }
+<a href=#253 id=253 data-nosnippet>253</a>
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">pub fn </span>with_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>, connector: Connector) {
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="self">self</span>.connector = connector;
+<a href=#256 id=256 data-nosnippet>256</a>    }
+<a href=#257 id=257 data-nosnippet>257</a>
+<a href=#258 id=258 data-nosnippet>258</a>    <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
+<a href=#259 id=259 data-nosnippet>259</a>    </span><span class="kw">pub fn </span>with_tor_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="self">self</span>.with_connector(Connector::tor());
+<a href=#261 id=261 data-nosnippet>261</a>    }
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a>    <span class="kw">async fn </span>init(
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="self">self</span>,
+<a href=#265 id=265 data-nosnippet>265</a>        pre_root_secret: DerivableSecret,
+<a href=#266 id=266 data-nosnippet>266</a>        config: ClientConfig,
+<a href=#267 id=267 data-nosnippet>267</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#268 id=268 data-nosnippet>268</a>        init_mode: InitMode,
+<a href=#269 id=269 data-nosnippet>269</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await </span>{
+<a href=#271 id=271 data-nosnippet>271</a>            <span class="macro">bail!</span>(<span class="string">"Client database already initialized"</span>)
+<a href=#272 id=272 data-nosnippet>272</a>        }
+<a href=#273 id=273 data-nosnippet>273</a>
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="comment">// Note: It's important all client initialization is performed as one big
+<a href=#275 id=275 data-nosnippet>275</a>        // transaction to avoid half-initialized client state.
+<a href=#276 id=276 data-nosnippet>276</a>        </span>{
+<a href=#277 id=277 data-nosnippet>277</a>            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Initializing client database"</span>);
+<a href=#278 id=278 data-nosnippet>278</a>            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db_no_decoders.begin_transaction().<span class="kw">await</span>;
+<a href=#279 id=279 data-nosnippet>279</a>            <span class="comment">// Save config to DB
+<a href=#280 id=280 data-nosnippet>280</a>            </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span><span class="kw">crate</span>::db::ClientConfigKey, <span class="kw-2">&amp;</span>config)
+<a href=#281 id=281 data-nosnippet>281</a>                .<span class="kw">await</span>;
+<a href=#282 id=282 data-nosnippet>282</a>            dbtx.insert_entry(
+<a href=#283 id=283 data-nosnippet>283</a>                <span class="kw-2">&amp;</span>ClientPreRootSecretHashKey,
+<a href=#284 id=284 data-nosnippet>284</a>                <span class="kw-2">&amp;</span>pre_root_secret.derive_pre_root_secret_hash(),
+<a href=#285 id=285 data-nosnippet>285</a>            )
+<a href=#286 id=286 data-nosnippet>286</a>            .<span class="kw">await</span>;
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret.as_ref() {
+<a href=#289 id=289 data-nosnippet>289</a>                dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ApiSecretKey, api_secret).<span class="kw">await</span>;
+<a href=#290 id=290 data-nosnippet>290</a>            }
+<a href=#291 id=291 data-nosnippet>291</a>
+<a href=#292 id=292 data-nosnippet>292</a>            <span class="kw">let </span>init_state = InitState::Pending(init_mode);
+<a href=#293 id=293 data-nosnippet>293</a>            dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientInitStateKey, <span class="kw-2">&amp;</span>init_state).<span class="kw">await</span>;
+<a href=#294 id=294 data-nosnippet>294</a>
+<a href=#295 id=295 data-nosnippet>295</a>            <span class="kw">let </span>metadata = init_state
+<a href=#296 id=296 data-nosnippet>296</a>                .does_require_recovery()
+<a href=#297 id=297 data-nosnippet>297</a>                .flatten()
+<a href=#298 id=298 data-nosnippet>298</a>                .map_or(Metadata::empty(), |s| s.metadata);
+<a href=#299 id=299 data-nosnippet>299</a>
+<a href=#300 id=300 data-nosnippet>300</a>            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientMetadataKey, <span class="kw-2">&amp;</span>metadata).<span class="kw">await</span>;
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>            dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#303 id=303 data-nosnippet>303</a>        }
+<a href=#304 id=304 data-nosnippet>304</a>
+<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
+<a href=#306 id=306 data-nosnippet>306</a>        <span class="self">self</span>.build(pre_root_secret, config, api_secret, stopped)
+<a href=#307 id=307 data-nosnippet>307</a>            .<span class="kw">await
+<a href=#308 id=308 data-nosnippet>308</a>    </span>}
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="doccomment">/// Join a new Federation
+<a href=#311 id=311 data-nosnippet>311</a>    ///
+<a href=#312 id=312 data-nosnippet>312</a>    /// When a user wants to connect to a new federation this function fetches
+<a href=#313 id=313 data-nosnippet>313</a>    /// the federation config and initializes the client database. If a user
+<a href=#314 id=314 data-nosnippet>314</a>    /// already joined the federation in the past and has a preexisting database
+<a href=#315 id=315 data-nosnippet>315</a>    /// use [`ClientBuilder::open`] instead.
+<a href=#316 id=316 data-nosnippet>316</a>    ///
+<a href=#317 id=317 data-nosnippet>317</a>    /// **Warning**: Calling `join` with a `root_secret` key that was used
+<a href=#318 id=318 data-nosnippet>318</a>    /// previous to `join` a Federation will lead to all sorts of malfunctions
+<a href=#319 id=319 data-nosnippet>319</a>    /// including likely loss of funds.
 <a href=#320 id=320 data-nosnippet>320</a>    ///
-<a href=#321 id=321 data-nosnippet>321</a>    /// A typical "join federation" flow would look as follows:
-<a href=#322 id=322 data-nosnippet>322</a>    /// ```no_run
-<a href=#323 id=323 data-nosnippet>323</a>    /// # use std::str::FromStr;
-<a href=#324 id=324 data-nosnippet>324</a>    /// # use fedimint_core::invite_code::InviteCode;
-<a href=#325 id=325 data-nosnippet>325</a>    /// # use fedimint_core::config::ClientConfig;
-<a href=#326 id=326 data-nosnippet>326</a>    /// # use fedimint_derive_secret::DerivableSecret;
-<a href=#327 id=327 data-nosnippet>327</a>    /// # use fedimint_client::{Client, ClientBuilder};
-<a href=#328 id=328 data-nosnippet>328</a>    /// # use fedimint_core::db::Database;
-<a href=#329 id=329 data-nosnippet>329</a>    /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
-<a href=#330 id=330 data-nosnippet>330</a>    /// #
-<a href=#331 id=331 data-nosnippet>331</a>    /// # #[tokio::main]
-<a href=#332 id=332 data-nosnippet>332</a>    /// # async fn main() {
-<a href=#333 id=333 data-nosnippet>333</a>    /// # let root_secret: DerivableSecret = unimplemented!();
-<a href=#334 id=334 data-nosnippet>334</a>    /// // Create a root secret, e.g. via fedimint-bip39, see also:
-<a href=#335 id=335 data-nosnippet>335</a>    /// // https://github.com/fedimint/fedimint/blob/master/docs/secret_derivation.md
-<a href=#336 id=336 data-nosnippet>336</a>    /// // let root_secret = …;
-<a href=#337 id=337 data-nosnippet>337</a>    ///
-<a href=#338 id=338 data-nosnippet>338</a>    /// // Get invite code from user
-<a href=#339 id=339 data-nosnippet>339</a>    /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
-<a href=#340 id=340 data-nosnippet>340</a>    ///     .expect("Invalid invite code");
-<a href=#341 id=341 data-nosnippet>341</a>    /// let config = fedimint_api_client::api::net::Connector::default().download_from_invite_code(&amp;invite_code).await
-<a href=#342 id=342 data-nosnippet>342</a>    ///     .expect("Error downloading config");
+<a href=#321 id=321 data-nosnippet>321</a>    /// This should be generally called only if the `root_secret` key is known
+<a href=#322 id=322 data-nosnippet>322</a>    /// not to have been used before (e.g. just randomly generated). For keys
+<a href=#323 id=323 data-nosnippet>323</a>    /// that might have been previous used (e.g. provided by the user),
+<a href=#324 id=324 data-nosnippet>324</a>    /// it's safer to call [`Self::recover`] which will attempt to recover
+<a href=#325 id=325 data-nosnippet>325</a>    /// client module states for the Federation.
+<a href=#326 id=326 data-nosnippet>326</a>    ///
+<a href=#327 id=327 data-nosnippet>327</a>    /// A typical "join federation" flow would look as follows:
+<a href=#328 id=328 data-nosnippet>328</a>    /// ```no_run
+<a href=#329 id=329 data-nosnippet>329</a>    /// # use std::str::FromStr;
+<a href=#330 id=330 data-nosnippet>330</a>    /// # use fedimint_core::invite_code::InviteCode;
+<a href=#331 id=331 data-nosnippet>331</a>    /// # use fedimint_core::config::ClientConfig;
+<a href=#332 id=332 data-nosnippet>332</a>    /// # use fedimint_derive_secret::DerivableSecret;
+<a href=#333 id=333 data-nosnippet>333</a>    /// # use fedimint_client::{Client, ClientBuilder};
+<a href=#334 id=334 data-nosnippet>334</a>    /// # use fedimint_core::db::Database;
+<a href=#335 id=335 data-nosnippet>335</a>    /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
+<a href=#336 id=336 data-nosnippet>336</a>    /// #
+<a href=#337 id=337 data-nosnippet>337</a>    /// # #[tokio::main]
+<a href=#338 id=338 data-nosnippet>338</a>    /// # async fn main() {
+<a href=#339 id=339 data-nosnippet>339</a>    /// # let root_secret: DerivableSecret = unimplemented!();
+<a href=#340 id=340 data-nosnippet>340</a>    /// // Create a root secret, e.g. via fedimint-bip39, see also:
+<a href=#341 id=341 data-nosnippet>341</a>    /// // https://github.com/fedimint/fedimint/blob/master/docs/secret_derivation.md
+<a href=#342 id=342 data-nosnippet>342</a>    /// // let root_secret = …;
 <a href=#343 id=343 data-nosnippet>343</a>    ///
-<a href=#344 id=344 data-nosnippet>344</a>    /// // Tell the user the federation name, bitcoin network
-<a href=#345 id=345 data-nosnippet>345</a>    /// // (e.g. from wallet module config), and other details
-<a href=#346 id=346 data-nosnippet>346</a>    /// // that are typically contained in the federation's
-<a href=#347 id=347 data-nosnippet>347</a>    /// // meta fields.
-<a href=#348 id=348 data-nosnippet>348</a>    ///
-<a href=#349 id=349 data-nosnippet>349</a>    /// // let network = config.get_first_module_by_kind::&lt;WalletClientConfig&gt;("wallet")
-<a href=#350 id=350 data-nosnippet>350</a>    /// //     .expect("Module not found")
-<a href=#351 id=351 data-nosnippet>351</a>    /// //     .network;
-<a href=#352 id=352 data-nosnippet>352</a>    ///
-<a href=#353 id=353 data-nosnippet>353</a>    /// println!(
-<a href=#354 id=354 data-nosnippet>354</a>    ///     "The federation name is: {}",
-<a href=#355 id=355 data-nosnippet>355</a>    ///     config.meta::&lt;String&gt;(META_FEDERATION_NAME_KEY)
-<a href=#356 id=356 data-nosnippet>356</a>    ///         .expect("Could not decode name field")
-<a href=#357 id=357 data-nosnippet>357</a>    ///         .expect("Name isn't set")
-<a href=#358 id=358 data-nosnippet>358</a>    /// );
-<a href=#359 id=359 data-nosnippet>359</a>    ///
-<a href=#360 id=360 data-nosnippet>360</a>    /// // Open the client's database, using the federation ID
-<a href=#361 id=361 data-nosnippet>361</a>    /// // as the DB name is a common pattern:
-<a href=#362 id=362 data-nosnippet>362</a>    ///
-<a href=#363 id=363 data-nosnippet>363</a>    /// // let db_path = format!("./path/to/db/{}", config.federation_id());
-<a href=#364 id=364 data-nosnippet>364</a>    /// // let db = RocksDb::open(db_path).expect("error opening DB");
-<a href=#365 id=365 data-nosnippet>365</a>    /// # let db: Database = unimplemented!();
-<a href=#366 id=366 data-nosnippet>366</a>    ///
-<a href=#367 id=367 data-nosnippet>367</a>    /// let client = Client::builder(db).await.expect("Error building client")
-<a href=#368 id=368 data-nosnippet>368</a>    ///     // Mount the modules the client should support:
-<a href=#369 id=369 data-nosnippet>369</a>    ///     // .with_module(LightningClientInit)
-<a href=#370 id=370 data-nosnippet>370</a>    ///     // .with_module(MintClientInit)
-<a href=#371 id=371 data-nosnippet>371</a>    ///     // .with_module(WalletClientInit::default())
-<a href=#372 id=372 data-nosnippet>372</a>    ///     .join(root_secret, config, None)
-<a href=#373 id=373 data-nosnippet>373</a>    ///     .await
-<a href=#374 id=374 data-nosnippet>374</a>    ///     .expect("Error joining federation");
-<a href=#375 id=375 data-nosnippet>375</a>    /// # }
-<a href=#376 id=376 data-nosnippet>376</a>    /// ```
-<a href=#377 id=377 data-nosnippet>377</a>    </span><span class="kw">pub async fn </span>join(
-<a href=#378 id=378 data-nosnippet>378</a>        <span class="self">self</span>,
-<a href=#379 id=379 data-nosnippet>379</a>        pre_root_secret: DerivableSecret,
-<a href=#380 id=380 data-nosnippet>380</a>        config: ClientConfig,
-<a href=#381 id=381 data-nosnippet>381</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#382 id=382 data-nosnippet>382</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-<a href=#383 id=383 data-nosnippet>383</a>        <span class="self">self</span>.init(pre_root_secret, config, api_secret, InitMode::Fresh)
-<a href=#384 id=384 data-nosnippet>384</a>            .<span class="kw">await
-<a href=#385 id=385 data-nosnippet>385</a>    </span>}
-<a href=#386 id=386 data-nosnippet>386</a>
-<a href=#387 id=387 data-nosnippet>387</a>    <span class="doccomment">/// Download most recent valid backup found from the Federation
-<a href=#388 id=388 data-nosnippet>388</a>    </span><span class="kw">pub async fn </span>download_backup_from_federation(
-<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#390 id=390 data-nosnippet>390</a>        root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
-<a href=#391 id=391 data-nosnippet>391</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
-<a href=#392 id=392 data-nosnippet>392</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#393 id=393 data-nosnippet>393</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">let </span>api = DynGlobalApi::from_endpoints(
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="comment">// TODO: change join logic to use FederationId v2
-<a href=#396 id=396 data-nosnippet>396</a>            </span>config
-<a href=#397 id=397 data-nosnippet>397</a>                .global
-<a href=#398 id=398 data-nosnippet>398</a>                .api_endpoints
-<a href=#399 id=399 data-nosnippet>399</a>                .iter()
-<a href=#400 id=400 data-nosnippet>400</a>                .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
-<a href=#401 id=401 data-nosnippet>401</a>            <span class="kw-2">&amp;</span>api_secret,
-<a href=#402 id=402 data-nosnippet>402</a>        )
-<a href=#403 id=403 data-nosnippet>403</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#404 id=404 data-nosnippet>404</a>
-<a href=#405 id=405 data-nosnippet>405</a>        Client::download_backup_from_federation_static(
-<a href=#406 id=406 data-nosnippet>406</a>            <span class="kw-2">&amp;</span>api,
-<a href=#407 id=407 data-nosnippet>407</a>            <span class="kw-2">&amp;</span><span class="self">Self</span>::federation_root_secret(root_secret, config),
-<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.decoders(config),
-<a href=#409 id=409 data-nosnippet>409</a>        )
-<a href=#410 id=410 data-nosnippet>410</a>        .<span class="kw">await
-<a href=#411 id=411 data-nosnippet>411</a>    </span>}
-<a href=#412 id=412 data-nosnippet>412</a>
-<a href=#413 id=413 data-nosnippet>413</a>    <span class="doccomment">/// Join a (possibly) previous joined Federation
-<a href=#414 id=414 data-nosnippet>414</a>    ///
-<a href=#415 id=415 data-nosnippet>415</a>    /// Unlike [`Self::join`], `recover` will run client module recovery for
-<a href=#416 id=416 data-nosnippet>416</a>    /// each client module attempting to recover any previous module state.
-<a href=#417 id=417 data-nosnippet>417</a>    ///
-<a href=#418 id=418 data-nosnippet>418</a>    /// Recovery process takes time during which each recovering client module
-<a href=#419 id=419 data-nosnippet>419</a>    /// will not be available for use.
+<a href=#344 id=344 data-nosnippet>344</a>    /// // Get invite code from user
+<a href=#345 id=345 data-nosnippet>345</a>    /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
+<a href=#346 id=346 data-nosnippet>346</a>    ///     .expect("Invalid invite code");
+<a href=#347 id=347 data-nosnippet>347</a>    /// let config = fedimint_api_client::api::net::Connector::default().download_from_invite_code(&amp;invite_code).await
+<a href=#348 id=348 data-nosnippet>348</a>    ///     .expect("Error downloading config");
+<a href=#349 id=349 data-nosnippet>349</a>    ///
+<a href=#350 id=350 data-nosnippet>350</a>    /// // Tell the user the federation name, bitcoin network
+<a href=#351 id=351 data-nosnippet>351</a>    /// // (e.g. from wallet module config), and other details
+<a href=#352 id=352 data-nosnippet>352</a>    /// // that are typically contained in the federation's
+<a href=#353 id=353 data-nosnippet>353</a>    /// // meta fields.
+<a href=#354 id=354 data-nosnippet>354</a>    ///
+<a href=#355 id=355 data-nosnippet>355</a>    /// // let network = config.get_first_module_by_kind::&lt;WalletClientConfig&gt;("wallet")
+<a href=#356 id=356 data-nosnippet>356</a>    /// //     .expect("Module not found")
+<a href=#357 id=357 data-nosnippet>357</a>    /// //     .network;
+<a href=#358 id=358 data-nosnippet>358</a>    ///
+<a href=#359 id=359 data-nosnippet>359</a>    /// println!(
+<a href=#360 id=360 data-nosnippet>360</a>    ///     "The federation name is: {}",
+<a href=#361 id=361 data-nosnippet>361</a>    ///     config.meta::&lt;String&gt;(META_FEDERATION_NAME_KEY)
+<a href=#362 id=362 data-nosnippet>362</a>    ///         .expect("Could not decode name field")
+<a href=#363 id=363 data-nosnippet>363</a>    ///         .expect("Name isn't set")
+<a href=#364 id=364 data-nosnippet>364</a>    /// );
+<a href=#365 id=365 data-nosnippet>365</a>    ///
+<a href=#366 id=366 data-nosnippet>366</a>    /// // Open the client's database, using the federation ID
+<a href=#367 id=367 data-nosnippet>367</a>    /// // as the DB name is a common pattern:
+<a href=#368 id=368 data-nosnippet>368</a>    ///
+<a href=#369 id=369 data-nosnippet>369</a>    /// // let db_path = format!("./path/to/db/{}", config.federation_id());
+<a href=#370 id=370 data-nosnippet>370</a>    /// // let db = RocksDb::open(db_path).expect("error opening DB");
+<a href=#371 id=371 data-nosnippet>371</a>    /// # let db: Database = unimplemented!();
+<a href=#372 id=372 data-nosnippet>372</a>    ///
+<a href=#373 id=373 data-nosnippet>373</a>    /// let client = Client::builder(db).await.expect("Error building client")
+<a href=#374 id=374 data-nosnippet>374</a>    ///     // Mount the modules the client should support:
+<a href=#375 id=375 data-nosnippet>375</a>    ///     // .with_module(LightningClientInit)
+<a href=#376 id=376 data-nosnippet>376</a>    ///     // .with_module(MintClientInit)
+<a href=#377 id=377 data-nosnippet>377</a>    ///     // .with_module(WalletClientInit::default())
+<a href=#378 id=378 data-nosnippet>378</a>    ///     .join(root_secret, config, None)
+<a href=#379 id=379 data-nosnippet>379</a>    ///     .await
+<a href=#380 id=380 data-nosnippet>380</a>    ///     .expect("Error joining federation");
+<a href=#381 id=381 data-nosnippet>381</a>    /// # }
+<a href=#382 id=382 data-nosnippet>382</a>    /// ```
+<a href=#383 id=383 data-nosnippet>383</a>    </span><span class="kw">pub async fn </span>join(
+<a href=#384 id=384 data-nosnippet>384</a>        <span class="self">self</span>,
+<a href=#385 id=385 data-nosnippet>385</a>        pre_root_secret: DerivableSecret,
+<a href=#386 id=386 data-nosnippet>386</a>        config: ClientConfig,
+<a href=#387 id=387 data-nosnippet>387</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#388 id=388 data-nosnippet>388</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="self">self</span>.init(pre_root_secret, config, api_secret, InitMode::Fresh)
+<a href=#390 id=390 data-nosnippet>390</a>            .<span class="kw">await
+<a href=#391 id=391 data-nosnippet>391</a>    </span>}
+<a href=#392 id=392 data-nosnippet>392</a>
+<a href=#393 id=393 data-nosnippet>393</a>    <span class="doccomment">/// Download most recent valid backup found from the Federation
+<a href=#394 id=394 data-nosnippet>394</a>    </span><span class="kw">pub async fn </span>download_backup_from_federation(
+<a href=#395 id=395 data-nosnippet>395</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#396 id=396 data-nosnippet>396</a>        root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
+<a href=#397 id=397 data-nosnippet>397</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
+<a href=#398 id=398 data-nosnippet>398</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#399 id=399 data-nosnippet>399</a>    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
+<a href=#400 id=400 data-nosnippet>400</a>        <span class="kw">let </span>api = DynGlobalApi::from_endpoints(
+<a href=#401 id=401 data-nosnippet>401</a>            <span class="comment">// TODO: change join logic to use FederationId v2
+<a href=#402 id=402 data-nosnippet>402</a>            </span>config
+<a href=#403 id=403 data-nosnippet>403</a>                .global
+<a href=#404 id=404 data-nosnippet>404</a>                .api_endpoints
+<a href=#405 id=405 data-nosnippet>405</a>                .iter()
+<a href=#406 id=406 data-nosnippet>406</a>                .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
+<a href=#407 id=407 data-nosnippet>407</a>            <span class="kw-2">&amp;</span>api_secret,
+<a href=#408 id=408 data-nosnippet>408</a>        )
+<a href=#409 id=409 data-nosnippet>409</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#410 id=410 data-nosnippet>410</a>
+<a href=#411 id=411 data-nosnippet>411</a>        Client::download_backup_from_federation_static(
+<a href=#412 id=412 data-nosnippet>412</a>            <span class="kw-2">&amp;</span>api,
+<a href=#413 id=413 data-nosnippet>413</a>            <span class="kw-2">&amp;</span><span class="self">Self</span>::federation_root_secret(root_secret, config),
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.decoders(config),
+<a href=#415 id=415 data-nosnippet>415</a>        )
+<a href=#416 id=416 data-nosnippet>416</a>        .<span class="kw">await
+<a href=#417 id=417 data-nosnippet>417</a>    </span>}
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="doccomment">/// Join a (possibly) previous joined Federation
 <a href=#420 id=420 data-nosnippet>420</a>    ///
-<a href=#421 id=421 data-nosnippet>421</a>    /// Calling `recovery` with a `root_secret` that was not actually previous
-<a href=#422 id=422 data-nosnippet>422</a>    /// used in a given Federation is safe.
-<a href=#423 id=423 data-nosnippet>423</a>    </span><span class="kw">pub async fn </span>recover(
-<a href=#424 id=424 data-nosnippet>424</a>        <span class="self">self</span>,
-<a href=#425 id=425 data-nosnippet>425</a>        root_secret: DerivableSecret,
-<a href=#426 id=426 data-nosnippet>426</a>        config: ClientConfig,
-<a href=#427 id=427 data-nosnippet>427</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#428 id=428 data-nosnippet>428</a>        backup: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;,
-<a href=#429 id=429 data-nosnippet>429</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-<a href=#430 id=430 data-nosnippet>430</a>        <span class="kw">let </span>client = <span class="self">self
-<a href=#431 id=431 data-nosnippet>431</a>            </span>.init(
-<a href=#432 id=432 data-nosnippet>432</a>                root_secret,
-<a href=#433 id=433 data-nosnippet>433</a>                config,
-<a href=#434 id=434 data-nosnippet>434</a>                api_secret,
-<a href=#435 id=435 data-nosnippet>435</a>                InitMode::Recover {
-<a href=#436 id=436 data-nosnippet>436</a>                    snapshot: backup.clone(),
-<a href=#437 id=437 data-nosnippet>437</a>                },
-<a href=#438 id=438 data-nosnippet>438</a>            )
-<a href=#439 id=439 data-nosnippet>439</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#440 id=440 data-nosnippet>440</a>
-<a href=#441 id=441 data-nosnippet>441</a>        <span class="prelude-val">Ok</span>(client)
-<a href=#442 id=442 data-nosnippet>442</a>    }
-<a href=#443 id=443 data-nosnippet>443</a>
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">pub async fn </span>open(<span class="self">self</span>, pre_root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await else </span>{
-<a href=#446 id=446 data-nosnippet>446</a>            <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
-<a href=#447 id=447 data-nosnippet>447</a>        };
-<a href=#448 id=448 data-nosnippet>448</a>
-<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">match </span><span class="self">self
-<a href=#450 id=450 data-nosnippet>450</a>            </span>.db_no_decoders()
-<a href=#451 id=451 data-nosnippet>451</a>            .begin_transaction_nc()
-<a href=#452 id=452 data-nosnippet>452</a>            .<span class="kw">await
-<a href=#453 id=453 data-nosnippet>453</a>            </span>.get_value(<span class="kw-2">&amp;</span>ClientPreRootSecretHashKey)
-<a href=#454 id=454 data-nosnippet>454</a>            .<span class="kw">await
-<a href=#455 id=455 data-nosnippet>455</a>        </span>{
-<a href=#456 id=456 data-nosnippet>456</a>            <span class="prelude-val">Some</span>(secret_hash) =&gt; {
-<a href=#457 id=457 data-nosnippet>457</a>                <span class="macro">ensure!</span>(
-<a href=#458 id=458 data-nosnippet>458</a>                    pre_root_secret.derive_pre_root_secret_hash() == secret_hash,
-<a href=#459 id=459 data-nosnippet>459</a>                    <span class="string">"Secret hash does not match. Incorrect secret"
-<a href=#460 id=460 data-nosnippet>460</a>                </span>);
-<a href=#461 id=461 data-nosnippet>461</a>            }
-<a href=#462 id=462 data-nosnippet>462</a>            <span class="kw">_ </span>=&gt; {
-<a href=#463 id=463 data-nosnippet>463</a>                <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Backfilling secret hash"</span>);
-<a href=#464 id=464 data-nosnippet>464</a>                <span class="comment">// Note: no need for dbtx autocommit, we are the only writer ATM
-<a href=#465 id=465 data-nosnippet>465</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db_no_decoders.begin_transaction().<span class="kw">await</span>;
-<a href=#466 id=466 data-nosnippet>466</a>                dbtx.insert_entry(
-<a href=#467 id=467 data-nosnippet>467</a>                    <span class="kw-2">&amp;</span>ClientPreRootSecretHashKey,
-<a href=#468 id=468 data-nosnippet>468</a>                    <span class="kw-2">&amp;</span>pre_root_secret.derive_pre_root_secret_hash(),
-<a href=#469 id=469 data-nosnippet>469</a>                )
-<a href=#470 id=470 data-nosnippet>470</a>                .<span class="kw">await</span>;
-<a href=#471 id=471 data-nosnippet>471</a>                dbtx.commit_tx().<span class="kw">await</span>;
-<a href=#472 id=472 data-nosnippet>472</a>            }
-<a href=#473 id=473 data-nosnippet>473</a>        }
-<a href=#474 id=474 data-nosnippet>474</a>
-<a href=#475 id=475 data-nosnippet>475</a>        <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await</span>;
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
-<a href=#477 id=477 data-nosnippet>477</a>        <span class="kw">let </span>request_hook = <span class="self">self</span>.request_hook.clone();
-<a href=#478 id=478 data-nosnippet>478</a>
-<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">let </span>log_event_added_transient_tx = <span class="self">self</span>.log_event_added_transient_tx.clone();
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">let </span>client = <span class="self">self
-<a href=#481 id=481 data-nosnippet>481</a>            </span>.build_stopped(
-<a href=#482 id=482 data-nosnippet>482</a>                pre_root_secret,
-<a href=#483 id=483 data-nosnippet>483</a>                <span class="kw-2">&amp;</span>config,
-<a href=#484 id=484 data-nosnippet>484</a>                api_secret,
-<a href=#485 id=485 data-nosnippet>485</a>                log_event_added_transient_tx,
-<a href=#486 id=486 data-nosnippet>486</a>                request_hook,
-<a href=#487 id=487 data-nosnippet>487</a>            )
-<a href=#488 id=488 data-nosnippet>488</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#489 id=489 data-nosnippet>489</a>        <span class="kw">if </span>!stopped {
-<a href=#490 id=490 data-nosnippet>490</a>            client.as_inner().start_executor();
-<a href=#491 id=491 data-nosnippet>491</a>        }
-<a href=#492 id=492 data-nosnippet>492</a>        <span class="prelude-val">Ok</span>(client)
-<a href=#493 id=493 data-nosnippet>493</a>    }
-<a href=#494 id=494 data-nosnippet>494</a>
-<a href=#495 id=495 data-nosnippet>495</a>    <span class="doccomment">/// Build a [`Client`] and start the executor
-<a href=#496 id=496 data-nosnippet>496</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>build(
-<a href=#497 id=497 data-nosnippet>497</a>        <span class="self">self</span>,
-<a href=#498 id=498 data-nosnippet>498</a>        pre_root_secret: DerivableSecret,
-<a href=#499 id=499 data-nosnippet>499</a>        config: ClientConfig,
-<a href=#500 id=500 data-nosnippet>500</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#501 id=501 data-nosnippet>501</a>        stopped: bool,
-<a href=#502 id=502 data-nosnippet>502</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-<a href=#503 id=503 data-nosnippet>503</a>        <span class="kw">let </span>log_event_added_transient_tx = <span class="self">self</span>.log_event_added_transient_tx.clone();
-<a href=#504 id=504 data-nosnippet>504</a>        <span class="kw">let </span>request_hook = <span class="self">self</span>.request_hook.clone();
-<a href=#505 id=505 data-nosnippet>505</a>        <span class="kw">let </span>client = <span class="self">self
-<a href=#506 id=506 data-nosnippet>506</a>            </span>.build_stopped(
-<a href=#507 id=507 data-nosnippet>507</a>                pre_root_secret,
-<a href=#508 id=508 data-nosnippet>508</a>                <span class="kw-2">&amp;</span>config,
-<a href=#509 id=509 data-nosnippet>509</a>                api_secret,
-<a href=#510 id=510 data-nosnippet>510</a>                log_event_added_transient_tx,
-<a href=#511 id=511 data-nosnippet>511</a>                request_hook,
-<a href=#512 id=512 data-nosnippet>512</a>            )
-<a href=#513 id=513 data-nosnippet>513</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#514 id=514 data-nosnippet>514</a>        <span class="kw">if </span>!stopped {
-<a href=#515 id=515 data-nosnippet>515</a>            client.as_inner().start_executor();
-<a href=#516 id=516 data-nosnippet>516</a>        }
-<a href=#517 id=517 data-nosnippet>517</a>
-<a href=#518 id=518 data-nosnippet>518</a>        <span class="prelude-val">Ok</span>(client)
-<a href=#519 id=519 data-nosnippet>519</a>    }
-<a href=#520 id=520 data-nosnippet>520</a>
-<a href=#521 id=521 data-nosnippet>521</a>    <span class="comment">// TODO: remove config argument
-<a href=#522 id=522 data-nosnippet>522</a>    </span><span class="doccomment">/// Build a [`Client`] but do not start the executor
-<a href=#523 id=523 data-nosnippet>523</a>    </span><span class="kw">async fn </span>build_stopped(
-<a href=#524 id=524 data-nosnippet>524</a>        <span class="self">self</span>,
-<a href=#525 id=525 data-nosnippet>525</a>        root_secret: DerivableSecret,
-<a href=#526 id=526 data-nosnippet>526</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
-<a href=#527 id=527 data-nosnippet>527</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#528 id=528 data-nosnippet>528</a>        log_event_added_transient_tx: broadcast::Sender&lt;EventLogEntry&gt;,
-<a href=#529 id=529 data-nosnippet>529</a>        request_hook: ApiRequestHook,
-<a href=#530 id=530 data-nosnippet>530</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">let </span>(log_event_added_tx, log_event_added_rx) = watch::channel(());
-<a href=#532 id=532 data-nosnippet>532</a>        <span class="kw">let </span>(log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
-<a href=#533 id=533 data-nosnippet>533</a>
-<a href=#534 id=534 data-nosnippet>534</a>        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(config);
-<a href=#535 id=535 data-nosnippet>535</a>        <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
-<a href=#536 id=536 data-nosnippet>536</a>        <span class="kw">let </span>fed_id = config.calculate_federation_id();
-<a href=#537 id=537 data-nosnippet>537</a>        <span class="kw">let </span>db = <span class="self">self</span>.db_no_decoders.with_decoders(decoders.clone());
-<a href=#538 id=538 data-nosnippet>538</a>        <span class="kw">let </span>connector = <span class="self">self</span>.connector;
-<a href=#539 id=539 data-nosnippet>539</a>        <span class="kw">let </span>peer_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
-<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>api = <span class="kw">match </span><span class="self">self</span>.admin_creds.as_ref() {
-<a href=#541 id=541 data-nosnippet>541</a>            <span class="prelude-val">Some</span>(admin_creds) =&gt; ReconnectFederationApi::new_admin(
-<a href=#542 id=542 data-nosnippet>542</a>                admin_creds.peer_id,
-<a href=#543 id=543 data-nosnippet>543</a>                peer_urls
-<a href=#544 id=544 data-nosnippet>544</a>                    .into_iter()
-<a href=#545 id=545 data-nosnippet>545</a>                    .find_map(|(peer, api_url)| (admin_creds.peer_id == peer).then_some(api_url))
-<a href=#546 id=546 data-nosnippet>546</a>                    .context(<span class="string">"Admin creds should match a peer"</span>)<span class="question-mark">?</span>,
-<a href=#547 id=547 data-nosnippet>547</a>                <span class="kw-2">&amp;</span>api_secret,
-<a href=#548 id=548 data-nosnippet>548</a>            )
-<a href=#549 id=549 data-nosnippet>549</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#550 id=550 data-nosnippet>550</a>            </span>.with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
-<a href=#551 id=551 data-nosnippet>551</a>            .with_request_hook(<span class="kw-2">&amp;</span>request_hook)
-<a href=#552 id=552 data-nosnippet>552</a>            .with_cache()
-<a href=#553 id=553 data-nosnippet>553</a>            .into(),
-<a href=#554 id=554 data-nosnippet>554</a>            <span class="prelude-val">None </span>=&gt; ReconnectFederationApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret, <span class="prelude-val">None</span>)
-<a href=#555 id=555 data-nosnippet>555</a>                .<span class="kw">await</span><span class="question-mark">?
-<a href=#556 id=556 data-nosnippet>556</a>                </span>.with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
-<a href=#557 id=557 data-nosnippet>557</a>                .with_request_hook(<span class="kw-2">&amp;</span>request_hook)
-<a href=#558 id=558 data-nosnippet>558</a>                .with_cache()
-<a href=#559 id=559 data-nosnippet>559</a>                .into(),
-<a href=#560 id=560 data-nosnippet>560</a>        };
-<a href=#561 id=561 data-nosnippet>561</a>        <span class="kw">let </span>task_group = TaskGroup::new();
-<a href=#562 id=562 data-nosnippet>562</a>
-<a href=#563 id=563 data-nosnippet>563</a>        <span class="comment">// Migrate the database before interacting with it in case any on-disk data
-<a href=#564 id=564 data-nosnippet>564</a>        // structures have changed.
-<a href=#565 id=565 data-nosnippet>565</a>        </span><span class="self">self</span>.migrate_database(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#566 id=566 data-nosnippet>566</a>
-<a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">let </span>init_state = <span class="self">Self</span>::load_init_state(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+<a href=#421 id=421 data-nosnippet>421</a>    /// Unlike [`Self::join`], `recover` will run client module recovery for
+<a href=#422 id=422 data-nosnippet>422</a>    /// each client module attempting to recover any previous module state.
+<a href=#423 id=423 data-nosnippet>423</a>    ///
+<a href=#424 id=424 data-nosnippet>424</a>    /// Recovery process takes time during which each recovering client module
+<a href=#425 id=425 data-nosnippet>425</a>    /// will not be available for use.
+<a href=#426 id=426 data-nosnippet>426</a>    ///
+<a href=#427 id=427 data-nosnippet>427</a>    /// Calling `recovery` with a `root_secret` that was not actually previous
+<a href=#428 id=428 data-nosnippet>428</a>    /// used in a given Federation is safe.
+<a href=#429 id=429 data-nosnippet>429</a>    </span><span class="kw">pub async fn </span>recover(
+<a href=#430 id=430 data-nosnippet>430</a>        <span class="self">self</span>,
+<a href=#431 id=431 data-nosnippet>431</a>        root_secret: DerivableSecret,
+<a href=#432 id=432 data-nosnippet>432</a>        config: ClientConfig,
+<a href=#433 id=433 data-nosnippet>433</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#434 id=434 data-nosnippet>434</a>        backup: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;,
+<a href=#435 id=435 data-nosnippet>435</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">let </span>client = <span class="self">self
+<a href=#437 id=437 data-nosnippet>437</a>            </span>.init(
+<a href=#438 id=438 data-nosnippet>438</a>                root_secret,
+<a href=#439 id=439 data-nosnippet>439</a>                config,
+<a href=#440 id=440 data-nosnippet>440</a>                api_secret,
+<a href=#441 id=441 data-nosnippet>441</a>                InitMode::Recover {
+<a href=#442 id=442 data-nosnippet>442</a>                    snapshot: backup.clone(),
+<a href=#443 id=443 data-nosnippet>443</a>                },
+<a href=#444 id=444 data-nosnippet>444</a>            )
+<a href=#445 id=445 data-nosnippet>445</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a>        <span class="prelude-val">Ok</span>(client)
+<a href=#448 id=448 data-nosnippet>448</a>    }
+<a href=#449 id=449 data-nosnippet>449</a>
+<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">pub async fn </span>open(<span class="self">self</span>, pre_root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await else </span>{
+<a href=#452 id=452 data-nosnippet>452</a>            <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
+<a href=#453 id=453 data-nosnippet>453</a>        };
+<a href=#454 id=454 data-nosnippet>454</a>
+<a href=#455 id=455 data-nosnippet>455</a>        <span class="kw">match </span><span class="self">self
+<a href=#456 id=456 data-nosnippet>456</a>            </span>.db_no_decoders()
+<a href=#457 id=457 data-nosnippet>457</a>            .begin_transaction_nc()
+<a href=#458 id=458 data-nosnippet>458</a>            .<span class="kw">await
+<a href=#459 id=459 data-nosnippet>459</a>            </span>.get_value(<span class="kw-2">&amp;</span>ClientPreRootSecretHashKey)
+<a href=#460 id=460 data-nosnippet>460</a>            .<span class="kw">await
+<a href=#461 id=461 data-nosnippet>461</a>        </span>{
+<a href=#462 id=462 data-nosnippet>462</a>            <span class="prelude-val">Some</span>(secret_hash) =&gt; {
+<a href=#463 id=463 data-nosnippet>463</a>                <span class="macro">ensure!</span>(
+<a href=#464 id=464 data-nosnippet>464</a>                    pre_root_secret.derive_pre_root_secret_hash() == secret_hash,
+<a href=#465 id=465 data-nosnippet>465</a>                    <span class="string">"Secret hash does not match. Incorrect secret"
+<a href=#466 id=466 data-nosnippet>466</a>                </span>);
+<a href=#467 id=467 data-nosnippet>467</a>            }
+<a href=#468 id=468 data-nosnippet>468</a>            <span class="kw">_ </span>=&gt; {
+<a href=#469 id=469 data-nosnippet>469</a>                <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Backfilling secret hash"</span>);
+<a href=#470 id=470 data-nosnippet>470</a>                <span class="comment">// Note: no need for dbtx autocommit, we are the only writer ATM
+<a href=#471 id=471 data-nosnippet>471</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db_no_decoders.begin_transaction().<span class="kw">await</span>;
+<a href=#472 id=472 data-nosnippet>472</a>                dbtx.insert_entry(
+<a href=#473 id=473 data-nosnippet>473</a>                    <span class="kw-2">&amp;</span>ClientPreRootSecretHashKey,
+<a href=#474 id=474 data-nosnippet>474</a>                    <span class="kw-2">&amp;</span>pre_root_secret.derive_pre_root_secret_hash(),
+<a href=#475 id=475 data-nosnippet>475</a>                )
+<a href=#476 id=476 data-nosnippet>476</a>                .<span class="kw">await</span>;
+<a href=#477 id=477 data-nosnippet>477</a>                dbtx.commit_tx().<span class="kw">await</span>;
+<a href=#478 id=478 data-nosnippet>478</a>            }
+<a href=#479 id=479 data-nosnippet>479</a>        }
+<a href=#480 id=480 data-nosnippet>480</a>
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await</span>;
+<a href=#482 id=482 data-nosnippet>482</a>        <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
+<a href=#483 id=483 data-nosnippet>483</a>        <span class="kw">let </span>request_hook = <span class="self">self</span>.request_hook.clone();
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>        <span class="kw">let </span>log_event_added_transient_tx = <span class="self">self</span>.log_event_added_transient_tx.clone();
+<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw">let </span>client = <span class="self">self
+<a href=#487 id=487 data-nosnippet>487</a>            </span>.build_stopped(
+<a href=#488 id=488 data-nosnippet>488</a>                pre_root_secret,
+<a href=#489 id=489 data-nosnippet>489</a>                <span class="kw-2">&amp;</span>config,
+<a href=#490 id=490 data-nosnippet>490</a>                api_secret,
+<a href=#491 id=491 data-nosnippet>491</a>                log_event_added_transient_tx,
+<a href=#492 id=492 data-nosnippet>492</a>                request_hook,
+<a href=#493 id=493 data-nosnippet>493</a>            )
+<a href=#494 id=494 data-nosnippet>494</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#495 id=495 data-nosnippet>495</a>        <span class="kw">if </span>!stopped {
+<a href=#496 id=496 data-nosnippet>496</a>            client.as_inner().start_executor();
+<a href=#497 id=497 data-nosnippet>497</a>        }
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="prelude-val">Ok</span>(client)
+<a href=#499 id=499 data-nosnippet>499</a>    }
+<a href=#500 id=500 data-nosnippet>500</a>
+<a href=#501 id=501 data-nosnippet>501</a>    <span class="doccomment">/// Build a [`Client`] and start the executor
+<a href=#502 id=502 data-nosnippet>502</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>build(
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="self">self</span>,
+<a href=#504 id=504 data-nosnippet>504</a>        pre_root_secret: DerivableSecret,
+<a href=#505 id=505 data-nosnippet>505</a>        config: ClientConfig,
+<a href=#506 id=506 data-nosnippet>506</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#507 id=507 data-nosnippet>507</a>        stopped: bool,
+<a href=#508 id=508 data-nosnippet>508</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">let </span>log_event_added_transient_tx = <span class="self">self</span>.log_event_added_transient_tx.clone();
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw">let </span>request_hook = <span class="self">self</span>.request_hook.clone();
+<a href=#511 id=511 data-nosnippet>511</a>        <span class="kw">let </span>client = <span class="self">self
+<a href=#512 id=512 data-nosnippet>512</a>            </span>.build_stopped(
+<a href=#513 id=513 data-nosnippet>513</a>                pre_root_secret,
+<a href=#514 id=514 data-nosnippet>514</a>                <span class="kw-2">&amp;</span>config,
+<a href=#515 id=515 data-nosnippet>515</a>                api_secret,
+<a href=#516 id=516 data-nosnippet>516</a>                log_event_added_transient_tx,
+<a href=#517 id=517 data-nosnippet>517</a>                request_hook,
+<a href=#518 id=518 data-nosnippet>518</a>            )
+<a href=#519 id=519 data-nosnippet>519</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">if </span>!stopped {
+<a href=#521 id=521 data-nosnippet>521</a>            client.as_inner().start_executor();
+<a href=#522 id=522 data-nosnippet>522</a>        }
+<a href=#523 id=523 data-nosnippet>523</a>
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="prelude-val">Ok</span>(client)
+<a href=#525 id=525 data-nosnippet>525</a>    }
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a>    <span class="comment">// TODO: remove config argument
+<a href=#528 id=528 data-nosnippet>528</a>    </span><span class="doccomment">/// Build a [`Client`] but do not start the executor
+<a href=#529 id=529 data-nosnippet>529</a>    </span><span class="kw">async fn </span>build_stopped(
+<a href=#530 id=530 data-nosnippet>530</a>        <span class="self">self</span>,
+<a href=#531 id=531 data-nosnippet>531</a>        root_secret: DerivableSecret,
+<a href=#532 id=532 data-nosnippet>532</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
+<a href=#533 id=533 data-nosnippet>533</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#534 id=534 data-nosnippet>534</a>        log_event_added_transient_tx: broadcast::Sender&lt;EventLogEntry&gt;,
+<a href=#535 id=535 data-nosnippet>535</a>        request_hook: ApiRequestHook,
+<a href=#536 id=536 data-nosnippet>536</a>    ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="kw">let </span>(log_event_added_tx, log_event_added_rx) = watch::channel(());
+<a href=#538 id=538 data-nosnippet>538</a>        <span class="kw">let </span>(log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
+<a href=#539 id=539 data-nosnippet>539</a>
+<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(config);
+<a href=#541 id=541 data-nosnippet>541</a>        <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+<a href=#542 id=542 data-nosnippet>542</a>        <span class="kw">let </span>fed_id = config.calculate_federation_id();
+<a href=#543 id=543 data-nosnippet>543</a>        <span class="kw">let </span>db = <span class="self">self</span>.db_no_decoders.with_decoders(decoders.clone());
+<a href=#544 id=544 data-nosnippet>544</a>        <span class="kw">let </span>connector = <span class="self">self</span>.connector;
+<a href=#545 id=545 data-nosnippet>545</a>        <span class="kw">let </span>peer_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="kw">let </span>api = <span class="kw">match </span><span class="self">self</span>.admin_creds.as_ref() {
+<a href=#547 id=547 data-nosnippet>547</a>            <span class="prelude-val">Some</span>(admin_creds) =&gt; ReconnectFederationApi::new_admin(
+<a href=#548 id=548 data-nosnippet>548</a>                admin_creds.peer_id,
+<a href=#549 id=549 data-nosnippet>549</a>                peer_urls
+<a href=#550 id=550 data-nosnippet>550</a>                    .into_iter()
+<a href=#551 id=551 data-nosnippet>551</a>                    .find_map(|(peer, api_url)| (admin_creds.peer_id == peer).then_some(api_url))
+<a href=#552 id=552 data-nosnippet>552</a>                    .context(<span class="string">"Admin creds should match a peer"</span>)<span class="question-mark">?</span>,
+<a href=#553 id=553 data-nosnippet>553</a>                <span class="kw-2">&amp;</span>api_secret,
+<a href=#554 id=554 data-nosnippet>554</a>            )
+<a href=#555 id=555 data-nosnippet>555</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#556 id=556 data-nosnippet>556</a>            </span>.with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+<a href=#557 id=557 data-nosnippet>557</a>            .with_request_hook(<span class="kw-2">&amp;</span>request_hook)
+<a href=#558 id=558 data-nosnippet>558</a>            .with_cache()
+<a href=#559 id=559 data-nosnippet>559</a>            .into(),
+<a href=#560 id=560 data-nosnippet>560</a>            <span class="prelude-val">None </span>=&gt; ReconnectFederationApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret, <span class="prelude-val">None</span>)
+<a href=#561 id=561 data-nosnippet>561</a>                .<span class="kw">await</span><span class="question-mark">?
+<a href=#562 id=562 data-nosnippet>562</a>                </span>.with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+<a href=#563 id=563 data-nosnippet>563</a>                .with_request_hook(<span class="kw-2">&amp;</span>request_hook)
+<a href=#564 id=564 data-nosnippet>564</a>                .with_cache()
+<a href=#565 id=565 data-nosnippet>565</a>                .into(),
+<a href=#566 id=566 data-nosnippet>566</a>        };
+<a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">let </span>task_group = TaskGroup::new();
 <a href=#568 id=568 data-nosnippet>568</a>
-<a href=#569 id=569 data-nosnippet>569</a>        <span class="kw">let </span>primary_module_instance = <span class="self">self
-<a href=#570 id=570 data-nosnippet>570</a>            </span>.primary_module_instance
-<a href=#571 id=571 data-nosnippet>571</a>            .or_else(|| {
-<a href=#572 id=572 data-nosnippet>572</a>                <span class="kw">let </span>primary_module_kind = <span class="self">self</span>.primary_module_kind<span class="question-mark">?</span>;
-<a href=#573 id=573 data-nosnippet>573</a>                config
-<a href=#574 id=574 data-nosnippet>574</a>                    .modules
-<a href=#575 id=575 data-nosnippet>575</a>                    .iter()
-<a href=#576 id=576 data-nosnippet>576</a>                    .find_map(|(module_instance_id, module_config)| {
-<a href=#577 id=577 data-nosnippet>577</a>                        (module_config.kind() == <span class="kw-2">&amp;</span>primary_module_kind)
-<a href=#578 id=578 data-nosnippet>578</a>                            .then_some(<span class="kw-2">*</span>module_instance_id)
-<a href=#579 id=579 data-nosnippet>579</a>                    })
-<a href=#580 id=580 data-nosnippet>580</a>            })
-<a href=#581 id=581 data-nosnippet>581</a>            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"No primary module set or found"</span>))<span class="question-mark">?</span>;
-<a href=#582 id=582 data-nosnippet>582</a>
-<a href=#583 id=583 data-nosnippet>583</a>        <span class="kw">let </span>notifier = Notifier::new();
-<a href=#584 id=584 data-nosnippet>584</a>
-<a href=#585 id=585 data-nosnippet>585</a>        <span class="kw">let </span>common_api_versions = Client::load_and_refresh_common_api_version_static(
-<a href=#586 id=586 data-nosnippet>586</a>            <span class="kw-2">&amp;</span>config,
-<a href=#587 id=587 data-nosnippet>587</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
-<a href=#588 id=588 data-nosnippet>588</a>            <span class="kw-2">&amp;</span>api,
-<a href=#589 id=589 data-nosnippet>589</a>            <span class="kw-2">&amp;</span>db,
-<a href=#590 id=590 data-nosnippet>590</a>            <span class="kw-2">&amp;</span>task_group,
-<a href=#591 id=591 data-nosnippet>591</a>        )
-<a href=#592 id=592 data-nosnippet>592</a>        .<span class="kw">await
-<a href=#593 id=593 data-nosnippet>593</a>        </span>.inspect_err(|err| {
-<a href=#594 id=594 data-nosnippet>594</a>            <span class="macro">warn!</span>(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), <span class="string">"Failed to discover initial API version to use."</span>);
-<a href=#595 id=595 data-nosnippet>595</a>        })
-<a href=#596 id=596 data-nosnippet>596</a>        .unwrap_or(ApiVersionSet {
-<a href=#597 id=597 data-nosnippet>597</a>            core: ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-<a href=#598 id=598 data-nosnippet>598</a>            <span class="comment">// This will cause all modules to skip initialization
-<a href=#599 id=599 data-nosnippet>599</a>            </span>modules: BTreeMap::new(),
-<a href=#600 id=600 data-nosnippet>600</a>        });
-<a href=#601 id=601 data-nosnippet>601</a>
-<a href=#602 id=602 data-nosnippet>602</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
-<a href=#603 id=603 data-nosnippet>603</a>
-<a href=#604 id=604 data-nosnippet>604</a>        <span class="kw">let </span><span class="kw-2">mut </span>module_recoveries: BTreeMap&lt;
-<a href=#605 id=605 data-nosnippet>605</a>            ModuleInstanceId,
-<a href=#606 id=606 data-nosnippet>606</a>            Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = anyhow::Result&lt;()&gt;&gt;)&gt;&gt;,
-<a href=#607 id=607 data-nosnippet>607</a>        &gt; = BTreeMap::new();
-<a href=#608 id=608 data-nosnippet>608</a>        <span class="kw">let </span><span class="kw-2">mut </span>module_recovery_progress_receivers: BTreeMap&lt;
-<a href=#609 id=609 data-nosnippet>609</a>            ModuleInstanceId,
-<a href=#610 id=610 data-nosnippet>610</a>            watch::Receiver&lt;RecoveryProgress&gt;,
-<a href=#611 id=611 data-nosnippet>611</a>        &gt; = BTreeMap::new();
-<a href=#612 id=612 data-nosnippet>612</a>
-<a href=#613 id=613 data-nosnippet>613</a>        <span class="kw">let </span>final_client = FinalClientIface::default();
-<a href=#614 id=614 data-nosnippet>614</a>
-<a href=#615 id=615 data-nosnippet>615</a>        <span class="kw">let </span>root_secret = <span class="self">Self</span>::federation_root_secret(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>config);
-<a href=#616 id=616 data-nosnippet>616</a>
-<a href=#617 id=617 data-nosnippet>617</a>        <span class="kw">let </span>modules = {
-<a href=#618 id=618 data-nosnippet>618</a>            <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();
-<a href=#619 id=619 data-nosnippet>619</a>            <span class="kw">for </span>(module_instance_id, module_config) <span class="kw">in </span>config.modules.clone() {
-<a href=#620 id=620 data-nosnippet>620</a>                <span class="kw">let </span>kind = module_config.kind().clone();
-<a href=#621 id=621 data-nosnippet>621</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(module_init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind).cloned() <span class="kw">else </span>{
-<a href=#622 id=622 data-nosnippet>622</a>                    <span class="macro">debug!</span>(
-<a href=#623 id=623 data-nosnippet>623</a>                        target: LOG_CLIENT,
-<a href=#624 id=624 data-nosnippet>624</a>                        kind=%kind,
-<a href=#625 id=625 data-nosnippet>625</a>                        instance_id=%module_instance_id,
-<a href=#626 id=626 data-nosnippet>626</a>                        <span class="string">"Module kind of instance not found in module gens, skipping"</span>);
-<a href=#627 id=627 data-nosnippet>627</a>                    <span class="kw">continue</span>;
-<a href=#628 id=628 data-nosnippet>628</a>                };
-<a href=#629 id=629 data-nosnippet>629</a>
-<a href=#630 id=630 data-nosnippet>630</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_version) = common_api_versions.modules.get(<span class="kw-2">&amp;</span>module_instance_id)
-<a href=#631 id=631 data-nosnippet>631</a>                <span class="kw">else </span>{
-<a href=#632 id=632 data-nosnippet>632</a>                    <span class="macro">warn!</span>(
-<a href=#633 id=633 data-nosnippet>633</a>                        target: LOG_CLIENT,
-<a href=#634 id=634 data-nosnippet>634</a>                        kind=%kind,
-<a href=#635 id=635 data-nosnippet>635</a>                        instance_id=%module_instance_id,
-<a href=#636 id=636 data-nosnippet>636</a>                        <span class="string">"Module kind of instance has incompatible api version, skipping"
-<a href=#637 id=637 data-nosnippet>637</a>                    </span>);
-<a href=#638 id=638 data-nosnippet>638</a>                    <span class="kw">continue</span>;
-<a href=#639 id=639 data-nosnippet>639</a>                };
-<a href=#640 id=640 data-nosnippet>640</a>
-<a href=#641 id=641 data-nosnippet>641</a>                <span class="comment">// since the exact logic of when to start recovery is a bit gnarly,
-<a href=#642 id=642 data-nosnippet>642</a>                // the recovery call is extracted here.
-<a href=#643 id=643 data-nosnippet>643</a>                </span><span class="kw">let </span>start_module_recover_fn =
-<a href=#644 id=644 data-nosnippet>644</a>                    |snapshot: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;, progress: RecoveryProgress| {
-<a href=#645 id=645 data-nosnippet>645</a>                        <span class="kw">let </span>module_config = module_config.clone();
-<a href=#646 id=646 data-nosnippet>646</a>                        <span class="kw">let </span>num_peers = NumPeers::from(config.global.api_endpoints.len());
-<a href=#647 id=647 data-nosnippet>647</a>                        <span class="kw">let </span>db = db.clone();
-<a href=#648 id=648 data-nosnippet>648</a>                        <span class="kw">let </span>kind = kind.clone();
-<a href=#649 id=649 data-nosnippet>649</a>                        <span class="kw">let </span>notifier = notifier.clone();
-<a href=#650 id=650 data-nosnippet>650</a>                        <span class="kw">let </span>api = api.clone();
-<a href=#651 id=651 data-nosnippet>651</a>                        <span class="kw">let </span>root_secret = root_secret.clone();
-<a href=#652 id=652 data-nosnippet>652</a>                        <span class="kw">let </span>admin_auth = <span class="self">self</span>.admin_creds.as_ref().map(|creds| creds.auth.clone());
-<a href=#653 id=653 data-nosnippet>653</a>                        <span class="kw">let </span>final_client = final_client.clone();
-<a href=#654 id=654 data-nosnippet>654</a>                        <span class="kw">let </span>(progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
-<a href=#655 id=655 data-nosnippet>655</a>                        <span class="kw">let </span>task_group = task_group.clone();
-<a href=#656 id=656 data-nosnippet>656</a>                        <span class="kw">let </span>module_init = module_init.clone();
-<a href=#657 id=657 data-nosnippet>657</a>                        (
-<a href=#658 id=658 data-nosnippet>658</a>                            Box::pin(<span class="kw">async move </span>{
-<a href=#659 id=659 data-nosnippet>659</a>                                module_init
-<a href=#660 id=660 data-nosnippet>660</a>                                    .recover(
-<a href=#661 id=661 data-nosnippet>661</a>                                        final_client.clone(),
-<a href=#662 id=662 data-nosnippet>662</a>                                        fed_id,
-<a href=#663 id=663 data-nosnippet>663</a>                                        num_peers,
-<a href=#664 id=664 data-nosnippet>664</a>                                        module_config.clone(),
-<a href=#665 id=665 data-nosnippet>665</a>                                        db.clone(),
-<a href=#666 id=666 data-nosnippet>666</a>                                        module_instance_id,
-<a href=#667 id=667 data-nosnippet>667</a>                                        common_api_versions.core,
-<a href=#668 id=668 data-nosnippet>668</a>                                        api_version,
-<a href=#669 id=669 data-nosnippet>669</a>                                        root_secret.derive_module_secret(module_instance_id),
-<a href=#670 id=670 data-nosnippet>670</a>                                        notifier.clone(),
-<a href=#671 id=671 data-nosnippet>671</a>                                        api.clone(),
-<a href=#672 id=672 data-nosnippet>672</a>                                        admin_auth,
-<a href=#673 id=673 data-nosnippet>673</a>                                        snapshot.as_ref().and_then(|s| s.modules.get(<span class="kw-2">&amp;</span>module_instance_id)),
-<a href=#674 id=674 data-nosnippet>674</a>                                        progress_tx,
-<a href=#675 id=675 data-nosnippet>675</a>                                        task_group,
-<a href=#676 id=676 data-nosnippet>676</a>                                    )
-<a href=#677 id=677 data-nosnippet>677</a>                                    .<span class="kw">await
-<a href=#678 id=678 data-nosnippet>678</a>                                    </span>.inspect_err(|err| {
-<a href=#679 id=679 data-nosnippet>679</a>                                        <span class="macro">warn!</span>(
-<a href=#680 id=680 data-nosnippet>680</a>                                            target: LOG_CLIENT,
-<a href=#681 id=681 data-nosnippet>681</a>                                            module_id = module_instance_id, %kind, err = %err.fmt_compact_anyhow(), <span class="string">"Module failed to recover"
-<a href=#682 id=682 data-nosnippet>682</a>                                        </span>);
-<a href=#683 id=683 data-nosnippet>683</a>                                    })
-<a href=#684 id=684 data-nosnippet>684</a>                            }),
-<a href=#685 id=685 data-nosnippet>685</a>                            progress_rx,
-<a href=#686 id=686 data-nosnippet>686</a>                        )
-<a href=#687 id=687 data-nosnippet>687</a>                    };
-<a href=#688 id=688 data-nosnippet>688</a>
-<a href=#689 id=689 data-nosnippet>689</a>                <span class="kw">let </span>recovery = <span class="kw">match </span>init_state.does_require_recovery() {
-<a href=#690 id=690 data-nosnippet>690</a>                    <span class="prelude-val">Some</span>(snapshot) =&gt; {
-<a href=#691 id=691 data-nosnippet>691</a>                        <span class="kw">match </span>db
-<a href=#692 id=692 data-nosnippet>692</a>                            .begin_transaction_nc()
-<a href=#693 id=693 data-nosnippet>693</a>                            .<span class="kw">await
-<a href=#694 id=694 data-nosnippet>694</a>                            </span>.get_value(<span class="kw-2">&amp;</span>ClientModuleRecovery { module_instance_id })
-<a href=#695 id=695 data-nosnippet>695</a>                            .<span class="kw">await
-<a href=#696 id=696 data-nosnippet>696</a>                        </span>{
-<a href=#697 id=697 data-nosnippet>697</a>                            <span class="prelude-val">Some</span>(module_recovery_state) =&gt; {
-<a href=#698 id=698 data-nosnippet>698</a>                                <span class="kw">if </span>module_recovery_state.is_done() {
-<a href=#699 id=699 data-nosnippet>699</a>                                    <span class="macro">debug!</span>(
-<a href=#700 id=700 data-nosnippet>700</a>                                        id = %module_instance_id,
-<a href=#701 id=701 data-nosnippet>701</a>                                        %kind, <span class="string">"Module recovery already complete"
-<a href=#702 id=702 data-nosnippet>702</a>                                    </span>);
-<a href=#703 id=703 data-nosnippet>703</a>                                    <span class="prelude-val">None
-<a href=#704 id=704 data-nosnippet>704</a>                                </span>} <span class="kw">else </span>{
+<a href=#569 id=569 data-nosnippet>569</a>        <span class="comment">// Migrate the database before interacting with it in case any on-disk data
+<a href=#570 id=570 data-nosnippet>570</a>        // structures have changed.
+<a href=#571 id=571 data-nosnippet>571</a>        </span><span class="self">self</span>.migrate_module_dbs(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#572 id=572 data-nosnippet>572</a>
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="kw">let </span>init_state = <span class="self">Self</span>::load_init_state(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+<a href=#574 id=574 data-nosnippet>574</a>
+<a href=#575 id=575 data-nosnippet>575</a>        <span class="kw">let </span>primary_module_instance = <span class="self">self
+<a href=#576 id=576 data-nosnippet>576</a>            </span>.primary_module_instance
+<a href=#577 id=577 data-nosnippet>577</a>            .or_else(|| {
+<a href=#578 id=578 data-nosnippet>578</a>                <span class="kw">let </span>primary_module_kind = <span class="self">self</span>.primary_module_kind<span class="question-mark">?</span>;
+<a href=#579 id=579 data-nosnippet>579</a>                config
+<a href=#580 id=580 data-nosnippet>580</a>                    .modules
+<a href=#581 id=581 data-nosnippet>581</a>                    .iter()
+<a href=#582 id=582 data-nosnippet>582</a>                    .find_map(|(module_instance_id, module_config)| {
+<a href=#583 id=583 data-nosnippet>583</a>                        (module_config.kind() == <span class="kw-2">&amp;</span>primary_module_kind)
+<a href=#584 id=584 data-nosnippet>584</a>                            .then_some(<span class="kw-2">*</span>module_instance_id)
+<a href=#585 id=585 data-nosnippet>585</a>                    })
+<a href=#586 id=586 data-nosnippet>586</a>            })
+<a href=#587 id=587 data-nosnippet>587</a>            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"No primary module set or found"</span>))<span class="question-mark">?</span>;
+<a href=#588 id=588 data-nosnippet>588</a>
+<a href=#589 id=589 data-nosnippet>589</a>        <span class="kw">let </span>notifier = Notifier::new();
+<a href=#590 id=590 data-nosnippet>590</a>
+<a href=#591 id=591 data-nosnippet>591</a>        <span class="kw">let </span>common_api_versions = Client::load_and_refresh_common_api_version_static(
+<a href=#592 id=592 data-nosnippet>592</a>            <span class="kw-2">&amp;</span>config,
+<a href=#593 id=593 data-nosnippet>593</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
+<a href=#594 id=594 data-nosnippet>594</a>            <span class="kw-2">&amp;</span>api,
+<a href=#595 id=595 data-nosnippet>595</a>            <span class="kw-2">&amp;</span>db,
+<a href=#596 id=596 data-nosnippet>596</a>            <span class="kw-2">&amp;</span>task_group,
+<a href=#597 id=597 data-nosnippet>597</a>        )
+<a href=#598 id=598 data-nosnippet>598</a>        .<span class="kw">await
+<a href=#599 id=599 data-nosnippet>599</a>        </span>.inspect_err(|err| {
+<a href=#600 id=600 data-nosnippet>600</a>            <span class="macro">warn!</span>(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), <span class="string">"Failed to discover initial API version to use."</span>);
+<a href=#601 id=601 data-nosnippet>601</a>        })
+<a href=#602 id=602 data-nosnippet>602</a>        .unwrap_or(ApiVersionSet {
+<a href=#603 id=603 data-nosnippet>603</a>            core: ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
+<a href=#604 id=604 data-nosnippet>604</a>            <span class="comment">// This will cause all modules to skip initialization
+<a href=#605 id=605 data-nosnippet>605</a>            </span>modules: BTreeMap::new(),
+<a href=#606 id=606 data-nosnippet>606</a>        });
+<a href=#607 id=607 data-nosnippet>607</a>
+<a href=#608 id=608 data-nosnippet>608</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
+<a href=#609 id=609 data-nosnippet>609</a>
+<a href=#610 id=610 data-nosnippet>610</a>        <span class="kw">let </span><span class="kw-2">mut </span>module_recoveries: BTreeMap&lt;
+<a href=#611 id=611 data-nosnippet>611</a>            ModuleInstanceId,
+<a href=#612 id=612 data-nosnippet>612</a>            Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = anyhow::Result&lt;()&gt;&gt;)&gt;&gt;,
+<a href=#613 id=613 data-nosnippet>613</a>        &gt; = BTreeMap::new();
+<a href=#614 id=614 data-nosnippet>614</a>        <span class="kw">let </span><span class="kw-2">mut </span>module_recovery_progress_receivers: BTreeMap&lt;
+<a href=#615 id=615 data-nosnippet>615</a>            ModuleInstanceId,
+<a href=#616 id=616 data-nosnippet>616</a>            watch::Receiver&lt;RecoveryProgress&gt;,
+<a href=#617 id=617 data-nosnippet>617</a>        &gt; = BTreeMap::new();
+<a href=#618 id=618 data-nosnippet>618</a>
+<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">let </span>final_client = FinalClientIface::default();
+<a href=#620 id=620 data-nosnippet>620</a>
+<a href=#621 id=621 data-nosnippet>621</a>        <span class="kw">let </span>root_secret = <span class="self">Self</span>::federation_root_secret(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>config);
+<a href=#622 id=622 data-nosnippet>622</a>
+<a href=#623 id=623 data-nosnippet>623</a>        <span class="kw">let </span>modules = {
+<a href=#624 id=624 data-nosnippet>624</a>            <span class="kw">let </span><span class="kw-2">mut </span>modules = ClientModuleRegistry::default();
+<a href=#625 id=625 data-nosnippet>625</a>            <span class="kw">for </span>(module_instance_id, module_config) <span class="kw">in </span>config.modules.clone() {
+<a href=#626 id=626 data-nosnippet>626</a>                <span class="kw">let </span>kind = module_config.kind().clone();
+<a href=#627 id=627 data-nosnippet>627</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(module_init) = <span class="self">self</span>.module_inits.get(<span class="kw-2">&amp;</span>kind).cloned() <span class="kw">else </span>{
+<a href=#628 id=628 data-nosnippet>628</a>                    <span class="macro">debug!</span>(
+<a href=#629 id=629 data-nosnippet>629</a>                        target: LOG_CLIENT,
+<a href=#630 id=630 data-nosnippet>630</a>                        kind=%kind,
+<a href=#631 id=631 data-nosnippet>631</a>                        instance_id=%module_instance_id,
+<a href=#632 id=632 data-nosnippet>632</a>                        <span class="string">"Module kind of instance not found in module gens, skipping"</span>);
+<a href=#633 id=633 data-nosnippet>633</a>                    <span class="kw">continue</span>;
+<a href=#634 id=634 data-nosnippet>634</a>                };
+<a href=#635 id=635 data-nosnippet>635</a>
+<a href=#636 id=636 data-nosnippet>636</a>                <span class="kw">let </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_version) = common_api_versions.modules.get(<span class="kw-2">&amp;</span>module_instance_id)
+<a href=#637 id=637 data-nosnippet>637</a>                <span class="kw">else </span>{
+<a href=#638 id=638 data-nosnippet>638</a>                    <span class="macro">warn!</span>(
+<a href=#639 id=639 data-nosnippet>639</a>                        target: LOG_CLIENT,
+<a href=#640 id=640 data-nosnippet>640</a>                        kind=%kind,
+<a href=#641 id=641 data-nosnippet>641</a>                        instance_id=%module_instance_id,
+<a href=#642 id=642 data-nosnippet>642</a>                        <span class="string">"Module kind of instance has incompatible api version, skipping"
+<a href=#643 id=643 data-nosnippet>643</a>                    </span>);
+<a href=#644 id=644 data-nosnippet>644</a>                    <span class="kw">continue</span>;
+<a href=#645 id=645 data-nosnippet>645</a>                };
+<a href=#646 id=646 data-nosnippet>646</a>
+<a href=#647 id=647 data-nosnippet>647</a>                <span class="comment">// since the exact logic of when to start recovery is a bit gnarly,
+<a href=#648 id=648 data-nosnippet>648</a>                // the recovery call is extracted here.
+<a href=#649 id=649 data-nosnippet>649</a>                </span><span class="kw">let </span>start_module_recover_fn =
+<a href=#650 id=650 data-nosnippet>650</a>                    |snapshot: <span class="prelude-ty">Option</span>&lt;ClientBackup&gt;, progress: RecoveryProgress| {
+<a href=#651 id=651 data-nosnippet>651</a>                        <span class="kw">let </span>module_config = module_config.clone();
+<a href=#652 id=652 data-nosnippet>652</a>                        <span class="kw">let </span>num_peers = NumPeers::from(config.global.api_endpoints.len());
+<a href=#653 id=653 data-nosnippet>653</a>                        <span class="kw">let </span>db = db.clone();
+<a href=#654 id=654 data-nosnippet>654</a>                        <span class="kw">let </span>kind = kind.clone();
+<a href=#655 id=655 data-nosnippet>655</a>                        <span class="kw">let </span>notifier = notifier.clone();
+<a href=#656 id=656 data-nosnippet>656</a>                        <span class="kw">let </span>api = api.clone();
+<a href=#657 id=657 data-nosnippet>657</a>                        <span class="kw">let </span>root_secret = root_secret.clone();
+<a href=#658 id=658 data-nosnippet>658</a>                        <span class="kw">let </span>admin_auth = <span class="self">self</span>.admin_creds.as_ref().map(|creds| creds.auth.clone());
+<a href=#659 id=659 data-nosnippet>659</a>                        <span class="kw">let </span>final_client = final_client.clone();
+<a href=#660 id=660 data-nosnippet>660</a>                        <span class="kw">let </span>(progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
+<a href=#661 id=661 data-nosnippet>661</a>                        <span class="kw">let </span>task_group = task_group.clone();
+<a href=#662 id=662 data-nosnippet>662</a>                        <span class="kw">let </span>module_init = module_init.clone();
+<a href=#663 id=663 data-nosnippet>663</a>                        (
+<a href=#664 id=664 data-nosnippet>664</a>                            Box::pin(<span class="kw">async move </span>{
+<a href=#665 id=665 data-nosnippet>665</a>                                module_init
+<a href=#666 id=666 data-nosnippet>666</a>                                    .recover(
+<a href=#667 id=667 data-nosnippet>667</a>                                        final_client.clone(),
+<a href=#668 id=668 data-nosnippet>668</a>                                        fed_id,
+<a href=#669 id=669 data-nosnippet>669</a>                                        num_peers,
+<a href=#670 id=670 data-nosnippet>670</a>                                        module_config.clone(),
+<a href=#671 id=671 data-nosnippet>671</a>                                        db.clone(),
+<a href=#672 id=672 data-nosnippet>672</a>                                        module_instance_id,
+<a href=#673 id=673 data-nosnippet>673</a>                                        common_api_versions.core,
+<a href=#674 id=674 data-nosnippet>674</a>                                        api_version,
+<a href=#675 id=675 data-nosnippet>675</a>                                        root_secret.derive_module_secret(module_instance_id),
+<a href=#676 id=676 data-nosnippet>676</a>                                        notifier.clone(),
+<a href=#677 id=677 data-nosnippet>677</a>                                        api.clone(),
+<a href=#678 id=678 data-nosnippet>678</a>                                        admin_auth,
+<a href=#679 id=679 data-nosnippet>679</a>                                        snapshot.as_ref().and_then(|s| s.modules.get(<span class="kw-2">&amp;</span>module_instance_id)),
+<a href=#680 id=680 data-nosnippet>680</a>                                        progress_tx,
+<a href=#681 id=681 data-nosnippet>681</a>                                        task_group,
+<a href=#682 id=682 data-nosnippet>682</a>                                    )
+<a href=#683 id=683 data-nosnippet>683</a>                                    .<span class="kw">await
+<a href=#684 id=684 data-nosnippet>684</a>                                    </span>.inspect_err(|err| {
+<a href=#685 id=685 data-nosnippet>685</a>                                        <span class="macro">warn!</span>(
+<a href=#686 id=686 data-nosnippet>686</a>                                            target: LOG_CLIENT,
+<a href=#687 id=687 data-nosnippet>687</a>                                            module_id = module_instance_id, %kind, err = %err.fmt_compact_anyhow(), <span class="string">"Module failed to recover"
+<a href=#688 id=688 data-nosnippet>688</a>                                        </span>);
+<a href=#689 id=689 data-nosnippet>689</a>                                    })
+<a href=#690 id=690 data-nosnippet>690</a>                            }),
+<a href=#691 id=691 data-nosnippet>691</a>                            progress_rx,
+<a href=#692 id=692 data-nosnippet>692</a>                        )
+<a href=#693 id=693 data-nosnippet>693</a>                    };
+<a href=#694 id=694 data-nosnippet>694</a>
+<a href=#695 id=695 data-nosnippet>695</a>                <span class="kw">let </span>recovery = <span class="kw">match </span>init_state.does_require_recovery() {
+<a href=#696 id=696 data-nosnippet>696</a>                    <span class="prelude-val">Some</span>(snapshot) =&gt; {
+<a href=#697 id=697 data-nosnippet>697</a>                        <span class="kw">match </span>db
+<a href=#698 id=698 data-nosnippet>698</a>                            .begin_transaction_nc()
+<a href=#699 id=699 data-nosnippet>699</a>                            .<span class="kw">await
+<a href=#700 id=700 data-nosnippet>700</a>                            </span>.get_value(<span class="kw-2">&amp;</span>ClientModuleRecovery { module_instance_id })
+<a href=#701 id=701 data-nosnippet>701</a>                            .<span class="kw">await
+<a href=#702 id=702 data-nosnippet>702</a>                        </span>{
+<a href=#703 id=703 data-nosnippet>703</a>                            <span class="prelude-val">Some</span>(module_recovery_state) =&gt; {
+<a href=#704 id=704 data-nosnippet>704</a>                                <span class="kw">if </span>module_recovery_state.is_done() {
 <a href=#705 id=705 data-nosnippet>705</a>                                    <span class="macro">debug!</span>(
 <a href=#706 id=706 data-nosnippet>706</a>                                        id = %module_instance_id,
-<a href=#707 id=707 data-nosnippet>707</a>                                        %kind,
-<a href=#708 id=708 data-nosnippet>708</a>                                        progress = %module_recovery_state.progress,
-<a href=#709 id=709 data-nosnippet>709</a>                                        <span class="string">"Starting module recovery with an existing progress"
-<a href=#710 id=710 data-nosnippet>710</a>                                    </span>);
-<a href=#711 id=711 data-nosnippet>711</a>                                    <span class="prelude-val">Some</span>(start_module_recover_fn(
-<a href=#712 id=712 data-nosnippet>712</a>                                        snapshot,
-<a href=#713 id=713 data-nosnippet>713</a>                                        module_recovery_state.progress,
-<a href=#714 id=714 data-nosnippet>714</a>                                    ))
-<a href=#715 id=715 data-nosnippet>715</a>                                }
-<a href=#716 id=716 data-nosnippet>716</a>                            }
-<a href=#717 id=717 data-nosnippet>717</a>                            <span class="kw">_ </span>=&gt; {
-<a href=#718 id=718 data-nosnippet>718</a>                                <span class="kw">let </span>progress = RecoveryProgress::none();
-<a href=#719 id=719 data-nosnippet>719</a>                                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-<a href=#720 id=720 data-nosnippet>720</a>                                dbtx.log_event(
-<a href=#721 id=721 data-nosnippet>721</a>                                    log_ordering_wakeup_tx.clone(),
-<a href=#722 id=722 data-nosnippet>722</a>                                    <span class="prelude-val">None</span>,
-<a href=#723 id=723 data-nosnippet>723</a>                                    ModuleRecoveryStarted::new(module_instance_id),
-<a href=#724 id=724 data-nosnippet>724</a>                                )
-<a href=#725 id=725 data-nosnippet>725</a>                                .<span class="kw">await</span>;
-<a href=#726 id=726 data-nosnippet>726</a>                                dbtx.insert_entry(
-<a href=#727 id=727 data-nosnippet>727</a>                                    <span class="kw-2">&amp;</span>ClientModuleRecovery { module_instance_id },
-<a href=#728 id=728 data-nosnippet>728</a>                                    <span class="kw-2">&amp;</span>ClientModuleRecoveryState { progress },
-<a href=#729 id=729 data-nosnippet>729</a>                                )
-<a href=#730 id=730 data-nosnippet>730</a>                                .<span class="kw">await</span>;
-<a href=#731 id=731 data-nosnippet>731</a>
-<a href=#732 id=732 data-nosnippet>732</a>                                dbtx.commit_tx().<span class="kw">await</span>;
-<a href=#733 id=733 data-nosnippet>733</a>
-<a href=#734 id=734 data-nosnippet>734</a>                                <span class="macro">debug!</span>(
-<a href=#735 id=735 data-nosnippet>735</a>                                    id = %module_instance_id,
-<a href=#736 id=736 data-nosnippet>736</a>                                    %kind, <span class="string">"Starting new module recovery"
-<a href=#737 id=737 data-nosnippet>737</a>                                </span>);
-<a href=#738 id=738 data-nosnippet>738</a>                                <span class="prelude-val">Some</span>(start_module_recover_fn(snapshot, progress))
-<a href=#739 id=739 data-nosnippet>739</a>                            }
-<a href=#740 id=740 data-nosnippet>740</a>                        }
-<a href=#741 id=741 data-nosnippet>741</a>                    }
-<a href=#742 id=742 data-nosnippet>742</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#743 id=743 data-nosnippet>743</a>                };
-<a href=#744 id=744 data-nosnippet>744</a>
-<a href=#745 id=745 data-nosnippet>745</a>                <span class="kw">match </span>recovery {
-<a href=#746 id=746 data-nosnippet>746</a>                    <span class="prelude-val">Some</span>((recovery, recovery_progress_rx)) =&gt; {
-<a href=#747 id=747 data-nosnippet>747</a>                        module_recoveries.insert(module_instance_id, recovery);
-<a href=#748 id=748 data-nosnippet>748</a>                        module_recovery_progress_receivers
-<a href=#749 id=749 data-nosnippet>749</a>                            .insert(module_instance_id, recovery_progress_rx);
-<a href=#750 id=750 data-nosnippet>750</a>                    }
-<a href=#751 id=751 data-nosnippet>751</a>                    <span class="kw">_ </span>=&gt; {
-<a href=#752 id=752 data-nosnippet>752</a>                        <span class="kw">let </span>module = module_init
-<a href=#753 id=753 data-nosnippet>753</a>                            .init(
-<a href=#754 id=754 data-nosnippet>754</a>                                final_client.clone(),
-<a href=#755 id=755 data-nosnippet>755</a>                                fed_id,
-<a href=#756 id=756 data-nosnippet>756</a>                                config.global.api_endpoints.len(),
-<a href=#757 id=757 data-nosnippet>757</a>                                module_config,
-<a href=#758 id=758 data-nosnippet>758</a>                                db.clone(),
-<a href=#759 id=759 data-nosnippet>759</a>                                module_instance_id,
-<a href=#760 id=760 data-nosnippet>760</a>                                common_api_versions.core,
-<a href=#761 id=761 data-nosnippet>761</a>                                api_version,
-<a href=#762 id=762 data-nosnippet>762</a>                                <span class="comment">// This is a divergence from the legacy client, where the child
-<a href=#763 id=763 data-nosnippet>763</a>                                // secret keys were derived using
-<a href=#764 id=764 data-nosnippet>764</a>                                // *module kind*-specific derivation paths.
-<a href=#765 id=765 data-nosnippet>765</a>                                // Since the new client has to support multiple, segregated modules
-<a href=#766 id=766 data-nosnippet>766</a>                                // of the same kind we have to use
-<a href=#767 id=767 data-nosnippet>767</a>                                // the instance id instead.
-<a href=#768 id=768 data-nosnippet>768</a>                                </span>root_secret.derive_module_secret(module_instance_id),
-<a href=#769 id=769 data-nosnippet>769</a>                                notifier.clone(),
-<a href=#770 id=770 data-nosnippet>770</a>                                api.clone(),
-<a href=#771 id=771 data-nosnippet>771</a>                                <span class="self">self</span>.admin_creds.as_ref().map(|cred| cred.auth.clone()),
-<a href=#772 id=772 data-nosnippet>772</a>                                task_group.clone(),
-<a href=#773 id=773 data-nosnippet>773</a>                            )
-<a href=#774 id=774 data-nosnippet>774</a>                            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#775 id=775 data-nosnippet>775</a>
-<a href=#776 id=776 data-nosnippet>776</a>                        <span class="kw">if </span>primary_module_instance == module_instance_id
-<a href=#777 id=777 data-nosnippet>777</a>                            &amp;&amp; !module.supports_being_primary()
-<a href=#778 id=778 data-nosnippet>778</a>                        {
-<a href=#779 id=779 data-nosnippet>779</a>                            <span class="macro">bail!</span>(
-<a href=#780 id=780 data-nosnippet>780</a>                                <span class="string">"Module instance {primary_module_instance} of kind {kind} does not support being a primary module"
-<a href=#781 id=781 data-nosnippet>781</a>                            </span>);
-<a href=#782 id=782 data-nosnippet>782</a>                        }
-<a href=#783 id=783 data-nosnippet>783</a>
-<a href=#784 id=784 data-nosnippet>784</a>                        modules.register_module(module_instance_id, kind, module);
-<a href=#785 id=785 data-nosnippet>785</a>                    }
-<a href=#786 id=786 data-nosnippet>786</a>                }
-<a href=#787 id=787 data-nosnippet>787</a>            }
-<a href=#788 id=788 data-nosnippet>788</a>            modules
-<a href=#789 id=789 data-nosnippet>789</a>        };
-<a href=#790 id=790 data-nosnippet>790</a>
-<a href=#791 id=791 data-nosnippet>791</a>        <span class="kw">if </span>init_state.is_pending() &amp;&amp; module_recoveries.is_empty() {
-<a href=#792 id=792 data-nosnippet>792</a>            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-<a href=#793 id=793 data-nosnippet>793</a>            dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientInitStateKey, <span class="kw-2">&amp;</span>init_state.into_complete())
-<a href=#794 id=794 data-nosnippet>794</a>                .<span class="kw">await</span>;
-<a href=#795 id=795 data-nosnippet>795</a>            dbtx.commit_tx().<span class="kw">await</span>;
-<a href=#796 id=796 data-nosnippet>796</a>        }
-<a href=#797 id=797 data-nosnippet>797</a>
-<a href=#798 id=798 data-nosnippet>798</a>        <span class="kw">let </span>executor = {
-<a href=#799 id=799 data-nosnippet>799</a>            <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::builder();
-<a href=#800 id=800 data-nosnippet>800</a>            executor_builder
-<a href=#801 id=801 data-nosnippet>801</a>                .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
-<a href=#802 id=802 data-nosnippet>802</a>
-<a href=#803 id=803 data-nosnippet>803</a>            <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
-<a href=#804 id=804 data-nosnippet>804</a>                executor_builder.with_module_dyn(module.context(module_instance_id));
-<a href=#805 id=805 data-nosnippet>805</a>            }
-<a href=#806 id=806 data-nosnippet>806</a>
-<a href=#807 id=807 data-nosnippet>807</a>            <span class="kw">for </span>module_instance_id <span class="kw">in </span>module_recoveries.keys() {
-<a href=#808 id=808 data-nosnippet>808</a>                executor_builder.with_valid_module_id(<span class="kw-2">*</span>module_instance_id);
-<a href=#809 id=809 data-nosnippet>809</a>            }
-<a href=#810 id=810 data-nosnippet>810</a>
-<a href=#811 id=811 data-nosnippet>811</a>            executor_builder.build(db.clone(), notifier, task_group.clone())
-<a href=#812 id=812 data-nosnippet>812</a>        };
-<a href=#813 id=813 data-nosnippet>813</a>
-<a href=#814 id=814 data-nosnippet>814</a>        <span class="kw">let </span>recovery_receiver_init_val = module_recovery_progress_receivers
-<a href=#815 id=815 data-nosnippet>815</a>            .iter()
-<a href=#816 id=816 data-nosnippet>816</a>            .map(|(module_instance_id, rx)| (<span class="kw-2">*</span>module_instance_id, <span class="kw-2">*</span>rx.borrow()))
-<a href=#817 id=817 data-nosnippet>817</a>            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-<a href=#818 id=818 data-nosnippet>818</a>        <span class="kw">let </span>(client_recovery_progress_sender, client_recovery_progress_receiver) =
-<a href=#819 id=819 data-nosnippet>819</a>            watch::channel(recovery_receiver_init_val);
-<a href=#820 id=820 data-nosnippet>820</a>
-<a href=#821 id=821 data-nosnippet>821</a>        <span class="kw">let </span>client_inner = Arc::new(Client {
-<a href=#822 id=822 data-nosnippet>822</a>            final_client: final_client.clone(),
-<a href=#823 id=823 data-nosnippet>823</a>            config: tokio::sync::RwLock::new(config.clone()),
-<a href=#824 id=824 data-nosnippet>824</a>            api_secret,
-<a href=#825 id=825 data-nosnippet>825</a>            decoders,
-<a href=#826 id=826 data-nosnippet>826</a>            db: db.clone(),
-<a href=#827 id=827 data-nosnippet>827</a>            federation_id: fed_id,
-<a href=#828 id=828 data-nosnippet>828</a>            federation_config_meta: config.global.meta,
-<a href=#829 id=829 data-nosnippet>829</a>            primary_module_instance,
-<a href=#830 id=830 data-nosnippet>830</a>            modules,
-<a href=#831 id=831 data-nosnippet>831</a>            module_inits: <span class="self">self</span>.module_inits.clone(),
-<a href=#832 id=832 data-nosnippet>832</a>            log_ordering_wakeup_tx,
-<a href=#833 id=833 data-nosnippet>833</a>            log_event_added_rx,
-<a href=#834 id=834 data-nosnippet>834</a>            log_event_added_transient_tx: log_event_added_transient_tx.clone(),
-<a href=#835 id=835 data-nosnippet>835</a>            request_hook,
-<a href=#836 id=836 data-nosnippet>836</a>            executor,
-<a href=#837 id=837 data-nosnippet>837</a>            api,
-<a href=#838 id=838 data-nosnippet>838</a>            secp_ctx: Secp256k1::new(),
-<a href=#839 id=839 data-nosnippet>839</a>            root_secret,
-<a href=#840 id=840 data-nosnippet>840</a>            task_group,
-<a href=#841 id=841 data-nosnippet>841</a>            operation_log: OperationLog::new(db.clone()),
-<a href=#842 id=842 data-nosnippet>842</a>            client_recovery_progress_receiver,
-<a href=#843 id=843 data-nosnippet>843</a>            meta_service: <span class="self">self</span>.meta_service,
-<a href=#844 id=844 data-nosnippet>844</a>            connector,
-<a href=#845 id=845 data-nosnippet>845</a>        });
-<a href=#846 id=846 data-nosnippet>846</a>        client_inner
-<a href=#847 id=847 data-nosnippet>847</a>            .task_group
-<a href=#848 id=848 data-nosnippet>848</a>            .spawn_cancellable(<span class="string">"MetaService::update_continuously"</span>, {
-<a href=#849 id=849 data-nosnippet>849</a>                <span class="kw">let </span>client_inner = client_inner.clone();
-<a href=#850 id=850 data-nosnippet>850</a>                <span class="kw">async move </span>{
-<a href=#851 id=851 data-nosnippet>851</a>                    client_inner
-<a href=#852 id=852 data-nosnippet>852</a>                        .meta_service
-<a href=#853 id=853 data-nosnippet>853</a>                        .update_continuously(<span class="kw-2">&amp;</span>client_inner)
-<a href=#854 id=854 data-nosnippet>854</a>                        .<span class="kw">await</span>;
-<a href=#855 id=855 data-nosnippet>855</a>                }
-<a href=#856 id=856 data-nosnippet>856</a>            });
-<a href=#857 id=857 data-nosnippet>857</a>
-<a href=#858 id=858 data-nosnippet>858</a>        client_inner.task_group.spawn_cancellable(
-<a href=#859 id=859 data-nosnippet>859</a>            <span class="string">"update-api-announcements"</span>,
-<a href=#860 id=860 data-nosnippet>860</a>            run_api_announcement_sync(client_inner.clone()),
-<a href=#861 id=861 data-nosnippet>861</a>        );
-<a href=#862 id=862 data-nosnippet>862</a>
-<a href=#863 id=863 data-nosnippet>863</a>        client_inner.task_group.spawn_cancellable(
-<a href=#864 id=864 data-nosnippet>864</a>            <span class="string">"event log ordering task"</span>,
-<a href=#865 id=865 data-nosnippet>865</a>            run_event_log_ordering_task(
-<a href=#866 id=866 data-nosnippet>866</a>                db.clone(),
-<a href=#867 id=867 data-nosnippet>867</a>                log_ordering_wakeup_rx,
-<a href=#868 id=868 data-nosnippet>868</a>                log_event_added_tx,
-<a href=#869 id=869 data-nosnippet>869</a>                log_event_added_transient_tx,
-<a href=#870 id=870 data-nosnippet>870</a>            ),
-<a href=#871 id=871 data-nosnippet>871</a>        );
-<a href=#872 id=872 data-nosnippet>872</a>        <span class="kw">let </span>client_iface = std::sync::Arc::&lt;Client&gt;::downgrade(<span class="kw-2">&amp;</span>client_inner);
-<a href=#873 id=873 data-nosnippet>873</a>
-<a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span>client_arc = ClientHandle::new(client_inner);
-<a href=#875 id=875 data-nosnippet>875</a>
-<a href=#876 id=876 data-nosnippet>876</a>        <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, module) <span class="kw">in </span>client_arc.modules.iter_modules() {
-<a href=#877 id=877 data-nosnippet>877</a>            module.start().<span class="kw">await</span>;
-<a href=#878 id=878 data-nosnippet>878</a>        }
+<a href=#707 id=707 data-nosnippet>707</a>                                        %kind, <span class="string">"Module recovery already complete"
+<a href=#708 id=708 data-nosnippet>708</a>                                    </span>);
+<a href=#709 id=709 data-nosnippet>709</a>                                    <span class="prelude-val">None
+<a href=#710 id=710 data-nosnippet>710</a>                                </span>} <span class="kw">else </span>{
+<a href=#711 id=711 data-nosnippet>711</a>                                    <span class="macro">debug!</span>(
+<a href=#712 id=712 data-nosnippet>712</a>                                        id = %module_instance_id,
+<a href=#713 id=713 data-nosnippet>713</a>                                        %kind,
+<a href=#714 id=714 data-nosnippet>714</a>                                        progress = %module_recovery_state.progress,
+<a href=#715 id=715 data-nosnippet>715</a>                                        <span class="string">"Starting module recovery with an existing progress"
+<a href=#716 id=716 data-nosnippet>716</a>                                    </span>);
+<a href=#717 id=717 data-nosnippet>717</a>                                    <span class="prelude-val">Some</span>(start_module_recover_fn(
+<a href=#718 id=718 data-nosnippet>718</a>                                        snapshot,
+<a href=#719 id=719 data-nosnippet>719</a>                                        module_recovery_state.progress,
+<a href=#720 id=720 data-nosnippet>720</a>                                    ))
+<a href=#721 id=721 data-nosnippet>721</a>                                }
+<a href=#722 id=722 data-nosnippet>722</a>                            }
+<a href=#723 id=723 data-nosnippet>723</a>                            <span class="kw">_ </span>=&gt; {
+<a href=#724 id=724 data-nosnippet>724</a>                                <span class="kw">let </span>progress = RecoveryProgress::none();
+<a href=#725 id=725 data-nosnippet>725</a>                                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+<a href=#726 id=726 data-nosnippet>726</a>                                dbtx.log_event(
+<a href=#727 id=727 data-nosnippet>727</a>                                    log_ordering_wakeup_tx.clone(),
+<a href=#728 id=728 data-nosnippet>728</a>                                    <span class="prelude-val">None</span>,
+<a href=#729 id=729 data-nosnippet>729</a>                                    ModuleRecoveryStarted::new(module_instance_id),
+<a href=#730 id=730 data-nosnippet>730</a>                                )
+<a href=#731 id=731 data-nosnippet>731</a>                                .<span class="kw">await</span>;
+<a href=#732 id=732 data-nosnippet>732</a>                                dbtx.insert_entry(
+<a href=#733 id=733 data-nosnippet>733</a>                                    <span class="kw-2">&amp;</span>ClientModuleRecovery { module_instance_id },
+<a href=#734 id=734 data-nosnippet>734</a>                                    <span class="kw-2">&amp;</span>ClientModuleRecoveryState { progress },
+<a href=#735 id=735 data-nosnippet>735</a>                                )
+<a href=#736 id=736 data-nosnippet>736</a>                                .<span class="kw">await</span>;
+<a href=#737 id=737 data-nosnippet>737</a>
+<a href=#738 id=738 data-nosnippet>738</a>                                dbtx.commit_tx().<span class="kw">await</span>;
+<a href=#739 id=739 data-nosnippet>739</a>
+<a href=#740 id=740 data-nosnippet>740</a>                                <span class="macro">debug!</span>(
+<a href=#741 id=741 data-nosnippet>741</a>                                    id = %module_instance_id,
+<a href=#742 id=742 data-nosnippet>742</a>                                    %kind, <span class="string">"Starting new module recovery"
+<a href=#743 id=743 data-nosnippet>743</a>                                </span>);
+<a href=#744 id=744 data-nosnippet>744</a>                                <span class="prelude-val">Some</span>(start_module_recover_fn(snapshot, progress))
+<a href=#745 id=745 data-nosnippet>745</a>                            }
+<a href=#746 id=746 data-nosnippet>746</a>                        }
+<a href=#747 id=747 data-nosnippet>747</a>                    }
+<a href=#748 id=748 data-nosnippet>748</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#749 id=749 data-nosnippet>749</a>                };
+<a href=#750 id=750 data-nosnippet>750</a>
+<a href=#751 id=751 data-nosnippet>751</a>                <span class="kw">match </span>recovery {
+<a href=#752 id=752 data-nosnippet>752</a>                    <span class="prelude-val">Some</span>((recovery, recovery_progress_rx)) =&gt; {
+<a href=#753 id=753 data-nosnippet>753</a>                        module_recoveries.insert(module_instance_id, recovery);
+<a href=#754 id=754 data-nosnippet>754</a>                        module_recovery_progress_receivers
+<a href=#755 id=755 data-nosnippet>755</a>                            .insert(module_instance_id, recovery_progress_rx);
+<a href=#756 id=756 data-nosnippet>756</a>                    }
+<a href=#757 id=757 data-nosnippet>757</a>                    <span class="kw">_ </span>=&gt; {
+<a href=#758 id=758 data-nosnippet>758</a>                        <span class="kw">let </span>module = module_init
+<a href=#759 id=759 data-nosnippet>759</a>                            .init(
+<a href=#760 id=760 data-nosnippet>760</a>                                final_client.clone(),
+<a href=#761 id=761 data-nosnippet>761</a>                                fed_id,
+<a href=#762 id=762 data-nosnippet>762</a>                                config.global.api_endpoints.len(),
+<a href=#763 id=763 data-nosnippet>763</a>                                module_config,
+<a href=#764 id=764 data-nosnippet>764</a>                                db.clone(),
+<a href=#765 id=765 data-nosnippet>765</a>                                module_instance_id,
+<a href=#766 id=766 data-nosnippet>766</a>                                common_api_versions.core,
+<a href=#767 id=767 data-nosnippet>767</a>                                api_version,
+<a href=#768 id=768 data-nosnippet>768</a>                                <span class="comment">// This is a divergence from the legacy client, where the child
+<a href=#769 id=769 data-nosnippet>769</a>                                // secret keys were derived using
+<a href=#770 id=770 data-nosnippet>770</a>                                // *module kind*-specific derivation paths.
+<a href=#771 id=771 data-nosnippet>771</a>                                // Since the new client has to support multiple, segregated modules
+<a href=#772 id=772 data-nosnippet>772</a>                                // of the same kind we have to use
+<a href=#773 id=773 data-nosnippet>773</a>                                // the instance id instead.
+<a href=#774 id=774 data-nosnippet>774</a>                                </span>root_secret.derive_module_secret(module_instance_id),
+<a href=#775 id=775 data-nosnippet>775</a>                                notifier.clone(),
+<a href=#776 id=776 data-nosnippet>776</a>                                api.clone(),
+<a href=#777 id=777 data-nosnippet>777</a>                                <span class="self">self</span>.admin_creds.as_ref().map(|cred| cred.auth.clone()),
+<a href=#778 id=778 data-nosnippet>778</a>                                task_group.clone(),
+<a href=#779 id=779 data-nosnippet>779</a>                            )
+<a href=#780 id=780 data-nosnippet>780</a>                            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#781 id=781 data-nosnippet>781</a>
+<a href=#782 id=782 data-nosnippet>782</a>                        <span class="kw">if </span>primary_module_instance == module_instance_id
+<a href=#783 id=783 data-nosnippet>783</a>                            &amp;&amp; !module.supports_being_primary()
+<a href=#784 id=784 data-nosnippet>784</a>                        {
+<a href=#785 id=785 data-nosnippet>785</a>                            <span class="macro">bail!</span>(
+<a href=#786 id=786 data-nosnippet>786</a>                                <span class="string">"Module instance {primary_module_instance} of kind {kind} does not support being a primary module"
+<a href=#787 id=787 data-nosnippet>787</a>                            </span>);
+<a href=#788 id=788 data-nosnippet>788</a>                        }
+<a href=#789 id=789 data-nosnippet>789</a>
+<a href=#790 id=790 data-nosnippet>790</a>                        modules.register_module(module_instance_id, kind, module);
+<a href=#791 id=791 data-nosnippet>791</a>                    }
+<a href=#792 id=792 data-nosnippet>792</a>                }
+<a href=#793 id=793 data-nosnippet>793</a>            }
+<a href=#794 id=794 data-nosnippet>794</a>            modules
+<a href=#795 id=795 data-nosnippet>795</a>        };
+<a href=#796 id=796 data-nosnippet>796</a>
+<a href=#797 id=797 data-nosnippet>797</a>        <span class="kw">if </span>init_state.is_pending() &amp;&amp; module_recoveries.is_empty() {
+<a href=#798 id=798 data-nosnippet>798</a>            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+<a href=#799 id=799 data-nosnippet>799</a>            dbtx.insert_entry(<span class="kw-2">&amp;</span>ClientInitStateKey, <span class="kw-2">&amp;</span>init_state.into_complete())
+<a href=#800 id=800 data-nosnippet>800</a>                .<span class="kw">await</span>;
+<a href=#801 id=801 data-nosnippet>801</a>            dbtx.commit_tx().<span class="kw">await</span>;
+<a href=#802 id=802 data-nosnippet>802</a>        }
+<a href=#803 id=803 data-nosnippet>803</a>
+<a href=#804 id=804 data-nosnippet>804</a>        <span class="kw">let </span>executor = {
+<a href=#805 id=805 data-nosnippet>805</a>            <span class="kw">let </span><span class="kw-2">mut </span>executor_builder = Executor::builder();
+<a href=#806 id=806 data-nosnippet>806</a>            executor_builder
+<a href=#807 id=807 data-nosnippet>807</a>                .with_module(TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext);
+<a href=#808 id=808 data-nosnippet>808</a>
+<a href=#809 id=809 data-nosnippet>809</a>            <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>, module) <span class="kw">in </span>modules.iter_modules() {
+<a href=#810 id=810 data-nosnippet>810</a>                executor_builder.with_module_dyn(module.context(module_instance_id));
+<a href=#811 id=811 data-nosnippet>811</a>            }
+<a href=#812 id=812 data-nosnippet>812</a>
+<a href=#813 id=813 data-nosnippet>813</a>            <span class="kw">for </span>module_instance_id <span class="kw">in </span>module_recoveries.keys() {
+<a href=#814 id=814 data-nosnippet>814</a>                executor_builder.with_valid_module_id(<span class="kw-2">*</span>module_instance_id);
+<a href=#815 id=815 data-nosnippet>815</a>            }
+<a href=#816 id=816 data-nosnippet>816</a>
+<a href=#817 id=817 data-nosnippet>817</a>            executor_builder.build(db.clone(), notifier, task_group.clone())
+<a href=#818 id=818 data-nosnippet>818</a>        };
+<a href=#819 id=819 data-nosnippet>819</a>
+<a href=#820 id=820 data-nosnippet>820</a>        <span class="kw">let </span>recovery_receiver_init_val = module_recovery_progress_receivers
+<a href=#821 id=821 data-nosnippet>821</a>            .iter()
+<a href=#822 id=822 data-nosnippet>822</a>            .map(|(module_instance_id, rx)| (<span class="kw-2">*</span>module_instance_id, <span class="kw-2">*</span>rx.borrow()))
+<a href=#823 id=823 data-nosnippet>823</a>            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+<a href=#824 id=824 data-nosnippet>824</a>        <span class="kw">let </span>(client_recovery_progress_sender, client_recovery_progress_receiver) =
+<a href=#825 id=825 data-nosnippet>825</a>            watch::channel(recovery_receiver_init_val);
+<a href=#826 id=826 data-nosnippet>826</a>
+<a href=#827 id=827 data-nosnippet>827</a>        <span class="kw">let </span>client_inner = Arc::new(Client {
+<a href=#828 id=828 data-nosnippet>828</a>            final_client: final_client.clone(),
+<a href=#829 id=829 data-nosnippet>829</a>            config: tokio::sync::RwLock::new(config.clone()),
+<a href=#830 id=830 data-nosnippet>830</a>            api_secret,
+<a href=#831 id=831 data-nosnippet>831</a>            decoders,
+<a href=#832 id=832 data-nosnippet>832</a>            db: db.clone(),
+<a href=#833 id=833 data-nosnippet>833</a>            federation_id: fed_id,
+<a href=#834 id=834 data-nosnippet>834</a>            federation_config_meta: config.global.meta,
+<a href=#835 id=835 data-nosnippet>835</a>            primary_module_instance,
+<a href=#836 id=836 data-nosnippet>836</a>            modules,
+<a href=#837 id=837 data-nosnippet>837</a>            module_inits: <span class="self">self</span>.module_inits.clone(),
+<a href=#838 id=838 data-nosnippet>838</a>            log_ordering_wakeup_tx,
+<a href=#839 id=839 data-nosnippet>839</a>            log_event_added_rx,
+<a href=#840 id=840 data-nosnippet>840</a>            log_event_added_transient_tx: log_event_added_transient_tx.clone(),
+<a href=#841 id=841 data-nosnippet>841</a>            request_hook,
+<a href=#842 id=842 data-nosnippet>842</a>            executor,
+<a href=#843 id=843 data-nosnippet>843</a>            api,
+<a href=#844 id=844 data-nosnippet>844</a>            secp_ctx: Secp256k1::new(),
+<a href=#845 id=845 data-nosnippet>845</a>            root_secret,
+<a href=#846 id=846 data-nosnippet>846</a>            task_group,
+<a href=#847 id=847 data-nosnippet>847</a>            operation_log: OperationLog::new(db.clone()),
+<a href=#848 id=848 data-nosnippet>848</a>            client_recovery_progress_receiver,
+<a href=#849 id=849 data-nosnippet>849</a>            meta_service: <span class="self">self</span>.meta_service,
+<a href=#850 id=850 data-nosnippet>850</a>            connector,
+<a href=#851 id=851 data-nosnippet>851</a>        });
+<a href=#852 id=852 data-nosnippet>852</a>        client_inner
+<a href=#853 id=853 data-nosnippet>853</a>            .task_group
+<a href=#854 id=854 data-nosnippet>854</a>            .spawn_cancellable(<span class="string">"MetaService::update_continuously"</span>, {
+<a href=#855 id=855 data-nosnippet>855</a>                <span class="kw">let </span>client_inner = client_inner.clone();
+<a href=#856 id=856 data-nosnippet>856</a>                <span class="kw">async move </span>{
+<a href=#857 id=857 data-nosnippet>857</a>                    client_inner
+<a href=#858 id=858 data-nosnippet>858</a>                        .meta_service
+<a href=#859 id=859 data-nosnippet>859</a>                        .update_continuously(<span class="kw-2">&amp;</span>client_inner)
+<a href=#860 id=860 data-nosnippet>860</a>                        .<span class="kw">await</span>;
+<a href=#861 id=861 data-nosnippet>861</a>                }
+<a href=#862 id=862 data-nosnippet>862</a>            });
+<a href=#863 id=863 data-nosnippet>863</a>
+<a href=#864 id=864 data-nosnippet>864</a>        client_inner.task_group.spawn_cancellable(
+<a href=#865 id=865 data-nosnippet>865</a>            <span class="string">"update-api-announcements"</span>,
+<a href=#866 id=866 data-nosnippet>866</a>            run_api_announcement_sync(client_inner.clone()),
+<a href=#867 id=867 data-nosnippet>867</a>        );
+<a href=#868 id=868 data-nosnippet>868</a>
+<a href=#869 id=869 data-nosnippet>869</a>        client_inner.task_group.spawn_cancellable(
+<a href=#870 id=870 data-nosnippet>870</a>            <span class="string">"event log ordering task"</span>,
+<a href=#871 id=871 data-nosnippet>871</a>            run_event_log_ordering_task(
+<a href=#872 id=872 data-nosnippet>872</a>                db.clone(),
+<a href=#873 id=873 data-nosnippet>873</a>                log_ordering_wakeup_rx,
+<a href=#874 id=874 data-nosnippet>874</a>                log_event_added_tx,
+<a href=#875 id=875 data-nosnippet>875</a>                log_event_added_transient_tx,
+<a href=#876 id=876 data-nosnippet>876</a>            ),
+<a href=#877 id=877 data-nosnippet>877</a>        );
+<a href=#878 id=878 data-nosnippet>878</a>        <span class="kw">let </span>client_iface = std::sync::Arc::&lt;Client&gt;::downgrade(<span class="kw-2">&amp;</span>client_inner);
 <a href=#879 id=879 data-nosnippet>879</a>
-<a href=#880 id=880 data-nosnippet>880</a>        final_client.set(client_iface.clone());
+<a href=#880 id=880 data-nosnippet>880</a>        <span class="kw">let </span>client_arc = ClientHandle::new(client_inner);
 <a href=#881 id=881 data-nosnippet>881</a>
-<a href=#882 id=882 data-nosnippet>882</a>        <span class="kw">if </span>!module_recoveries.is_empty() {
-<a href=#883 id=883 data-nosnippet>883</a>            client_arc.spawn_module_recoveries_task(
-<a href=#884 id=884 data-nosnippet>884</a>                client_recovery_progress_sender,
-<a href=#885 id=885 data-nosnippet>885</a>                module_recoveries,
-<a href=#886 id=886 data-nosnippet>886</a>                module_recovery_progress_receivers,
-<a href=#887 id=887 data-nosnippet>887</a>            );
-<a href=#888 id=888 data-nosnippet>888</a>        }
-<a href=#889 id=889 data-nosnippet>889</a>
-<a href=#890 id=890 data-nosnippet>890</a>        <span class="prelude-val">Ok</span>(client_arc)
-<a href=#891 id=891 data-nosnippet>891</a>    }
-<a href=#892 id=892 data-nosnippet>892</a>
-<a href=#893 id=893 data-nosnippet>893</a>    <span class="kw">async fn </span>load_init_state(db: <span class="kw-2">&amp;</span>Database) -&gt; InitState {
-<a href=#894 id=894 data-nosnippet>894</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
-<a href=#895 id=895 data-nosnippet>895</a>        dbtx.get_value(<span class="kw-2">&amp;</span>ClientInitStateKey)
-<a href=#896 id=896 data-nosnippet>896</a>            .<span class="kw">await
-<a href=#897 id=897 data-nosnippet>897</a>            </span>.unwrap_or_else(|| {
-<a href=#898 id=898 data-nosnippet>898</a>                <span class="comment">// could be turned in a hard error in the future, but for now
-<a href=#899 id=899 data-nosnippet>899</a>                // no need to break backward compat.
-<a href=#900 id=900 data-nosnippet>900</a>                </span><span class="macro">warn!</span>(
-<a href=#901 id=901 data-nosnippet>901</a>                    target: LOG_CLIENT,
-<a href=#902 id=902 data-nosnippet>902</a>                    <span class="string">"Client missing ClientRequiresRecovery: assuming complete"
-<a href=#903 id=903 data-nosnippet>903</a>                </span>);
-<a href=#904 id=904 data-nosnippet>904</a>                db::InitState::Complete(db::InitModeComplete::Fresh)
-<a href=#905 id=905 data-nosnippet>905</a>            })
-<a href=#906 id=906 data-nosnippet>906</a>    }
-<a href=#907 id=907 data-nosnippet>907</a>
-<a href=#908 id=908 data-nosnippet>908</a>    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>, config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; ModuleDecoderRegistry {
-<a href=#909 id=909 data-nosnippet>909</a>        <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
-<a href=#910 id=910 data-nosnippet>910</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
-<a href=#911 id=911 data-nosnippet>911</a>            config
-<a href=#912 id=912 data-nosnippet>912</a>                .modules
-<a href=#913 id=913 data-nosnippet>913</a>                .iter()
-<a href=#914 id=914 data-nosnippet>914</a>                .map(|(module_instance, module_config)| (<span class="kw-2">*</span>module_instance, module_config.kind())),
-<a href=#915 id=915 data-nosnippet>915</a>        );
-<a href=#916 id=916 data-nosnippet>916</a>
-<a href=#917 id=917 data-nosnippet>917</a>        decoders.register_module(
-<a href=#918 id=918 data-nosnippet>918</a>            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
-<a href=#919 id=919 data-nosnippet>919</a>            ModuleKind::from_static_str(<span class="string">"tx_submission"</span>),
-<a href=#920 id=920 data-nosnippet>920</a>            tx_submission_sm_decoder(),
+<a href=#882 id=882 data-nosnippet>882</a>        <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, module) <span class="kw">in </span>client_arc.modules.iter_modules() {
+<a href=#883 id=883 data-nosnippet>883</a>            module.start().<span class="kw">await</span>;
+<a href=#884 id=884 data-nosnippet>884</a>        }
+<a href=#885 id=885 data-nosnippet>885</a>
+<a href=#886 id=886 data-nosnippet>886</a>        final_client.set(client_iface.clone());
+<a href=#887 id=887 data-nosnippet>887</a>
+<a href=#888 id=888 data-nosnippet>888</a>        <span class="kw">if </span>!module_recoveries.is_empty() {
+<a href=#889 id=889 data-nosnippet>889</a>            client_arc.spawn_module_recoveries_task(
+<a href=#890 id=890 data-nosnippet>890</a>                client_recovery_progress_sender,
+<a href=#891 id=891 data-nosnippet>891</a>                module_recoveries,
+<a href=#892 id=892 data-nosnippet>892</a>                module_recovery_progress_receivers,
+<a href=#893 id=893 data-nosnippet>893</a>            );
+<a href=#894 id=894 data-nosnippet>894</a>        }
+<a href=#895 id=895 data-nosnippet>895</a>
+<a href=#896 id=896 data-nosnippet>896</a>        <span class="prelude-val">Ok</span>(client_arc)
+<a href=#897 id=897 data-nosnippet>897</a>    }
+<a href=#898 id=898 data-nosnippet>898</a>
+<a href=#899 id=899 data-nosnippet>899</a>    <span class="kw">async fn </span>load_init_state(db: <span class="kw-2">&amp;</span>Database) -&gt; InitState {
+<a href=#900 id=900 data-nosnippet>900</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+<a href=#901 id=901 data-nosnippet>901</a>        dbtx.get_value(<span class="kw-2">&amp;</span>ClientInitStateKey)
+<a href=#902 id=902 data-nosnippet>902</a>            .<span class="kw">await
+<a href=#903 id=903 data-nosnippet>903</a>            </span>.unwrap_or_else(|| {
+<a href=#904 id=904 data-nosnippet>904</a>                <span class="comment">// could be turned in a hard error in the future, but for now
+<a href=#905 id=905 data-nosnippet>905</a>                // no need to break backward compat.
+<a href=#906 id=906 data-nosnippet>906</a>                </span><span class="macro">warn!</span>(
+<a href=#907 id=907 data-nosnippet>907</a>                    target: LOG_CLIENT,
+<a href=#908 id=908 data-nosnippet>908</a>                    <span class="string">"Client missing ClientRequiresRecovery: assuming complete"
+<a href=#909 id=909 data-nosnippet>909</a>                </span>);
+<a href=#910 id=910 data-nosnippet>910</a>                db::InitState::Complete(db::InitModeComplete::Fresh)
+<a href=#911 id=911 data-nosnippet>911</a>            })
+<a href=#912 id=912 data-nosnippet>912</a>    }
+<a href=#913 id=913 data-nosnippet>913</a>
+<a href=#914 id=914 data-nosnippet>914</a>    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>, config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; ModuleDecoderRegistry {
+<a href=#915 id=915 data-nosnippet>915</a>        <span class="kw">let </span><span class="kw-2">mut </span>decoders = client_decoders(
+<a href=#916 id=916 data-nosnippet>916</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
+<a href=#917 id=917 data-nosnippet>917</a>            config
+<a href=#918 id=918 data-nosnippet>918</a>                .modules
+<a href=#919 id=919 data-nosnippet>919</a>                .iter()
+<a href=#920 id=920 data-nosnippet>920</a>                .map(|(module_instance, module_config)| (<span class="kw-2">*</span>module_instance, module_config.kind())),
 <a href=#921 id=921 data-nosnippet>921</a>        );
 <a href=#922 id=922 data-nosnippet>922</a>
-<a href=#923 id=923 data-nosnippet>923</a>        decoders
-<a href=#924 id=924 data-nosnippet>924</a>    }
-<a href=#925 id=925 data-nosnippet>925</a>
-<a href=#926 id=926 data-nosnippet>926</a>    <span class="kw">fn </span>config_decoded(
-<a href=#927 id=927 data-nosnippet>927</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
-<a href=#928 id=928 data-nosnippet>928</a>        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-<a href=#929 id=929 data-nosnippet>929</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig, fedimint_core::encoding::DecodeError&gt; {
-<a href=#930 id=930 data-nosnippet>930</a>        config.clone().redecode_raw(decoders)
-<a href=#931 id=931 data-nosnippet>931</a>    }
-<a href=#932 id=932 data-nosnippet>932</a>
-<a href=#933 id=933 data-nosnippet>933</a>    <span class="doccomment">/// Re-derive client's `root_secret` using the federation ID. This
-<a href=#934 id=934 data-nosnippet>934</a>    /// eliminates the possibility of having the same client `root_secret`
-<a href=#935 id=935 data-nosnippet>935</a>    /// across multiple federations.
-<a href=#936 id=936 data-nosnippet>936</a>    </span><span class="kw">fn </span>federation_root_secret(
-<a href=#937 id=937 data-nosnippet>937</a>        root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
-<a href=#938 id=938 data-nosnippet>938</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
-<a href=#939 id=939 data-nosnippet>939</a>    ) -&gt; DerivableSecret {
-<a href=#940 id=940 data-nosnippet>940</a>        root_secret.federation_key(<span class="kw-2">&amp;</span>config.global.calculate_federation_id())
-<a href=#941 id=941 data-nosnippet>941</a>    }
-<a href=#942 id=942 data-nosnippet>942</a>
-<a href=#943 id=943 data-nosnippet>943</a>    <span class="doccomment">/// Register to receiver all new transient (unpersisted) events
-<a href=#944 id=944 data-nosnippet>944</a>    </span><span class="kw">pub fn </span>get_event_log_transient_receiver(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; broadcast::Receiver&lt;EventLogEntry&gt; {
-<a href=#945 id=945 data-nosnippet>945</a>        <span class="self">self</span>.log_event_added_transient_tx.subscribe()
-<a href=#946 id=946 data-nosnippet>946</a>    }
-<a href=#947 id=947 data-nosnippet>947</a>}</code></pre></div></section></main></body></html>
+<a href=#923 id=923 data-nosnippet>923</a>        decoders.register_module(
+<a href=#924 id=924 data-nosnippet>924</a>            TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+<a href=#925 id=925 data-nosnippet>925</a>            ModuleKind::from_static_str(<span class="string">"tx_submission"</span>),
+<a href=#926 id=926 data-nosnippet>926</a>            tx_submission_sm_decoder(),
+<a href=#927 id=927 data-nosnippet>927</a>        );
+<a href=#928 id=928 data-nosnippet>928</a>
+<a href=#929 id=929 data-nosnippet>929</a>        decoders
+<a href=#930 id=930 data-nosnippet>930</a>    }
+<a href=#931 id=931 data-nosnippet>931</a>
+<a href=#932 id=932 data-nosnippet>932</a>    <span class="kw">fn </span>config_decoded(
+<a href=#933 id=933 data-nosnippet>933</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
+<a href=#934 id=934 data-nosnippet>934</a>        decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+<a href=#935 id=935 data-nosnippet>935</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig, fedimint_core::encoding::DecodeError&gt; {
+<a href=#936 id=936 data-nosnippet>936</a>        config.clone().redecode_raw(decoders)
+<a href=#937 id=937 data-nosnippet>937</a>    }
+<a href=#938 id=938 data-nosnippet>938</a>
+<a href=#939 id=939 data-nosnippet>939</a>    <span class="doccomment">/// Re-derive client's `root_secret` using the federation ID. This
+<a href=#940 id=940 data-nosnippet>940</a>    /// eliminates the possibility of having the same client `root_secret`
+<a href=#941 id=941 data-nosnippet>941</a>    /// across multiple federations.
+<a href=#942 id=942 data-nosnippet>942</a>    </span><span class="kw">fn </span>federation_root_secret(
+<a href=#943 id=943 data-nosnippet>943</a>        root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
+<a href=#944 id=944 data-nosnippet>944</a>        config: <span class="kw-2">&amp;</span>ClientConfig,
+<a href=#945 id=945 data-nosnippet>945</a>    ) -&gt; DerivableSecret {
+<a href=#946 id=946 data-nosnippet>946</a>        root_secret.federation_key(<span class="kw-2">&amp;</span>config.global.calculate_federation_id())
+<a href=#947 id=947 data-nosnippet>947</a>    }
+<a href=#948 id=948 data-nosnippet>948</a>
+<a href=#949 id=949 data-nosnippet>949</a>    <span class="doccomment">/// Register to receiver all new transient (unpersisted) events
+<a href=#950 id=950 data-nosnippet>950</a>    </span><span class="kw">pub fn </span>get_event_log_transient_receiver(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; broadcast::Receiver&lt;EventLogEntry&gt; {
+<a href=#951 id=951 data-nosnippet>951</a>        <span class="self">self</span>.log_event_added_transient_tx.subscribe()
+<a href=#952 id=952 data-nosnippet>952</a>    }
+<a href=#953 id=953 data-nosnippet>953</a>}</code></pre></div></section></main></body></html>
