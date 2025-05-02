@@ -53,8 +53,8 @@ services:
       - 8174:8174/udp # api iroh
       - 127.0.0.1:8175:8175/tcp # ui
     environment:
-      - FM_BITCOIN_RPC_KIND=${FM_BITCOIN_RPC_KIND}
-      - FM_BITCOIN_RPC_URL=${FM_BITCOIN_RPC_URL}
+      - FM_FORCE_BITCOIN_RPC_KIND=${FM_BITCOIN_RPC_KIND}
+      - FM_FORCE_BITCOIN_RPC_URL=${FM_BITCOIN_RPC_URL}
       - FM_BITCOIN_NETWORK=bitcoin
       - FM_BIND_P2P=0.0.0.0:8173
       - FM_P2P_URL=fedimint://${FM_DOMAIN}:8173
