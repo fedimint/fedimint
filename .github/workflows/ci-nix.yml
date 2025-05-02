@@ -84,7 +84,7 @@ jobs:
           - host: macos
             runs-on: macos-14
             build-in-pr: false
-            timeout: 60
+            timeout: 90
 
     name: "Dev Shell on ${{ matrix.host }}"
     runs-on: ${{ matrix.runs-on }}
