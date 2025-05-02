@@ -28,5 +28,22 @@ jobs:
         run: |
           nix run nixpkgs#lychee -- \
             --verbose \
+            --cache \
             --github-token $GITHUB_TOKEN \
             docs README.md
+
+      - name: Prune errors from lychee cache
+        if: always()
+        run: |
+          if [ -f .lycheecache ]; then
+            # keep only 2xx and 3xx results, drop all 4xx/5xx
+            grep -E ' [23][0-9]{2} ' .lycheecache > .lycheecache.pruned
+            mv .lycheecache.pruned .lycheecache
+          fi
+
+      - name: Save lychee cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: cache-lychee-${{ github.sha }}
