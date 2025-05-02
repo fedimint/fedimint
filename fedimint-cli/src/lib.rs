@@ -42,9 +42,11 @@ use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
+use fedimint_core::encoding::Decodable;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::setup_code::PeerSetupCode;
+use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, retry};
 use fedimint_core::{Amount, PeerId, TieredMulti, fedimint_build_code_version_env, runtime};
 use fedimint_eventlog::EventLogId;
@@ -567,6 +569,14 @@ Examples:
         pos: Option<EventLogId>,
         #[arg(long, default_value = "10")]
         limit: u64,
+    },
+    /// Manually submit a fedimint transaction to guardians
+    ///
+    /// This can be useful to check why a transaction may have been rejected
+    /// when debugging client issues.
+    SubmitTransaction {
+        /// Hex-encoded fedimint transaction
+        transaction: String,
     },
 }
 
@@ -1237,6 +1247,21 @@ impl FedimintCli {
 
                 Ok(CliOutput::Raw(
                     serde_json::to_value(events).expect("Can be encoded"),
+                ))
+            }
+            Command::Dev(DevCmd::SubmitTransaction { transaction }) => {
+                let client = self.client_open(&cli).await?;
+                let tx = Transaction::consensus_decode_hex(&transaction, client.decoders())
+                    .map_err_cli()?;
+                let tx_outcome = client
+                    .api()
+                    .submit_transaction(tx)
+                    .await
+                    .try_into_inner(client.decoders())
+                    .map_err_cli()?;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(tx_outcome.0.map_err_cli()?).expect("Can be encoded"),
                 ))
             }
             Command::Completion { shell } => {
