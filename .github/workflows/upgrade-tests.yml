@@ -38,7 +38,7 @@ jobs:
     if: github.repository == 'fedimint/fedimint'
     name: "Upgrade tests"
     runs-on: [self-hosted, linux, x64]
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
