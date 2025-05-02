@@ -105,11 +105,25 @@ impl ClientBuilder {
     }
 
     /// Replace module generator registry entirely
+    ///
+    /// There has to be at least one module supporting being primary among the
+    /// registered modules. The client won't start without the federation and
+    /// the client having at least one overlapping primary module. In case there
+    /// are multiple, the one to use can be selected with
+    /// [`ClientBuilder::with_primary_module_kind`] or
+    /// [`ClientBuilder::with_primary_module_instance_id`].
     pub fn with_module_inits(&mut self, module_inits: ClientModuleInitRegistry) {
         self.module_inits = module_inits;
     }
 
     /// Make module generator available when reading the config
+    ///
+    /// There has to be at least one module supporting being primary among the
+    /// registered modules. The client won't start without the federation and
+    /// the client having at least one overlapping primary module. In case there
+    /// are multiple, the one to use can be selected with
+    /// [`ClientBuilder::with_primary_module_kind`] or
+    /// [`ClientBuilder::with_primary_module_instance_id`].
     pub fn with_module<M: ClientModuleInit>(&mut self, module_init: M) {
         self.module_inits.attach(module_init);
     }
@@ -572,19 +586,15 @@ impl ClientBuilder {
 
         let init_state = Self::load_init_state(&db).await;
 
-        let primary_module_instance = self
-            .primary_module_instance
-            .or_else(|| {
-                let primary_module_kind = self.primary_module_kind?;
-                config
-                    .modules
-                    .iter()
-                    .find_map(|(module_instance_id, module_config)| {
-                        (module_config.kind() == &primary_module_kind)
-                            .then_some(*module_instance_id)
-                    })
-            })
-            .ok_or(anyhow!("No primary module set or found"))?;
+        let mut primary_module_instance = self.primary_module_instance.or_else(|| {
+            let primary_module_kind = self.primary_module_kind?;
+            config
+                .modules
+                .iter()
+                .find_map(|(module_instance_id, module_config)| {
+                    (module_config.kind() == &primary_module_kind).then_some(*module_instance_id)
+                })
+        });
 
         let notifier = Notifier::new();
 
@@ -779,11 +789,13 @@ impl ClientBuilder {
                             )
                             .await?;
 
-                        if primary_module_instance == module_instance_id
+                        if primary_module_instance.is_none() && module.supports_being_primary() {
+                            primary_module_instance = Some(module_instance_id);
+                        } else if primary_module_instance == Some(module_instance_id)
                             && !module.supports_being_primary()
                         {
                             bail!(
-                                "Module instance {primary_module_instance} of kind {kind} does not support being a primary module"
+                                "Module instance {module_instance_id} of kind {kind} does not support being a primary module"
                             );
                         }
 
@@ -832,7 +844,8 @@ impl ClientBuilder {
             db: db.clone(),
             federation_id: fed_id,
             federation_config_meta: config.global.meta,
-            primary_module_instance,
+            primary_module_instance: primary_module_instance
+                .ok_or(anyhow!("No primary module set or found"))?,
             modules,
             module_inits: self.module_inits.clone(),
             log_ordering_wakeup_tx,
