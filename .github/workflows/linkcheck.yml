@@ -2,6 +2,10 @@ on: [push, pull_request]
 
 name: Markdown Link Check
 
+# Grant the job read access to repo contents so ${{ secrets.GITHUB_TOKEN }} can be used
+permissions:
+  contents: read
+
 jobs:
   markdown-link-check:
     runs-on: [self-hosted, linux, x64]
@@ -18,4 +22,12 @@ jobs:
           restore-keys: cache-lychee-
 
       - name: Check links
-        run: nix run nixpkgs#lychee -- --verbose docs README.md
+        # provide the GitHub token to lychee so API rate‐limits are lifted to 5k/hour
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          nix run nixpkgs#lychee -- \
+            --verbose \
+            --cache \
+            --github-token $GITHUB_TOKEN \
+            docs README.md
