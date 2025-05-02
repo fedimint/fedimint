@@ -28,6 +28,5 @@ jobs:
         run: |
           nix run nixpkgs#lychee -- \
             --verbose \
-            --cache \
             --github-token $GITHUB_TOKEN \
             docs README.md
