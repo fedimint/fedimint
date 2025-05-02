@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-mint-client"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-mint is a chaumian ecash mint module."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-mint-client"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
@@ -16,17 +16,17 @@ rustc-args = ["--cfg", "tokio_unstable"]
 normal = ["aquamarine"]
 
 [features]
-default = []
 cli = ["dep:clap"]
+default = []
 
 [lib]
 name = "fedimint_mint_client"
 path = "src/lib.rs"
 
 [[bench]]
+harness = false
 name = "notes"
 path = "benches/notes.rs"
-harness = false
 
 [dependencies]
 anyhow = { workspace = true }
@@ -34,7 +34,6 @@ aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
-base64-url = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
 clap = { workspace = true, optional = true }

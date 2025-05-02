@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-server"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-server' facilitates federated consensus with atomic broadcast and distributed configuration."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-server"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
@@ -27,7 +27,6 @@ axum = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
-bitcoincore-rpc = { workspace = true }
 bls12_381 = { workspace = true }
 bytes = { workspace = true }
 fedimint-aead = { workspace = true }

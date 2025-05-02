@@ -3,6 +3,7 @@
     nixpkgs = {
       url = "github:nixos/nixpkgs/nixos-24.11";
     };
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -31,6 +32,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-unstable,
       flake-utils,
       flakebox,
       cargo-deluxe,
@@ -73,6 +75,7 @@
 
             (final: prev: {
               cargo-deluxe = cargo-deluxe.packages.${system}.default;
+              cargo-udeps = nixpkgs-unstable.legacyPackages.${system}.cargo-udeps;
             })
           ];
         };

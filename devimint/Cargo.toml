@@ -1,12 +1,12 @@
 [package]
-name = "devimint"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "devimint is a library useful for setting up a local environment to run the fedimint stack"
+edition = { workspace = true }
 license = { workspace = true }
+name = "devimint"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [[bin]]
 name = "devimint"
@@ -26,7 +26,6 @@ fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
-fedimint-lightning = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
