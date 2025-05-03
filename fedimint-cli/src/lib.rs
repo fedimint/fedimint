@@ -412,7 +412,14 @@ enum DecodeType {
     /// Decode an invite code string into a JSON representation
     InviteCode { invite_code: InviteCode },
     /// Decode a string of ecash notes into a JSON representation
-    Notes { notes: OOBNotes },
+    #[group(required = true, multiple = false)]
+    Notes {
+        /// Base64 e-cash notes to be decoded
+        notes: Option<OOBNotes>,
+        /// File containing base64 e-cash notes to be decoded
+        #[arg(long)]
+        file: Option<PathBuf>,
+    },
     /// Decode a transaction hex string and print it to stdout
     Transaction { hex_string: String },
     /// Decode a setup code (as shared during a federation setup ceremony)
@@ -1064,7 +1071,17 @@ impl FedimintCli {
                     url: invite_code.url(),
                     federation_id: invite_code.federation_id(),
                 }),
-                DecodeType::Notes { notes } => {
+                DecodeType::Notes { notes, file } => {
+                    let notes = if let Some(notes) = notes {
+                        notes
+                    } else if let Some(file) = file {
+                        let notes_str =
+                            fs::read_to_string(file).map_err_cli_msg("failed to read file")?;
+                        OOBNotes::from_str(&notes_str).map_err_cli_msg("failed to decode notes")?
+                    } else {
+                        unreachable!("Clap enforces either notes or file being set");
+                    };
+
                     let notes_json = notes
                         .notes_json()
                         .map_err_cli_msg("failed to decode notes")?;
