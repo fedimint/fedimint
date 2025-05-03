@@ -41,3 +41,6 @@ tracing = { workspace = true }
 fedimint-dummy-client = { workspace = true }
 fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
+
+[lints]
+workspace = true

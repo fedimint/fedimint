@@ -13,7 +13,7 @@ use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::{PeerHandleOps, g1, g2, scalar};
 use group::ff::Field;
 use rand::rngs::OsRng;
-use tracing::info;
+use tracing::{info, trace};
 
 use super::peer_handle::PeerHandle;
 
@@ -59,6 +59,7 @@ impl Dkg {
 
     /// Runs a single step of the DKG algorithm
     fn step(&mut self, peer: PeerId, msg: DkgMessage) -> anyhow::Result<DkgStep> {
+        trace!(?peer, ?msg, "Running DKG step");
         match msg {
             DkgMessage::Hash(hash) => {
                 ensure!(
@@ -74,11 +75,9 @@ impl Dkg {
             }
             DkgMessage::Commitment(polynomial) => {
                 ensure!(
-                    *self
-                        .hash_commitments
-                        .get(&peer)
-                        .context("DKG: hash commitment not found for peer {peer}")?
-                        == polynomial.consensus_hash_sha256(),
+                    *self.hash_commitments.get(&peer).with_context(|| format!(
+                        "DKG: hash commitment not found for peer {peer}"
+                    ))? == polynomial.consensus_hash_sha256(),
                     "DKG: polynomial commitment from peer {peer} is of wrong degree."
                 );
 
@@ -111,17 +110,16 @@ impl Dkg {
                 }
             }
             DkgMessage::Share(s) => {
-                let polynomial = self
-                    .commitments
-                    .get(&peer)
-                    .context("DKG: polynomial commitment not found for peer {peer}.")?;
+                let polynomial = self.commitments.get(&peer).with_context(|| {
+                    format!("DKG: polynomial commitment not found for peer {peer}.")
+                })?;
 
                 let checksum: (G1Projective, G2Projective) = polynomial
                     .iter()
                     .zip((0..).map(|k| scalar(&self.identity).pow(&[k, 0, 0, 0])))
                     .map(|(c, x)| (c.0 * x, c.1 * x))
                     .reduce(|(a1, a2), (b1, b2)| (a1 + b1, a2 + b2))
-                    .expect("DKG: polynomial commitment from peer {peer} is empty.");
+                    .expect("DKG: polynomial commitment from peer is empty.");
 
                 ensure!(
                     (g1(&s), g2(&s)) == checksum,

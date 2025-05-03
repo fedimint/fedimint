@@ -28,3 +28,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tpe = { workspace = true }
+
+[lints]
+workspace = true

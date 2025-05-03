@@ -250,7 +250,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 let params = &params;
                 async move {
                     let response = util::retry(
-                        "api-request-{method}-{peer}",
+                        format!("api-request-{method}-{peer}"),
                         api_networking_backoff(),
                         || async {
                             self.request_single_peer(method.clone(), params.clone(), *peer)
@@ -283,7 +283,7 @@ pub trait FederationApiExt: IRawFederationApi {
                             let params = &params;
                             async move {
                                 let response = util::retry(
-                                    "api-request-{method}-{peer}",
+                                    format!("api-request-{method}-{peer}"),
                                     api_networking_backoff(),
                                     || async {
                                         self.request_single_peer(

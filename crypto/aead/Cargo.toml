@@ -21,3 +21,6 @@ argon2 = { workspace = true, features = ["password-hash", "alloc"] }
 hex = { workspace = true }
 rand = { workspace = true }
 ring = { workspace = true }
+
+[lints]
+workspace = true

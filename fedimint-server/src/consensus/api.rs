@@ -174,7 +174,7 @@ impl ConsensusApi {
         let module_id = module_ids
             .into_iter()
             .nth(outpoint.out_idx as usize)
-            .context("Outpoint index out of bounds {outpoint:?}")?;
+            .with_context(|| format!("Outpoint index out of bounds {outpoint:?}"))?;
 
         #[allow(deprecated)]
         let outcome = self

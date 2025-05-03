@@ -28,3 +28,6 @@ fedimint-meta-common = { workspace = true }
 fedimint-mint-common = { workspace = true }
 fedimint-wallet-common = { workspace = true }
 honggfuzz = { workspace = true }
+
+[lints]
+workspace = true

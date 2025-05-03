@@ -27,3 +27,6 @@ rand = { workspace = true }
 wasm-bindgen-test = { workspace = true }
 # workaround https://github.com/n0-computer/iroh/issues/3252
 web-sys = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,6 +1,7 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::large_futures)]
 #![allow(dead_code)]
+#![allow(clippy::literal_string_with_formatting_args)]
 
 use std::sync::Arc;
 

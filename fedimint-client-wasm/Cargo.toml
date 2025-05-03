@@ -17,6 +17,9 @@ crate-type = ["cdylib", "rlib"]
 name = "fedimint_client_wasm"
 path = "src/lib.rs"
 
+[lints]
+workspace = true
+
 [target.'cfg(target_family = "wasm")'.dependencies]
 anyhow = { workspace = true }
 async-stream = { workspace = true }

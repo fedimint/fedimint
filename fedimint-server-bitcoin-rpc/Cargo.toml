@@ -22,3 +22,6 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-server-core = { workspace = true }
 tracing = { workspace = true } 
+
+[lints]
+workspace = true

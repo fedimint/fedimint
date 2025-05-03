@@ -95,5 +95,8 @@ tpe = { workspace = true }
 [build-dependencies]
 fedimint-build = { workspace = true }
 
+[lints]
+workspace = true
+
 [target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
 tikv-jemallocator = { workspace = true }

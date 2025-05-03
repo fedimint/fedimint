@@ -20,3 +20,6 @@ fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 rand = { workspace = true }
+
+[lints]
+workspace = true

@@ -11,3 +11,6 @@ repository = { workspace = true }
 [lib]
 name = "fedimint_docs"
 path = "lib.rs"
+
+[lints]
+workspace = true

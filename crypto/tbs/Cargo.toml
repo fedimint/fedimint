@@ -33,3 +33,6 @@ sha3 = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+
+[lints]
+workspace = true

@@ -21,3 +21,6 @@ fedimint-core = { workspace = true }
 prometheus = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

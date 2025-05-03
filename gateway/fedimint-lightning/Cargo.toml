@@ -33,3 +33,6 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic_lnd = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
+
+[lints]
+workspace = true

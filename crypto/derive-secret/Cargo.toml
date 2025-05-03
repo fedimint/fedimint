@@ -22,3 +22,6 @@ bls12_381 = { workspace = true }
 fedimint-core = { workspace = true }
 hkdf = { workspace = true }
 ring = { workspace = true }
+
+[lints]
+workspace = true
