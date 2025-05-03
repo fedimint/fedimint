@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-wallet-server"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-wallet is a n on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-wallet-server"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
@@ -29,8 +29,6 @@ fedimint-wallet-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
-jaq-core = { workspace = true }
-jaq-json = { workspace = true }
 miniscript = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

@@ -1,11 +1,11 @@
 [package]
-name = "gateway-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "gateway-tests contain integration tests for the gateway"
+edition = { workspace = true }
 license = { workspace = true }
+name = "gateway-tests"
 publish = false
+version = { workspace = true }
 
 # workaround: cargo-deny in Nix needs to see at least one
 # artifact here
@@ -20,7 +20,6 @@ devimint = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-testing = { workspace = true }
 fedimint-testing-core = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }

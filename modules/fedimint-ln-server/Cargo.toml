@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-ln-server"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-ln is a lightning payment service module."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-ln-server"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
@@ -24,7 +24,6 @@ fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
-fedimint-server-bitcoin-rpc = { workspace = true }
 fedimint-server-core = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }

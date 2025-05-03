@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-core"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-core provides common code used by both client and server."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-core"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.cargo-udeps.ignore]
 development = ["tokio-test"]
@@ -25,7 +25,6 @@ async-trait = { workspace = true }
 backon = { workspace = true }
 backtrace = { workspace = true }
 base64 = { workspace = true }
-base64-url = { workspace = true }
 bech32 = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
@@ -74,14 +73,14 @@ tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 async-lock = { workspace = true }
-tokio = { workspace = true, features = ["io-util"] }
 futures-util = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { workspace = true, features = ["js"] }
 gloo-timers = { workspace = true, features = ["futures"] }
-wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
 # enable lowmemory for better bundle size
 secp256k1 = { workspace = true, features = ["lowmemory"] }
