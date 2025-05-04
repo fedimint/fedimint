@@ -526,6 +526,14 @@ impl ClientModule for WalletClientModule {
                         .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e))?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
+                },
+                "check_pegin_status" => {
+                    let req: PeginStatusRequest = serde_json::from_value(request)?;
+                    let response =self.check_pegin_status(req.operation_id)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("peg_in status check failed: {}", e))?;
+                    let result = serde_json::to_value(&response)?;
+                    yield result;
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
@@ -545,6 +553,25 @@ impl ClientModule for WalletClientModule {
 
 #[derive(Deserialize)]
 struct WalletSummaryRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeginStatusRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegInStatusResponse {
+    pub operation_id: OperationId,
+    pub deposit_address: Address<NetworkUnchecked>,
+    pub claimed_outputs: Vec<bitcoin::OutPoint>,
+    pub status: PegInStatusKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PegInStatusKind {
+    Pending,
+    Claimed,
+}
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {
