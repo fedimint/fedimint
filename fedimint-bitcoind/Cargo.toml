@@ -23,3 +23,6 @@ esplora-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

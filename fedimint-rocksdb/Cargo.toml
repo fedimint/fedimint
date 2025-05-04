@@ -28,6 +28,9 @@ tracing = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
+[lints]
+workspace = true
+
 [target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
 rocksdb = { workspace = true, features = ["jemalloc"] }
 

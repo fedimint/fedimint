@@ -41,3 +41,6 @@ serde_millis = { workspace = true }
 thiserror = { workspace = true }
 tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
+
+[lints]
+workspace = true

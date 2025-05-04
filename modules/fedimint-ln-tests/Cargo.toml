@@ -35,3 +35,6 @@ strum = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

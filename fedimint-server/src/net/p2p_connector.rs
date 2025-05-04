@@ -149,7 +149,7 @@ where
         let domain = ServerName::try_from(dns_sanitize(&self.cfg.peer_names[&peer]).as_str())
             .expect("Always a valid DNS name");
 
-        let destination = self.peers.get(&peer).expect("No url for peer {peer}");
+        let destination = self.peers.get(&peer).expect("No url for peer");
 
         let tls = TlsConnector::from(Arc::new(cfg))
             .connect(domain, TcpStream::connect(parse_p2p(destination)?).await?)
@@ -325,10 +325,7 @@ where
     }
 
     async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
-        let node_id = *self
-            .node_ids
-            .get(&peer)
-            .expect("No node id found for peer {peer}");
+        let node_id = *self.node_ids.get(&peer).expect("No node id found for peer");
 
         let connection = match self.connection_overrides.get(&node_id) {
             Some(node_addr) => {
@@ -358,7 +355,7 @@ where
             .node_ids
             .iter()
             .find(|entry| entry.1 == &node_id)
-            .context("Node id {node_id} is unknown")?
+            .with_context(|| format!("Node id {node_id} is unknown"))?
             .0;
 
         Ok((*auth_peer, connection.into_dyn()))

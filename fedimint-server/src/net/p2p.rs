@@ -69,7 +69,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
                 connection_receiver,
                 status_senders
                     .get(&peer_id)
-                    .expect("No p2p status sender for peer {peer}")
+                    .expect("No p2p status sender for peer")
                     .clone(),
                 task_group,
             );
@@ -156,7 +156,7 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M
     async fn receive_from_peer(&self, peer: PeerId) -> Option<M> {
         self.connections
             .get(&peer)
-            .expect("No connection found for peer {peer}")
+            .expect("No connection found for peer")
             .receive()
             .await
     }

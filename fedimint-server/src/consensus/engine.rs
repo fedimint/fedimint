@@ -645,7 +645,7 @@ impl ConsensusEngine {
 
         self.ci_status_senders
             .get(&peer)
-            .expect("No ci status sender for peer {peer}")
+            .expect("No ci status sender for peer")
             .send_replace(Some(session_index));
 
         CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX

@@ -23,3 +23,6 @@ lightning-invoice = { workspace = true }
 lnurl-rs = { workspace = true, features = ["async"] }
 reqwest = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

@@ -50,3 +50,6 @@ tracing = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
+
+[lints]
+workspace = true

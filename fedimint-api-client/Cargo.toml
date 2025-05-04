@@ -49,6 +49,9 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 z32 = { workspace = true }
 
+[lints]
+workspace = true
+
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
 tokio-rustls = { version = "0.26.0", default-features = false, features = [

@@ -43,3 +43,6 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

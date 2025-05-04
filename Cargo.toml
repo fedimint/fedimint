@@ -306,6 +306,9 @@ webpki-roots = "0.26.8"
 web-sys = "0.3.77"
 z32 = "1"
 
+[workspace.lints.clippy]
+literal_string_with_formatting_args = "deny"
+
 [profile.dev]
 debug = "line-tables-only"
 

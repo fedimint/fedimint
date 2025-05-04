@@ -41,3 +41,6 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
+
+[lints]
+workspace = true

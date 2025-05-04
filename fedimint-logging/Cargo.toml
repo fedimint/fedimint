@@ -27,3 +27,6 @@ opentelemetry = { workspace = true, optional = true }
 opentelemetry-jaeger = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[lints]
+workspace = true

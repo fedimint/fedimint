@@ -604,7 +604,7 @@ impl ServerConfig {
 
             let cfg = registry
                 .get(kind)
-                .context("Module of kind {kind} not found")?
+                .with_context(|| format!("Module of kind {kind} not found"))?
                 .distributed_gen(&handle, module_params)
                 .await?;
 

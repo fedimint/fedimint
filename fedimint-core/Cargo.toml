@@ -67,6 +67,9 @@ url = { workspace = true, features = ["serde"] }
 test-log = { workspace = true }
 tokio-test = { workspace = true }
 
+[lints]
+workspace = true
+
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
