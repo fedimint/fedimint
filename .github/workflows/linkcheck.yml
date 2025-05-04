@@ -17,5 +17,13 @@ jobs:
           key: cache-lychee-${{ github.sha }}
           restore-keys: cache-lychee-
 
+      # accept 429 only for PR runs where secret isn't available
       - name: Check links
-        run: nix run nixpkgs#lychee -- --verbose docs README.md
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          nix run nixpkgs#lychee -- \
+            --verbose \
+            --cache \
+            --accept '${{ github.event_name == 'pull_request' && '200, 429' || '200' }}' \
+            docs README.md
