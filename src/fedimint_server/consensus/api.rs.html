@@ -174,7 +174,7 @@
 <a href=#174 id=174 data-nosnippet>174</a>        <span class="kw">let </span>module_id = module_ids
 <a href=#175 id=175 data-nosnippet>175</a>            .into_iter()
 <a href=#176 id=176 data-nosnippet>176</a>            .nth(outpoint.out_idx <span class="kw">as </span>usize)
-<a href=#177 id=177 data-nosnippet>177</a>            .context(<span class="string">"Outpoint index out of bounds {outpoint:?}"</span>)<span class="question-mark">?</span>;
+<a href=#177 id=177 data-nosnippet>177</a>            .with_context(|| <span class="macro">format!</span>(<span class="string">"Outpoint index out of bounds {outpoint:?}"</span>))<span class="question-mark">?</span>;
 <a href=#178 id=178 data-nosnippet>178</a>
 <a href=#179 id=179 data-nosnippet>179</a>        <span class="attr">#[allow(deprecated)]
 <a href=#180 id=180 data-nosnippet>180</a>        </span><span class="kw">let </span>outcome = <span class="self">self

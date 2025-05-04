@@ -250,7 +250,7 @@
 <a href=#250 id=250 data-nosnippet>250</a>                <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
 <a href=#251 id=251 data-nosnippet>251</a>                <span class="kw">async move </span>{
 <a href=#252 id=252 data-nosnippet>252</a>                    <span class="kw">let </span>response = util::retry(
-<a href=#253 id=253 data-nosnippet>253</a>                        <span class="string">"api-request-{method}-{peer}"</span>,
+<a href=#253 id=253 data-nosnippet>253</a>                        <span class="macro">format!</span>(<span class="string">"api-request-{method}-{peer}"</span>),
 <a href=#254 id=254 data-nosnippet>254</a>                        api_networking_backoff(),
 <a href=#255 id=255 data-nosnippet>255</a>                        || <span class="kw">async </span>{
 <a href=#256 id=256 data-nosnippet>256</a>                            <span class="self">self</span>.request_single_peer(method.clone(), params.clone(), <span class="kw-2">*</span>peer)
@@ -283,7 +283,7 @@
 <a href=#283 id=283 data-nosnippet>283</a>                            <span class="kw">let </span>params = <span class="kw-2">&amp;</span>params;
 <a href=#284 id=284 data-nosnippet>284</a>                            <span class="kw">async move </span>{
 <a href=#285 id=285 data-nosnippet>285</a>                                <span class="kw">let </span>response = util::retry(
-<a href=#286 id=286 data-nosnippet>286</a>                                    <span class="string">"api-request-{method}-{peer}"</span>,
+<a href=#286 id=286 data-nosnippet>286</a>                                    <span class="macro">format!</span>(<span class="string">"api-request-{method}-{peer}"</span>),
 <a href=#287 id=287 data-nosnippet>287</a>                                    api_networking_backoff(),
 <a href=#288 id=288 data-nosnippet>288</a>                                    || <span class="kw">async </span>{
 <a href=#289 id=289 data-nosnippet>289</a>                                        <span class="self">self</span>.request_single_peer(
