@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["LightningNode"],"fn":["external_daemons","open_channels_between_gateways","wait_for_ready_channel_on_gateway_with_counterparty"],"struct":["Bitcoind","Electrs","Esplora","ExternalDaemons","Lnd"],"type":["NamedGateway"]};
+window.SIDEBAR_ITEMS = {"enum":["LightningNode"],"fn":["external_daemons","open_channels_between_gateways","wait_for_ready_channel_on_gateway_with_counterparty"],"struct":["Bitcoind","Esplora","ExternalDaemons","Lnd"],"type":["NamedGateway"]};
