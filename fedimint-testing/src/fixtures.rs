@@ -71,7 +71,7 @@ impl Fixtures {
             DynServerBitcoinRpc,
             Option<DynBitcoindRpc>,
         ) = if real_testing {
-            // `backend-test.sh` overrides which Bitcoin RPC to use for electrs and esplora
+            // `backend-test.sh` overrides which Bitcoin RPC to use for esplora
             // backend tests
             let override_bitcoin_rpc_kind = env::var(FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV);
             let override_bitcoin_rpc_url = env::var(FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV);

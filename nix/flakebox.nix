@@ -237,7 +237,6 @@ let
         (hiPrio pkgs.bashInteractive)
         bc
         bitcoind
-        electrs
         jq
         lnd
         netcat

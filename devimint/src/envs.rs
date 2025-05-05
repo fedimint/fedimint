@@ -89,9 +89,6 @@ pub const FM_BITCOIND_BASE_EXECUTABLE_ENV: &str = "FM_BITCOIND_BASE_EXECUTABLE";
 // Env variable to override lnd binary set:
 pub const FM_LND_BASE_EXECUTABLE_ENV: &str = "FM_LND_BASE_EXECUTABLE";
 
-// Env variable to override electrs binary set:
-pub const FM_ELECTRS_BASE_EXECUTABLE_ENV: &str = "FM_ELECTRS_BASE_EXECUTABLE";
-
 // Env variable to override esplora binary set:
 pub const FM_ESPLORA_BASE_EXECUTABLE_ENV: &str = "FM_ESPLORA_BASE_EXECUTABLE";
 
