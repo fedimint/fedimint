@@ -17,13 +17,13 @@ jobs:
           key: cache-lychee-${{ github.sha }}
           restore-keys: cache-lychee-
 
-      # accept 429 only for PR runs where secret isn't available
+      # Accept 429 status codes so we don't fail when GitHub rate-limits us. The --github-token option didn't work and
+      # this way we'll successfully check *some* links each run, cache them and check others the next run.
       - name: Check links
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          nix run nixpkgs#lychee -- \
+          nix develop .#linkcheck -c lychee \
             --verbose \
             --cache \
-            --accept '${{ github.event_name == 'pull_request' && '200, 429' || '200' }}' \
+            --cache-exclude-status "429" \
+            --accept "200, 429" \
             docs README.md

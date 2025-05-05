@@ -404,6 +404,10 @@
               };
             };
 
+            linkcheck = flakeboxLib.mkDevShell {
+              nativeBuildInputs = [ nixpkgs-unstable.legacyPackages.${system}.lychee ];
+            };
+
             # Like `cross` but only with wasm
             crossWasm = flakeboxLib.mkDevShell (
               commonShellArgs
