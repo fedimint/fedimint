@@ -7,5 +7,4 @@ Here you can find scripts for running and testing Fedimint:
 * `cli-test.sh` - Runs a CLI-based integration test (required for PRs)
 * `final-checks.sh` - Checks to run before opening a PR
 * `mprocs-user-shell.sh` - Helper script that prepares the mprocs setup (generate some blocks, fund wallet, …)
-* `tmuxinator.sh` - Sets up a complete fedimint federation with Lightning gateway in tmux
 * `mprocs.sh` - Sets up a complete fedimint federation with Lightning gateway in mprocs
