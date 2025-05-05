@@ -147,8 +147,6 @@ declare_vars! {
         FM_PORT_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
         FM_PORT_LND_RPC: u16 = port_alloc(1)?; env: "FM_PORT_LND_RPC";
         FM_PORT_LND_REST: u16 = port_alloc(1)?; env: "FM_PORT_LND_REST";
-        FM_PORT_ELECTRS: u16 = port_alloc(1)?; env: "FM_PORT_ELECTRS";
-        FM_PORT_ELECTRS_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ELECTRS_MONITORING";
         FM_PORT_ESPLORA: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA";
         FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_MONITORING";
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
@@ -166,7 +164,6 @@ declare_vars! {
         FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone(); env: "FM_DATA_DIR";
         FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join("clients")).await?; env: "FM_CLIENT_BASE_DIR";
         FM_CLIENT_DIR: PathBuf = mkdir(FM_TEST_DIR.join("clients").join("default-0")).await?; env: "FM_CLIENT_DIR";
-        FM_ELECTRS_DIR: PathBuf = mkdir(FM_TEST_DIR.join("electrs")).await?; env: "FM_ELECTRS_DIR";
         FM_ESPLORA_DIR: PathBuf = mkdir(FM_TEST_DIR.join("esplora")).await?; env: "FM_ESPLORA_DIR";
         FM_READY_FILE: PathBuf = FM_TEST_DIR.join("ready"); env: "FM_READY_FILE";
 

@@ -9,9 +9,7 @@ use tokio::join;
 use tracing::{debug, info};
 
 use crate::LightningNode;
-use crate::external::{
-    Bitcoind, Electrs, Esplora, Lnd, NamedGateway, open_channels_between_gateways,
-};
+use crate::external::{Bitcoind, Esplora, Lnd, NamedGateway, open_channels_between_gateways};
 use crate::federation::{Client, Federation};
 use crate::gatewayd::{Gatewayd, LdkChainSource};
 use crate::recurringd::Recurringd;
@@ -36,7 +34,6 @@ pub struct DevFed {
     pub gw_lnd: Gatewayd,
     pub gw_ldk: Gatewayd,
     pub gw_ldk_second: Gatewayd,
-    pub electrs: Electrs,
     pub esplora: Esplora,
     pub recurringd: Recurringd,
 }
@@ -50,7 +47,6 @@ impl DevFed {
             gw_lnd,
             gw_ldk,
             gw_ldk_second,
-            electrs,
             esplora,
             recurringd,
         } = self;
@@ -62,7 +58,6 @@ impl DevFed {
             spawn_drop(fed),
             spawn_drop(lnd),
             spawn_drop(esplora),
-            spawn_drop(electrs),
             spawn_drop(bitcoind),
             spawn_drop(recurringd),
         );
@@ -84,7 +79,6 @@ pub struct DevJitFed {
     gw_lnd: JitArc<Gatewayd>,
     gw_ldk: JitArc<Gatewayd>,
     gw_ldk_second: JitArc<Gatewayd>,
-    electrs: JitArc<Electrs>,
     esplora: JitArc<Esplora>,
     recurringd: JitArc<Recurringd>,
     start_time: std::time::SystemTime,
@@ -131,18 +125,6 @@ impl DevJitFed {
                 let lnd = Lnd::new(&process_mgr, bitcoind).await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started lnd");
                 Ok(Arc::new(lnd))
-            }
-        });
-        let electrs = JitTryAnyhow::new_try({
-            let process_mgr = process_mgr.to_owned();
-            let bitcoind = bitcoind.clone();
-            || async move {
-                let bitcoind = bitcoind.get_try().await?.deref().clone();
-                debug!(target: LOG_DEVIMINT, "Starting electrs...");
-                let start_time = fedimint_core::time::now();
-                let electrs = Electrs::new(&process_mgr, bitcoind).await?;
-                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started electrs");
-                Ok(Arc::new(electrs))
             }
         });
         let esplora = JitTryAnyhow::new_try({
@@ -365,7 +347,6 @@ impl DevJitFed {
             gw_lnd,
             gw_ldk,
             gw_ldk_second,
-            electrs,
             esplora,
             recurringd,
             start_time,
@@ -380,9 +361,6 @@ impl DevJitFed {
         })
     }
 
-    pub async fn electrs(&self) -> anyhow::Result<&Electrs> {
-        Ok(self.electrs.get_try().await?.deref())
-    }
     pub async fn esplora(&self) -> anyhow::Result<&Esplora> {
         Ok(self.esplora.get_try().await?.deref())
     }
@@ -453,7 +431,6 @@ impl DevJitFed {
         let _ = self.gw_ldk_connected().await?;
         let _ = self.gw_ldk_second_connected().await?;
         let _ = self.lnd().await?;
-        let _ = self.electrs().await?;
         let _ = self.esplora().await?;
         let _ = self.recurringd_connected().await?;
         let _ = self.fed_epoch_generated.get_try().await?;
@@ -478,7 +455,6 @@ impl DevJitFed {
             gw_ldk: self.gw_ldk().await?.to_owned(),
             gw_ldk_second: self.gw_ldk_second().await?.to_owned(),
             esplora: self.esplora().await?.to_owned(),
-            electrs: self.electrs().await?.to_owned(),
             recurringd: self.recurringd().await?.to_owned(),
         })
     }
@@ -489,7 +465,6 @@ impl DevJitFed {
             lnd,
             fed,
             gw_lnd,
-            electrs,
             esplora,
             gw_ldk,
             gw_ldk_second,
@@ -504,7 +479,6 @@ impl DevJitFed {
             spawn_drop(fed),
             spawn_drop(lnd),
             spawn_drop(esplora),
-            spawn_drop(electrs),
             spawn_drop(bitcoind),
             spawn_drop(recurringd),
         );

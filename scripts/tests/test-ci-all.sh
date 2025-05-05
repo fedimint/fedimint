@@ -221,14 +221,6 @@ function bckn_gw_not_client() {
 }
 export -f bckn_gw_not_client
 
-function bckn_electrs() {
-  # backend tests don't support different versions, so we skip for backwards-compatibility tests
-  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/backend-test.sh
-  fi
-}
-export -f bckn_electrs
-
 function bckn_esplora() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -313,9 +305,6 @@ tests_to_run_in_parallel+=(
   "bckn_bitcoind_lnv2"
   "bckn_gw_client"
   "bckn_gw_not_client"
-  # TODO: https://github.com/fedimint/fedimint/issues/5917
-  # disabling while we investigate 60s timeouts causing CI flakiness
-  # "bckn_electrs"
   "bckn_esplora"
   "latency_reissue"
   "latency_ln_send"

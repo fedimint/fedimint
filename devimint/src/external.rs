@@ -763,52 +763,6 @@ impl LightningNode {
 }
 
 #[derive(Clone)]
-pub struct Electrs {
-    _process: ProcessHandle,
-    _bitcoind: Bitcoind,
-}
-
-impl Electrs {
-    pub async fn new(process_mgr: &ProcessManager, bitcoind: Bitcoind) -> Result<Self> {
-        debug!(target: LOG_DEVIMINT, "Starting electrs");
-        let electrs_dir = process_mgr
-            .globals
-            .FM_ELECTRS_DIR
-            .to_str()
-            .context("non utf8 path")?;
-
-        let daemon_dir = &process_mgr.globals.FM_BTC_DIR.display();
-
-        let conf = format!(
-            include_str!("cfg/electrs.toml"),
-            rpc_port = process_mgr.globals.FM_PORT_BTC_RPC,
-            p2p_port = process_mgr.globals.FM_PORT_BTC_P2P,
-            electrs_port = process_mgr.globals.FM_PORT_ELECTRS,
-            monitoring_port = process_mgr.globals.FM_PORT_ELECTRS_MONITORING,
-        );
-        debug!("electrs conf: {:?}", conf);
-        write_overwrite_async(
-            process_mgr.globals.FM_ELECTRS_DIR.join("electrs.toml"),
-            conf,
-        )
-        .await?;
-        let cmd = cmd!(
-            crate::util::Electrs,
-            "--conf-dir={electrs_dir}",
-            "--db-dir={electrs_dir}",
-            "--daemon-dir={daemon_dir}"
-        );
-        let process = process_mgr.spawn_daemon("electrs", cmd).await?;
-        debug!(target: LOG_DEVIMINT, "Electrs ready");
-
-        Ok(Self {
-            _bitcoind: bitcoind,
-            _process: process,
-        })
-    }
-}
-
-#[derive(Clone)]
 pub struct Esplora {
     _process: ProcessHandle,
     _bitcoind: Bitcoind,
@@ -882,16 +836,12 @@ impl Esplora {
 #[allow(unused)]
 pub struct ExternalDaemons {
     pub bitcoind: Bitcoind,
-    pub electrs: Electrs,
     pub esplora: Esplora,
 }
 
 pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDaemons> {
     let bitcoind = Bitcoind::new(process_mgr, false).await?;
-    let (electrs, esplora) = tokio::try_join!(
-        Electrs::new(process_mgr, bitcoind.clone()),
-        Esplora::new(process_mgr, bitcoind.clone()),
-    )?;
+    let esplora = Esplora::new(process_mgr, bitcoind.clone()).await?;
     let start_time = fedimint_core::time::now();
     // make sure the bitcoind wallet is ready
     let _ = bitcoind.wallet_client().await?;
@@ -900,9 +850,5 @@ pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDa
         "starting base daemons took {:?}",
         start_time.elapsed()?
     );
-    Ok(ExternalDaemons {
-        bitcoind,
-        electrs,
-        esplora,
-    })
+    Ok(ExternalDaemons { bitcoind, esplora })
 }
