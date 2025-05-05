@@ -170,19 +170,27 @@ pub async fn latency_tests(
             }
         }
         LatencyTest::LnSend => {
-            use fedimint_core::util::{backoff_util, retry};
             info!("Testing latency of ln send");
+            let mut ln_sends = Vec::with_capacity(iterations);
             for _ in 0..iterations {
-                retry("ln send", backoff_util::ln_send_backoff(), || async {
-                    let invoice = gw_ldk.create_invoice(1_000_000).await?;
-                    ln_pay(&client, invoice.to_string(), lnd_gw_id.clone(), false).await?;
-                    gw_ldk
-                        .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
-                        .await?;
-                    Ok(())
-                })
-                .await
-                .context("couldn't pay invoice after retries")?;
+                let invoice = gw_ldk.create_invoice(1_000_000).await?;
+                let start_time = Instant::now();
+                ln_pay(&client, invoice.to_string(), lnd_gw_id.clone(), false).await?;
+                gw_ldk
+                    .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
+                    .await?;
+                ln_sends.push(start_time.elapsed());
+            }
+            let ln_sends_stats = stats_for(ln_sends);
+            println!("### LATENCY LN SEND: {ln_sends_stats}");
+
+            if assert_thresholds {
+                assert!(ln_sends_stats.median < Duration::from_secs(10));
+                assert!(ln_sends_stats.p90 < ln_sends_stats.median * p90_median_factor);
+                assert!(
+                    ln_sends_stats.max.as_secs_f64()
+                        < ln_sends_stats.p90.as_secs_f64() * max_p90_factor
+                );
             }
         }
         LatencyTest::LnReceive => {
@@ -515,7 +523,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     .get(i)
                     .expect("Not enough gateway-cli paths");
 
-                let gateways = vec![&mut dev_fed.gw_lnd];
+                let gateways = vec![&mut dev_fed.gw_lnd, &mut dev_fed.gw_ldk];
 
                 try_join_all(gateways.into_iter().map(|gateway| {
                     gateway.restart_with_bin(process_mgr, new_gatewayd_path, new_gateway_cli_path)
