@@ -171,7 +171,7 @@ mod tests {
         let (opid, invoice, _) = lightning_module
             .create_bolt11_invoice(
                 amount,
-                Bolt11InvoiceDescription::Direct(&desc),
+                Bolt11InvoiceDescription::Direct(desc),
                 None,
                 (),
                 Some(gateway),

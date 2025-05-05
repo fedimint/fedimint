@@ -1040,7 +1040,7 @@ async fn client_create_invoice(
     let (operation_id, invoice, _) = lightning_module
         .create_bolt11_invoice(
             invoice_amount,
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             (),
             ln_gateway,
