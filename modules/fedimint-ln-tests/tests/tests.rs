@@ -95,7 +95,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
         .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice(
             sats(250),
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             extra_meta.clone(),
             None,
@@ -157,7 +157,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice(
             sats(250),
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             (),
             None,
@@ -304,7 +304,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice(
             sats(250),
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             (),
             None,
@@ -348,7 +348,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice(
             sats(250),
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             (),
             ln_gateway,
@@ -407,7 +407,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice_for_user(
             sats(250),
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             keypair.public_key(),
             (),
@@ -466,7 +466,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user(
             sats(250),
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             keypair.public_key(),
             (),
@@ -538,7 +538,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user_tweaked(
             sats(250),
-            Bolt11InvoiceDescription::Direct(&desc),
+            Bolt11InvoiceDescription::Direct(desc),
             None,
             keypair.public_key(),
             1, // tweak with index 1
