@@ -535,7 +535,7 @@ jobs:
         with:
           files: "bins/**"
           prerelease: ${{ env.IS_PRERELEASE }}
-          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Build DEB package
         run: |
@@ -569,7 +569,7 @@ jobs:
         with:
           files: "debs/**.deb"
           prerelease: ${{ env.IS_PRERELEASE }}
-          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
@@ -583,7 +583,7 @@ jobs:
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ env.IS_PRERELEASE }}
-          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
 
   status:
     name: Status
