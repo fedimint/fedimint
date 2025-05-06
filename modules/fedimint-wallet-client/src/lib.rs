@@ -694,7 +694,6 @@ impl WalletClientModule {
 
     pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
         let (operation_id, address, _) = self.safe_allocate_deposit_address(req.extra_meta).await?;
-        self.pegin_monitor_wakeup_sender.send_replace(());
 
         Ok(PegInResponse {
             deposit_address: Address::from_script(&address.script_pubkey(), self.get_network())?
