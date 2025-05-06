@@ -526,6 +526,14 @@ impl ClientModule for WalletClientModule {
                         .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e))?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
+                },
+                "check_pegin_status" => {
+                    let req: PeginStatusRequest = serde_json::from_value(request)?;
+                    let response =self.check_pegin_status(req.operation_id)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("peg_in status check failed: {}", e))?;
+                    let result = serde_json::to_value(&response)?;
+                    yield result;
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
@@ -545,6 +553,25 @@ impl ClientModule for WalletClientModule {
 
 #[derive(Deserialize)]
 struct WalletSummaryRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeginStatusRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PegInStatusResponse {
+    pub operation_id: OperationId,
+    pub deposit_address: Address<NetworkUnchecked>,
+    pub claimed_outputs: Vec<bitcoin::OutPoint>,
+    pub status: PegInStatusKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PegInStatusKind {
+    Pending,
+    Claimed,
+}
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {
@@ -1010,6 +1037,35 @@ impl WalletClientModule {
             .map(|(key, data)| (key.0, data))
             .collect()
             .await)
+    }
+
+    pub async fn check_pegin_status(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<Option<PegInStatusResponse>> {
+        let pegin_tweak_idx = self
+            .list_peg_in_tweak_idxes()
+            .await
+            .context("Failed to list peg-in tweak indices")?;
+        for (tweak_idx, data) in pegin_tweak_idx {
+            if operation_id == data.operation_id {
+                let (_, _, address, _) = self.data.derive_deposit_address(tweak_idx);
+                let deposit_address = address.as_unchecked().clone();
+                let status = if data.claimed.is_empty() {
+                    PegInStatusKind::Pending
+                } else {
+                    PegInStatusKind::Claimed
+                };
+
+                return Ok(Some(PegInStatusResponse {
+                    operation_id,
+                    deposit_address,
+                    claimed_outputs: data.claimed,
+                    status,
+                }));
+            }
+        }
+        Ok(None)
     }
 
     pub async fn find_tweak_idx_by_address(
