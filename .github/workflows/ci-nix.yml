@@ -542,7 +542,7 @@ jobs:
         with:
           files: "bins/**"
           prerelease: ${{ env.IS_PRERELEASE }}
-          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Build DEB package
         if: matrix.platform.build-deb
@@ -579,7 +579,7 @@ jobs:
         with:
           files: "debs/**.deb"
           prerelease: ${{ env.IS_PRERELEASE }}
-          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
 
       - name: Upload RPM packages
         if: matrix.platform.build-rpm
@@ -594,7 +594,7 @@ jobs:
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ env.IS_PRERELEASE }}
-          body: ${{ env.IS_PRERELEASE && env.PRERELEASE_MESSAGE || '' }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
 
   status:
     name: Status
