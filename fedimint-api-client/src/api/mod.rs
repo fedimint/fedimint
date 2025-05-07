@@ -21,6 +21,7 @@ use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -587,6 +588,10 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     /// Fetch the backup statistics from the federation (admin endpoint)
     async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics>;
+
+    /// Get the invite code for the federation guardian.
+    /// For instance, useful after DKG
+    async fn get_invite_code(&self, guardian: PeerId) -> PeerResult<InviteCode>;
 }
 
 pub fn deserialize_outcome<R>(
