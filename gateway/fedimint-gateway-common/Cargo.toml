@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 bitcoin = { workspace = true }
 clap = { workspace = true }
-fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.7.1-beta.0" }
+fedimint-api-client = { path = "../../fedimint-api-client", version = "=0.7.1" }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
