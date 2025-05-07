@@ -102,11 +102,7 @@ pub async fn run(
 
     let server_bitcoin_rpc_monitor = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
-        if is_running_in_test_env() {
-            Duration::from_millis(100)
-        } else {
-            Duration::from_secs(60)
-        },
+        Duration::from_secs(if is_running_in_test_env() { 1 } else { 60 }),
         task_group,
     );
 

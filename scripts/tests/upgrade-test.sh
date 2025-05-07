@@ -152,7 +152,6 @@ if [ -z "${CI:-}" ] && [[ -t 1 ]] && [ -z "${FM_TEST_CI_ALL_DISABLE_ETA:-}" ]; t
   parallel_args+=(--eta)
 fi
 parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
-parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
 parallel_args+=(--timeout "$FM_TEST_UPGRADE_TIMEOUT")
 parallel_args+=(
@@ -162,6 +161,18 @@ parallel_args+=(
   --memfree 2G
   --nice 15
 )
+
+nix run nixpkgs#stress-ng -- \
+  --cpu "$(nproc)" \
+  --cpu-load 50 \
+  --vm 1 --vm-bytes 60% \
+  --timeout 1200s \
+  --metrics-brief \
+  &
+
+echo "started stress-ng in background"
+
+sleep 5
 
 >&2 echo "## Starting all tests in parallel..."
 >&2 echo "parallel ${parallel_args[*]}"
