@@ -11,6 +11,7 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
+use futures::stream::StreamExt;
 use tokio::select;
 use tracing::debug;
 
@@ -57,31 +58,50 @@ pub async fn start_api_announcement_service(
         // together
         sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).await;
         loop {
-            let announcement = db.begin_transaction_nc()
+            let mut success = true;
+            let announcements = db.begin_transaction_nc()
                 .await
-                .get_value(&ApiAnnouncementKey(our_peer_id))
+                .find_by_prefix(&ApiAnnouncementPrefix)
                 .await
-                .expect("Our own API announcement should be present in the database");
+                .map(|(peer_key, peer_announcement)| (peer_key.0, peer_announcement))
+                .collect::<Vec<(PeerId, SignedApiAnnouncement)>>()
+                .await;
 
-            if let Err(e) = api_client
-                .submit_api_announcement(our_peer_id, announcement.clone())
-                .await {
-                debug!(target: LOG_NET_API, ?e, "Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
-                sleep(Duration::from_secs(FAILURE_RETRY_SECONDS)).await;
-            } else {
-                let our_announcement_key = ApiAnnouncementKey(our_peer_id);
-                let new_announcement = db.wait_key_check(
-                    &our_announcement_key,
-                    |new_announcement| {
-                        new_announcement.and_then(
-                            |new_announcement| (new_announcement.api_announcement.nonce != announcement.api_announcement.nonce).then_some(())
-                        )
-                    });
-
-                select! {
-                    _ = new_announcement => {},
-                    () = sleep(Duration::from_secs(SUCCESS_RETRY_SECONDS)) => {},
+            // Announce all peer API URLs we know, but at least our own
+            for (peer, announcement) in announcements {
+                if let Err(e) = api_client
+                    .submit_api_announcement(peer, announcement.clone())
+                    .await {
+                    debug!(target: LOG_NET_API, ?peer, ?e, "Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
+                    success = false;
                 }
+            }
+
+            // While we announce all peer API urls, we only want to immediately trigger in case
+            let our_announcement_key = ApiAnnouncementKey(our_peer_id);
+            let our_announcement = db
+                .begin_transaction_nc()
+                .await
+                .get_value(&our_announcement_key)
+                .await
+                .expect("Our announcement is always present");
+            let new_announcement = db.wait_key_check(
+                &our_announcement_key,
+                |new_announcement| {
+                    new_announcement.and_then(
+                        |new_announcement| (new_announcement.api_announcement.nonce != our_announcement.api_announcement.nonce).then_some(())
+                    )
+                });
+
+            let auto_announcement_delay = if success {
+                Duration::from_secs(SUCCESS_RETRY_SECONDS)
+            } else {
+                Duration::from_secs(FAILURE_RETRY_SECONDS)
+            };
+
+            select! {
+                _ = new_announcement => {},
+                () = sleep(auto_announcement_delay) => {},
             }
         }
     });
