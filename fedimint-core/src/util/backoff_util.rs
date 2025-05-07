@@ -11,22 +11,12 @@ pub fn background_backoff() -> FibonacciBackoff {
 }
 
 /// A backoff strategy for relatively quick foreground operations.
-///
-/// Starts at 200ms and increases to 5s. Will retry 10 times before giving up,
-/// with a maximum total delay between 20.8s and 22.8s depending on jitter.
 pub fn aggressive_backoff() -> FibonacciBackoff {
-    // Not accounting for jitter, the delays are:
-    // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, 2.6, 4.2, 5.0, 5.0.
-    //
-    // Jitter adds a random value between 0 and `min_delay` to each delay.
-    // Total jitter is between 0 and (10 * 0.2) = 2.0.
-    //
-    // Maximum possible delay including jitter is 22.8 seconds.
-    custom_backoff(Duration::from_millis(200), Duration::from_secs(5), Some(10))
+    custom_backoff(Duration::from_millis(200), Duration::from_secs(5), Some(14))
 }
 
 pub fn aggressive_backoff_long() -> FibonacciBackoff {
-    custom_backoff(Duration::from_millis(200), Duration::from_secs(5), Some(15))
+    custom_backoff(Duration::from_millis(200), Duration::from_secs(5), Some(25))
 }
 
 #[cfg(test)]
