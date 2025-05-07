@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -360,7 +360,10 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     .out_json()
                     .await?;
 
-                let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_6_0_ALPHA {
+
+                let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_8_0_ALPHA {
+                    (2000, 100)
+                } else if gatewayd_version >= *VERSION_0_6_0_ALPHA {
                     (50000, 5000)
                 } else {
                     (0, 10000)
