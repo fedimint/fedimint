@@ -140,6 +140,7 @@ impl TracingSetup {
         };
 
         let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_ansi(is_terminal::is_terminal(std::io::stderr()))
             .with_thread_names(false) // can be enabled for debugging
             .with_writer(fmt_writer)
             .with_filter(filter_layer);
