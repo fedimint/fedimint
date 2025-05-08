@@ -13,7 +13,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, task};
 use fedimint_logging::LOG_TEST;
 use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::btc::BitcoinTest;
 
@@ -42,6 +42,36 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     }
 
     async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
+        // `Stdio::piped` can't even parse outputs larger
+        // than pipe buffer size (64K on Linux, 16K on MacOS), so
+        // we should split larger requesteds into smaller chunks.
+        //
+        // On top of it mining a lot of blocks is just slow, so should
+        // be avoided.
+        const BLOCK_NUM_LIMIT: u64 = 32;
+
+        if BLOCK_NUM_LIMIT < block_num {
+            warn!(
+                target: LOG_TEST,
+                %block_num,
+                "Mining a lot of blocks (even when split) is a terrible idea and can lead to issues. Splitting request just to make it work somehow."
+            );
+            let mut block_num = block_num;
+            let mut blocks = vec![];
+
+            loop {
+                if BLOCK_NUM_LIMIT < block_num {
+                    block_num -= BLOCK_NUM_LIMIT;
+                    blocks.append(
+                        &mut Box::pin(async { self.mine_blocks(BLOCK_NUM_LIMIT).await }).await,
+                    );
+                } else {
+                    blocks.append(&mut Box::pin(async { self.mine_blocks(block_num).await }).await);
+                    return blocks;
+                }
+            }
+        }
+
         let mined_block_hashes = self
             .client
             .generate_to_address(block_num, &self.get_new_address().await)
