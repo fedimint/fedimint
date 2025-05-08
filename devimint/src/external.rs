@@ -24,7 +24,7 @@ use tokio::task::spawn_blocking;
 use tokio::time::Instant;
 use tonic_lnd::Client as LndClient;
 use tonic_lnd::lnrpc::GetInfoRequest;
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 
 use crate::gatewayd::LdkChainSource;
 use crate::util::{ProcessHandle, ProcessManager, poll};
@@ -208,6 +208,32 @@ impl Bitcoind {
     }
 
     pub async fn mine_blocks(&self, block_num: u64) -> Result<()> {
+        // `Stdio::piped` can't even parse outputs larger
+        // than pipe buffer size (64K on Linux, 16K on MacOS), so
+        // we should split larger requesteds into smaller chunks.
+        //
+        // On top of it mining a lot of blocks is just slow, so should
+        // be avoided.
+        const BLOCK_NUM_LIMIT: u64 = 32;
+
+        if BLOCK_NUM_LIMIT < block_num {
+            warn!(
+                target: LOG_DEVIMINT,
+                %block_num,
+                "Mining a lot of blocks (even when split) is a terrible idea and can lead to issues. Splitting request just to make it work somehow."
+            );
+            let mut block_num = block_num;
+
+            loop {
+                if BLOCK_NUM_LIMIT < block_num {
+                    block_num -= BLOCK_NUM_LIMIT;
+                    Box::pin(async { self.mine_blocks(BLOCK_NUM_LIMIT).await }).await?;
+                } else {
+                    Box::pin(async { self.mine_blocks(block_num).await }).await?;
+                    return Ok(());
+                }
+            }
+        }
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let addr = self.get_new_address().await?;
