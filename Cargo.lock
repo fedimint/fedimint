@@ -3817,9 +3817,11 @@ dependencies = [
  "bls12_381",
  "fedimint-api-client",
  "fedimint-core",
+ "fedimint-logging",
  "futures",
  "group",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
