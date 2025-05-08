@@ -313,7 +313,6 @@
                     pkgs.nil
                     pkgs.convco
                     pkgs.nodePackages.bash-language-server
-                    pkgs.sccache
                   ]
                   ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [ pkgs.semgrep ]
                   ++ lib.optionals (!stdenv.isDarwin) [
@@ -335,7 +334,6 @@
                     >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
                   fi
 
-                  export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
                   export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${REPO_ROOT}/target-nix}"
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
 
