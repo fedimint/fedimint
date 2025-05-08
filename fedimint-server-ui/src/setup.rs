@@ -9,7 +9,7 @@ use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
 use crate::assets::WithStaticRoutesExt as _;
-use crate::auth::UserAuth;
+use crate::auth::{MaybeUserAuth, UserAuth};
 use crate::{
     LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, common_head, login_form_response,
     login_submit_response,
@@ -24,7 +24,7 @@ pub const START_DKG_ROUTE: &str = "/start_dkg";
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct SetupInput {
-    pub password: String,
+    pub password: Option<String>,
     pub name: String,
     #[serde(default)]
     pub is_lead: bool,
@@ -36,8 +36,11 @@ pub(crate) struct PeerInfoInput {
     pub peer_info: String,
 }
 
-async fn root(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.auth().await.is_some() {
+async fn root(
+    State(state): State<UiState<DynSetupApi>>,
+    maybe_auth: MaybeUserAuth,
+) -> impl IntoResponse {
+    if state.api.auth().await.is_some() && !maybe_auth.is_authenticated() {
         return Redirect::to(LOGIN_ROUTE).into_response();
     }
 
@@ -78,9 +81,19 @@ pub fn setup_layout(title: &str, content: Markup) -> Markup {
 }
 
 // GET handler for the /setup route (display the setup form)
-async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.setup_code().await.is_some() || state.api.auth().await.is_some() {
-        return Redirect::to(ROOT_ROUTE).into_response();
+async fn setup_form(
+    State(state): State<UiState<DynSetupApi>>,
+    maybe_auth: MaybeUserAuth,
+) -> impl IntoResponse {
+    // If we have set a password already and aren't authenticated, redirect to the
+    // login page
+    if state.api.auth().await.is_some() && !maybe_auth.is_authenticated() {
+        return Redirect::to(LOGIN_ROUTE).into_response();
+    }
+
+    // If we already have a setup code, redirect to the federation setup page
+    if state.api.setup_code().await.is_some() {
+        return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
 
     let content = html! {
@@ -101,8 +114,11 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                 input type="text" class="form-control" id="name" name="name" placeholder="Guardian name" required;
             }
 
-            div class="form-group mb-4" {
-                input type="password" class="form-control" id="password" name="password" placeholder="Secure password" required;
+            // If we have a password set, we don't need to ask for it here
+            @if state.api.auth().await.is_none() {
+                div class="form-group mb-4" {
+                    input type="password" class="form-control" id="password" name="password" placeholder="Secure password" required;
+                }
             }
 
             div class="form-group mb-4" {
@@ -131,8 +147,13 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
 // POST handler for the /setup route (process the password setup form)
 async fn setup_submit(
     State(state): State<UiState<DynSetupApi>>,
+    maybe_auth: MaybeUserAuth,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
+    if state.api.auth().await.is_some() && !maybe_auth.is_authenticated() {
+        return Redirect::to(LOGIN_ROUTE).into_response();
+    }
+
     // Only use federation_name if is_lead is true
     let federation_name = if input.is_lead {
         Some(input.federation_name)
@@ -142,7 +163,7 @@ async fn setup_submit(
 
     match state
         .api
-        .set_local_parameters(ApiAuth(input.password), input.name, federation_name)
+        .set_local_parameters(input.password.map(ApiAuth), input.name, federation_name)
         .await
     {
         Ok(_) => Redirect::to(LOGIN_ROUTE).into_response(),
@@ -160,9 +181,12 @@ async fn setup_submit(
 }
 
 // GET handler for the /login route (display the login form)
-async fn login_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
-    if state.api.setup_code().await.is_none() {
-        return Redirect::to(ROOT_ROUTE).into_response();
+async fn login_form(
+    State(state): State<UiState<DynSetupApi>>,
+    maybe_auth: MaybeUserAuth,
+) -> impl IntoResponse {
+    if state.api.auth().await.is_none() || maybe_auth.is_authenticated() {
+        return Redirect::to(LOCAL_SETUP_ROUTE).into_response();
     }
 
     login_form_response().into_response()

@@ -114,7 +114,7 @@ pub(crate) fn login_submit_response(
     jar: CookieJar,
     input: LoginInput,
 ) -> impl IntoResponse {
-    if auth.0 == input.password {
+    if auth.0.as_str() == input.password.trim() {
         let mut cookie = Cookie::new(auth_cookie_name, auth_cookie_value);
 
         cookie.set_http_only(true);
@@ -125,6 +125,9 @@ pub(crate) fn login_submit_response(
 
     let content = html! {
         div class="alert alert-danger" { "The password is invalid" }
+        p {
+            (format!("expected: '{}', got '{}'", auth.0, input.password))
+        }
         div class="button-container" {
             a href="/login" class="btn btn-primary setup-btn" { "Return to Login" }
         }

@@ -58,3 +58,9 @@ where
         }
     }
 }
+
+impl MaybeUserAuth {
+    pub fn is_authenticated(&self) -> bool {
+        self.is_authenticated
+    }
+}
