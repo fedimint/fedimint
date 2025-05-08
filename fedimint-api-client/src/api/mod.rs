@@ -1189,7 +1189,14 @@ impl ClientConnection {
         self.sender
             .send(sender)
             .await
-            .expect("Api connection request channel closed unexpectedly");
+            .inspect_err(|err| {
+                warn!(
+                    target: LOG_CLIENT_NET_API,
+                    err = %err.fmt_compact(),
+                    "Api connection request channel closed unexpectedly"
+                );
+            })
+            .ok()?;
 
         receiver.await.ok()
     }
