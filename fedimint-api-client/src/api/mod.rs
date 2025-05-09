@@ -1060,6 +1060,15 @@ impl IRawFederationApi for ReconnectFederationApi {
         .into()
     }
 
+    #[instrument(
+        target = LOG_NET_API,
+        skip_all,
+        fields(
+            peer_id = %peer_id,
+            method = %method,
+            params = %params.params,
+        )
+    )]
     async fn request_raw(
         &self,
         peer_id: PeerId,
