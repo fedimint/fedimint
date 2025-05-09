@@ -1,6 +1,6 @@
 use fedimint_core::encode_bolt11_invoice_features_without_length;
 use hex::FromHex;
-use lightning::ln::features::Bolt11InvoiceFeatures;
+use lightning::types::features::Bolt11InvoiceFeatures;
 
 use super::wire_features_to_lnd_feature_vec;
 
