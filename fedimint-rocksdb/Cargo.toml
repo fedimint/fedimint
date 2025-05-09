@@ -31,7 +31,7 @@ tempfile = { workspace = true }
 [lints]
 workspace = true
 
-[target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
 rocksdb = { workspace = true, features = ["jemalloc"] }
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
