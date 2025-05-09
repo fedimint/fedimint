@@ -21,6 +21,7 @@ use fedimint_core::db::Database;
 use fedimint_core::envs::{
     BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
+use fedimint_core::module::ApiAuth;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
@@ -55,7 +56,7 @@ use crate::envs::{
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
     FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
-    FM_PORT_ESPLORA_ENV,
+    FM_PASSWORD_FILE_ENV, FM_PORT_ESPLORA_ENV,
 };
 use crate::metrics::APP_START_TS;
 
@@ -129,6 +130,18 @@ struct ServerOpts {
 
     #[arg(long, env = FM_ENABLE_IROH_ENV)]
     enable_iroh: bool,
+
+    /// Path to a file containing the guardian password
+    ///
+    /// The password is used to encrypt the secret key material and that is used
+    /// for guardian authentication. If not set, a password file will be
+    /// created in the data dir once the guardian sets their password
+    /// through the web UI for the first time.
+    ///
+    /// This argument is meant to be used for storing the password in a ram disk
+    /// and dynamically load it on boot from a secure key store.
+    #[arg(long, env = FM_PASSWORD_FILE_ENV)]
+    password_file: Option<PathBuf>,
 
     /// Enable tokio console logging
     #[arg(long, env = FM_BIND_TOKIO_CONSOLE_ENV)]
@@ -234,6 +247,9 @@ pub async fn run(
         );
     }
 
+    let password_file_password =
+        maybe_read_password_file_password(server_opts.password_file.as_ref()).await;
+
     let settings = ConfigGenSettings {
         p2p_bind: server_opts.bind_p2p,
         api_bind: server_opts.bind_api,
@@ -241,6 +257,7 @@ pub async fn run(
         p2p_url: server_opts.p2p_url,
         api_url: server_opts.api_url,
         enable_iroh: server_opts.enable_iroh,
+        password_file_password,
         modules: server_gen_params.clone(),
         registry: server_gens.clone(),
     };
@@ -304,6 +321,22 @@ pub async fn run(
 
     // Should we ever shut down without an error code?
     std::process::exit(-1);
+}
+
+async fn maybe_read_password_file_password(
+    maybe_password_file: Option<&PathBuf>,
+) -> Option<ApiAuth> {
+    if let Some(password_file) = maybe_password_file {
+        let password = tokio::fs::read_to_string(&password_file)
+            .await
+            .unwrap_or_else(|_| panic!("Failed to read password file: {}", password_file.display()))
+            .trim()
+            .to_owned();
+
+        Some(ApiAuth(password))
+    } else {
+        None
+    }
 }
 
 pub fn default_modules(

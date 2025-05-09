@@ -332,8 +332,11 @@ pub async fn run_config_gen(
         cfg.consensus.api_endpoints.is_empty(),
     );
 
-    // TODO: Make writing password optional
-    write_new(data_dir.join(PLAINTEXT_PASSWORD), &cfg.private.api_auth.0)?;
+    // Only write the default password file if none was specified
+    if settings.password_file_password.is_none() {
+        write_new(data_dir.join(PLAINTEXT_PASSWORD), &cfg.private.api_auth.0)?;
+    }
+
     write_new(data_dir.join(SALT_FILE), random_salt())?;
     write_server_config(
         &cfg,

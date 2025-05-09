@@ -48,8 +48,8 @@ pub struct SetupState {
 #[derive(Clone, Debug)]
 /// Connection information sent between peers in order to start config gen
 pub struct LocalParams {
-    /// Our auth string
-    auth: ApiAuth,
+    /// Our auth string, if not set via the environment
+    auth: Option<ApiAuth>,
     /// Our TLS private key
     tls_key: Option<rustls::PrivateKey>,
     /// Optional secret key for our iroh api endpoint
@@ -117,12 +117,16 @@ impl ISetupApi for SetupApi {
     }
 
     async fn auth(&self) -> Option<ApiAuth> {
+        if let Some(password) = &self.settings.password_file_password {
+            return Some(password.clone());
+        }
+
         self.state
             .lock()
             .await
             .local_params
             .as_ref()
-            .map(|lp| lp.auth.clone())
+            .and_then(|lp| lp.auth.clone())
     }
 
     async fn connected_peers(&self) -> Vec<String> {
@@ -142,18 +146,30 @@ impl ISetupApi for SetupApi {
 
     async fn set_local_parameters(
         &self,
-        auth: ApiAuth,
+        maybe_auth: Option<ApiAuth>,
         name: String,
         federation_name: Option<String>,
     ) -> anyhow::Result<String> {
         ensure!(!name.is_empty(), "The guardian name is empty");
 
-        ensure!(!auth.0.is_empty(), "The password is empty");
+        if let Some(auth) = &maybe_auth {
+            ensure!(!auth.0.is_empty(), "The password is empty");
 
-        ensure!(
-            auth.0.trim() == auth.0,
-            "The password contains leading/trailing whitespace",
-        );
+            ensure!(
+                auth.0.trim() == auth.0,
+                "The password contains leading/trailing whitespace",
+            );
+
+            ensure!(
+                self.auth().await.is_none(),
+                "The password has already been set via FM_PASSWORD_FILE"
+            );
+        } else {
+            ensure!(
+                self.auth().await.is_some(),
+                "No password was provided and it has not been set via FM_PASSWORD_FILE"
+            );
+        }
 
         if let Some(federation_name) = federation_name.as_ref() {
             ensure!(!federation_name.is_empty(), "The federation name is empty");
@@ -184,7 +200,7 @@ impl ISetupApi for SetupApi {
             };
 
             LocalParams {
-                auth,
+                auth: maybe_auth,
                 tls_key: None,
                 iroh_api_sk: Some(iroh_api_sk.clone()),
                 iroh_p2p_sk: Some(iroh_p2p_sk.clone()),
@@ -200,7 +216,7 @@ impl ISetupApi for SetupApi {
                 gen_cert_and_key(&name).expect("Failed to generate TLS for given guardian name");
 
             LocalParams {
-                auth,
+                auth: maybe_auth,
                 tls_key: Some(tls_key),
                 iroh_api_sk: None,
                 iroh_p2p_sk: None,
@@ -303,7 +319,7 @@ impl ISetupApi for SetupApi {
             tls_key: local_params.tls_key,
             iroh_api_sk: local_params.iroh_api_sk,
             iroh_p2p_sk: local_params.iroh_p2p_sk,
-            api_auth: local_params.auth,
+            api_auth: self.auth().await.expect("Auth is set"),
             peers: (0..)
                 .map(|i| PeerId::from(i as u16))
                 .zip(state.setup_codes.clone().into_iter())
@@ -335,12 +351,9 @@ impl HasApiContext<SetupApi> for SetupApi {
         let db = self.db.clone();
         let dbtx = self.db.begin_transaction().await;
 
-        let is_authenticated = match self.state.lock().await.local_params {
+        let is_authenticated = match request.auth.as_ref() {
+            Some(auth) => *auth == self.auth().await.expect("Auth is set"),
             None => false,
-            Some(ref params) => match request.auth.as_ref() {
-                Some(auth) => *auth == params.auth,
-                None => false,
-            },
         };
 
         let context = ApiEndpointContext::new(db, dbtx, is_authenticated, request.auth.clone());
@@ -366,9 +379,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                 config.set_local_parameters(auth, request.name, request.federation_name)
-                    .await
-                    .map_err(|e| ApiError::bad_request(e.to_string()))
+                // If there is a password set already we need to check that the caller is authorized to set local params
+                if config.auth().await.is_some() && !context.has_auth() {
+                    return Err(ApiError::unauthorized());
+                }
+
+                // Only pass on auth if no password is set already
+                let maybe_auth = config.auth().await.is_none()
+                    .then(|| auth.clone());
+
+                config.set_local_parameters(maybe_auth, request.name, request.federation_name)
+                   .await
+                   .map_err(|e| ApiError::bad_request(e.to_string()))
             }
         },
         api_endpoint! {

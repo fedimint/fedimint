@@ -208,6 +208,10 @@ pub struct ConfigGenSettings {
     pub api_url: Option<SafeUrl>,
     /// Enable iroh for networking
     pub enable_iroh: bool,
+    /// Password from the password file specified through the environment
+    ///
+    /// If provided, the user won't be asked to set the password during setup.
+    pub password_file_password: Option<ApiAuth>,
     /// Set the params (if leader) or just the local params (if follower)
     pub modules: ServerModuleConfigGenParamsRegistry,
     /// Registry for config gen

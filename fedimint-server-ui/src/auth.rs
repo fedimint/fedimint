@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::response::Redirect;
@@ -18,14 +20,47 @@ where
         parts: &mut Parts,
         state: &UiState<Api>,
     ) -> Result<Self, Self::Rejection> {
-        let jar = CookieJar::from_request_parts(parts, state)
+        if MaybeUserAuth::from_request_parts(parts, state)
             .await
-            .map_err(|_| Redirect::to(LOGIN_ROUTE))?;
+            .is_ok_and(|auth| auth.is_authenticated)
+        {
+            Ok(UserAuth)
+        } else {
+            Err(Redirect::to(LOGIN_ROUTE))
+        }
+    }
+}
+
+pub struct MaybeUserAuth {
+    is_authenticated: bool,
+}
+
+impl<Api> FromRequestParts<UiState<Api>> for MaybeUserAuth
+where
+    Api: Send + Sync + 'static,
+{
+    type Rejection = Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &UiState<Api>,
+    ) -> Result<Self, Self::Rejection> {
+        let jar = CookieJar::from_request_parts(parts, state).await?;
 
         // Check if the auth cookie exists and has the correct value
         match jar.get(&state.auth_cookie_name) {
-            Some(cookie) if cookie.value() == state.auth_cookie_value => Ok(UserAuth),
-            _ => Err(Redirect::to(LOGIN_ROUTE)),
+            Some(cookie) if cookie.value() == state.auth_cookie_value => Ok(MaybeUserAuth {
+                is_authenticated: true,
+            }),
+            _ => Ok(MaybeUserAuth {
+                is_authenticated: false,
+            }),
         }
+    }
+}
+
+impl MaybeUserAuth {
+    pub fn is_authenticated(&self) -> bool {
+        self.is_authenticated
     }
 }
