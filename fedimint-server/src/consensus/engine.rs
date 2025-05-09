@@ -832,6 +832,7 @@ impl ConsensusEngine {
             }
         };
 
+        let mut backoff = fedimint_core::util::backoff_util::api_networking_backoff();
         loop {
             let result = federation_api
                 .request_with_strategy(
@@ -847,6 +848,8 @@ impl ConsensusEngine {
                     error.report_if_unusual("Requesting Session Outcome");
                 }
             }
+
+            sleep(backoff.next().expect("infinite retries")).await;
         }
     }
 
