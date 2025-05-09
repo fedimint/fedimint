@@ -1060,6 +1060,15 @@ impl IRawFederationApi for ReconnectFederationApi {
         .into()
     }
 
+    #[instrument(
+        target = LOG_NET_API,
+        skip_all,
+        fields(
+            peer_id = %peer_id,
+            method = %method,
+            params = %params.params,
+        )
+    )]
     async fn request_raw(
         &self,
         peer_id: PeerId,
@@ -1189,7 +1198,14 @@ impl ClientConnection {
         self.sender
             .send(sender)
             .await
-            .expect("Api connection request channel closed unexpectedly");
+            .inspect_err(|err| {
+                warn!(
+                    target: LOG_CLIENT_NET_API,
+                    err = %err.fmt_compact(),
+                    "Api connection request channel closed unexpectedly"
+                );
+            })
+            .ok()?;
 
         receiver.await.ok()
     }
