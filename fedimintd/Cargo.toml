@@ -52,5 +52,5 @@ tracing = { workspace = true }
 [build-dependencies]
 fedimint-build = { workspace = true }
 
-[target.'cfg(not(any(target_env = "msvc", target_os = "ios")))'.dependencies]
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
 tikv-jemallocator = { workspace = true }
