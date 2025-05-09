@@ -14,11 +14,11 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_gateway_server::Gateway;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_logging::{LOG_GATEWAY, TracingSetup};
-<a href=#17 id=17 data-nosnippet>17</a><span class="attr">#[cfg(not(any(target_env = <span class="string">"msvc"</span>, target_os = <span class="string">"ios"</span>)))]
+<a href=#17 id=17 data-nosnippet>17</a><span class="attr">#[cfg(not(any(target_env = <span class="string">"msvc"</span>, target_os = <span class="string">"ios"</span>, target_os = <span class="string">"android"</span>)))]
 <a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">use </span>tikv_jemallocator::Jemalloc;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>tracing::info;
 <a href=#20 id=20 data-nosnippet>20</a>
-<a href=#21 id=21 data-nosnippet>21</a><span class="attr">#[cfg(not(any(target_env = <span class="string">"msvc"</span>, target_os = <span class="string">"ios"</span>)))]
+<a href=#21 id=21 data-nosnippet>21</a><span class="attr">#[cfg(not(any(target_env = <span class="string">"msvc"</span>, target_os = <span class="string">"ios"</span>, target_os = <span class="string">"android"</span>)))]
 <a href=#22 id=22 data-nosnippet>22</a>#[global_allocator]
 <a href=#23 id=23 data-nosnippet>23</a></span><span class="comment">// rocksdb suffers from memory fragmentation when using standard allocator
 <a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">static </span>GLOBAL: Jemalloc = Jemalloc;
