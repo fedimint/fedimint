@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// backup with 52 notes is around 5.1K.
 pub const BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES: usize = 128 * 1024;
 
-#[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Serialize, Deserialize, Encodable, Decodable)]
 pub struct BackupRequest {
     pub id: secp256k1::PublicKey,
     #[serde(with = "fedimint_core::hex::serde")]
@@ -35,6 +35,16 @@ impl BackupRequest {
             request: self,
             signature,
         })
+    }
+}
+
+impl fmt::Debug for BackupRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BackupRequest")
+            .field("id", &self.id)
+            .field("timestamp", &self.timestamp)
+            .field("payload_len", &self.payload.len())
+            .finish()
     }
 }
 
