@@ -243,6 +243,7 @@ impl Global {
 
 declare_vars! {
     Fedimintd = (globals: &Global, federation_name: String, peer_id: PeerId, overrides: &FedimintdPeerOverrides) => {
+        FM_IN_DEVIMINT: String = "1".to_string(); env: FM_IN_DEVIMINT_ENV;
         FM_BIND_P2P: String = format!("127.0.0.1:{}", overrides.p2p.port()); env: "FM_BIND_P2P";
         FM_BIND_API_WS: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API_WS";
         FM_BIND_API_IROH: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API_IROH";
