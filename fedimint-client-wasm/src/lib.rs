@@ -21,7 +21,6 @@ use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
 use serde_json::json;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};
-
 #[wasm_bindgen]
 pub struct WasmClient {
     client: ClientHandleArc,
@@ -116,6 +115,27 @@ impl WasmClient {
             "memo": description,
         });
         Ok(serde_json::to_string(&response).map_err(|e| JsError::new(&e.to_string()))?)
+    }
+
+    #[wasm_bindgen]
+    pub async fn preview_federation(invite_code: String) -> Result<JsValue, JsError> {
+        let invite =
+            InviteCode::from_str(&invite_code).map_err(|e| JsError::new(&e.to_string()))?;
+        let client_config = fedimint_api_client::api::net::Connector::default()
+            .download_from_invite_code(&invite)
+            .await
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        let json_config = client_config.to_json();
+        let federation_id = client_config.calculate_federation_id();
+
+        let preview = json!({
+            "config": json_config,
+            "federation_id": federation_id.to_string(),
+        });
+
+        Ok(JsValue::from_str(
+            &serde_json::to_string(&preview).map_err(|e| JsError::new(&e.to_string()))?,
+        ))
     }
 
     async fn open_inner(client_name: String) -> anyhow::Result<Option<WasmClient>> {
