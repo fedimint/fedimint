@@ -13,7 +13,8 @@ description = "Fedimint client CLI interface"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default = ["tor"]
+default = ["tor", "jemalloc"]
+jemalloc = ["fedimint-rocksdb/jemalloc", "dep:tikv-jemallocator"]
 tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
 
 [[bin]]
@@ -52,6 +53,7 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tikv-jemallocator = { workspace = true, optional = true }
 time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
@@ -61,6 +63,3 @@ fedimint-build = { workspace = true }
 
 [lints]
 workspace = true
-
-[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
-tikv-jemallocator = { workspace = true }

@@ -20,6 +20,10 @@ path = "src/bin/main.rs"
 name = "fedimintd"
 path = "src/lib.rs"
 
+[features]
+default = ["jemalloc"]
+jemalloc = ["fedimint-rocksdb/jemalloc", "dep:tikv-jemallocator"]
+
 [dependencies]
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
@@ -46,12 +50,10 @@ futures = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+tikv-jemallocator = { workspace = true, optional = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
 
 [lints]
 workspace = true
-
-[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
-tikv-jemallocator = { workspace = true }
