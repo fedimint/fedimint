@@ -15,6 +15,8 @@ use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
+use fedimint_core::util::backoff_util::aggressive_backoff;
+use fedimint_core::util::retry;
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
@@ -875,23 +877,34 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fedimintd_version
     );
 
-    // # API URL announcements
-    let initial_announcements = serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
-        cmd!(client, "dev", "api-announcements",).out_json().await?,
-    )
-    .expect("failed to parse API announcements");
+    retry(
+        "Check initial announcements",
+        aggressive_backoff(),
+        || async {
+            // # API URL announcements
+            let initial_announcements =
+                serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
+                    cmd!(client, "dev", "api-announcements",).out_json().await?,
+                )
+                .expect("failed to parse API announcements");
 
-    assert_eq!(
-        fed.members.len(),
-        initial_announcements.len(),
-        "Not all guardians made an announcement"
-    );
-    assert!(
-        initial_announcements
-            .values()
-            .all(|announcement| announcement.api_announcement.nonce == 0),
-        "Not all announcements have their initial value"
-    );
+            if fed.members.len() != initial_announcements.len() {
+                bail!(
+                    "Not all announcements ready: {}",
+                    initial_announcements.len()
+                )
+            }
+
+            if !initial_announcements
+                .values()
+                .all(|announcement| announcement.api_announcement.nonce == 0)
+            {
+                bail!("Not all announcements have their initial value");
+            }
+            Ok(())
+        },
+    )
+    .await?;
 
     const NEW_API_URL: &str = "ws://127.0.0.1:4242";
     let new_announcement = serde_json::from_value::<SignedApiAnnouncement>(
