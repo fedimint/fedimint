@@ -1,15 +1,15 @@
 [package]
-name = "fedimint-server-core"
-version = { workspace = true }
 authors = { workspace = true }
 description = { workspace = true }
 documentation = { workspace = true }
 edition = { workspace = true }
-readme = { workspace = true }
 homepage = { workspace = true }
-repository = { workspace = true }
-license = { workspace = true }
 keywords = { workspace = true }
+license = { workspace = true }
+name = "fedimint-server-core"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
 
 [lib]
 name = "fedimint_server_core"
@@ -21,9 +21,11 @@ async-trait = { workspace = true }
 bls12_381 = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 group = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true

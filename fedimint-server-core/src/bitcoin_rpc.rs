@@ -8,7 +8,9 @@ use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
+use fedimint_logging::LOG_SERVER;
 use tokio::sync::watch;
+use tracing::debug;
 
 use crate::dashboard_ui::ServerBitcoinRpcStatus;
 
@@ -27,9 +29,16 @@ impl ServerBitcoinRpcMonitor {
         let (status_sender, status_receiver) = watch::channel(None);
 
         let rpc_clone = rpc.clone();
+        debug!(
+            target: LOG_SERVER,
+            interval_ms  = %update_interval.as_millis(),
+            "Starting bitcoin rpc monitor"
+        );
 
         task_group.spawn_cancellable("bitcoin-status-update", async move {
+            let mut interval = tokio::time::interval(update_interval);
             loop {
+                interval.tick().await;
                 match Self::fetch_status(&rpc_clone).await {
                     Ok(new_status) => {
                         status_sender.send_replace(Some(new_status));
@@ -38,8 +47,6 @@ impl ServerBitcoinRpcMonitor {
                         status_sender.send_replace(None);
                     }
                 }
-
-                fedimint_core::task::sleep(update_interval).await;
             }
         });
 
