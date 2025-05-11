@@ -2670,6 +2670,7 @@ dependencies = [
  "fedimint-derive-secret",
  "fedimint-eventlog",
  "fedimint-logging",
+ "fedimint-rocksdb",
  "futures",
  "reqwest 0.12.9",
  "serde",

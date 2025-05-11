@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{self, Formatter};
+use std::fs;
 use std::future::{Future, pending};
 use std::ops::Range;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -65,9 +67,11 @@ use fedimint_eventlog::{
     DBTransactionEventLogExt as _, Event, EventKind, EventLogEntry, EventLogId, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
+use fedimint_rocksdb::RocksDb;
 use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt as _};
 use global_ctx::ModuleGlobalClientContext;
+use serde::Deserialize;
 use tokio::sync::{broadcast, watch};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, info, warn};
@@ -144,6 +148,11 @@ pub struct Client {
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ListClientsRequest {
+    db_dir: String,
 }
 
 impl Client {
@@ -722,6 +731,27 @@ impl Client {
         self.modules
             .get(self.primary_module_instance)
             .expect("primary module must be present")
+    }
+
+    /// Lists all federation IDs stored in client databases.
+    pub async fn list_clients(db_dir: &Path) -> Result<Vec<FederationId>, anyhow::Error> {
+        let mut federation_ids = Vec::new();
+
+        if db_dir.exists() && db_dir.is_dir() {
+            for entry in fs::read_dir(db_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    let db = Database::new(RocksDb::open(&path).await?, Default::default());
+
+                    if let Some(config) = Client::get_config_from_db(&db).await {
+                        federation_ids.push(config.calculate_federation_id());
+                    }
+                }
+            }
+        }
+
+        Ok(federation_ids)
     }
 
     /// Balance available to the client for spending
@@ -1395,6 +1425,12 @@ impl Client {
                             "progress": progress
                         });
                     }
+                }
+                "list_clients" => {
+                    let req: ListClientsRequest = serde_json::from_value(params)?;
+                    let db_dir = PathBuf::from(req.db_dir);
+                    let clients = Client::list_clients(&db_dir).await?;
+                    yield serde_json::to_value(clients)?;
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
