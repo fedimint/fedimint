@@ -23,8 +23,8 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::timing;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
+use fedimint_core::{default_esplora_server, timing};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
@@ -355,7 +355,10 @@ pub fn default_modules(
             consensus: WalletGenParamsConsensus {
                 network,
                 finality_delay: default_finality_delay(network),
-                client_default_bitcoin_rpc: default_esplora_server(network),
+                client_default_bitcoin_rpc: default_esplora_server(
+                    network,
+                    std::env::var(FM_PORT_ESPLORA_ENV).ok(),
+                ),
                 fee_consensus: fedimint_wallet_server::common::config::FeeConsensus::default(),
             },
         },
@@ -393,24 +396,6 @@ pub fn default_modules(
     }
 
     (server_gens, server_gen_params)
-}
-
-pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
-    BitcoinRpcConfig {
-        kind: "esplora".to_string(),
-        url: match network {
-            Network::Bitcoin => SafeUrl::parse("https://mempool.space/api/"),
-            Network::Testnet => SafeUrl::parse("https://mempool.space/testnet/api/"),
-            Network::Testnet4 => SafeUrl::parse("https://mempool.space/testnet4/api/"),
-            Network::Signet => SafeUrl::parse("https://mutinynet.com/api/"),
-            Network::Regtest => SafeUrl::parse(&format!(
-                "http://127.0.0.1:{}/",
-                std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
-            )),
-            _ => panic!("Failed to parse default esplora server"),
-        }
-        .expect("Failed to parse default esplora server"),
-    }
 }
 
 /// For real Bitcoin we want to have a responsible default, while for demos

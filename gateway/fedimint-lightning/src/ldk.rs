@@ -141,10 +141,11 @@ impl GatewayLdkClient {
                 let host = server_url
                     .host_str()
                     .ok_or(anyhow::anyhow!("Missing esplora host"))?;
-                let port = server_url
-                    .port()
-                    .ok_or(anyhow::anyhow!("Missing esplora port"))?;
-                let server_url = format!("{}://{}:{}", server_url.scheme(), host, port);
+                let server_url = if let Some(port) = server_url.port() {
+                    format!("{}://{}:{}", server_url.scheme(), host, port)
+                } else {
+                    server_url.to_string()
+                };
                 node_builder.set_chain_source_esplora(server_url, None);
             }
         };

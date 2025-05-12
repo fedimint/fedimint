@@ -1,5 +1,6 @@
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
+use fedimint_core::default_esplora_server;
 use fedimint_core::envs::{BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set};
 use fedimint_ln_server::LightningInit;
 use fedimint_ln_server::common::config::{
@@ -15,8 +16,7 @@ use fedimint_wallet_client::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
 use fedimint_wallet_server::WalletInit;
-use fedimintd::default_esplora_server;
-use fedimintd::envs::FM_DISABLE_META_MODULE_ENV;
+use fedimintd::envs::{FM_DISABLE_META_MODULE_ENV, FM_PORT_ESPLORA_ENV};
 
 use crate::util::supports_lnv2;
 
@@ -57,7 +57,10 @@ pub fn attach_default_module_init_params(
             consensus: WalletGenParamsConsensus {
                 network,
                 finality_delay,
-                client_default_bitcoin_rpc: default_esplora_server(network),
+                client_default_bitcoin_rpc: default_esplora_server(
+                    network,
+                    std::env::var(FM_PORT_ESPLORA_ENV).ok(),
+                ),
                 fee_consensus: fedimint_wallet_client::config::FeeConsensus::default(),
             },
         },
