@@ -477,7 +477,7 @@ impl ILnRpcClient for GatewayLdkClient {
     ) -> Result<SendOnchainResponse, LightningRpcError> {
         let onchain = self.node.onchain_payment();
 
-        let retain_reserves = true;
+        let retain_reserves = false;
         let txid = match amount {
             BitcoinAmountOrAll::All => onchain.send_all_to_address(
                 &address.assume_checked(),
