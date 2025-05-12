@@ -8,12 +8,13 @@ use fedimint_core::envs::parse_kv_list_from_env;
 use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
 };
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::LOG_NET_IROH;
 use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use serde_json::Value;
+use tokio::task::JoinSet;
 use tracing::{debug, trace, warn};
 
 use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
@@ -21,7 +22,8 @@ use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError,
 #[derive(Debug, Clone)]
 pub struct IrohConnector {
     node_ids: BTreeMap<PeerId, NodeId>,
-    endpoint: Endpoint,
+    endpoint_stable: Endpoint,
+    endpoint_next: iroh_next::Endpoint,
 
     /// List of overrides to use when attempting to connect to given
     /// `NodeId`
@@ -56,20 +58,37 @@ impl IrohConnector {
             })
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
-        let builder = Endpoint::builder().discovery_n0();
-        #[cfg(not(target_family = "wasm"))]
-        let builder = builder.discovery_dht();
-        let endpoint = builder.bind().await?;
-        debug!(
-            target: LOG_NET_IROH,
-            node_id = %endpoint.node_id(),
-            node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-            "Iroh api client endpoint"
-        );
+        let endpoint_stable = {
+            let builder = Endpoint::builder().discovery_n0();
+            #[cfg(not(target_family = "wasm"))]
+            let builder = builder.discovery_dht();
+            let endpoint = builder.bind().await?;
+            debug!(
+                target: LOG_NET_IROH,
+                node_id = %endpoint.node_id(),
+                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                "Iroh api client endpoint (stable)"
+            );
+            endpoint
+        };
+        let endpoint_next = {
+            let builder = iroh_next::Endpoint::builder().discovery_n0();
+            #[cfg(not(target_family = "wasm"))]
+            let builder = builder.discovery_dht();
+            let endpoint = builder.bind().await?;
+            debug!(
+                target: LOG_NET_IROH,
+                node_id = %endpoint.node_id(),
+                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                "Iroh api client endpoint (next)"
+            );
+            endpoint
+        };
 
         Ok(Self {
             node_ids,
-            endpoint,
+            endpoint_stable,
+            endpoint_next,
             connection_overrides: BTreeMap::new(),
         })
     }
@@ -92,22 +111,113 @@ impl IClientConnector for IrohConnector {
             .get(&peer_id)
             .ok_or(PeerError::InvalidPeerId { peer_id })?;
 
-        let connection = match self.connection_overrides.get(&node_id) {
-            Some(node_addr) => {
-                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                self.endpoint
-                    .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                    .await
-            }
-            None => self.endpoint.connect(node_id, FEDIMINT_API_ALPN).await,
-        }.map_err(PeerError::Connection)?;
+        let mut join_set = JoinSet::new();
+        let connection_override = self.connection_overrides.get(&node_id).cloned();
+        let endpoint_stable = self.endpoint_stable.clone();
+        let endpoint_next = self.endpoint_next.clone();
 
-        Ok(connection.into_dyn())
+        join_set.spawn({
+            let connection_override = connection_override.clone();
+            async move {
+                Ok(match connection_override {
+                    Some(node_addr) => {
+                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                        endpoint_stable
+                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                            .await
+                    }
+                    None => endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
+                }.map_err(PeerError::Connection)?.into_dyn())
+        }});
+
+        join_set.spawn(async move {
+            Ok(match connection_override {
+                Some(node_addr) => {
+                    trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                    endpoint_next
+                        .connect(node_addr_stable_to_next(&node_addr), FEDIMINT_API_ALPN)
+                        .await
+                }
+                None => endpoint_next.connect(
+                        iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
+                        FEDIMINT_API_ALPN
+                    ).await,
+                }.map_err(PeerError::Connection)?.into_dyn() )
+        });
+
+        // Remember last error, so we have something to return if
+        // neither connection works.
+        let mut prev_err = None;
+
+        // Loop until first success, or running out of connections.
+        while let Some(join) = join_set.join_next().await {
+            match join {
+                Ok(Ok(o)) => return Ok(o),
+                Ok(Err(err)) => {
+                    prev_err = Some(err);
+                }
+                Err(err) => {
+                    warn!(
+                        target: LOG_NET_IROH,
+                        err = %err.fmt_compact(),
+                        "Join error in iroh connection task"
+                    );
+                }
+            }
+        }
+
+        Err(prev_err.unwrap_or_else(|| {
+            PeerError::ServerError(anyhow::anyhow!("Both iroh connection task panicked?!"))
+        }))
+    }
+}
+
+fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::NodeAddr {
+    iroh_next::NodeAddr {
+        node_id: iroh_next::NodeId::from_bytes(stable.node_id.as_bytes()).expect("Can't fail"),
+        relay_url: stable
+            .relay_url
+            .as_ref()
+            .map(|u| iroh_next::RelayUrl::from_str(&u.to_string()).expect("Can't fail")),
+        direct_addresses: stable.direct_addresses.clone(),
+    }
+}
+#[async_trait]
+impl IClientConnection for Connection {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+        let json = serde_json::to_vec(&IrohApiRequest { method, request })
+            .expect("Serialization to vec can't fail");
+
+        let (mut sink, mut stream) = self
+            .open_bi()
+            .await
+            .map_err(|e| PeerError::Transport(e.into()))?;
+
+        sink.write_all(&json)
+            .await
+            .map_err(|e| PeerError::Transport(e.into()))?;
+
+        sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
+
+        let response = stream
+            .read_to_end(1_000_000)
+            .await
+            .map_err(|e| PeerError::Transport(e.into()))?;
+
+        // TODO: We should not be serializing Results on the wire
+        let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
+            .map_err(|e| PeerError::InvalidResponse(e.into()))?;
+
+        response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+    }
+
+    async fn await_disconnection(&self) {
+        self.closed().await;
     }
 }
 
 #[async_trait]
-impl IClientConnection for Connection {
+impl IClientConnection for iroh_next::endpoint::Connection {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
