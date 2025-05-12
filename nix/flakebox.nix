@@ -225,6 +225,8 @@ let
         darwin.apple_sdk.frameworks.SystemConfiguration
       ];
 
+    CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS = "--cfg getrandom_backend=\"wasm_js\"";
+
     nativeBuildInputs =
       with pkgs;
       [
