@@ -62,7 +62,8 @@ use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned};
 use fedimint_core::{
-    Amount, BitcoinAmountOrAll, crit, fedimint_build_code_version_env, get_network_for_address,
+    Amount, BitcoinAmountOrAll, crit, default_esplora_server, fedimint_build_code_version_env,
+    get_network_for_address,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
@@ -105,6 +106,7 @@ use fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,
 };
+use fedimint_wallet_client::envs::FM_PORT_ESPLORA_ENV;
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
@@ -2051,7 +2053,14 @@ impl Gateway {
                                 .expect("Could not parse bitcoind rpc url"),
                         },
                         (None, None) => {
-                            panic!("Either esplora or bitcoind chain info source must be provided")
+                            info!("No chain source URL provided, defaulting to esplora...");
+                            GatewayLdkChainSourceConfig::Esplora {
+                                server_url: default_esplora_server(
+                                    self.network,
+                                    std::env::var(FM_PORT_ESPLORA_ENV).ok(),
+                                )
+                                .url,
+                            }
                         }
                         (Some(_), Some(bitcoind_rpc_url)) => {
                             warn!(

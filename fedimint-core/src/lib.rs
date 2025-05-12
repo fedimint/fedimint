@@ -48,6 +48,7 @@ pub use anyhow;
 use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
+use envs::BitcoinRpcConfig;
 use lightning::util::ser::Writeable;
 use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;
@@ -56,6 +57,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
+use util::SafeUrl;
 pub use {bitcoin, hex, secp256k1};
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -348,6 +350,25 @@ pub fn get_network_for_address(address: &Address<NetworkUnchecked>) -> Network {
         Network::Regtest
     } else {
         panic!("Address is not valid for any network");
+    }
+}
+
+/// Returns the default esplora server according to the network
+pub fn default_esplora_server(network: Network, port: Option<String>) -> BitcoinRpcConfig {
+    BitcoinRpcConfig {
+        kind: "esplora".to_string(),
+        url: match network {
+            Network::Bitcoin => SafeUrl::parse("https://mempool.space/api/"),
+            Network::Testnet => SafeUrl::parse("https://mempool.space/testnet/api/"),
+            Network::Testnet4 => SafeUrl::parse("https://mempool.space/testnet4/api/"),
+            Network::Signet => SafeUrl::parse("https://mutinynet.com/api/"),
+            Network::Regtest => SafeUrl::parse(&format!(
+                "http://127.0.0.1:{}/",
+                port.unwrap_or_else(|| String::from("50002"))
+            )),
+            _ => panic!("Failed to parse default esplora server"),
+        }
+        .expect("Failed to parse default esplora server"),
     }
 }
 
