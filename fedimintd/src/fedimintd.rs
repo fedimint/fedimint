@@ -22,7 +22,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{
     FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command, write_overwrite,
 };
-use fedimint_core::{crit, timing};
+use fedimint_core::{crit, default_esplora_server, timing};
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
@@ -45,12 +45,12 @@ use fedimint_wallet_server::common::config::{
 use futures::FutureExt;
 use tracing::{debug, error, info};
 
-use crate::default_esplora_server;
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_API_IROH_ENV, FM_BIND_API_WS_ENV,
     FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV,
     FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV, FM_FINALITY_DELAY_ENV,
-    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV, FM_PORT_ESPLORA_ENV,
+    FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -399,7 +399,10 @@ impl Fedimintd {
                         // TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         finality_delay,
-                        client_default_bitcoin_rpc: default_esplora_server(network),
+                        client_default_bitcoin_rpc: default_esplora_server(
+                            network,
+                            std::env::var(FM_PORT_ESPLORA_ENV).ok(),
+                        ),
                         fee_consensus:
                             fedimint_wallet_server::common::config::FeeConsensus::default(),
                     },
