@@ -23,8 +23,8 @@
 <a href=#23 id=23 data-nosnippet>23</a>};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::timing;
-<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::util::{FmtCompactAnyhow <span class="kw">as _</span>, SafeUrl, handle_version_hash_command};
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::util::{FmtCompactAnyhow <span class="kw">as _</span>, SafeUrl, handle_version_hash_command};
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::{default_esplora_server, timing};
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_ln_common::config::{
 <a href=#29 id=29 data-nosnippet>29</a>    LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 <a href=#30 id=30 data-nosnippet>30</a>};
@@ -355,70 +355,55 @@
 <a href=#355 id=355 data-nosnippet>355</a>            consensus: WalletGenParamsConsensus {
 <a href=#356 id=356 data-nosnippet>356</a>                network,
 <a href=#357 id=357 data-nosnippet>357</a>                finality_delay: default_finality_delay(network),
-<a href=#358 id=358 data-nosnippet>358</a>                client_default_bitcoin_rpc: default_esplora_server(network),
-<a href=#359 id=359 data-nosnippet>359</a>                fee_consensus: fedimint_wallet_server::common::config::FeeConsensus::default(),
-<a href=#360 id=360 data-nosnippet>360</a>            },
-<a href=#361 id=361 data-nosnippet>361</a>        },
-<a href=#362 id=362 data-nosnippet>362</a>    );
-<a href=#363 id=363 data-nosnippet>363</a>
-<a href=#364 id=364 data-nosnippet>364</a>    <span class="kw">let </span>enable_lnv2 = std::env::var_os(FM_ENABLE_MODULE_LNV2_ENV).is_none()
-<a href=#365 id=365 data-nosnippet>365</a>        || is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV);
+<a href=#358 id=358 data-nosnippet>358</a>                client_default_bitcoin_rpc: default_esplora_server(
+<a href=#359 id=359 data-nosnippet>359</a>                    network,
+<a href=#360 id=360 data-nosnippet>360</a>                    std::env::var(FM_PORT_ESPLORA_ENV).ok(),
+<a href=#361 id=361 data-nosnippet>361</a>                ),
+<a href=#362 id=362 data-nosnippet>362</a>                fee_consensus: fedimint_wallet_server::common::config::FeeConsensus::default(),
+<a href=#363 id=363 data-nosnippet>363</a>            },
+<a href=#364 id=364 data-nosnippet>364</a>        },
+<a href=#365 id=365 data-nosnippet>365</a>    );
 <a href=#366 id=366 data-nosnippet>366</a>
-<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">if </span>enable_lnv2 {
-<a href=#368 id=368 data-nosnippet>368</a>        server_gens.attach(fedimint_lnv2_server::LightningInit);
-<a href=#369 id=369 data-nosnippet>369</a>        server_gen_params.attach_config_gen_params(
-<a href=#370 id=370 data-nosnippet>370</a>            fedimint_lnv2_server::LightningInit::kind(),
-<a href=#371 id=371 data-nosnippet>371</a>            fedimint_lnv2_common::config::LightningGenParams {
-<a href=#372 id=372 data-nosnippet>372</a>                local: fedimint_lnv2_common::config::LightningGenParamsLocal {
-<a href=#373 id=373 data-nosnippet>373</a>                    bitcoin_rpc: bitcoin_rpc_config.clone(),
-<a href=#374 id=374 data-nosnippet>374</a>                },
-<a href=#375 id=375 data-nosnippet>375</a>                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
-<a href=#376 id=376 data-nosnippet>376</a>                    <span class="comment">// TODO: actually make the relative fee configurable
-<a href=#377 id=377 data-nosnippet>377</a>                    </span>fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(<span class="number">100</span>).unwrap(),
-<a href=#378 id=378 data-nosnippet>378</a>                    network,
-<a href=#379 id=379 data-nosnippet>379</a>                },
-<a href=#380 id=380 data-nosnippet>380</a>            },
-<a href=#381 id=381 data-nosnippet>381</a>        );
-<a href=#382 id=382 data-nosnippet>382</a>    }
-<a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
-<a href=#385 id=385 data-nosnippet>385</a>        server_gens.attach(MetaInit);
-<a href=#386 id=386 data-nosnippet>386</a>        server_gen_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams::default());
-<a href=#387 id=387 data-nosnippet>387</a>    }
-<a href=#388 id=388 data-nosnippet>388</a>
-<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
-<a href=#390 id=390 data-nosnippet>390</a>        server_gens.attach(UnknownInit);
-<a href=#391 id=391 data-nosnippet>391</a>        server_gen_params
-<a href=#392 id=392 data-nosnippet>392</a>            .attach_config_gen_params(UnknownInit::kind(), UnknownGenParams::default());
-<a href=#393 id=393 data-nosnippet>393</a>    }
-<a href=#394 id=394 data-nosnippet>394</a>
-<a href=#395 id=395 data-nosnippet>395</a>    (server_gens, server_gen_params)
-<a href=#396 id=396 data-nosnippet>396</a>}
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">let </span>enable_lnv2 = std::env::var_os(FM_ENABLE_MODULE_LNV2_ENV).is_none()
+<a href=#368 id=368 data-nosnippet>368</a>        || is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV);
+<a href=#369 id=369 data-nosnippet>369</a>
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">if </span>enable_lnv2 {
+<a href=#371 id=371 data-nosnippet>371</a>        server_gens.attach(fedimint_lnv2_server::LightningInit);
+<a href=#372 id=372 data-nosnippet>372</a>        server_gen_params.attach_config_gen_params(
+<a href=#373 id=373 data-nosnippet>373</a>            fedimint_lnv2_server::LightningInit::kind(),
+<a href=#374 id=374 data-nosnippet>374</a>            fedimint_lnv2_common::config::LightningGenParams {
+<a href=#375 id=375 data-nosnippet>375</a>                local: fedimint_lnv2_common::config::LightningGenParamsLocal {
+<a href=#376 id=376 data-nosnippet>376</a>                    bitcoin_rpc: bitcoin_rpc_config.clone(),
+<a href=#377 id=377 data-nosnippet>377</a>                },
+<a href=#378 id=378 data-nosnippet>378</a>                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
+<a href=#379 id=379 data-nosnippet>379</a>                    <span class="comment">// TODO: actually make the relative fee configurable
+<a href=#380 id=380 data-nosnippet>380</a>                    </span>fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(<span class="number">100</span>).unwrap(),
+<a href=#381 id=381 data-nosnippet>381</a>                    network,
+<a href=#382 id=382 data-nosnippet>382</a>                },
+<a href=#383 id=383 data-nosnippet>383</a>            },
+<a href=#384 id=384 data-nosnippet>384</a>        );
+<a href=#385 id=385 data-nosnippet>385</a>    }
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+<a href=#388 id=388 data-nosnippet>388</a>        server_gens.attach(MetaInit);
+<a href=#389 id=389 data-nosnippet>389</a>        server_gen_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams::default());
+<a href=#390 id=390 data-nosnippet>390</a>    }
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+<a href=#393 id=393 data-nosnippet>393</a>        server_gens.attach(UnknownInit);
+<a href=#394 id=394 data-nosnippet>394</a>        server_gen_params
+<a href=#395 id=395 data-nosnippet>395</a>            .attach_config_gen_params(UnknownInit::kind(), UnknownGenParams::default());
+<a href=#396 id=396 data-nosnippet>396</a>    }
 <a href=#397 id=397 data-nosnippet>397</a>
-<a href=#398 id=398 data-nosnippet>398</a><span class="kw">pub fn </span>default_esplora_server(network: Network) -&gt; BitcoinRpcConfig {
-<a href=#399 id=399 data-nosnippet>399</a>    BitcoinRpcConfig {
-<a href=#400 id=400 data-nosnippet>400</a>        kind: <span class="string">"esplora"</span>.to_string(),
-<a href=#401 id=401 data-nosnippet>401</a>        url: <span class="kw">match </span>network {
-<a href=#402 id=402 data-nosnippet>402</a>            Network::Bitcoin =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/api/"</span>),
-<a href=#403 id=403 data-nosnippet>403</a>            Network::Testnet =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet/api/"</span>),
-<a href=#404 id=404 data-nosnippet>404</a>            Network::Testnet4 =&gt; SafeUrl::parse(<span class="string">"https://mempool.space/testnet4/api/"</span>),
-<a href=#405 id=405 data-nosnippet>405</a>            Network::Signet =&gt; SafeUrl::parse(<span class="string">"https://mutinynet.com/api/"</span>),
-<a href=#406 id=406 data-nosnippet>406</a>            Network::Regtest =&gt; SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#407 id=407 data-nosnippet>407</a>                <span class="string">"http://127.0.0.1:{}/"</span>,
-<a href=#408 id=408 data-nosnippet>408</a>                std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
-<a href=#409 id=409 data-nosnippet>409</a>            )),
-<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#411 id=411 data-nosnippet>411</a>        }
-<a href=#412 id=412 data-nosnippet>412</a>        .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#413 id=413 data-nosnippet>413</a>    }
-<a href=#414 id=414 data-nosnippet>414</a>}
-<a href=#415 id=415 data-nosnippet>415</a>
-<a href=#416 id=416 data-nosnippet>416</a><span class="doccomment">/// For real Bitcoin we want to have a responsible default, while for demos
-<a href=#417 id=417 data-nosnippet>417</a>/// nobody wants to wait multiple minutes
-<a href=#418 id=418 data-nosnippet>418</a></span><span class="kw">fn </span>default_finality_delay(network: Network) -&gt; u32 {
-<a href=#419 id=419 data-nosnippet>419</a>    <span class="kw">match </span>network {
-<a href=#420 id=420 data-nosnippet>420</a>        Network::Bitcoin | Network::Regtest =&gt; <span class="number">10</span>,
-<a href=#421 id=421 data-nosnippet>421</a>        Network::Testnet | Network::Signet | Network::Testnet4 =&gt; <span class="number">2</span>,
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Unsupported network"</span>),
-<a href=#423 id=423 data-nosnippet>423</a>    }
-<a href=#424 id=424 data-nosnippet>424</a>}</code></pre></div></section></main></body></html>
+<a href=#398 id=398 data-nosnippet>398</a>    (server_gens, server_gen_params)
+<a href=#399 id=399 data-nosnippet>399</a>}
+<a href=#400 id=400 data-nosnippet>400</a>
+<a href=#401 id=401 data-nosnippet>401</a><span class="doccomment">/// For real Bitcoin we want to have a responsible default, while for demos
+<a href=#402 id=402 data-nosnippet>402</a>/// nobody wants to wait multiple minutes
+<a href=#403 id=403 data-nosnippet>403</a></span><span class="kw">fn </span>default_finality_delay(network: Network) -&gt; u32 {
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">match </span>network {
+<a href=#405 id=405 data-nosnippet>405</a>        Network::Bitcoin | Network::Regtest =&gt; <span class="number">10</span>,
+<a href=#406 id=406 data-nosnippet>406</a>        Network::Testnet | Network::Signet | Network::Testnet4 =&gt; <span class="number">2</span>,
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Unsupported network"</span>),
+<a href=#408 id=408 data-nosnippet>408</a>    }
+<a href=#409 id=409 data-nosnippet>409</a>}</code></pre></div></section></main></body></html>
