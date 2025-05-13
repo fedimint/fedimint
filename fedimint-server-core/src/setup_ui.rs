@@ -22,9 +22,14 @@ pub trait ISetupApi {
     async fn reset_setup_codes(&self);
 
     /// Set local guardian parameters
+    ///
+    /// The `auth` parameter is only provided if the password is to be written
+    /// to the `password.secret` file in the data dir. If it is provided via the
+    /// `FM_PASSWORD_FILE` env var, it has to be `None`. **In that case the
+    /// caller needs to ensure that the user is authenticated!**
     async fn set_local_parameters(
         &self,
-        auth: ApiAuth,
+        auth: Option<ApiAuth>,
         name: String,
         federation_name: Option<String>,
     ) -> Result<String>;
