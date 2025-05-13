@@ -554,6 +554,16 @@ impl Gateway {
             .await;
         info!(target: LOG_GATEWAY, "Gateway is running");
 
+        if self.is_running_lnv1() {
+            // Re-register the gateway with all federations after connecting to the
+            // lightning node
+            let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+            let all_federations_configs =
+                dbtx.load_federation_configs().await.into_iter().collect();
+            self.register_federations(&all_federations_configs, &self.task_group)
+                .await;
+        }
+
         // Runs until the connection to the lightning node breaks or we receive the
         // shutdown signal.
         if handle
