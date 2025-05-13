@@ -662,7 +662,7 @@ in
           export FM_TEST_CI_ALL_DISABLE_ETA=1
           if [ "${builtins.toString useIroh}" == "1" ]; then
             >&2 echo "Iroh enabled"
-            export FM_FORCE_IROH=1
+            export FM_ENABLE_IROH=true
           fi
           ./scripts/tests/test-ci-all.sh || exit 1
           cp scripts/tests/always-success-test.sh scripts/tests/always-success-test.sh.bck
