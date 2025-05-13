@@ -9,7 +9,7 @@ services:
     volumes:
       - fedimintd_data:/data
     environment:
-      - FM_FORCE_IROH=1
+      - FM_ENABLE_IROH=true
       - FM_BITCOIN_NETWORK=signet
       - FM_BITCOIN_RPC_KIND=esplora
       - FM_BITCOIN_RPC_URL=https://mutinynet.com/api

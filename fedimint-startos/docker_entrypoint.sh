@@ -10,7 +10,7 @@ if [[ -z "$ENTRYPOINT_SCRIPT" ]]; then
     exit 1
 fi
 
-export FM_FORCE_IROH=1
+export FM_ENABLE_IROH=true
 export FM_BITCOIN_NETWORK=signet
 export FM_BITCOIN_RPC_KIND=esplora
 export FM_BITCOIN_RPC_URL=https://mutinynet.com/api
