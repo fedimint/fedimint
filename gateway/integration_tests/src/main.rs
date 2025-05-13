@@ -1,20 +1,22 @@
 #![deny(clippy::pedantic)]
 
 use std::collections::BTreeMap;
-use std::env;
 use std::fs::remove_dir_all;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
+use std::{env, ffi};
 
 use anyhow::ensure;
 use clap::{Parser, Subcommand};
+use devimint::cli::cleanup_on_exit;
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
-use devimint::util::{ProcessManager, poll_with_timeout};
+use devimint::gatewayd::LdkChainSource;
+use devimint::util::{ProcessManager, poll, poll_with_timeout};
 use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
-use devimint::{Gatewayd, LightningNode, cmd, util};
+use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
@@ -52,6 +54,7 @@ enum GatewayTest {
     },
     BackupRestoreTest,
     LiquidityTest,
+    EsploraTest,
 }
 
 #[tokio::main]
@@ -75,6 +78,7 @@ async fn main() -> anyhow::Result<()> {
         }
         GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
         GatewayTest::LiquidityTest => Box::pin(liquidity_test()).await,
+        GatewayTest::EsploraTest => esplora_test().await,
     }
 }
 
@@ -620,6 +624,53 @@ async fn liquidity_test() -> anyhow::Result<()> {
             Ok(())
         })
         .await
+}
+
+/// This test cannot be run in CI because it connects to an external esplora
+/// server
+async fn esplora_test() -> anyhow::Result<()> {
+    let args = cli::CommonArgs::parse_from::<_, ffi::OsString>(vec![]);
+    let (process_mgr, task_group) = cli::setup(args).await?;
+    cleanup_on_exit(
+        async {
+            // Spawn mutinynet esplora Gatewayd instance
+            unsafe {
+                std::env::set_var("FM_GATEWAY_NETWORK", "signet");
+                std::env::set_var("FM_LDK_NETWORK", "signet");
+            }
+            let ldk = Gatewayd::new(
+                &process_mgr,
+                LightningNode::Ldk {
+                    name: "gateway-ldk-mutinynet".to_string(),
+                    gw_port: process_mgr.globals.FM_PORT_GW_LDK,
+                    ldk_port: process_mgr.globals.FM_PORT_LDK,
+                    chain_source: LdkChainSource::Esplora,
+                },
+            )
+            .await?;
+
+            poll("Waiting for LDK to be ready", || async {
+                let info = ldk.get_info().await.map_err(ControlFlow::Continue)?;
+                let state: String = serde_json::from_value(info["gateway_state"].clone())
+                    .expect("Could not get gateway state");
+                if state == "Running" {
+                    Ok(())
+                } else {
+                    Err(ControlFlow::Continue(anyhow::anyhow!(
+                        "Gateway not running"
+                    )))
+                }
+            })
+            .await?;
+
+            ldk.get_ln_onchain_address().await?;
+            info!(target:LOG_TEST, "Successfully connected to mutinynet esplora");
+            Ok(())
+        },
+        task_group,
+    )
+    .await?;
+    Ok(())
 }
 
 async fn get_transaction(

@@ -11,7 +11,7 @@ use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
+use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash, default_esplora_server};
 use fedimint_gateway_common::{
     ChannelInfo, CreateOfferResponse, GatewayBalances, GetInvoiceResponse,
     ListTransactionsResponse, MnemonicResponse, PaymentDetails, PaymentStatus,
@@ -132,6 +132,11 @@ impl Gatewayd {
         gateway_env: &mut HashMap<String, String>,
         process_mgr: &ProcessManager,
     ) {
+        let network = if let Ok(network) = std::env::var("FM_GATEWAY_NETWORK") {
+            bitcoin::Network::from_str(&network).expect("Invalid network specified")
+        } else {
+            bitcoin::Network::Regtest
+        };
         if let LightningNode::Ldk {
             name: _,
             gw_port: _,
@@ -148,10 +153,12 @@ impl Gatewayd {
                     );
                 }
                 LdkChainSource::Esplora => {
-                    let esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
+                    let esplora_port = process_mgr.globals.FM_PORT_ESPLORA.to_string();
                     gateway_env.insert(
                         "FM_LDK_ESPLORA_SERVER_URL".to_owned(),
-                        format!("http://localhost:{esplora_port}"),
+                        default_esplora_server(network, Some(esplora_port))
+                            .url
+                            .to_string(),
                     );
                 }
             }
