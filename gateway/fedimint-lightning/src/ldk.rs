@@ -159,16 +159,7 @@ impl GatewayLdkClient {
                 );
             }
             GatewayLdkChainSourceConfig::Esplora { server_url } => {
-                // Esplora client cannot handle trailing slashes
-                let host = server_url
-                    .host_str()
-                    .ok_or(anyhow::anyhow!("Missing esplora host"))?;
-                let server_url = if let Some(port) = server_url.port() {
-                    format!("{}://{}:{}", server_url.scheme(), host, port)
-                } else {
-                    server_url.to_string()
-                };
-                node_builder.set_chain_source_esplora(server_url, None);
+                node_builder.set_chain_source_esplora(get_esplora_url(server_url)?, None);
             }
         };
         let Some(data_dir_str) = data_dir.to_str() else {
@@ -922,6 +913,26 @@ fn get_preimage_and_payment_hash(
     }
 }
 
+/// When a port is specified in the Esplora URL, the esplora client inside LDK
+/// node cannot connect to the lightning node when there is a trailing slash.
+/// The `SafeUrl::Display` function will always serialize the `SafeUrl` with a
+/// trailing slash, which causes the connection to fail.
+///
+/// To handle this, we explicitly construct the esplora URL when a port is
+/// specified.
+fn get_esplora_url(server_url: SafeUrl) -> anyhow::Result<String> {
+    // Esplora client cannot handle trailing slashes
+    let host = server_url
+        .host_str()
+        .ok_or(anyhow::anyhow!("Missing esplora host"))?;
+    let server_url = if let Some(port) = server_url.port() {
+        format!("{}://{}:{}", server_url.scheme(), host, port)
+    } else {
+        server_url.to_string()
+    };
+    Ok(server_url)
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct LdkOfferId(OfferId);
 
@@ -930,3 +941,6 @@ impl std::hash::Hash for LdkOfferId {
         state.write(&self.0.0);
     }
 }
+
+#[cfg(test)]
+mod tests;

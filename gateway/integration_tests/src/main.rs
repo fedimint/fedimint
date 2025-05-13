@@ -14,7 +14,7 @@ use devimint::cli::cleanup_on_exit;
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::gatewayd::LdkChainSource;
-use devimint::util::{ProcessManager, poll_with_timeout};
+use devimint::util::{ProcessManager, poll, poll_with_timeout};
 use devimint::version_constants::{VERSION_0_5_0_ALPHA, VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
@@ -649,6 +649,8 @@ async fn liquidity_test() -> anyhow::Result<()> {
         .await
 }
 
+/// This test cannot be run in CI because it connects to an external esplora
+/// server
 async fn esplora_test() -> anyhow::Result<()> {
     let args = cli::CommonArgs::parse_from::<_, ffi::OsString>(vec![]);
     let (process_mgr, task_group) = cli::setup(args).await?;
@@ -657,6 +659,7 @@ async fn esplora_test() -> anyhow::Result<()> {
             // Spawn mutinynet esplora Gatewayd instance
             unsafe {
                 std::env::set_var("FM_GATEWAY_NETWORK", "signet");
+                std::env::set_var("FM_LDK_NETWORK", "signet");
             }
             let ldk = Gatewayd::new(
                 &process_mgr,
@@ -669,7 +672,22 @@ async fn esplora_test() -> anyhow::Result<()> {
             )
             .await?;
 
-            ldk.get_info().await?;
+            poll("Waiting for LDK to be ready", || async {
+                let info = ldk.get_info().await.map_err(ControlFlow::Continue)?;
+                let state: String = serde_json::from_value(info["gateway_state"].clone())
+                    .expect("Could not get gateway state");
+                if state == "Running" {
+                    Ok(())
+                } else {
+                    Err(ControlFlow::Continue(anyhow::anyhow!(
+                        "Gateway not running"
+                    )))
+                }
+            })
+            .await?;
+
+            ldk.get_ln_onchain_address().await?;
+            info!(target:LOG_TEST, "Successfully connected to mutinynet esplora");
             Ok(())
         },
         task_group,
