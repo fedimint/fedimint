@@ -239,10 +239,12 @@ impl DevJitFed {
                 let gw_ldk = gw_ldk.get_try().await?.deref();
                 if supports_lnv2() {
                     let fed = fed.get_try().await?.deref();
-                    debug!(target: LOG_DEVIMINT, "Registering ldk gateway...");
                     let start_time = fedimint_core::time::now();
                     if !skip_setup && !pre_dkg {
+                        debug!(target: LOG_DEVIMINT, "Registering ldk gateway...");
                         gw_ldk.connect_fed(fed).await?;
+                    } else {
+                        debug!(target: LOG_DEVIMINT, "Skipping registering ldk gateway");
                     }
                     info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Connected ldk gateway");
                 }
