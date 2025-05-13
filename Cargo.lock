@@ -3769,6 +3769,7 @@ dependencies = [
  "hyper 1.6.0",
  "iroh",
  "iroh-base",
+ "iroh-relay",
  "itertools 0.13.0",
  "jsonrpsee",
  "parity-scale-codec",

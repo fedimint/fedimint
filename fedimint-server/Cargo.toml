@@ -45,6 +45,7 @@ iroh = { workspace = true, features = [
 iroh-base = { workspace = true, default-features = false, features = [
   "ticket",
 ] }
+iroh-relay = { workspace = true, default-features = false }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server"] }
 parity-scale-codec = { workspace = true }

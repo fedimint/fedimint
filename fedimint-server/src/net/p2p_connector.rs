@@ -15,8 +15,11 @@ use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env}
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
-use iroh::{Endpoint, NodeAddr, NodeId, SecretKey};
+use iroh::defaults::DEFAULT_STUN_PORT;
+use iroh::discovery::pkarr::{N0_DNS_PKARR_RELAY_PROD, PkarrPublisher, PkarrResolver};
+use iroh::{Endpoint, NodeAddr, NodeId, RelayMap, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_base::ticket::NodeTicket;
+use iroh_relay::RelayQuicConfig;
 use rustls::ServerName;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -256,9 +259,13 @@ impl IrohConnector {
     pub async fn new(
         secret_key: SecretKey,
         p2p_bind_addr: SocketAddr,
+        iroh_dns: Option<SafeUrl>,
+        iroh_relays: Vec<SafeUrl>,
         node_ids: BTreeMap<PeerId, NodeId>,
     ) -> anyhow::Result<Self> {
-        let mut s = Self::new_no_overrides(secret_key, p2p_bind_addr, node_ids).await;
+        let mut s =
+            Self::new_no_overrides(secret_key, p2p_bind_addr, iroh_dns, iroh_relays, node_ids)
+                .await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -270,49 +277,93 @@ impl IrohConnector {
     pub async fn new_no_overrides(
         secret_key: SecretKey,
         bind_addr: SocketAddr,
+        iroh_dns: Option<SafeUrl>,
+        iroh_relays: Vec<SafeUrl>,
         node_ids: BTreeMap<PeerId, NodeId>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let identity = *node_ids
             .iter()
             .find(|entry| entry.1 == &secret_key.public())
             .expect("Our public key is not part of the keyset")
             .0;
 
-        let builder = Endpoint::builder()
-            .discovery_n0()
-            .discovery_dht()
-            .secret_key(secret_key)
-            .alpns(vec![FEDIMINT_P2P_ALPN.to_vec()]);
+        let endpoint = build_iroh_endpoint(
+            secret_key,
+            bind_addr,
+            iroh_dns,
+            iroh_relays,
+            FEDIMINT_P2P_ALPN,
+        )
+        .await?;
 
-        let builder = match bind_addr {
-            SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
-            SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
-        };
-
-        let endpoint = builder.bind().await.expect("Could not bind to port");
-
-        info!(
-            target: LOG_NET_IROH,
-            %bind_addr,
-            node_id = %endpoint.node_id(),
-            node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-            "Iroh p2p server endpoint"
-        );
-
-        Self {
+        Ok(Self {
             node_ids: node_ids
                 .into_iter()
                 .filter(|entry| entry.0 != identity)
                 .collect(),
             endpoint,
             connection_overrides: BTreeMap::default(),
-        }
+        })
     }
 
     pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
         self.connection_overrides.insert(node, addr);
         self
     }
+}
+
+pub(crate) async fn build_iroh_endpoint(
+    secret_key: SecretKey,
+    bind_addr: SocketAddr,
+    iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
+    alpn: &[u8],
+) -> Result<Endpoint, anyhow::Error> {
+    let iroh_dns = iroh_dns.clone().map_or(
+        N0_DNS_PKARR_RELAY_PROD.parse().expect("Can't fail"),
+        SafeUrl::to_unsafe,
+    );
+
+    let relay_mode = if iroh_relays.is_empty() {
+        RelayMode::Default
+    } else {
+        RelayMode::Custom(RelayMap::from_nodes(iroh_relays.into_iter().map(|url| {
+            RelayNode {
+                url: RelayUrl::from(url.to_unsafe()),
+                stun_only: false,
+                stun_port: DEFAULT_STUN_PORT,
+                quic: Some(RelayQuicConfig::default()),
+            }
+        }))?)
+    };
+
+    let builder = Endpoint::builder()
+        .add_discovery({
+            let iroh_dns = iroh_dns.clone();
+            move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
+        })
+        .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)))
+        .discovery_dht()
+        .relay_mode(relay_mode)
+        .secret_key(secret_key)
+        .alpns(vec![alpn.to_vec()]);
+
+    let builder = match bind_addr {
+        SocketAddr::V4(addr_v4) => builder.bind_addr_v4(addr_v4),
+        SocketAddr::V6(addr_v6) => builder.bind_addr_v6(addr_v6),
+    };
+
+    let endpoint = builder.bind().await.expect("Could not bind to port");
+
+    info!(
+        target: LOG_NET_IROH,
+        %bind_addr,
+        node_id = %endpoint.node_id(),
+        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+        "Iroh p2p server endpoint"
+    );
+
+    Ok(endpoint)
 }
 
 #[async_trait]
