@@ -916,11 +916,8 @@ impl WalletClientModule {
         }}))
     }
 
-    pub async fn list_peg_in_tweak_idxes(
-        &self,
-    ) -> anyhow::Result<BTreeMap<TweakIdx, PegInTweakIndexData>> {
-        Ok(self
-            .client_ctx
+    pub async fn list_peg_in_tweak_idxes(&self) -> BTreeMap<TweakIdx, PegInTweakIndexData> {
+        self.client_ctx
             .module_db()
             .clone()
             .begin_transaction_nc()
@@ -929,7 +926,7 @@ impl WalletClientModule {
             .await
             .map(|(key, data)| (key.0, data))
             .collect()
-            .await)
+            .await
     }
 
     pub async fn find_tweak_idx_by_address(
