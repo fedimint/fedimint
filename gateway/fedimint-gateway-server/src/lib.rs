@@ -486,6 +486,8 @@ impl Gateway {
                         crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
                     }
 
+                    self_copy.unannounce_from_all_federations().await;
+
                     match route_payments_response {
                         ReceivePaymentStreamAction::RetryAfterDelay => {
                             warn!(target: LOG_GATEWAY, retry_interval = %PAYMENT_STREAM_RETRY_SECONDS, "Disconnected from lightning node");
@@ -553,6 +555,16 @@ impl Gateway {
         self.set_gateway_state(GatewayState::Running { lightning_context })
             .await;
         info!(target: LOG_GATEWAY, "Gateway is running");
+
+        if self.is_running_lnv1() {
+            // Re-register the gateway with all federations after connecting to the
+            // lightning node
+            let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+            let all_federations_configs =
+                dbtx.load_federation_configs().await.into_iter().collect();
+            self.register_federations(&all_federations_configs, &self.task_group)
+                .await;
+        }
 
         // Runs until the connection to the lightning node breaks or we receive the
         // shutdown signal.
