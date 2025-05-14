@@ -284,10 +284,12 @@ cargo_sort_defaults := "-w -g --order package,features,bin,lib,test,bench,depend
 # Fix sort order in `Cargo.toml` files
 cargo-sort-fix *ARGS="":
   cargo sort {{cargo_sort_defaults}} {{ARGS}}
+  shopt -s globstar && taplo fmt -- **/Cargo.toml
 
 # Check sort order in `Cargo.toml` files
 cargo-sort-check *ARGS="":
   cargo sort {{cargo_sort_defaults}} --check {{ARGS}}
+  shopt -s globstar && taplo fmt -- --check **/Cargo.toml
 
 # deploy our docker-compose deployment to HOST
 deploy-docker-demo HOST:
