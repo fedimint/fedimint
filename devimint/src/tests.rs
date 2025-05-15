@@ -1844,6 +1844,28 @@ pub async fn recurringd_test(dev_fed: DevFed) -> Result<()> {
         return Ok(());
     }
 
+    {
+        let dummy_invite = "fed114znk7uk7ppugdjuytr8venqf2tkywd65cqvg3u93um64tu5cw4yr0n3fvn7qmwvm4g48cpndgnm4gqq4waen5te0xyerwt3s9cczuvf6xyurzde597s7crdvsk2vmyarjw9gwyqjdzj";
+        let url = format!("{}lnv1/federations", recurringd.api_url);
+        let client = reqwest::Client::new();
+        let response_no_auth = client
+            .put(&url)
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({ "invite": dummy_invite }))
+            .send()
+            .await?;
+        assert!(response_no_auth.status().is_client_error());
+
+        let response_with_wrong_auth = client
+            .put(&url)
+            .header("Authorization", "Bearer wrong-token")
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({ "invite": dummy_invite }))
+            .send()
+            .await?;
+        assert!(response_with_wrong_auth.status().is_client_error());
+    }
+
     // Give the LND Gateway a balance, it's the only GW serving LNv1 and recurringd
     // is currently LNv1-only
     fed.pegin_gateways(10_000_000, vec![&gw_lnd]).await?;
