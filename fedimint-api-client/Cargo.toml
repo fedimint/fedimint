@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-api-client"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-api-client provides common code used by client."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-api-client"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.cargo-udeps.ignore]
 development = ["tokio-test"]
@@ -53,20 +53,20 @@ z32 = { workspace = true }
 workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
+arti-client = { workspace = true, optional = true }
+curve25519-dalek = { workspace = true, optional = true }
+iroh = { workspace = true, default-features = false, features = [
+  "discovery-pkarr-dht",
+] }
 jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
+rustls-pki-types = { workspace = true }
+strum = { workspace = true, optional = true }
 tokio-rustls = { version = "0.26.0", default-features = false, features = [
   "logging",
   "tls12",
   "ring",
 ] }
 webpki-roots = { workspace = true }
-rustls-pki-types = { workspace = true }
-arti-client = { workspace = true, optional = true }
-strum = { workspace = true, optional = true }
-curve25519-dalek = { workspace = true, optional = true }
-iroh = { workspace = true, default-features = false, features = [
-  "discovery-pkarr-dht",
-] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = { workspace = true }

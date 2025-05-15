@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-load-test-tool"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-load-test-tool is a tool to load test the fedimint server and gateway."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-load-test-tool"
 publish = false
+version = { workspace = true }
 
 [[bin]]
 name = "fedimint-load-test-tool"

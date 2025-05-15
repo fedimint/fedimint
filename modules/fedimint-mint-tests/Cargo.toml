@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-mint-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-mint-tests contains integration tests for the mint module"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-mint-tests"
 publish = false
+version = { workspace = true }
 
 [[test]]
 name = "fedimint_mint_tests"

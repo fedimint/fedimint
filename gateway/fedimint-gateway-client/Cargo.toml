@@ -1,13 +1,13 @@
 [package]
-name = "fedimint-gateway-client"
+description = "Client for interacting with the gateway"
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = { workspace = true }
 license = { workspace = true }
+name = "fedimint-gateway-client"
+readme = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
-readme = { workspace = true }
-description = "Client for interacting with the gateway"
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

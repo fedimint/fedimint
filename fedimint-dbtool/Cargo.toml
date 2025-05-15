@@ -1,18 +1,18 @@
 [package]
-name = "fedimint-dbtool"
-version = { workspace = true }
+description = "Tool to inspect Fedimint client and server databases"
 edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-dbtool"
 readme = { workspace = true }
-description = "Tool to inspect Fedimint client and server databases"
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [[bin]]
-path = "src/main.rs"
 name = "fedimint-dbtool"
+path = "src/main.rs"
 
 [lib]
 name = "fedimint_dbtool"

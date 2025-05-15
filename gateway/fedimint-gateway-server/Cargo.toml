@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-gateway-server"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-gateway-server sends/receives Lightning Network payments on behalf of Fedimint clients"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-gateway-server"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [features]
 tor = [

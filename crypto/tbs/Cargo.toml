@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-tbs"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "tbs is a helper cryptography library for threshold blind signatures"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-tbs"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [features]
 default = []
@@ -17,9 +17,9 @@ name = "tbs"
 path = "src/lib.rs"
 
 [[bench]]
+harness = false
 name = "tbs"
 path = "benches/tbs.rs"
-harness = false
 
 [dependencies]
 bls12_381 = { workspace = true }

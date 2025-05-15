@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-server-ui"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-server-ui is a server-side rendered admin web UI for fedimintd."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-server-ui"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [lib]
 name = "fedimint_server_ui"

@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-gw-client"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-gw-client is a crate for servicing lightning payments on behalf of fedimint clients"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-gw-client"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

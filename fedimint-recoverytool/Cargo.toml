@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-recoverytool"
-version = { workspace = true }
-edition = { workspace = true }
 authors = { workspace = true }
 description = "Tool for retrieving on-chain funds from a decommissioned Fedimint federation"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-recoverytool"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

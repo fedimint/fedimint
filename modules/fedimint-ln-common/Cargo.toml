@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-ln-common"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-ln-common is a lightning payment service module (common types)."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-ln-common"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.cargo-udeps.ignore]
 # cargo udeps can't detect that one

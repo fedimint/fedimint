@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-wallet-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-wallet-tests contains integration tests for the lightning module"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-wallet-tests"
 publish = false
+version = { workspace = true }
 
 [[bin]]
 name = "wallet-module-tests"

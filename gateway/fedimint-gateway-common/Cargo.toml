@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-gateway-common"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "Contains common structs and logic between the gateway client and server"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-gateway-common"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [features]
 tor = ["fedimint-api-client/tor"]

@@ -1,12 +1,12 @@
 [package]
-edition = { workspace = true }
-name = "fedimint-client-wasm"
-version = { workspace = true }
 authors = { workspace = true }
 description = "fedimint client for wasm"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-client-wasm"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 # https://rustwasm.github.io/wasm-pack/book/cargo-toml-configuration.html
 [package.metadata.wasm-pack.profile.release]
@@ -34,9 +34,9 @@ fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 imbl = { workspace = true }
 js-sys = { workspace = true }
+lightning-invoice = { workspace = true }
 rexie = { workspace = true }
 serde_json = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 wasm-bindgen-test = { workspace = true }
-lightning-invoice = { workspace = true }

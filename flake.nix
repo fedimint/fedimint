@@ -296,6 +296,7 @@
                     pkgs.just
                     pkgs.time
                     pkgs.gawk
+                    pkgs.taplo
 
                     (pkgs.writeShellScriptBin "git-recommit" "exec git commit --edit -F <(cat \"$(git rev-parse --git-path COMMIT_EDITMSG)\" | grep -v -E '^#.*') \"$@\"")
 

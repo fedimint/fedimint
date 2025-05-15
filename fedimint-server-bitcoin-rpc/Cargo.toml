@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-server-bitcoin-rpc"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "Bitcoin RPC implementations for Fedimint server"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-server-bitcoin-rpc"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [lib]
 name = "fedimint_server_bitcoin_rpc"
@@ -21,7 +21,7 @@ esplora-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-server-core = { workspace = true }
-tracing = { workspace = true } 
+tracing = { workspace = true }
 
 [lints]
 workspace = true

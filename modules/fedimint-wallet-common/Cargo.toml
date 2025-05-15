@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-wallet-common"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-wallet-common is a n on-chain bitcoin wallet module. It uses a key-value store and is not a standard HD wallet. (common types)"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-wallet-common"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
