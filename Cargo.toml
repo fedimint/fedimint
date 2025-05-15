@@ -118,6 +118,7 @@ async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.88"
 axum = "0.8.4"
+axum-auth = "0.8.1"
 axum-extra = "0.10.1"
 backon = { version = "1.5.0", default-features = false }
 backtrace = "0.3.74"

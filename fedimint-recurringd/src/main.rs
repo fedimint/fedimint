@@ -7,6 +7,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, put};
+use axum_auth::AuthBearer;
 use clap::Parser;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
@@ -42,6 +43,7 @@ struct CliOpts {
 
 #[derive(Clone)]
 struct AppState {
+    auth_token: String,
     recurring_invoice_server: RecurringInvoiceServer,
 }
 
@@ -71,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
     let app = axum::Router::new()
         .nest("/lnv1", api_v1)
         .with_state(AppState {
+            auth_token: cli_opts.bearer_token,
             recurring_invoice_server,
         });
 
@@ -87,8 +90,13 @@ struct AddFederationRequest {
 
 async fn add_federation(
     State(app_state): State<AppState>,
+    AuthBearer(token): AuthBearer,
     request: Json<AddFederationRequest>,
 ) -> Result<Json<FederationId>, ApiError> {
+    if token != app_state.auth_token {
+        return Err(ApiError(anyhow::anyhow!("Invalid auth token")));
+    }
+
     let federation_id = app_state
         .recurring_invoice_server
         .register_federation(&request.invite)
