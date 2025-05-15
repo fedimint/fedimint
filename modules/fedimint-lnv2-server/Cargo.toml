@@ -1,10 +1,10 @@
 [package]
+authors = { workspace = true }
+description = "fedimint-ln is a lightning payment service module."
+edition = { workspace = true }
+license = { workspace = true }
 name = "fedimint-lnv2-server"
 version = { workspace = true }
-authors = { workspace = true }
-edition = { workspace = true }
-description = "fedimint-ln is a lightning payment service module."
-license = { workspace = true }
 
 [lib]
 name = "fedimint_lnv2_server"

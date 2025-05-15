@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-mint-server"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-mint is a chaumian ecash mint module."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-mint-server"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

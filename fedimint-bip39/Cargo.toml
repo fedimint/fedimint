@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-bip39"
-version = { workspace = true }
+description = "Allows using bip39 mnemonic phrases to generate fedimint client keys"
 edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-bip39"
 readme = { workspace = true }
-description = "Allows using bip39 mnemonic phrases to generate fedimint client keys"
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

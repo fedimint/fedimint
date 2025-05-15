@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-lnv2-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-lnv2-tests contains integration tests for the lnv2 module"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-lnv2-tests"
 publish = false
+version = { workspace = true }
 
 [[bin]]
 name = "lnv2-module-tests"

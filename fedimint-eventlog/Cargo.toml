@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-eventlog"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-eventlog provides a eventlog handling primitives for Fedimint."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-eventlog"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

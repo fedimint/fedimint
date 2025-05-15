@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-ln-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-ln-tests contains integration tests for the lightning module"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-ln-tests"
 publish = false
+version = { workspace = true }
 
 [[test]]
 name = "fedimint_ln_tests"

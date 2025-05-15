@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-docs"
-edition = { workspace = true }
 authors = { workspace = true }
-version = { workspace = true }
-publish = false
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-docs"
+publish = false
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [lib]
 name = "fedimint_docs"

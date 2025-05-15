@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-meta-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-mint-tests contains integration tests for the meta module"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-meta-tests"
 publish = false
+version = { workspace = true }
 
 # workaround: cargo-deny in Nix needs to see at least one
 # artifact here

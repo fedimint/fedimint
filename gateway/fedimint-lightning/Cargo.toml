@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-lightning"
-version = { workspace = true }
 authors = ["The Fedimint Developers"]
-edition = { workspace = true }
 description = "fedimint-lightning handle the gateway's interaction with the lightning node"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-lightning"
 readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
+version = { workspace = true }
 
 [lib]
 name = "fedimint_lightning"

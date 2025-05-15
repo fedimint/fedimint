@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-recurringd-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-recurringd-tests contains integration tests for fedimint-recurringd"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-recurringd-tests"
 publish = false
+version = { workspace = true }
 
 [[bin]]
 name = "fedimint-recurringd-tests"

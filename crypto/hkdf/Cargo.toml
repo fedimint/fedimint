@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-hkdf"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "RFC5869 HKDF implementation on top of bitcoin_hashes"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-hkdf"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [lib]
 name = "hkdf"

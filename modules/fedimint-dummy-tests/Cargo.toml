@@ -1,11 +1,11 @@
 [package]
-name = "fedimint-dummy-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-dummy is a dummy example fedimint module."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-dummy-tests"
 publish = false
+version = { workspace = true }
 
 [[test]]
 name = "fedimint_dummy_tests"

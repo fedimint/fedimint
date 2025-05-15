@@ -1,19 +1,19 @@
 [package]
-name = "fedimint-logging"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "contains some utilities for logging and tracing"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-logging"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [features]
 telemetry = [
-    "tracing-opentelemetry",
-    "opentelemetry-jaeger",
-    "console-subscriber",
-    "opentelemetry"
+  "tracing-opentelemetry",
+  "opentelemetry-jaeger",
+  "console-subscriber",
+  "opentelemetry",
 ]
 
 [lib]

@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-testing"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-testing provides a library of shared objects and utilities for testing fedimint components"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-testing"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

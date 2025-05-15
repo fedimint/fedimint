@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-build"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "Fedimint build script utilities for including git version information in builds"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-build"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [lib]
 name = "fedimint_build"

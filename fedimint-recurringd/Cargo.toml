@@ -1,13 +1,13 @@
 [package]
-name = "fedimint-recurringd"
+description = "recurringd is a service that allows Fedimint users to receive recurring payments"
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = { workspace = true }
 license = { workspace = true }
+name = "fedimint-recurringd"
+readme = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
-readme = { workspace = true }
-description = "recurringd is a service that allows Fedimint users to receive recurring payments"
 
 [[bin]]
 name = "fedimint-recurringd"

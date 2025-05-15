@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-aead"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "aead utilities on top of ring"
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-aead"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

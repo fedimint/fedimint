@@ -1,18 +1,18 @@
 [package]
+authors = { workspace = true }
+description = "fedimint-ln is a lightning payment service module."
+edition = { workspace = true }
+license = { workspace = true }
 name = "fedimint-lnv2-client"
 version = { workspace = true }
-authors = { workspace = true }
-edition = { workspace = true }
-description = "fedimint-ln is a lightning payment service module."
-license = { workspace = true }
 
 [package.metadata.cargo-udeps.ignore]
 # cargo udeps can't detect that one
 normal = ["aquamarine"]
 
 [features]
-default = []
 cli = ["dep:clap"]
+default = []
 
 [lib]
 name = "fedimint_lnv2_client"

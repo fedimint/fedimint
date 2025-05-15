@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-unknown-server"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-unknown-server is a test fedimint module that doesn't have any client side implementation."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-unknown-server"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

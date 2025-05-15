@@ -1,13 +1,13 @@
 [package]
-name = "fedimintd"
+description = "fedimintd daemon for Fedimint"
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = { workspace = true }
 license = { workspace = true }
+name = "fedimintd"
+readme = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
-readme = { workspace = true }
-description = "fedimintd daemon for Fedimint"
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

@@ -1,12 +1,12 @@
 [package]
-name = "fedimint-rocksdb"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = "fedimint-rocksdb provides a rocksdb-backed database implementation for Fedimint."
+edition = { workspace = true }
 license = { workspace = true }
+name = "fedimint-rocksdb"
 readme = { workspace = true }
 repository = { workspace = true }
+version = { workspace = true }
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]

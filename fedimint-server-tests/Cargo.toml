@@ -1,15 +1,15 @@
 [package]
-name = "fedimint-server-tests"
-version = { workspace = true }
 authors = { workspace = true }
-edition = { workspace = true }
 description = { workspace = true }
 documentation = { workspace = true }
-readme = { workspace = true }
+edition = { workspace = true }
 homepage = { workspace = true }
-repository = { workspace = true }
-license = { workspace = true }
 keywords = { workspace = true }
+license = { workspace = true }
+name = "fedimint-server-tests"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
 
 [[test]]
 name = "fedimint_server_migration"
