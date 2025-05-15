@@ -31,6 +31,22 @@ Options:
   -h, --help                         Print help
 ```
 
+## Adding Federations
+
+`recurringd` only supports specified federations.
+To add a federation to `recurringd`, you need to provide a valid federation invite code. This is done via the HTTP API using a `PUT` request to the `/lnv1/federations` endpoint.
+Authentication is required via the bearer token specified via the environment or command line arguments.
+
+```bash
+curl -X PUT \
+  -H "Authorization: Bearer <YOUR_BEARER_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"invite": "<FEDERATION_INVITE_CODE>"}' \
+  http://<RECURRINGD_API_ADDRESS>/lnv1/federations
+```
+
+If successful, the response will contain the federation ID that was added.
+
 ## Sequence Diagram
 
 ```mermaid
