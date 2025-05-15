@@ -106,9 +106,13 @@ ssh -q "root@$ssh_host" << EOF
 
   sed -i 's/my-super-host.com/$domain/g' $host_dir/.env
 
+  ufw allow 8173/tcp # p2p tls
+  ufw allow 8173/udp # p2p iroh
+  ufw allow 8174/udp # api iroh (api tls goes through traefic)
   ufw allow 80/tcp
   ufw allow 443/tcp
   ufw allow 22/tcp
+  ufw default deny
   ufw --force enable
 
   systemctl daemon-reload
