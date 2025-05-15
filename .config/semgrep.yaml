@@ -27,7 +27,7 @@ rules:
   languages:
     - rust
   message: Use fedimint_core::time::now instead of Instant::now for better wasm compatibility. ATM. there's no good Instant replacement for WASM, so we need to resort to SystemTime.
-  
+
   pattern-either:
     - pattern: std::time::Instant::now
     - pattern: tokio::time::Instant::now
@@ -105,7 +105,7 @@ rules:
     # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
     # so matching this one with raw regexes instead
     - pattern-regex: '%e\b|%err\b|%error\b'
-    - pattern-not-regex: '%err[a-zA-Z\.]+(fmt|as_str)'
+    - pattern-not-regex: '%e[a-zA-Z\.]*(fmt_compact|as_str)'
   severity: ERROR
 
 - id: use-log-targets
