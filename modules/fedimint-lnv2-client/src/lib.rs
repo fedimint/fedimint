@@ -418,7 +418,7 @@ impl LightningClientModule {
         }
     }
 
-    async fn select_gateway(
+    pub async fn select_gateway(
         &self,
         invoice: Option<Bolt11Invoice>,
     ) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
