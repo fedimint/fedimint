@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
+axum-auth = { workspace = true }
 clap = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
