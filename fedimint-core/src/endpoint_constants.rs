@@ -1,5 +1,6 @@
 pub const ADD_PEER_SETUP_CODE_ENDPOINT: &str = "add_peer_setup_code";
 pub const RESET_PEER_SETUP_CODES_ENDPOINT: &str = "reset_peer_setup_codes";
+pub const GET_SETUP_CODE_ENDPOINT: &str = "get_setup_code";
 pub const AUDIT_ENDPOINT: &str = "audit";
 pub const GUARDIAN_CONFIG_BACKUP_ENDPOINT: &str = "download_guardian_backup";
 pub const AUTH_ENDPOINT: &str = "auth";

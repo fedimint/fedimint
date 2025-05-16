@@ -12,8 +12,8 @@ use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
-    ADD_PEER_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, START_DKG_ENDPOINT,
+    ADD_PEER_SETUP_CODE_ENDPOINT, GET_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
+    SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT, START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::{
     FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
@@ -400,6 +400,15 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                 config.reset_setup_codes().await;
 
                 Ok(())
+            }
+        },
+        api_endpoint! {
+            GET_SETUP_CODE_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |config: &SetupApi, context, _request: ()| -> Option<String> {
+                check_auth(context)?;
+
+                Ok(config.setup_code().await)
             }
         },
         api_endpoint! {
