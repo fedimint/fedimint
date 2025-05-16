@@ -263,7 +263,7 @@ impl RecurringInvoiceServer {
             PaymentCodeVariant::Lnurl { meta } => meta,
         };
         let meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
-        let description = Bolt11InvoiceDescription::Hash(&meta_hash);
+        let description = Bolt11InvoiceDescription::Hash(meta_hash);
 
         // TODO: ideally creating the invoice would take a dbtx as argument so we don't
         // get holes in our used indexes in case this function fails/is cancelled

@@ -17,7 +17,7 @@ use fedimint_mint_client::MintClientInit;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::StreamExt;
 use futures::future::{AbortHandle, Abortable};
-use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
+use lightning_invoice::Bolt11InvoiceDescriptionRef;
 use serde_json::json;
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsError, JsValue};
@@ -105,8 +105,8 @@ impl WasmClient {
 
         // memo
         let description = match invoice.description() {
-            Bolt11InvoiceDescription::Direct(desc) => desc.to_string(),
-            Bolt11InvoiceDescription::Hash(_) => "Description hash only".to_string(),
+            Bolt11InvoiceDescriptionRef::Direct(desc) => desc.to_string(),
+            Bolt11InvoiceDescriptionRef::Hash(_) => "Description hash only".to_string(),
         };
 
         let response = json!({

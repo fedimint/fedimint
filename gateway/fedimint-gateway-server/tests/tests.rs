@@ -515,7 +515,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
                 invoice_amount,
-                Bolt11InvoiceDescription::Direct(&desc),
+                Bolt11InvoiceDescription::Direct(desc),
                 None,
                 "test intercept valid HTLC",
                 lightning_gateway,
@@ -606,7 +606,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
                 sats(100),
-                Bolt11InvoiceDescription::Direct(&desc),
+                Bolt11InvoiceDescription::Direct(desc),
                 None,
                 "test intercept htlc but with no funds",
                 lightning_gateway,
@@ -880,7 +880,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         let (receive_op, invoice, _) = ln_module
             .create_bolt11_invoice(
                 invoice_amt,
-                Bolt11InvoiceDescription::Direct(&desc),
+                Bolt11InvoiceDescription::Direct(desc),
                 None,
                 "test gw swap between federations",
                 lightning_gateway,

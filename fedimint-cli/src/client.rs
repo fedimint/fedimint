@@ -370,7 +370,7 @@ pub async fn handle_command(
             let (operation_id, invoice, _) = lightning_module
                 .create_bolt11_invoice(
                     amount,
-                    Bolt11InvoiceDescription::Direct(&desc),
+                    Bolt11InvoiceDescription::Direct(desc),
                     expiry_time,
                     (),
                     ln_gateway,

@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use bitcoin::Network;
 use bitcoin::hashes::{Hash, sha256};
+use bitcoin::{FeeRate, Network};
 use fedimint_bip39::Mnemonic;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
@@ -15,14 +15,13 @@ use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
 use fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
-use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::NodeAlias;
 use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
-use lightning::ln::PaymentPreimage;
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
-use lightning_invoice::Bolt11Invoice;
+use lightning::types::payment::{PaymentHash, PaymentPreimage};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
@@ -194,6 +193,7 @@ impl GatewayLdkClient {
             payment_hash,
             claimable_amount_msat,
             claim_deadline,
+            ..
         } = event
         {
             if let Err(err) = htlc_stream_sender
@@ -213,7 +213,9 @@ impl GatewayLdkClient {
 
         // The `PaymentClaimable` event is the only event type that we are interested
         // in. We can safely ignore all other events.
-        node.event_handled();
+        if let Err(err) = node.event_handled() {
+            warn!(err = %err.fmt_compact(), "LDK could not mark event handled");
+        }
     }
 }
 
@@ -415,25 +417,30 @@ impl ILnRpcClient for GatewayLdkClient {
             None
         };
 
-        // Currently `ldk-node` only supports direct descriptions.
-        // See https://github.com/lightningdevkit/ldk-node/issues/325.
-        // TODO: Once the above issue is resolved, we should support
-        // description hashes as well.
-        let description_str = match create_invoice_request.description {
-            Some(InvoiceDescription::Direct(desc)) => desc,
-            _ => String::new(),
+        let description = match create_invoice_request.description {
+            Some(InvoiceDescription::Direct(desc)) => {
+                Bolt11InvoiceDescription::Direct(Description::new(desc).map_err(|_| {
+                    LightningRpcError::FailedToGetInvoice {
+                        failure_reason: "Invalid description".to_string(),
+                    }
+                })?)
+            }
+            Some(InvoiceDescription::Hash(hash)) => {
+                Bolt11InvoiceDescription::Hash(lightning_invoice::Sha256(hash))
+            }
+            None => Bolt11InvoiceDescription::Direct(Description::empty()),
         };
 
         let invoice = match payment_hash_or {
             Some(payment_hash) => self.node.bolt11_payment().receive_for_hash(
                 create_invoice_request.amount_msat,
-                description_str.as_str(),
+                &description,
                 create_invoice_request.expiry_secs,
                 payment_hash,
             ),
             None => self.node.bolt11_payment().receive(
                 create_invoice_request.amount_msat,
-                description_str.as_str(),
+                &description,
                 create_invoice_request.expiry_secs,
             ),
         }
@@ -465,19 +472,23 @@ impl ILnRpcClient for GatewayLdkClient {
         SendOnchainRequest {
             address,
             amount,
-            // TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
-            // This work is planned to be in `ldk-node` v0.4 and is tracked here:
-            // https://github.com/lightningdevkit/ldk-node/issues/176
-            fee_rate_sats_per_vbyte: _,
+            fee_rate_sats_per_vbyte,
         }: SendOnchainRequest,
     ) -> Result<SendOnchainResponse, LightningRpcError> {
         let onchain = self.node.onchain_payment();
 
+        let retain_reserves = false;
         let txid = match amount {
-            BitcoinAmountOrAll::All => onchain.send_all_to_address(&address.assume_checked()),
-            BitcoinAmountOrAll::Amount(amount_sats) => {
-                onchain.send_to_address(&address.assume_checked(), amount_sats.to_sat())
-            }
+            BitcoinAmountOrAll::All => onchain.send_all_to_address(
+                &address.assume_checked(),
+                retain_reserves,
+                FeeRate::from_sat_per_vb(fee_rate_sats_per_vbyte),
+            ),
+            BitcoinAmountOrAll::Amount(amount_sats) => onchain.send_to_address(
+                &address.assume_checked(),
+                amount_sats.to_sat(),
+                FeeRate::from_sat_per_vb(fee_rate_sats_per_vbyte),
+            ),
         }
         .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
             failure_reason: e.to_string(),
@@ -620,7 +631,7 @@ impl ILnRpcClient for GatewayLdkClient {
             .list_payments_with_filter(|details| {
                 details.direction == PaymentDirection::Inbound
                     && details.id == PaymentId(get_invoice_request.payment_hash.to_byte_array())
-                    && !matches!(details.kind, PaymentKind::Onchain)
+                    && !matches!(details.kind, PaymentKind::Onchain { .. })
             })
             .iter()
             .map(|details| {
@@ -655,7 +666,7 @@ impl ILnRpcClient for GatewayLdkClient {
         let transactions = self
             .node
             .list_payments_with_filter(|details| {
-                details.kind != PaymentKind::Onchain
+                !matches!(details.kind, PaymentKind::Onchain { .. })
                     && details.latest_update_timestamp >= start_secs
                     && details.latest_update_timestamp < end_secs
             })
@@ -804,6 +815,7 @@ fn get_preimage_and_payment_hash(
             preimage,
             secret: _,
             lsp_fee_limits: _,
+            ..
         } => (
             preimage.map(|p| Preimage(p.0)),
             Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
@@ -837,7 +849,7 @@ fn get_preimage_and_payment_hash(
             Some(sha256::Hash::from_slice(&hash.0).expect("Failed to convert payment hash")),
             fedimint_gateway_common::PaymentKind::Bolt11,
         ),
-        PaymentKind::Onchain => (None, None, fedimint_gateway_common::PaymentKind::Onchain),
+        PaymentKind::Onchain { .. } => (None, None, fedimint_gateway_common::PaymentKind::Onchain),
     }
 }
 
