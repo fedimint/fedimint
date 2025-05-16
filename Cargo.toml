@@ -121,7 +121,7 @@ axum = "0.8.4"
 axum-auth = "0.8.1"
 axum-extra = "0.10.1"
 backon = { version = "1.5.0", default-features = false }
-backtrace = "0.3.74"
+backtrace = "0.3.75"
 base64 = "0.22.1"
 base64-url = "3.0.0"
 bcrypt = "0.16.0"
@@ -138,8 +138,8 @@ bls12_381 = "0.8.0"
 bon = "3.6.3"
 bytes = "1.10.1"
 chrono = "0.4.41"
-clap = { version = "4.5.37", features = ["derive", "env"] }
-clap_complete = "4.5.48"
+clap = { version = "4.5.38", features = ["derive", "env"] }
+clap_complete = "4.5.50"
 console-subscriber = "0.4.1"
 criterion = "0.5.1"
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
@@ -296,7 +296,7 @@ tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
   "routerrpc",
 ] }
 tower = { version = "0.4.13", default-features = false }
-tower-http = "0.6.2"
+tower-http = "0.6.4"
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.8.0-alpha" }
 tracing = "0.1.41"
 tracing-opentelemetry = "0.24.0"
