@@ -55,6 +55,7 @@ impl RocksDb {
 
         block_in_place(|| Self::open_blocking(db_path))
     }
+
     pub fn open_blocking(db_path: &Path) -> anyhow::Result<Locked<RocksDb>> {
         block_in_place(|| {
             std::fs::create_dir_all(
@@ -62,9 +63,10 @@ impl RocksDb {
                     .parent()
                     .ok_or_else(|| anyhow::anyhow!("db path must have a base dir"))?,
             )?;
-            Ok(LockedBuilder::new(db_path)?.with_db(Self::open_blocking_unlocked(db_path)?))
+            LockedBuilder::new(db_path)?.with_db(|| Self::open_blocking_unlocked(db_path))
         })
     }
+
     pub fn open_blocking_unlocked(db_path: &Path) -> anyhow::Result<RocksDb> {
         let mut opts = get_default_options()?;
         // Since we turned synchronous writes one we should never encounter a corrupted

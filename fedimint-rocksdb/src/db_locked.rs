@@ -51,11 +51,14 @@ impl LockedBuilder {
     }
 
     /// Create [`Locked`] by giving it the database to wrap
-    pub fn with_db<DB>(self, db: DB) -> Locked<DB> {
-        Locked {
-            inner: db,
+    pub fn with_db<DB>(
+        self,
+        db_fn: impl FnOnce() -> anyhow::Result<DB>,
+    ) -> anyhow::Result<Locked<DB>> {
+        Ok(Locked {
+            inner: db_fn()?,
             lock: self.lock,
-        }
+        })
     }
 }
 
