@@ -17,7 +17,7 @@
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>futures::StreamExt;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>futures::future::{AbortHandle, Abortable};
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>lightning_invoice::Bolt11InvoiceDescriptionRef;
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>serde_json::json;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>wasm_bindgen::prelude::wasm_bindgen;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>wasm_bindgen::{JsError, JsValue};
@@ -105,8 +105,8 @@
 <a href=#105 id=105 data-nosnippet>105</a>
 <a href=#106 id=106 data-nosnippet>106</a>        <span class="comment">// memo
 <a href=#107 id=107 data-nosnippet>107</a>        </span><span class="kw">let </span>description = <span class="kw">match </span>invoice.description() {
-<a href=#108 id=108 data-nosnippet>108</a>            Bolt11InvoiceDescription::Direct(desc) =&gt; desc.to_string(),
-<a href=#109 id=109 data-nosnippet>109</a>            Bolt11InvoiceDescription::Hash(<span class="kw">_</span>) =&gt; <span class="string">"Description hash only"</span>.to_string(),
+<a href=#108 id=108 data-nosnippet>108</a>            Bolt11InvoiceDescriptionRef::Direct(desc) =&gt; desc.to_string(),
+<a href=#109 id=109 data-nosnippet>109</a>            Bolt11InvoiceDescriptionRef::Hash(<span class="kw">_</span>) =&gt; <span class="string">"Description hash only"</span>.to_string(),
 <a href=#110 id=110 data-nosnippet>110</a>        };
 <a href=#111 id=111 data-nosnippet>111</a>
 <a href=#112 id=112 data-nosnippet>112</a>        <span class="kw">let </span>response = <span class="macro">json!</span>({

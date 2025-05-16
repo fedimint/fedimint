@@ -263,7 +263,7 @@
 <a href=#263 id=263 data-nosnippet>263</a>            PaymentCodeVariant::Lnurl { meta } =&gt; meta,
 <a href=#264 id=264 data-nosnippet>264</a>        };
 <a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">let </span>meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
-<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>description = Bolt11InvoiceDescription::Hash(<span class="kw-2">&amp;</span>meta_hash);
+<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>description = Bolt11InvoiceDescription::Hash(meta_hash);
 <a href=#267 id=267 data-nosnippet>267</a>
 <a href=#268 id=268 data-nosnippet>268</a>        <span class="comment">// TODO: ideally creating the invoice would take a dbtx as argument so we don't
 <a href=#269 id=269 data-nosnippet>269</a>        // get holes in our used indexes in case this function fails/is cancelled

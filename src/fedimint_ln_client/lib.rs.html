@@ -504,7 +504,7 @@
 <a href=#504 id=504 data-nosnippet>504</a>                        </span>.create_bolt11_invoice(
 <a href=#505 id=505 data-nosnippet>505</a>                            req.amount,
 <a href=#506 id=506 data-nosnippet>506</a>                            lightning_invoice::Bolt11InvoiceDescription::Direct(
-<a href=#507 id=507 data-nosnippet>507</a>                                <span class="kw-2">&amp;</span>lightning_invoice::Description::new(req.description)<span class="question-mark">?</span>,
+<a href=#507 id=507 data-nosnippet>507</a>                                lightning_invoice::Description::new(req.description)<span class="question-mark">?</span>,
 <a href=#508 id=508 data-nosnippet>508</a>                            ),
 <a href=#509 id=509 data-nosnippet>509</a>                            req.expiry_time,
 <a href=#510 id=510 data-nosnippet>510</a>                            req.extra_meta,
@@ -542,7 +542,7 @@
 <a href=#542 id=542 data-nosnippet>542</a>                        </span>.create_bolt11_invoice_for_user_tweaked(
 <a href=#543 id=543 data-nosnippet>543</a>                            req.amount,
 <a href=#544 id=544 data-nosnippet>544</a>                            lightning_invoice::Bolt11InvoiceDescription::Direct(
-<a href=#545 id=545 data-nosnippet>545</a>                                <span class="kw-2">&amp;</span>lightning_invoice::Description::new(req.description)<span class="question-mark">?</span>,
+<a href=#545 id=545 data-nosnippet>545</a>                                lightning_invoice::Description::new(req.description)<span class="question-mark">?</span>,
 <a href=#546 id=546 data-nosnippet>546</a>                            ),
 <a href=#547 id=547 data-nosnippet>547</a>                            req.expiry_time,
 <a href=#548 id=548 data-nosnippet>548</a>                            req.user_key,
@@ -942,7 +942,7 @@
 <a href=#942 id=942 data-nosnippet>942</a>    </span><span class="kw">fn </span>create_lightning_receive_output&lt;<span class="lifetime">'a</span>&gt;(
 <a href=#943 id=943 data-nosnippet>943</a>        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
 <a href=#944 id=944 data-nosnippet>944</a>        amount: Amount,
-<a href=#945 id=945 data-nosnippet>945</a>        description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'a</span>&gt;,
+<a href=#945 id=945 data-nosnippet>945</a>        description: lightning_invoice::Bolt11InvoiceDescription,
 <a href=#946 id=946 data-nosnippet>946</a>        receiving_key: ReceivingKey,
 <a href=#947 id=947 data-nosnippet>947</a>        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">'a</span>,
 <a href=#948 id=948 data-nosnippet>948</a>        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
@@ -1604,7 +1604,7 @@
 <a href=#1604 id=1604 data-nosnippet>1604</a>    </span><span class="kw">pub async fn </span>create_bolt11_invoice&lt;M: Serialize + Send + Sync&gt;(
 <a href=#1605 id=1605 data-nosnippet>1605</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1606 id=1606 data-nosnippet>1606</a>        amount: Amount,
-<a href=#1607 id=1607 data-nosnippet>1607</a>        description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1607 id=1607 data-nosnippet>1607</a>        description: lightning_invoice::Bolt11InvoiceDescription,
 <a href=#1608 id=1608 data-nosnippet>1608</a>        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
 <a href=#1609 id=1609 data-nosnippet>1609</a>        extra_meta: M,
 <a href=#1610 id=1610 data-nosnippet>1610</a>        gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
@@ -1628,7 +1628,7 @@
 <a href=#1628 id=1628 data-nosnippet>1628</a>    </span><span class="kw">pub async fn </span>create_bolt11_invoice_for_user_tweaked&lt;M: Serialize + Send + Sync&gt;(
 <a href=#1629 id=1629 data-nosnippet>1629</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1630 id=1630 data-nosnippet>1630</a>        amount: Amount,
-<a href=#1631 id=1631 data-nosnippet>1631</a>        description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1631 id=1631 data-nosnippet>1631</a>        description: lightning_invoice::Bolt11InvoiceDescription,
 <a href=#1632 id=1632 data-nosnippet>1632</a>        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
 <a href=#1633 id=1633 data-nosnippet>1633</a>        user_key: PublicKey,
 <a href=#1634 id=1634 data-nosnippet>1634</a>        index: u64,
@@ -1651,7 +1651,7 @@
 <a href=#1651 id=1651 data-nosnippet>1651</a>    </span><span class="kw">pub async fn </span>create_bolt11_invoice_for_user&lt;M: Serialize + Send + Sync&gt;(
 <a href=#1652 id=1652 data-nosnippet>1652</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1653 id=1653 data-nosnippet>1653</a>        amount: Amount,
-<a href=#1654 id=1654 data-nosnippet>1654</a>        description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1654 id=1654 data-nosnippet>1654</a>        description: lightning_invoice::Bolt11InvoiceDescription,
 <a href=#1655 id=1655 data-nosnippet>1655</a>        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
 <a href=#1656 id=1656 data-nosnippet>1656</a>        user_key: PublicKey,
 <a href=#1657 id=1657 data-nosnippet>1657</a>        extra_meta: M,
@@ -1673,7 +1673,7 @@
 <a href=#1673 id=1673 data-nosnippet>1673</a>    </span><span class="kw">async fn </span>create_bolt11_invoice_internal&lt;M: Serialize + Send + Sync&gt;(
 <a href=#1674 id=1674 data-nosnippet>1674</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1675 id=1675 data-nosnippet>1675</a>        amount: Amount,
-<a href=#1676 id=1676 data-nosnippet>1676</a>        description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#1676 id=1676 data-nosnippet>1676</a>        description: lightning_invoice::Bolt11InvoiceDescription,
 <a href=#1677 id=1677 data-nosnippet>1677</a>        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
 <a href=#1678 id=1678 data-nosnippet>1678</a>        receiving_key: ReceivingKey,
 <a href=#1679 id=1679 data-nosnippet>1679</a>        extra_meta: M,
