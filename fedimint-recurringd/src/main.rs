@@ -23,6 +23,8 @@ use fedimint_rocksdb::RocksDb;
 use lightning_invoice::Bolt11Invoice;
 use lnurl::pay::{LnURLPayInvoice, PayResponse};
 use tokio::net::TcpListener;
+use tower_http::cors;
+use tower_http::cors::CorsLayer;
 use tracing::debug;
 
 #[derive(Debug, Parser)]
@@ -56,6 +58,10 @@ async fn main() -> anyhow::Result<()> {
     let db = RocksDb::open(cli_opts.data_dir).await?;
     let recurring_invoice_server = RecurringInvoiceServer::new(db, cli_opts.api_address).await?;
 
+    let cors = CorsLayer::new()
+        .allow_origin(cors::Any)
+        .allow_methods(cors::Any);
+
     let api_v1 = axum::Router::new()
         .route("/federations", put(add_federation))
         .route("/federations", get(list_federations))
@@ -68,7 +74,8 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/paycodes/recipient/{payment_code_root_key}/generated/{invoice_index}",
             get(await_invoice),
-        );
+        )
+        .layer(cors);
 
     let app = axum::Router::new()
         .nest("/lnv1", api_v1)
