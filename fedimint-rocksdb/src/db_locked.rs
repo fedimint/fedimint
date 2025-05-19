@@ -14,9 +14,11 @@ use tracing::{debug, info};
 /// Use [`LockedBuilder`] to create.
 #[derive(Debug)]
 pub struct Locked<DB> {
-    inner: DB,
-    #[allow(dead_code)] // only for `Drop`
+    // only for `Drop`, MUST be first, as struct fields are dropped in
+    // a field reverse order
+    #[allow(dead_code)]
     lock: fs_lock::FileLock,
+    inner: DB,
 }
 
 /// Builder for [`Locked`]
