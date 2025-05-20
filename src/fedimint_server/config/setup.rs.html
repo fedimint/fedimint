@@ -12,8 +12,8 @@
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::db::Database;
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::endpoint_constants::{
-<a href=#15 id=15 data-nosnippet>15</a>    ADD_PEER_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
-<a href=#16 id=16 data-nosnippet>16</a>    SETUP_STATUS_ENDPOINT, START_DKG_ENDPOINT,
+<a href=#15 id=15 data-nosnippet>15</a>    ADD_PEER_SETUP_CODE_ENDPOINT, GET_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
+<a href=#16 id=16 data-nosnippet>16</a>    SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT, START_DKG_ENDPOINT,
 <a href=#17 id=17 data-nosnippet>17</a>};
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::envs::{
 <a href=#19 id=19 data-nosnippet>19</a>    FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
@@ -403,13 +403,22 @@
 <a href=#403 id=403 data-nosnippet>403</a>            }
 <a href=#404 id=404 data-nosnippet>404</a>        },
 <a href=#405 id=405 data-nosnippet>405</a>        <span class="macro">api_endpoint!</span> {
-<a href=#406 id=406 data-nosnippet>406</a>            START_DKG_ENDPOINT,
+<a href=#406 id=406 data-nosnippet>406</a>            GET_SETUP_CODE_ENDPOINT,
 <a href=#407 id=407 data-nosnippet>407</a>            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>SetupApi, context, _v: ()| -&gt; () {
+<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>SetupApi, context, _request: ()| -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
 <a href=#409 id=409 data-nosnippet>409</a>                check_auth(context)<span class="question-mark">?</span>;
 <a href=#410 id=410 data-nosnippet>410</a>
-<a href=#411 id=411 data-nosnippet>411</a>                config.start_dkg().<span class="kw">await</span>.map_err(|e| ApiError::server_error(e.to_string()))
+<a href=#411 id=411 data-nosnippet>411</a>                <span class="prelude-val">Ok</span>(config.setup_code().<span class="kw">await</span>)
 <a href=#412 id=412 data-nosnippet>412</a>            }
 <a href=#413 id=413 data-nosnippet>413</a>        },
-<a href=#414 id=414 data-nosnippet>414</a>    ]
-<a href=#415 id=415 data-nosnippet>415</a>}</code></pre></div></section></main></body></html>
+<a href=#414 id=414 data-nosnippet>414</a>        <span class="macro">api_endpoint!</span> {
+<a href=#415 id=415 data-nosnippet>415</a>            START_DKG_ENDPOINT,
+<a href=#416 id=416 data-nosnippet>416</a>            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
+<a href=#417 id=417 data-nosnippet>417</a>            <span class="kw">async </span>|config: <span class="kw-2">&amp;</span>SetupApi, context, _v: ()| -&gt; () {
+<a href=#418 id=418 data-nosnippet>418</a>                check_auth(context)<span class="question-mark">?</span>;
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>                config.start_dkg().<span class="kw">await</span>.map_err(|e| ApiError::server_error(e.to_string()))
+<a href=#421 id=421 data-nosnippet>421</a>            }
+<a href=#422 id=422 data-nosnippet>422</a>        },
+<a href=#423 id=423 data-nosnippet>423</a>    ]
+<a href=#424 id=424 data-nosnippet>424</a>}</code></pre></div></section></main></body></html>
