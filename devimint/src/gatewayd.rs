@@ -19,6 +19,7 @@ use fedimint_gateway_common::{
 };
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
+use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
 use semver::Version;
 use tracing::{debug, info};
@@ -85,7 +86,7 @@ impl Gatewayd {
             (FM_PORT_LDK_ENV.to_owned(), lightning_node_port.to_string()),
         ]);
         if !supports_lnv2() {
-            tracing::info!("LNv2 is not supported, running gatewayd in LNv1 mode");
+            info!(target: LOG_DEVIMINT, "LNv2 is not supported, running gatewayd in LNv1 mode");
             gateway_env.insert(
                 "FM_GATEWAY_LIGHTNING_MODULE_MODE".to_owned(),
                 "LNv1".to_string(),
@@ -165,13 +166,13 @@ impl Gatewayd {
     }
 
     fn is_forced_current(&self) -> bool {
-        self.ln.ln_type() == LightningNodeType::Ldk && self.gatewayd_version < *VERSION_0_6_0_ALPHA
+        self.ln.ln_type() == LightningNodeType::Ldk && self.gatewayd_version < *VERSION_0_7_0_ALPHA
     }
 
     fn start_gatewayd(ln_type: &LightningNodeType, gatewayd_version: &Version) -> Command {
         // If an LDK gateway is trying to spawn prior to v0.6, just use most recent
         // version
-        if *ln_type == LightningNodeType::Ldk && *gatewayd_version < *VERSION_0_6_0_ALPHA {
+        if *ln_type == LightningNodeType::Ldk && *gatewayd_version < *VERSION_0_7_0_ALPHA {
             cmd!("gatewayd", ln_type)
         } else {
             cmd!(crate::util::Gatewayd, ln_type)
@@ -187,7 +188,7 @@ impl Gatewayd {
     }
 
     pub async fn stop_lightning_node(&mut self) -> Result<()> {
-        info!("Stopping lightning node");
+        info!(target: LOG_DEVIMINT, "Stopping lightning node");
         match self.ln.clone() {
             LightningNode::Lnd(lnd) => lnd.terminate().await,
             LightningNode::Ldk {
@@ -220,7 +221,7 @@ impl Gatewayd {
         unsafe { std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path) };
 
         if supports_lnv2() {
-            tracing::info!("LNv2 is now supported, running in All mode");
+            info!(target: LOG_DEVIMINT, "LNv2 is now supported, running in All mode");
             // TODO: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::set_var("FM_GATEWAY_LIGHTNING_MODULE_MODE", "All") };
         }
@@ -232,6 +233,7 @@ impl Gatewayd {
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         info!(
+            target: LOG_DEVIMINT,
             ?gatewayd_version,
             ?gateway_cli_version,
             "upgraded gatewayd and gateway-cli"
@@ -301,7 +303,7 @@ impl Gatewayd {
     pub async fn recover_fed(&self, fed: &Federation) -> Result<()> {
         let federation_id = fed.calculate_federation_id();
         let invite_code = fed.invite_code()?;
-        info!("Recovering {federation_id}...");
+        info!(target: LOG_DEVIMINT, federation_id = %federation_id, "Recovering...");
         poll("gateway connect-fed --recover=true", || async {
             cmd!(self, "connect-fed", invite_code.clone(), "--recover=true")
                 .run()
