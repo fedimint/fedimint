@@ -4355,9 +4355,9 @@ dependencies = [
 
 [[package]]
 name = "fs-lock"
-version = "0.1.8"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "123aaa96c3b79df4454cdef6210a65eec781e3179595565691c91eb28e65eca7"
+checksum = "7b4f2056716254938d208ed159fdd08d9d5f6fc208568fd80a5d8a69d3614b96"
 dependencies = [
  "fs4",
 ]
@@ -4390,12 +4390,12 @@ dependencies = [
 
 [[package]]
 name = "fs4"
-version = "0.12.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c29c30684418547d476f0b48e84f4821639119c483b1eccd566c8cd0cd05f521"
+checksum = "8640e34b88f7652208ce9e88b1a37a2ae95227d84abec377ccd3c5cfeb141ed4"
 dependencies = [
- "rustix 0.38.39",
- "windows-sys 0.52.0",
+ "rustix 1.0.3",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
