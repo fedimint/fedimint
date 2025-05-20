@@ -16,17 +16,18 @@ use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::ClientModuleInit;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
-use fedimint_client_module::secret::DeriveableSecretClientExt as _;
+use fedimint_client_module::secret::{DeriveableSecretClientExt as _, get_default_client_secret};
 use fedimint_client_module::transaction::{
     TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext, tx_submission_sm_decoder,
 };
 use fedimint_client_module::{AdminCreds, ModuleRecoveryStarted};
-use fedimint_core::config::{ClientConfig, ModuleInitRegistry};
+use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     Database, IDatabaseTransactionOpsCoreTyped as _, verify_module_db_integrity_dbtx,
 };
 use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiVersion;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::task::TaskGroup;
@@ -42,7 +43,9 @@ use tracing::{debug, warn};
 
 use super::handle::ClientHandle;
 use super::{Client, client_decoders};
-use crate::api_announcements::{get_api_urls, run_api_announcement_sync};
+use crate::api_announcements::{
+    get_api_urls, refresh_api_announcement_sync, run_api_announcement_sync,
+};
 use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
     self, ApiSecretKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
@@ -54,6 +57,51 @@ use crate::module_init::ClientModuleInitRegistry;
 use crate::oplog::OperationLog;
 use crate::sm::executor::Executor;
 use crate::sm::notifier::Notifier;
+
+/// The type of root secret hashing
+///
+/// Internally, client will always hash-in federation id
+/// to the root secret provided to the [`ClientBuilder`],
+/// to ensure a different secret is used for ever federation.
+/// This makes reusing a single root secret for different federations
+/// in a multi-federation client, perfectly fine, and frees the client
+/// from worrying about `FederationId`.
+///
+/// However, in the past some applications (including `fedimint-cli`)
+/// were doing the hashing-in of `FederationId` outside of `fedimint-client`,
+/// which lead to effectively doing it twice, and sub-optimal API, as the end
+/// application needed to know the federation id e.g. before joining federation,
+/// leaking downloading of configs and internals of joining federation outside.
+///
+/// This is now hard to cleanly fix, so to help phase out the old system,
+/// without affecting existing secrets, the following enum is used.
+#[derive(Clone)]
+pub enum RootSecret {
+    /// Derive an extra round of federation-id to the secret, like
+    /// Fedimint applications were doing manually in the past.
+    ///
+    /// **Note**: Applications MUST NOT do the derivation themselves anymore.
+    LegacyDoubleDerive(DerivableSecret),
+    /// Only use a single internal federation-id hashing.
+    ///
+    /// Use this method if you are building a new application, that
+    /// did not use old system in the past, and save yourself some trouble.
+    ///
+    /// The high level application is free to re-use the same secret for
+    /// multiple different federations. Or not. But client APIs will not
+    /// expose federation_id to the outside before join/recover operations.
+    Standard(DerivableSecret),
+}
+impl RootSecret {
+    fn to_inner(&self, federation_id: FederationId) -> DerivableSecret {
+        match self {
+            RootSecret::LegacyDoubleDerive(derivable_secret) => {
+                get_default_client_secret(derivable_secret, &federation_id)
+            }
+            RootSecret::Standard(derivable_secret) => derivable_secret.clone(),
+        }
+    }
+}
 
 /// Used to configure, assemble and build [`Client`]
 pub struct ClientBuilder {
@@ -344,7 +392,7 @@ impl ClientBuilder {
     /// # use fedimint_core::invite_code::InviteCode;
     /// # use fedimint_core::config::ClientConfig;
     /// # use fedimint_derive_secret::DerivableSecret;
-    /// # use fedimint_client::{Client, ClientBuilder};
+    /// # use fedimint_client::{Client, ClientBuilder, RootSecret};
     /// # use fedimint_core::db::Database;
     /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
     /// #
@@ -358,8 +406,6 @@ impl ClientBuilder {
     /// // Get invite code from user
     /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
     ///     .expect("Invalid invite code");
-    /// let config = fedimint_api_client::api::net::Connector::default().download_from_invite_code(&invite_code).await
-    ///     .expect("Error downloading config");
     ///
     /// // Tell the user the federation name, bitcoin network
     /// // (e.g. from wallet module config), and other details
@@ -389,25 +435,63 @@ impl ClientBuilder {
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)
     ///     // .with_module(WalletClientInit::default())
-    ///     .join(root_secret, config, None)
+    ///     .join_with_invite(RootSecret::Standard(root_secret), &invite_code)
     ///     .await
     ///     .expect("Error joining federation");
     /// # }
     /// ```
-    pub async fn join(
+    pub async fn join_with_invite(
         self,
-        pre_root_secret: DerivableSecret,
+        pre_root_secret: RootSecret,
+        invite_code: &InviteCode,
+    ) -> anyhow::Result<ClientHandle> {
+        let config = self
+            .connector
+            .download_from_invite_code(invite_code)
+            .await?;
+
+        if let Some(guardian_pub_keys) = config.global.broadcast_public_keys.clone() {
+            // Fetching api announcements using invite urls before joining, then write them
+            // to database This ensures the client can communicated with the
+            // Federation even if all the peers moved.
+            let api = DynGlobalApi::from_endpoints(invite_code.peers(), &invite_code.api_secret())
+                .await?;
+            refresh_api_announcement_sync(&api, self.db_no_decoders(), &guardian_pub_keys).await?;
+        }
+
+        let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
+
+        let client = self
+            .init(
+                pre_root_secret,
+                config.clone(),
+                invite_code.api_secret(),
+                InitMode::Fresh,
+            )
+            .await?;
+
+        Ok(client)
+    }
+
+    pub async fn join_with_existing_config(
+        self,
+        root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<ClientHandle> {
-        self.init(pre_root_secret, config, api_secret, InitMode::Fresh)
-            .await
+        let pre_root_secret =
+            get_default_client_secret(&root_secret, &config.global.calculate_federation_id());
+        let client = self
+            .init(pre_root_secret, config.clone(), api_secret, InitMode::Fresh)
+            .await?;
+
+        Ok(client)
     }
 
     /// Download most recent valid backup found from the Federation
-    pub async fn download_backup_from_federation(
+    async fn download_backup_from_federation(
         &self,
-        root_secret: &DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: &ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<Option<ClientBackup>> {
@@ -424,7 +508,7 @@ impl ClientBuilder {
 
         Client::download_backup_from_federation_static(
             &api,
-            &Self::federation_root_secret(root_secret, config),
+            &Self::federation_root_secret(&pre_root_secret, config),
             &self.decoders(config),
         )
         .await
@@ -432,8 +516,9 @@ impl ClientBuilder {
 
     /// Join a (possibly) previous joined Federation
     ///
-    /// Unlike [`Self::join`], `recover` will run client module recovery for
-    /// each client module attempting to recover any previous module state.
+    /// Unlike [`Self::join_with_invite`], `recover` will run client module
+    /// recovery for each client module attempting to recover any previous
+    /// module state.
     ///
     /// Recovery process takes time during which each recovering client module
     /// will not be available for use.
@@ -442,16 +527,41 @@ impl ClientBuilder {
     /// used in a given Federation is safe.
     pub async fn recover(
         self,
-        root_secret: DerivableSecret,
-        config: ClientConfig,
-        api_secret: Option<String>,
-        backup: Option<ClientBackup>,
+        pre_root_secret: RootSecret,
+        invite_code: &InviteCode,
+        custom_backup: Option<ClientBackup>,
     ) -> anyhow::Result<ClientHandle> {
+        let config = self
+            .connector
+            .download_from_invite_code(invite_code)
+            .await?;
+
+        if let Some(guardian_pub_keys) = config.global.broadcast_public_keys.clone() {
+            // Fetching api announcements using invite urls before joining, then write them
+            // to database This ensures the client can communicated with the
+            // Federation even if all the peers moved.
+            let api = DynGlobalApi::from_endpoints(invite_code.peers(), &invite_code.api_secret())
+                .await?;
+            refresh_api_announcement_sync(&api, self.db_no_decoders(), &guardian_pub_keys).await?;
+        }
+
+        let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
+        let backup = if let Some(backup) = custom_backup {
+            Some(backup)
+        } else {
+            self.download_backup_from_federation(
+                pre_root_secret.clone(),
+                &config,
+                invite_code.api_secret(),
+            )
+            .await?
+        };
+
         let client = self
             .init(
-                root_secret,
+                pre_root_secret,
                 config,
-                api_secret,
+                invite_code.api_secret(),
                 InitMode::Recover {
                     snapshot: backup.clone(),
                 },
@@ -461,10 +571,12 @@ impl ClientBuilder {
         Ok(client)
     }
 
-    pub async fn open(self, pre_root_secret: DerivableSecret) -> anyhow::Result<ClientHandle> {
+    pub async fn open(self, pre_root_secret: RootSecret) -> anyhow::Result<ClientHandle> {
         let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
+
+        let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
 
         match self
             .db_no_decoders()
@@ -542,7 +654,7 @@ impl ClientBuilder {
     /// Build a [`Client`] but do not start the executor
     async fn build_stopped(
         self,
-        root_secret: DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: &ClientConfig,
         api_secret: Option<String>,
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
@@ -628,7 +740,7 @@ impl ClientBuilder {
 
         let final_client = FinalClientIface::default();
 
-        let root_secret = Self::federation_root_secret(&root_secret, &config);
+        let root_secret = Self::federation_root_secret(&pre_root_secret, &config);
 
         let modules = {
             let mut modules = ClientModuleRegistry::default();
@@ -953,10 +1065,10 @@ impl ClientBuilder {
     /// eliminates the possibility of having the same client `root_secret`
     /// across multiple federations.
     fn federation_root_secret(
-        root_secret: &DerivableSecret,
+        pre_root_secret: &DerivableSecret,
         config: &ClientConfig,
     ) -> DerivableSecret {
-        root_secret.federation_key(&config.global.calculate_federation_id())
+        pre_root_secret.federation_key(&config.global.calculate_federation_id())
     }
 
     /// Register to receiver all new transient (unpersisted) events

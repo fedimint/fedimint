@@ -120,7 +120,7 @@ impl FederationTest {
             .await
             .unwrap();
         client_builder
-            .join(
+            .join_with_existing_config(
                 PlainRootSecretStrategy::to_root_secret(&client_secret),
                 client_config,
                 None,
