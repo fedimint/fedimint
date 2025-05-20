@@ -52,6 +52,9 @@ function check_cargo_sort() {
     set -eo pipefail
 
     cargo sort -w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies --check >/dev/null
+
+    shopt -s globstar
+    taplo fmt --check -- **/Cargo.toml
 }
 export -f check_cargo_sort
 

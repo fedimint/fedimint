@@ -384,7 +384,10 @@
             );
 
             lint = flakeboxLib.mkLintShell {
-              nativeBuildInputs = [ pkgs.cargo-sort ];
+              nativeBuildInputs = [
+                pkgs.cargo-sort
+                pkgs.taplo
+              ];
               env = {
                 FLAKEBOX_GIT_LS_IGNORE = "fedimint-server-ui/assets/";
                 FLAKEBOX_GIT_LS_TEXT_IGNORE = "fedimint-server-ui/assets/";
