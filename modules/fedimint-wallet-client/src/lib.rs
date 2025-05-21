@@ -1034,6 +1034,30 @@ impl WalletClientModule {
             .collect()
             .await
     }
+    pub async fn check_pegin_status(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<Option<PegInStatusResponse>> {
+        let pegin_tweak_idx = self.list_peg_in_tweak_idxes().await;
+        for (tweak_idx, data) in pegin_tweak_idx {
+            if operation_id == data.operation_id {
+                let (_, _, address, _) = self.data.derive_deposit_address(tweak_idx);
+                let deposit_address = address.as_unchecked().clone();
+                let status = if data.claimed.is_empty() {
+                    PegInStatusKind::Pending
+                } else {
+                    PegInStatusKind::Claimed
+                };
+                return Ok(Some(PegInStatusResponse {
+                    operation_id,
+                    deposit_address,
+                    claimed_outputs: data.claimed,
+                    status,
+                }));
+            }
+        }
+        Ok(None)
+    }
 
     pub async fn find_tweak_idx_by_address(
         &self,
