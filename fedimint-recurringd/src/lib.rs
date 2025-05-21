@@ -128,10 +128,11 @@ impl RecurringInvoiceServer {
         client_builder.with_primary_module_kind(ModuleKind::from_static_str("mint"));
 
         let client = client_builder
-            .join_with_invite(
-                fedimint_client::RootSecret::LegacyDoubleDerive(Self::default_secret()),
-                invite_code,
-            )
+            .preview(invite_code)
+            .await?
+            .join(fedimint_client::RootSecret::LegacyDoubleDerive(
+                Self::default_secret(),
+            ))
             .await
             .map_err(RecurringPaymentError::JoiningFederationFailed)?;
         Ok(Arc::new(client))

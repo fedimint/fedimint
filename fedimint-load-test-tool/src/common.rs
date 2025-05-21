@@ -163,7 +163,9 @@ pub async fn build_client(
         client_builder.open(RootSecret::Standard(root_secret)).await
     } else if let Some(invite_code) = &invite_code {
         client_builder
-            .join_with_invite(RootSecret::Standard(root_secret), invite_code)
+            .preview(invite_code)
+            .await?
+            .join(RootSecret::Standard(root_secret))
             .await
     } else {
         bail!("Database not initialize and invite code not provided");

@@ -44,10 +44,11 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandl
     let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
     builder.stopped();
     let client = builder
-        .join_with_invite(
-            RootSecret::Standard(PlainRootSecretStrategy::to_root_secret(&client_secret)),
-            invite_code,
-        )
+        .preview(invite_code)
+        .await?
+        .join(RootSecret::Standard(
+            PlainRootSecretStrategy::to_root_secret(&client_secret),
+        ))
         .await
         .map(Arc::new)?;
     if let Ok(ln_client) = client.get_first_module::<LightningClientModule>() {

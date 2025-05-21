@@ -110,7 +110,9 @@ impl GatewayClientBuilder {
         let root_secret =
             RootSecret::Standard(Self::derive_federation_secret(mnemonic, &federation_id));
         let client = client_builder
-            .recover(root_secret, &config.invite_code, None)
+            .preview(&config.invite_code)
+            .await?
+            .recover(root_secret, None)
             .await
             .map(Arc::new)
             .map_err(AdminGatewayError::ClientCreationError)?;
@@ -155,7 +157,9 @@ impl GatewayClientBuilder {
             client_builder.open(root_secret).await
         } else {
             client_builder
-                .join_with_invite(root_secret, &invite_code)
+                .preview(&invite_code)
+                .await?
+                .join(root_secret)
                 .await
         }
         .map(Arc::new)

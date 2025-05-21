@@ -369,82 +369,7 @@ impl ClientBuilder {
             .await
     }
 
-    /// Join a new Federation
-    ///
-    /// When a user wants to connect to a new federation this function fetches
-    /// the federation config and initializes the client database. If a user
-    /// already joined the federation in the past and has a preexisting database
-    /// use [`ClientBuilder::open`] instead.
-    ///
-    /// **Warning**: Calling `join` with a `root_secret` key that was used
-    /// previous to `join` a Federation will lead to all sorts of malfunctions
-    /// including likely loss of funds.
-    ///
-    /// This should be generally called only if the `root_secret` key is known
-    /// not to have been used before (e.g. just randomly generated). For keys
-    /// that might have been previous used (e.g. provided by the user),
-    /// it's safer to call [`Self::recover`] which will attempt to recover
-    /// client module states for the Federation.
-    ///
-    /// A typical "join federation" flow would look as follows:
-    /// ```no_run
-    /// # use std::str::FromStr;
-    /// # use fedimint_core::invite_code::InviteCode;
-    /// # use fedimint_core::config::ClientConfig;
-    /// # use fedimint_derive_secret::DerivableSecret;
-    /// # use fedimint_client::{Client, ClientBuilder, RootSecret};
-    /// # use fedimint_core::db::Database;
-    /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
-    /// #
-    /// # #[tokio::main]
-    /// # async fn main() {
-    /// # let root_secret: DerivableSecret = unimplemented!();
-    /// // Create a root secret, e.g. via fedimint-bip39, see also:
-    /// // https://github.com/fedimint/fedimint/blob/master/docs/secret_derivation.md
-    /// // let root_secret = …;
-    ///
-    /// // Get invite code from user
-    /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
-    ///     .expect("Invalid invite code");
-    ///
-    /// // Tell the user the federation name, bitcoin network
-    /// // (e.g. from wallet module config), and other details
-    /// // that are typically contained in the federation's
-    /// // meta fields.
-    ///
-    /// // let network = config.get_first_module_by_kind::<WalletClientConfig>("wallet")
-    /// //     .expect("Module not found")
-    /// //     .network;
-    ///
-    /// println!(
-    ///     "The federation name is: {}",
-    ///     config.meta::<String>(META_FEDERATION_NAME_KEY)
-    ///         .expect("Could not decode name field")
-    ///         .expect("Name isn't set")
-    /// );
-    ///
-    /// // Open the client's database, using the federation ID
-    /// // as the DB name is a common pattern:
-    ///
-    /// // let db_path = format!("./path/to/db/{}", config.federation_id());
-    /// // let db = RocksDb::open(db_path).expect("error opening DB");
-    /// # let db: Database = unimplemented!();
-    ///
-    /// let client = Client::builder(db).await.expect("Error building client")
-    ///     // Mount the modules the client should support:
-    ///     // .with_module(LightningClientInit)
-    ///     // .with_module(MintClientInit)
-    ///     // .with_module(WalletClientInit::default())
-    ///     .join_with_invite(RootSecret::Standard(root_secret), &invite_code)
-    ///     .await
-    ///     .expect("Error joining federation");
-    /// # }
-    /// ```
-    pub async fn join_with_invite(
-        self,
-        pre_root_secret: RootSecret,
-        invite_code: &InviteCode,
-    ) -> anyhow::Result<ClientHandle> {
+    pub async fn preview(self, invite_code: &InviteCode) -> anyhow::Result<ClientPreview> {
         let config = self
             .connector
             .download_from_invite_code(invite_code)
@@ -459,33 +384,24 @@ impl ClientBuilder {
             refresh_api_announcement_sync(&api, self.db_no_decoders(), &guardian_pub_keys).await?;
         }
 
-        let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
-
-        let client = self
-            .init(
-                pre_root_secret,
-                config.clone(),
-                invite_code.api_secret(),
-                InitMode::Fresh,
-            )
-            .await?;
-
-        Ok(client)
+        Ok(ClientPreview {
+            inner: self,
+            config,
+            api_secret: invite_code.api_secret(),
+        })
     }
 
-    pub async fn join_with_existing_config(
+    /// Use [`Self::preview`] instead
+    pub async fn preview_with_existing_config(
         self,
-        root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
-    ) -> anyhow::Result<ClientHandle> {
-        let pre_root_secret =
-            get_default_client_secret(&root_secret, &config.global.calculate_federation_id());
-        let client = self
-            .init(pre_root_secret, config.clone(), api_secret, InitMode::Fresh)
-            .await?;
-
-        Ok(client)
+    ) -> anyhow::Result<ClientPreview> {
+        Ok(ClientPreview {
+            inner: self,
+            config,
+            api_secret,
+        })
     }
 
     /// Download most recent valid backup found from the Federation
@@ -513,64 +429,6 @@ impl ClientBuilder {
         )
         .await
     }
-
-    /// Join a (possibly) previous joined Federation
-    ///
-    /// Unlike [`Self::join_with_invite`], `recover` will run client module
-    /// recovery for each client module attempting to recover any previous
-    /// module state.
-    ///
-    /// Recovery process takes time during which each recovering client module
-    /// will not be available for use.
-    ///
-    /// Calling `recovery` with a `root_secret` that was not actually previous
-    /// used in a given Federation is safe.
-    pub async fn recover(
-        self,
-        pre_root_secret: RootSecret,
-        invite_code: &InviteCode,
-        custom_backup: Option<ClientBackup>,
-    ) -> anyhow::Result<ClientHandle> {
-        let config = self
-            .connector
-            .download_from_invite_code(invite_code)
-            .await?;
-
-        if let Some(guardian_pub_keys) = config.global.broadcast_public_keys.clone() {
-            // Fetching api announcements using invite urls before joining, then write them
-            // to database This ensures the client can communicated with the
-            // Federation even if all the peers moved.
-            let api = DynGlobalApi::from_endpoints(invite_code.peers(), &invite_code.api_secret())
-                .await?;
-            refresh_api_announcement_sync(&api, self.db_no_decoders(), &guardian_pub_keys).await?;
-        }
-
-        let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
-        let backup = if let Some(backup) = custom_backup {
-            Some(backup)
-        } else {
-            self.download_backup_from_federation(
-                pre_root_secret.clone(),
-                &config,
-                invite_code.api_secret(),
-            )
-            .await?
-        };
-
-        let client = self
-            .init(
-                pre_root_secret,
-                config,
-                invite_code.api_secret(),
-                InitMode::Recover {
-                    snapshot: backup.clone(),
-                },
-            )
-            .await?;
-
-        Ok(client)
-    }
-
     pub async fn open(self, pre_root_secret: RootSecret) -> anyhow::Result<ClientHandle> {
         let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
@@ -1074,5 +932,155 @@ impl ClientBuilder {
     /// Register to receiver all new transient (unpersisted) events
     pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
         self.log_event_added_transient_tx.subscribe()
+    }
+}
+
+pub struct ClientPreview {
+    inner: ClientBuilder,
+    config: ClientConfig,
+    api_secret: Option<String>,
+}
+
+impl ClientPreview {
+    /// Get the config
+    pub fn config(&self) -> &ClientConfig {
+        &self.config
+    }
+
+    /// Join a new Federation
+    ///
+    /// When a user wants to connect to a new federation this function fetches
+    /// the federation config and initializes the client database. If a user
+    /// already joined the federation in the past and has a preexisting database
+    /// use [`ClientBuilder::open`] instead.
+    ///
+    /// **Warning**: Calling `join` with a `root_secret` key that was used
+    /// previous to `join` a Federation will lead to all sorts of malfunctions
+    /// including likely loss of funds.
+    ///
+    /// This should be generally called only if the `root_secret` key is known
+    /// not to have been used before (e.g. just randomly generated). For keys
+    /// that might have been previous used (e.g. provided by the user),
+    /// it's safer to call [`Self::recover`] which will attempt to recover
+    /// client module states for the Federation.
+    ///
+    /// A typical "join federation" flow would look as follows:
+    /// ```no_run
+    /// # use std::str::FromStr;
+    /// # use fedimint_core::invite_code::InviteCode;
+    /// # use fedimint_core::config::ClientConfig;
+    /// # use fedimint_derive_secret::DerivableSecret;
+    /// # use fedimint_client::{Client, ClientBuilder, RootSecret};
+    /// # use fedimint_core::db::Database;
+    /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
+    /// #
+    /// # #[tokio::main]
+    /// # async fn main() -> anyhow::Result<()> {
+    /// # let root_secret: DerivableSecret = unimplemented!();
+    /// // Create a root secret, e.g. via fedimint-bip39, see also:
+    /// // https://github.com/fedimint/fedimint/blob/master/docs/secret_derivation.md
+    /// // let root_secret = …;
+    ///
+    /// // Get invite code from user
+    /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
+    ///     .expect("Invalid invite code");
+    ///
+    /// // Tell the user the federation name, bitcoin network
+    /// // (e.g. from wallet module config), and other details
+    /// // that are typically contained in the federation's
+    /// // meta fields.
+    ///
+    /// // let network = config.get_first_module_by_kind::<WalletClientConfig>("wallet")
+    /// //     .expect("Module not found")
+    /// //     .network;
+    ///
+    /// // Open the client's database, using the federation ID
+    /// // as the DB name is a common pattern:
+    ///
+    /// // let db_path = format!("./path/to/db/{}", config.federation_id());
+    /// // let db = RocksDb::open(db_path).expect("error opening DB");
+    /// # let db: Database = unimplemented!();
+    ///
+    /// let preview = Client::builder(db).await
+    ///     // Mount the modules the client should support:
+    ///     // .with_module(LightningClientInit)
+    ///     // .with_module(MintClientInit)
+    ///     // .with_module(WalletClientInit::default())
+    ///      .expect("Error building client")
+    ///      .preview(&invite_code).await?;
+    ///
+    /// println!(
+    ///     "The federation name is: {}",
+    ///     preview.config().meta::<String>(META_FEDERATION_NAME_KEY)
+    ///         .expect("Could not decode name field")
+    ///         .expect("Name isn't set")
+    /// );
+    ///
+    /// let client = preview
+    ///     .join(RootSecret::Standard(root_secret))
+    ///     .await
+    ///     .expect("Error joining federation");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn join(self, pre_root_secret: RootSecret) -> anyhow::Result<ClientHandle> {
+        let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
+
+        let client = self
+            .inner
+            .init(
+                pre_root_secret,
+                self.config,
+                self.api_secret,
+                InitMode::Fresh,
+            )
+            .await?;
+
+        Ok(client)
+    }
+
+    /// Join a (possibly) previous joined Federation
+    ///
+    /// Unlike [`Self::join`], `recover` will run client module
+    /// recovery for each client module attempting to recover any previous
+    /// module state.
+    ///
+    /// Recovery process takes time during which each recovering client module
+    /// will not be available for use.
+    ///
+    /// Calling `recovery` with a `root_secret` that was not actually previous
+    /// used in a given Federation is safe.
+    pub async fn recover(
+        self,
+        pre_root_secret: RootSecret,
+        custom_backup: Option<ClientBackup>,
+    ) -> anyhow::Result<ClientHandle> {
+        let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
+
+        let backup = if let Some(backup) = custom_backup {
+            Some(backup)
+        } else {
+            self.inner
+                .download_backup_from_federation(
+                    pre_root_secret.clone(),
+                    &self.config,
+                    self.api_secret.clone(),
+                )
+                .await?
+        };
+
+        let client = self
+            .inner
+            .init(
+                pre_root_secret,
+                self.config,
+                self.api_secret,
+                InitMode::Recover {
+                    snapshot: backup.clone(),
+                },
+            )
+            .await?;
+
+        Ok(client)
     }
 }

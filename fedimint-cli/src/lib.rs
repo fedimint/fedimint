@@ -677,12 +677,12 @@ impl FedimintCli {
         let mnemonic = load_or_generate_mnemonic(client_builder.db_no_decoders()).await?;
 
         let client = client_builder
-            .join_with_invite(
-                RootSecret::LegacyDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
-                    &mnemonic,
-                )),
-                &invite_code,
-            )
+            .preview(&invite_code)
+            .await
+            .map_err_cli()?
+            .join(RootSecret::LegacyDoubleDerive(
+                Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+            ))
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -753,7 +753,10 @@ impl FedimintCli {
             Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
         );
         let client = builder
-            .recover(root_secret, &invite_code, None)
+            .preview(&invite_code)
+            .await
+            .map_err_cli()?
+            .recover(root_secret, None)
             .await
             .map(Arc::new)
             .map_err_cli()?;
