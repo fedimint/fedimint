@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module_init::ClientModuleInitRegistry;
-use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client::{Client, ClientHandleArc, RootSecret};
 use fedimint_client_module::AdminCreds;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::PeerId;
@@ -120,11 +120,12 @@ impl FederationTest {
             .await
             .unwrap();
         client_builder
-            .join(
+            .preview_with_existing_config(client_config, None)
+            .await
+            .expect("Preview failed")
+            .join(RootSecret::Standard(
                 PlainRootSecretStrategy::to_root_secret(&client_secret),
-                client_config,
-                None,
-            )
+            ))
             .await
             .map(Arc::new)
             .expect("Failed to build client")

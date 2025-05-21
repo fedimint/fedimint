@@ -53,7 +53,11 @@ impl RecurringInvoiceServer {
             client_builder.with_module(LightningClientInit::default());
             client_builder.with_module(MintClientInit);
             client_builder.with_primary_module_kind(ModuleKind::from_static_str("mint"));
-            let client = client_builder.open(Self::default_secret()).await?;
+            let client = client_builder
+                .open(fedimint_client::RootSecret::LegacyDoubleDerive(
+                    Self::default_secret(),
+                ))
+                .await?;
             clients.insert(federation_id, Arc::new(client));
         }
 
@@ -114,11 +118,6 @@ impl RecurringInvoiceServer {
         client_db: Database,
         invite_code: &InviteCode,
     ) -> Result<ClientHandleArc, RecurringPaymentError> {
-        let config = Connector::default()
-            .download_from_invite_code(invite_code)
-            .await
-            .map_err(RecurringPaymentError::JoiningFederationFailed)?;
-
         let mut client_builder = Client::builder(client_db)
             .await
             .map_err(RecurringPaymentError::JoiningFederationFailed)?;
@@ -129,7 +128,11 @@ impl RecurringInvoiceServer {
         client_builder.with_primary_module_kind(ModuleKind::from_static_str("mint"));
 
         let client = client_builder
-            .join(Self::default_secret(), config, None)
+            .preview(invite_code)
+            .await?
+            .join(fedimint_client::RootSecret::LegacyDoubleDerive(
+                Self::default_secret(),
+            ))
             .await
             .map_err(RecurringPaymentError::JoiningFederationFailed)?;
         Ok(Arc::new(client))

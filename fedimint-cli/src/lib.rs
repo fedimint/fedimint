@@ -37,8 +37,8 @@ use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::module::init::ClientModuleInit;
 use fedimint_client::module_init::ClientModuleInitRegistry;
-use fedimint_client::secret::{RootSecretStrategy, get_default_client_secret};
-use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
+use fedimint_client::secret::RootSecretStrategy;
+use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc, RootSecret};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
@@ -662,10 +662,7 @@ impl FedimintCli {
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
-        #[cfg(feature = "tor")]
-        if cli.use_tor {
-            client_builder.with_tor_connector();
-        }
+        client_builder.with_connector(cli.connector());
 
         Ok(client_builder)
     }
@@ -675,25 +672,17 @@ impl FedimintCli {
         cli: &Opts,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
-        let client_config = cli
-            .connector()
-            .download_from_invite_code(&invite_code)
-            .await
-            .map_err_cli()?;
-
         let client_builder = self.make_client_builder(cli).await?;
 
         let mnemonic = load_or_generate_mnemonic(client_builder.db_no_decoders()).await?;
 
         let client = client_builder
-            .join(
-                get_default_client_secret(
-                    &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                    &client_config.global.calculate_federation_id(),
-                ),
-                client_config.clone(),
-                invite_code.api_secret(),
-            )
+            .preview(&invite_code)
+            .await
+            .map_err_cli()?
+            .join(RootSecret::LegacyDoubleDerive(
+                Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
+            ))
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -721,14 +710,9 @@ impl FedimintCli {
         )
         .map_err_cli()?;
 
-        let config = client_builder.load_existing_config().await.map_err_cli()?;
-
-        let federation_id = config.calculate_federation_id();
-
         let client = client_builder
-            .open(get_default_client_secret(
-                &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-                &federation_id,
+            .open(RootSecret::LegacyDoubleDerive(
+                Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
             ))
             .await
             .map(Arc::new)
@@ -746,13 +730,6 @@ impl FedimintCli {
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
         let builder = self.make_client_builder(cli).await?;
-
-        let client_config = cli
-            .connector()
-            .download_from_invite_code(&invite_code)
-            .await
-            .map_err_cli()?;
-
         match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db_no_decoders())
             .await
             .map_err_cli()?
@@ -772,21 +749,14 @@ impl FedimintCli {
             }
         }
 
-        let root_secret = get_default_client_secret(
-            &Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-            &client_config.calculate_federation_id(),
+        let root_secret = RootSecret::LegacyDoubleDerive(
+            Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
         );
-        let backup = builder
-            .download_backup_from_federation(&root_secret, &client_config, invite_code.api_secret())
-            .await
-            .map_err_cli()?;
         let client = builder
-            .recover(
-                root_secret,
-                client_config.clone(),
-                invite_code.api_secret(),
-                backup,
-            )
+            .preview(&invite_code)
+            .await
+            .map_err_cli()?
+            .recover(root_secret, None)
             .await
             .map(Arc::new)
             .map_err_cli()?;

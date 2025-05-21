@@ -1301,47 +1301,79 @@ impl Client {
     pub async fn get_guardian_public_keys_blocking(
         &self,
     ) -> BTreeMap<PeerId, fedimint_core::secp256k1::PublicKey> {
-        self.db.autocommit(|dbtx, _| Box::pin(async move {
-            let config = self.config().await;
+        self.db
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(async move {
+                        let config = self.config().await;
 
-            let guardian_pub_keys = match config.global.broadcast_public_keys { Some(guardian_pub_keys) => {guardian_pub_keys} _ => {
-                let fetched_config = retry(
-                    "Fetching guardian public keys",
-                    backoff_util::background_backoff(),
-                    || async {
-                        Ok(self.api.request_current_consensus::<ClientConfig>(
-                            CLIENT_CONFIG_ENDPOINT.to_owned(),
-                            ApiRequestErased::default(),
-                        ).await?)
-                    },
-                )
-                .await
-                .expect("Will never return on error");
+                        let guardian_pub_keys = self
+                            .get_or_backfill_broadcast_public_keys(dbtx, config)
+                            .await;
 
-                let Some(guardian_pub_keys) = fetched_config.global.broadcast_public_keys else {
-                    warn!(
-                        target: LOG_CLIENT,
-                        "Guardian public keys not found in fetched config, server not updated to 0.4 yet"
-                    );
-                    pending::<()>().await;
-                    unreachable!("Pending will never return");
-                };
+                        Result::<_, ()>::Ok(guardian_pub_keys)
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Will retry forever")
+    }
 
-                let new_config = ClientConfig {
-                    global: GlobalClientConfig {
-                        broadcast_public_keys: Some(guardian_pub_keys.clone()),
-                        ..config.global
-                    },
-                    modules: config.modules,
-                };
+    async fn get_or_backfill_broadcast_public_keys(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        config: ClientConfig,
+    ) -> BTreeMap<PeerId, PublicKey> {
+        match config.global.broadcast_public_keys {
+            Some(guardian_pub_keys) => guardian_pub_keys,
+            _ => {
+                let (guardian_pub_keys, new_config) = self.fetch_and_update_config(config).await;
 
                 dbtx.insert_entry(&ClientConfigKey, &new_config).await;
                 *(self.config.write().await) = new_config;
                 guardian_pub_keys
-            }};
+            }
+        }
+    }
 
-            Result::<_, ()>::Ok(guardian_pub_keys)
-        }), None).await.expect("Will retry forever")
+    async fn fetch_and_update_config(
+        &self,
+        config: ClientConfig,
+    ) -> (BTreeMap<PeerId, PublicKey>, ClientConfig) {
+        let fetched_config = retry(
+            "Fetching guardian public keys",
+            backoff_util::background_backoff(),
+            || async {
+                Ok(self
+                    .api
+                    .request_current_consensus::<ClientConfig>(
+                        CLIENT_CONFIG_ENDPOINT.to_owned(),
+                        ApiRequestErased::default(),
+                    )
+                    .await?)
+            },
+        )
+        .await
+        .expect("Will never return on error");
+
+        let Some(guardian_pub_keys) = fetched_config.global.broadcast_public_keys else {
+            warn!(
+                target: LOG_CLIENT,
+                "Guardian public keys not found in fetched config, server not updated to 0.4 yet"
+            );
+            pending::<()>().await;
+            unreachable!("Pending will never return");
+        };
+
+        let new_config = ClientConfig {
+            global: GlobalClientConfig {
+                broadcast_public_keys: Some(guardian_pub_keys.clone()),
+                ..config.global
+            },
+            modules: config.modules,
+        };
+        (guardian_pub_keys, new_config)
     }
 
     pub fn handle_global_rpc(

@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use async_stream::try_stream;
 use db::MemAndIndexedDb;
-use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client::{ClientHandleArc, RootSecret};
 use fedimint_client_module::module::IClientModule;
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
@@ -147,7 +147,11 @@ impl WasmClient {
         let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
         let builder = Self::client_builder(db).await?;
         Ok(Some(Self {
-            client: Arc::new(builder.open(root_secret).await?),
+            client: Arc::new(
+                builder
+                    .open(RootSecret::LegacyDoubleDerive(root_secret))
+                    .await?,
+            ),
         }))
     }
 
@@ -160,10 +164,13 @@ impl WasmClient {
         let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
         let builder = Self::client_builder(db).await?;
         let invite_code = InviteCode::from_str(&invite_code)?;
-        let config = fedimint_api_client::api::net::Connector::default()
-            .download_from_invite_code(&invite_code)
-            .await?;
-        let client = Arc::new(builder.join(root_secret, config, None).await?);
+        let client = Arc::new(
+            builder
+                .preview(&invite_code)
+                .await?
+                .join(RootSecret::LegacyDoubleDerive(root_secret))
+                .await?,
+        );
         Ok(Self { client })
     }
 

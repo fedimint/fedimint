@@ -6,7 +6,7 @@ use std::sync::Arc;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ClientConfigKey;
 use fedimint_client::module_init::ClientModuleInitRegistry;
-use fedimint_client::{Client, ClientBuilder};
+use fedimint_client::{Client, ClientBuilder, RootSecret};
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
@@ -102,32 +102,17 @@ impl GatewayClientBuilder {
         gateway: Arc<Gateway>,
         mnemonic: &Mnemonic,
     ) -> AdminResult<()> {
-        let client_config = config
-            .connector
-            .download_from_invite_code(&config.invite_code)
-            .await
-            .map_err(AdminGatewayError::ClientCreationError)?;
         let federation_id = config.invite_code.federation_id();
         let db = gateway.gateway_db.get_client_database(&federation_id);
         let client_builder = self
             .create_client_builder(db, &config, gateway.clone())
             .await?;
-        let secret = Self::derive_federation_secret(mnemonic, &federation_id);
-        let backup = client_builder
-            .download_backup_from_federation(
-                &secret,
-                &client_config,
-                config.invite_code.api_secret(),
-            )
-            .await
-            .map_err(AdminGatewayError::ClientCreationError)?;
+        let root_secret =
+            RootSecret::Standard(Self::derive_federation_secret(mnemonic, &federation_id));
         let client = client_builder
-            .recover(
-                secret.clone(),
-                client_config,
-                config.invite_code.api_secret(),
-                backup,
-            )
+            .preview(&config.invite_code)
+            .await?
+            .recover(root_secret, None)
             .await
             .map(Arc::new)
             .map_err(AdminGatewayError::ClientCreationError)?;
@@ -167,16 +152,14 @@ impl GatewayClientBuilder {
 
         let client_builder = self.create_client_builder(db, &config, gateway).await?;
 
+        let root_secret = RootSecret::Standard(root_secret);
         if Client::is_initialized(client_builder.db_no_decoders()).await {
             client_builder.open(root_secret).await
         } else {
-            let client_config = config
-                .connector
-                .download_from_invite_code(&invite_code)
-                .await
-                .map_err(AdminGatewayError::ClientCreationError)?;
             client_builder
-                .join(root_secret, client_config.clone(), invite_code.api_secret())
+                .preview(&invite_code)
+                .await?
+                .join(root_secret)
                 .await
         }
         .map(Arc::new)
