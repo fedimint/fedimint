@@ -7,10 +7,11 @@ use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::api_announcement::{SignedApiAnnouncement, override_api_urls};
 use fedimint_core::runtime::sleep;
 use fedimint_core::secp256k1::SECP256K1;
-use fedimint_core::util::{SafeUrl, backoff_util, retry};
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::future::join_all;
@@ -42,12 +43,20 @@ pub(crate) async fn run_api_announcement_sync(client_inner: Arc<Client>) {
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
     loop {
-        let _ =
+        if let Err(err) =
             refresh_api_announcement_sync(&client_inner.api, client_inner.db(), &guardian_pub_keys)
-                .await;
+                .await
+        {
+            debug!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Refreshing api announcements failed");
+        }
 
-        // Check once an hour if there are new announcements
-        sleep(Duration::from_secs(3600)).await;
+        let duration = if is_running_in_test_env() {
+            Duration::from_secs(1)
+        } else {
+            // Check once an hour if there are new announcements
+            Duration::from_secs(3600)
+        };
+        sleep(duration).await;
     }
 }
 
@@ -85,16 +94,9 @@ async fn fetch_api_announcements_from_all_peers(
 ) -> Vec<Result<BTreeMap<PeerId, SignedApiAnnouncement>, anyhow::Error>> {
     join_all(api.all_peers().iter().map(|peer_id| async {
         let peer_id = *peer_id;
-        let announcements = retry(
-            "Fetch api announcement (sync)",
-            backoff_util::aggressive_backoff(),
-            || async {
-                api.api_announcements(peer_id).await.with_context(move || {
-                    format!("Fetching API announcements from peer {peer_id} failed")
-                })
-            },
-        )
-        .await?;
+        let announcements = api.api_announcements(peer_id).await.with_context(move || {
+            format!("Fetching API announcements from peer {peer_id} failed")
+        })?;
 
         // If any of the announcements is invalid something is fishy with that
         // guardian and we ignore all its responses
