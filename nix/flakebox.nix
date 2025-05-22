@@ -705,30 +705,33 @@ in
 
     wasmBundleClientPkgDeps = craneLib.buildWorkspaceDepsOnly {
       pname = "${commonArgs.pname}-client-wasm";
-      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "s";
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "z";
       buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE --locked -p fedimint-client-wasm";
     };
 
     wasmBundleClientPkg = craneLib.buildWorkspace {
       cargoArtifacts = wasmBundleClientPkgDeps;
       pname = "${commonArgs.pname}-client-wasm";
-      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "s";
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "z";
       buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE --locked -p fedimint-client-wasm";
     };
 
     wasmBundle = craneLibTests.mkCargoDerivation {
       pname = "wasm-bundle";
       cargoArtifacts = wasmBundleClientPkg;
-      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "s";
+      "CARGO_PROFILE_RELEASE_OPT_LEVEL" = "z";
       nativeBuildInputs = commonCliTestArgs.nativeBuildInputs ++ [
         pkgs.wasm-bindgen-cli
         pkgs.wasm-pack
         pkgs.binaryen
       ];
       buildPhaseCargoCommand = ''
-        runLowPrio wasm-pack build fedimint-client-wasm
+        runLowPrio wasm-pack build --release fedimint-client-wasm
+        runLowPrio wasm-pack build --release --target web --out-dir web fedimint-client-wasm
         mkdir -p $out/share/fedimint-client-wasm
+        mkdir -p $out/share/fedimint-client-wasm-web
         cp fedimint-client-wasm/pkg/* $out/share/fedimint-client-wasm
+        cp fedimint-client-wasm/web/* $out/share/fedimint-client-wasm-web
       '';
     };
 
