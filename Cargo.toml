@@ -241,7 +241,7 @@ miniscript = "12.3.2"
 nix = "0.29.0"
 opentelemetry = "0.27.1"
 opentelemetry-jaeger = "0.22.0"
-parity-scale-codec = "3.7.4"
+parity-scale-codec = "3.7.5"
 pin-project = "1.1.10"
 proc-macro2 = "1.0"
 prometheus = "0.13.4"
@@ -251,7 +251,7 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
 rcgen = "=0.13.2"
-reqwest = { version = "0.12.9", features = [
+reqwest = { version = "0.12.15", features = [
   "json",
   "rustls-tls",
   "charset",
