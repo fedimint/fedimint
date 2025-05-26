@@ -29,7 +29,12 @@ impl Connector {
         &self,
         invite: &InviteCode,
     ) -> anyhow::Result<ClientConfig> {
-        debug!(target: LOG_CLIENT, %invite, "Downloading client config via invite code");
+        debug!(
+            target: LOG_CLIENT,
+            %invite,
+            peers = ?invite.peers(),
+            "Downloading client config via invite code"
+        );
 
         let federation_id = invite.federation_id();
         let api = DynGlobalApi::from_endpoints(invite.peers(), &invite.api_secret()).await?;

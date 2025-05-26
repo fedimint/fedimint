@@ -877,6 +877,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fedimintd_version
     );
 
+    info!("Checking initial announcements...");
+
     retry(
         "Check initial announcements",
         aggressive_backoff(),
@@ -894,6 +896,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
                     initial_announcements.len()
                 )
             }
+
+            // Give the client some time to fetch updates
+            cmd!(client, "dev", "wait", "3").run().await?;
 
             if !initial_announcements
                 .values()

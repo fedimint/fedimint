@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use fedimint_client::Client;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client::{Client, RootSecret};
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::invite_code::InviteCode;
@@ -40,18 +40,15 @@ async fn make_client_builder() -> Result<fedimint_client::ClientBuilder> {
 }
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
-    let client_config = fedimint_api_client::api::net::Connector::default()
-        .download_from_invite_code(invite_code)
-        .await?;
     let mut builder = make_client_builder().await?;
     let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
     builder.stopped();
     let client = builder
-        .join(
+        .preview(invite_code)
+        .await?
+        .join(RootSecret::Standard(
             PlainRootSecretStrategy::to_root_secret(&client_secret),
-            client_config.clone(),
-            None,
-        )
+        ))
         .await
         .map(Arc::new)?;
     if let Ok(ln_client) = client.get_first_module::<LightningClientModule>() {

@@ -9,7 +9,7 @@ use devimint::util::{FedimintCli, GatewayLdkCli, LnCli};
 use devimint::version_constants::VERSION_0_7_0_ALPHA;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
-use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client::{Client, ClientHandleArc, RootSecret};
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
@@ -160,13 +160,12 @@ pub async fn build_client(
     let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
 
     let client = if Client::is_initialized(client_builder.db_no_decoders()).await {
-        client_builder.open(root_secret).await
+        client_builder.open(RootSecret::Standard(root_secret)).await
     } else if let Some(invite_code) = &invite_code {
-        let client_config = fedimint_api_client::api::net::Connector::default()
-            .download_from_invite_code(invite_code)
-            .await?;
         client_builder
-            .join(root_secret, client_config.clone(), invite_code.api_secret())
+            .preview(invite_code)
+            .await?
+            .join(RootSecret::Standard(root_secret))
             .await
     } else {
         bail!("Database not initialize and invite code not provided");
