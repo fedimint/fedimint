@@ -53,355 +53,358 @@
 <a href=#53 id=53 data-nosnippet>53</a>            client_builder.with_module(LightningClientInit::default());
 <a href=#54 id=54 data-nosnippet>54</a>            client_builder.with_module(MintClientInit);
 <a href=#55 id=55 data-nosnippet>55</a>            client_builder.with_primary_module_kind(ModuleKind::from_static_str(<span class="string">"mint"</span>));
-<a href=#56 id=56 data-nosnippet>56</a>            <span class="kw">let </span>client = client_builder.open(<span class="self">Self</span>::default_secret()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#57 id=57 data-nosnippet>57</a>            clients.insert(federation_id, Arc::new(client));
-<a href=#58 id=58 data-nosnippet>58</a>        }
-<a href=#59 id=59 data-nosnippet>59</a>
-<a href=#60 id=60 data-nosnippet>60</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#61 id=61 data-nosnippet>61</a>            db,
-<a href=#62 id=62 data-nosnippet>62</a>            clients: Arc::new(RwLock::new(clients)),
-<a href=#63 id=63 data-nosnippet>63</a>            invoice_generated: Arc::new(Default::default()),
-<a href=#64 id=64 data-nosnippet>64</a>            base_url,
-<a href=#65 id=65 data-nosnippet>65</a>        })
-<a href=#66 id=66 data-nosnippet>66</a>    }
-<a href=#67 id=67 data-nosnippet>67</a>
-<a href=#68 id=68 data-nosnippet>68</a>    <span class="doccomment">/// We don't want to hold any money or sign anything ourselves, we only use
-<a href=#69 id=69 data-nosnippet>69</a>    /// the client with externally supplied key material and to track
-<a href=#70 id=70 data-nosnippet>70</a>    /// ongoing progress of other users' receives.
-<a href=#71 id=71 data-nosnippet>71</a>    </span><span class="kw">fn </span>default_secret() -&gt; DerivableSecret {
-<a href=#72 id=72 data-nosnippet>72</a>        DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[])
-<a href=#73 id=73 data-nosnippet>73</a>    }
-<a href=#74 id=74 data-nosnippet>74</a>
-<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">pub async fn </span>register_federation(
-<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#77 id=77 data-nosnippet>77</a>        invite_code: <span class="kw-2">&amp;</span>InviteCode,
-<a href=#78 id=78 data-nosnippet>78</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationId, RecurringPaymentError&gt; {
-<a href=#79 id=79 data-nosnippet>79</a>        <span class="kw">let </span>federation_id = invite_code.federation_id();
-<a href=#80 id=80 data-nosnippet>80</a>        <span class="macro">info!</span>(<span class="string">"Registering federation {}"</span>, federation_id);
-<a href=#81 id=81 data-nosnippet>81</a>
-<a href=#82 id=82 data-nosnippet>82</a>        <span class="comment">// We lock to prevent parallel join attempts
-<a href=#83 id=83 data-nosnippet>83</a>        // TODO: lock per federation
-<a href=#84 id=84 data-nosnippet>84</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>clients = <span class="self">self</span>.clients.write().<span class="kw">await</span>;
-<a href=#85 id=85 data-nosnippet>85</a>        <span class="kw">if </span>clients.contains_key(<span class="kw-2">&amp;</span>federation_id) {
-<a href=#86 id=86 data-nosnippet>86</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(RecurringPaymentError::FederationAlreadyRegistered(
-<a href=#87 id=87 data-nosnippet>87</a>                federation_id,
-<a href=#88 id=88 data-nosnippet>88</a>            ));
-<a href=#89 id=89 data-nosnippet>89</a>        }
-<a href=#90 id=90 data-nosnippet>90</a>
-<a href=#91 id=91 data-nosnippet>91</a>        <span class="comment">// We don't know if joining will succeed or be interrupted. We use a random DB
-<a href=#92 id=92 data-nosnippet>92</a>        // prefix to initialize the client and only write the prefix to the DB if that
-<a href=#93 id=93 data-nosnippet>93</a>        // succeeds. If it fails we end up with some orphaned data in the DB, if it ever
-<a href=#94 id=94 data-nosnippet>94</a>        // becomes a problem we can clean it up later.
-<a href=#95 id=95 data-nosnippet>95</a>        </span><span class="kw">let </span>client_db_prefix = FederationDbPrefix::random();
-<a href=#96 id=96 data-nosnippet>96</a>        <span class="kw">let </span>client_db = open_client_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db, client_db_prefix);
-<a href=#97 id=97 data-nosnippet>97</a>
-<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw">match </span><span class="self">Self</span>::join_federation_static(client_db, invite_code).<span class="kw">await </span>{
-<a href=#99 id=99 data-nosnippet>99</a>            <span class="prelude-val">Ok</span>(client) =&gt; {
-<a href=#100 id=100 data-nosnippet>100</a>                try_add_federation_database(<span class="kw-2">&amp;</span><span class="self">self</span>.db, federation_id, client_db_prefix)
-<a href=#101 id=101 data-nosnippet>101</a>                    .<span class="kw">await
-<a href=#102 id=102 data-nosnippet>102</a>                    </span>.expect(<span class="string">"We hold a global lock, no parallel joining can happen"</span>);
-<a href=#103 id=103 data-nosnippet>103</a>                clients.insert(federation_id, client);
-<a href=#104 id=104 data-nosnippet>104</a>                <span class="prelude-val">Ok</span>(federation_id)
-<a href=#105 id=105 data-nosnippet>105</a>            }
-<a href=#106 id=106 data-nosnippet>106</a>            <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#107 id=107 data-nosnippet>107</a>                <span class="comment">// TODO: clean up DB?
-<a href=#108 id=108 data-nosnippet>108</a>                </span><span class="prelude-val">Err</span>(e)
+<a href=#56 id=56 data-nosnippet>56</a>            <span class="kw">let </span>client = client_builder
+<a href=#57 id=57 data-nosnippet>57</a>                .open(fedimint_client::RootSecret::LegacyDoubleDerive(
+<a href=#58 id=58 data-nosnippet>58</a>                    <span class="self">Self</span>::default_secret(),
+<a href=#59 id=59 data-nosnippet>59</a>                ))
+<a href=#60 id=60 data-nosnippet>60</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#61 id=61 data-nosnippet>61</a>            clients.insert(federation_id, Arc::new(client));
+<a href=#62 id=62 data-nosnippet>62</a>        }
+<a href=#63 id=63 data-nosnippet>63</a>
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#65 id=65 data-nosnippet>65</a>            db,
+<a href=#66 id=66 data-nosnippet>66</a>            clients: Arc::new(RwLock::new(clients)),
+<a href=#67 id=67 data-nosnippet>67</a>            invoice_generated: Arc::new(Default::default()),
+<a href=#68 id=68 data-nosnippet>68</a>            base_url,
+<a href=#69 id=69 data-nosnippet>69</a>        })
+<a href=#70 id=70 data-nosnippet>70</a>    }
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="doccomment">/// We don't want to hold any money or sign anything ourselves, we only use
+<a href=#73 id=73 data-nosnippet>73</a>    /// the client with externally supplied key material and to track
+<a href=#74 id=74 data-nosnippet>74</a>    /// ongoing progress of other users' receives.
+<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="kw">fn </span>default_secret() -&gt; DerivableSecret {
+<a href=#76 id=76 data-nosnippet>76</a>        DerivableSecret::new_root(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[])
+<a href=#77 id=77 data-nosnippet>77</a>    }
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="kw">pub async fn </span>register_federation(
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#81 id=81 data-nosnippet>81</a>        invite_code: <span class="kw-2">&amp;</span>InviteCode,
+<a href=#82 id=82 data-nosnippet>82</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationId, RecurringPaymentError&gt; {
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="kw">let </span>federation_id = invite_code.federation_id();
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="macro">info!</span>(<span class="string">"Registering federation {}"</span>, federation_id);
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="comment">// We lock to prevent parallel join attempts
+<a href=#87 id=87 data-nosnippet>87</a>        // TODO: lock per federation
+<a href=#88 id=88 data-nosnippet>88</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>clients = <span class="self">self</span>.clients.write().<span class="kw">await</span>;
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="kw">if </span>clients.contains_key(<span class="kw-2">&amp;</span>federation_id) {
+<a href=#90 id=90 data-nosnippet>90</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(RecurringPaymentError::FederationAlreadyRegistered(
+<a href=#91 id=91 data-nosnippet>91</a>                federation_id,
+<a href=#92 id=92 data-nosnippet>92</a>            ));
+<a href=#93 id=93 data-nosnippet>93</a>        }
+<a href=#94 id=94 data-nosnippet>94</a>
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="comment">// We don't know if joining will succeed or be interrupted. We use a random DB
+<a href=#96 id=96 data-nosnippet>96</a>        // prefix to initialize the client and only write the prefix to the DB if that
+<a href=#97 id=97 data-nosnippet>97</a>        // succeeds. If it fails we end up with some orphaned data in the DB, if it ever
+<a href=#98 id=98 data-nosnippet>98</a>        // becomes a problem we can clean it up later.
+<a href=#99 id=99 data-nosnippet>99</a>        </span><span class="kw">let </span>client_db_prefix = FederationDbPrefix::random();
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">let </span>client_db = open_client_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db, client_db_prefix);
+<a href=#101 id=101 data-nosnippet>101</a>
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">match </span><span class="self">Self</span>::join_federation_static(client_db, invite_code).<span class="kw">await </span>{
+<a href=#103 id=103 data-nosnippet>103</a>            <span class="prelude-val">Ok</span>(client) =&gt; {
+<a href=#104 id=104 data-nosnippet>104</a>                try_add_federation_database(<span class="kw-2">&amp;</span><span class="self">self</span>.db, federation_id, client_db_prefix)
+<a href=#105 id=105 data-nosnippet>105</a>                    .<span class="kw">await
+<a href=#106 id=106 data-nosnippet>106</a>                    </span>.expect(<span class="string">"We hold a global lock, no parallel joining can happen"</span>);
+<a href=#107 id=107 data-nosnippet>107</a>                clients.insert(federation_id, client);
+<a href=#108 id=108 data-nosnippet>108</a>                <span class="prelude-val">Ok</span>(federation_id)
 <a href=#109 id=109 data-nosnippet>109</a>            }
-<a href=#110 id=110 data-nosnippet>110</a>        }
-<a href=#111 id=111 data-nosnippet>111</a>    }
-<a href=#112 id=112 data-nosnippet>112</a>
-<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">async fn </span>join_federation_static(
-<a href=#114 id=114 data-nosnippet>114</a>        client_db: Database,
-<a href=#115 id=115 data-nosnippet>115</a>        invite_code: <span class="kw-2">&amp;</span>InviteCode,
-<a href=#116 id=116 data-nosnippet>116</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientHandleArc, RecurringPaymentError&gt; {
-<a href=#117 id=117 data-nosnippet>117</a>        <span class="kw">let </span>config = Connector::default()
-<a href=#118 id=118 data-nosnippet>118</a>            .download_from_invite_code(invite_code)
-<a href=#119 id=119 data-nosnippet>119</a>            .<span class="kw">await
-<a href=#120 id=120 data-nosnippet>120</a>            </span>.map_err(RecurringPaymentError::JoiningFederationFailed)<span class="question-mark">?</span>;
-<a href=#121 id=121 data-nosnippet>121</a>
-<a href=#122 id=122 data-nosnippet>122</a>        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(client_db)
-<a href=#123 id=123 data-nosnippet>123</a>            .<span class="kw">await
-<a href=#124 id=124 data-nosnippet>124</a>            </span>.map_err(RecurringPaymentError::JoiningFederationFailed)<span class="question-mark">?</span>;
-<a href=#125 id=125 data-nosnippet>125</a>
-<a href=#126 id=126 data-nosnippet>126</a>        client_builder.with_connector(Connector::default());
-<a href=#127 id=127 data-nosnippet>127</a>        client_builder.with_module(LightningClientInit::default());
-<a href=#128 id=128 data-nosnippet>128</a>        client_builder.with_module(MintClientInit);
-<a href=#129 id=129 data-nosnippet>129</a>        client_builder.with_primary_module_kind(ModuleKind::from_static_str(<span class="string">"mint"</span>));
-<a href=#130 id=130 data-nosnippet>130</a>
-<a href=#131 id=131 data-nosnippet>131</a>        <span class="kw">let </span>client = client_builder
-<a href=#132 id=132 data-nosnippet>132</a>            .join(<span class="self">Self</span>::default_secret(), config, <span class="prelude-val">None</span>)
-<a href=#133 id=133 data-nosnippet>133</a>            .<span class="kw">await
-<a href=#134 id=134 data-nosnippet>134</a>            </span>.map_err(RecurringPaymentError::JoiningFederationFailed)<span class="question-mark">?</span>;
-<a href=#135 id=135 data-nosnippet>135</a>        <span class="prelude-val">Ok</span>(Arc::new(client))
-<a href=#136 id=136 data-nosnippet>136</a>    }
-<a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>    <span class="kw">pub async fn </span>register_recurring_payment_code(
-<a href=#139 id=139 data-nosnippet>139</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#140 id=140 data-nosnippet>140</a>        federation_id: FederationId,
-<a href=#141 id=141 data-nosnippet>141</a>        payment_code_root_key: PaymentCodeRootKey,
-<a href=#142 id=142 data-nosnippet>142</a>        protocol: RecurringPaymentProtocol,
-<a href=#143 id=143 data-nosnippet>143</a>        meta: <span class="kw-2">&amp;</span>str,
-<a href=#144 id=144 data-nosnippet>144</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, RecurringPaymentError&gt; {
-<a href=#145 id=145 data-nosnippet>145</a>        <span class="comment">// TODO: support BOLT12
-<a href=#146 id=146 data-nosnippet>146</a>        </span><span class="kw">if </span>protocol != RecurringPaymentProtocol::LNURL {
-<a href=#147 id=147 data-nosnippet>147</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(RecurringPaymentError::UnsupportedProtocol(protocol));
-<a href=#148 id=148 data-nosnippet>148</a>        }
-<a href=#149 id=149 data-nosnippet>149</a>
-<a href=#150 id=150 data-nosnippet>150</a>        <span class="comment">// Ensure the federation is supported
-<a href=#151 id=151 data-nosnippet>151</a>        </span><span class="self">self</span>.get_federation_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#110 id=110 data-nosnippet>110</a>            <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#111 id=111 data-nosnippet>111</a>                <span class="comment">// TODO: clean up DB?
+<a href=#112 id=112 data-nosnippet>112</a>                </span><span class="prelude-val">Err</span>(e)
+<a href=#113 id=113 data-nosnippet>113</a>            }
+<a href=#114 id=114 data-nosnippet>114</a>        }
+<a href=#115 id=115 data-nosnippet>115</a>    }
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">async fn </span>join_federation_static(
+<a href=#118 id=118 data-nosnippet>118</a>        client_db: Database,
+<a href=#119 id=119 data-nosnippet>119</a>        invite_code: <span class="kw-2">&amp;</span>InviteCode,
+<a href=#120 id=120 data-nosnippet>120</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientHandleArc, RecurringPaymentError&gt; {
+<a href=#121 id=121 data-nosnippet>121</a>        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(client_db)
+<a href=#122 id=122 data-nosnippet>122</a>            .<span class="kw">await
+<a href=#123 id=123 data-nosnippet>123</a>            </span>.map_err(RecurringPaymentError::JoiningFederationFailed)<span class="question-mark">?</span>;
+<a href=#124 id=124 data-nosnippet>124</a>
+<a href=#125 id=125 data-nosnippet>125</a>        client_builder.with_connector(Connector::default());
+<a href=#126 id=126 data-nosnippet>126</a>        client_builder.with_module(LightningClientInit::default());
+<a href=#127 id=127 data-nosnippet>127</a>        client_builder.with_module(MintClientInit);
+<a href=#128 id=128 data-nosnippet>128</a>        client_builder.with_primary_module_kind(ModuleKind::from_static_str(<span class="string">"mint"</span>));
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="kw">let </span>client = client_builder
+<a href=#131 id=131 data-nosnippet>131</a>            .preview(invite_code)
+<a href=#132 id=132 data-nosnippet>132</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#133 id=133 data-nosnippet>133</a>            </span>.join(fedimint_client::RootSecret::LegacyDoubleDerive(
+<a href=#134 id=134 data-nosnippet>134</a>                <span class="self">Self</span>::default_secret(),
+<a href=#135 id=135 data-nosnippet>135</a>            ))
+<a href=#136 id=136 data-nosnippet>136</a>            .<span class="kw">await
+<a href=#137 id=137 data-nosnippet>137</a>            </span>.map_err(RecurringPaymentError::JoiningFederationFailed)<span class="question-mark">?</span>;
+<a href=#138 id=138 data-nosnippet>138</a>        <span class="prelude-val">Ok</span>(Arc::new(client))
+<a href=#139 id=139 data-nosnippet>139</a>    }
+<a href=#140 id=140 data-nosnippet>140</a>
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">pub async fn </span>register_recurring_payment_code(
+<a href=#142 id=142 data-nosnippet>142</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#143 id=143 data-nosnippet>143</a>        federation_id: FederationId,
+<a href=#144 id=144 data-nosnippet>144</a>        payment_code_root_key: PaymentCodeRootKey,
+<a href=#145 id=145 data-nosnippet>145</a>        protocol: RecurringPaymentProtocol,
+<a href=#146 id=146 data-nosnippet>146</a>        meta: <span class="kw-2">&amp;</span>str,
+<a href=#147 id=147 data-nosnippet>147</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, RecurringPaymentError&gt; {
+<a href=#148 id=148 data-nosnippet>148</a>        <span class="comment">// TODO: support BOLT12
+<a href=#149 id=149 data-nosnippet>149</a>        </span><span class="kw">if </span>protocol != RecurringPaymentProtocol::LNURL {
+<a href=#150 id=150 data-nosnippet>150</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(RecurringPaymentError::UnsupportedProtocol(protocol));
+<a href=#151 id=151 data-nosnippet>151</a>        }
 <a href=#152 id=152 data-nosnippet>152</a>
-<a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">let </span>payment_code = <span class="self">self</span>.create_lnurl(payment_code_root_key.to_payment_code_id());
-<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">let </span>payment_code_entry = PaymentCodeEntry {
-<a href=#155 id=155 data-nosnippet>155</a>            root_key: payment_code_root_key,
-<a href=#156 id=156 data-nosnippet>156</a>            federation_id,
-<a href=#157 id=157 data-nosnippet>157</a>            protocol,
-<a href=#158 id=158 data-nosnippet>158</a>            payment_code: payment_code.clone(),
-<a href=#159 id=159 data-nosnippet>159</a>            variant: PaymentCodeVariant::Lnurl {
-<a href=#160 id=160 data-nosnippet>160</a>                meta: meta.to_owned(),
-<a href=#161 id=161 data-nosnippet>161</a>            },
-<a href=#162 id=162 data-nosnippet>162</a>        };
-<a href=#163 id=163 data-nosnippet>163</a>
-<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_code) = dbtx
-<a href=#166 id=166 data-nosnippet>166</a>            .insert_entry(
-<a href=#167 id=167 data-nosnippet>167</a>                <span class="kw-2">&amp;</span>PaymentCodeKey {
-<a href=#168 id=168 data-nosnippet>168</a>                    payment_code_id: payment_code_root_key.to_payment_code_id(),
-<a href=#169 id=169 data-nosnippet>169</a>                },
-<a href=#170 id=170 data-nosnippet>170</a>                <span class="kw-2">&amp;</span>payment_code_entry,
-<a href=#171 id=171 data-nosnippet>171</a>            )
-<a href=#172 id=172 data-nosnippet>172</a>            .<span class="kw">await
-<a href=#173 id=173 data-nosnippet>173</a>        </span>{
-<a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">if </span>existing_code != payment_code_entry {
-<a href=#175 id=175 data-nosnippet>175</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(RecurringPaymentError::PaymentCodeAlreadyExists(
-<a href=#176 id=176 data-nosnippet>176</a>                    payment_code_root_key,
-<a href=#177 id=177 data-nosnippet>177</a>                ));
-<a href=#178 id=178 data-nosnippet>178</a>            }
-<a href=#179 id=179 data-nosnippet>179</a>
-<a href=#180 id=180 data-nosnippet>180</a>            dbtx.ignore_uncommitted();
-<a href=#181 id=181 data-nosnippet>181</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(payment_code);
-<a href=#182 id=182 data-nosnippet>182</a>        }
-<a href=#183 id=183 data-nosnippet>183</a>
-<a href=#184 id=184 data-nosnippet>184</a>        dbtx.insert_new_entry(
-<a href=#185 id=185 data-nosnippet>185</a>            <span class="kw-2">&amp;</span>PaymentCodeNextInvoiceIndexKey {
-<a href=#186 id=186 data-nosnippet>186</a>                payment_code_id: payment_code_root_key.to_payment_code_id(),
-<a href=#187 id=187 data-nosnippet>187</a>            },
-<a href=#188 id=188 data-nosnippet>188</a>            <span class="kw-2">&amp;</span><span class="number">0</span>,
-<a href=#189 id=189 data-nosnippet>189</a>        )
-<a href=#190 id=190 data-nosnippet>190</a>        .<span class="kw">await</span>;
-<a href=#191 id=191 data-nosnippet>191</a>        dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#192 id=192 data-nosnippet>192</a>
-<a href=#193 id=193 data-nosnippet>193</a>        <span class="prelude-val">Ok</span>(payment_code)
-<a href=#194 id=194 data-nosnippet>194</a>    }
+<a href=#153 id=153 data-nosnippet>153</a>        <span class="comment">// Ensure the federation is supported
+<a href=#154 id=154 data-nosnippet>154</a>        </span><span class="self">self</span>.get_federation_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a>        <span class="kw">let </span>payment_code = <span class="self">self</span>.create_lnurl(payment_code_root_key.to_payment_code_id());
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="kw">let </span>payment_code_entry = PaymentCodeEntry {
+<a href=#158 id=158 data-nosnippet>158</a>            root_key: payment_code_root_key,
+<a href=#159 id=159 data-nosnippet>159</a>            federation_id,
+<a href=#160 id=160 data-nosnippet>160</a>            protocol,
+<a href=#161 id=161 data-nosnippet>161</a>            payment_code: payment_code.clone(),
+<a href=#162 id=162 data-nosnippet>162</a>            variant: PaymentCodeVariant::Lnurl {
+<a href=#163 id=163 data-nosnippet>163</a>                meta: meta.to_owned(),
+<a href=#164 id=164 data-nosnippet>164</a>            },
+<a href=#165 id=165 data-nosnippet>165</a>        };
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(existing_code) = dbtx
+<a href=#169 id=169 data-nosnippet>169</a>            .insert_entry(
+<a href=#170 id=170 data-nosnippet>170</a>                <span class="kw-2">&amp;</span>PaymentCodeKey {
+<a href=#171 id=171 data-nosnippet>171</a>                    payment_code_id: payment_code_root_key.to_payment_code_id(),
+<a href=#172 id=172 data-nosnippet>172</a>                },
+<a href=#173 id=173 data-nosnippet>173</a>                <span class="kw-2">&amp;</span>payment_code_entry,
+<a href=#174 id=174 data-nosnippet>174</a>            )
+<a href=#175 id=175 data-nosnippet>175</a>            .<span class="kw">await
+<a href=#176 id=176 data-nosnippet>176</a>        </span>{
+<a href=#177 id=177 data-nosnippet>177</a>            <span class="kw">if </span>existing_code != payment_code_entry {
+<a href=#178 id=178 data-nosnippet>178</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(RecurringPaymentError::PaymentCodeAlreadyExists(
+<a href=#179 id=179 data-nosnippet>179</a>                    payment_code_root_key,
+<a href=#180 id=180 data-nosnippet>180</a>                ));
+<a href=#181 id=181 data-nosnippet>181</a>            }
+<a href=#182 id=182 data-nosnippet>182</a>
+<a href=#183 id=183 data-nosnippet>183</a>            dbtx.ignore_uncommitted();
+<a href=#184 id=184 data-nosnippet>184</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(payment_code);
+<a href=#185 id=185 data-nosnippet>185</a>        }
+<a href=#186 id=186 data-nosnippet>186</a>
+<a href=#187 id=187 data-nosnippet>187</a>        dbtx.insert_new_entry(
+<a href=#188 id=188 data-nosnippet>188</a>            <span class="kw-2">&amp;</span>PaymentCodeNextInvoiceIndexKey {
+<a href=#189 id=189 data-nosnippet>189</a>                payment_code_id: payment_code_root_key.to_payment_code_id(),
+<a href=#190 id=190 data-nosnippet>190</a>            },
+<a href=#191 id=191 data-nosnippet>191</a>            <span class="kw-2">&amp;</span><span class="number">0</span>,
+<a href=#192 id=192 data-nosnippet>192</a>        )
+<a href=#193 id=193 data-nosnippet>193</a>        .<span class="kw">await</span>;
+<a href=#194 id=194 data-nosnippet>194</a>        dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#195 id=195 data-nosnippet>195</a>
-<a href=#196 id=196 data-nosnippet>196</a>    <span class="kw">fn </span>create_lnurl(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_code_id: PaymentCodeId) -&gt; String {
-<a href=#197 id=197 data-nosnippet>197</a>        <span class="kw">let </span>lnurl = LnUrl::from_url(<span class="macro">format!</span>(
-<a href=#198 id=198 data-nosnippet>198</a>            <span class="string">"{}lnv1/paycodes/{}"</span>,
-<a href=#199 id=199 data-nosnippet>199</a>            <span class="self">self</span>.base_url, payment_code_id
-<a href=#200 id=200 data-nosnippet>200</a>        ));
-<a href=#201 id=201 data-nosnippet>201</a>        lnurl.encode()
-<a href=#202 id=202 data-nosnippet>202</a>    }
-<a href=#203 id=203 data-nosnippet>203</a>
-<a href=#204 id=204 data-nosnippet>204</a>    <span class="kw">pub async fn </span>lnurl_pay(
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#206 id=206 data-nosnippet>206</a>        payment_code_id: PaymentCodeId,
-<a href=#207 id=207 data-nosnippet>207</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayResponse, RecurringPaymentError&gt; {
-<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">let </span>payment_code = <span class="self">self</span>.get_payment_code(payment_code_id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#209 id=209 data-nosnippet>209</a>        <span class="kw">let </span>PaymentCodeVariant::Lnurl { meta } = payment_code.variant;
-<a href=#210 id=210 data-nosnippet>210</a>
-<a href=#211 id=211 data-nosnippet>211</a>        <span class="prelude-val">Ok</span>(PayResponse {
-<a href=#212 id=212 data-nosnippet>212</a>            callback: <span class="macro">format!</span>(<span class="string">"{}lnv1/paycodes/{}/invoice"</span>, <span class="self">self</span>.base_url, payment_code_id),
-<a href=#213 id=213 data-nosnippet>213</a>            max_sendable: <span class="number">100000000000</span>,
-<a href=#214 id=214 data-nosnippet>214</a>            min_sendable: <span class="number">1</span>,
-<a href=#215 id=215 data-nosnippet>215</a>            tag: Tag::PayRequest,
-<a href=#216 id=216 data-nosnippet>216</a>            metadata: meta,
-<a href=#217 id=217 data-nosnippet>217</a>            comment_allowed: <span class="prelude-val">None</span>,
-<a href=#218 id=218 data-nosnippet>218</a>            allows_nostr: <span class="prelude-val">None</span>,
-<a href=#219 id=219 data-nosnippet>219</a>            nostr_pubkey: <span class="prelude-val">None</span>,
-<a href=#220 id=220 data-nosnippet>220</a>        })
-<a href=#221 id=221 data-nosnippet>221</a>    }
-<a href=#222 id=222 data-nosnippet>222</a>
-<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">pub async fn </span>lnurl_invoice(
-<a href=#224 id=224 data-nosnippet>224</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#225 id=225 data-nosnippet>225</a>        payment_code_id: PaymentCodeId,
-<a href=#226 id=226 data-nosnippet>226</a>        amount: Amount,
-<a href=#227 id=227 data-nosnippet>227</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;LnURLPayInvoice, RecurringPaymentError&gt; {
-<a href=#228 id=228 data-nosnippet>228</a>        <span class="prelude-val">Ok</span>(LnURLPayInvoice::new(
-<a href=#229 id=229 data-nosnippet>229</a>            <span class="self">self</span>.create_bolt11_invoice(payment_code_id, amount)
-<a href=#230 id=230 data-nosnippet>230</a>                .<span class="kw">await</span><span class="question-mark">?
-<a href=#231 id=231 data-nosnippet>231</a>                </span>.to_string(),
-<a href=#232 id=232 data-nosnippet>232</a>        ))
-<a href=#233 id=233 data-nosnippet>233</a>    }
-<a href=#234 id=234 data-nosnippet>234</a>
-<a href=#235 id=235 data-nosnippet>235</a>    <span class="kw">async fn </span>create_bolt11_invoice(
-<a href=#236 id=236 data-nosnippet>236</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#237 id=237 data-nosnippet>237</a>        payment_code_id: PaymentCodeId,
-<a href=#238 id=238 data-nosnippet>238</a>        amount: Amount,
-<a href=#239 id=239 data-nosnippet>239</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, RecurringPaymentError&gt; {
-<a href=#240 id=240 data-nosnippet>240</a>        <span class="comment">// Invoices are valid for one day by default, might become dynamic with BOLT12
-<a href=#241 id=241 data-nosnippet>241</a>        // support
-<a href=#242 id=242 data-nosnippet>242</a>        </span><span class="kw">const </span>DEFAULT_EXPIRY_TIME: u64 = <span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24</span>;
-<a href=#243 id=243 data-nosnippet>243</a>
-<a href=#244 id=244 data-nosnippet>244</a>        <span class="kw">let </span>payment_code = <span class="self">self</span>.get_payment_code(payment_code_id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#245 id=245 data-nosnippet>245</a>        <span class="kw">let </span>invoice_index = <span class="self">self</span>.get_next_invoice_index(payment_code_id).<span class="kw">await</span>;
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="prelude-val">Ok</span>(payment_code)
+<a href=#197 id=197 data-nosnippet>197</a>    }
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">fn </span>create_lnurl(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_code_id: PaymentCodeId) -&gt; String {
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="kw">let </span>lnurl = LnUrl::from_url(<span class="macro">format!</span>(
+<a href=#201 id=201 data-nosnippet>201</a>            <span class="string">"{}lnv1/paycodes/{}"</span>,
+<a href=#202 id=202 data-nosnippet>202</a>            <span class="self">self</span>.base_url, payment_code_id
+<a href=#203 id=203 data-nosnippet>203</a>        ));
+<a href=#204 id=204 data-nosnippet>204</a>        lnurl.encode()
+<a href=#205 id=205 data-nosnippet>205</a>    }
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">pub async fn </span>lnurl_pay(
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#209 id=209 data-nosnippet>209</a>        payment_code_id: PaymentCodeId,
+<a href=#210 id=210 data-nosnippet>210</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayResponse, RecurringPaymentError&gt; {
+<a href=#211 id=211 data-nosnippet>211</a>        <span class="kw">let </span>payment_code = <span class="self">self</span>.get_payment_code(payment_code_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#212 id=212 data-nosnippet>212</a>        <span class="kw">let </span>PaymentCodeVariant::Lnurl { meta } = payment_code.variant;
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="prelude-val">Ok</span>(PayResponse {
+<a href=#215 id=215 data-nosnippet>215</a>            callback: <span class="macro">format!</span>(<span class="string">"{}lnv1/paycodes/{}/invoice"</span>, <span class="self">self</span>.base_url, payment_code_id),
+<a href=#216 id=216 data-nosnippet>216</a>            max_sendable: <span class="number">100000000000</span>,
+<a href=#217 id=217 data-nosnippet>217</a>            min_sendable: <span class="number">1</span>,
+<a href=#218 id=218 data-nosnippet>218</a>            tag: Tag::PayRequest,
+<a href=#219 id=219 data-nosnippet>219</a>            metadata: meta,
+<a href=#220 id=220 data-nosnippet>220</a>            comment_allowed: <span class="prelude-val">None</span>,
+<a href=#221 id=221 data-nosnippet>221</a>            allows_nostr: <span class="prelude-val">None</span>,
+<a href=#222 id=222 data-nosnippet>222</a>            nostr_pubkey: <span class="prelude-val">None</span>,
+<a href=#223 id=223 data-nosnippet>223</a>        })
+<a href=#224 id=224 data-nosnippet>224</a>    }
+<a href=#225 id=225 data-nosnippet>225</a>
+<a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">pub async fn </span>lnurl_invoice(
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#228 id=228 data-nosnippet>228</a>        payment_code_id: PaymentCodeId,
+<a href=#229 id=229 data-nosnippet>229</a>        amount: Amount,
+<a href=#230 id=230 data-nosnippet>230</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;LnURLPayInvoice, RecurringPaymentError&gt; {
+<a href=#231 id=231 data-nosnippet>231</a>        <span class="prelude-val">Ok</span>(LnURLPayInvoice::new(
+<a href=#232 id=232 data-nosnippet>232</a>            <span class="self">self</span>.create_bolt11_invoice(payment_code_id, amount)
+<a href=#233 id=233 data-nosnippet>233</a>                .<span class="kw">await</span><span class="question-mark">?
+<a href=#234 id=234 data-nosnippet>234</a>                </span>.to_string(),
+<a href=#235 id=235 data-nosnippet>235</a>        ))
+<a href=#236 id=236 data-nosnippet>236</a>    }
+<a href=#237 id=237 data-nosnippet>237</a>
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">async fn </span>create_bolt11_invoice(
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#240 id=240 data-nosnippet>240</a>        payment_code_id: PaymentCodeId,
+<a href=#241 id=241 data-nosnippet>241</a>        amount: Amount,
+<a href=#242 id=242 data-nosnippet>242</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, RecurringPaymentError&gt; {
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="comment">// Invoices are valid for one day by default, might become dynamic with BOLT12
+<a href=#244 id=244 data-nosnippet>244</a>        // support
+<a href=#245 id=245 data-nosnippet>245</a>        </span><span class="kw">const </span>DEFAULT_EXPIRY_TIME: u64 = <span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24</span>;
 <a href=#246 id=246 data-nosnippet>246</a>
-<a href=#247 id=247 data-nosnippet>247</a>        <span class="kw">let </span>federation_client = <span class="self">self
-<a href=#248 id=248 data-nosnippet>248</a>            </span>.get_federation_client(payment_code.federation_id)
-<a href=#249 id=249 data-nosnippet>249</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#250 id=250 data-nosnippet>250</a>        <span class="kw">let </span>federation_client_ln_module = federation_client
-<a href=#251 id=251 data-nosnippet>251</a>            .get_first_module::&lt;LightningClientModule&gt;()
-<a href=#252 id=252 data-nosnippet>252</a>            .map_err(|e| {
-<a href=#253 id=253 data-nosnippet>253</a>                <span class="macro">warn!</span>(<span class="string">"No compatible lightning module found {e}"</span>);
-<a href=#254 id=254 data-nosnippet>254</a>                RecurringPaymentError::NoLightningModuleFound
-<a href=#255 id=255 data-nosnippet>255</a>            })<span class="question-mark">?</span>;
-<a href=#256 id=256 data-nosnippet>256</a>
-<a href=#257 id=257 data-nosnippet>257</a>        <span class="kw">let </span>gateway = federation_client_ln_module
-<a href=#258 id=258 data-nosnippet>258</a>            .get_gateway(<span class="prelude-val">None</span>, <span class="bool-val">false</span>)
-<a href=#259 id=259 data-nosnippet>259</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#260 id=260 data-nosnippet>260</a>            </span>.ok_or(RecurringPaymentError::NoGatewayFound)<span class="question-mark">?</span>;
-<a href=#261 id=261 data-nosnippet>261</a>
-<a href=#262 id=262 data-nosnippet>262</a>        <span class="kw">let </span>lnurl_meta = <span class="kw">match </span>payment_code.variant {
-<a href=#263 id=263 data-nosnippet>263</a>            PaymentCodeVariant::Lnurl { meta } =&gt; meta,
-<a href=#264 id=264 data-nosnippet>264</a>        };
-<a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">let </span>meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
-<a href=#266 id=266 data-nosnippet>266</a>        <span class="kw">let </span>description = Bolt11InvoiceDescription::Hash(meta_hash);
-<a href=#267 id=267 data-nosnippet>267</a>
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="comment">// TODO: ideally creating the invoice would take a dbtx as argument so we don't
-<a href=#269 id=269 data-nosnippet>269</a>        // get holes in our used indexes in case this function fails/is cancelled
-<a href=#270 id=270 data-nosnippet>270</a>        </span><span class="kw">let </span>(operation_id, invoice, _preimage) = federation_client_ln_module
-<a href=#271 id=271 data-nosnippet>271</a>            .create_bolt11_invoice_for_user_tweaked(
-<a href=#272 id=272 data-nosnippet>272</a>                amount,
-<a href=#273 id=273 data-nosnippet>273</a>                description,
-<a href=#274 id=274 data-nosnippet>274</a>                <span class="prelude-val">Some</span>(DEFAULT_EXPIRY_TIME),
-<a href=#275 id=275 data-nosnippet>275</a>                payment_code.root_key.<span class="number">0</span>,
-<a href=#276 id=276 data-nosnippet>276</a>                invoice_index,
-<a href=#277 id=277 data-nosnippet>277</a>                serde_json::Value::Null,
-<a href=#278 id=278 data-nosnippet>278</a>                <span class="prelude-val">Some</span>(gateway),
-<a href=#279 id=279 data-nosnippet>279</a>            )
-<a href=#280 id=280 data-nosnippet>280</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#281 id=281 data-nosnippet>281</a>
-<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
-<a href=#283 id=283 data-nosnippet>283</a>        dbtx.insert_new_entry(
-<a href=#284 id=284 data-nosnippet>284</a>            <span class="kw-2">&amp;</span>PaymentCodeInvoiceKey {
-<a href=#285 id=285 data-nosnippet>285</a>                payment_code_id,
-<a href=#286 id=286 data-nosnippet>286</a>                index: invoice_index,
-<a href=#287 id=287 data-nosnippet>287</a>            },
-<a href=#288 id=288 data-nosnippet>288</a>            <span class="kw-2">&amp;</span>PaymentCodeInvoiceEntry {
-<a href=#289 id=289 data-nosnippet>289</a>                operation_id,
-<a href=#290 id=290 data-nosnippet>290</a>                invoice: PaymentCodeInvoice::Bolt11(invoice.clone()),
-<a href=#291 id=291 data-nosnippet>291</a>            },
-<a href=#292 id=292 data-nosnippet>292</a>        )
-<a href=#293 id=293 data-nosnippet>293</a>        .<span class="kw">await</span>;
-<a href=#294 id=294 data-nosnippet>294</a>
-<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>invoice_generated_notifier = <span class="self">self</span>.invoice_generated.clone();
-<a href=#296 id=296 data-nosnippet>296</a>        dbtx.on_commit(<span class="kw">move </span>|| {
-<a href=#297 id=297 data-nosnippet>297</a>            invoice_generated_notifier.notify_waiters();
-<a href=#298 id=298 data-nosnippet>298</a>        });
-<a href=#299 id=299 data-nosnippet>299</a>        dbtx.commit_tx().<span class="kw">await</span>;
-<a href=#300 id=300 data-nosnippet>300</a>
-<a href=#301 id=301 data-nosnippet>301</a>        await_invoice_confirmed(<span class="kw-2">&amp;</span>federation_client_ln_module, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#302 id=302 data-nosnippet>302</a>
-<a href=#303 id=303 data-nosnippet>303</a>        <span class="prelude-val">Ok</span>(invoice)
-<a href=#304 id=304 data-nosnippet>304</a>    }
+<a href=#247 id=247 data-nosnippet>247</a>        <span class="kw">let </span>payment_code = <span class="self">self</span>.get_payment_code(payment_code_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#248 id=248 data-nosnippet>248</a>        <span class="kw">let </span>invoice_index = <span class="self">self</span>.get_next_invoice_index(payment_code_id).<span class="kw">await</span>;
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>        <span class="kw">let </span>federation_client = <span class="self">self
+<a href=#251 id=251 data-nosnippet>251</a>            </span>.get_federation_client(payment_code.federation_id)
+<a href=#252 id=252 data-nosnippet>252</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="kw">let </span>federation_client_ln_module = federation_client
+<a href=#254 id=254 data-nosnippet>254</a>            .get_first_module::&lt;LightningClientModule&gt;()
+<a href=#255 id=255 data-nosnippet>255</a>            .map_err(|e| {
+<a href=#256 id=256 data-nosnippet>256</a>                <span class="macro">warn!</span>(<span class="string">"No compatible lightning module found {e}"</span>);
+<a href=#257 id=257 data-nosnippet>257</a>                RecurringPaymentError::NoLightningModuleFound
+<a href=#258 id=258 data-nosnippet>258</a>            })<span class="question-mark">?</span>;
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>        <span class="kw">let </span>gateway = federation_client_ln_module
+<a href=#261 id=261 data-nosnippet>261</a>            .get_gateway(<span class="prelude-val">None</span>, <span class="bool-val">false</span>)
+<a href=#262 id=262 data-nosnippet>262</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#263 id=263 data-nosnippet>263</a>            </span>.ok_or(RecurringPaymentError::NoGatewayFound)<span class="question-mark">?</span>;
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="kw">let </span>lnurl_meta = <span class="kw">match </span>payment_code.variant {
+<a href=#266 id=266 data-nosnippet>266</a>            PaymentCodeVariant::Lnurl { meta } =&gt; meta,
+<a href=#267 id=267 data-nosnippet>267</a>        };
+<a href=#268 id=268 data-nosnippet>268</a>        <span class="kw">let </span>meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="kw">let </span>description = Bolt11InvoiceDescription::Hash(meta_hash);
+<a href=#270 id=270 data-nosnippet>270</a>
+<a href=#271 id=271 data-nosnippet>271</a>        <span class="comment">// TODO: ideally creating the invoice would take a dbtx as argument so we don't
+<a href=#272 id=272 data-nosnippet>272</a>        // get holes in our used indexes in case this function fails/is cancelled
+<a href=#273 id=273 data-nosnippet>273</a>        </span><span class="kw">let </span>(operation_id, invoice, _preimage) = federation_client_ln_module
+<a href=#274 id=274 data-nosnippet>274</a>            .create_bolt11_invoice_for_user_tweaked(
+<a href=#275 id=275 data-nosnippet>275</a>                amount,
+<a href=#276 id=276 data-nosnippet>276</a>                description,
+<a href=#277 id=277 data-nosnippet>277</a>                <span class="prelude-val">Some</span>(DEFAULT_EXPIRY_TIME),
+<a href=#278 id=278 data-nosnippet>278</a>                payment_code.root_key.<span class="number">0</span>,
+<a href=#279 id=279 data-nosnippet>279</a>                invoice_index,
+<a href=#280 id=280 data-nosnippet>280</a>                serde_json::Value::Null,
+<a href=#281 id=281 data-nosnippet>281</a>                <span class="prelude-val">Some</span>(gateway),
+<a href=#282 id=282 data-nosnippet>282</a>            )
+<a href=#283 id=283 data-nosnippet>283</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+<a href=#286 id=286 data-nosnippet>286</a>        dbtx.insert_new_entry(
+<a href=#287 id=287 data-nosnippet>287</a>            <span class="kw-2">&amp;</span>PaymentCodeInvoiceKey {
+<a href=#288 id=288 data-nosnippet>288</a>                payment_code_id,
+<a href=#289 id=289 data-nosnippet>289</a>                index: invoice_index,
+<a href=#290 id=290 data-nosnippet>290</a>            },
+<a href=#291 id=291 data-nosnippet>291</a>            <span class="kw-2">&amp;</span>PaymentCodeInvoiceEntry {
+<a href=#292 id=292 data-nosnippet>292</a>                operation_id,
+<a href=#293 id=293 data-nosnippet>293</a>                invoice: PaymentCodeInvoice::Bolt11(invoice.clone()),
+<a href=#294 id=294 data-nosnippet>294</a>            },
+<a href=#295 id=295 data-nosnippet>295</a>        )
+<a href=#296 id=296 data-nosnippet>296</a>        .<span class="kw">await</span>;
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a>        <span class="kw">let </span>invoice_generated_notifier = <span class="self">self</span>.invoice_generated.clone();
+<a href=#299 id=299 data-nosnippet>299</a>        dbtx.on_commit(<span class="kw">move </span>|| {
+<a href=#300 id=300 data-nosnippet>300</a>            invoice_generated_notifier.notify_waiters();
+<a href=#301 id=301 data-nosnippet>301</a>        });
+<a href=#302 id=302 data-nosnippet>302</a>        dbtx.commit_tx().<span class="kw">await</span>;
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>        await_invoice_confirmed(<span class="kw-2">&amp;</span>federation_client_ln_module, operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#305 id=305 data-nosnippet>305</a>
-<a href=#306 id=306 data-nosnippet>306</a>    <span class="kw">async fn </span>get_federation_client(
-<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#308 id=308 data-nosnippet>308</a>        federation_id: FederationId,
-<a href=#309 id=309 data-nosnippet>309</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientHandleArc, RecurringPaymentError&gt; {
-<a href=#310 id=310 data-nosnippet>310</a>        <span class="self">self</span>.clients
-<a href=#311 id=311 data-nosnippet>311</a>            .read()
-<a href=#312 id=312 data-nosnippet>312</a>            .<span class="kw">await
-<a href=#313 id=313 data-nosnippet>313</a>            </span>.get(<span class="kw-2">&amp;</span>federation_id)
-<a href=#314 id=314 data-nosnippet>314</a>            .cloned()
-<a href=#315 id=315 data-nosnippet>315</a>            .ok_or(RecurringPaymentError::UnknownFederationId(federation_id))
-<a href=#316 id=316 data-nosnippet>316</a>    }
-<a href=#317 id=317 data-nosnippet>317</a>
-<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw">pub async fn </span>await_invoice_index_generated(
-<a href=#319 id=319 data-nosnippet>319</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#320 id=320 data-nosnippet>320</a>        payment_code_id: PaymentCodeId,
-<a href=#321 id=321 data-nosnippet>321</a>        invoice_index: u64,
-<a href=#322 id=322 data-nosnippet>322</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentCodeInvoiceEntry, RecurringPaymentError&gt; {
-<a href=#323 id=323 data-nosnippet>323</a>        <span class="self">self</span>.get_payment_code(payment_code_id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="kw">let </span><span class="kw-2">mut </span>notified = <span class="self">self</span>.invoice_generated.notified();
-<a href=#326 id=326 data-nosnippet>326</a>        <span class="kw">loop </span>{
-<a href=#327 id=327 data-nosnippet>327</a>            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
-<a href=#328 id=328 data-nosnippet>328</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(invoice_entry) = dbtx
-<a href=#329 id=329 data-nosnippet>329</a>                .get_value(<span class="kw-2">&amp;</span>PaymentCodeInvoiceKey {
-<a href=#330 id=330 data-nosnippet>330</a>                    payment_code_id,
-<a href=#331 id=331 data-nosnippet>331</a>                    index: invoice_index,
-<a href=#332 id=332 data-nosnippet>332</a>                })
-<a href=#333 id=333 data-nosnippet>333</a>                .<span class="kw">await
-<a href=#334 id=334 data-nosnippet>334</a>            </span>{
-<a href=#335 id=335 data-nosnippet>335</a>                <span class="kw">break </span><span class="prelude-val">Ok</span>(invoice_entry);
-<a href=#336 id=336 data-nosnippet>336</a>            };
-<a href=#337 id=337 data-nosnippet>337</a>
-<a href=#338 id=338 data-nosnippet>338</a>            notified.<span class="kw">await</span>;
-<a href=#339 id=339 data-nosnippet>339</a>            notified = <span class="self">self</span>.invoice_generated.notified();
-<a href=#340 id=340 data-nosnippet>340</a>        }
-<a href=#341 id=341 data-nosnippet>341</a>    }
-<a href=#342 id=342 data-nosnippet>342</a>
-<a href=#343 id=343 data-nosnippet>343</a>    <span class="kw">async fn </span>get_next_invoice_index(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_code_id: PaymentCodeId) -&gt; u64 {
-<a href=#344 id=344 data-nosnippet>344</a>        <span class="self">self</span>.db
-<a href=#345 id=345 data-nosnippet>345</a>            .autocommit(
-<a href=#346 id=346 data-nosnippet>346</a>                |dbtx, <span class="kw">_</span>| {
-<a href=#347 id=347 data-nosnippet>347</a>                    Box::pin(<span class="kw">async move </span>{
-<a href=#348 id=348 data-nosnippet>348</a>                        <span class="kw">let </span>next_index = dbtx
-<a href=#349 id=349 data-nosnippet>349</a>                            .get_value(<span class="kw-2">&amp;</span>PaymentCodeNextInvoiceIndexKey { payment_code_id })
-<a href=#350 id=350 data-nosnippet>350</a>                            .<span class="kw">await
-<a href=#351 id=351 data-nosnippet>351</a>                            </span>.map(|index| index + <span class="number">1</span>)
-<a href=#352 id=352 data-nosnippet>352</a>                            .unwrap_or(<span class="number">0</span>);
-<a href=#353 id=353 data-nosnippet>353</a>                        dbtx.insert_entry(
-<a href=#354 id=354 data-nosnippet>354</a>                            <span class="kw-2">&amp;</span>PaymentCodeNextInvoiceIndexKey { payment_code_id },
-<a href=#355 id=355 data-nosnippet>355</a>                            <span class="kw-2">&amp;</span>next_index,
-<a href=#356 id=356 data-nosnippet>356</a>                        )
-<a href=#357 id=357 data-nosnippet>357</a>                        .<span class="kw">await</span>;
-<a href=#358 id=358 data-nosnippet>358</a>                        <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, ()&gt;::Ok(next_index)
-<a href=#359 id=359 data-nosnippet>359</a>                    })
-<a href=#360 id=360 data-nosnippet>360</a>                },
-<a href=#361 id=361 data-nosnippet>361</a>                <span class="prelude-val">None</span>,
-<a href=#362 id=362 data-nosnippet>362</a>            )
-<a href=#363 id=363 data-nosnippet>363</a>            .<span class="kw">await
-<a href=#364 id=364 data-nosnippet>364</a>            </span>.expect(<span class="string">"Loops forever and never returns errors internally"</span>)
-<a href=#365 id=365 data-nosnippet>365</a>    }
-<a href=#366 id=366 data-nosnippet>366</a>
-<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">pub async fn </span>list_federations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;FederationId&gt; {
-<a href=#368 id=368 data-nosnippet>368</a>        <span class="self">self</span>.clients.read().<span class="kw">await</span>.keys().cloned().collect()
-<a href=#369 id=369 data-nosnippet>369</a>    }
-<a href=#370 id=370 data-nosnippet>370</a>
-<a href=#371 id=371 data-nosnippet>371</a>    <span class="kw">async fn </span>get_payment_code(
-<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#373 id=373 data-nosnippet>373</a>        payment_code_id: PaymentCodeId,
-<a href=#374 id=374 data-nosnippet>374</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentCodeEntry, RecurringPaymentError&gt; {
-<a href=#375 id=375 data-nosnippet>375</a>        <span class="self">self</span>.db
-<a href=#376 id=376 data-nosnippet>376</a>            .begin_transaction_nc()
-<a href=#377 id=377 data-nosnippet>377</a>            .<span class="kw">await
-<a href=#378 id=378 data-nosnippet>378</a>            </span>.get_value(<span class="kw-2">&amp;</span>PaymentCodeKey { payment_code_id })
-<a href=#379 id=379 data-nosnippet>379</a>            .<span class="kw">await
-<a href=#380 id=380 data-nosnippet>380</a>            </span>.ok_or(RecurringPaymentError::UnknownPaymentCode(payment_code_id))
-<a href=#381 id=381 data-nosnippet>381</a>    }
-<a href=#382 id=382 data-nosnippet>382</a>}
-<a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a><span class="kw">async fn </span>await_invoice_confirmed(
-<a href=#385 id=385 data-nosnippet>385</a>    ln_module: <span class="kw-2">&amp;</span>ClientModuleInstance&lt;<span class="lifetime">'_</span>, LightningClientModule&gt;,
-<a href=#386 id=386 data-nosnippet>386</a>    operation_id: OperationId,
-<a href=#387 id=387 data-nosnippet>387</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), RecurringPaymentError&gt; {
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">let </span><span class="kw-2">mut </span>operation_updated = ln_module
-<a href=#389 id=389 data-nosnippet>389</a>        .subscribe_ln_receive(operation_id)
-<a href=#390 id=390 data-nosnippet>390</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#391 id=391 data-nosnippet>391</a>        </span>.into_stream();
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = operation_updated.next().<span class="kw">await </span>{
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">if </span><span class="macro">matches!</span>(update, LnReceiveState::WaitingForPayment { .. }) {
-<a href=#395 id=395 data-nosnippet>395</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#396 id=396 data-nosnippet>396</a>        }
-<a href=#397 id=397 data-nosnippet>397</a>    }
-<a href=#398 id=398 data-nosnippet>398</a>
-<a href=#399 id=399 data-nosnippet>399</a>    <span class="prelude-val">Err</span>(RecurringPaymentError::Other(<span class="macro">anyhow!</span>(
-<a href=#400 id=400 data-nosnippet>400</a>        <span class="string">"BOLT11 invoice not confirmed"
-<a href=#401 id=401 data-nosnippet>401</a>    </span>)))
-<a href=#402 id=402 data-nosnippet>402</a>}
-<a href=#403 id=403 data-nosnippet>403</a>
-<a href=#404 id=404 data-nosnippet>404</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
-<a href=#405 id=405 data-nosnippet>405</a></span><span class="kw">pub enum </span>PaymentCodeInvoice {
-<a href=#406 id=406 data-nosnippet>406</a>    Bolt11(Bolt11Invoice),
-<a href=#407 id=407 data-nosnippet>407</a>}</code></pre></div></section></main></body></html>
+<a href=#306 id=306 data-nosnippet>306</a>        <span class="prelude-val">Ok</span>(invoice)
+<a href=#307 id=307 data-nosnippet>307</a>    }
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">async fn </span>get_federation_client(
+<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#311 id=311 data-nosnippet>311</a>        federation_id: FederationId,
+<a href=#312 id=312 data-nosnippet>312</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientHandleArc, RecurringPaymentError&gt; {
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="self">self</span>.clients
+<a href=#314 id=314 data-nosnippet>314</a>            .read()
+<a href=#315 id=315 data-nosnippet>315</a>            .<span class="kw">await
+<a href=#316 id=316 data-nosnippet>316</a>            </span>.get(<span class="kw-2">&amp;</span>federation_id)
+<a href=#317 id=317 data-nosnippet>317</a>            .cloned()
+<a href=#318 id=318 data-nosnippet>318</a>            .ok_or(RecurringPaymentError::UnknownFederationId(federation_id))
+<a href=#319 id=319 data-nosnippet>319</a>    }
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">pub async fn </span>await_invoice_index_generated(
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#323 id=323 data-nosnippet>323</a>        payment_code_id: PaymentCodeId,
+<a href=#324 id=324 data-nosnippet>324</a>        invoice_index: u64,
+<a href=#325 id=325 data-nosnippet>325</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentCodeInvoiceEntry, RecurringPaymentError&gt; {
+<a href=#326 id=326 data-nosnippet>326</a>        <span class="self">self</span>.get_payment_code(payment_code_id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">let </span><span class="kw-2">mut </span>notified = <span class="self">self</span>.invoice_generated.notified();
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="kw">loop </span>{
+<a href=#330 id=330 data-nosnippet>330</a>            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
+<a href=#331 id=331 data-nosnippet>331</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(invoice_entry) = dbtx
+<a href=#332 id=332 data-nosnippet>332</a>                .get_value(<span class="kw-2">&amp;</span>PaymentCodeInvoiceKey {
+<a href=#333 id=333 data-nosnippet>333</a>                    payment_code_id,
+<a href=#334 id=334 data-nosnippet>334</a>                    index: invoice_index,
+<a href=#335 id=335 data-nosnippet>335</a>                })
+<a href=#336 id=336 data-nosnippet>336</a>                .<span class="kw">await
+<a href=#337 id=337 data-nosnippet>337</a>            </span>{
+<a href=#338 id=338 data-nosnippet>338</a>                <span class="kw">break </span><span class="prelude-val">Ok</span>(invoice_entry);
+<a href=#339 id=339 data-nosnippet>339</a>            };
+<a href=#340 id=340 data-nosnippet>340</a>
+<a href=#341 id=341 data-nosnippet>341</a>            notified.<span class="kw">await</span>;
+<a href=#342 id=342 data-nosnippet>342</a>            notified = <span class="self">self</span>.invoice_generated.notified();
+<a href=#343 id=343 data-nosnippet>343</a>        }
+<a href=#344 id=344 data-nosnippet>344</a>    }
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>    <span class="kw">async fn </span>get_next_invoice_index(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_code_id: PaymentCodeId) -&gt; u64 {
+<a href=#347 id=347 data-nosnippet>347</a>        <span class="self">self</span>.db
+<a href=#348 id=348 data-nosnippet>348</a>            .autocommit(
+<a href=#349 id=349 data-nosnippet>349</a>                |dbtx, <span class="kw">_</span>| {
+<a href=#350 id=350 data-nosnippet>350</a>                    Box::pin(<span class="kw">async move </span>{
+<a href=#351 id=351 data-nosnippet>351</a>                        <span class="kw">let </span>next_index = dbtx
+<a href=#352 id=352 data-nosnippet>352</a>                            .get_value(<span class="kw-2">&amp;</span>PaymentCodeNextInvoiceIndexKey { payment_code_id })
+<a href=#353 id=353 data-nosnippet>353</a>                            .<span class="kw">await
+<a href=#354 id=354 data-nosnippet>354</a>                            </span>.map(|index| index + <span class="number">1</span>)
+<a href=#355 id=355 data-nosnippet>355</a>                            .unwrap_or(<span class="number">0</span>);
+<a href=#356 id=356 data-nosnippet>356</a>                        dbtx.insert_entry(
+<a href=#357 id=357 data-nosnippet>357</a>                            <span class="kw-2">&amp;</span>PaymentCodeNextInvoiceIndexKey { payment_code_id },
+<a href=#358 id=358 data-nosnippet>358</a>                            <span class="kw-2">&amp;</span>next_index,
+<a href=#359 id=359 data-nosnippet>359</a>                        )
+<a href=#360 id=360 data-nosnippet>360</a>                        .<span class="kw">await</span>;
+<a href=#361 id=361 data-nosnippet>361</a>                        <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, ()&gt;::Ok(next_index)
+<a href=#362 id=362 data-nosnippet>362</a>                    })
+<a href=#363 id=363 data-nosnippet>363</a>                },
+<a href=#364 id=364 data-nosnippet>364</a>                <span class="prelude-val">None</span>,
+<a href=#365 id=365 data-nosnippet>365</a>            )
+<a href=#366 id=366 data-nosnippet>366</a>            .<span class="kw">await
+<a href=#367 id=367 data-nosnippet>367</a>            </span>.expect(<span class="string">"Loops forever and never returns errors internally"</span>)
+<a href=#368 id=368 data-nosnippet>368</a>    }
+<a href=#369 id=369 data-nosnippet>369</a>
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">pub async fn </span>list_federations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;FederationId&gt; {
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="self">self</span>.clients.read().<span class="kw">await</span>.keys().cloned().collect()
+<a href=#372 id=372 data-nosnippet>372</a>    }
+<a href=#373 id=373 data-nosnippet>373</a>
+<a href=#374 id=374 data-nosnippet>374</a>    <span class="kw">async fn </span>get_payment_code(
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#376 id=376 data-nosnippet>376</a>        payment_code_id: PaymentCodeId,
+<a href=#377 id=377 data-nosnippet>377</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentCodeEntry, RecurringPaymentError&gt; {
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="self">self</span>.db
+<a href=#379 id=379 data-nosnippet>379</a>            .begin_transaction_nc()
+<a href=#380 id=380 data-nosnippet>380</a>            .<span class="kw">await
+<a href=#381 id=381 data-nosnippet>381</a>            </span>.get_value(<span class="kw-2">&amp;</span>PaymentCodeKey { payment_code_id })
+<a href=#382 id=382 data-nosnippet>382</a>            .<span class="kw">await
+<a href=#383 id=383 data-nosnippet>383</a>            </span>.ok_or(RecurringPaymentError::UnknownPaymentCode(payment_code_id))
+<a href=#384 id=384 data-nosnippet>384</a>    }
+<a href=#385 id=385 data-nosnippet>385</a>}
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a><span class="kw">async fn </span>await_invoice_confirmed(
+<a href=#388 id=388 data-nosnippet>388</a>    ln_module: <span class="kw-2">&amp;</span>ClientModuleInstance&lt;<span class="lifetime">'_</span>, LightningClientModule&gt;,
+<a href=#389 id=389 data-nosnippet>389</a>    operation_id: OperationId,
+<a href=#390 id=390 data-nosnippet>390</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), RecurringPaymentError&gt; {
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="kw">let </span><span class="kw-2">mut </span>operation_updated = ln_module
+<a href=#392 id=392 data-nosnippet>392</a>        .subscribe_ln_receive(operation_id)
+<a href=#393 id=393 data-nosnippet>393</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#394 id=394 data-nosnippet>394</a>        </span>.into_stream();
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = operation_updated.next().<span class="kw">await </span>{
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="kw">if </span><span class="macro">matches!</span>(update, LnReceiveState::WaitingForPayment { .. }) {
+<a href=#398 id=398 data-nosnippet>398</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#399 id=399 data-nosnippet>399</a>        }
+<a href=#400 id=400 data-nosnippet>400</a>    }
+<a href=#401 id=401 data-nosnippet>401</a>
+<a href=#402 id=402 data-nosnippet>402</a>    <span class="prelude-val">Err</span>(RecurringPaymentError::Other(<span class="macro">anyhow!</span>(
+<a href=#403 id=403 data-nosnippet>403</a>        <span class="string">"BOLT11 invoice not confirmed"
+<a href=#404 id=404 data-nosnippet>404</a>    </span>)))
+<a href=#405 id=405 data-nosnippet>405</a>}
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+<a href=#408 id=408 data-nosnippet>408</a></span><span class="kw">pub enum </span>PaymentCodeInvoice {
+<a href=#409 id=409 data-nosnippet>409</a>    Bolt11(Bolt11Invoice),
+<a href=#410 id=410 data-nosnippet>410</a>}</code></pre></div></section></main></body></html>

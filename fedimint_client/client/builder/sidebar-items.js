@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ClientBuilder"]};
+window.SIDEBAR_ITEMS = {"enum":["RootSecret"],"struct":["ClientBuilder","ClientPreview"]};
