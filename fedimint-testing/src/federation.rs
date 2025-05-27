@@ -123,7 +123,7 @@ impl FederationTest {
             .preview_with_existing_config(client_config, None)
             .await
             .expect("Preview failed")
-            .join(RootSecret::Standard(
+            .join(RootSecret::StandardDoubleDerive(
                 PlainRootSecretStrategy::to_root_secret(&client_secret),
             ))
             .await

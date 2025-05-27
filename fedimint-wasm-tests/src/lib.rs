@@ -46,7 +46,7 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandl
     let client = builder
         .preview(invite_code)
         .await?
-        .join(RootSecret::Standard(
+        .join(RootSecret::StandardDoubleDerive(
             PlainRootSecretStrategy::to_root_secret(&client_secret),
         ))
         .await

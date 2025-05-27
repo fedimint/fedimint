@@ -680,9 +680,11 @@ impl FedimintCli {
             .preview(&invite_code)
             .await
             .map_err_cli()?
-            .join(RootSecret::LegacyDoubleDerive(
-                Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-            ))
+            .join(RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<
+                12,
+            >::to_root_secret(
+                &mnemonic
+            )))
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -711,9 +713,11 @@ impl FedimintCli {
         .map_err_cli()?;
 
         let client = client_builder
-            .open(RootSecret::LegacyDoubleDerive(
-                Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
-            ))
+            .open(RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<
+                12,
+            >::to_root_secret(
+                &mnemonic
+            )))
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -749,7 +753,7 @@ impl FedimintCli {
             }
         }
 
-        let root_secret = RootSecret::LegacyDoubleDerive(
+        let root_secret = RootSecret::StandardDoubleDerive(
             Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
         );
         let client = builder
