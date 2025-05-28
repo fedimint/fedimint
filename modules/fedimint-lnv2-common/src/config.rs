@@ -93,8 +93,8 @@ plugin_types_trait_impl_config!(
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
-    base: Amount,
-    parts_per_million: u64,
+    pub base: Amount,
+    pub parts_per_million: u64,
 }
 
 impl FeeConsensus {
