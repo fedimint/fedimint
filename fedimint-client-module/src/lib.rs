@@ -425,7 +425,7 @@ impl<'m, M: ClientModule> ClientModuleInstance<'m, M> {
     }
 }
 
-impl<'m, M> ops::Deref for ClientModuleInstance<'m, M>
+impl<M> ops::Deref for ClientModuleInstance<'_, M>
 where
     M: ClientModule,
 {

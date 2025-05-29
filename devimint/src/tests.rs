@@ -319,6 +319,7 @@ pub async fn latency_tests(
     Ok(())
 }
 
+#[allow(clippy::struct_field_names)]
 /// Clients reused for upgrade tests
 pub struct UpgradeClients {
     reissue_client: Client,

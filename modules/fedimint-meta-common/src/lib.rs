@@ -153,7 +153,7 @@ impl<'de> Deserialize<'de> for MetaValue {
     {
         struct MetaValueVisitor;
 
-        impl<'de> Visitor<'de> for MetaValueVisitor {
+        impl Visitor<'_> for MetaValueVisitor {
             type Value = MetaValue;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

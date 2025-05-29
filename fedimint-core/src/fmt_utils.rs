@@ -37,7 +37,7 @@ where
 /// environment variable is set to a non-empty value.
 pub struct AbbreviateHexBytes<'a>(pub &'a [u8]);
 
-impl<'a> fmt::Display for AbbreviateHexBytes<'a> {
+impl fmt::Display for AbbreviateHexBytes<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0.len() <= 64 || rust_log_full_enabled() {
             fedimint_core::format_hex(self.0, f)?;
@@ -49,7 +49,7 @@ impl<'a> fmt::Display for AbbreviateHexBytes<'a> {
     }
 }
 
-impl<'a> fmt::Debug for AbbreviateHexBytes<'a> {
+impl fmt::Debug for AbbreviateHexBytes<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
@@ -139,7 +139,7 @@ fn fmt_abbreviated_object(
     Ok(())
 }
 
-impl<'a> fmt::Debug for AbbreviateJson<'a> {
+impl fmt::Debug for AbbreviateJson<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if rust_log_full_enabled() {
             std::fmt::Debug::fmt(&self.0, formatter)

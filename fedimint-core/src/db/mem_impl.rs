@@ -52,7 +52,7 @@ pub struct MemTransaction<'a> {
     num_savepoint_operations: usize,
 }
 
-impl<'a> fmt::Debug for MemTransaction<'a> {
+impl fmt::Debug for MemTransaction<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
             "MemTransaction {{ db={:?}, operations_len={}, tx_data_len={}, savepoint_len={}, num_pending_ops={}, num_savepoint_ops={} }}",
@@ -112,7 +112,7 @@ impl IRawDatabase for MemDatabase {
 // In-memory database transaction should only be used for test code and never
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
+impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         // Insert data from copy so we can read our own writes
         let old_value = self.tx_data.insert(key.to_vec(), value.to_owned());
@@ -194,7 +194,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemTransaction<'a> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOps for MemTransaction<'a> {
+impl IDatabaseTransactionOps for MemTransaction<'_> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         self.tx_data = self.savepoint.clone();
 
@@ -215,7 +215,7 @@ impl<'a> IDatabaseTransactionOps for MemTransaction<'a> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
+impl IRawDatabaseTransaction for MemTransaction<'_> {
     #[allow(clippy::significant_drop_tightening)]
     async fn commit_tx(self) -> Result<()> {
         let mut data = self.db.data.write().await;

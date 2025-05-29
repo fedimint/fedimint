@@ -12,6 +12,7 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::large_futures)]
+#![allow(clippy::struct_field_names)]
 
 pub mod client;
 pub mod config;

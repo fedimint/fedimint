@@ -118,6 +118,7 @@ pub async fn process_transaction_with_dbtx(
     Ok(())
 }
 
+#[allow(clippy::struct_field_names)]
 pub struct FundingVerifier {
     input_amount: Amount,
     output_amount: Amount,

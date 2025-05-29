@@ -20,7 +20,7 @@ pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
 
 use std::collections::BTreeMap;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as AnyhowContext;
@@ -265,10 +265,9 @@ pub struct LightningGatewayRegistration {
 impl Encodable for LightningGatewayRegistration {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         let json_repr = serde_json::to_string(self).map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
-                format!("Failed to serialize LightningGatewayRegistration: {e}"),
-            )
+            Error::other(format!(
+                "Failed to serialize LightningGatewayRegistration: {e}"
+            ))
         })?;
 
         json_repr.consensus_encode(writer)

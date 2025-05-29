@@ -431,7 +431,7 @@ pub fn get_median(vals: &[u64]) -> Option<u64> {
     let mid = len / 2;
 
     if len % 2 == 0 {
-        Some((vals[mid - 1] + vals[mid]) / 2)
+        Some(u64::midpoint(vals[mid - 1], vals[mid]))
     } else {
         Some(vals[mid])
     }
