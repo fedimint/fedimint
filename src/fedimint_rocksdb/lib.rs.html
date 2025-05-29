@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-rocksdb/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-c233d2bd.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_rocksdb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.88.0-nightly (df35ff6c3 2025-04-23)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-4e99c027.js"></script><script defer src="../../static.files/src-script-63605ae7.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-7ef8a74a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_rocksdb/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-rocksdb/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-84e720fa.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_rocksdb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (2805e1dc4 2025-05-26)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-4e99c027.js"></script><script defer src="../../static.files/src-script-63605ae7.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_rocksdb/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
 <a href=#2 id=2 data-nosnippet>2</a>#![allow(clippy::missing_errors_doc)]
 <a href=#3 id=3 data-nosnippet>3</a>#![allow(clippy::must_use_candidate)]
 <a href=#4 id=4 data-nosnippet>4</a>#![allow(clippy::needless_lifetimes)]
@@ -87,13 +87,13 @@
 <a href=#87 id=87 data-nosnippet>87</a>    num.is_power_of_two()
 <a href=#88 id=88 data-nosnippet>88</a>}
 <a href=#89 id=89 data-nosnippet>89</a>
-<a href=#90 id=90 data-nosnippet>90</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; fmt::Debug <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#90 id=90 data-nosnippet>90</a><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
 <a href=#92 id=92 data-nosnippet>92</a>        f.write_str(<span class="string">"RocksDbTransaction"</span>)
 <a href=#93 id=93 data-nosnippet>93</a>    }
 <a href=#94 id=94 data-nosnippet>94</a>}
 <a href=#95 id=95 data-nosnippet>95</a>
-<a href=#96 id=96 data-nosnippet>96</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; fmt::Debug <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#96 id=96 data-nosnippet>96</a><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
 <a href=#98 id=98 data-nosnippet>98</a>        f.write_str(<span class="string">"RocksDbTransaction"</span>)
 <a href=#99 id=99 data-nosnippet>99</a>    }
@@ -225,7 +225,7 @@
 <a href=#225 id=225 data-nosnippet>225</a>}
 <a href=#226 id=226 data-nosnippet>226</a>
 <a href=#227 id=227 data-nosnippet>227</a><span class="attr">#[async_trait]
-<a href=#228 id=228 data-nosnippet>228</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#228 id=228 data-nosnippet>228</a></span><span class="kw">impl </span>IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
 <a href=#230 id=230 data-nosnippet>230</a>        fedimint_core::runtime::block_in_place(|| {
 <a href=#231 id=231 data-nosnippet>231</a>            <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.snapshot().get(key).unwrap();
@@ -343,7 +343,7 @@
 <a href=#343 id=343 data-nosnippet>343</a>}
 <a href=#344 id=344 data-nosnippet>344</a>
 <a href=#345 id=345 data-nosnippet>345</a><span class="attr">#[async_trait]
-<a href=#346 id=346 data-nosnippet>346</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#346 id=346 data-nosnippet>346</a></span><span class="kw">impl </span>IDatabaseTransactionOps <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#347 id=347 data-nosnippet>347</a>    <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#348 id=348 data-nosnippet>348</a>        <span class="prelude-val">Ok</span>(fedimint_core::runtime::block_in_place(|| {
 <a href=#349 id=349 data-nosnippet>349</a>            <span class="self">self</span>.<span class="number">0</span>.rollback_to_savepoint()
@@ -358,7 +358,7 @@
 <a href=#358 id=358 data-nosnippet>358</a>}
 <a href=#359 id=359 data-nosnippet>359</a>
 <a href=#360 id=360 data-nosnippet>360</a><span class="attr">#[async_trait]
-<a href=#361 id=361 data-nosnippet>361</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#361 id=361 data-nosnippet>361</a></span><span class="kw">impl </span>IRawDatabaseTransaction <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#362 id=362 data-nosnippet>362</a>    <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#363 id=363 data-nosnippet>363</a>        fedimint_core::runtime::block_in_place(|| {
 <a href=#364 id=364 data-nosnippet>364</a>            <span class="self">self</span>.<span class="number">0</span>.commit()<span class="question-mark">?</span>;
@@ -368,7 +368,7 @@
 <a href=#368 id=368 data-nosnippet>368</a>}
 <a href=#369 id=369 data-nosnippet>369</a>
 <a href=#370 id=370 data-nosnippet>370</a><span class="attr">#[async_trait]
-<a href=#371 id=371 data-nosnippet>371</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#371 id=371 data-nosnippet>371</a></span><span class="kw">impl </span>IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#372 id=372 data-nosnippet>372</a>    <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key: <span class="kw-2">&amp;</span>[u8], _value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
 <a href=#373 id=373 data-nosnippet>373</a>        <span class="macro">panic!</span>(<span class="string">"Cannot insert into a read only transaction"</span>);
 <a href=#374 id=374 data-nosnippet>374</a>    }
@@ -452,7 +452,7 @@
 <a href=#452 id=452 data-nosnippet>452</a>}
 <a href=#453 id=453 data-nosnippet>453</a>
 <a href=#454 id=454 data-nosnippet>454</a><span class="attr">#[async_trait]
-<a href=#455 id=455 data-nosnippet>455</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#455 id=455 data-nosnippet>455</a></span><span class="kw">impl </span>IDatabaseTransactionOps <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#456 id=456 data-nosnippet>456</a>    <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#457 id=457 data-nosnippet>457</a>        <span class="macro">panic!</span>(<span class="string">"Cannot rollback a read only transaction"</span>);
 <a href=#458 id=458 data-nosnippet>458</a>    }
@@ -463,7 +463,7 @@
 <a href=#463 id=463 data-nosnippet>463</a>}
 <a href=#464 id=464 data-nosnippet>464</a>
 <a href=#465 id=465 data-nosnippet>465</a><span class="attr">#[async_trait]
-<a href=#466 id=466 data-nosnippet>466</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#466 id=466 data-nosnippet>466</a></span><span class="kw">impl </span>IRawDatabaseTransaction <span class="kw">for </span>RocksDbReadOnlyTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#467 id=467 data-nosnippet>467</a>    <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#468 id=468 data-nosnippet>468</a>        <span class="macro">panic!</span>(<span class="string">"Cannot commit a read only transaction"</span>);
 <a href=#469 id=469 data-nosnippet>469</a>    }

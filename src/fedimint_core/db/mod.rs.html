@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/db/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-c233d2bd.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.88.0-nightly (df35ff6c3 2025-04-23)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-4e99c027.js"></script><script defer src="../../../static.files/src-script-63605ae7.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-7ef8a74a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_core/db/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Core Fedimint database traits and types
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/db/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-84e720fa.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (2805e1dc4 2025-05-26)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-4e99c027.js"></script><script defer src="../../../static.files/src-script-63605ae7.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_core/db/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Core Fedimint database traits and types
 <a href=#2 id=2 data-nosnippet>2</a>//!
 <a href=#3 id=3 data-nosnippet>3</a>//! This module provides the core key-value database for Fedimint.
 <a href=#4 id=4 data-nosnippet>4</a>//!
@@ -1088,7 +1088,7 @@
 <a href=#1088 id=1088 data-nosnippet>1088</a><span class="comment">// blanket implementation of typed ops for anything that implements raw ops and
 <a href=#1089 id=1089 data-nosnippet>1089</a>// has decoders
 <a href=#1090 id=1090 data-nosnippet>1090</a></span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#1091 id=1091 data-nosnippet>1091</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; IDatabaseTransactionOpsCoreTyped&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>T
+<a href=#1091 id=1091 data-nosnippet>1091</a></span><span class="kw">impl</span>&lt;T&gt; IDatabaseTransactionOpsCoreTyped&lt;<span class="lifetime">'_</span>&gt; <span class="kw">for </span>T
 <a href=#1092 id=1092 data-nosnippet>1092</a><span class="kw">where
 <a href=#1093 id=1093 data-nosnippet>1093</a>    </span>T: IDatabaseTransactionOpsCore + WithDecoders,
 <a href=#1094 id=1094 data-nosnippet>1094</a>{
@@ -1505,7 +1505,7 @@
 <a href=#1505 id=1505 data-nosnippet>1505</a>    Borrowed(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>T),
 <a href=#1506 id=1506 data-nosnippet>1506</a>}
 <a href=#1507 id=1507 data-nosnippet>1507</a>
-<a href=#1508 id=1508 data-nosnippet>1508</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; ops::Deref <span class="kw">for </span>MaybeRef&lt;<span class="lifetime">'a</span>, T&gt; {
+<a href=#1508 id=1508 data-nosnippet>1508</a><span class="kw">impl</span>&lt;T&gt; ops::Deref <span class="kw">for </span>MaybeRef&lt;<span class="lifetime">'_</span>, T&gt; {
 <a href=#1509 id=1509 data-nosnippet>1509</a>    <span class="kw">type </span>Target = T;
 <a href=#1510 id=1510 data-nosnippet>1510</a>
 <a href=#1511 id=1511 data-nosnippet>1511</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
@@ -1516,7 +1516,7 @@
 <a href=#1516 id=1516 data-nosnippet>1516</a>    }
 <a href=#1517 id=1517 data-nosnippet>1517</a>}
 <a href=#1518 id=1518 data-nosnippet>1518</a>
-<a href=#1519 id=1519 data-nosnippet>1519</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, T&gt; ops::DerefMut <span class="kw">for </span>MaybeRef&lt;<span class="lifetime">'a</span>, T&gt; {
+<a href=#1519 id=1519 data-nosnippet>1519</a><span class="kw">impl</span>&lt;T&gt; ops::DerefMut <span class="kw">for </span>MaybeRef&lt;<span class="lifetime">'_</span>, T&gt; {
 <a href=#1520 id=1520 data-nosnippet>1520</a>    <span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target {
 <a href=#1521 id=1521 data-nosnippet>1521</a>        <span class="kw">match </span><span class="self">self </span>{
 <a href=#1522 id=1522 data-nosnippet>1522</a>            MaybeRef::Owned(o) =&gt; o,
@@ -1546,7 +1546,7 @@
 <a href=#1546 id=1546 data-nosnippet>1546</a>    capability: marker::PhantomData&lt;Cap&gt;,
 <a href=#1547 id=1547 data-nosnippet>1547</a>}
 <a href=#1548 id=1548 data-nosnippet>1548</a>
-<a href=#1549 id=1549 data-nosnippet>1549</a><span class="kw">impl</span>&lt;<span class="lifetime">'tx</span>, Cap&gt; fmt::Debug <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>, Cap&gt; {
+<a href=#1549 id=1549 data-nosnippet>1549</a><span class="kw">impl</span>&lt;Cap&gt; fmt::Debug <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt; {
 <a href=#1550 id=1550 data-nosnippet>1550</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
 <a href=#1551 id=1551 data-nosnippet>1551</a>        f.write_fmt(<span class="macro">format_args!</span>(
 <a href=#1552 id=1552 data-nosnippet>1552</a>            <span class="string">"DatabaseTransaction {{ tx: {:?}, decoders={:?} }}"</span>,
@@ -1555,7 +1555,7 @@
 <a href=#1555 id=1555 data-nosnippet>1555</a>    }
 <a href=#1556 id=1556 data-nosnippet>1556</a>}
 <a href=#1557 id=1557 data-nosnippet>1557</a>
-<a href=#1558 id=1558 data-nosnippet>1558</a><span class="kw">impl</span>&lt;<span class="lifetime">'tx</span>, Cap&gt; WithDecoders <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>, Cap&gt; {
+<a href=#1558 id=1558 data-nosnippet>1558</a><span class="kw">impl</span>&lt;Cap&gt; WithDecoders <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt; {
 <a href=#1559 id=1559 data-nosnippet>1559</a>    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
 <a href=#1560 id=1560 data-nosnippet>1560</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.decoders
 <a href=#1561 id=1561 data-nosnippet>1561</a>    }
@@ -1871,7 +1871,7 @@
 <a href=#1871 id=1871 data-nosnippet>1871</a>}
 <a href=#1872 id=1872 data-nosnippet>1872</a>
 <a href=#1873 id=1873 data-nosnippet>1873</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#1874 id=1874 data-nosnippet>1874</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, Cap&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>, Cap&gt;
+<a href=#1874 id=1874 data-nosnippet>1874</a></span><span class="kw">impl</span>&lt;Cap&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt;
 <a href=#1875 id=1875 data-nosnippet>1875</a><span class="kw">where
 <a href=#1876 id=1876 data-nosnippet>1876</a>    </span>Cap: Send,
 <a href=#1877 id=1877 data-nosnippet>1877</a>{
@@ -1911,7 +1911,7 @@
 <a href=#1911 id=1911 data-nosnippet>1911</a>    </span>}
 <a href=#1912 id=1912 data-nosnippet>1912</a>}
 <a href=#1913 id=1913 data-nosnippet>1913</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#1914 id=1914 data-nosnippet>1914</a></span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>, Committable&gt; {
+<a href=#1914 id=1914 data-nosnippet>1914</a></span><span class="kw">impl </span>IDatabaseTransactionOps <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Committable&gt; {
 <a href=#1915 id=1915 data-nosnippet>1915</a>    <span class="kw">async fn </span>set_tx_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#1916 id=1916 data-nosnippet>1916</a>        <span class="self">self</span>.tx.set_tx_savepoint().<span class="kw">await
 <a href=#1917 id=1917 data-nosnippet>1917</a>    </span>}
@@ -3365,7 +3365,7 @@
 <a href=#3365 id=3365 data-nosnippet>3365</a>        </span><span class="kw">struct </span>FakeTransaction&lt;<span class="lifetime">'a</span>&gt;(PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>()&gt;);
 <a href=#3366 id=3366 data-nosnippet>3366</a>
 <a href=#3367 id=3367 data-nosnippet>3367</a>        <span class="attr">#[async_trait]
-<a href=#3368 id=3368 data-nosnippet>3368</a>        </span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>FakeTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#3368 id=3368 data-nosnippet>3368</a>        </span><span class="kw">impl </span>IDatabaseTransactionOpsCore <span class="kw">for </span>FakeTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#3369 id=3369 data-nosnippet>3369</a>            <span class="kw">async fn </span>raw_insert_bytes(
 <a href=#3370 id=3370 data-nosnippet>3370</a>                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
 <a href=#3371 id=3371 data-nosnippet>3371</a>                _key: <span class="kw-2">&amp;</span>[u8],
@@ -3409,7 +3409,7 @@
 <a href=#3409 id=3409 data-nosnippet>3409</a>        }
 <a href=#3410 id=3410 data-nosnippet>3410</a>
 <a href=#3411 id=3411 data-nosnippet>3411</a>        <span class="attr">#[async_trait]
-<a href=#3412 id=3412 data-nosnippet>3412</a>        </span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOps <span class="kw">for </span>FakeTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#3412 id=3412 data-nosnippet>3412</a>        </span><span class="kw">impl </span>IDatabaseTransactionOps <span class="kw">for </span>FakeTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#3413 id=3413 data-nosnippet>3413</a>            <span class="kw">async fn </span>rollback_tx_to_savepoint(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
 <a href=#3414 id=3414 data-nosnippet>3414</a>                <span class="macro">unimplemented!</span>()
 <a href=#3415 id=3415 data-nosnippet>3415</a>            }
@@ -3420,7 +3420,7 @@
 <a href=#3420 id=3420 data-nosnippet>3420</a>        }
 <a href=#3421 id=3421 data-nosnippet>3421</a>
 <a href=#3422 id=3422 data-nosnippet>3422</a>        <span class="attr">#[async_trait]
-<a href=#3423 id=3423 data-nosnippet>3423</a>        </span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IRawDatabaseTransaction <span class="kw">for </span>FakeTransaction&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#3423 id=3423 data-nosnippet>3423</a>        </span><span class="kw">impl </span>IRawDatabaseTransaction <span class="kw">for </span>FakeTransaction&lt;<span class="lifetime">'_</span>&gt; {
 <a href=#3424 id=3424 data-nosnippet>3424</a>            <span class="kw">async fn </span>commit_tx(<span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
 <a href=#3425 id=3425 data-nosnippet>3425</a>                <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Can't commit!"</span>))
 <a href=#3426 id=3426 data-nosnippet>3426</a>            }
