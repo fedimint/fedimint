@@ -23,6 +23,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::{Instrument, Span, debug, warn};
 use url::{Host, ParseError, Url};
 
+use crate::envs::{FM_DEBUG_SHOW_SECRETS_ENV, is_env_var_set};
 use crate::task::MaybeSend;
 use crate::{apply, async_trait_maybe_send, maybe_add_send, runtime};
 
@@ -169,10 +170,22 @@ impl Display for SafeUrl {
         write!(f, "{}://", self.0.scheme())?;
 
         if !self.0.username().is_empty() {
-            write!(f, "REDACTEDUSER")?;
+            if is_env_var_set(FM_DEBUG_SHOW_SECRETS_ENV) {
+                write!(f, "{}", self.0.username())?;
+            } else {
+                write!(f, "REDACTEDUSER")?;
+            }
 
             if self.0.password().is_some() {
-                write!(f, ":REDACTEDPASS")?;
+                if is_env_var_set(FM_DEBUG_SHOW_SECRETS_ENV) {
+                    write!(
+                        f,
+                        ":{}",
+                        self.0.password().expect("Just checked it's checked")
+                    )?;
+                } else {
+                    write!(f, ":REDACTEDPASS")?;
+                }
             }
 
             write!(f, "@")?;
