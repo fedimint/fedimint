@@ -18,6 +18,9 @@ pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 
 pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
 
+/// Print sensitive secrets without redacting them. Use only for debugging.
+pub const FM_DEBUGGING_SHOW_SECRETS_ENV: &str = "FM_DEBUGGING_SHOW_SECRETS";
+
 /// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.
 pub fn is_env_var_set(var: &str) -> bool {
