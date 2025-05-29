@@ -289,6 +289,7 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Decodable, Encodable)]
 pub enum MintRecoveryState {
     #[encodable(index = 2)]

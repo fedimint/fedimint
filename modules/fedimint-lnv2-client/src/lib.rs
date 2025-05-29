@@ -70,6 +70,7 @@ const EXPIRATION_DELTA_LIMIT: u64 = 1440;
 /// A two hour buffer in case either the client or gateway go offline
 const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LightningOperationMeta {
     Send(SendOperationMeta),

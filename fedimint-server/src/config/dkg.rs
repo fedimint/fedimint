@@ -215,7 +215,7 @@ enum DkgStep {
 }
 
 #[async_trait]
-impl<'a> PeerHandleOps for PeerHandle<'a> {
+impl PeerHandleOps for PeerHandle<'_> {
     fn num_peers(&self) -> NumPeers {
         self.num_peers
     }

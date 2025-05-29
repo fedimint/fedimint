@@ -80,7 +80,7 @@ impl OperationId {
     }
 }
 
-impl<'a> Display for OperationIdShortFmt<'a> {
+impl Display for OperationIdShortFmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         fedimint_core::format_hex(&self.0.0[0..4], f)?;
         f.write_str("_")?;
@@ -89,7 +89,7 @@ impl<'a> Display for OperationIdShortFmt<'a> {
     }
 }
 
-impl<'a> Display for OperationIdFullFmt<'a> {
+impl Display for OperationIdFullFmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         fedimint_core::format_hex(&self.0.0, f)
     }

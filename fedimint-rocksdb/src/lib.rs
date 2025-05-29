@@ -87,13 +87,13 @@ fn is_power_of_two(num: usize) -> bool {
     num.is_power_of_two()
 }
 
-impl<'a> fmt::Debug for RocksDbReadOnlyTransaction<'a> {
+impl fmt::Debug for RocksDbReadOnlyTransaction<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("RocksDbTransaction")
     }
 }
 
-impl<'a> fmt::Debug for RocksDbTransaction<'a> {
+impl fmt::Debug for RocksDbTransaction<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("RocksDbTransaction")
     }
@@ -225,7 +225,7 @@ impl IRawDatabase for RocksDbReadOnly {
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
+impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             let val = self.0.snapshot().get(key).unwrap();
@@ -343,7 +343,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransactionOps for RocksDbTransaction<'a> {
+impl IDatabaseTransactionOps for RocksDbTransaction<'_> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         Ok(fedimint_core::runtime::block_in_place(|| {
             self.0.rollback_to_savepoint()
@@ -358,7 +358,7 @@ impl<'a> IDatabaseTransactionOps for RocksDbTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IRawDatabaseTransaction for RocksDbTransaction<'a> {
+impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
     async fn commit_tx(self) -> Result<()> {
         fedimint_core::runtime::block_in_place(|| {
             self.0.commit()?;
@@ -368,7 +368,7 @@ impl<'a> IRawDatabaseTransaction for RocksDbTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
+impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
     async fn raw_insert_bytes(&mut self, _key: &[u8], _value: &[u8]) -> Result<Option<Vec<u8>>> {
         panic!("Cannot insert into a read only transaction");
     }
@@ -452,7 +452,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'a> {
+impl IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {
     async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
         panic!("Cannot rollback a read only transaction");
     }
@@ -463,7 +463,7 @@ impl<'a> IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'a> {
 }
 
 #[async_trait]
-impl<'a> IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'a> {
+impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
     async fn commit_tx(self) -> Result<()> {
         panic!("Cannot commit a read only transaction");
     }

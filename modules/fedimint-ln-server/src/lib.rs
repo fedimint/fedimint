@@ -233,7 +233,7 @@ impl ServerModuleInit for LightningInit {
         let sks = threshold_crypto::SecretKeySet::random(peers.to_num_peers().degree(), &mut OsRng);
         let pks = sks.public_keys();
 
-        let server_cfg = peers
+        peers
             .iter()
             .map(|&peer| {
                 let sk = sks.secret_key_share(peer.to_usize());
@@ -253,9 +253,7 @@ impl ServerModuleInit for LightningInit {
                     .to_erased(),
                 )
             })
-            .collect();
-
-        server_cfg
+            .collect()
     }
 
     async fn distributed_gen(

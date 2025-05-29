@@ -1088,7 +1088,7 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
 // blanket implementation of typed ops for anything that implements raw ops and
 // has decoders
 #[apply(async_trait_maybe_send!)]
-impl<'a, T> IDatabaseTransactionOpsCoreTyped<'a> for T
+impl<T> IDatabaseTransactionOpsCoreTyped<'_> for T
 where
     T: IDatabaseTransactionOpsCore + WithDecoders,
 {
@@ -1505,7 +1505,7 @@ enum MaybeRef<'a, T> {
     Borrowed(&'a mut T),
 }
 
-impl<'a, T> ops::Deref for MaybeRef<'a, T> {
+impl<T> ops::Deref for MaybeRef<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -1516,7 +1516,7 @@ impl<'a, T> ops::Deref for MaybeRef<'a, T> {
     }
 }
 
-impl<'a, T> ops::DerefMut for MaybeRef<'a, T> {
+impl<T> ops::DerefMut for MaybeRef<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             MaybeRef::Owned(o) => o,
@@ -1546,7 +1546,7 @@ pub struct DatabaseTransaction<'tx, Cap = NonCommittable> {
     capability: marker::PhantomData<Cap>,
 }
 
-impl<'tx, Cap> fmt::Debug for DatabaseTransaction<'tx, Cap> {
+impl<Cap> fmt::Debug for DatabaseTransaction<'_, Cap> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
             "DatabaseTransaction {{ tx: {:?}, decoders={:?} }}",
@@ -1555,7 +1555,7 @@ impl<'tx, Cap> fmt::Debug for DatabaseTransaction<'tx, Cap> {
     }
 }
 
-impl<'tx, Cap> WithDecoders for DatabaseTransaction<'tx, Cap> {
+impl<Cap> WithDecoders for DatabaseTransaction<'_, Cap> {
     fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.decoders
     }
@@ -1871,7 +1871,7 @@ impl<'tx> DatabaseTransaction<'tx, Committable> {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<'a, Cap> IDatabaseTransactionOpsCore for DatabaseTransaction<'a, Cap>
+impl<Cap> IDatabaseTransactionOpsCore for DatabaseTransaction<'_, Cap>
 where
     Cap: Send,
 {
@@ -1911,7 +1911,7 @@ where
     }
 }
 #[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOps for DatabaseTransaction<'a, Committable> {
+impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {
     async fn set_tx_savepoint(&mut self) -> Result<()> {
         self.tx.set_tx_savepoint().await
     }
@@ -3365,7 +3365,7 @@ mod test_utils {
         struct FakeTransaction<'a>(PhantomData<&'a ()>);
 
         #[async_trait]
-        impl<'a> IDatabaseTransactionOpsCore for FakeTransaction<'a> {
+        impl IDatabaseTransactionOpsCore for FakeTransaction<'_> {
             async fn raw_insert_bytes(
                 &mut self,
                 _key: &[u8],
@@ -3409,7 +3409,7 @@ mod test_utils {
         }
 
         #[async_trait]
-        impl<'a> IDatabaseTransactionOps for FakeTransaction<'a> {
+        impl IDatabaseTransactionOps for FakeTransaction<'_> {
             async fn rollback_tx_to_savepoint(&mut self) -> anyhow::Result<()> {
                 unimplemented!()
             }
@@ -3420,7 +3420,7 @@ mod test_utils {
         }
 
         #[async_trait]
-        impl<'a> IRawDatabaseTransaction for FakeTransaction<'a> {
+        impl IRawDatabaseTransaction for FakeTransaction<'_> {
             async fn commit_tx(self) -> anyhow::Result<()> {
                 Err(anyhow!("Can't commit!"))
             }

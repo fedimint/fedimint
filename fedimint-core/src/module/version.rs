@@ -246,7 +246,7 @@ impl MultiApiVersion {
     /// modifying its `minor` number. This is useful when merging required /
     /// supported version sequences with each other.
     fn try_insert(&mut self, version: ApiVersion) -> result::Result<(), &mut u32> {
-        let ret = match self
+        match self
             .0
             .binary_search_by_key(&version.major, |version| version.major)
         {
@@ -259,9 +259,7 @@ impl MultiApiVersion {
                 self.0.insert(insert_idx, version);
                 Ok(())
             }
-        };
-
-        ret
+        }
     }
 
     pub(crate) fn get_by_major(&self, major: u32) -> Option<ApiVersion> {
@@ -300,7 +298,7 @@ impl<'de> Deserialize<'de> for MultiApiVersion {
 
 pub struct MultiApiVersionIter<'a>(std::slice::Iter<'a, ApiVersion>);
 
-impl<'a> Iterator for MultiApiVersionIter<'a> {
+impl Iterator for MultiApiVersionIter<'_> {
     type Item = ApiVersion;
 
     fn next(&mut self) -> Option<Self::Item> {

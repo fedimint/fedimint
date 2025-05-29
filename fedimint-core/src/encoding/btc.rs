@@ -343,7 +343,7 @@ impl<'a, R: std::io::Read> BufBitcoinReader<'a, R> {
     }
 }
 
-impl<'a, R: std::io::Read> bitcoin_io::Read for BufBitcoinReader<'a, R> {
+impl<R: std::io::Read> bitcoin_io::Read for BufBitcoinReader<'_, R> {
     #[inline]
     fn read(&mut self, output: &mut [u8]) -> bitcoin_io::Result<usize> {
         if output.is_empty() {
@@ -363,7 +363,7 @@ impl<'a, R: std::io::Read> bitcoin_io::Read for BufBitcoinReader<'a, R> {
     }
 }
 
-impl<'a, R: std::io::Read> bitcoin_io::BufRead for BufBitcoinReader<'a, R> {
+impl<R: std::io::Read> bitcoin_io::BufRead for BufBitcoinReader<'_, R> {
     #[inline]
     fn fill_buf(&mut self) -> bitcoin_io::Result<&[u8]> {
         debug_assert!(false, "rust-bitcoin doesn't actually use this");
