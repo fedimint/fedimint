@@ -12,6 +12,7 @@ use std::io::Write;
 use std::path::Path;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::LazyLock;
 use std::{fs, io};
 
 use anyhow::format_err;
@@ -23,6 +24,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::{Instrument, Span, debug, warn};
 use url::{Host, ParseError, Url};
 
+use crate::envs::{FM_DEBUG_SHOW_SECRETS_ENV, is_env_var_set};
 use crate::task::MaybeSend;
 use crate::{apply, async_trait_maybe_send, maybe_add_send, runtime};
 
@@ -164,15 +166,38 @@ impl SafeUrl {
     }
 }
 
+static SHOW_SECRETS: LazyLock<bool> = LazyLock::new(|| {
+    let enable = is_env_var_set(FM_DEBUG_SHOW_SECRETS_ENV);
+
+    if enable {
+        warn!(target: LOG_CORE, "{} enabled. Please don't use in production.", FM_DEBUG_SHOW_SECRETS_ENV);
+    }
+
+    enable
+});
+
 impl Display for SafeUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}://", self.0.scheme())?;
 
         if !self.0.username().is_empty() {
-            write!(f, "REDACTEDUSER")?;
+            let show_secrets = *SHOW_SECRETS;
+            if show_secrets {
+                write!(f, "{}", self.0.username())?;
+            } else {
+                write!(f, "REDACTEDUSER")?;
+            }
 
             if self.0.password().is_some() {
-                write!(f, ":REDACTEDPASS")?;
+                if show_secrets {
+                    write!(
+                        f,
+                        ":{}",
+                        self.0.password().expect("Just checked it's checked")
+                    )?;
+                } else {
+                    write!(f, ":REDACTEDPASS")?;
+                }
             }
 
             write!(f, "@")?;
