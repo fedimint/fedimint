@@ -21,7 +21,7 @@ use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
-use fedimint_core::util::{BoxFuture, FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{BoxFuture, FmtCompact, SafeUrl};
 use fedimint_derive_secret::ChildId;
 use futures::StreamExt;
 use futures::future::select_all;
@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::Notify;
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 
 use crate::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
 use crate::receive::LightningReceiveError;
@@ -38,8 +38,6 @@ use crate::{
     LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
     LightningOperationMetaVariant, LnReceiveState, tweak_user_key, tweak_user_secret_key,
 };
-
-const LOG_CLIENT_RECURRING: &str = "fm::client::ln::recurring";
 
 impl LightningClientModule {
     pub async fn register_recurring_payment_code(
@@ -81,12 +79,6 @@ impl LightningClientModule {
                                 meta,
                             )
                             .await?;
-
-                        debug!(
-                            target: LOG_CLIENT_RECURRING,
-                            ?register_response,
-                            "Registered recurring payment code"
-                        );
 
                         let payment_code_entry = RecurringPaymentCodeEntry {
                             protocol,
@@ -164,7 +156,6 @@ impl LightningClientModule {
                     let invoice_index = payment_code.last_derivation_index + 1;
 
                     trace!(
-                        target: LOG_CLIENT_RECURRING,
                         root_key=?payment_code.root_keypair.public_key(),
                         %invoice_index,
                         server=%payment_code.recurringd_api,
@@ -175,7 +166,6 @@ impl LightningClientModule {
                         Ok(invoice) => {Ok((payment_code_idx, payment_code, invoice_index, invoice))}
                         Err(err) => {
                             debug!(
-                                target: LOG_CLIENT_RECURRING,
                                 err=%err.fmt_compact(),
                                 root_key=?payment_code.root_keypair.public_key(),
                                 invoice_index=%invoice_index,
@@ -273,9 +263,10 @@ impl LightningClientModule {
         let invoice_key =
             tweak_user_secret_key(SECP256K1, payment_code.root_keypair, invoice_index);
 
+        // TODO: use proper operation id, what do we use for LN normally? Preimage I
+        // guess?
         let operation_id = OperationId(*invoice.payment_hash().as_ref());
         debug!(
-            target: LOG_CLIENT_RECURRING,
             ?operation_id,
             payment_code_key=?payment_code.root_keypair.public_key(),
             invoice_index=%invoice_index,
@@ -294,7 +285,7 @@ impl LightningClientModule {
                 ),
             });
 
-        if let Err(e) = client
+        client
             .manual_operation_start_dbtx(
                 dbtx,
                 operation_id,
@@ -314,16 +305,7 @@ impl LightningClientModule {
                 vec![client.make_dyn_state(ln_state)],
             )
             .await
-        {
-            warn!(
-                target: LOG_CLIENT_RECURRING,
-                ?operation_id,
-                payment_code_key=?payment_code.root_keypair.public_key(),
-                invoice_index=%invoice_index,
-                err = %e.fmt_compact_anyhow(),
-                "Failed to create recurring receive operation"
-            )
-        }
+            .expect("OperationId is random");
     }
 
     pub async fn subscribe_ln_recurring_receive(
@@ -518,6 +500,8 @@ pub enum RecurringPaymentError {
     UnknownFederationId(FederationId),
     #[error("Unknown payment code: {0:?}")]
     UnknownPaymentCode(PaymentCodeId),
+    #[error("Unknown lightning receive operation: {0:?}")]
+    UnknownInvoice(OperationId),
     #[error("No compatible lightning module found")]
     NoLightningModuleFound,
     #[error("No gateway found")]
