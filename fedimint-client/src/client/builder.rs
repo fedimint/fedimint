@@ -60,45 +60,46 @@ use crate::sm::notifier::Notifier;
 
 /// The type of root secret hashing
 ///
+/// *Please read this documentation carefully if, especially if you're upgrading
+/// downstream Fedimint client application.*
+///
 /// Internally, client will always hash-in federation id
 /// to the root secret provided to the [`ClientBuilder`],
-/// to ensure a different secret is used for ever federation.
+/// to ensure a different actual root secret is used for ever federation.
 /// This makes reusing a single root secret for different federations
 /// in a multi-federation client, perfectly fine, and frees the client
 /// from worrying about `FederationId`.
 ///
-/// However, in the past some applications (including `fedimint-cli`)
-/// were doing the hashing-in of `FederationId` outside of `fedimint-client`,
-/// which lead to effectively doing it twice, and sub-optimal API, as the end
-/// application needed to know the federation id e.g. before joining federation,
-/// leaking downloading of configs and internals of joining federation outside.
+/// However, in the past Fedimint applications (including `fedimint-cli`)
+/// were doing the hashing-in of `FederationId` outside of `fedimint-client` as
+/// well, which lead to effectively doing it twice, and pushed downloading of
+/// the client config on join to application code, a sub-optimal API, especially
+/// after joining federation needed to handle even more functionality.
 ///
-/// This is now hard to cleanly fix, so to help phase out the old system,
-/// without affecting existing secrets, the following enum is used.
+/// To keep the interoperability of the seed phrases this double-derivation
+/// is preserved, due to other architectural reason, `fedimint-client`
+/// will now do the outer-derivation internally as well.
 #[derive(Clone)]
 pub enum RootSecret {
     /// Derive an extra round of federation-id to the secret, like
     /// Fedimint applications were doing manually in the past.
     ///
     /// **Note**: Applications MUST NOT do the derivation themselves anymore.
-    LegacyDoubleDerive(DerivableSecret),
-    /// Only use a single internal federation-id hashing.
+    StandardDoubleDerive(DerivableSecret),
+    /// No double derivation
     ///
-    /// Use this method if you are building a new application, that
-    /// did not use old system in the past, and save yourself some trouble.
-    ///
-    /// The high level application is free to re-use the same secret for
-    /// multiple different federations. Or not. But client APIs will not
-    /// expose federation_id to the outside before join/recover operations.
-    Standard(DerivableSecret),
+    /// This is useful for applications that for whatever reason do the
+    /// double-derivation externally, or use a custom scheme.
+    Custom(DerivableSecret),
 }
+
 impl RootSecret {
     fn to_inner(&self, federation_id: FederationId) -> DerivableSecret {
         match self {
-            RootSecret::LegacyDoubleDerive(derivable_secret) => {
+            RootSecret::StandardDoubleDerive(derivable_secret) => {
                 get_default_client_secret(derivable_secret, &federation_id)
             }
-            RootSecret::Standard(derivable_secret) => derivable_secret.clone(),
+            RootSecret::Custom(derivable_secret) => derivable_secret.clone(),
         }
     }
 }
@@ -1017,7 +1018,7 @@ impl ClientPreview {
     /// );
     ///
     /// let client = preview
-    ///     .join(RootSecret::Standard(root_secret))
+    ///     .join(RootSecret::StandardDoubleDerive(root_secret))
     ///     .await
     ///     .expect("Error joining federation");
     /// # Ok(())
