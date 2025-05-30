@@ -7,6 +7,7 @@ pub const CONSENSUS_BLOCK_COUNT_ENDPOINT: &str = "consensus_block_count";
 pub const GATEWAYS_ENDPOINT: &str = "gateways";
 pub const OUTGOING_CONTRACT_EXPIRATION_ENDPOINT: &str = "outgoing_contract_expiration";
 pub const REMOVE_GATEWAY_ENDPOINT: &str = "remove_gateway";
+pub const LIST_INCOMING_CONTRACTS_ENDPOINT: &str = "list_incoming_contracts";
 
 // Gateway endpoints
 pub const CREATE_BOLT11_INVOICE_ENDPOINT: &str = "/create_bolt11_invoice";
