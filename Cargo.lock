@@ -3733,6 +3733,118 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-mintv2-client"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "aquamarine",
+ "async-stream",
+ "async-trait",
+ "bitcoin_hashes 0.14.0",
+ "bls12_381",
+ "clap",
+ "criterion",
+ "erased-serde 0.4.6",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-client-module",
+ "fedimint-core",
+ "fedimint-derive-secret",
+ "fedimint-eventlog",
+ "fedimint-logging",
+ "fedimint-mintv2-common",
+ "fedimint-tbs",
+ "fedimint-threshold-crypto",
+ "futures",
+ "hex",
+ "itertools 0.13.0",
+ "rayon",
+ "serde",
+ "serde-big-array",
+ "serde_json",
+ "serdect",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "test-log",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-common"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "bitcoin_hashes 0.14.0",
+ "fedimint-core",
+ "fedimint-tbs",
+ "serde",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-server"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "assert_matches",
+ "async-trait",
+ "bitcoin",
+ "erased-serde 0.4.6",
+ "fedimint-core",
+ "fedimint-logging",
+ "fedimint-metrics",
+ "fedimint-mintv2-common",
+ "fedimint-server",
+ "fedimint-server-core",
+ "fedimint-tbs",
+ "fedimint-threshold-crypto",
+ "futures",
+ "itertools 0.13.0",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "serde",
+ "strum 0.26.3",
+ "strum_macros 0.26.4",
+ "test-log",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mintv2-tests"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin_hashes 0.14.0",
+ "bls12_381",
+ "devimint",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-dummy-client",
+ "fedimint-dummy-common",
+ "fedimint-dummy-server",
+ "fedimint-logging",
+ "fedimint-mintv2-client",
+ "fedimint-mintv2-common",
+ "fedimint-mintv2-server",
+ "fedimint-tbs",
+ "fedimint-testing",
+ "fedimint-threshold-crypto",
+ "ff",
+ "futures",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "strum 0.26.3",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-portalloc"
 version = "0.8.0-alpha"
 dependencies = [
