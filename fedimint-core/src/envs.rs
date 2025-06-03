@@ -92,10 +92,6 @@ pub const FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV: &str = "FM_IROH_P2P_SECRET_KEY_OV
 /// Url. Which means there's no need to escape it.
 pub const FM_WALLET_FEERATE_SOURCES_ENV: &str = "FM_WALLET_FEERATE_SOURCES";
 
-/// Env var that can be set to point at the bitcoind's cookie file to use for
-/// auth
-pub const FM_BITCOIND_COOKIE_FILE_ENV: &str = "FM_BITCOIND_COOKIE_FILE";
-
 /// `devimint` will set when code is running inside `devimint`
 pub const FM_IN_DEVIMINT_ENV: &str = "FM_IN_DEVIMINT";
 

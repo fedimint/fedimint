@@ -14,8 +14,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::Context as _;
 use bitcoin::Network;
 use clap::{ArgGroup, Parser};
+use envs::FM_BITCOIND_URL_PASSWORD_FILE_ENV;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
@@ -84,6 +86,16 @@ struct ServerOpts {
     /// Bitcoind RPC URL, e.g. <http://user:pass@127.0.0.1:8332>
     #[arg(long, env = FM_BITCOIND_URL_ENV)]
     bitcoind_url: Option<SafeUrl>,
+
+    /// If set, the password part of `--bitcoind-url` will be set/replaced with
+    /// the content of this file.
+    ///
+    /// This is useful for setups that provide secret material via ramdisk
+    /// e.g. SOPS, age, etc.
+    ///
+    /// Note this is not meant to handle bitcoind's cookie file.
+    #[arg(long, env = FM_BITCOIND_URL_PASSWORD_FILE_ENV)]
+    bitcoind_url_password_file: Option<PathBuf>,
 
     /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
@@ -172,6 +184,27 @@ struct ServerOpts {
     force_api_secrets: ApiSecrets,
 }
 
+impl ServerOpts {
+    pub async fn get_bitcoind_url(&self) -> anyhow::Result<SafeUrl> {
+        let mut url = self
+            .bitcoind_url
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No bitcoind url set"))?;
+        if let Some(password_file) = self.bitcoind_url_password_file.as_ref() {
+            let password = tokio::fs::read_to_string(password_file)
+                .await
+                .context("Failed to read the password")?
+                .trim()
+                .to_owned();
+            url.set_password(Some(&password))
+                .ok()
+                .ok_or_else(|| anyhow::anyhow!("Failed to set the password from the url"))?;
+        }
+
+        Ok(url)
+    }
+}
+
 /// Block the thread and run a Fedimintd server
 ///
 /// # Arguments
@@ -246,11 +279,11 @@ pub async fn run(
         p2p_bind: server_opts.bind_p2p,
         api_bind: server_opts.bind_api,
         ui_bind: server_opts.bind_ui,
-        p2p_url: server_opts.p2p_url,
-        api_url: server_opts.api_url,
+        p2p_url: server_opts.p2p_url.clone(),
+        api_url: server_opts.api_url.clone(),
         enable_iroh: server_opts.enable_iroh,
-        iroh_dns: server_opts.iroh_dns,
-        iroh_relays: server_opts.iroh_relays,
+        iroh_dns: server_opts.iroh_dns.clone(),
+        iroh_relays: server_opts.iroh_relays.clone(),
         modules: server_gen_params.clone(),
         registry: server_gens.clone(),
     };
@@ -266,7 +299,14 @@ pub async fn run(
         server_opts.bitcoind_url.as_ref(),
         server_opts.esplora_url.as_ref(),
     ) {
-        (Some(url), None) => BitcoindClient::new(url).unwrap().into_dyn(),
+        (Some(_), None) => BitcoindClient::new(
+            &server_opts
+                .get_bitcoind_url()
+                .await
+                .expect("Failed to get bitcoind url"),
+        )
+        .unwrap()
+        .into_dyn(),
         (None, Some(url)) => EsploraClient::new(url).unwrap().into_dyn(),
         _ => unreachable!("ArgGroup already enforced XOR relation"),
     };
