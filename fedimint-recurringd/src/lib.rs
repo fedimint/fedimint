@@ -1,28 +1,34 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use fedimint_api_client::api::net::Connector;
-use fedimint_client::{Client, ClientHandleArc, ClientModuleInstance};
+use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped, IRawDatabase};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::hashes::sha256;
+use fedimint_core::task::timeout;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinHash};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_ln_client::recurring::{
     PaymentCodeId, PaymentCodeRootKey, RecurringPaymentError, RecurringPaymentProtocol,
 };
-use fedimint_ln_client::{LightningClientInit, LightningClientModule, LnReceiveState};
+use fedimint_ln_client::{
+    LightningClientInit, LightningClientModule, LightningOperationMeta,
+    LightningOperationMetaVariant, LnReceiveState,
+};
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Sha256};
 use lnurl::Tag;
 use lnurl::lnurl::LnUrl;
-use lnurl::pay::{LnURLPayInvoice, PayResponse};
+use lnurl::pay::PayResponse;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{Notify, RwLock};
 use tracing::{info, warn};
 
@@ -227,19 +233,25 @@ impl RecurringInvoiceServer {
         &self,
         payment_code_id: PaymentCodeId,
         amount: Amount,
-    ) -> Result<LnURLPayInvoice, RecurringPaymentError> {
-        Ok(LnURLPayInvoice::new(
-            self.create_bolt11_invoice(payment_code_id, amount)
-                .await?
-                .to_string(),
-        ))
+    ) -> Result<LNURLPayInvoice, RecurringPaymentError> {
+        let (operation_id, federation_id, invoice) =
+            self.create_bolt11_invoice(payment_code_id, amount).await?;
+        Ok(LNURLPayInvoice {
+            pr: invoice.to_string(),
+            verify: format!(
+                "{}lnv1/verify/{}/{}",
+                self.base_url,
+                federation_id,
+                operation_id.fmt_full()
+            ),
+        })
     }
 
     async fn create_bolt11_invoice(
         &self,
         payment_code_id: PaymentCodeId,
         amount: Amount,
-    ) -> Result<Bolt11Invoice, RecurringPaymentError> {
+    ) -> Result<(OperationId, FederationId, Bolt11Invoice), RecurringPaymentError> {
         // Invoices are valid for one day by default, might become dynamic with BOLT12
         // support
         const DEFAULT_EXPIRY_TIME: u64 = 60 * 60 * 24;
@@ -303,7 +315,7 @@ impl RecurringInvoiceServer {
 
         await_invoice_confirmed(&federation_client_ln_module, operation_id).await?;
 
-        Ok(invoice)
+        Ok((operation_id, federation_client.federation_id(), invoice))
     }
 
     async fn get_federation_client(
@@ -382,6 +394,87 @@ impl RecurringInvoiceServer {
             .await
             .ok_or(RecurringPaymentError::UnknownPaymentCode(payment_code_id))
     }
+
+    /// Returns if an invoice has been paid yet. To avoid DB indirection and
+    /// since the URLs would be similarly long either way we identify
+    /// invoices by federation id and operation id instead of the payment
+    /// code. This function is the basis of `recurringd`'s [LUD-21]
+    /// implementation that allows clients to verify if a given invoice they
+    /// generated using the LNURL has been paid yet.
+    ///
+    /// [LUD-21]: https://github.com/lnurl/luds/blob/luds/21.md
+    pub async fn verify_invoice_paid(
+        &self,
+        federation_id: FederationId,
+        operation_id: OperationId,
+    ) -> Result<InvoiceStatus, RecurringPaymentError> {
+        let federation_client = self.get_federation_client(federation_id).await?;
+
+        // Unfortunately LUD-21 wants us to return the invoice again, so we have to
+        // fetch it from the operation meta.
+        let invoice = {
+            let operation = federation_client
+                .operation_log()
+                .get_operation(operation_id)
+                .await
+                .ok_or(RecurringPaymentError::UnknownInvoice(operation_id))?;
+
+            if operation.operation_module_kind() != LightningClientModule::kind().as_str() {
+                return Err(RecurringPaymentError::UnknownInvoice(operation_id));
+            }
+
+            let LightningOperationMetaVariant::Receive { invoice, .. } =
+                operation.meta::<LightningOperationMeta>().variant
+            else {
+                return Err(RecurringPaymentError::UnknownInvoice(operation_id));
+            };
+
+            invoice
+        };
+
+        let ln_module = federation_client
+            .get_first_module::<LightningClientModule>()
+            .map_err(|e| {
+                warn!("No compatible lightning module found {e}");
+                RecurringPaymentError::NoLightningModuleFound
+            })?;
+
+        let mut stream = ln_module
+            .subscribe_ln_receive(operation_id)
+            .await
+            .map_err(|_| RecurringPaymentError::UnknownInvoice(operation_id))?
+            .into_stream();
+        let status = loop {
+            // Unfortunately the fedimint client doesn't track payment status internally
+            // yet, but relies on integrators to consume the update streams belonging to
+            // operations to figure out their state. Since the verify endpoint is meant to
+            // be non-blocking, we need to find a way to consume the stream until we think
+            // no immediate progress will be made anymore. That's why we limit each update
+            // step to 100ms, far more than a DB read should ever take, and abort if we'd
+            // block to wait for further progress to be made.
+            let update = timeout(Duration::from_millis(100), stream.next()).await;
+            match update {
+                // For some reason recurringd jumps right to claimed without going over funded … but
+                // either is fine to conclude the user will receive their money once they come
+                // online.
+                Ok(Some(LnReceiveState::Funded | LnReceiveState::Claimed)) => {
+                    break PaymentStatus::Paid;
+                }
+                // Keep looking for a state update indicating the invoice having been paid
+                Ok(Some(_)) => {
+                    continue;
+                }
+                // If we reach the end of the update stream without observing a state indicating the
+                // invoice having been paid there was likely some error or the invoice timed out.
+                // Either way we just show the invoice as unpaid.
+                Ok(None) | Err(_) => {
+                    break PaymentStatus::Pending;
+                }
+            }
+        };
+
+        Ok(InvoiceStatus { invoice, status })
+    }
 }
 
 async fn await_invoice_confirmed(
@@ -407,4 +500,31 @@ async fn await_invoice_confirmed(
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub enum PaymentCodeInvoice {
     Bolt11(Bolt11Invoice),
+}
+
+/// Helper struct indicating if an invoice was paid. In the future it may also
+/// contain the preimage to be fully LUD-21 compliant.
+pub struct InvoiceStatus {
+    pub invoice: Bolt11Invoice,
+    pub status: PaymentStatus,
+}
+
+pub enum PaymentStatus {
+    Paid,
+    Pending,
+}
+
+impl PaymentStatus {
+    pub fn is_paid(&self) -> bool {
+        matches!(self, PaymentStatus::Paid)
+    }
+}
+
+/// The lnurl-rs crate doesn't have the `verify` field in this type and we don't
+/// use any of the other fields right now. Once we upstream the verify field
+/// this struct can be removed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LNURLPayInvoice {
+    pub pr: String,
+    pub verify: String,
 }

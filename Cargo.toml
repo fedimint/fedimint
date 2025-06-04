@@ -296,7 +296,7 @@ tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
   "routerrpc",
 ] }
 tower = { version = "0.4.13", default-features = false }
-tower-http = "0.6.4"
+tower-http = { version = "0.6.4", features = ["cors"] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.8.0-alpha" }
 tracing = "0.1.41"
 tracing-opentelemetry = "0.24.0"
