@@ -518,6 +518,8 @@ pub enum RecurringPaymentError {
     UnknownFederationId(FederationId),
     #[error("Unknown payment code: {0:?}")]
     UnknownPaymentCode(PaymentCodeId),
+    #[error("Unknown lightning receive operation: {0:?}")]
+    UnknownInvoice(OperationId),
     #[error("No compatible lightning module found")]
     NoLightningModuleFound,
     #[error("No gateway found")]
