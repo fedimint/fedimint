@@ -8,8 +8,9 @@ use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
 use devimint::util::FedimintCli;
-use devimint::version_constants::VERSION_0_6_0_ALPHA;
+use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_8_0_ALPHA};
 use fedimint_core::encoding::Decodable;
+use fedimint_core::module::serde_json;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_logging::LOG_TEST;
 use tokio::try_join;
@@ -298,6 +299,46 @@ async fn wallet_recovery_test_2() -> anyhow::Result<()> {
     })
     .await
 }
+
+async fn transfer(
+    send_client: &Client,
+    receive_client: &Client,
+    bitcoind: &devimint::external::Bitcoind,
+    amount_sat: u64,
+) -> Result<serde_json::Value> {
+    debug!(target: LOG_TEST, %amount_sat, "Transferring on-chain funds between clients");
+    let (deposit_address, operation_id) = receive_client.get_deposit_addr().await?;
+    let withdraw_res = cmd!(
+        send_client,
+        "withdraw",
+        "--address",
+        &deposit_address,
+        "--amount",
+        "{amount_sat} sat"
+    )
+    .out_json()
+    .await?;
+
+    // Verify federation broadcasts withdrawal tx
+    let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
+    let tx_hex = bitcoind.poll_get_transaction(txid).await?;
+
+    let parsed_address = Address::from_str(&deposit_address)?;
+    let tx = Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
+    assert!(tx.output.iter().any(|o| o.script_pubkey
+        == parsed_address.clone().assume_checked().script_pubkey()
+        && o.value.to_sat() == amount_sat));
+
+    debug!(target: LOG_TEST, %txid, "Awaiting transaction");
+    // Verify the receive client gets the deposit
+    try_join!(
+        bitcoind.mine_blocks(21),
+        receive_client.await_deposit(&operation_id),
+    )?;
+
+    Ok(withdraw_res)
+}
+
 async fn assert_withdrawal(
     send_client: &Client,
     receive_client: &Client,
@@ -315,33 +356,13 @@ async fn assert_withdrawal(
     let send_client_pre_balance = send_client.balance().await?;
     let receive_client_pre_balance = receive_client.balance().await?;
 
-    let (deposit_address, operation_id) = receive_client.get_deposit_addr().await?;
-    let withdraw_res = cmd!(
+    let withdraw_res = transfer(
         send_client,
-        "withdraw",
-        "--address",
-        &deposit_address,
-        "--amount",
-        "{withdrawal_amount_sats} sat"
+        receive_client,
+        bitcoind,
+        withdrawal_amount_sats,
     )
-    .out_json()
     .await?;
-
-    // Verify federation broadcasts withdrawal tx
-    let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
-    let tx_hex = bitcoind.poll_get_transaction(txid).await?;
-
-    let parsed_address = Address::from_str(&deposit_address)?;
-    let tx = Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
-    assert!(tx.output.iter().any(|o| o.script_pubkey
-        == parsed_address.clone().assume_checked().script_pubkey()
-        && o.value.to_sat() == withdrawal_amount_sats));
-
-    // Verify the receive client gets the deposit
-    try_join!(
-        bitcoind.mine_blocks(21),
-        receive_client.await_deposit(&operation_id),
-    )?;
 
     // Balance checks
     let send_client_post_balance = send_client.balance().await?;
@@ -384,6 +405,16 @@ async fn circular_deposit_test() -> anyhow::Result<()> {
                 .new_joined_client("circular-deposit-receive-client")
                 .await?;
             assert_withdrawal(&send_client, &receive_client, bitcoind, fed).await?;
+
+            let fedimint_cli_version = FedimintCli::version_or_default().await;
+            if fedimint_cli_version >= *VERSION_0_8_0_ALPHA {
+                // Verify that dust deposits aren't claimed
+                let dust_receive_client = fed
+                    .new_joined_client("circular-deposit-dust-receive-client")
+                    .await?;
+                transfer(&send_client, &dust_receive_client, bitcoind, 900).await?;
+                assert_eq!(dust_receive_client.balance().await?, 0);
+            }
 
             Ok(())
         })
