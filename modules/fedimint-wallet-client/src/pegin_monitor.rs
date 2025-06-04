@@ -14,7 +14,7 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{secp256k1, time};
+use fedimint_core::{BitcoinHash, TransactionId, secp256k1, time};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::WalletInput;
 use fedimint_wallet_common::txoproof::PegInProof;
@@ -397,7 +397,7 @@ async fn check_idx_pegins(
     Ok(outcomes)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn claim_peg_in(
     client_ctx: &ClientContext<WalletClientModule>,
     tweak_idx: TweakIdx,
@@ -408,6 +408,8 @@ async fn claim_peg_in(
     tx_out_proof: TxOutProof,
     federation_knows_utxo: bool,
 ) -> anyhow::Result<()> {
+    /// Returns the claim transactions output range if a claim happened or
+    /// `None` otherwise if the deposit was smaller than the deposit fee.
     async fn claim_peg_in_inner(
         client_ctx: &ClientContext<WalletClientModule>,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -417,7 +419,7 @@ async fn claim_peg_in(
         txout_proof: TxOutProof,
         operation_id: OperationId,
         federation_knows_utxo: bool,
-    ) -> OutPointRange {
+    ) -> Option<OutPointRange> {
         let pegin_proof = PegInProof::new(
             txout_proof,
             btc_transaction.clone(),
@@ -439,6 +441,11 @@ async fn claim_peg_in(
             amount,
         };
 
+        if amount <= client_ctx.self_ref().cfg().fee_consensus.peg_in_abs {
+            warn!(target: LOG_CLIENT_MODULE_WALLET, "We won't claim a deposit lower than the deposit fee");
+            return None;
+        }
+
         client_ctx
             .log_event(
                 dbtx,
@@ -450,14 +457,16 @@ async fn claim_peg_in(
             )
             .await;
 
-        client_ctx
-            .claim_inputs(
-                dbtx,
-                ClientInputBundle::new_no_sm(vec![client_input]),
-                operation_id,
-            )
-            .await
-            .expect("Cannot claim input, additional funding needed")
+        Some(
+            client_ctx
+                .claim_inputs(
+                    dbtx,
+                    ClientInputBundle::new_no_sm(vec![client_input]),
+                    operation_id,
+                )
+                .await
+                .expect("Cannot claim input, additional funding needed"),
+        )
     }
 
     let tx_out_proof = &tx_out_proof;
@@ -469,7 +478,7 @@ async fn claim_peg_in(
         .autocommit(
             |dbtx, _| {
                 Box::pin(async {
-                    let change_range = claim_peg_in_inner(
+                    let maybe_change_range = claim_peg_in_inner(
                         client_ctx,
                         dbtx,
                         transaction,
@@ -481,15 +490,24 @@ async fn claim_peg_in(
                     )
                     .await;
 
+                    let claimed_pegin_data = if let Some(change_range) = maybe_change_range {
+                        ClaimedPegInData {
+                            claim_txid: change_range.txid(),
+                            change: change_range.into_iter().collect(),
+                        }
+                    } else {
+                        ClaimedPegInData {
+                            claim_txid: TransactionId::from_byte_array([0; 32]),
+                            change: vec![],
+                        }
+                    };
+
                     dbtx.insert_entry(
                         &ClaimedPegInKey {
                             peg_in_index: tweak_idx,
                             btc_out_point: out_point,
                         },
-                        &ClaimedPegInData {
-                            claim_txid: change_range.txid(),
-                            change: change_range.into_iter().collect(),
-                        },
+                        &claimed_pegin_data,
                     )
                     .await;
 

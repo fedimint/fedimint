@@ -806,6 +806,82 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    info!("Starting test dust_deposits_are_ignored");
+
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    assert_eq!(client.get_balance().await, sats(0));
+    let (op, address, _) = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
+
+    info!(?address, "Peg-in address generated");
+    let (_proof, tx) = bitcoin
+        .send_and_mine_block(
+            &address,
+            bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000 - 1),
+        )
+        .await;
+
+    let mut deposit_updates = wallet_module.subscribe_deposit(op).await?.into_stream();
+    info!("Waiting for transaction");
+    assert!(matches!(
+        deposit_updates.next().await.unwrap(),
+        DepositStateV2::WaitingForTransaction
+    ));
+    info!("Waiting for confirmation");
+    assert!(matches!(
+        deposit_updates.next().await.unwrap(),
+        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+    ));
+
+    bitcoin.mine_blocks(finality_delay).await;
+
+    // Afaik technically not necessary, but useful to speed up test (should probably
+    // just poll more often in tests?)
+    let await_update_while_rechecking = async {
+        loop {
+            wallet_module
+                .recheck_pegin_address_by_op_id(op)
+                .await
+                .expect("Operation exists");
+            select! {
+                update = deposit_updates.next() => {
+                    break update;
+                },
+                _ = sleep_in_test("Waiting for address recheck", Duration::from_millis(100)) => { }
+            }
+        }
+    };
+
+    info!("Waiting for claim tx");
+    assert!(matches!(
+        await_update_while_rechecking.await.unwrap(),
+        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+    ));
+
+    info!("Waiting for e-cash");
+    assert!(matches!(
+        deposit_updates.next().await.unwrap(),
+        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
+    ));
+
+    info!("Checking balance after deposit");
+    assert_eq!(client.get_balance().await, Amount::ZERO);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn construct_wallet_summary() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
