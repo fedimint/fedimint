@@ -3,7 +3,9 @@
     nixpkgs = {
       url = "github:nixos/nixpkgs/nixos-24.11";
     };
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-unstable = {
+      url = "github:nixos/nixpkgs/nixos-unstable";
+    };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -68,6 +70,7 @@
     // flake-utils.lib.eachDefaultSystem (
       system:
       let
+        pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
         pkgs = import nixpkgs {
           inherit system;
           overlays = [
@@ -317,6 +320,9 @@
                   ]
                   ++ lib.optionals (!stdenv.isAarch64 && !stdenv.isDarwin) [ pkgs.semgrep ]
                   ++ lib.optionals (!stdenv.isDarwin) [
+                    # does not support macos
+                    (pkgs-unstable.callPackage ./nix/pkgs/wild.nix { })
+
                     # broken on MacOS?
                     pkgs.cargo-workspaces
 
@@ -355,6 +361,8 @@
                   if [ -z "$(git config --global merge.ours.driver)" ]; then
                       >&2 echo "⚠️  Recommended to run 'git config --global merge.ours.driver true' to enable better lock file handling. See https://blog.aspect.dev/easier-merges-on-lockfiles for more info"
                   fi
+
+                  export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=--ld-path=wild"
                 '';
               };
           in
