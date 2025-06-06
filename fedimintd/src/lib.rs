@@ -56,7 +56,8 @@ use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
+    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
     FM_PORT_ESPLORA_ENV,
 };
 use crate::metrics::APP_START_TS;
@@ -182,6 +183,14 @@ struct ServerOpts {
     /// and defaults will be provided via `FM_DEFAULT_API_SECRETS`.
     #[arg(long, env = FM_FORCE_API_SECRETS_ENV, default_value = "")]
     force_api_secrets: ApiSecrets,
+
+    /// Maximum number of concurrent Iroh API connections
+    #[arg(long = "iroh-api-max-connections", env = FM_IROH_API_MAX_CONNECTIONS_ENV, default_value = "1000")]
+    iroh_api_max_connections: usize,
+
+    /// Maximum number of parallel requests per Iroh API connection
+    #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
+    iroh_api_max_requests_per_connection: usize,
 }
 
 impl ServerOpts {
@@ -221,6 +230,7 @@ impl ServerOpts {
 ///   different vendors, usually with a different set of modules. Currently DKG
 ///   will enforce that the combined `code_version` is the same between all
 ///   peers.
+#[allow(clippy::too_many_lines)]
 pub async fn run(
     modules_fn: fn(
         Network,
@@ -327,6 +337,10 @@ pub async fn run(
             Box::new(fedimint_server_ui::setup::router),
             Box::new(fedimint_server_ui::dashboard::router),
             server_opts.db_checkpoint_retention,
+            fedimint_server::ConnectionLimits::new(
+                server_opts.iroh_api_max_connections,
+                server_opts.iroh_api_max_requests_per_connection,
+            ),
         )
         .await
         .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));

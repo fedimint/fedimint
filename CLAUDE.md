@@ -90,6 +90,7 @@ fedimint-<module>-server/     # Server-side consensus logic
 ### Code Quality Standards
 - **Never use `unwrap()` in non-test code** - Always use `expect()` with a succinct message explaining why the condition cannot fail
 - **Use structured logging** - Break logging statements into multiple lines for readability and use tracing's structured logging (field = value) instead of string interpolation
+- **Group related parameters** - When passing many related parameters, create utility structs (like `ConnectionLimits`) to reduce function parameter count and improve readability
 - Follow existing patterns and conventions in the codebase
 - Use meaningful error messages that help with debugging
 

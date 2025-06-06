@@ -21,6 +21,7 @@
 //! Server side fedimint module traits
 
 extern crate fedimint_core;
+pub mod connection_limits;
 pub mod db;
 
 use std::fs;
@@ -29,6 +30,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use config::ServerConfig;
 use config::io::{PLAINTEXT_PASSWORD, read_server_config};
+pub use connection_limits::ConnectionLimits;
 use fedimint_aead::random_salt;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
@@ -89,6 +91,7 @@ pub async fn run(
     setup_ui_router: SetupUiRouter,
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
+    iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
@@ -175,6 +178,7 @@ pub async fn run(
         settings.ui_bind,
         dashboard_ui_router,
         db_checkpoint_retention,
+        iroh_api_limits,
     ))
     .await?;
 
