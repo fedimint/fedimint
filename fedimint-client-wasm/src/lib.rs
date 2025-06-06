@@ -149,7 +149,7 @@ impl WasmClient {
         Ok(Some(Self {
             client: Arc::new(
                 builder
-                    .open(RootSecret::LegacyDoubleDerive(root_secret))
+                    .open(RootSecret::StandardDoubleDerive(root_secret))
                     .await?,
             ),
         }))
@@ -168,7 +168,7 @@ impl WasmClient {
             builder
                 .preview(&invite_code)
                 .await?
-                .join(RootSecret::LegacyDoubleDerive(root_secret))
+                .join(RootSecret::StandardDoubleDerive(root_secret))
                 .await?,
         );
         Ok(Self { client })

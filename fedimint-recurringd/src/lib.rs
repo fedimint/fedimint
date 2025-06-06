@@ -60,7 +60,7 @@ impl RecurringInvoiceServer {
             client_builder.with_module(MintClientInit);
             client_builder.with_primary_module_kind(ModuleKind::from_static_str("mint"));
             let client = client_builder
-                .open(fedimint_client::RootSecret::LegacyDoubleDerive(
+                .open(fedimint_client::RootSecret::StandardDoubleDerive(
                     Self::default_secret(),
                 ))
                 .await?;
@@ -136,7 +136,7 @@ impl RecurringInvoiceServer {
         let client = client_builder
             .preview(invite_code)
             .await?
-            .join(fedimint_client::RootSecret::LegacyDoubleDerive(
+            .join(fedimint_client::RootSecret::StandardDoubleDerive(
                 Self::default_secret(),
             ))
             .await

@@ -12,7 +12,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_derive_secret::DerivableSecret;
 use fedimint_gateway_common::FederationConfig;
 use fedimint_gateway_server_db::GatewayDbExt as _;
 use fedimint_gw_client::GatewayClientInit;
@@ -107,8 +107,9 @@ impl GatewayClientBuilder {
         let client_builder = self
             .create_client_builder(db, &config, gateway.clone())
             .await?;
-        let root_secret =
-            RootSecret::Standard(Self::derive_federation_secret(mnemonic, &federation_id));
+        let root_secret = RootSecret::StandardDoubleDerive(
+            Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic),
+        );
         let client = client_builder
             .preview(&config.invite_code)
             .await?
@@ -140,19 +141,21 @@ impl GatewayClientBuilder {
                 .await
                 .map_err(AdminGatewayError::ClientCreationError)?;
             let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
-            let root_secret = self.client_plainrootsecret(&db).await?;
+            let root_secret = RootSecret::Custom(self.client_plainrootsecret(&db).await?);
             (db, root_secret)
         } else {
             let db = gateway.gateway_db.get_client_database(&federation_id);
-            let secret = Self::derive_federation_secret(mnemonic, &federation_id);
-            (db, secret)
+
+            let root_secret = RootSecret::StandardDoubleDerive(
+                Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic),
+            );
+            (db, root_secret)
         };
 
         Self::verify_client_config(&db, federation_id).await?;
 
         let client_builder = self.create_client_builder(db, &config, gateway).await?;
 
-        let root_secret = RootSecret::Standard(root_secret);
         if Client::is_initialized(client_builder.db_no_decoders()).await {
             client_builder.open(root_secret).await
         } else {
@@ -178,19 +181,6 @@ impl GatewayClientBuilder {
             }
         }
         Ok(())
-    }
-
-    /// Derives a per-federation secret according to Fedimint's multi-federation
-    /// secret derivation policy.
-    fn derive_federation_secret(
-        mnemonic: &Mnemonic,
-        federation_id: &FederationId,
-    ) -> DerivableSecret {
-        let global_root_secret = Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic);
-        let multi_federation_root_secret = global_root_secret.child_key(ChildId(0));
-        let federation_root_secret = multi_federation_root_secret.federation_key(federation_id);
-        let federation_wallet_root_secret = federation_root_secret.child_key(ChildId(0));
-        federation_wallet_root_secret.child_key(ChildId(0))
     }
 
     /// Returns a vector of "legacy" federations which did not derive their
