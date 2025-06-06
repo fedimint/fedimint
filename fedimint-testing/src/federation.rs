@@ -267,7 +267,7 @@ impl FederationTestBuilder {
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
-            let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
+            let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().keep();
             let code_version_str = env!("CARGO_PKG_VERSION");
 
             let connector = TlsTcpConnector::new(
