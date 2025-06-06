@@ -31,3 +31,10 @@ pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";
 pub const FM_ENABLE_IROH_ENV: &str = "FM_ENABLE_IROH";
 
 pub const FM_DB_CHECKPOINT_RETENTION_ENV: &str = "FM_DB_CHECKPOINT_RETENTION";
+
+pub const FM_IROH_API_MAX_CONNECTIONS_ENV: &str = "FM_IROH_API_MAX_CONNECTIONS";
+
+// TODO: Eventually Iroh should provide something better than this.
+// <https://github.com/n0-computer/iroh/discussions/3212>
+pub const FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV: &str =
+    "FM_IROH_API_MAX_REQUESTS_PER_CONNECTION";
