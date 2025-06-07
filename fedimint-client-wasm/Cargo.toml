@@ -27,14 +27,12 @@ async-trait = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
+fedimint-client-rpc = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-client = { workspace = true }
-fedimint-mint-client = { workspace = true }
-fedimint-wallet-client = { workspace = true }
+fedimint-indexeddb = { workspace = true }
 futures = { workspace = true }
 imbl = { workspace = true }
 js-sys = { workspace = true }
-lightning-invoice = { workspace = true }
 rexie = { workspace = true }
 serde_json = { workspace = true }
 wasm-bindgen = { workspace = true }
