@@ -527,13 +527,11 @@ impl ClientModule for WalletClientModule {
                     let result = serde_json::to_value(&response)?;
                     yield result;
                 },
-                "check_pegin_status" => {
-                    let req: PeginStatusRequest = serde_json::from_value(request)?;
-                    let response = self.check_pegin_status(req.operation_id)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("peg_in status check failed: {}", e))?;
-                    let result = serde_json::to_value(&response)?;
-                    yield result;
+                "subscribe_deposit"=>{
+                    let req: SubscribeDepositRequest = serde_json::from_value(request)?;
+                    for await state in self.subscribe_deposit(req.operation_id).await?.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
@@ -585,6 +583,10 @@ pub struct WalletClientContext {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
+}
+#[derive(Deserialize)]
+struct SubscribeDepositRequest {
+    operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1034,7 +1036,8 @@ impl WalletClientModule {
             .collect()
             .await
     }
-    pub async fn check_pegin_status(
+
+    async fn check_pegin_status(
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<Option<PegInStatusResponse>> {
