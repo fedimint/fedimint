@@ -529,6 +529,12 @@ impl ClientModule for LightningClientModule {
                         yield serde_json::to_value(state)?;
                     }
                 }
+                "subscribe_internal_pay" => {
+                    let req: SubscribeInternalPayRequest = serde_json::from_value(payload)?;
+                    for await state in self.subscribe_internal_pay(req.operation_id).await?.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
                 "subscribe_ln_receive" => {
                     let req: SubscribeLnReceiveRequest = serde_json::from_value(payload)?;
                     for await state in self.subscribe_ln_receive(req.operation_id).await?.into_stream()
@@ -610,6 +616,11 @@ struct PayBolt11InvoiceRequest {
 
 #[derive(Deserialize)]
 struct SubscribeLnPayRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SubscribeInternalPayRequest {
     operation_id: OperationId,
 }
 
