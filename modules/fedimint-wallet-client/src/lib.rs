@@ -526,6 +526,12 @@ impl ClientModule for WalletClientModule {
                         .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e))?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
+                },
+                "subscribe_deposit" => {
+                    let req: SubscribeDepositRequest = serde_json::from_value(request)?;
+                    for await state in self.subscribe_deposit(req.operation_id).await?.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
@@ -558,6 +564,10 @@ pub struct WalletClientContext {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
+}
+#[derive(Deserialize)]
+struct SubscribeDepositRequest {
+    operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
