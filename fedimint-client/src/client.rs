@@ -68,6 +68,7 @@ use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
 use futures::{Stream, StreamExt as _};
 use global_ctx::ModuleGlobalClientContext;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, watch};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, info, warn};
@@ -76,10 +77,11 @@ use crate::ClientBuilder;
 use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
 use crate::db::{
-    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientMetadataKey,
-    ClientModuleRecovery, ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey,
-    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, apply_migrations_core_client_dbtx,
-    get_decoded_client_secret, verify_client_db_integrity_dbtx,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChronologicalOperationLogKey,
+    ClientConfigKey, ClientMetadataKey, ClientModuleRecovery, ClientModuleRecoveryState,
+    EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
+    PeerLastApiVersionsSummaryKey, apply_migrations_core_client_dbtx, get_decoded_client_secret,
+    verify_client_db_integrity_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -144,6 +146,17 @@ pub struct Client {
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ListOperationsParams {
+    limit: Option<usize>,
+    last_seen: Option<ChronologicalOperationLogKey>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetOperationIdRequest {
+    operation_id: OperationId,
 }
 
 impl Client {
@@ -1406,9 +1419,21 @@ impl Client {
                     let invite_code = self.invite_code(req.peer).await;
                     yield serde_json::to_value(invite_code)?;
                 }
+                "get_operation" => {
+                    let req: GetOperationIdRequest = serde_json::from_value(params)?;
+                    let operation = self.operation_log().get_operation(req.operation_id).await;
+                    yield serde_json::to_value(operation)?;
+                }
                 "list_operations" => {
-                    // TODO: support pagination
-                    let operations = self.operation_log().paginate_operations_rev(usize::MAX, None).await;
+                    let req: ListOperationsParams = serde_json::from_value(params)?;
+                    let limit = if req.limit.is_none() && req.last_seen.is_none() {
+                        usize::MAX
+                    } else {
+                        req.limit.unwrap_or(usize::MAX)
+                    };
+                    let operations = self.operation_log()
+                        .paginate_operations_rev(limit, req.last_seen)
+                        .await;
                     yield serde_json::to_value(operations)?;
                 }
                 "has_pending_recoveries" => {
