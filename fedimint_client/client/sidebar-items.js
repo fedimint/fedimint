@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SUPPORTED_CORE_API_VERSIONS"],"fn":["client_decoders"],"mod":["builder","global_ctx","handle"],"struct":["Client"]};
+window.SIDEBAR_ITEMS = {"constant":["SUPPORTED_CORE_API_VERSIONS"],"fn":["client_decoders"],"mod":["builder","global_ctx","handle"],"struct":["Client","GetOperationIdRequest","ListOperationsParams"]};
