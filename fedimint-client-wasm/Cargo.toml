@@ -10,7 +10,7 @@ version = { workspace = true }
 
 # https://rustwasm.github.io/wasm-pack/book/cargo-toml-configuration.html
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ['-Os']
+wasm-opt = ['-Oz']
 
 [lib]
 crate-type = ["cdylib", "rlib"]
