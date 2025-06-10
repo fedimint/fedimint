@@ -123,7 +123,7 @@
 <a href=#123 id=123 data-nosnippet>123</a>            .preview_with_existing_config(client_config, <span class="prelude-val">None</span>)
 <a href=#124 id=124 data-nosnippet>124</a>            .<span class="kw">await
 <a href=#125 id=125 data-nosnippet>125</a>            </span>.expect(<span class="string">"Preview failed"</span>)
-<a href=#126 id=126 data-nosnippet>126</a>            .join(RootSecret::Standard(
+<a href=#126 id=126 data-nosnippet>126</a>            .join(RootSecret::StandardDoubleDerive(
 <a href=#127 id=127 data-nosnippet>127</a>                PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret),
 <a href=#128 id=128 data-nosnippet>128</a>            ))
 <a href=#129 id=129 data-nosnippet>129</a>            .<span class="kw">await

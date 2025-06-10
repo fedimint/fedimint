@@ -149,7 +149,7 @@
 <a href=#149 id=149 data-nosnippet>149</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="self">Self </span>{
 <a href=#150 id=150 data-nosnippet>150</a>            client: Arc::new(
 <a href=#151 id=151 data-nosnippet>151</a>                builder
-<a href=#152 id=152 data-nosnippet>152</a>                    .open(RootSecret::LegacyDoubleDerive(root_secret))
+<a href=#152 id=152 data-nosnippet>152</a>                    .open(RootSecret::StandardDoubleDerive(root_secret))
 <a href=#153 id=153 data-nosnippet>153</a>                    .<span class="kw">await</span><span class="question-mark">?</span>,
 <a href=#154 id=154 data-nosnippet>154</a>            ),
 <a href=#155 id=155 data-nosnippet>155</a>        }))
@@ -168,7 +168,7 @@
 <a href=#168 id=168 data-nosnippet>168</a>            builder
 <a href=#169 id=169 data-nosnippet>169</a>                .preview(<span class="kw-2">&amp;</span>invite_code)
 <a href=#170 id=170 data-nosnippet>170</a>                .<span class="kw">await</span><span class="question-mark">?
-<a href=#171 id=171 data-nosnippet>171</a>                </span>.join(RootSecret::LegacyDoubleDerive(root_secret))
+<a href=#171 id=171 data-nosnippet>171</a>                </span>.join(RootSecret::StandardDoubleDerive(root_secret))
 <a href=#172 id=172 data-nosnippet>172</a>                .<span class="kw">await</span><span class="question-mark">?</span>,
 <a href=#173 id=173 data-nosnippet>173</a>        );
 <a href=#174 id=174 data-nosnippet>174</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ client })

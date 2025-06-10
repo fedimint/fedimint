@@ -60,7 +60,7 @@
 <a href=#60 id=60 data-nosnippet>60</a>            client_builder.with_module(MintClientInit);
 <a href=#61 id=61 data-nosnippet>61</a>            client_builder.with_primary_module_kind(ModuleKind::from_static_str(<span class="string">"mint"</span>));
 <a href=#62 id=62 data-nosnippet>62</a>            <span class="kw">let </span>client = client_builder
-<a href=#63 id=63 data-nosnippet>63</a>                .open(fedimint_client::RootSecret::LegacyDoubleDerive(
+<a href=#63 id=63 data-nosnippet>63</a>                .open(fedimint_client::RootSecret::StandardDoubleDerive(
 <a href=#64 id=64 data-nosnippet>64</a>                    <span class="self">Self</span>::default_secret(),
 <a href=#65 id=65 data-nosnippet>65</a>                ))
 <a href=#66 id=66 data-nosnippet>66</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -136,7 +136,7 @@
 <a href=#136 id=136 data-nosnippet>136</a>        <span class="kw">let </span>client = client_builder
 <a href=#137 id=137 data-nosnippet>137</a>            .preview(invite_code)
 <a href=#138 id=138 data-nosnippet>138</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#139 id=139 data-nosnippet>139</a>            </span>.join(fedimint_client::RootSecret::LegacyDoubleDerive(
+<a href=#139 id=139 data-nosnippet>139</a>            </span>.join(fedimint_client::RootSecret::StandardDoubleDerive(
 <a href=#140 id=140 data-nosnippet>140</a>                <span class="self">Self</span>::default_secret(),
 <a href=#141 id=141 data-nosnippet>141</a>            ))
 <a href=#142 id=142 data-nosnippet>142</a>            .<span class="kw">await
