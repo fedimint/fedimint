@@ -58,8 +58,8 @@ use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
-    Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items, runtime,
-    secp256k1,
+    Amount, BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send,
+    push_db_pair_items, runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -1214,6 +1214,11 @@ impl WalletClientModule {
             debug!(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), "Enough deposits detected");
 
             for (_outpoint, transaction_id, change) in pegins {
+                if transaction_id == TransactionId::from_byte_array([0; 32]) && change.is_empty() {
+                    debug!(target: LOG_CLIENT_MODULE_WALLET, "Deposited amount was too low, skipping");
+                    continue;
+                }
+
                 debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring deposists claimed");
                 let tx_subscriber = self.client_ctx.transaction_updates(operation_id).await;
 
