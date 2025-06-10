@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["TestCli"],"fn":["assert_withdrawal","circular_deposit_test","main","wallet_recovery_test_1","wallet_recovery_test_2"]};
+window.SIDEBAR_ITEMS = {"enum":["TestCli"],"fn":["assert_withdrawal","circular_deposit_test","main","transfer","wallet_recovery_test_1","wallet_recovery_test_2"]};
