@@ -22,11 +22,11 @@
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_logging::LOG_TEST;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_rocksdb::RocksDb;
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_server::config::ServerConfig;
-<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_server::consensus;
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_server::core::ServerModuleInitRegistry;
-<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_server::net::api::ApiSecrets;
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
-<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_server::core::ServerModuleInitRegistry;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_server::net::api::ApiSecrets;
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_server::{ConnectionLimits, consensus};
 <a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 <a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_testing_core::config::local_config_gen_params;
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>tracing::info;
@@ -309,47 +309,51 @@
 <a href=#309 id=309 data-nosnippet>309</a>                    ui_bind,
 <a href=#310 id=310 data-nosnippet>310</a>                    Box::new(|<span class="kw">_</span>| axum::Router::new()),
 <a href=#311 id=311 data-nosnippet>311</a>                    <span class="number">1</span>,
-<a href=#312 id=312 data-nosnippet>312</a>                ))
-<a href=#313 id=313 data-nosnippet>313</a>                .<span class="kw">await
-<a href=#314 id=314 data-nosnippet>314</a>                </span>.expect(<span class="string">"Could not initialise consensus"</span>);
-<a href=#315 id=315 data-nosnippet>315</a>            });
-<a href=#316 id=316 data-nosnippet>316</a>        }
-<a href=#317 id=317 data-nosnippet>317</a>
-<a href=#318 id=318 data-nosnippet>318</a>        <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
-<a href=#319 id=319 data-nosnippet>319</a>            <span class="kw">if </span>u16::from(peer_id) &gt;= <span class="self">self</span>.num_peers - <span class="self">self</span>.num_offline {
-<a href=#320 id=320 data-nosnippet>320</a>                <span class="kw">continue</span>;
-<a href=#321 id=321 data-nosnippet>321</a>            }
-<a href=#322 id=322 data-nosnippet>322</a>
-<a href=#323 id=323 data-nosnippet>323</a>            <span class="comment">// FIXME: (@leonardo) Currently there is no support for Tor while testing,
-<a href=#324 id=324 data-nosnippet>324</a>            // defaulting to Tcp variant.
-<a href=#325 id=325 data-nosnippet>325</a>            </span><span class="kw">let </span>api = DynGlobalApi::new_admin(
-<a href=#326 id=326 data-nosnippet>326</a>                peer_id,
-<a href=#327 id=327 data-nosnippet>327</a>                config.consensus.api_endpoints()[<span class="kw-2">&amp;</span>peer_id].url.clone(),
-<a href=#328 id=328 data-nosnippet>328</a>                <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
-<a href=#329 id=329 data-nosnippet>329</a>            )
-<a href=#330 id=330 data-nosnippet>330</a>            .<span class="kw">await
-<a href=#331 id=331 data-nosnippet>331</a>            </span>.unwrap();
-<a href=#332 id=332 data-nosnippet>332</a>
-<a href=#333 id=333 data-nosnippet>333</a>            <span class="kw">while let </span><span class="prelude-val">Err</span>(e) = api
-<a href=#334 id=334 data-nosnippet>334</a>                .request_admin_no_auth::&lt;u64&gt;(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
-<a href=#335 id=335 data-nosnippet>335</a>                .<span class="kw">await
-<a href=#336 id=336 data-nosnippet>336</a>            </span>{
-<a href=#337 id=337 data-nosnippet>337</a>                sleep_in_test(
-<a href=#338 id=338 data-nosnippet>338</a>                    <span class="macro">format!</span>(<span class="string">"Waiting for api of peer {peer_id} to come online: {e}"</span>),
-<a href=#339 id=339 data-nosnippet>339</a>                    Duration::from_millis(<span class="number">500</span>),
-<a href=#340 id=340 data-nosnippet>340</a>                )
-<a href=#341 id=341 data-nosnippet>341</a>                .<span class="kw">await</span>;
-<a href=#342 id=342 data-nosnippet>342</a>            }
-<a href=#343 id=343 data-nosnippet>343</a>        }
-<a href=#344 id=344 data-nosnippet>344</a>
-<a href=#345 id=345 data-nosnippet>345</a>        FederationTest {
-<a href=#346 id=346 data-nosnippet>346</a>            configs,
-<a href=#347 id=347 data-nosnippet>347</a>            server_init: <span class="self">self</span>.server_init,
-<a href=#348 id=348 data-nosnippet>348</a>            client_init: <span class="self">self</span>.client_init,
-<a href=#349 id=349 data-nosnippet>349</a>            primary_module_kind: <span class="self">self</span>.primary_module_kind,
-<a href=#350 id=350 data-nosnippet>350</a>            _task: task_group,
-<a href=#351 id=351 data-nosnippet>351</a>            num_peers: <span class="self">self</span>.num_peers,
-<a href=#352 id=352 data-nosnippet>352</a>            num_offline: <span class="self">self</span>.num_offline,
-<a href=#353 id=353 data-nosnippet>353</a>        }
-<a href=#354 id=354 data-nosnippet>354</a>    }
-<a href=#355 id=355 data-nosnippet>355</a>}</code></pre></div></section></main></body></html>
+<a href=#312 id=312 data-nosnippet>312</a>                    ConnectionLimits {
+<a href=#313 id=313 data-nosnippet>313</a>                        max_connections: <span class="number">1000</span>,
+<a href=#314 id=314 data-nosnippet>314</a>                        max_requests_per_connection: <span class="number">100</span>,
+<a href=#315 id=315 data-nosnippet>315</a>                    },
+<a href=#316 id=316 data-nosnippet>316</a>                ))
+<a href=#317 id=317 data-nosnippet>317</a>                .<span class="kw">await
+<a href=#318 id=318 data-nosnippet>318</a>                </span>.expect(<span class="string">"Could not initialise consensus"</span>);
+<a href=#319 id=319 data-nosnippet>319</a>            });
+<a href=#320 id=320 data-nosnippet>320</a>        }
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a>        <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
+<a href=#323 id=323 data-nosnippet>323</a>            <span class="kw">if </span>u16::from(peer_id) &gt;= <span class="self">self</span>.num_peers - <span class="self">self</span>.num_offline {
+<a href=#324 id=324 data-nosnippet>324</a>                <span class="kw">continue</span>;
+<a href=#325 id=325 data-nosnippet>325</a>            }
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a>            <span class="comment">// FIXME: (@leonardo) Currently there is no support for Tor while testing,
+<a href=#328 id=328 data-nosnippet>328</a>            // defaulting to Tcp variant.
+<a href=#329 id=329 data-nosnippet>329</a>            </span><span class="kw">let </span>api = DynGlobalApi::new_admin(
+<a href=#330 id=330 data-nosnippet>330</a>                peer_id,
+<a href=#331 id=331 data-nosnippet>331</a>                config.consensus.api_endpoints()[<span class="kw-2">&amp;</span>peer_id].url.clone(),
+<a href=#332 id=332 data-nosnippet>332</a>                <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
+<a href=#333 id=333 data-nosnippet>333</a>            )
+<a href=#334 id=334 data-nosnippet>334</a>            .<span class="kw">await
+<a href=#335 id=335 data-nosnippet>335</a>            </span>.unwrap();
+<a href=#336 id=336 data-nosnippet>336</a>
+<a href=#337 id=337 data-nosnippet>337</a>            <span class="kw">while let </span><span class="prelude-val">Err</span>(e) = api
+<a href=#338 id=338 data-nosnippet>338</a>                .request_admin_no_auth::&lt;u64&gt;(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
+<a href=#339 id=339 data-nosnippet>339</a>                .<span class="kw">await
+<a href=#340 id=340 data-nosnippet>340</a>            </span>{
+<a href=#341 id=341 data-nosnippet>341</a>                sleep_in_test(
+<a href=#342 id=342 data-nosnippet>342</a>                    <span class="macro">format!</span>(<span class="string">"Waiting for api of peer {peer_id} to come online: {e}"</span>),
+<a href=#343 id=343 data-nosnippet>343</a>                    Duration::from_millis(<span class="number">500</span>),
+<a href=#344 id=344 data-nosnippet>344</a>                )
+<a href=#345 id=345 data-nosnippet>345</a>                .<span class="kw">await</span>;
+<a href=#346 id=346 data-nosnippet>346</a>            }
+<a href=#347 id=347 data-nosnippet>347</a>        }
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a>        FederationTest {
+<a href=#350 id=350 data-nosnippet>350</a>            configs,
+<a href=#351 id=351 data-nosnippet>351</a>            server_init: <span class="self">self</span>.server_init,
+<a href=#352 id=352 data-nosnippet>352</a>            client_init: <span class="self">self</span>.client_init,
+<a href=#353 id=353 data-nosnippet>353</a>            primary_module_kind: <span class="self">self</span>.primary_module_kind,
+<a href=#354 id=354 data-nosnippet>354</a>            _task: task_group,
+<a href=#355 id=355 data-nosnippet>355</a>            num_peers: <span class="self">self</span>.num_peers,
+<a href=#356 id=356 data-nosnippet>356</a>            num_offline: <span class="self">self</span>.num_offline,
+<a href=#357 id=357 data-nosnippet>357</a>        }
+<a href=#358 id=358 data-nosnippet>358</a>    }
+<a href=#359 id=359 data-nosnippet>359</a>}</code></pre></div></section></main></body></html>
