@@ -33,6 +33,7 @@ members = [
   "fedimint-server-ui",
   "fedimint-testing",
   "fedimint-testing-core",
+  "fedimint-tonbo",
   "fedimint-wasm-tests",
   "fedimintd",
   "fuzz",
@@ -195,6 +196,7 @@ fedimint-server-core = { path = "./fedimint-server-core", version = "=0.8.0-alph
 fedimint-server-ui = { path = "./fedimint-server-ui", version = "=0.8.0-alpha" }
 fedimint-testing = { path = "./fedimint-testing", version = "=0.8.0-alpha" }
 fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.8.0-alpha" }
+fedimint-tonbo = { path = "./fedimint-tonbo", version = "=0.8.0-alpha" }
 fedimint-unknown-common = { path = "./modules/fedimint-unknown-common", version = "=0.8.0-alpha" }
 fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version = "=0.8.0-alpha" }
 fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = "=0.8.0-alpha" }
