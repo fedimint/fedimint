@@ -22,11 +22,11 @@ use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ServerConfig;
-use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
+use fedimint_server::{ConnectionLimits, consensus};
 use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 use fedimint_testing_core::config::local_config_gen_params;
 use tracing::info;
@@ -309,6 +309,10 @@ impl FederationTestBuilder {
                     ui_bind,
                     Box::new(|_| axum::Router::new()),
                     1,
+                    ConnectionLimits {
+                        max_connections: 1000,
+                        max_requests_per_connection: 100,
+                    },
                 ))
                 .await
                 .expect("Could not initialise consensus");
