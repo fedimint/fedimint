@@ -8,7 +8,7 @@ use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
 use devimint::util::FedimintCli;
-use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_8_0_ALPHA};
+use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::serde_json;
 use fedimint_core::util::{backoff_util, retry};
@@ -407,7 +407,7 @@ async fn circular_deposit_test() -> anyhow::Result<()> {
             assert_withdrawal(&send_client, &receive_client, bitcoind, fed).await?;
 
             let fedimint_cli_version = FedimintCli::version_or_default().await;
-            if fedimint_cli_version >= *VERSION_0_8_0_ALPHA {
+            if fedimint_cli_version >= *VERSION_0_7_0_ALPHA {
                 // Verify that dust deposits aren't claimed
                 let dust_receive_client = fed
                     .new_joined_client("circular-deposit-dust-receive-client")
