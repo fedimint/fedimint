@@ -3647,6 +3647,7 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.13.0",
+ "rand 0.8.5",
  "rayon",
  "serde",
  "serde-big-array",

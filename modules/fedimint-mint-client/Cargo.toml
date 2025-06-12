@@ -63,6 +63,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+rand = { workspace = true }
 test-log = { workspace = true }
 
 [lints]
