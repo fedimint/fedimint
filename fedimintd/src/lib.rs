@@ -40,6 +40,7 @@ use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::DB_FILE;
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_server::net::api::ApiSecrets;
+use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
@@ -71,7 +72,6 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
     group(
         ArgGroup::new("bitcoin_rpc")
             .required(true)
-            .multiple(false)
             .args(["bitcoind_url", "esplora_url"])
     )
 )]
@@ -318,6 +318,15 @@ pub async fn run(
         .unwrap()
         .into_dyn(),
         (None, Some(url)) => EsploraClient::new(url).unwrap().into_dyn(),
+        (Some(_), Some(esplora_url)) => BitcoindClientWithFallback::new(
+            &server_opts
+                .get_bitcoind_url()
+                .await
+                .expect("Failed to get bitcoind url"),
+            esplora_url,
+        )
+        .unwrap()
+        .into_dyn(),
         _ => unreachable!("ArgGroup already enforced XOR relation"),
     };
 
