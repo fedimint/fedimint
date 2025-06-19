@@ -613,29 +613,25 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.10.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdd82dba44d209fddb11c190e0a94b78651f95299598e472215667417a03ff1d"
+checksum = "93fcc8f365936c834db5514fc45aee5b1202d677e6b40e48468aaaa8183ca8c7"
 dependencies = [
  "aws-lc-sys",
- "mirai-annotations",
- "paste",
  "zeroize",
 ]
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.22.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df7a4168111d7eb622a31b214057b8509c0a7e1794f44c546d742330dc793972"
+checksum = "61b1d86e7705efe1be1b569bab41d4fa1e14e220b60a160f78de2db687add079"
 dependencies = [
  "bindgen",
  "cc",
  "cmake",
  "dunce",
  "fs_extra",
- "libc",
- "paste",
 ]
 
 [[package]]
@@ -911,9 +907,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_chain"
-version = "0.21.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4955734f97b2baed3f36d16ae7c203fdde31ae85391ac44ee3cbcaf0886db5ce"
+checksum = "0e7e7c062f2229a767fe85062b8932352a7b8c1df586f91fae1017fd3dd281ef"
 dependencies = [
  "bdk_core",
  "bitcoin",
@@ -923,9 +919,9 @@ dependencies = [
 
 [[package]]
 name = "bdk_core"
-version = "0.4.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b545aea1efc090e4f71f1dd5468090d9f54c3de48002064c04895ef811fbe0b2"
+checksum = "17698c25d2728afd6950d82069dce172147006f73960b9dc793a7e8dd7089016"
 dependencies = [
  "bitcoin",
  "hashbrown 0.14.5",
@@ -934,31 +930,31 @@ dependencies = [
 
 [[package]]
 name = "bdk_electrum"
-version = "0.20.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b272d5a3228799f7c917255fe26e788f6c29dd4a084a342d274a44352bbc0915"
+checksum = "28f25503fbb646a219a23145ca1a753f7e239232225c661df8353f05faf00116"
 dependencies = [
  "bdk_core",
- "electrum-client 0.22.0",
+ "electrum-client 0.23.1",
 ]
 
 [[package]]
 name = "bdk_esplora"
-version = "0.20.1"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d7fdf5efbebabc0c0bb46c0348ef0d4db505856c7d6c5d50cebba1e5eda5fe4"
+checksum = "1b9bf0bcfc01d6d67f2515b1fd4eab77b220726ed2ade09f9b6c90c286e0b767"
 dependencies = [
  "async-trait",
  "bdk_core",
- "esplora-client 0.11.0",
+ "esplora-client 0.12.0",
  "futures",
 ]
 
 [[package]]
 name = "bdk_wallet"
-version = "1.2.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "461b92c4e47b688a92740b204f4580e0a51775df16b67dde1d2db6ede1f0ba09"
+checksum = "f278518ee6f2a17711fd4662dc34ce6153792a7a21575f05a9c8e2cb9ba36245"
 dependencies = [
  "bdk_chain",
  "bip39",
@@ -986,9 +982,9 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.69.4"
+version = "0.69.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
+checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
 dependencies = [
  "bitflags 2.7.0",
  "cexpr",
@@ -1038,9 +1034,9 @@ checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bitcoin"
-version = "0.32.5"
+version = "0.32.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce6bc65742dea50536e35ad42492b234c27904a27f0abdcbce605015cb4ea026"
+checksum = "ad8929a18b8e33ea6b3c09297b687baaa71fb1b97353243a3f1029fad5c59c5b"
 dependencies = [
  "base58ck",
  "base64 0.21.7",
@@ -2365,7 +2361,7 @@ dependencies = [
  "byteorder",
  "libc",
  "log",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "serde",
  "serde_json",
  "webpki-roots 0.25.4",
@@ -2374,15 +2370,15 @@ dependencies = [
 
 [[package]]
 name = "electrum-client"
-version = "0.22.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d627e4feaf3009c10c8a0eb06d6ceb4ce1ff861849157fb35e8155d9706babb6"
+checksum = "5ed9a037f88aa61d3627a20af1c68fa0405ed5a16d9a0d9dc0e66adcda44afbe"
 dependencies = [
  "bitcoin",
  "byteorder",
  "libc",
  "log",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "serde",
  "serde_json",
  "webpki-roots 0.25.4",
@@ -2548,6 +2544,20 @@ dependencies = [
  "hex-conservative 0.2.1",
  "log",
  "reqwest 0.11.27",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "esplora-client"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "209cf00e44b979682b22be38672317d8bb48dd5ea2726e61b762d6b14b5842f2"
+dependencies = [
+ "bitcoin",
+ "hex-conservative 0.2.1",
+ "log",
+ "reqwest 0.12.9",
  "serde",
  "tokio",
 ]
@@ -4513,7 +4523,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f2f12607f92c69b12ed746fabf9ca4f5c482cba46679c1a75b874ed7c26adb"
 dependencies = [
  "futures-io",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-pki-types",
 ]
 
@@ -5161,7 +5171,7 @@ dependencies = [
  "http 1.3.1",
  "hyper 1.6.0",
  "hyper-util",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.0",
@@ -5607,7 +5617,7 @@ dependencies = [
  "rcgen",
  "reqwest 0.12.9",
  "ring 0.17.14",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-webpki 0.102.8",
  "serde",
  "smallvec",
@@ -5669,7 +5679,7 @@ dependencies = [
  "iroh-quinn-udp",
  "pin-project-lite",
  "rustc-hash 2.0.0",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "socket2",
  "thiserror 2.0.12",
  "tokio",
@@ -5688,7 +5698,7 @@ dependencies = [
  "rand 0.8.5",
  "ring 0.17.14",
  "rustc-hash 2.0.0",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.12",
@@ -5739,7 +5749,7 @@ dependencies = [
  "postcard",
  "rand 0.8.5",
  "reqwest 0.12.9",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-webpki 0.102.8",
  "serde",
  "strum 0.26.3",
@@ -5864,7 +5874,7 @@ dependencies = [
  "http 1.3.1",
  "jsonrpsee-core",
  "pin-project",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-pki-types",
  "soketto",
  "thiserror 1.0.69",
@@ -6000,9 +6010,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "ldk-node"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d570ab14b180136650945301124a4b12e73f99c1ecb8cac1e850a30fc087ed4d"
+checksum = "e67a3c34bbd8ceca217b17875a7d6c724488b92a856455545e41166b77409470"
 dependencies = [
  "base64 0.22.1",
  "bdk_chain",
@@ -6013,8 +6023,9 @@ dependencies = [
  "bip39",
  "bitcoin",
  "chrono",
- "electrum-client 0.22.0",
+ "electrum-client 0.23.1",
  "esplora-client 0.11.0",
+ "esplora-client 0.12.0",
  "libc",
  "lightning",
  "lightning-background-processor",
@@ -6029,7 +6040,7 @@ dependencies = [
  "log",
  "prost 0.11.9",
  "rand 0.8.5",
- "reqwest 0.11.27",
+ "reqwest 0.12.9",
  "rusqlite",
  "serde",
  "serde_json",
@@ -6590,12 +6601,6 @@ dependencies = [
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
 ]
-
-[[package]]
-name = "mirai-annotations"
-version = "1.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
 name = "moka"
@@ -7991,7 +7996,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash 1.1.0",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -8007,7 +8012,7 @@ dependencies = [
  "rand 0.8.5",
  "ring 0.17.14",
  "rustc-hash 2.0.0",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "slab",
  "thiserror 1.0.69",
  "tinyvec",
@@ -8304,7 +8309,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "quinn",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-pemfile 2.1.1",
  "rustls-pki-types",
  "serde",
@@ -8555,16 +8560,16 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.20"
+version = "0.23.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5065c3f250cbd332cd894be57c40fa52387247659b14a2d6041d121547903b1b"
+checksum = "7160e3e10bf4535308537f3c4e1641468cd0e485175d6163087c0393c7d46643"
 dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
  "ring 0.17.14",
  "rustls-pki-types",
- "rustls-webpki 0.102.8",
+ "rustls-webpki 0.103.3",
  "subtle",
  "zeroize",
 ]
@@ -8613,6 +8618,17 @@ name = "rustls-webpki"
 version = "0.102.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
+dependencies = [
+ "ring 0.17.14",
+ "rustls-pki-types",
+ "untrusted 0.9.0",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.103.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4a72fe2bcf7a6ac6fd7d0b9e5cb68aeb7d4c0a0271730218b3e92d43b4eb435"
 dependencies = [
  "aws-lc-rs",
  "ring 0.17.14",
@@ -9660,7 +9676,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c7bc40d0e5a97695bb96e27995cd3a08538541b0a846f65bba7a359f36700d4"
 dependencies = [
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-pki-types",
  "tokio",
 ]
@@ -10930,7 +10946,7 @@ dependencies = [
  "base64 0.22.1",
  "log",
  "once_cell",
- "rustls 0.23.20",
+ "rustls 0.23.28",
  "rustls-pki-types",
  "url",
  "webpki-roots 0.26.10",
