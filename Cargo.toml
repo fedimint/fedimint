@@ -135,11 +135,11 @@ bitcoin_hashes = "0.14.0"
 bitcoincore-rpc = "0.19.0"
 bitvec = "1.0.1"
 bls12_381 = "0.8.0"
-bon = "3.6.3"
+bon = "3.6.4"
 bytes = "1.10.1"
 chrono = "0.4.41"
-clap = { version = "4.5.39", features = ["derive", "env"] }
-clap_complete = "4.5.52"
+clap = { version = "4.5.40", features = ["derive", "env"] }
+clap_complete = "4.5.54"
 console-subscriber = "0.4.1"
 criterion = "0.5.1"
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
