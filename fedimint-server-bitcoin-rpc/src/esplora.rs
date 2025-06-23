@@ -6,7 +6,7 @@ use bitcoin::{BlockHash, Network, Transaction};
 use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::SafeUrl;
-use fedimint_logging::LOG_BITCOIND_ESPLORA;
+use fedimint_logging::{LOG_BITCOIND_ESPLORA, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
 
@@ -32,6 +32,11 @@ pub struct EsploraClient {
 
 impl EsploraClient {
     pub fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+        info!(
+            target: LOG_SERVER,
+            %url,
+            "Initiallizing bitcoin esplora backend"
+        );
         // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');
 
