@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use anyhow::{Context, bail};
 use bitcoin::{BlockHash, Network, Transaction};
@@ -26,6 +27,7 @@ const REGTEST: &str = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a114
 pub struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
+    cached_network: OnceLock<Network>,
 }
 
 impl EsploraClient {
@@ -38,6 +40,7 @@ impl EsploraClient {
         Ok(Self {
             client,
             url: url.clone(),
+            cached_network: OnceLock::new(),
         })
     }
 }
@@ -56,6 +59,12 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn get_network(&self) -> anyhow::Result<Network> {
+        // Return cached network if already fetched
+        if let Some(network) = self.cached_network.get() {
+            return Ok(*network);
+        }
+
+        // Fetch and cache the network
         let genesis_hash = self.client.get_block_hash(0).await?;
 
         let network = match genesis_hash.to_string().as_str() {
@@ -68,6 +77,8 @@ impl IServerBitcoinRpc for EsploraClient {
             }
         };
 
+        // Cache the successful result
+        let _ = self.cached_network.set(network);
         Ok(network)
     }
 

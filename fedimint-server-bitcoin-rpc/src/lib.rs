@@ -43,13 +43,26 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
 
     async fn get_network(&self) -> Result<Network> {
         match self.bitcoind_client.get_network().await {
-            Ok(network) => Ok(network),
+            Ok(bitcoind_network) => {
+                // Assert that bitcoind network matches esplora network, if available
+                //
+                // This is OK to do every time, as first success is cached internally.
+                if let Ok(esplora_network) = self.esplora_client.get_network().await {
+                    assert_eq!(
+                        bitcoind_network, esplora_network,
+                        "Network mismatch: bitcoind reported {:?} but esplora reported {:?}",
+                        bitcoind_network, esplora_network
+                    );
+                }
+                Ok(bitcoind_network)
+            }
             Err(e) => {
                 warn!(
                     target: LOG_SERVER,
                     error = %e.fmt_compact_anyhow(),
                     "BitcoindClient failed for get_network, falling back to EsploraClient"
                 );
+
                 self.esplora_client.get_network().await
             }
         }
