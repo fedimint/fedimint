@@ -8,7 +8,7 @@ use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::util::SafeUrl;
-use fedimint_logging::LOG_BITCOIND_CORE;
+use fedimint_logging::{LOG_BITCOIND_CORE, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
 
@@ -31,6 +31,11 @@ impl BitcoindClient {
             .without_auth()
             .map_err(|()| anyhow!("Failed to strip auth from Bitcoin Rpc Url"))?;
 
+        info!(
+            target: LOG_SERVER,
+            %url,
+            "Initiallizing bitcoin bitcoind backend"
+        );
         Ok(Self {
             client: Client::new(url.as_str(), auth)?,
             url,
