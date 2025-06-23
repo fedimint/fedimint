@@ -5,10 +5,10 @@ use anyhow::{Context, bail};
 use bitcoin::{BlockHash, Network, Transaction};
 use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::{LOG_BITCOIND_ESPLORA, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
-use tracing::info;
+use tracing::{debug, info};
 
 // <https://blockstream.info/api/block-height/0>
 const MAINNET: &str = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
@@ -70,7 +70,12 @@ impl IServerBitcoinRpc for EsploraClient {
         }
 
         // Fetch and cache the network
-        let genesis_hash = self.client.get_block_hash(0).await?;
+        let genesis_hash = self.client.get_block_hash(0).await.inspect_err(|err| {
+            debug!(
+                target: LOG_BITCOIND_ESPLORA,
+                err = %err.fmt_compact(),
+                "Error getting network (genesis hash) from esplora backend");
+        })?;
 
         let network = match genesis_hash.to_string().as_str() {
             MAINNET => Network::Bitcoin,
