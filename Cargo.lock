@@ -3121,6 +3121,7 @@ dependencies = [
  "fedimint-meta-client",
  "fedimint-mint-client",
  "fedimint-rocksdb",
+ "fedimint-tonbo",
  "fedimint-wallet-client",
  "fs-lock",
  "futures",
