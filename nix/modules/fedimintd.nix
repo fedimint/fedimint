@@ -206,7 +206,10 @@ let
           };
           config = mkOption {
             type = types.submodule (
-              recursiveUpdate (import ../web-servers/nginx/vhost-options.nix {
+              # in nixpkgs we used to do it like this:
+              # recursiveUpdate (import ../web-servers/nginx/vhost-options.nix {
+              # in the flake this works:
+              recursiveUpdate (import "${pkgs.path}/nixos/modules/services/web-servers/nginx/vhost-options.nix" {
                 inherit config lib;
               }) { }
             );
