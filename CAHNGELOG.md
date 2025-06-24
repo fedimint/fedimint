@@ -562,7 +562,7 @@ Downgrading to previous versions is unsupported and will likely fail.
 * chore: set FM_INVITE_CODE in devimint dev-fed by @maan2003 in https://github.com/fedimint/fedimint/pull/4461
 * chore: add stalled-download-timeout nix config in CI by @bradleystachurski in https://github.com/fedimint/fedimint/pull/4468
 * fix: Client::has_pending_recoveries by @maan2003 in https://github.com/fedimint/fedimint/pull/4462
-* fix(ci): stop notifing about failing merge queue builds by @dpc in https://github.com/fedimint/fedimint/pull/4469
+* fix(ci): stop notifying about failing merge queue builds by @dpc in https://github.com/fedimint/fedimint/pull/4469
 * chore: move dev shell target to `./target-nix` by @dpc in https://github.com/fedimint/fedimint/pull/4470
 * feat(dev): `just bench-compilation` by @dpc in https://github.com/fedimint/fedimint/pull/4471
 * chore(deps): bump async-channel from 1.9.0 to 2.2.0 by @dependabot in https://github.com/fedimint/fedimint/pull/4466

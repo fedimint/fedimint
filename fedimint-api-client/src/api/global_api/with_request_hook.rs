@@ -18,7 +18,7 @@ use crate::api::PeerResult;
 /// to the original one.
 ///
 /// This is meant to allow downstream users to add custom logic for debugging,
-/// testing (e.g. simulating network being down), collecting stats, notifing
+/// testing (e.g. simulating network being down), collecting stats, notifying
 /// about slow calls, errors, etc.
 pub type ApiRequestHook =
     Arc<maybe_add_send_sync!(dyn Fn(DynIRawFederationApi) -> DynIRawFederationApi + 'static)>;
