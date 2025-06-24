@@ -308,7 +308,7 @@
 <a href=#308 id=308 data-nosnippet>308</a>        <span class="kw">let </span>RecoverScanOutcome { last_used_idx: <span class="kw">_</span>, new_start_idx, tweak_idxes_with_pegins}
 <a href=#309 id=309 data-nosnippet>309</a>            = recover_scan_idxes_for_activity(
 <a href=#310 id=310 data-nosnippet>310</a>                <span class="kw">if </span><span class="self">self</span>.state.already_claimed_tweak_idxes_from_backup.is_some() {
-<a href=#311 id=311 data-nosnippet>311</a>                    <span class="comment">// If the backup contains list of already claimed tweak_idexes, we can just scan
+<a href=#311 id=311 data-nosnippet>311</a>                    <span class="comment">// If the backup contains list of already claimed tweak_indices, we can just scan
 <a href=#312 id=312 data-nosnippet>312</a>                    // the blockchain addresses starting from tweakidx `0`, without loosing too much privacy,
 <a href=#313 id=313 data-nosnippet>313</a>                    // as we will skip all the idxes that had peg-ins already
 <a href=#314 id=314 data-nosnippet>314</a>                    </span>TweakIdx(<span class="number">0</span>)
