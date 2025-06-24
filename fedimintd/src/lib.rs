@@ -73,6 +73,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
     group(
         ArgGroup::new("bitcoin_rpc")
             .required(true)
+            .multiple(true)
             .args(["bitcoind_url", "esplora_url"])
     )
 )]
