@@ -46,7 +46,7 @@ pub async fn test_restore_gap_test(fed: &Federation) -> Result<()> {
             "--amount",
             "1024msat",
             "--count",
-            // we are not guarantted to use a 1024 note on every payment,
+            // we are not guaranteed to use a 1024 note on every payment,
             // so create some random small gaps, so it's very unlikely we
             // would cross the default gap limit accidentally
             &gap.to_string()

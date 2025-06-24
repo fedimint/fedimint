@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-24.11";
+      url = "github:nixos/nixpkgs/nixos-25.05";
     };
     nixpkgs-unstable = {
       url = "github:nixos/nixpkgs/nixos-unstable";
@@ -12,7 +12,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=9dbc54f04c4236a64c965e8519ab97232909b1b1";
+      url = "github:dpc/flakebox?rev=f96cbeafded56bc6f5c27fbd96e4fcc78b8a8861";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
     };
