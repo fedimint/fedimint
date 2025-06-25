@@ -19,6 +19,8 @@ use std::fmt;
 use std::ops::{Bound, Range};
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use anyhow::Result;
 use async_stream::stream;
@@ -37,6 +39,7 @@ use tonbo::executor::tokio::TokioExecutor as Executor;
 use tonbo::option::Path as TonboPath;
 use tonbo::transaction::Transaction;
 use tonbo::{DB, DbOption, Projection, Record};
+use tracing::{error, info};
 
 /// Key-value pair schema for Fedimint storage
 #[derive(Record, Debug, Clone)]
@@ -49,6 +52,7 @@ pub struct KvPair {
 /// Tonbo database implementation for Fedimint
 pub struct TonboDatabase {
     db: Arc<DB<KvPair, Executor>>,
+    transaction_counter: AtomicU64,
 }
 
 impl TonboDatabase {
@@ -63,7 +67,10 @@ impl TonboDatabase {
         let exec = Executor::default();
         let db = DB::new(options, exec, KvPairSchema).await?;
 
-        Ok(Self { db: Arc::new(db) })
+        Ok(Self {
+            db: Arc::new(db),
+            transaction_counter: AtomicU64::new(0),
+        })
     }
 }
 
@@ -77,11 +84,14 @@ impl fmt::Debug for TonboDatabase {
 pub struct TonboTransaction<'a> {
     txn: Transaction<'a, KvPair>,
     db: &'a TonboDatabase,
+    id: u64,
 }
 
 impl<'a> fmt::Debug for TonboTransaction<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TonboTransaction").finish()
+        f.debug_struct("TonboTransaction")
+            .field("id", &self.id)
+            .finish()
     }
 }
 
@@ -114,7 +124,9 @@ impl IRawDatabase for TonboDatabase {
 
     async fn begin_transaction<'a>(&'a self) -> TonboTransaction<'a> {
         let txn = self.db.transaction().await;
-        TonboTransaction { txn, db: self }
+        let id = self.transaction_counter.fetch_add(1, Ordering::Relaxed);
+        info!(transaction_id = id, "beginning transaction");
+        TonboTransaction { txn, db: self, id }
     }
 
     fn checkpoint(&self, _backup_path: &Path) -> Result<()> {
@@ -245,12 +257,23 @@ impl<'a> IDatabaseTransactionOps for TonboTransaction<'a> {
     }
 }
 
+impl<'a> TonboTransaction<'a> {
+    async fn commit_tx_inner(self) -> Result<()> {
+        info!(transaction_id = self.id, "committing transaction");
+        self.txn.commit().await?;
+        info!(transaction_id = self.id, "flushing transaction");
+        self.db.db.flush_wal().await?;
+        info!(transaction_id = self.id, "transaction flushed");
+        Ok(())
+    }
+}
 #[apply(async_trait_maybe_send!)]
 impl<'a> IRawDatabaseTransaction for TonboTransaction<'a> {
     async fn commit_tx(self) -> Result<()> {
-        self.txn.commit().await?;
-        self.db.db.flush_wal().await?;
-        Ok(())
+        fedimint_core::task::timeout(Duration::from_secs(10), self.commit_tx_inner())
+            .await
+            .inspect_err(|_| error!("commit TIMEOUT"))
+            .unwrap()
     }
 }
 
