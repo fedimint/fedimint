@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::pin::Pin;
 use std::str::FromStr;
 
 use anyhow::Context;
@@ -10,11 +11,12 @@ use fedimint_core::module::{
 };
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::LOG_NET_IROH;
+use futures::Future;
+use futures::stream::{FuturesUnordered, StreamExt};
 use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use serde_json::Value;
-use tokio::task::JoinSet;
 use tracing::{debug, trace, warn};
 
 use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
@@ -111,15 +113,17 @@ impl IClientConnector for IrohConnector {
             .get(&peer_id)
             .ok_or(PeerError::InvalidPeerId { peer_id })?;
 
-        let mut join_set = JoinSet::new();
+        let mut futures = FuturesUnordered::<
+            Pin<Box<dyn Future<Output = PeerResult<DynClientConnection>> + Send>>,
+        >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
         let endpoint_stable = self.endpoint_stable.clone();
         let endpoint_next = self.endpoint_next.clone();
 
-        join_set.spawn({
+        futures.push(Box::pin({
             let connection_override = connection_override.clone();
             async move {
-                Ok(match connection_override {
+                match connection_override {
                     Some(node_addr) => {
                         trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
                         endpoint_stable
@@ -127,11 +131,13 @@ impl IClientConnector for IrohConnector {
                             .await
                     }
                     None => endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
-                }.map_err(PeerError::Connection)?.into_dyn())
-        }});
+                }.map_err(PeerError::Connection)
+                .map(super::IClientConnection::into_dyn)
+            }
+        }));
 
-        join_set.spawn(async move {
-            Ok(match connection_override {
+        futures.push(Box::pin(async move {
+            match connection_override {
                 Some(node_addr) => {
                     trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
                     endpoint_next
@@ -142,32 +148,31 @@ impl IClientConnector for IrohConnector {
                         iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
                         FEDIMINT_API_ALPN
                     ).await,
-                }.map_err(PeerError::Connection)?.into_dyn() )
-        });
+                }.map_err(PeerError::Connection)
+                .map(super::IClientConnection::into_dyn)
+        }));
 
         // Remember last error, so we have something to return if
         // neither connection works.
         let mut prev_err = None;
 
         // Loop until first success, or running out of connections.
-        while let Some(join) = join_set.join_next().await {
-            match join {
-                Ok(Ok(o)) => return Ok(o),
-                Ok(Err(err)) => {
-                    prev_err = Some(err);
-                }
+        while let Some(result) = futures.next().await {
+            match result {
+                Ok(connection) => return Ok(connection),
                 Err(err) => {
                     warn!(
                         target: LOG_NET_IROH,
                         err = %err.fmt_compact(),
                         "Join error in iroh connection task"
                     );
+                    prev_err = Some(err);
                 }
             }
         }
 
         Err(prev_err.unwrap_or_else(|| {
-            PeerError::ServerError(anyhow::anyhow!("Both iroh connection task panicked?!"))
+            PeerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
         }))
     }
 }
