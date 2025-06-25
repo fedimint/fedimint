@@ -11,6 +11,7 @@ The following meta fields have been defined as part of the core Fedimint protoco
 * [`meta_override_url`](meta_override_url.md): A URL to a file containing overrides for meta fields (will be deprecated in the future)
 * [`welcome_message`](welcome_message.md): A welcome message for new users joining the federation
 * [`vetted_gateways`](vetted_gateways.md): A list of gateway identifiers vetted by the federation
+* [`recurringd_api`](recurringd_api.md): The API URL of a recurringd instance that can be used by the clients to create LNURLs
 
 ## Defining new meta fields
 
