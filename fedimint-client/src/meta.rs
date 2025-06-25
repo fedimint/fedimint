@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::pin::pin;
 use std::sync::Arc;
 
@@ -8,9 +9,10 @@ use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCo
 use fedimint_core::task::waiter::Waiter;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_logging::LOG_CLIENT;
+use futures::StreamExt as _;
 use serde::de::DeserializeOwned;
 use tokio::sync::Notify;
-use tokio_stream::{Stream, StreamExt as _};
+use tokio_stream::Stream;
 use tracing::{instrument, warn};
 
 use crate::Client;
@@ -25,6 +27,8 @@ pub struct MetaService<S: ?Sized = dyn MetaSource> {
     meta_update_notify: Notify,
     source: S,
 }
+
+pub type MetaEntries = BTreeMap<String, String>;
 
 impl<S: MetaSource + ?Sized> MetaService<S> {
     pub fn new(source: S) -> Arc<MetaService>
@@ -78,6 +82,38 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
             fetch_time: info.last_updated,
             value,
         })
+    }
+
+    /// Get all meta entries.
+    ///
+    /// This may wait for significant time on first run when there is no cached
+    /// data.
+    pub async fn entries(&self, db: &Database) -> Option<MetaEntries> {
+        if let Some(value) = self.entries_from_db(db).await {
+            // might be from in old cache.
+            // TODO: maybe old cache should have a ttl?
+            Some(value)
+        } else {
+            // wait for initial value
+            self.wait_initialization().await;
+            self.entries_from_db(db).await
+        }
+    }
+
+    async fn entries_from_db(&self, db: &Database) -> Option<MetaEntries> {
+        let dbtx = &mut db.begin_transaction_nc().await;
+        let info = dbtx.get_value(&MetaServiceInfoKey).await;
+        #[allow(clippy::question_mark)] // more readable
+        if info.is_none() {
+            return None;
+        }
+        let entries: MetaEntries = dbtx
+            .find_by_prefix(&MetaFieldPrefix)
+            .await
+            .map(|(k, v)| (k.0.0, v.0.0))
+            .collect()
+            .await;
+        Some(entries)
     }
 
     async fn current_revision(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u64> {
