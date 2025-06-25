@@ -25,7 +25,9 @@ use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{
+    FM_IROH_DNS_ENV, FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env,
+};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1052,7 +1054,12 @@ impl ReconnectFederationApi {
             "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone())?.into_dyn(),
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
             "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
-            "iroh" => iroh::IrohConnector::new(peers).await?.into_dyn(),
+            "iroh" => {
+                let iroh_dns = std::env::var(FM_IROH_DNS_ENV)
+                    .ok()
+                    .and_then(|dns| dns.parse().ok());
+                iroh::IrohConnector::new(peers, iroh_dns).await?.into_dyn()
+            }
             scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
         };
 
