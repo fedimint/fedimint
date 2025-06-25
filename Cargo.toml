@@ -142,7 +142,7 @@ clap = { version = "4.5.40", features = ["derive", "env"] }
 clap_complete = "4.5.54"
 console-subscriber = "0.4.1"
 criterion = "0.5.1"
-iroh-relay = { version = "=0.34.1", default-features = false }
+iroh-relay = { version = "=0.35.0", default-features = false }
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
 # It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.
 curve25519-dalek = ">=4.1.3"
