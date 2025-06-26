@@ -38,10 +38,11 @@ use jsonrpsee::RpcModule;
 use jsonrpsee::server::ServerHandle;
 use serde_json::Value;
 use tokio::net::TcpListener;
-use tokio::sync::watch;
+use tokio::sync::{Semaphore, watch};
 use tracing::{info, warn};
 
 use crate::config::{ServerConfig, ServerConfigLocal};
+use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::{ConsensusApi, server_endpoints};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
@@ -72,6 +73,7 @@ pub async fn run(
     ui_bind: SocketAddr,
     dashboard_ui_router: DashboardUiRouter,
     db_checkpoint_retention: u64,
+    iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -208,6 +210,7 @@ pub async fn run(
             iroh_relays,
             consensus_api.clone(),
             task_group,
+            iroh_api_limits,
         ))
         .await?;
 
@@ -384,6 +387,7 @@ async fn start_iroh_api(
     iroh_relays: Vec<SafeUrl>,
     consensus_api: ConsensusApi,
     task_group: &TaskGroup,
+    iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
     let endpoint = build_iroh_endpoint(
         secret_key,
@@ -395,13 +399,18 @@ async fn start_iroh_api(
     .await?;
     task_group.spawn_cancellable(
         "iroh-api",
-        run_iroh_api(consensus_api, endpoint, task_group.clone()),
+        run_iroh_api(consensus_api, endpoint, task_group.clone(), iroh_api_limits),
     );
 
     Ok(())
 }
 
-async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_group: TaskGroup) {
+async fn run_iroh_api(
+    consensus_api: ConsensusApi,
+    endpoint: Endpoint,
+    task_group: TaskGroup,
+    iroh_api_limits: ConnectionLimits,
+) {
     let core_api = server_endpoints()
         .into_iter()
         .map(|endpoint| (endpoint.path.to_string(), endpoint))
@@ -424,10 +433,23 @@ async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_grou
     let consensus_api = Arc::new(consensus_api);
     let core_api = Arc::new(core_api);
     let module_api = Arc::new(module_api);
+    let parallel_connections_limit = Arc::new(Semaphore::new(iroh_api_limits.max_connections));
 
     loop {
         match endpoint.accept().await {
             Some(incoming) => {
+                if parallel_connections_limit.available_permits() == 0 {
+                    warn!(
+                        target: LOG_NET_API,
+                        limit = iroh_api_limits.max_connections,
+                        "Iroh API connection limit reached, blocking new connections"
+                    );
+                }
+                let permit = parallel_connections_limit
+                    .clone()
+                    .acquire_owned()
+                    .await
+                    .expect("semaphore should not be closed");
                 task_group.spawn_cancellable_silent(
                     "handle-iroh-connection",
                     handle_incoming(
@@ -436,6 +458,8 @@ async fn run_iroh_api(consensus_api: ConsensusApi, endpoint: Endpoint, task_grou
                         module_api.clone(),
                         task_group.clone(),
                         incoming,
+                        permit,
+                        iroh_api_limits.max_requests_per_connection,
                     )
                     .then(|result| async {
                         if let Err(err) = result {
@@ -455,12 +479,27 @@ async fn handle_incoming(
     module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
     task_group: TaskGroup,
     incoming: Incoming,
+    _connection_permit: tokio::sync::OwnedSemaphorePermit,
+    iroh_api_max_requests_per_connection: usize,
 ) -> anyhow::Result<()> {
     let connection = incoming.accept()?.await?;
+    let parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
 
     loop {
         let (send_stream, recv_stream) = connection.accept_bi().await?;
 
+        if parallel_requests_limit.available_permits() == 0 {
+            warn!(
+                target: LOG_NET_API,
+                limit = iroh_api_max_requests_per_connection,
+                "Iroh API request limit reached for connection, blocking new requests"
+            );
+        }
+        let permit = parallel_requests_limit
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore should not be closed");
         task_group.spawn_cancellable_silent(
             "handle-iroh-request",
             handle_request(
@@ -469,6 +508,7 @@ async fn handle_incoming(
                 module_api.clone(),
                 send_stream,
                 recv_stream,
+                permit,
             )
             .then(|result| async {
                 if let Err(err) = result {
@@ -485,6 +525,7 @@ async fn handle_request(
     module_api: Arc<BTreeMap<ModuleInstanceId, BTreeMap<String, ApiEndpoint<DynServerModule>>>>,
     mut send_stream: SendStream,
     mut recv_stream: RecvStream,
+    _request_permit: tokio::sync::OwnedSemaphorePermit,
 ) -> anyhow::Result<()> {
     let request = recv_stream.read_to_end(100_000).await?;
 

@@ -9,7 +9,7 @@ use crate::ConsensusItem;
 /// A newtype for a nice [`fmt::Debug`] of a [`ConsensusItem`]
 pub struct DebugConsensusItem<'ci>(pub &'ci ConsensusItem);
 
-impl<'ci> fmt::Debug for DebugConsensusItem<'ci> {
+impl fmt::Debug for DebugConsensusItem<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             ConsensusItem::Module(mci) => {
@@ -50,7 +50,7 @@ impl<'ci> fmt::Debug for DebugConsensusItem<'ci> {
 /// list of citems are dumped, so it needs to be very compact.
 pub struct DebugConsensusItemCompact<'a>(pub &'a AcceptedItem);
 
-impl<'a> fmt::Display for DebugConsensusItemCompact<'a> {
+impl fmt::Display for DebugConsensusItemCompact<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut engine = sha256::HashEngine::default();
         let mut count = CountWrite::from(&mut engine);

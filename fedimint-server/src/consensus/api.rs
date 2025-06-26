@@ -357,9 +357,9 @@ impl ConsensusApi {
         GuardianConfigBackup { tar_archive_bytes }
     }
 
-    async fn handle_backup_request<'s, 'dbtx, 'a>(
-        &'s self,
-        dbtx: &'dbtx mut DatabaseTransaction<'a>,
+    async fn handle_backup_request(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request

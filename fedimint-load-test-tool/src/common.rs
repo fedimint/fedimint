@@ -157,15 +157,16 @@ pub async fn build_client(
     client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
     let client_secret =
         Client::load_or_generate_client_secret(client_builder.db_no_decoders()).await?;
-    let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
+    let root_secret =
+        RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(&client_secret));
 
     let client = if Client::is_initialized(client_builder.db_no_decoders()).await {
-        client_builder.open(RootSecret::Standard(root_secret)).await
+        client_builder.open(root_secret).await
     } else if let Some(invite_code) = &invite_code {
         client_builder
             .preview(invite_code)
             .await?
-            .join(RootSecret::Standard(root_secret))
+            .join(root_secret)
             .await
     } else {
         bail!("Database not initialize and invite code not provided");

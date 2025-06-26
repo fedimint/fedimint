@@ -14,8 +14,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use anyhow::Context as _;
 use bitcoin::Network;
 use clap::{ArgGroup, Parser};
+use envs::FM_BITCOIND_URL_PASSWORD_FILE_ENV;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
@@ -38,6 +40,7 @@ use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::DB_FILE;
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_server::net::api::ApiSecrets;
+use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
@@ -54,7 +57,8 @@ use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV,
+    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
     FM_PORT_ESPLORA_ENV,
 };
 use crate::metrics::APP_START_TS;
@@ -68,7 +72,6 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
     group(
         ArgGroup::new("bitcoin_rpc")
             .required(true)
-            .multiple(false)
             .args(["bitcoind_url", "esplora_url"])
     )
 )]
@@ -84,6 +87,16 @@ struct ServerOpts {
     /// Bitcoind RPC URL, e.g. <http://user:pass@127.0.0.1:8332>
     #[arg(long, env = FM_BITCOIND_URL_ENV)]
     bitcoind_url: Option<SafeUrl>,
+
+    /// If set, the password part of `--bitcoind-url` will be set/replaced with
+    /// the content of this file.
+    ///
+    /// This is useful for setups that provide secret material via ramdisk
+    /// e.g. SOPS, age, etc.
+    ///
+    /// Note this is not meant to handle bitcoind's cookie file.
+    #[arg(long, env = FM_BITCOIND_URL_PASSWORD_FILE_ENV)]
+    bitcoind_url_password_file: Option<PathBuf>,
 
     /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
@@ -170,6 +183,35 @@ struct ServerOpts {
     /// and defaults will be provided via `FM_DEFAULT_API_SECRETS`.
     #[arg(long, env = FM_FORCE_API_SECRETS_ENV, default_value = "")]
     force_api_secrets: ApiSecrets,
+
+    /// Maximum number of concurrent Iroh API connections
+    #[arg(long = "iroh-api-max-connections", env = FM_IROH_API_MAX_CONNECTIONS_ENV, default_value = "1000")]
+    iroh_api_max_connections: usize,
+
+    /// Maximum number of parallel requests per Iroh API connection
+    #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
+    iroh_api_max_requests_per_connection: usize,
+}
+
+impl ServerOpts {
+    pub async fn get_bitcoind_url(&self) -> anyhow::Result<SafeUrl> {
+        let mut url = self
+            .bitcoind_url
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No bitcoind url set"))?;
+        if let Some(password_file) = self.bitcoind_url_password_file.as_ref() {
+            let password = tokio::fs::read_to_string(password_file)
+                .await
+                .context("Failed to read the password")?
+                .trim()
+                .to_owned();
+            url.set_password(Some(&password))
+                .ok()
+                .ok_or_else(|| anyhow::anyhow!("Failed to set the password from the url"))?;
+        }
+
+        Ok(url)
+    }
 }
 
 /// Block the thread and run a Fedimintd server
@@ -188,6 +230,7 @@ struct ServerOpts {
 ///   different vendors, usually with a different set of modules. Currently DKG
 ///   will enforce that the combined `code_version` is the same between all
 ///   peers.
+#[allow(clippy::too_many_lines)]
 pub async fn run(
     modules_fn: fn(
         Network,
@@ -246,11 +289,11 @@ pub async fn run(
         p2p_bind: server_opts.bind_p2p,
         api_bind: server_opts.bind_api,
         ui_bind: server_opts.bind_ui,
-        p2p_url: server_opts.p2p_url,
-        api_url: server_opts.api_url,
+        p2p_url: server_opts.p2p_url.clone(),
+        api_url: server_opts.api_url.clone(),
         enable_iroh: server_opts.enable_iroh,
-        iroh_dns: server_opts.iroh_dns,
-        iroh_relays: server_opts.iroh_relays,
+        iroh_dns: server_opts.iroh_dns.clone(),
+        iroh_relays: server_opts.iroh_relays.clone(),
         modules: server_gen_params.clone(),
         registry: server_gens.clone(),
     };
@@ -266,8 +309,24 @@ pub async fn run(
         server_opts.bitcoind_url.as_ref(),
         server_opts.esplora_url.as_ref(),
     ) {
-        (Some(url), None) => BitcoindClient::new(url).unwrap().into_dyn(),
+        (Some(_), None) => BitcoindClient::new(
+            &server_opts
+                .get_bitcoind_url()
+                .await
+                .expect("Failed to get bitcoind url"),
+        )
+        .unwrap()
+        .into_dyn(),
         (None, Some(url)) => EsploraClient::new(url).unwrap().into_dyn(),
+        (Some(_), Some(esplora_url)) => BitcoindClientWithFallback::new(
+            &server_opts
+                .get_bitcoind_url()
+                .await
+                .expect("Failed to get bitcoind url"),
+            esplora_url,
+        )
+        .unwrap()
+        .into_dyn(),
         _ => unreachable!("ArgGroup already enforced XOR relation"),
     };
 
@@ -287,6 +346,10 @@ pub async fn run(
             Box::new(fedimint_server_ui::setup::router),
             Box::new(fedimint_server_ui::dashboard::router),
             server_opts.db_checkpoint_retention,
+            fedimint_server::ConnectionLimits::new(
+                server_opts.iroh_api_max_connections,
+                server_opts.iroh_api_max_requests_per_connection,
+            ),
         )
         .await
         .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));

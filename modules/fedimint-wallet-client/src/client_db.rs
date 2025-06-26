@@ -154,6 +154,10 @@ pub struct ClaimedPegInPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct ClaimedPegInData {
+    /// The Fedimint transaction id of the claim transaction. If there was no
+    /// claim transaction due to the deposit being smaller than the deposit fee
+    /// there will be no claim transaction and the transaction id will be all
+    /// zeros.
     pub claim_txid: TransactionId,
     pub change: Vec<fedimint_core::OutPoint>,
 }

@@ -58,8 +58,8 @@ use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
-    Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items, runtime,
-    secp256k1,
+    Amount, BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send,
+    push_db_pair_items, runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -526,6 +526,12 @@ impl ClientModule for WalletClientModule {
                         .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e))?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
+                },
+                "subscribe_deposit" => {
+                    let req: SubscribeDepositRequest = serde_json::from_value(request)?;
+                    for await state in self.subscribe_deposit(req.operation_id).await?.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
@@ -558,6 +564,10 @@ pub struct WalletClientContext {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
+}
+#[derive(Deserialize)]
+struct SubscribeDepositRequest {
+    operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1204,6 +1214,11 @@ impl WalletClientModule {
             debug!(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), "Enough deposits detected");
 
             for (_outpoint, transaction_id, change) in pegins {
+                if transaction_id == TransactionId::from_byte_array([0; 32]) && change.is_empty() {
+                    debug!(target: LOG_CLIENT_MODULE_WALLET, "Deposited amount was too low, skipping");
+                    continue;
+                }
+
                 debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring deposists claimed");
                 let tx_subscriber = self.client_ctx.transaction_updates(operation_id).await;
 

@@ -4,7 +4,7 @@ final: prev: {
     pname = "wasm-bindgen-cli";
     version = "0.2.100";
     hash = "sha256-3RJzK7mkYFrs7C/WkhW9Rr4LdP5ofb2FdYGz1P7Uxog=";
-    cargoHash = "sha256-tD0OY2PounRqsRiFh8Js5nyknQ809ZcHMvCOLrvYHRE=";
+    cargoHash = "sha256-qsO12332HSjWCVKtf1cUePWWb9IdYUmT+8OPj/XP2WE=";
 
     src = final.fetchCrate { inherit pname version hash; };
 

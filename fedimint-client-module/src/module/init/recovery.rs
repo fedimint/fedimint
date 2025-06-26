@@ -27,6 +27,7 @@ use super::{ClientModuleInit, ClientModuleRecoverArgs};
 use crate::module::recovery::RecoveryProgress;
 use crate::module::{ClientContext, ClientModule};
 
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 /// Common state tracked during recovery from history
 pub struct RecoveryFromHistoryCommon {

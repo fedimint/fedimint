@@ -241,7 +241,7 @@ where
     /// can be used to recover the reference to the module at later
     /// time.
     #[allow(clippy::needless_lifetimes)] // just for explicitiness
-    pub fn self_ref<'s>(&'s self) -> ClientContextSelfRef<'s, M> {
+    pub fn self_ref(&self) -> ClientContextSelfRef<'_, M> {
         ClientContextSelfRef {
             client: self.client.get(),
             module_instance_id: self.module_instance_id,

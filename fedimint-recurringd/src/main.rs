@@ -11,6 +11,7 @@ use axum_auth::AuthBearer;
 use clap::Parser;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::OperationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::SafeUrl;
 use fedimint_ln_client::recurring::api::{
@@ -18,11 +19,14 @@ use fedimint_ln_client::recurring::api::{
 };
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey};
 use fedimint_logging::TracingSetup;
-use fedimint_recurringd::{PaymentCodeInvoice, RecurringInvoiceServer};
+use fedimint_recurringd::{LNURLPayInvoice, PaymentCodeInvoice, RecurringInvoiceServer};
 use fedimint_rocksdb::RocksDb;
 use lightning_invoice::Bolt11Invoice;
-use lnurl::pay::{LnURLPayInvoice, PayResponse};
+use lnurl::pay::PayResponse;
+use serde_json::json;
 use tokio::net::TcpListener;
+use tower_http::cors;
+use tower_http::cors::CorsLayer;
 use tracing::debug;
 
 #[derive(Debug, Parser)]
@@ -56,11 +60,19 @@ async fn main() -> anyhow::Result<()> {
     let db = RocksDb::open(cli_opts.data_dir).await?;
     let recurring_invoice_server = RecurringInvoiceServer::new(db, cli_opts.api_address).await?;
 
+    let cors = CorsLayer::new()
+        .allow_origin(cors::Any)
+        .allow_methods(cors::Any);
+
     let api_v1 = axum::Router::new()
         .route("/federations", put(add_federation))
         .route("/federations", get(list_federations))
         .route("/paycodes", put(add_payment_code))
         .route("/paycodes/{payment_code_id}", get(lnurl_pay))
+        .route(
+            "/verify/{federation_id}/{operation_id}",
+            get(verify_invoice_paid),
+        )
         .route(
             "/paycodes/{payment_code_id}/invoice",
             get(lnurl_pay_invoice),
@@ -68,7 +80,8 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/paycodes/recipient/{payment_code_root_key}/generated/{invoice_index}",
             get(await_invoice),
-        );
+        )
+        .layer(cors);
 
     let app = axum::Router::new()
         .nest("/lnv1", api_v1)
@@ -144,7 +157,7 @@ async fn lnurl_pay_invoice(
     State(app_state): State<AppState>,
     Path(payment_code_id): Path<PaymentCodeId>,
     Query(params): Query<GetInvoiceParams>,
-) -> Result<Json<LnURLPayInvoice>, ApiError> {
+) -> Result<Json<LNURLPayInvoice>, ApiError> {
     let invoice = app_state
         .recurring_invoice_server
         .lnurl_invoice(payment_code_id, params.amount)
@@ -167,6 +180,37 @@ async fn await_invoice(
 
 async fn list_federations(State(app_state): State<AppState>) -> Json<Vec<FederationId>> {
     Json(app_state.recurring_invoice_server.list_federations().await)
+}
+
+/// See [LUD-21](https://github.com/lnurl/luds/blob/luds/21.md).
+async fn verify_invoice_paid(
+    State(app_state): State<AppState>,
+    Path((federation_id, operation_id)): Path<(FederationId, OperationId)>,
+) -> Json<serde_json::Value> {
+    let result = app_state
+        .recurring_invoice_server
+        .verify_invoice_paid(federation_id, operation_id)
+        .await
+        .map(|status| {
+            // Technically we aren't fully LUD-21 compliant here because we are leaving out
+            // the preimage. There's no good way to only get the preimage once the payment
+            // happened in the current architecture, so we skip it entirely to not
+            // accidentally leak it prematurely.
+            json!({
+                "status": "OK",
+                "settled": status.status.is_paid(),
+                "pr": status.invoice,
+
+            })
+        })
+        .unwrap_or_else(|e| {
+            json!({
+                "status": "ERROR",
+                "reason": e.to_string(),
+            })
+        });
+
+    Json(result)
 }
 
 struct ApiError(anyhow::Error);

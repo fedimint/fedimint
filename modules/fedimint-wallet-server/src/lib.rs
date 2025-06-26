@@ -1272,9 +1272,9 @@ impl Wallet {
         nonce_from_idx(nonce_idx)
     }
 
-    async fn sync_up_to_consensus_count<'a>(
+    async fn sync_up_to_consensus_count(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'_>,
         old_count: u32,
         new_count: u32,
     ) {
@@ -1407,9 +1407,9 @@ impl Wallet {
 
     /// Add a change UTXO to our spendable UTXO database after it was included
     /// in a block that we got consensus on.
-    async fn recognize_change_utxo<'a>(
+    async fn recognize_change_utxo(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'_>,
         pending_tx: &PendingTransaction,
     ) {
         self.remove_rbf_transactions(dbtx, pending_tx).await;
@@ -1438,9 +1438,9 @@ impl Wallet {
     }
 
     /// Removes the `PendingTransaction` and any transactions tied to it via RBF
-    async fn remove_rbf_transactions<'a>(
+    async fn remove_rbf_transactions(
         &self,
-        dbtx: &mut DatabaseTransaction<'a>,
+        dbtx: &mut DatabaseTransaction<'_>,
         pending_tx: &PendingTransaction,
     ) {
         let mut all_transactions: BTreeMap<Txid, PendingTransaction> = dbtx
@@ -1869,7 +1869,7 @@ struct StatelessWallet<'a> {
     secp: &'a secp256k1::Secp256k1<secp256k1::All>,
 }
 
-impl<'a> StatelessWallet<'a> {
+impl StatelessWallet<'_> {
     /// Given a tx created from an `WalletOutput`, validate there will be no
     /// issues submitting the transaction to the Bitcoin network
     fn validate_tx(
@@ -2168,9 +2168,9 @@ impl<'a> StatelessWallet<'a> {
             secp: &'s Secp256k1<Ctx>,
         }
 
-        impl<'t, 's, Ctx: Verification>
+        impl<Ctx: Verification>
             miniscript::Translator<CompressedPublicKey, CompressedPublicKey, Infallible>
-            for CompressedPublicKeyTranslator<'t, 's, Ctx>
+            for CompressedPublicKeyTranslator<'_, '_, Ctx>
         {
             fn pk(&mut self, pk: &CompressedPublicKey) -> Result<CompressedPublicKey, Infallible> {
                 let hashed_tweak = {

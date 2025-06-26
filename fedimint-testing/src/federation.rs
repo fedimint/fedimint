@@ -22,11 +22,11 @@ use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ServerConfig;
-use fedimint_server::consensus;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
+use fedimint_server::{ConnectionLimits, consensus};
 use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
 use fedimint_testing_core::config::local_config_gen_params;
 use tracing::info;
@@ -123,7 +123,7 @@ impl FederationTest {
             .preview_with_existing_config(client_config, None)
             .await
             .expect("Preview failed")
-            .join(RootSecret::Standard(
+            .join(RootSecret::StandardDoubleDerive(
                 PlainRootSecretStrategy::to_root_secret(&client_secret),
             ))
             .await
@@ -267,7 +267,7 @@ impl FederationTestBuilder {
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
-            let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
+            let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().keep();
             let code_version_str = env!("CARGO_PKG_VERSION");
 
             let connector = TlsTcpConnector::new(
@@ -309,6 +309,10 @@ impl FederationTestBuilder {
                     ui_bind,
                     Box::new(|_| axum::Router::new()),
                     1,
+                    ConnectionLimits {
+                        max_connections: 1000,
+                        max_requests_per_connection: 100,
+                    },
                 ))
                 .await
                 .expect("Could not initialise consensus");

@@ -43,6 +43,35 @@ impl RpcHandler {
         Self {
             state: Arc::new(RpcGlobalState::new(MemAndIndexedDbLoader)),
         }
+        let client_secret = fedimint_client::Client::load_or_generate_client_secret(&db).await?;
+        let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
+        let builder = Self::client_builder(db).await?;
+        Ok(Some(Self {
+            client: Arc::new(
+                builder
+                    .open(RootSecret::StandardDoubleDerive(root_secret))
+                    .await?,
+            ),
+        }))
+    }
+
+    async fn join_federation_inner(
+        client_name: String,
+        invite_code: String,
+    ) -> anyhow::Result<WasmClient> {
+        let db = Database::from(MemAndIndexedDb::new(&client_name).await?);
+        let client_secret = fedimint_client::Client::load_or_generate_client_secret(&db).await?;
+        let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
+        let builder = Self::client_builder(db).await?;
+        let invite_code = InviteCode::from_str(&invite_code)?;
+        let client = Arc::new(
+            builder
+                .preview(&invite_code)
+                .await?
+                .join(RootSecret::StandardDoubleDerive(root_secret))
+                .await?,
+        );
+        Ok(Self { client })
     }
 
     #[wasm_bindgen]

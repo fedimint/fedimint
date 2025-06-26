@@ -333,9 +333,10 @@ async fn main() -> anyhow::Result<()> {
                 None
             };
             let invoices = if let Some(invoices_file) = args.invoices_file {
+                let display_path = invoices_file.display();
                 let invoices_file = tokio::fs::File::open(&invoices_file)
                     .await
-                    .with_context(|| format!("Failed to open {invoices_file:?}"))?;
+                    .with_context(|| format!("Failed to open {display_path}"))?;
                 let mut lines = tokio::io::BufReader::new(invoices_file).lines();
                 let mut invoices = vec![];
                 while let Some(line) = lines.next_line().await? {
@@ -1108,15 +1109,14 @@ async fn test_connect_raw_client(
     info!("Connecting to {users} clients");
     let clients = (0..users)
         .flat_map(|_| {
-            let clients = cfg.global.api_endpoints.values().map(|url| async {
+            cfg.global.api_endpoints.values().map(|url| async {
                 let ws_client = WsClientBuilder::default()
                     .request_timeout(timeout)
                     .connection_timeout(timeout)
                     .build(url_to_string_with_default_port(&url.url))
                     .await?;
                 Ok::<_, anyhow::Error>(ws_client)
-            });
-            clients
+            })
         })
         .collect::<Vec<_>>();
     let clients = futures::future::try_join_all(clients).await?;
@@ -1184,9 +1184,10 @@ async fn handle_metrics_summary(
             .max_by_key(|(_entry, created)| created.to_owned())
             .map(|(entry, _)| entry.path());
         if let Some(latest_metrics_file) = latest_metrics_file {
+            let display_path = latest_metrics_file.display();
             let latest_metrics_file = tokio::fs::File::open(&latest_metrics_file)
                 .await
-                .with_context(|| format!("Failed to open {latest_metrics_file:?}"))?;
+                .with_context(|| format!("Failed to open {display_path}"))?;
             let mut lines = tokio::io::BufReader::new(latest_metrics_file).lines();
             while let Some(line) = lines.next_line().await? {
                 match serde_json::from_str::<EventMetricSummary>(&line) {

@@ -18,6 +18,9 @@ pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 
 pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
 
+/// Print sensitive secrets without redacting them. Use only for debugging.
+pub const FM_DEBUG_SHOW_SECRETS_ENV: &str = "FM_DEBUG_SHOW_SECRETS";
+
 /// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.
 pub fn is_env_var_set(var: &str) -> bool {
@@ -91,10 +94,6 @@ pub const FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV: &str = "FM_IROH_P2P_SECRET_KEY_OV
 /// Note that `#` is a standalone separator and *not* parsed as a part of the
 /// Url. Which means there's no need to escape it.
 pub const FM_WALLET_FEERATE_SOURCES_ENV: &str = "FM_WALLET_FEERATE_SOURCES";
-
-/// Env var that can be set to point at the bitcoind's cookie file to use for
-/// auth
-pub const FM_BITCOIND_COOKIE_FILE_ENV: &str = "FM_BITCOIND_COOKIE_FILE";
 
 /// `devimint` will set when code is running inside `devimint`
 pub const FM_IN_DEVIMINT_ENV: &str = "FM_IN_DEVIMINT";

@@ -149,9 +149,9 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
             secp: &'s Secp256k1<Ctx>,
         }
 
-        impl<'t, 's, Ctx: Verification + Signing, Ctr: Contract>
+        impl<Ctx: Verification + Signing, Ctr: Contract>
             miniscript::Translator<CompressedPublicKey, CompressedPublicKey, Infallible>
-            for CompressedPublicKeyTranslator<'t, 's, Ctx, Ctr>
+            for CompressedPublicKeyTranslator<'_, '_, Ctx, Ctr>
         {
             fn pk(&mut self, pk: &CompressedPublicKey) -> Result<CompressedPublicKey, Infallible> {
                 Ok(CompressedPublicKey::new(

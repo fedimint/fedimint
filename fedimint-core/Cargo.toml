@@ -81,7 +81,7 @@ tokio = { workspace = true, features = ["io-util"] }
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
-getrandom = { workspace = true, features = ["js"] }
+getrandom = { workspace = true, features = ["wasm_js"] }
 gloo-timers = { workspace = true, features = ["futures"] }
 js-sys = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
