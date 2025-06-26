@@ -2849,6 +2849,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-eventlog",
+ "fedimint-fjall",
  "fedimint-ln-client",
  "fedimint-lnv2-client",
  "fedimint-logging",
