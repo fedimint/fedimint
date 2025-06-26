@@ -21,6 +21,7 @@ members = [
   "fedimint-dbtool",
   "fedimint-derive",
   "fedimint-eventlog",
+  "fedimint-fjall",
   "fedimint-load-test-tool",
   "fedimint-logging",
   "fedimint-metrics",
@@ -194,6 +195,7 @@ fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.
 fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.8.0-alpha" }
 fedimint-portalloc = { path = "utils/portalloc", version = "=0.8.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.8.0-alpha" }
+fedimint-fjall = { path = "./fedimint-fjall", version = "=0.8.0-alpha" }
 fedimint-server = { path = "./fedimint-server", version = "=0.8.0-alpha" }
 fedimint-server-bitcoin-rpc = { path = "./fedimint-server-bitcoin-rpc", version = "=0.8.0-alpha" }
 fedimint-server-core = { path = "./fedimint-server-core", version = "=0.8.0-alpha" }
