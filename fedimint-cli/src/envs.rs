@@ -14,5 +14,8 @@ pub const FM_USE_TOR_ENV: &str = "FM_USE_TOR";
 // Api authentication secret
 pub const FM_API_SECRET_ENV: &str = "FM_API_SECRET";
 
+// Env variable to select database backend (rocksdb or cursed-redb)
+pub const FM_DB_BACKEND_ENV: &str = "FM_DB_BACKEND";
+
 /// Salt backup for combining with the private key
 pub const SALT_FILE: &str = "private.salt";

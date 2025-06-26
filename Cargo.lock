@@ -2794,6 +2794,7 @@ dependencies = [
  "fedimint-build",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-cursed-redb",
  "fedimint-eventlog",
  "fedimint-ln-client",
  "fedimint-lnv2-client",
@@ -2957,6 +2958,36 @@ dependencies = [
  "tracing",
  "url",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "fedimint-cursed-redb"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+ "fedimint-db-locked",
+ "fedimint-logging",
+ "fs-lock",
+ "futures",
+ "imbl",
+ "redb",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-db-locked"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+ "fedimint-logging",
+ "fs-lock",
+ "tracing",
 ]
 
 [[package]]
@@ -3222,6 +3253,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",
+ "fedimint-cursed-redb",
  "fedimint-derive-secret",
  "fedimint-dummy-client",
  "fedimint-dummy-common",
@@ -3900,6 +3932,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fedimint-core",
+ "fedimint-db-locked",
  "fedimint-logging",
  "fs-lock",
  "futures",
@@ -8522,6 +8555,15 @@ dependencies = [
  "rustls-pki-types",
  "time",
  "yasna",
+]
+
+[[package]]
+name = "redb"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cef6a6d3a65ea334d6cdfb31fa2525c20184b7aa7bd1ad1e2e37502610d4609f"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

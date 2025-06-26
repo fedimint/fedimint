@@ -43,6 +43,7 @@ fedimint-bip39 = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-cursed-redb = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }

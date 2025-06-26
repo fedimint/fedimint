@@ -19,7 +19,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::LightningMode;
 use fedimint_gateway_server::Gateway;
 use fedimint_gateway_server::client::GatewayClientBuilder;
-use fedimint_gateway_server::config::LightningModuleMode;
+use fedimint_gateway_server::config::{DatabaseBackend, LightningModuleMode};
 use fedimint_lightning::{ILnRpcClient, LightningContext};
 use fedimint_logging::TracingSetup;
 use fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
@@ -213,8 +213,12 @@ impl Fixtures {
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
 
         // Create federation client builder for the gateway
-        let client_builder: GatewayClientBuilder =
-            GatewayClientBuilder::new(path.clone(), registry, ModuleKind::from_static_str("dummy"));
+        let client_builder: GatewayClientBuilder = GatewayClientBuilder::new(
+            path.clone(),
+            registry,
+            ModuleKind::from_static_str("dummy"),
+            DatabaseBackend::RocksDb,
+        );
 
         let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
 
