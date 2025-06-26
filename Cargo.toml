@@ -19,6 +19,7 @@ members = [
   "fedimint-dbtool",
   "fedimint-derive",
   "fedimint-eventlog",
+  "fedimint-fjall",
   "fedimint-load-test-tool",
   "fedimint-logging",
   "fedimint-metrics",
