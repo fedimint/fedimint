@@ -29,7 +29,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use client::ModuleSelector;
 #[cfg(feature = "tor")]
 use envs::FM_USE_TOR_ENV;
-use envs::{FM_API_SECRET_ENV, SALT_FILE};
+use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
@@ -209,6 +209,16 @@ impl fmt::Display for CliError {
     }
 }
 
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+enum DatabaseBackend {
+    /// Use RocksDB database backend
+    #[value(name = "rocksdb")]
+    RocksDb,
+    /// Use CursedRedb database backend (hybrid memory/redb)
+    #[value(name = "cursed-redb")]
+    CursedRedb,
+}
+
 #[derive(Parser, Clone)]
 #[command(version)]
 struct Opts {
@@ -228,6 +238,10 @@ struct Opts {
     /// Activate usage of Tor as the Connector when building the Client
     #[arg(long, env = FM_USE_TOR_ENV)]
     use_tor: bool,
+
+    /// Database backend to use.
+    #[arg(long, env = FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
+    db_backend: DatabaseBackend,
 
     /// Activate more verbose logging, for full control use the RUST_LOG env
     /// variable
@@ -284,13 +298,25 @@ impl Opts {
         Ok(ApiAuth(password))
     }
 
-    async fn load_rocks_db(&self) -> CliResult<Database> {
+    async fn load_database(&self) -> CliResult<Database> {
         debug!(target: LOG_CLIENT, "Loading client database");
         let db_path = self.data_dir_create().await?.join("client.db");
-        Ok(fedimint_rocksdb::RocksDb::open(db_path)
-            .await
-            .map_err_cli_msg("could not open database")?
-            .into())
+        match self.db_backend {
+            DatabaseBackend::RocksDb => {
+                debug!(target: LOG_CLIENT, "Using RocksDB database backend");
+                Ok(fedimint_rocksdb::RocksDb::open(db_path)
+                    .await
+                    .map_err_cli_msg("could not open rocksdb database")?
+                    .into())
+            }
+            DatabaseBackend::CursedRedb => {
+                debug!(target: LOG_CLIENT, "Using CursedRedb database backend");
+                Ok(fedimint_cursed_redb::MemAndRedb::new(db_path)
+                    .await
+                    .map_err_cli_msg("could not open cursed redb database")?
+                    .into())
+            }
+        }
     }
 
     #[allow(clippy::unused_self)]
@@ -657,7 +683,7 @@ impl FedimintCli {
     }
 
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
-        let db = cli.load_rocks_db().await?;
+        let db = cli.load_database().await?;
         let mut client_builder = Client::builder(db).await.map_err_cli()?;
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module_kind(fedimint_mint_client::KIND);

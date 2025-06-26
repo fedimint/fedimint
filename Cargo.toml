@@ -16,6 +16,8 @@ members = [
   "fedimint-client-module",
   "fedimint-client-wasm",
   "fedimint-core",
+  "fedimint-cursed-redb",
+  "fedimint-db-locked",
   "fedimint-dbtool",
   "fedimint-derive",
   "fedimint-eventlog",
@@ -159,6 +161,8 @@ fedimint-build = { path = "./fedimint-build", version = "=0.8.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.8.0-alpha" }
 fedimint-client-module = { path = "./fedimint-client-module", version = "=0.8.0-alpha" }
 fedimint-core = { path = "./fedimint-core", version = "=0.8.0-alpha" }
+fedimint-cursed-redb = { path = "./fedimint-cursed-redb", version = "=0.8.0-alpha" }
+fedimint-db-locked = { path = "./fedimint-db-locked", version = "=0.8.0-alpha" }
 fedimint-derive = { path = "./fedimint-derive", version = "=0.8.0-alpha" }
 fedimint-derive-secret = { path = "./crypto/derive-secret", version = "=0.8.0-alpha" }
 fedimint-dummy-client = { path = "./modules/fedimint-dummy-client", version = "=0.8.0-alpha" }
@@ -254,6 +258,7 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
 rcgen = "=0.13.2"
+redb = "2"
 reqwest = { version = "0.12.9", features = [
   "json",
   "rustls-tls",

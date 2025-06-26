@@ -1,7 +1,7 @@
 #![deny(clippy::pedantic)]
 
 use std::collections::BTreeMap;
-use std::fs::remove_dir_all;
+use std::fs::{remove_dir_all, remove_file};
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -144,7 +144,12 @@ async fn stop_and_recover_gateway(
         .parse()
         .expect("Could not parse data dir");
     let gw_db = data_dir.join(gw_name.clone()).join("gatewayd.db");
-    remove_dir_all(gw_db)?;
+    if gw_db.is_file() {
+        // db is single file on redb
+        remove_file(gw_db)?;
+    } else {
+        remove_dir_all(gw_db)?;
+    }
     info!(target: LOG_TEST, "Deleted the Gateway's database");
 
     if gw_type == LightningNodeType::Ldk {
