@@ -390,14 +390,22 @@ pub async fn run_event_log_ordering_task(
         // This thread is the only thread deleting already existing element of unordered
         // log and inserting new elements into ordered log, so it should never
         // fail to commit.
-        dbtx.commit_tx().await;
-        if !unordered_events.is_empty() {
-            log_event_added.send_replace(());
-        }
+        //
+        // But fjail db has still conflicts on this transaction with adding new items to
+        // unordered event log. We just retry immediately in case of conflict, because
+        // this is transaction is very short, we just have to get luck that there are no
+        // new events while this transaction executes.
+        if let Ok(()) = dbtx.commit_tx_result().await {
+            if !unordered_events.is_empty() {
+                log_event_added.send_replace(());
+            }
 
-        trace!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task waits for more events");
-        if log_ordering_task_wakeup.changed().await.is_err() {
-            break;
+            trace!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task waits for more events");
+            if log_ordering_task_wakeup.changed().await.is_err() {
+                break;
+            }
+        } else {
+            debug!(target: LOG_CLIENT_EVENT_LOG, "Event log saw a conflict, retrying");
         }
     }
 
