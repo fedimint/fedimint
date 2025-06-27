@@ -77,7 +77,7 @@ async fn test_next_or_pending() {
     assert_eq!(stream.next_or_pending().now_or_never(), Some(2));
     assert!(matches!(
         timeout(Duration::from_millis(100), stream.next_or_pending()).await,
-        Err(Elapsed)
+        Err(Elapsed { .. })
     ));
 }
 

@@ -9,7 +9,7 @@ pub mod waiter;
 use std::future::Future;
 use std::pin::{Pin, pin};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use anyhow::bail;
 use fedimint_core::time::now;
