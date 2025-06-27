@@ -146,7 +146,6 @@ where
             .clone();
 
         let cfg = rustls::ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(root_cert_store)
             .with_client_auth_cert(vec![certificate], self.cfg.private_key.clone())
             .expect("Failed to create TLS config");
