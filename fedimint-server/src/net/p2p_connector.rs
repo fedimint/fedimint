@@ -17,7 +17,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
 use iroh::defaults::DEFAULT_STUN_PORT;
 use iroh::discovery::pkarr::{N0_DNS_PKARR_RELAY_PROD, PkarrPublisher, PkarrResolver};
-use iroh::{Endpoint, NodeAddr, NodeId, RelayMap, RelayMode, RelayNode, RelayUrl, SecretKey};
+use iroh::{Endpoint, NodeAddr, NodeId, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_relay::RelayQuicConfig;
 use rustls::ServerName;
@@ -327,14 +327,17 @@ pub(crate) async fn build_iroh_endpoint(
     let relay_mode = if iroh_relays.is_empty() {
         RelayMode::Default
     } else {
-        RelayMode::Custom(RelayMap::from_nodes(iroh_relays.into_iter().map(|url| {
-            RelayNode {
-                url: RelayUrl::from(url.to_unsafe()),
-                stun_only: false,
-                stun_port: DEFAULT_STUN_PORT,
-                quic: Some(RelayQuicConfig::default()),
-            }
-        }))?)
+        RelayMode::Custom(
+            iroh_relays
+                .into_iter()
+                .map(|url| RelayNode {
+                    url: RelayUrl::from(url.to_unsafe()),
+                    stun_only: false,
+                    stun_port: DEFAULT_STUN_PORT,
+                    quic: Some(RelayQuicConfig::default()),
+                })
+                .collect(),
+        )
     };
 
     let builder = Endpoint::builder()
