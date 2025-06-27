@@ -21,7 +21,8 @@ use envs::FM_BITCOIND_URL_PASSWORD_FILE_ENV;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV,
+    FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::TaskGroup;
@@ -144,11 +145,11 @@ struct ServerOpts {
     enable_iroh: bool,
 
     /// Optional URL of the Iroh DNS server
-    #[arg(long, env = "FM_IROH_DNS", requires = "enable_iroh")]
+    #[arg(long, env = FM_IROH_DNS_ENV, requires = "enable_iroh")]
     iroh_dns: Option<SafeUrl>,
 
     /// Optional URLs of the Iroh relays to use for registering
-    #[arg(long, env = "FM_IROH_RELAY", requires = "enable_iroh")]
+    #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh")]
     iroh_relays: Vec<SafeUrl>,
 
     /// Number of checkpoints from the current session to retain on disk
