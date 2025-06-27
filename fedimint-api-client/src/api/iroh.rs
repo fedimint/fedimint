@@ -13,8 +13,8 @@ use fedimint_logging::LOG_NET_IROH;
 use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
+use n0_future::task::JoinSet;
 use serde_json::Value;
-use tokio::task::JoinSet;
 use tracing::{debug, trace, warn};
 
 use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};

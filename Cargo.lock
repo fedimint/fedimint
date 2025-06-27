@@ -2735,6 +2735,7 @@ dependencies = [
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "lru 0.13.0",
+ "n0-future",
  "rand 0.8.5",
  "rustls-pki-types",
  "serde",

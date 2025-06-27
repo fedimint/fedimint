@@ -42,6 +42,7 @@ itertools = { workspace = true }
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
 lru = { workspace = true }
+n0-future = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
