@@ -3297,6 +3297,7 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-eventlog",
+ "fedimint-fjall",
  "fedimint-gateway-common",
  "fedimint-gateway-server-db",
  "fedimint-gw-client",
