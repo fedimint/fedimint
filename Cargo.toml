@@ -274,7 +274,7 @@ serde_millis = "0.1.1"
 serdect = "0.2.0"
 sha3 = "0.10.8"
 slotmap = "1.0.7"
-strum = { version = "0.26", features = ["derive"] }
+strum = { version = "0.27", features = ["derive"] }
 strum_macros = "0.26"
 substring = "1.4.5"
 subtle = "2.6.1"
