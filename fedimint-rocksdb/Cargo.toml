@@ -15,6 +15,10 @@ rustc-args = ["--cfg", "tokio_unstable"]
 name = "fedimint_rocksdb"
 path = "src/lib.rs"
 
+[features]
+default = []
+jemalloc = ["rocksdb/jemalloc"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
