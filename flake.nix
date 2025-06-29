@@ -64,6 +64,10 @@
       bundlers = bundlers.bundlers;
 
       nixosModules = {
+        # Note: since it conflicts with the module in nixpkgs, you're going
+        # to need to disable the upstream one with:
+        #
+        # disabledModules = [ "services/networking/fedimintd.nix" ];
         fedimintd = import ./nix/modules/fedimintd.nix;
       };
     }

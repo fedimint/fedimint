@@ -133,33 +133,32 @@ let
             example = "bitcoin";
             description = "Bitcoin network to participate in.";
           };
-          rpc = {
-            url = mkOption {
-              type = types.str;
-              default = "http://127.0.0.1:38332";
-              example = "signet";
-              description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
-            };
+          bitcoindUrl = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "http://127.0.0.1:38332";
+            description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
+          };
 
-            kind = mkOption {
-              type = types.str;
-              default = "bitcoind";
-              example = "electrum";
-              description = "Kind of a bitcoin node.";
-            };
+          esploraUrl = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "https://mempool.space/signet/api";
+            description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
+          };
 
-            secretFile = mkOption {
-              type = types.nullOr types.path;
-              default = null;
-              description = ''
-                If set the URL specified in `bitcoin.rpc.url` will get the content of this file added
-                as an URL password, so `http://user@example.com` will turn into `http://user:SOMESECRET@example.com`.
+          bitcoindSecretFile = mkOption {
+            type = types.nullOr types.path;
+            default = null;
+            description = ''
+              If set the URL specified in `bitcoin.bitcoindUrl` will get the content of
+              this file added as an URL password, so `http://user@example.com` will turn
+              into `http://user:SOMESECRET@example.com`.
 
-                Example:
+              Example:
 
-                `/etc/nix-bitcoin-secrets/bitcoin-rpcpassword-public` (for nix-bitcoin default)
-              '';
-            };
+              `/etc/nix-bitcoin-secrets/bitcoin-rpcpassword-public` (for nix-bitcoin default)
+            '';
           };
         };
 
@@ -207,7 +206,10 @@ let
           };
           config = mkOption {
             type = types.submodule (
-              recursiveUpdate (import ../web-servers/nginx/vhost-options.nix {
+              # in nixpkgs we used to do it like this:
+              # recursiveUpdate (import ../web-servers/nginx/vhost-options.nix {
+              # in the flake this works:
+              recursiveUpdate (import "${pkgs.path}/nixos/modules/services/web-servers/nginx/vhost-options.nix" {
                 inherit config lib;
               }) { }
             );
@@ -259,21 +261,9 @@ in
         fedimintdName: cfg:
         (nameValuePair "fedimintd-${fedimintdName}" (
           let
-            startScript = pkgs.writeShellScriptBin "fedimintd" (
-              (
-                if cfg.bitcoin.rpc.secretFile != null then
-                  ''
-                    >&2 echo "Setting FM_FORCE_BITCOIN_RPC_URL using password from ${cfg.bitcoin.rpc.secretFile}"
-                    secret=$(${pkgs.coreutils}/bin/head -n 1 "${cfg.bitcoin.rpc.secretFile}" || exit 1)
-                    export FM_FORCE_BITCOIN_RPC_URL=$(echo "$FM_BITCOIN_RPC_URL" | sed "s|^\(\w\+://[^@]\+\)\(@.*\)|\1:''${secret}\2|")
-                  ''
-                else
-                  ""
-              )
-              + ''
-                exec ${cfg.package}/bin/fedimintd
-              ''
-            );
+            startScript = pkgs.writeShellScriptBin "fedimintd" ''
+              exec ${cfg.package}/bin/fedimintd
+            '';
           in
           {
             description = "Fedimint Server";
@@ -287,8 +277,9 @@ in
                 FM_BIND_UI = "${cfg.ui.bind}:${toString cfg.ui.port}";
                 FM_DATA_DIR = cfg.dataDir;
                 FM_BITCOIN_NETWORK = cfg.bitcoin.network;
-                FM_BITCOIN_RPC_URL = cfg.bitcoin.rpc.url;
-                FM_BITCOIN_RPC_KIND = cfg.bitcoin.rpc.kind;
+                FM_BITCOIND_URL = cfg.bitcoin.bitcoindUrl;
+                FM_ESPLORA_URL = cfg.bitcoin.esploraUrl;
+                FM_BITCOIND_URL_PASSWORD_FILE = cfg.bitcoin.bitcoindSecretFile;
               }
 
               (lib.optionalAttrs (cfg.p2p.url != null) {
