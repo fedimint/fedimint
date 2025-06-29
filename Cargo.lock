@@ -2939,6 +2939,7 @@ dependencies = [
  "lightning-types",
  "macro_rules_attribute",
  "miniscript",
+ "n0-future",
  "parity-scale-codec",
  "rand 0.8.5",
  "scopeguard",
