@@ -37,8 +37,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
 use clap::Parser;
 use client::GatewayClientBuilder;
-use config::GatewayOpts;
 pub use config::GatewayParameters;
+use config::{DatabaseBackend, GatewayOpts};
 use envs::{FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV};
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
@@ -57,7 +57,6 @@ use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
-use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
 use fedimint_core::time::duration_since_epoch;
@@ -93,7 +92,6 @@ use fedimint_lightning::{
     RouteHtlcStream,
 };
 use fedimint_ln_client::pay::PaymentData;
-use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
@@ -301,13 +299,24 @@ impl Gateway {
 
         let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())?;
 
-        let gateway_db = Database::new(
-            fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).await?,
-            decoders,
-        );
+        let db_path = opts.data_dir.join(DB_FILE);
+        let gateway_db = match opts.db_backend {
+            DatabaseBackend::Fjall => {
+                debug!(target: LOG_GATEWAY, "Using Fjall database backend");
+                Database::new(fedimint_fjall::FjallDb::open(&db_path)?, decoders)
+            }
+            DatabaseBackend::RocksDb => {
+                debug!(target: LOG_GATEWAY, "Using RocksDB database backend");
+                Database::new(fedimint_rocksdb::RocksDb::open(db_path).await?, decoders)
+            }
+        };
 
-        let client_builder =
-            GatewayClientBuilder::new(opts.data_dir.clone(), registry, fedimint_mint_client::KIND);
+        let client_builder = GatewayClientBuilder::new(
+            opts.data_dir.clone(),
+            registry,
+            fedimint_mint_client::KIND,
+            opts.db_backend,
+        );
 
         info!(
             target: LOG_GATEWAY,
