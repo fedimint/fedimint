@@ -316,7 +316,8 @@ tests_to_run_in_parallel+=(
   "gw_reboot_test"
   "gw_config_test_lnd"
   "gw_restore_test"
-  "gw_liquidity_test"
+  # flaky https://github.com/fedimint/fedimint/issues/7546
+  # "gw_liquidity_test"
   "lnv2_module"
   "devimint_cli_test"
   "devimint_cli_test_single"
