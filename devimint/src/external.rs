@@ -10,6 +10,7 @@ use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfo
 use bitcoincore_rpc::jsonrpc::error::RpcError;
 use bitcoincore_rpc::{Auth, RpcApi};
 use fedimint_core::encoding::Encodable;
+use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, sleep, timeout};
 use fedimint_core::util::{FmtCompact as _, SafeUrl, write_overwrite_async};
@@ -478,6 +479,8 @@ impl Lnd {
             }
         })
         .await?;
+
+        install_crypto_provider().await;
 
         let client = poll("lnd_connect", || async {
             tonic_lnd::connect(

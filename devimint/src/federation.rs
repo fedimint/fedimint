@@ -369,11 +369,10 @@ impl Federation {
                 let peer_data_dir = utf8(&peer_env_vars.FM_DATA_DIR);
 
                 let invite_code = poll_simple("awaiting-invite-code", || async {
-                    tokio::fs::read_to_string(format!(
-                        "{peer_data_dir}/{invite_code_filename_original}"
-                    ))
-                    .await
-                    .map_err(Into::into)
+                    let path = format!("{peer_data_dir}/{invite_code_filename_original}");
+                    tokio::fs::read_to_string(&path)
+                        .await
+                        .with_context(|| format!("Awaiting invite code file: {path}"))
                 })
                 .await
                 .context("Awaiting invite code file")?;

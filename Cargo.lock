@@ -2114,6 +2114,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-rustls 0.26.2",
  "tower-http",
  "tracing",
 ]
@@ -4006,8 +4007,9 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tonic-lnd"
-version = "0.2.0"
-source = "git+https://github.com/fedimint/tonic_lnd.git?rev=200857e203e08206fbc1970806f3cfbc7ef0384a#200857e203e08206fbc1970806f3cfbc7ef0384a"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "374d7b804191264442b33656b9d1e2800c38f8431c64644bb0f4419f3c7be4bc"
 dependencies = [
  "hex",
  "hyper 1.6.0",
