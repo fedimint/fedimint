@@ -35,6 +35,8 @@ use fedimint_core::module::{
     ApiAuth, ApiMethod, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
+#[cfg(not(target_family = "wasm"))]
+use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
@@ -80,11 +82,6 @@ pub type FederationResult<T> = Result<T, FederationError>;
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
 pub type OutputOutcomeResult<O> = result::Result<O, OutputOutcomeError>;
-
-#[cfg(not(target_family = "wasm"))]
-fn install_crypto_provider() {
-    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
-}
 
 /// Set of api versions for each component (core + modules)
 ///
@@ -682,7 +679,7 @@ impl IClientConnector for WebsocketConnector {
 
         #[cfg(not(target_family = "wasm"))]
         let mut client = {
-            install_crypto_provider();
+            install_crypto_provider().await;
             let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
             let mut root_certs = RootCertStore::empty();
             root_certs.extend(webpki_roots);
@@ -771,8 +768,6 @@ impl IClientConnector for TorConnector {
             .peers
             .get(&peer_id)
             .ok_or_else(|| PeerError::InternalClientError(anyhow!("Invalid peer_id: {peer_id}")))?;
-
-        install_crypto_provider();
 
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)

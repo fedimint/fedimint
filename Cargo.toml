@@ -383,4 +383,4 @@ debug = "line-tables-only"
 lto = "fat"
 
 [patch.crates-io]
-fedimint-tonic-lnd = { git = 'https://github.com/fedimint/tonic_lnd.git', rev = "200857e203e08206fbc1970806f3cfbc7ef0384a" }
+fedimint-tonic-lnd = { git = 'https://github.com/fedimint/tonic_lnd.git', rev = "78c53edd3d7903b67b5a77afdb82df8a43428c4b" }

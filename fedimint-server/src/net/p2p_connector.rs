@@ -21,12 +21,12 @@ use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::{Endpoint, NodeAddr, NodeId, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_relay::RelayQuicConfig;
-use rustls::ServerName;
+use rustls::pki_types::ServerName;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::rustls::RootCertStore;
-use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
+use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream, rustls};
 use tokio_util::codec::LengthDelimitedCodec;
 use tracing::{info, trace};
@@ -57,8 +57,8 @@ pub trait IP2PConnector<M>: Send + Sync + 'static {
 
 #[derive(Debug, Clone)]
 pub struct TlsConfig {
-    pub private_key: rustls::PrivateKey,
-    pub certificates: BTreeMap<PeerId, rustls::Certificate>,
+    pub private_key: Arc<rustls::pki_types::PrivateKeyDer<'static>>,
+    pub certificates: BTreeMap<PeerId, rustls::pki_types::CertificateDer<'static>>,
     pub peer_names: BTreeMap<PeerId, String>,
 }
 
@@ -82,11 +82,13 @@ impl TlsTcpConnector {
 
         for cert in cfg.certificates.values() {
             root_cert_store
-                .add(cert)
+                .add(cert.clone())
                 .expect("Could not add peer certificate");
         }
 
-        let verifier = AllowAnyAuthenticatedClient::new(root_cert_store);
+        let verifier = WebPkiClientVerifier::builder(root_cert_store.into())
+            .build()
+            .expect("Failed to create client verifier");
 
         let certificate = cfg
             .certificates
@@ -95,9 +97,8 @@ impl TlsTcpConnector {
             .clone();
 
         let config = rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_client_cert_verifier(Arc::from(verifier))
-            .with_single_cert(vec![certificate], cfg.private_key.clone())
+            .with_client_cert_verifier(verifier)
+            .with_single_cert(vec![certificate], cfg.private_key.clone_key())
             .expect("Failed to create TLS config");
 
         let listener = TcpListener::bind(p2p_bind_addr)
@@ -134,7 +135,7 @@ where
 
         for cert in self.cfg.certificates.values() {
             root_cert_store
-                .add(cert)
+                .add(cert.clone())
                 .expect("Could not add peer certificate");
         }
 
@@ -147,10 +148,10 @@ where
 
         let cfg = rustls::ClientConfig::builder()
             .with_root_certificates(root_cert_store)
-            .with_client_auth_cert(vec![certificate], self.cfg.private_key.clone())
+            .with_client_auth_cert(vec![certificate], self.cfg.private_key.clone_key())
             .expect("Failed to create TLS config");
 
-        let domain = ServerName::try_from(dns_sanitize(&self.cfg.peer_names[&peer]).as_str())
+        let domain = ServerName::try_from(dns_sanitize(&self.cfg.peer_names[&peer]))
             .expect("Always a valid DNS name");
 
         let destination = self.peers.get(&peer).expect("No url for peer");
@@ -214,12 +215,21 @@ where
 
 pub fn gen_cert_and_key(
     name: &str,
-) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
+) -> Result<
+    (
+        rustls::pki_types::CertificateDer<'static>,
+        Arc<rustls::pki_types::PrivateKeyDer<'static>>,
+    ),
+    anyhow::Error,
+> {
     let cert_key = rcgen::generate_simple_self_signed(vec![dns_sanitize(name)])?;
 
     Ok((
-        rustls::Certificate(cert_key.cert.der().to_vec()),
-        rustls::PrivateKey(cert_key.key_pair.serialize_der()),
+        rustls::pki_types::CertificateDer::from(cert_key.cert.der().to_vec()),
+        Arc::new(
+            rustls::pki_types::PrivateKeyDer::try_from(cert_key.key_pair.serialize_der())
+                .expect("Failed to create private key"),
+        ),
     ))
 }
 

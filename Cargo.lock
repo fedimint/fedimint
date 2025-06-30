@@ -2114,6 +2114,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-rustls 0.26.2",
  "tower-http",
  "tracing",
 ]
@@ -4007,7 +4008,7 @@ dependencies = [
 [[package]]
 name = "fedimint-tonic-lnd"
 version = "0.2.0"
-source = "git+https://github.com/fedimint/tonic_lnd.git?rev=200857e203e08206fbc1970806f3cfbc7ef0384a#200857e203e08206fbc1970806f3cfbc7ef0384a"
+source = "git+https://github.com/fedimint/tonic_lnd.git?rev=78c53edd3d7903b67b5a77afdb82df8a43428c4b#78c53edd3d7903b67b5a77afdb82df8a43428c4b"
 dependencies = [
  "hex",
  "hyper 1.6.0",
