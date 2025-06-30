@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use fedimint_core::PeerId;
 use fedimint_core::module::ApiAuth;
@@ -18,7 +18,13 @@ pub fn local_config_gen_params(
     base_port: u16,
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
     // Generate TLS cert and private key
-    let tls_keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
+    let tls_keys: HashMap<
+        PeerId,
+        (
+            rustls::pki_types::CertificateDer<'static>,
+            Arc<rustls::pki_types::PrivateKeyDer<'static>>,
+        ),
+    > = peers
         .iter()
         .map(|peer| {
             (
@@ -42,7 +48,7 @@ pub fn local_config_gen_params(
                 endpoints: PeerEndpoints::Tcp {
                     api_url: api_url.parse().expect("Should parse"),
                     p2p_url: p2p_url.parse().expect("Should parse"),
-                    cert: tls_keys[peer].0.clone().0,
+                    cert: tls_keys[peer].0.as_ref().to_vec(),
                 },
                 federation_name: None,
             };

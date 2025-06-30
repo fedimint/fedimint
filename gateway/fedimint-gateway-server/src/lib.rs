@@ -57,6 +57,7 @@ use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
@@ -430,6 +431,7 @@ impl Gateway {
         self,
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<TaskShutdownToken> {
+        install_crypto_provider().await;
         self.verify_lightning_module_mode()?;
         self.register_clients_timer();
         self.load_clients().await?;
