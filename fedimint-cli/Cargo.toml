@@ -42,6 +42,7 @@ fedimint-logging = { workspace = true }
 fedimint-meta-client = { workspace = true, features = ["cli"] }
 fedimint-mint-client = { workspace = true, features = ["cli"] }
 fedimint-rocksdb = { workspace = true }
+fedimint-tonbo = { workspace = true }
 fedimint-wallet-client = { workspace = true, features = ["cli"] }
 fs-lock = { workspace = true }
 futures = { workspace = true }
