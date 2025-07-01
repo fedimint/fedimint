@@ -148,7 +148,9 @@ impl IClientConnector for IrohConnector {
                         iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
                         FEDIMINT_API_ALPN
                     ).await,
-                }.map_err(PeerError::Connection)
+                }
+                .map_err(Into::into)
+                .map_err(PeerError::Connection)
                 .map(super::IClientConnection::into_dyn)
         }));
 

@@ -618,6 +618,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic-polyfill"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cf2bce30dfe09ef0bfaef228b9d414faaf7e563035494d7fe092dba54b300f4"
+dependencies = [
+ "critical-section",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1333,6 +1342,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2225b558afc76c596898f5f1b3fc35cfce0eb1b13635cbd7d1b2a7177dc10ccd"
 
 [[package]]
+name = "btparse"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "387e80962b798815a2b5c4bcfdb6bf626fa922ffe9f74e373103b858738e9f31"
+
+[[package]]
 name = "bumpalo"
 version = "3.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1586,6 +1601,17 @@ name = "cobs"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
+
+[[package]]
+name = "color-backtrace"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2123a5984bd52ca861c66f66a9ab9883b27115c607f801f86c1bc2a84eb69f0f"
+dependencies = [
+ "backtrace",
+ "btparse",
+ "termcolor",
+]
 
 [[package]]
 name = "colorchoice"
@@ -2727,7 +2753,7 @@ dependencies = [
  "fedimint-logging",
  "futures",
  "iroh 0.34.1",
- "iroh 0.35.0",
+ "iroh 0.90.0",
  "iroh-base 0.34.1",
  "itertools 0.14.0",
  "jsonrpsee-core",
@@ -4847,6 +4873,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hash32"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4899,6 +4934,20 @@ dependencies = [
  "flate2",
  "nom",
  "num-traits",
+]
+
+[[package]]
+name = "heapless"
+version = "0.7.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdc6457c0eb62c71aac4bc17216026d8410337c4126773b9c5daba343f17964f"
+dependencies = [
+ "atomic-polyfill",
+ "hash32",
+ "rustc_version",
+ "serde",
+ "spin 0.9.8",
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -5661,7 +5710,7 @@ dependencies = [
  "instant",
  "iroh-base 0.34.1",
  "iroh-metrics 0.32.0",
- "iroh-quinn",
+ "iroh-quinn 0.13.0",
  "iroh-quinn-proto",
  "iroh-quinn-udp",
  "iroh-relay 0.34.1",
@@ -5697,17 +5746,14 @@ dependencies = [
 
 [[package]]
 name = "iroh"
-version = "0.35.0"
+version = "0.90.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ca758f4ce39ae3f07de922be6c73de6a48a07f39554e78b5745585652ce38f5"
+checksum = "9436f319c2d24bca1b28a2fab4477c8d2ac795ab2d3aeda142d207b38ec068f4"
 dependencies = [
  "aead",
- "anyhow",
- "atomic-waker",
  "backon",
  "bytes",
  "cfg_aliases",
- "concurrent-queue",
  "crypto_box",
  "data-encoding",
  "der",
@@ -5720,31 +5766,34 @@ dependencies = [
  "http 1.3.1",
  "igd-next 0.16.1",
  "instant",
- "iroh-base 0.35.0",
- "iroh-metrics 0.34.0",
- "iroh-quinn",
+ "iroh-base 0.90.0",
+ "iroh-metrics 0.35.0",
+ "iroh-quinn 0.14.0",
  "iroh-quinn-proto",
  "iroh-quinn-udp",
- "iroh-relay 0.35.0",
+ "iroh-relay 0.90.0",
  "n0-future",
+ "n0-snafu",
+ "n0-watcher",
+ "nested_enum_utils",
  "netdev",
- "netwatch 0.5.0",
+ "netwatch 0.6.0",
  "pin-project",
  "pkarr 3.8.0",
- "portmapper 0.5.0",
+ "portmapper 0.6.1",
  "rand 0.8.5",
- "rcgen",
  "reqwest 0.12.20",
  "ring 0.17.14",
  "rustls 0.23.28",
- "rustls-webpki 0.102.8",
+ "rustls-pki-types",
+ "rustls-webpki 0.103.3",
  "serde",
  "smallvec",
+ "snafu",
  "spki",
  "strum 0.26.3",
  "stun-rs",
  "surge-ping",
- "thiserror 2.0.12",
  "time",
  "tokio",
  "tokio-stream",
@@ -5753,7 +5802,6 @@ dependencies = [
  "url",
  "wasm-bindgen-futures",
  "webpki-roots 0.26.11",
- "x509-parser",
  "z32",
 ]
 
@@ -5776,17 +5824,19 @@ dependencies = [
 
 [[package]]
 name = "iroh-base"
-version = "0.35.0"
+version = "0.90.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f91ac4aaab68153d726c4e6b39c30f9f9253743f0e25664e52f4caeb46f48d11"
+checksum = "8e0090050c4055b21e61cbcb856f043a2b24ad22c65d76bab91f121b4c7bece3"
 dependencies = [
  "curve25519-dalek",
  "data-encoding",
  "derive_more 1.0.0",
  "ed25519-dalek",
+ "n0-snafu",
+ "nested_enum_utils",
  "rand_core 0.6.4",
  "serde",
- "thiserror 2.0.12",
+ "snafu",
  "url",
 ]
 
@@ -5805,12 +5855,13 @@ dependencies = [
 
 [[package]]
 name = "iroh-metrics"
-version = "0.34.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70466f14caff7420a14373676947e25e2917af6a5b1bec45825beb2bf1eb6a7"
+checksum = "c8922c169f1b84d39d325c02ef1bbe1419d4de6e35f0403462b3c7e60cc19634"
 dependencies = [
  "iroh-metrics-derive",
  "itoa",
+ "postcard",
  "serde",
  "snafu",
  "tracing",
@@ -5833,6 +5884,26 @@ name = "iroh-quinn"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76c6245c9ed906506ab9185e8d7f64857129aee4f935e899f398a3bd3b70338d"
+dependencies = [
+ "bytes",
+ "cfg_aliases",
+ "iroh-quinn-proto",
+ "iroh-quinn-udp",
+ "pin-project-lite",
+ "rustc-hash 2.1.1",
+ "rustls 0.23.28",
+ "socket2",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "web-time",
+]
+
+[[package]]
+name = "iroh-quinn"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cde160ebee7aabede6ae887460cd303c8b809054224815addf1469d54a6fcf7"
 dependencies = [
  "bytes",
  "cfg_aliases",
@@ -5900,7 +5971,7 @@ dependencies = [
  "hyper-util",
  "iroh-base 0.34.1",
  "iroh-metrics 0.32.0",
- "iroh-quinn",
+ "iroh-quinn 0.13.0",
  "iroh-quinn-proto",
  "lru 0.12.5",
  "n0-future",
@@ -5928,11 +5999,10 @@ dependencies = [
 
 [[package]]
 name = "iroh-relay"
-version = "0.35.0"
+version = "0.90.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c63f122cdfaa4b4e0e7d6d3921d2b878f42a0c6d3ee5a29456dc3f5ab5ec931f"
+checksum = "c3f3cdbdaebc92835452e4e1d0d4b36118206b0950089b7bc3654f13e843475b"
 dependencies = [
- "anyhow",
  "bytes",
  "cfg_aliases",
  "data-encoding",
@@ -5943,12 +6013,14 @@ dependencies = [
  "http-body-util",
  "hyper 1.6.0",
  "hyper-util",
- "iroh-base 0.35.0",
- "iroh-metrics 0.34.0",
- "iroh-quinn",
+ "iroh-base 0.90.0",
+ "iroh-metrics 0.35.0",
+ "iroh-quinn 0.14.0",
  "iroh-quinn-proto",
- "lru 0.12.5",
+ "lru 0.13.0",
  "n0-future",
+ "n0-snafu",
+ "nested_enum_utils",
  "num_enum",
  "pin-project",
  "pkarr 3.8.0",
@@ -5956,12 +6028,12 @@ dependencies = [
  "rand 0.8.5",
  "reqwest 0.12.20",
  "rustls 0.23.28",
- "rustls-webpki 0.102.8",
+ "rustls-pki-types",
+ "rustls-webpki 0.103.3",
  "serde",
  "sha1",
+ "snafu",
  "strum 0.26.3",
- "stun-rs",
- "thiserror 2.0.12",
  "tokio",
  "tokio-rustls 0.26.2",
  "tokio-util",
@@ -6877,6 +6949,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "n0-snafu"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4fed465ff57041f29db78a9adc8864296ef93c6c16029f9e192dc303404ebd0"
+dependencies = [
+ "anyhow",
+ "btparse",
+ "color-backtrace",
+ "snafu",
+ "tracing-error",
+]
+
+[[package]]
+name = "n0-watcher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f216d4ebc5fcf9548244803cbb93f488a2ae160feba3706cd17040d69cf7a368"
+dependencies = [
+ "derive_more 1.0.0",
+ "n0-future",
+ "snafu",
+]
+
+[[package]]
 name = "nanorand"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7042,9 +7138,9 @@ dependencies = [
 
 [[package]]
 name = "netwatch"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67eeaa5f7505c93c5a9b35ba84fd21fb8aa3f24678c76acfe8716af7862fb07a"
+checksum = "2a829a830199b14989f9bccce6136ab928ab48336ab1f8b9002495dbbbb2edbe"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -7054,12 +7150,14 @@ dependencies = [
  "js-sys",
  "libc",
  "n0-future",
+ "n0-watcher",
  "nested_enum_utils",
  "netdev",
  "netlink-packet-core",
  "netlink-packet-route 0.23.0",
  "netlink-proto",
  "netlink-sys",
+ "pin-project-lite",
  "serde",
  "snafu",
  "socket2",
@@ -7906,9 +8004,9 @@ dependencies = [
 
 [[package]]
 name = "portmapper"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d6db66007eac4a0ec8331d0d20c734bd64f6445d64bbaf0d0a27fea7a054e36"
+checksum = "2d82975dc029c00d566f4e0f61f567d31f0297a290cb5416b5580dd8b4b54ade"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -7917,10 +8015,10 @@ dependencies = [
  "futures-util",
  "hyper-util",
  "igd-next 0.16.1",
- "iroh-metrics 0.34.0",
+ "iroh-metrics 0.35.0",
  "libc",
  "nested_enum_utils",
- "netwatch 0.5.0",
+ "netwatch 0.6.0",
  "num_enum",
  "rand 0.8.5",
  "serde",
@@ -7968,6 +8066,7 @@ dependencies = [
  "cobs",
  "embedded-io 0.4.0",
  "embedded-io 0.6.1",
+ "heapless",
  "postcard-derive",
  "serde",
 ]
@@ -9460,6 +9559,7 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320b01e011bf8d5d7a4a4a4be966d9160968935849c83b918827f6a435e7f627"
 dependencies = [
+ "backtrace",
  "snafu-derive",
 ]
 
@@ -9865,6 +9965,15 @@ dependencies = [
  "once_cell",
  "rustix 1.0.7",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "termcolor"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
+dependencies = [
+ "winapi-util",
 ]
 
 [[package]]
@@ -11223,6 +11332,16 @@ checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
 dependencies = [
  "once_cell",
  "valuable",
+]
+
+[[package]]
+name = "tracing-error"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b1581020d7a273442f5b45074a6a57d5757ad0a47dac0e9f0bd57b81936f3db"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
