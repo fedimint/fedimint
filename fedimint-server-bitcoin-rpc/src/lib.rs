@@ -21,6 +21,12 @@ pub struct BitcoindClientWithFallback {
 
 impl BitcoindClientWithFallback {
     pub fn new(bitcoind_url: &SafeUrl, esplora_url: &SafeUrl) -> Result<Self> {
+        warn!(
+            target: LOG_SERVER,
+            %bitcoind_url,
+            %esplora_url,
+            "Initiallizing bitcoin bitcoind backend with esplora fallback"
+        );
         let bitcoind_client = BitcoindClient::new(bitcoind_url)?;
         let esplora_client = EsploraClient::new(esplora_url)?;
 
@@ -43,13 +49,26 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
 
     async fn get_network(&self) -> Result<Network> {
         match self.bitcoind_client.get_network().await {
-            Ok(network) => Ok(network),
+            Ok(bitcoind_network) => {
+                // Assert that bitcoind network matches esplora network, if available
+                //
+                // This is OK to do every time, as first success is cached internally.
+                if let Ok(esplora_network) = self.esplora_client.get_network().await {
+                    assert_eq!(
+                        bitcoind_network, esplora_network,
+                        "Network mismatch: bitcoind reported {:?} but esplora reported {:?}",
+                        bitcoind_network, esplora_network
+                    );
+                }
+                Ok(bitcoind_network)
+            }
             Err(e) => {
                 warn!(
                     target: LOG_SERVER,
                     error = %e.fmt_compact_anyhow(),
                     "BitcoindClient failed for get_network, falling back to EsploraClient"
                 );
+
                 self.esplora_client.get_network().await
             }
         }

@@ -6,6 +6,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::envs::parse_kv_list_from_env;
+use fedimint_core::iroh_prod::FM_DNS_PKARR_RELAY_PROD;
 use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
 };
@@ -13,11 +14,13 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::LOG_NET_IROH;
 use futures::Future;
 use futures::stream::{FuturesUnordered, StreamExt};
+use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::endpoint::Connection;
-use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
+use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, SecretKey};
 use iroh_base::ticket::NodeTicket;
 use serde_json::Value;
 use tracing::{debug, trace, warn};
+use url::Url;
 
 use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
 
@@ -36,10 +39,13 @@ pub struct IrohConnector {
 }
 
 impl IrohConnector {
-    pub async fn new(peers: BTreeMap<PeerId, SafeUrl>) -> anyhow::Result<Self> {
+    pub async fn new(
+        peers: BTreeMap<PeerId, SafeUrl>,
+        iroh_dns: Option<SafeUrl>,
+    ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
         warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-        let mut s = Self::new_no_overrides(peers).await?;
+        let mut s = Self::new_no_overrides(peers, iroh_dns).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -48,7 +54,14 @@ impl IrohConnector {
         Ok(s)
     }
 
-    pub async fn new_no_overrides(peers: BTreeMap<PeerId, SafeUrl>) -> anyhow::Result<Self> {
+    pub async fn new_no_overrides(
+        peers: BTreeMap<PeerId, SafeUrl>,
+        iroh_dns: Option<SafeUrl>,
+    ) -> anyhow::Result<Self> {
+        let iroh_dns = iroh_dns.map_or(
+            Url::parse(FM_DNS_PKARR_RELAY_PROD).expect("Hardcoded, can't fail"),
+            SafeUrl::to_unsafe,
+        );
         let node_ids = peers
             .into_iter()
             .map(|(peer, url)| {
@@ -61,7 +74,12 @@ impl IrohConnector {
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
         let endpoint_stable = {
-            let builder = Endpoint::builder().discovery_n0();
+            let builder = Endpoint::builder()
+                .add_discovery({
+                    let iroh_dns = iroh_dns.clone();
+                    move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
+                })
+                .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
             let endpoint = builder.bind().await?;

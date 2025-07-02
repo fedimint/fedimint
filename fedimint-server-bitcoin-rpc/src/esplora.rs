@@ -1,13 +1,14 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use anyhow::{Context, bail};
 use bitcoin::{BlockHash, Network, Transaction};
 use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::util::SafeUrl;
-use fedimint_logging::LOG_BITCOIND_ESPLORA;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_logging::{LOG_BITCOIND_ESPLORA, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
-use tracing::info;
+use tracing::{debug, info};
 
 // <https://blockstream.info/api/block-height/0>
 const MAINNET: &str = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
@@ -26,10 +27,16 @@ const REGTEST: &str = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a114
 pub struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
+    cached_network: OnceLock<Network>,
 }
 
 impl EsploraClient {
     pub fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+        info!(
+            target: LOG_SERVER,
+            %url,
+            "Initiallizing bitcoin esplora backend"
+        );
         // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');
 
@@ -38,6 +45,7 @@ impl EsploraClient {
         Ok(Self {
             client,
             url: url.clone(),
+            cached_network: OnceLock::new(),
         })
     }
 }
@@ -56,7 +64,18 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn get_network(&self) -> anyhow::Result<Network> {
-        let genesis_hash = self.client.get_block_hash(0).await?;
+        // Return cached network if already fetched
+        if let Some(network) = self.cached_network.get() {
+            return Ok(*network);
+        }
+
+        // Fetch and cache the network
+        let genesis_hash = self.client.get_block_hash(0).await.inspect_err(|err| {
+            debug!(
+                target: LOG_BITCOIND_ESPLORA,
+                err = %err.fmt_compact(),
+                "Error getting network (genesis hash) from esplora backend");
+        })?;
 
         let network = match genesis_hash.to_string().as_str() {
             MAINNET => Network::Bitcoin,
@@ -68,6 +87,8 @@ impl IServerBitcoinRpc for EsploraClient {
             }
         };
 
+        // Cache the successful result
+        let _ = self.cached_network.set(network);
         Ok(network)
     }
 

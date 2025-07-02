@@ -76,6 +76,12 @@ pub const FM_FORCE_BITCOIN_RPC_URL_BAD_ENV: &str = "FM_FORCE_BITCOIND_RPC_URL";
 /// Comma separated key-value list (`<node_id>=<ticket>,<node_id>=<ticket>,...`)
 pub const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
 
+/// Env var to override iroh DNS server
+pub const FM_IROH_DNS_ENV: &str = "FM_IROH_DNS";
+
+/// Env var to override iroh relays server
+pub const FM_IROH_RELAY_ENV: &str = "FM_IROH_RELAY";
+
 /// Env var to override tcp api connectivity
 ///
 /// Comma separated key-value list (`peer_id=url,peer_id=url`)

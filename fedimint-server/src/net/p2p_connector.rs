@@ -12,12 +12,13 @@ use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::iroh_prod::{FM_DNS_PKARR_RELAY_PROD, FM_IROH_RELAYS_PROD};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
 use iroh::defaults::DEFAULT_STUN_PORT;
-use iroh::discovery::pkarr::{N0_DNS_PKARR_RELAY_PROD, PkarrPublisher, PkarrResolver};
-use iroh::{Endpoint, NodeAddr, NodeId, RelayMap, RelayMode, RelayNode, RelayUrl, SecretKey};
+use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
+use iroh::{Endpoint, NodeAddr, NodeId, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_relay::RelayQuicConfig;
 use rustls::ServerName;
@@ -29,6 +30,7 @@ use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream, rustls};
 use tokio_util::codec::LengthDelimitedCodec;
 use tracing::{info, trace};
+use url::Url;
 
 use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection};
 
@@ -320,21 +322,34 @@ pub(crate) async fn build_iroh_endpoint(
     alpn: &[u8],
 ) -> Result<Endpoint, anyhow::Error> {
     let iroh_dns = iroh_dns.clone().map_or(
-        N0_DNS_PKARR_RELAY_PROD.parse().expect("Can't fail"),
+        FM_DNS_PKARR_RELAY_PROD.parse().expect("Can't fail"),
         SafeUrl::to_unsafe,
     );
 
     let relay_mode = if iroh_relays.is_empty() {
-        RelayMode::Default
+        RelayMode::Custom(
+            FM_IROH_RELAYS_PROD
+                .into_iter()
+                .map(|url| RelayNode {
+                    url: RelayUrl::from(Url::parse(url).expect("Hardcoded, can't fail")),
+                    stun_only: false,
+                    stun_port: DEFAULT_STUN_PORT,
+                    quic: Some(RelayQuicConfig::default()),
+                })
+                .collect(),
+        )
     } else {
-        RelayMode::Custom(RelayMap::from_nodes(iroh_relays.into_iter().map(|url| {
-            RelayNode {
-                url: RelayUrl::from(url.to_unsafe()),
-                stun_only: false,
-                stun_port: DEFAULT_STUN_PORT,
-                quic: Some(RelayQuicConfig::default()),
-            }
-        }))?)
+        RelayMode::Custom(
+            iroh_relays
+                .into_iter()
+                .map(|url| RelayNode {
+                    url: RelayUrl::from(url.to_unsafe()),
+                    stun_only: false,
+                    stun_port: DEFAULT_STUN_PORT,
+                    quic: Some(RelayQuicConfig::default()),
+                })
+                .collect(),
+        )
     };
 
     let builder = Endpoint::builder()
