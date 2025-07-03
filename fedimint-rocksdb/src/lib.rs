@@ -3,7 +3,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::needless_lifetimes)]
 
-pub mod db_locked;
 pub mod envs;
 
 use std::fmt;
@@ -13,12 +12,12 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use db_locked::{Locked, LockedBuilder};
 use fedimint_core::db::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
     PrefixStream,
 };
 use fedimint_core::task::block_in_place;
+use fedimint_db_locked::{Locked, LockedBuilder};
 use futures::stream;
 pub use rocksdb;
 use rocksdb::{

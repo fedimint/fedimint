@@ -35,6 +35,7 @@ fedimint-api-client = { workspace = true }
 fedimint-bip39 = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-cursed-redb = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-lnv2-client = { workspace = true, features = ["cli"] }

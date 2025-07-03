@@ -18,6 +18,7 @@ use fedimint_gateway_server_db::GatewayDbExt as _;
 use fedimint_gw_client::GatewayClientInit;
 use fedimint_gwv2_client::GatewayClientInitV2;
 
+use crate::config::DatabaseBackend;
 use crate::error::AdminGatewayError;
 use crate::{AdminResult, Gateway};
 
@@ -26,6 +27,7 @@ pub struct GatewayClientBuilder {
     work_dir: PathBuf,
     registry: ClientModuleInitRegistry,
     primary_module_kind: ModuleKind,
+    db_backend: DatabaseBackend,
 }
 
 impl GatewayClientBuilder {
@@ -33,11 +35,13 @@ impl GatewayClientBuilder {
         work_dir: PathBuf,
         registry: ClientModuleInitRegistry,
         primary_module_kind: ModuleKind,
+        db_backend: DatabaseBackend,
     ) -> Self {
         Self {
             work_dir,
             registry,
             primary_module_kind,
+            db_backend,
         }
     }
 
@@ -137,10 +141,20 @@ impl GatewayClientBuilder {
         let db_path = self.work_dir.join(format!("{federation_id}.db"));
 
         let (db, root_secret) = if db_path.exists() {
-            let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone())
-                .await
-                .map_err(AdminGatewayError::ClientCreationError)?;
-            let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
+            let db = match self.db_backend {
+                DatabaseBackend::RocksDb => {
+                    let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone())
+                        .await
+                        .map_err(AdminGatewayError::ClientCreationError)?;
+                    Database::new(rocksdb, ModuleDecoderRegistry::default())
+                }
+                DatabaseBackend::CursedRedb => {
+                    let cursed_redb = fedimint_cursed_redb::MemAndRedb::new(db_path.clone())
+                        .await
+                        .map_err(AdminGatewayError::ClientCreationError)?;
+                    Database::new(cursed_redb, ModuleDecoderRegistry::default())
+                }
+            };
             let root_secret = RootSecret::Custom(self.client_plainrootsecret(&db).await?);
             (db, root_secret)
         } else {

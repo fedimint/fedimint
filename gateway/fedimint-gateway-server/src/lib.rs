@@ -37,8 +37,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid};
 use clap::Parser;
 use client::GatewayClientBuilder;
-use config::GatewayOpts;
 pub use config::GatewayParameters;
+use config::{DatabaseBackend, GatewayOpts};
 use envs::{FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV};
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
@@ -301,13 +301,27 @@ impl Gateway {
 
         let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())?;
 
-        let gateway_db = Database::new(
-            fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE)).await?,
-            decoders,
-        );
+        let db_path = opts.data_dir.join(DB_FILE);
+        let gateway_db = match opts.db_backend {
+            DatabaseBackend::RocksDb => {
+                debug!(target: LOG_GATEWAY, "Using RocksDB database backend");
+                Database::new(fedimint_rocksdb::RocksDb::open(db_path).await?, decoders)
+            }
+            DatabaseBackend::CursedRedb => {
+                debug!(target: LOG_GATEWAY, "Using CursedRedb database backend");
+                Database::new(
+                    fedimint_cursed_redb::MemAndRedb::new(db_path).await?,
+                    decoders,
+                )
+            }
+        };
 
-        let client_builder =
-            GatewayClientBuilder::new(opts.data_dir.clone(), registry, fedimint_mint_client::KIND);
+        let client_builder = GatewayClientBuilder::new(
+            opts.data_dir.clone(),
+            registry,
+            fedimint_mint_client::KIND,
+            opts.db_backend,
+        );
 
         info!(
             target: LOG_GATEWAY,

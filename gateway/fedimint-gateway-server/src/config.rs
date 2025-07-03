@@ -10,6 +10,16 @@ use fedimint_gateway_common::{LightningMode, V1_API_ENDPOINT};
 
 use super::envs;
 
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum DatabaseBackend {
+    /// Use RocksDB database backend
+    #[value(name = "rocksdb")]
+    RocksDb,
+    /// Use CursedRedb database backend (hybrid memory/redb)
+    #[value(name = "cursed-redb")]
+    CursedRedb,
+}
+
 /// Command line parameters for starting the gateway. `mode`, `data_dir`,
 /// `listen`, and `api_addr` are all required.
 #[derive(Parser)]
@@ -49,6 +59,10 @@ pub struct GatewayOpts {
     /// The Lightning module to use: LNv1, LNv2, or both
     #[arg(long = "lightning-module-mode", env = envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, default_value_t = LightningModuleMode::LNv1)]
     lightning_module_mode: LightningModuleMode,
+
+    /// Database backend to use.
+    #[arg(long, env = envs::FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
+    pub db_backend: DatabaseBackend,
 }
 
 impl GatewayOpts {
