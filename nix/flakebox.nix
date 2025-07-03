@@ -214,6 +214,7 @@ let
         pkg-config
         protobuf
         sqlite
+        cmake
       ]
       ++ lib.optionals (!stdenv.isDarwin) [
         util-linux

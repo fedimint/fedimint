@@ -51,7 +51,7 @@ pub struct LocalParams {
     /// Our auth string
     auth: ApiAuth,
     /// Our TLS private key
-    tls_key: Option<rustls::PrivateKey>,
+    tls_key: Option<Arc<rustls::pki_types::PrivateKeyDer<'static>>>,
     /// Optional secret key for our iroh api endpoint
     iroh_api_sk: Option<iroh::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
@@ -225,7 +225,7 @@ impl ISetupApi for SetupApi {
                         .clone()
                         .ok_or_else(|| anyhow::format_err!("P2P URL must be configured"))?,
 
-                    cert: tls_cert.0,
+                    cert: tls_cert.as_ref().to_vec(),
                 },
                 name,
                 federation_name,
