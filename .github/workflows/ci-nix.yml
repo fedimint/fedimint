@@ -385,14 +385,14 @@ jobs:
           # https://tech.aufomm.com/how-to-build-multi-arch-docker-image-on-nixos/?utm_source=chatgpt.com#Tag-multi-arch
           for container in $containers; do
             image="fedimint/$container"
-            if [ "$GITHUB_REF" = "refs/heads/master" ]; then
-              echo "Creating manifest for $image:master"
-              docker manifest create "$image:master" \
-                "$image:master-x86_64-linux" \
-                "$image:master-aarch64-linux"
-              docker manifest annotate "$image:master" "$image:master-x86_64-linux" --arch amd64
-              docker manifest annotate "$image:master" "$image:master-aarch64-linux" --arch arm64
-              docker manifest push "$image:master"
+            if [ "$GITHUB_HEAD_REF" = "2025-07-01-multi-arch-debug" ]; then
+              # echo "Creating manifest for $image:master"
+              # docker manifest create "$image:master" \
+              #   "$image:master-x86_64-linux" \
+              #   "$image:master-aarch64-linux"
+              # docker manifest annotate "$image:master" "$image:master-x86_64-linux" --arch amd64
+              # docker manifest annotate "$image:master" "$image:master-aarch64-linux" --arch arm64
+              # docker manifest push "$image:master"
 
               echo "Creating manifest for $image:${GITHUB_SHA}"
               docker manifest create "$image:${GITHUB_SHA}" \
