@@ -381,6 +381,11 @@ jobs:
           # containers=$(echo '${{ needs.containers.outputs.matrix }}' | jq -r '.[].container.name' | sort -u)
           # echo "containers: $containers"
 
+          echo "GITHUB_HEAD_REF: '$GITHUB_HEAD_REF'"
+          echo "GITHUB_REF: '$GITHUB_REF'"
+          echo "GITHUB_REF_TYPE: '$GITHUB_REF_TYPE'"
+          echo "containers: '$containers'"
+
           # Reference the following blog post for multi arch images with nix and docker manifest
           # https://tech.aufomm.com/how-to-build-multi-arch-docker-image-on-nixos/?utm_source=chatgpt.com#Tag-multi-arch
           for container in $containers; do
