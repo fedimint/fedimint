@@ -368,6 +368,10 @@ jobs:
     needs: containers
     runs-on: [self-hosted, linux, x64]
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Prepare
+        uses: ./.github/actions/prepare
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -380,7 +384,7 @@ jobs:
           containers="fedimintd fedimint-cli gatewayd gateway-cli fedimint-recurringd devtools"
 
           # Reference the following blog post for multi arch images with nix and docker manifest
-          # https://tech.aufomm.com/how-to-build-multi-arch-docker-image-on-nixos/?utm_source=chatgpt.com#Tag-multi-arch
+          # https://tech.aufomm.com/how-to-build-multi-arch-docker-image-on-nixos
           for container in $containers; do
             image="fedimint/$container"
             if [ "$GITHUB_REF" = "refs/heads/master" ]; then
@@ -392,13 +396,13 @@ jobs:
               docker manifest annotate "$image:master" "$image:master-aarch64-linux" --arch arm64
               docker manifest push "$image:master"
 
-              echo "Creating manifest for $image:${GITHUB_SHA}"
-              docker manifest create "$image:${GITHUB_SHA}" \
-                "$image:${GITHUB_SHA}-x86_64-linux" \
-                "$image:${GITHUB_SHA}-aarch64-linux"
-              docker manifest annotate "$image:${GITHUB_SHA}" "$image:${GITHUB_SHA}-x86_64-linux" --arch amd64
-              docker manifest annotate "$image:${GITHUB_SHA}" "$image:${GITHUB_SHA}-aarch64-linux" --arch arm64
-              docker manifest push "$image:${GITHUB_SHA}"
+              echo "Creating manifest for $image:${LAST_COMMIT_SHA}"
+              docker manifest create "$image:${LAST_COMMIT_SHA}" \
+                "$image:${LAST_COMMIT_SHA}-x86_64-linux" \
+                "$image:${LAST_COMMIT_SHA}-aarch64-linux"
+              docker manifest annotate "$image:${LAST_COMMIT_SHA}" "$image:${LAST_COMMIT_SHA}-x86_64-linux" --arch amd64
+              docker manifest annotate "$image:${LAST_COMMIT_SHA}" "$image:${LAST_COMMIT_SHA}-aarch64-linux" --arch arm64
+              docker manifest push "$image:${LAST_COMMIT_SHA}"
             elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
               echo "Creating manifest for $image:${GITHUB_REF_NAME}"
               docker manifest create "$image:${GITHUB_REF_NAME}" \
