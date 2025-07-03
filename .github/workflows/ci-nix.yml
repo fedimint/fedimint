@@ -296,7 +296,7 @@ jobs:
             run_in_pr: true
           - arch: aarch64-linux
             runs-on: [self-hosted, linux, arm64]
-            run_in_pr: false
+            run_in_pr: true
         container:
           - name: fedimintd
             image: fedimint/fedimintd
@@ -341,14 +341,14 @@ jobs:
           echo "container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
-        if: (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
+        if: (github.head_ref == '2025-07-01-multi-arch-debug' || github.ref_type == 'tag') && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
         uses: docker/login-action@v3
         with:
           username: fedimint
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Publish
-        if: github.ref == 'refs/heads/master' && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
+        if: github.head_ref == '2025-07-01-multi-arch-debug' && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
         run: |
           nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${LAST_COMMIT_SHA}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
@@ -363,11 +363,15 @@ jobs:
           nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${GITHUB_REF_NAME}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   manifest:
-    if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
+    if: github.repository == 'fedimint/fedimint' && (github.head_ref == '2025-07-01-multi-arch-debug' || github.ref_type == 'tag')
     name: "Create Multi-arch Manifests"
     needs: containers
     runs-on: [self-hosted, linux, x64]
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Prepare
+        uses: ./.github/actions/prepare
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -377,28 +381,35 @@ jobs:
       - name: Create and push multi-arch manifests
         run: |
           # Get all unique container names from the matrix
-          containers=$(echo '${{ needs.containers.outputs.matrix }}' | jq -r '.[].container.name' | sort -u)
+          containers="fedimintd fedimint-cli gatewayd gateway-cli fedimint-recurringd devtools"
+          # containers=$(echo '${{ needs.containers.outputs.matrix }}' | jq -r '.[].container.name' | sort -u)
+          # echo "containers: $containers"
+
+          echo "GITHUB_HEAD_REF: '$GITHUB_HEAD_REF'"
+          echo "GITHUB_REF: '$GITHUB_REF'"
+          echo "GITHUB_REF_TYPE: '$GITHUB_REF_TYPE'"
+          echo "containers: '$containers'"
 
           # Reference the following blog post for multi arch images with nix and docker manifest
           # https://tech.aufomm.com/how-to-build-multi-arch-docker-image-on-nixos/?utm_source=chatgpt.com#Tag-multi-arch
           for container in $containers; do
             image="fedimint/$container"
-            if [ "$GITHUB_REF" = "refs/heads/master" ]; then
-              echo "Creating manifest for $image:master"
-              docker manifest create "$image:master" \
-                "$image:master-x86_64-linux" \
-                "$image:master-aarch64-linux"
-              docker manifest annotate "$image:master" "$image:master-x86_64-linux" --arch amd64
-              docker manifest annotate "$image:master" "$image:master-aarch64-linux" --arch arm64
-              docker manifest push "$image:master"
+            if [ "$GITHUB_HEAD_REF" = "2025-07-01-multi-arch-debug" ]; then
+              # echo "Creating manifest for $image:master"
+              # docker manifest create "$image:master" \
+              #   "$image:master-x86_64-linux" \
+              #   "$image:master-aarch64-linux"
+              # docker manifest annotate "$image:master" "$image:master-x86_64-linux" --arch amd64
+              # docker manifest annotate "$image:master" "$image:master-aarch64-linux" --arch arm64
+              # docker manifest push "$image:master"
 
-              echo "Creating manifest for $image:${GITHUB_SHA}"
-              docker manifest create "$image:${GITHUB_SHA}" \
-                "$image:${GITHUB_SHA}-x86_64-linux" \
-                "$image:${GITHUB_SHA}-aarch64-linux"
-              docker manifest annotate "$image:${GITHUB_SHA}" "$image:${GITHUB_SHA}-x86_64-linux" --arch amd64
-              docker manifest annotate "$image:${GITHUB_SHA}" "$image:${GITHUB_SHA}-aarch64-linux" --arch arm64
-              docker manifest push "$image:${GITHUB_SHA}"
+              echo "Creating manifest for $image:${LAST_COMMIT_SHA}"
+              docker manifest create "$image:${LAST_COMMIT_SHA}" \
+                "$image:${LAST_COMMIT_SHA}-x86_64-linux" \
+                "$image:${LAST_COMMIT_SHA}-aarch64-linux"
+              docker manifest annotate "$image:${LAST_COMMIT_SHA}" "$image:${LAST_COMMIT_SHA}-x86_64-linux" --arch amd64
+              docker manifest annotate "$image:${LAST_COMMIT_SHA}" "$image:${LAST_COMMIT_SHA}-aarch64-linux" --arch arm64
+              docker manifest push "$image:${LAST_COMMIT_SHA}"
             elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
               echo "Creating manifest for $image:${GITHUB_REF_NAME}"
               docker manifest create "$image:${GITHUB_REF_NAME}" \
