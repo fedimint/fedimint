@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_gateway_common::LightningMode;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_gateway_server::Gateway;
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_gateway_server::client::GatewayClientBuilder;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_gateway_server::config::LightningModuleMode;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_gateway_server::config::{DatabaseBackend, LightningModuleMode};
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_lightning::{ILnRpcClient, LightningContext};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_logging::TracingSetup;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
@@ -213,80 +213,84 @@
 <a href=#213 id=213 data-nosnippet>213</a>        <span class="kw">let </span>(path, _config_dir) = test_dir(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"gateway-{}"</span>, rand::random::&lt;u64&gt;()));
 <a href=#214 id=214 data-nosnippet>214</a>
 <a href=#215 id=215 data-nosnippet>215</a>        <span class="comment">// Create federation client builder for the gateway
-<a href=#216 id=216 data-nosnippet>216</a>        </span><span class="kw">let </span>client_builder: GatewayClientBuilder =
-<a href=#217 id=217 data-nosnippet>217</a>            GatewayClientBuilder::new(path.clone(), registry, ModuleKind::from_static_str(<span class="string">"dummy"</span>));
-<a href=#218 id=218 data-nosnippet>218</a>
-<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = Arc::new(FakeLightningTest::new());
-<a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a>        <span class="kw">let </span>(lightning_public_key, lightning_alias, lightning_network, <span class="kw">_</span>, <span class="kw">_</span>) = ln_client
-<a href=#222 id=222 data-nosnippet>222</a>            .parsed_node_info()
-<a href=#223 id=223 data-nosnippet>223</a>            .<span class="kw">await
-<a href=#224 id=224 data-nosnippet>224</a>            </span>.expect(<span class="string">"Could not get Lightning info"</span>);
-<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">let </span>lightning_context = LightningContext {
-<a href=#226 id=226 data-nosnippet>226</a>            lnrpc: ln_client.clone(),
-<a href=#227 id=227 data-nosnippet>227</a>            lightning_public_key,
-<a href=#228 id=228 data-nosnippet>228</a>            lightning_alias,
-<a href=#229 id=229 data-nosnippet>229</a>            lightning_network,
-<a href=#230 id=230 data-nosnippet>230</a>        };
-<a href=#231 id=231 data-nosnippet>231</a>
-<a href=#232 id=232 data-nosnippet>232</a>        <span class="comment">// Module tests do not use the webserver, so any port is ok
-<a href=#233 id=233 data-nosnippet>233</a>        </span><span class="kw">let </span>listen: SocketAddr = <span class="string">"127.0.0.1:9000"</span>.parse().unwrap();
-<a href=#234 id=234 data-nosnippet>234</a>        <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">"http://{listen}"</span>).parse().unwrap();
+<a href=#216 id=216 data-nosnippet>216</a>        </span><span class="kw">let </span>client_builder: GatewayClientBuilder = GatewayClientBuilder::new(
+<a href=#217 id=217 data-nosnippet>217</a>            path.clone(),
+<a href=#218 id=218 data-nosnippet>218</a>            registry,
+<a href=#219 id=219 data-nosnippet>219</a>            ModuleKind::from_static_str(<span class="string">"dummy"</span>),
+<a href=#220 id=220 data-nosnippet>220</a>            DatabaseBackend::RocksDb,
+<a href=#221 id=221 data-nosnippet>221</a>        );
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = Arc::new(FakeLightningTest::new());
+<a href=#224 id=224 data-nosnippet>224</a>
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">let </span>(lightning_public_key, lightning_alias, lightning_network, <span class="kw">_</span>, <span class="kw">_</span>) = ln_client
+<a href=#226 id=226 data-nosnippet>226</a>            .parsed_node_info()
+<a href=#227 id=227 data-nosnippet>227</a>            .<span class="kw">await
+<a href=#228 id=228 data-nosnippet>228</a>            </span>.expect(<span class="string">"Could not get Lightning info"</span>);
+<a href=#229 id=229 data-nosnippet>229</a>        <span class="kw">let </span>lightning_context = LightningContext {
+<a href=#230 id=230 data-nosnippet>230</a>            lnrpc: ln_client.clone(),
+<a href=#231 id=231 data-nosnippet>231</a>            lightning_public_key,
+<a href=#232 id=232 data-nosnippet>232</a>            lightning_alias,
+<a href=#233 id=233 data-nosnippet>233</a>            lightning_network,
+<a href=#234 id=234 data-nosnippet>234</a>        };
 <a href=#235 id=235 data-nosnippet>235</a>
-<a href=#236 id=236 data-nosnippet>236</a>        Gateway::new_with_custom_registry(
-<a href=#237 id=237 data-nosnippet>237</a>            <span class="comment">// Fixtures does not use real lightning connection, so just fake the connection
-<a href=#238 id=238 data-nosnippet>238</a>            // parameters
-<a href=#239 id=239 data-nosnippet>239</a>            </span>LightningMode::Lnd {
-<a href=#240 id=240 data-nosnippet>240</a>                lnd_rpc_addr: <span class="string">"FakeRpcAddr"</span>.to_string(),
-<a href=#241 id=241 data-nosnippet>241</a>                lnd_tls_cert: <span class="string">"FakeTlsCert"</span>.to_string(),
-<a href=#242 id=242 data-nosnippet>242</a>                lnd_macaroon: <span class="string">"FakeMacaroon"</span>.to_string(),
-<a href=#243 id=243 data-nosnippet>243</a>            },
-<a href=#244 id=244 data-nosnippet>244</a>            client_builder,
-<a href=#245 id=245 data-nosnippet>245</a>            listen,
-<a href=#246 id=246 data-nosnippet>246</a>            address.clone(),
-<a href=#247 id=247 data-nosnippet>247</a>            bcrypt::HashParts::from_str(
-<a href=#248 id=248 data-nosnippet>248</a>                <span class="kw-2">&amp;</span>bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
-<a href=#249 id=249 data-nosnippet>249</a>            )
-<a href=#250 id=250 data-nosnippet>250</a>            .unwrap(),
-<a href=#251 id=251 data-nosnippet>251</a>            bitcoin::Network::Regtest,
-<a href=#252 id=252 data-nosnippet>252</a>            <span class="number">0</span>,
-<a href=#253 id=253 data-nosnippet>253</a>            gateway_db,
-<a href=#254 id=254 data-nosnippet>254</a>            <span class="comment">// Manually set the gateway's state to `Running`. In tests, we do don't run the
-<a href=#255 id=255 data-nosnippet>255</a>            // webserver or intercept HTLCs, so this is necessary for instructing the
-<a href=#256 id=256 data-nosnippet>256</a>            // gateway that it is connected to the mock Lightning node.
-<a href=#257 id=257 data-nosnippet>257</a>            </span>fedimint_gateway_server::GatewayState::Running { lightning_context },
-<a href=#258 id=258 data-nosnippet>258</a>            lightning_module_mode,
-<a href=#259 id=259 data-nosnippet>259</a>        )
-<a href=#260 id=260 data-nosnippet>260</a>        .<span class="kw">await
-<a href=#261 id=261 data-nosnippet>261</a>        </span>.expect(<span class="string">"Failed to create gateway"</span>)
-<a href=#262 id=262 data-nosnippet>262</a>    }
-<a href=#263 id=263 data-nosnippet>263</a>
-<a href=#264 id=264 data-nosnippet>264</a>    <span class="doccomment">/// Get a server bitcoin RPC config
-<a href=#265 id=265 data-nosnippet>265</a>    </span><span class="kw">pub fn </span>bitcoin_server(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
-<a href=#266 id=266 data-nosnippet>266</a>        <span class="self">self</span>.bitcoin_rpc.clone()
-<a href=#267 id=267 data-nosnippet>267</a>    }
-<a href=#268 id=268 data-nosnippet>268</a>
-<a href=#269 id=269 data-nosnippet>269</a>    <span class="kw">pub fn </span>client_esplora_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynBitcoindRpc {
-<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">if </span>Fixtures::is_real_test() {
-<a href=#271 id=271 data-nosnippet>271</a>            create_esplora_rpc(
-<a href=#272 id=272 data-nosnippet>272</a>                <span class="kw-2">&amp;</span>SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#273 id=273 data-nosnippet>273</a>                    <span class="string">"http://127.0.0.1:{}/"</span>,
-<a href=#274 id=274 data-nosnippet>274</a>                    env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
-<a href=#275 id=275 data-nosnippet>275</a>                ))
-<a href=#276 id=276 data-nosnippet>276</a>                .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#277 id=277 data-nosnippet>277</a>            )
-<a href=#278 id=278 data-nosnippet>278</a>            .unwrap()
-<a href=#279 id=279 data-nosnippet>279</a>        } <span class="kw">else </span>{
-<a href=#280 id=280 data-nosnippet>280</a>            <span class="self">self</span>.fake_bitcoin_rpc.clone().unwrap()
-<a href=#281 id=281 data-nosnippet>281</a>        }
-<a href=#282 id=282 data-nosnippet>282</a>    }
-<a href=#283 id=283 data-nosnippet>283</a>
-<a href=#284 id=284 data-nosnippet>284</a>    <span class="doccomment">/// Get a test bitcoin fixture
-<a href=#285 id=285 data-nosnippet>285</a>    </span><span class="kw">pub fn </span>bitcoin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt; {
-<a href=#286 id=286 data-nosnippet>286</a>        <span class="self">self</span>.bitcoin.clone()
-<a href=#287 id=287 data-nosnippet>287</a>    }
-<a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a>    <span class="kw">pub fn </span>server_bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynServerBitcoinRpc {
-<a href=#290 id=290 data-nosnippet>290</a>        <span class="self">self</span>.server_bitcoin_rpc.clone()
+<a href=#236 id=236 data-nosnippet>236</a>        <span class="comment">// Module tests do not use the webserver, so any port is ok
+<a href=#237 id=237 data-nosnippet>237</a>        </span><span class="kw">let </span>listen: SocketAddr = <span class="string">"127.0.0.1:9000"</span>.parse().unwrap();
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">"http://{listen}"</span>).parse().unwrap();
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a>        Gateway::new_with_custom_registry(
+<a href=#241 id=241 data-nosnippet>241</a>            <span class="comment">// Fixtures does not use real lightning connection, so just fake the connection
+<a href=#242 id=242 data-nosnippet>242</a>            // parameters
+<a href=#243 id=243 data-nosnippet>243</a>            </span>LightningMode::Lnd {
+<a href=#244 id=244 data-nosnippet>244</a>                lnd_rpc_addr: <span class="string">"FakeRpcAddr"</span>.to_string(),
+<a href=#245 id=245 data-nosnippet>245</a>                lnd_tls_cert: <span class="string">"FakeTlsCert"</span>.to_string(),
+<a href=#246 id=246 data-nosnippet>246</a>                lnd_macaroon: <span class="string">"FakeMacaroon"</span>.to_string(),
+<a href=#247 id=247 data-nosnippet>247</a>            },
+<a href=#248 id=248 data-nosnippet>248</a>            client_builder,
+<a href=#249 id=249 data-nosnippet>249</a>            listen,
+<a href=#250 id=250 data-nosnippet>250</a>            address.clone(),
+<a href=#251 id=251 data-nosnippet>251</a>            bcrypt::HashParts::from_str(
+<a href=#252 id=252 data-nosnippet>252</a>                <span class="kw-2">&amp;</span>bcrypt::hash(DEFAULT_GATEWAY_PASSWORD, bcrypt::DEFAULT_COST).unwrap(),
+<a href=#253 id=253 data-nosnippet>253</a>            )
+<a href=#254 id=254 data-nosnippet>254</a>            .unwrap(),
+<a href=#255 id=255 data-nosnippet>255</a>            bitcoin::Network::Regtest,
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="number">0</span>,
+<a href=#257 id=257 data-nosnippet>257</a>            gateway_db,
+<a href=#258 id=258 data-nosnippet>258</a>            <span class="comment">// Manually set the gateway's state to `Running`. In tests, we do don't run the
+<a href=#259 id=259 data-nosnippet>259</a>            // webserver or intercept HTLCs, so this is necessary for instructing the
+<a href=#260 id=260 data-nosnippet>260</a>            // gateway that it is connected to the mock Lightning node.
+<a href=#261 id=261 data-nosnippet>261</a>            </span>fedimint_gateway_server::GatewayState::Running { lightning_context },
+<a href=#262 id=262 data-nosnippet>262</a>            lightning_module_mode,
+<a href=#263 id=263 data-nosnippet>263</a>        )
+<a href=#264 id=264 data-nosnippet>264</a>        .<span class="kw">await
+<a href=#265 id=265 data-nosnippet>265</a>        </span>.expect(<span class="string">"Failed to create gateway"</span>)
+<a href=#266 id=266 data-nosnippet>266</a>    }
+<a href=#267 id=267 data-nosnippet>267</a>
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="doccomment">/// Get a server bitcoin RPC config
+<a href=#269 id=269 data-nosnippet>269</a>    </span><span class="kw">pub fn </span>bitcoin_server(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="self">self</span>.bitcoin_rpc.clone()
+<a href=#271 id=271 data-nosnippet>271</a>    }
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="kw">pub fn </span>client_esplora_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynBitcoindRpc {
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">if </span>Fixtures::is_real_test() {
+<a href=#275 id=275 data-nosnippet>275</a>            create_esplora_rpc(
+<a href=#276 id=276 data-nosnippet>276</a>                <span class="kw-2">&amp;</span>SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#277 id=277 data-nosnippet>277</a>                    <span class="string">"http://127.0.0.1:{}/"</span>,
+<a href=#278 id=278 data-nosnippet>278</a>                    env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
+<a href=#279 id=279 data-nosnippet>279</a>                ))
+<a href=#280 id=280 data-nosnippet>280</a>                .expect(<span class="string">"Failed to parse default esplora server"</span>),
+<a href=#281 id=281 data-nosnippet>281</a>            )
+<a href=#282 id=282 data-nosnippet>282</a>            .unwrap()
+<a href=#283 id=283 data-nosnippet>283</a>        } <span class="kw">else </span>{
+<a href=#284 id=284 data-nosnippet>284</a>            <span class="self">self</span>.fake_bitcoin_rpc.clone().unwrap()
+<a href=#285 id=285 data-nosnippet>285</a>        }
+<a href=#286 id=286 data-nosnippet>286</a>    }
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="doccomment">/// Get a test bitcoin fixture
+<a href=#289 id=289 data-nosnippet>289</a>    </span><span class="kw">pub fn </span>bitcoin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt; {
+<a href=#290 id=290 data-nosnippet>290</a>        <span class="self">self</span>.bitcoin.clone()
 <a href=#291 id=291 data-nosnippet>291</a>    }
-<a href=#292 id=292 data-nosnippet>292</a>}</code></pre></div></section></main></body></html>
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>    <span class="kw">pub fn </span>server_bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynServerBitcoinRpc {
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="self">self</span>.server_bitcoin_rpc.clone()
+<a href=#295 id=295 data-nosnippet>295</a>    }
+<a href=#296 id=296 data-nosnippet>296</a>}</code></pre></div></section></main></body></html>
