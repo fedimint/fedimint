@@ -311,7 +311,9 @@ jobs:
           - name: devtools
             image: fedimint/devtools
     runs-on: ${{ matrix.platform.runs-on }}
-    timeout-minutes: 60
+    # TODO: reduce back to 60
+    # https://github.com/fedimint/fedimint/issues/7561
+    timeout-minutes: 120
     steps:
       - name: Checkout Code
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
