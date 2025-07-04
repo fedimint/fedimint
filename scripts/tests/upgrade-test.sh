@@ -155,8 +155,8 @@ parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
 parallel_args+=(--timeout "$FM_TEST_UPGRADE_TIMEOUT")
+# may need to reintroduce retries
 parallel_args+=(
-  --halt-on-error 1
   --joblog "$joblog"
   --noswap
   --memfree 2G
