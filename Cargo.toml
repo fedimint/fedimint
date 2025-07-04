@@ -14,6 +14,7 @@ members = [
   "fedimint-cli",
   "fedimint-client",
   "fedimint-client-module",
+  "fedimint-client-rpc",
   "fedimint-client-wasm",
   "fedimint-core",
   "fedimint-cursed-redb",
@@ -21,6 +22,7 @@ members = [
   "fedimint-dbtool",
   "fedimint-derive",
   "fedimint-eventlog",
+  "fedimint-indexeddb",
   "fedimint-load-test-tool",
   "fedimint-logging",
   "fedimint-metrics",
@@ -160,6 +162,7 @@ fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.8.0-alpha" }
 fedimint-build = { path = "./fedimint-build", version = "=0.8.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.8.0-alpha" }
 fedimint-client-module = { path = "./fedimint-client-module", version = "=0.8.0-alpha" }
+fedimint-client-rpc = { path = "./fedimint-client-rpc", version = "=0.8.0-alpha" }
 fedimint-core = { path = "./fedimint-core", version = "=0.8.0-alpha" }
 fedimint-cursed-redb = { path = "./fedimint-cursed-redb", version = "=0.8.0-alpha" }
 fedimint-db-locked = { path = "./fedimint-db-locked", version = "=0.8.0-alpha" }
@@ -175,6 +178,7 @@ fedimint-gateway-server = { package = "fedimint-gateway-server", path = "./gatew
 fedimint-gateway-server-db = { package = "fedimint-gateway-server-db", path = "./gateway/fedimint-gateway-server-db", version = "=0.8.0-alpha" }
 fedimint-gw-client = { path = "./modules/fedimint-gw-client", version = "=0.8.0-alpha" }
 fedimint-gwv2-client = { path = "./modules/fedimint-gwv2-client", version = "=0.8.0-alpha" }
+fedimint-indexeddb = { path = "./fedimint-indexeddb", version = "=0.8.0-alpha" }
 fedimint-lightning = { package = "fedimint-lightning", path = "./gateway/fedimint-lightning", version = "=0.8.0-alpha" }
 fedimint-ln-client = { path = "./modules/fedimint-ln-client", version = "=0.8.0-alpha" }
 fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.8.0-alpha" }

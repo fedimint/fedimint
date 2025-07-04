@@ -2888,6 +2888,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-client-rpc"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-ln-client",
+ "fedimint-mint-client",
+ "fedimint-wallet-client",
+ "futures",
+ "lightning-invoice",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-client-wasm"
 version = "0.8.0-alpha"
 dependencies = [
@@ -2897,14 +2918,12 @@ dependencies = [
  "fedimint-api-client",
  "fedimint-client",
  "fedimint-client-module",
+ "fedimint-client-rpc",
  "fedimint-core",
- "fedimint-ln-client",
- "fedimint-mint-client",
- "fedimint-wallet-client",
+ "fedimint-indexeddb",
  "futures",
  "imbl",
  "js-sys",
- "lightning-invoice",
  "rexie",
  "serde_json",
  "wasm-bindgen",
@@ -3402,6 +3421,21 @@ name = "fedimint-hkdf"
 version = "0.8.0-alpha"
 dependencies = [
  "bitcoin_hashes 0.14.0",
+]
+
+[[package]]
+name = "fedimint-indexeddb"
+version = "0.8.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+ "futures",
+ "imbl",
+ "js-sys",
+ "rexie",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
