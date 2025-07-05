@@ -2258,7 +2258,7 @@ dependencies = [
  "itertools 0.14.0",
  "nix",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "semver",
  "serde",
  "serde_json",
@@ -2641,7 +2641,7 @@ dependencies = [
  "bitcoin",
  "hex-conservative 0.2.1",
  "log",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "tokio",
 ]
@@ -2847,7 +2847,7 @@ dependencies = [
  "fedimint-eventlog",
  "fedimint-logging",
  "futures",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -2876,7 +2876,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -3222,7 +3222,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-mint-client",
  "lightning-invoice",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -3301,7 +3301,7 @@ dependencies = [
  "lockable",
  "prost 0.13.5",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -3452,7 +3452,7 @@ dependencies = [
  "lightning-invoice",
  "lnurl-rs",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -3575,7 +3575,7 @@ dependencies = [
  "group",
  "lightning-invoice",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -3933,7 +3933,7 @@ dependencies = [
  "anyhow",
  "devimint",
  "lightning-invoice",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde_json",
  "tokio",
  "tracing",
@@ -5723,7 +5723,7 @@ dependencies = [
  "portmapper 0.5.0",
  "rand 0.8.5",
  "rcgen",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "ring 0.17.14",
  "rustls 0.23.28",
  "rustls-webpki 0.102.8",
@@ -5784,7 +5784,7 @@ dependencies = [
  "pkarr",
  "portmapper 0.6.1",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "ring 0.17.14",
  "rustls 0.23.28",
  "rustls-pki-types",
@@ -5983,7 +5983,7 @@ dependencies = [
  "pkarr",
  "postcard",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "rustls 0.23.28",
  "rustls-webpki 0.102.8",
  "serde",
@@ -6031,7 +6031,7 @@ dependencies = [
  "pkarr",
  "postcard",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "rustls 0.23.28",
  "rustls-pki-types",
  "rustls-webpki 0.103.3",
@@ -6341,7 +6341,7 @@ dependencies = [
  "log",
  "prost 0.11.9",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "rusqlite",
  "serde",
  "serde_json",
@@ -6596,7 +6596,7 @@ dependencies = [
  "bitcoin",
  "cbc",
  "email_address",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "url",
@@ -6611,7 +6611,7 @@ dependencies = [
  "fedimint-core",
  "lightning-invoice",
  "lnurl-rs",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "tokio",
 ]
 
@@ -6841,9 +6841,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "12.3.2"
+version = "12.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0760e92feaf4ee26bd2e616f557de64712bf1e75f3b1b218dfb475c0a84c7943"
+checksum = "16137581c4511d1ed210f2452669006fca0f1e2bb28e00ee37a9e3b87a6e7e8c"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -7747,7 +7747,7 @@ dependencies = [
  "lru 0.13.0",
  "mainline",
  "ntimestamp",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "self_cell",
  "serde",
  "sha1_smol",
@@ -8695,9 +8695,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.20"
+version = "0.12.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eabf4c97d9130e2bf606614eb937e86edac8292eaa6f422f995d7e8de1eb1813"
+checksum = "cbc931937e6ca3a06e3b6c0aa7841849b160a90351d6ab467a8b9b9959767531"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -9839,9 +9839,9 @@ dependencies = [
 
 [[package]]
 name = "test-log"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7f46083d221181166e5b6f6b1e5f1d499f3a76888826e6cb1d057554157cd0f"
+checksum = "1e33b98a582ea0be1168eba097538ee8dd4bbe0f2b01b22ac92ea30054e5be7b"
 dependencies = [
  "test-log-macros",
  "tracing-subscriber",
@@ -9849,9 +9849,9 @@ dependencies = [
 
 [[package]]
 name = "test-log-macros"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "888d0c3c6db53c0fdab160d2ed5e12ba745383d3e85813f2ea0f2b1475ab553f"
+checksum = "451b374529930d7601b1eef8d32bc79ae870b6079b069401709c2a8bf9e75f36"
 dependencies = [
  "proc-macro2",
  "quote",
