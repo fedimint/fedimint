@@ -321,9 +321,14 @@ pub(crate) async fn build_iroh_endpoint(
     iroh_relays: Vec<SafeUrl>,
     alpn: &[u8],
 ) -> Result<Endpoint, anyhow::Error> {
-    let iroh_dns = iroh_dns.clone().map_or(
-        FM_DNS_PKARR_RELAY_PROD.parse().expect("Can't fail"),
-        SafeUrl::to_unsafe,
+    let iroh_dns_servers: Vec<_> = iroh_dns.clone().map_or_else(
+        || {
+            FM_DNS_PKARR_RELAY_PROD
+                .into_iter()
+                .map(|dns| dns.parse().expect("Can't fail"))
+                .collect()
+        },
+        |iroh_dns| vec![iroh_dns.to_unsafe()],
     );
 
     let relay_mode = if iroh_relays.is_empty() {
@@ -352,12 +357,18 @@ pub(crate) async fn build_iroh_endpoint(
         )
     };
 
-    let builder = Endpoint::builder()
-        .add_discovery({
-            let iroh_dns = iroh_dns.clone();
-            move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
-        })
-        .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)))
+    let mut builder = Endpoint::builder();
+
+    for iroh_dns in iroh_dns_servers {
+        builder = builder
+            .add_discovery({
+                let iroh_dns = iroh_dns.clone();
+                move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
+            })
+            .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+    }
+
+    builder = builder
         .discovery_dht()
         .relay_mode(relay_mode)
         .secret_key(secret_key)
