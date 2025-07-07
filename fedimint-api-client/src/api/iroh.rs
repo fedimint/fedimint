@@ -58,9 +58,14 @@ impl IrohConnector {
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
     ) -> anyhow::Result<Self> {
-        let iroh_dns = iroh_dns.map_or(
-            Url::parse(FM_DNS_PKARR_RELAY_PROD).expect("Hardcoded, can't fail"),
-            SafeUrl::to_unsafe,
+        let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
+            || {
+                FM_DNS_PKARR_RELAY_PROD
+                    .into_iter()
+                    .map(|url| Url::parse(url).expect("Hardcoded, can't fail"))
+                    .collect()
+            },
+            |url| vec![url.to_unsafe()],
         );
         let node_ids = peers
             .into_iter()
@@ -74,12 +79,17 @@ impl IrohConnector {
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
         let endpoint_stable = {
-            let builder = Endpoint::builder()
-                .add_discovery({
-                    let iroh_dns = iroh_dns.clone();
-                    move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
-                })
-                .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+            let mut builder = Endpoint::builder();
+
+            for iroh_dns in iroh_dns_servers {
+                builder = builder
+                    .add_discovery({
+                        let iroh_dns = iroh_dns.clone();
+                        move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
+                    })
+                    .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+            }
+
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
             let endpoint = builder.bind().await?;
