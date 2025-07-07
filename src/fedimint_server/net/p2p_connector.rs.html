@@ -321,109 +321,120 @@
 <a href=#321 id=321 data-nosnippet>321</a>    iroh_relays: Vec&lt;SafeUrl&gt;,
 <a href=#322 id=322 data-nosnippet>322</a>    alpn: <span class="kw-2">&amp;</span>[u8],
 <a href=#323 id=323 data-nosnippet>323</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Endpoint, anyhow::Error&gt; {
-<a href=#324 id=324 data-nosnippet>324</a>    <span class="kw">let </span>iroh_dns = iroh_dns.clone().map_or(
-<a href=#325 id=325 data-nosnippet>325</a>        FM_DNS_PKARR_RELAY_PROD.parse().expect(<span class="string">"Can't fail"</span>),
-<a href=#326 id=326 data-nosnippet>326</a>        SafeUrl::to_unsafe,
-<a href=#327 id=327 data-nosnippet>327</a>    );
-<a href=#328 id=328 data-nosnippet>328</a>
-<a href=#329 id=329 data-nosnippet>329</a>    <span class="kw">let </span>relay_mode = <span class="kw">if </span>iroh_relays.is_empty() {
-<a href=#330 id=330 data-nosnippet>330</a>        RelayMode::Custom(
-<a href=#331 id=331 data-nosnippet>331</a>            FM_IROH_RELAYS_PROD
-<a href=#332 id=332 data-nosnippet>332</a>                .into_iter()
-<a href=#333 id=333 data-nosnippet>333</a>                .map(|url| RelayNode {
-<a href=#334 id=334 data-nosnippet>334</a>                    url: RelayUrl::from(Url::parse(url).expect(<span class="string">"Hardcoded, can't fail"</span>)),
-<a href=#335 id=335 data-nosnippet>335</a>                    stun_only: <span class="bool-val">false</span>,
-<a href=#336 id=336 data-nosnippet>336</a>                    stun_port: DEFAULT_STUN_PORT,
-<a href=#337 id=337 data-nosnippet>337</a>                    quic: <span class="prelude-val">Some</span>(RelayQuicConfig::default()),
-<a href=#338 id=338 data-nosnippet>338</a>                })
-<a href=#339 id=339 data-nosnippet>339</a>                .collect(),
-<a href=#340 id=340 data-nosnippet>340</a>        )
-<a href=#341 id=341 data-nosnippet>341</a>    } <span class="kw">else </span>{
-<a href=#342 id=342 data-nosnippet>342</a>        RelayMode::Custom(
-<a href=#343 id=343 data-nosnippet>343</a>            iroh_relays
-<a href=#344 id=344 data-nosnippet>344</a>                .into_iter()
-<a href=#345 id=345 data-nosnippet>345</a>                .map(|url| RelayNode {
-<a href=#346 id=346 data-nosnippet>346</a>                    url: RelayUrl::from(url.to_unsafe()),
-<a href=#347 id=347 data-nosnippet>347</a>                    stun_only: <span class="bool-val">false</span>,
-<a href=#348 id=348 data-nosnippet>348</a>                    stun_port: DEFAULT_STUN_PORT,
-<a href=#349 id=349 data-nosnippet>349</a>                    quic: <span class="prelude-val">Some</span>(RelayQuicConfig::default()),
-<a href=#350 id=350 data-nosnippet>350</a>                })
-<a href=#351 id=351 data-nosnippet>351</a>                .collect(),
-<a href=#352 id=352 data-nosnippet>352</a>        )
-<a href=#353 id=353 data-nosnippet>353</a>    };
-<a href=#354 id=354 data-nosnippet>354</a>
-<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">let </span>builder = Endpoint::builder()
-<a href=#356 id=356 data-nosnippet>356</a>        .add_discovery({
-<a href=#357 id=357 data-nosnippet>357</a>            <span class="kw">let </span>iroh_dns = iroh_dns.clone();
-<a href=#358 id=358 data-nosnippet>358</a>            <span class="kw">move </span>|sk: <span class="kw-2">&amp;</span>SecretKey| <span class="prelude-val">Some</span>(PkarrPublisher::new(sk.clone(), iroh_dns))
-<a href=#359 id=359 data-nosnippet>359</a>        })
-<a href=#360 id=360 data-nosnippet>360</a>        .add_discovery(|<span class="kw">_</span>| <span class="prelude-val">Some</span>(PkarrResolver::new(iroh_dns)))
-<a href=#361 id=361 data-nosnippet>361</a>        .discovery_dht()
-<a href=#362 id=362 data-nosnippet>362</a>        .relay_mode(relay_mode)
-<a href=#363 id=363 data-nosnippet>363</a>        .secret_key(secret_key)
-<a href=#364 id=364 data-nosnippet>364</a>        .alpns(<span class="macro">vec!</span>[alpn.to_vec()]);
-<a href=#365 id=365 data-nosnippet>365</a>
-<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">let </span>builder = <span class="kw">match </span>bind_addr {
-<a href=#367 id=367 data-nosnippet>367</a>        SocketAddr::V4(addr_v4) =&gt; builder.bind_addr_v4(addr_v4),
-<a href=#368 id=368 data-nosnippet>368</a>        SocketAddr::V6(addr_v6) =&gt; builder.bind_addr_v6(addr_v6),
-<a href=#369 id=369 data-nosnippet>369</a>    };
+<a href=#324 id=324 data-nosnippet>324</a>    <span class="kw">let </span>iroh_dns_servers: Vec&lt;<span class="kw">_</span>&gt; = iroh_dns.clone().map_or_else(
+<a href=#325 id=325 data-nosnippet>325</a>        || {
+<a href=#326 id=326 data-nosnippet>326</a>            FM_DNS_PKARR_RELAY_PROD
+<a href=#327 id=327 data-nosnippet>327</a>                .into_iter()
+<a href=#328 id=328 data-nosnippet>328</a>                .map(|dns| dns.parse().expect(<span class="string">"Can't fail"</span>))
+<a href=#329 id=329 data-nosnippet>329</a>                .collect()
+<a href=#330 id=330 data-nosnippet>330</a>        },
+<a href=#331 id=331 data-nosnippet>331</a>        |iroh_dns| <span class="macro">vec!</span>[iroh_dns.to_unsafe()],
+<a href=#332 id=332 data-nosnippet>332</a>    );
+<a href=#333 id=333 data-nosnippet>333</a>
+<a href=#334 id=334 data-nosnippet>334</a>    <span class="kw">let </span>relay_mode = <span class="kw">if </span>iroh_relays.is_empty() {
+<a href=#335 id=335 data-nosnippet>335</a>        RelayMode::Custom(
+<a href=#336 id=336 data-nosnippet>336</a>            FM_IROH_RELAYS_PROD
+<a href=#337 id=337 data-nosnippet>337</a>                .into_iter()
+<a href=#338 id=338 data-nosnippet>338</a>                .map(|url| RelayNode {
+<a href=#339 id=339 data-nosnippet>339</a>                    url: RelayUrl::from(Url::parse(url).expect(<span class="string">"Hardcoded, can't fail"</span>)),
+<a href=#340 id=340 data-nosnippet>340</a>                    stun_only: <span class="bool-val">false</span>,
+<a href=#341 id=341 data-nosnippet>341</a>                    stun_port: DEFAULT_STUN_PORT,
+<a href=#342 id=342 data-nosnippet>342</a>                    quic: <span class="prelude-val">Some</span>(RelayQuicConfig::default()),
+<a href=#343 id=343 data-nosnippet>343</a>                })
+<a href=#344 id=344 data-nosnippet>344</a>                .collect(),
+<a href=#345 id=345 data-nosnippet>345</a>        )
+<a href=#346 id=346 data-nosnippet>346</a>    } <span class="kw">else </span>{
+<a href=#347 id=347 data-nosnippet>347</a>        RelayMode::Custom(
+<a href=#348 id=348 data-nosnippet>348</a>            iroh_relays
+<a href=#349 id=349 data-nosnippet>349</a>                .into_iter()
+<a href=#350 id=350 data-nosnippet>350</a>                .map(|url| RelayNode {
+<a href=#351 id=351 data-nosnippet>351</a>                    url: RelayUrl::from(url.to_unsafe()),
+<a href=#352 id=352 data-nosnippet>352</a>                    stun_only: <span class="bool-val">false</span>,
+<a href=#353 id=353 data-nosnippet>353</a>                    stun_port: DEFAULT_STUN_PORT,
+<a href=#354 id=354 data-nosnippet>354</a>                    quic: <span class="prelude-val">Some</span>(RelayQuicConfig::default()),
+<a href=#355 id=355 data-nosnippet>355</a>                })
+<a href=#356 id=356 data-nosnippet>356</a>                .collect(),
+<a href=#357 id=357 data-nosnippet>357</a>        )
+<a href=#358 id=358 data-nosnippet>358</a>    };
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="kw">let </span><span class="kw-2">mut </span>builder = Endpoint::builder();
+<a href=#361 id=361 data-nosnippet>361</a>
+<a href=#362 id=362 data-nosnippet>362</a>    <span class="kw">for </span>iroh_dns <span class="kw">in </span>iroh_dns_servers {
+<a href=#363 id=363 data-nosnippet>363</a>        builder = builder
+<a href=#364 id=364 data-nosnippet>364</a>            .add_discovery({
+<a href=#365 id=365 data-nosnippet>365</a>                <span class="kw">let </span>iroh_dns = iroh_dns.clone();
+<a href=#366 id=366 data-nosnippet>366</a>                <span class="kw">move </span>|sk: <span class="kw-2">&amp;</span>SecretKey| <span class="prelude-val">Some</span>(PkarrPublisher::new(sk.clone(), iroh_dns))
+<a href=#367 id=367 data-nosnippet>367</a>            })
+<a href=#368 id=368 data-nosnippet>368</a>            .add_discovery(|<span class="kw">_</span>| <span class="prelude-val">Some</span>(PkarrResolver::new(iroh_dns)));
+<a href=#369 id=369 data-nosnippet>369</a>    }
 <a href=#370 id=370 data-nosnippet>370</a>
-<a href=#371 id=371 data-nosnippet>371</a>    <span class="kw">let </span>endpoint = builder.bind().<span class="kw">await</span>.expect(<span class="string">"Could not bind to port"</span>);
-<a href=#372 id=372 data-nosnippet>372</a>
-<a href=#373 id=373 data-nosnippet>373</a>    <span class="macro">info!</span>(
-<a href=#374 id=374 data-nosnippet>374</a>        target: LOG_NET_IROH,
-<a href=#375 id=375 data-nosnippet>375</a>        %bind_addr,
-<a href=#376 id=376 data-nosnippet>376</a>        node_id = %endpoint.node_id(),
-<a href=#377 id=377 data-nosnippet>377</a>        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-<a href=#378 id=378 data-nosnippet>378</a>        <span class="string">"Iroh p2p server endpoint"
-<a href=#379 id=379 data-nosnippet>379</a>    </span>);
-<a href=#380 id=380 data-nosnippet>380</a>
-<a href=#381 id=381 data-nosnippet>381</a>    <span class="prelude-val">Ok</span>(endpoint)
-<a href=#382 id=382 data-nosnippet>382</a>}
+<a href=#371 id=371 data-nosnippet>371</a>    builder = builder
+<a href=#372 id=372 data-nosnippet>372</a>        .discovery_dht()
+<a href=#373 id=373 data-nosnippet>373</a>        .relay_mode(relay_mode)
+<a href=#374 id=374 data-nosnippet>374</a>        .secret_key(secret_key)
+<a href=#375 id=375 data-nosnippet>375</a>        .alpns(<span class="macro">vec!</span>[alpn.to_vec()]);
+<a href=#376 id=376 data-nosnippet>376</a>
+<a href=#377 id=377 data-nosnippet>377</a>    <span class="kw">let </span>builder = <span class="kw">match </span>bind_addr {
+<a href=#378 id=378 data-nosnippet>378</a>        SocketAddr::V4(addr_v4) =&gt; builder.bind_addr_v4(addr_v4),
+<a href=#379 id=379 data-nosnippet>379</a>        SocketAddr::V6(addr_v6) =&gt; builder.bind_addr_v6(addr_v6),
+<a href=#380 id=380 data-nosnippet>380</a>    };
+<a href=#381 id=381 data-nosnippet>381</a>
+<a href=#382 id=382 data-nosnippet>382</a>    <span class="kw">let </span>endpoint = builder.bind().<span class="kw">await</span>.expect(<span class="string">"Could not bind to port"</span>);
 <a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a><span class="attr">#[async_trait]
-<a href=#385 id=385 data-nosnippet>385</a></span><span class="kw">impl</span>&lt;M&gt; IP2PConnector&lt;M&gt; <span class="kw">for </span>IrohConnector
-<a href=#386 id=386 data-nosnippet>386</a><span class="kw">where
-<a href=#387 id=387 data-nosnippet>387</a>    </span>M: Encodable + Decodable + Serialize + DeserializeOwned + Send + <span class="lifetime">'static</span>,
-<a href=#388 id=388 data-nosnippet>388</a>{
-<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
-<a href=#390 id=390 data-nosnippet>390</a>        <span class="self">self</span>.node_ids.keys().copied().collect()
-<a href=#391 id=391 data-nosnippet>391</a>    }
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a>    <span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; anyhow::Result&lt;DynP2PConnection&lt;M&gt;&gt; {
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="kw">let </span>node_id = <span class="kw-2">*</span><span class="self">self</span>.node_ids.get(<span class="kw-2">&amp;</span>peer).expect(<span class="string">"No node id found for peer"</span>);
-<a href=#395 id=395 data-nosnippet>395</a>
-<a href=#396 id=396 data-nosnippet>396</a>        <span class="kw">let </span>connection = <span class="kw">match </span><span class="self">self</span>.connection_overrides.get(<span class="kw-2">&amp;</span>node_id) {
-<a href=#397 id=397 data-nosnippet>397</a>            <span class="prelude-val">Some</span>(node_addr) =&gt; {
-<a href=#398 id=398 data-nosnippet>398</a>                <span class="macro">trace!</span>(target: LOG_NET_IROH, %node_id, <span class="string">"Using a connectivity override for connection"</span>);
-<a href=#399 id=399 data-nosnippet>399</a>                <span class="self">self</span>.endpoint
-<a href=#400 id=400 data-nosnippet>400</a>                    .connect(node_addr.clone(), FEDIMINT_P2P_ALPN)
-<a href=#401 id=401 data-nosnippet>401</a>                    .<span class="kw">await</span><span class="question-mark">?
-<a href=#402 id=402 data-nosnippet>402</a>            </span>}
-<a href=#403 id=403 data-nosnippet>403</a>            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.endpoint.connect(node_id, FEDIMINT_P2P_ALPN).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#404 id=404 data-nosnippet>404</a>        };
-<a href=#405 id=405 data-nosnippet>405</a>
-<a href=#406 id=406 data-nosnippet>406</a>        <span class="prelude-val">Ok</span>(connection.into_dyn())
-<a href=#407 id=407 data-nosnippet>407</a>    }
-<a href=#408 id=408 data-nosnippet>408</a>
-<a href=#409 id=409 data-nosnippet>409</a>    <span class="kw">async fn </span>accept(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PeerId, DynP2PConnection&lt;M&gt;)&gt; {
-<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw">let </span>connection = <span class="self">self
-<a href=#411 id=411 data-nosnippet>411</a>            </span>.endpoint
-<a href=#412 id=412 data-nosnippet>412</a>            .accept()
-<a href=#413 id=413 data-nosnippet>413</a>            .<span class="kw">await
-<a href=#414 id=414 data-nosnippet>414</a>            </span>.context(<span class="string">"Listener closed unexpectedly"</span>)<span class="question-mark">?
-<a href=#415 id=415 data-nosnippet>415</a>            </span>.accept()<span class="question-mark">?
-<a href=#416 id=416 data-nosnippet>416</a>            </span>.<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#417 id=417 data-nosnippet>417</a>
-<a href=#418 id=418 data-nosnippet>418</a>        <span class="kw">let </span>node_id = connection.remote_node_id()<span class="question-mark">?</span>;
+<a href=#384 id=384 data-nosnippet>384</a>    <span class="macro">info!</span>(
+<a href=#385 id=385 data-nosnippet>385</a>        target: LOG_NET_IROH,
+<a href=#386 id=386 data-nosnippet>386</a>        %bind_addr,
+<a href=#387 id=387 data-nosnippet>387</a>        node_id = %endpoint.node_id(),
+<a href=#388 id=388 data-nosnippet>388</a>        node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="string">"Iroh p2p server endpoint"
+<a href=#390 id=390 data-nosnippet>390</a>    </span>);
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="prelude-val">Ok</span>(endpoint)
+<a href=#393 id=393 data-nosnippet>393</a>}
+<a href=#394 id=394 data-nosnippet>394</a>
+<a href=#395 id=395 data-nosnippet>395</a><span class="attr">#[async_trait]
+<a href=#396 id=396 data-nosnippet>396</a></span><span class="kw">impl</span>&lt;M&gt; IP2PConnector&lt;M&gt; <span class="kw">for </span>IrohConnector
+<a href=#397 id=397 data-nosnippet>397</a><span class="kw">where
+<a href=#398 id=398 data-nosnippet>398</a>    </span>M: Encodable + Decodable + Serialize + DeserializeOwned + Send + <span class="lifetime">'static</span>,
+<a href=#399 id=399 data-nosnippet>399</a>{
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
+<a href=#401 id=401 data-nosnippet>401</a>        <span class="self">self</span>.node_ids.keys().copied().collect()
+<a href=#402 id=402 data-nosnippet>402</a>    }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">async fn </span>connect(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; anyhow::Result&lt;DynP2PConnection&lt;M&gt;&gt; {
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">let </span>node_id = <span class="kw-2">*</span><span class="self">self</span>.node_ids.get(<span class="kw-2">&amp;</span>peer).expect(<span class="string">"No node id found for peer"</span>);
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span>connection = <span class="kw">match </span><span class="self">self</span>.connection_overrides.get(<span class="kw-2">&amp;</span>node_id) {
+<a href=#408 id=408 data-nosnippet>408</a>            <span class="prelude-val">Some</span>(node_addr) =&gt; {
+<a href=#409 id=409 data-nosnippet>409</a>                <span class="macro">trace!</span>(target: LOG_NET_IROH, %node_id, <span class="string">"Using a connectivity override for connection"</span>);
+<a href=#410 id=410 data-nosnippet>410</a>                <span class="self">self</span>.endpoint
+<a href=#411 id=411 data-nosnippet>411</a>                    .connect(node_addr.clone(), FEDIMINT_P2P_ALPN)
+<a href=#412 id=412 data-nosnippet>412</a>                    .<span class="kw">await</span><span class="question-mark">?
+<a href=#413 id=413 data-nosnippet>413</a>            </span>}
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.endpoint.connect(node_id, FEDIMINT_P2P_ALPN).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#415 id=415 data-nosnippet>415</a>        };
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a>        <span class="prelude-val">Ok</span>(connection.into_dyn())
+<a href=#418 id=418 data-nosnippet>418</a>    }
 <a href=#419 id=419 data-nosnippet>419</a>
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">let </span>auth_peer = <span class="self">self
-<a href=#421 id=421 data-nosnippet>421</a>            </span>.node_ids
-<a href=#422 id=422 data-nosnippet>422</a>            .iter()
-<a href=#423 id=423 data-nosnippet>423</a>            .find(|entry| entry.<span class="number">1 </span>== <span class="kw-2">&amp;</span>node_id)
-<a href=#424 id=424 data-nosnippet>424</a>            .with_context(|| <span class="macro">format!</span>(<span class="string">"Node id {node_id} is unknown"</span>))<span class="question-mark">?
-<a href=#425 id=425 data-nosnippet>425</a>            </span>.<span class="number">0</span>;
-<a href=#426 id=426 data-nosnippet>426</a>
-<a href=#427 id=427 data-nosnippet>427</a>        <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>auth_peer, connection.into_dyn()))
-<a href=#428 id=428 data-nosnippet>428</a>    }
-<a href=#429 id=429 data-nosnippet>429</a>}</code></pre></div></section></main></body></html>
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="kw">async fn </span>accept(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PeerId, DynP2PConnection&lt;M&gt;)&gt; {
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>connection = <span class="self">self
+<a href=#422 id=422 data-nosnippet>422</a>            </span>.endpoint
+<a href=#423 id=423 data-nosnippet>423</a>            .accept()
+<a href=#424 id=424 data-nosnippet>424</a>            .<span class="kw">await
+<a href=#425 id=425 data-nosnippet>425</a>            </span>.context(<span class="string">"Listener closed unexpectedly"</span>)<span class="question-mark">?
+<a href=#426 id=426 data-nosnippet>426</a>            </span>.accept()<span class="question-mark">?
+<a href=#427 id=427 data-nosnippet>427</a>            </span>.<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#428 id=428 data-nosnippet>428</a>
+<a href=#429 id=429 data-nosnippet>429</a>        <span class="kw">let </span>node_id = connection.remote_node_id()<span class="question-mark">?</span>;
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a>        <span class="kw">let </span>auth_peer = <span class="self">self
+<a href=#432 id=432 data-nosnippet>432</a>            </span>.node_ids
+<a href=#433 id=433 data-nosnippet>433</a>            .iter()
+<a href=#434 id=434 data-nosnippet>434</a>            .find(|entry| entry.<span class="number">1 </span>== <span class="kw-2">&amp;</span>node_id)
+<a href=#435 id=435 data-nosnippet>435</a>            .with_context(|| <span class="macro">format!</span>(<span class="string">"Node id {node_id} is unknown"</span>))<span class="question-mark">?
+<a href=#436 id=436 data-nosnippet>436</a>            </span>.<span class="number">0</span>;
+<a href=#437 id=437 data-nosnippet>437</a>
+<a href=#438 id=438 data-nosnippet>438</a>        <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>auth_peer, connection.into_dyn()))
+<a href=#439 id=439 data-nosnippet>439</a>    }
+<a href=#440 id=440 data-nosnippet>440</a>}</code></pre></div></section></main></body></html>
