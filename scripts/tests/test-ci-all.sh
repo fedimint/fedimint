@@ -155,6 +155,11 @@ function devimint_cli_test() {
 }
 export -f devimint_cli_test
 
+function devimint_misc() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-misc-test.sh
+}
+export -f devimint_misc
+
 function devimint_cli_test_single() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/devimint-cli-test-single.sh
 }
@@ -319,6 +324,7 @@ tests_to_run_in_parallel+=(
   # flaky https://github.com/fedimint/fedimint/issues/7546
   # "gw_liquidity_test"
   "lnv2_module"
+  "devimint_misc"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"
