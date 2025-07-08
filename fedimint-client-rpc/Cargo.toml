@@ -17,13 +17,17 @@ anyhow = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 fedimint-api-client = { workspace = true }
+fedimint-bip39 = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
+fedimint-meta-client = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }

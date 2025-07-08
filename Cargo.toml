@@ -22,7 +22,6 @@ members = [
   "fedimint-dbtool",
   "fedimint-derive",
   "fedimint-eventlog",
-  "fedimint-indexeddb",
   "fedimint-load-test-tool",
   "fedimint-logging",
   "fedimint-metrics",
@@ -163,7 +162,7 @@ fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.9.0-alpha" }
 fedimint-build = { path = "./fedimint-build", version = "=0.9.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.9.0-alpha" }
 fedimint-client-module = { path = "./fedimint-client-module", version = "=0.9.0-alpha" }
-fedimint-client-rpc = { path = "./fedimint-client-rpc", version = "=0.8.0-alpha" }
+fedimint-client-rpc = { path = "./fedimint-client-rpc", version = "=0.9.0-alpha" }
 fedimint-core = { path = "./fedimint-core", version = "=0.9.0-alpha" }
 fedimint-cursed-redb = { path = "./fedimint-cursed-redb", version = "=0.9.0-alpha" }
 fedimint-db-locked = { path = "./fedimint-db-locked", version = "=0.9.0-alpha" }
