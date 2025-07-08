@@ -392,9 +392,9 @@ dependencies = [
 
 [[package]]
 name = "async-channel"
-version = "2.3.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89b47800b0be77592da0afd425cc03468052844aff33b84e33cc696f64e77b6a"
+checksum = "924ed96dd52d1b75e9c1a3e6275715fd320f5f9439fb5a4a11fa51f4221158d2"
 dependencies = [
  "concurrent-queue",
  "event-listener-strategy",
@@ -448,7 +448,7 @@ version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05b1b633a2115cd122d73b955eadd9916c18c8f510ec9cd1686404c60ad1c29c"
 dependencies = [
- "async-channel 2.3.1",
+ "async-channel 2.5.0",
  "async-executor",
  "async-io",
  "async-lock",
@@ -1273,7 +1273,7 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "703f41c54fc768e63e091340b424302bb1c29ef4aa0c7f10fe849dfb114d29ea"
 dependencies = [
- "async-channel 2.3.1",
+ "async-channel 2.5.0",
  "async-task",
  "futures-io",
  "futures-lite",
@@ -2219,7 +2219,7 @@ dependencies = [
 
 [[package]]
 name = "devimint"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -2258,7 +2258,7 @@ dependencies = [
  "itertools 0.14.0",
  "nix",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "semver",
  "serde",
  "serde_json",
@@ -2641,7 +2641,7 @@ dependencies = [
  "bitcoin",
  "hex-conservative 0.2.1",
  "log",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "tokio",
 ]
@@ -2693,7 +2693,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "fedimint-aead"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2725,11 +2725,11 @@ dependencies = [
 
 [[package]]
 name = "fedimint-api-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "arti-client",
- "async-channel 2.3.1",
+ "async-channel 2.5.0",
  "async-trait",
  "base64 0.22.1",
  "bitcoin",
@@ -2762,7 +2762,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bip39"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "bip39",
  "fedimint-client",
@@ -2773,7 +2773,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bitcoind"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2786,14 +2786,14 @@ dependencies = [
 
 [[package]]
 name = "fedimint-build"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "fedimint-cli"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2832,7 +2832,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2847,7 +2847,7 @@ dependencies = [
  "fedimint-eventlog",
  "fedimint-logging",
  "futures",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -2860,7 +2860,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client-module"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -2876,7 +2876,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -2910,7 +2910,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client-wasm"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2933,10 +2933,10 @@ dependencies = [
 
 [[package]]
 name = "fedimint-core"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
- "async-channel 2.3.1",
+ "async-channel 2.5.0",
  "async-lock",
  "async-recursion",
  "async-trait",
@@ -2994,7 +2994,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-cursed-redb"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3013,7 +3013,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-db-locked"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3025,7 +3025,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dbtool"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3060,7 +3060,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
@@ -3070,7 +3070,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive-secret"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.14.0",
@@ -3082,11 +3082,11 @@ dependencies = [
 
 [[package]]
 name = "fedimint-docs"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 
 [[package]]
 name = "fedimint-dummy-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3106,7 +3106,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -3116,7 +3116,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3132,7 +3132,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -3153,7 +3153,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3170,7 +3170,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -3180,7 +3180,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3196,7 +3196,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-eventlog"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3213,7 +3213,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-fuzz"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "fedimint-core",
  "fedimint-ln-common",
@@ -3226,7 +3226,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bcrypt",
@@ -3241,7 +3241,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-mint-client",
  "lightning-invoice",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -3250,7 +3250,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "bitcoin",
  "clap",
@@ -3267,7 +3267,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -3320,7 +3320,7 @@ dependencies = [
  "lockable",
  "prost 0.13.5",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -3337,7 +3337,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-server-db"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -3364,7 +3364,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gw-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -3391,7 +3391,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gwv2-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -3418,7 +3418,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-hkdf"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "bitcoin_hashes 0.14.0",
 ]
@@ -3440,7 +3440,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lightning"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3466,7 +3466,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -3486,7 +3486,7 @@ dependencies = [
  "lightning-invoice",
  "lnurl-rs",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "strum 0.27.1",
@@ -3498,7 +3498,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -3515,7 +3515,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3540,7 +3540,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3569,7 +3569,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -3598,7 +3598,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3609,7 +3609,7 @@ dependencies = [
  "group",
  "lightning-invoice",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -3617,7 +3617,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3641,7 +3641,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3668,7 +3668,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-load-test-tool"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -3695,7 +3695,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-logging"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "console-subscriber",
@@ -3707,7 +3707,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3728,7 +3728,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -3742,7 +3742,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3761,7 +3761,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -3775,7 +3775,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-metrics"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -3787,7 +3787,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -3826,7 +3826,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.14.0",
@@ -3839,7 +3839,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3865,7 +3865,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin_hashes 0.14.0",
@@ -3898,7 +3898,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-portalloc"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "dirs 6.0.0",
@@ -3912,7 +3912,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recoverytool"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -3935,7 +3935,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recurringd"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
@@ -3962,12 +3962,12 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recurringd-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "devimint",
  "lightning-invoice",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde_json",
  "tokio",
  "tracing",
@@ -3975,7 +3975,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-rocksdb"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3991,10 +3991,10 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
- "async-channel 2.3.1",
+ "async-channel 2.5.0",
  "async-trait",
  "axum 0.8.4",
  "base64 0.22.1",
@@ -4044,7 +4044,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-bitcoin-rpc"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4059,7 +4059,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-core"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4075,7 +4075,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "bitcoin",
  "fedimint-api-client",
@@ -4095,7 +4095,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-ui"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4117,7 +4117,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tbs"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "bls12_381",
  "criterion",
@@ -4132,7 +4132,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -4168,7 +4168,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing-core"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -4229,7 +4229,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tpe"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "bitcoin_hashes 0.14.0",
  "bls12_381",
@@ -4243,7 +4243,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-unknown-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-core",
@@ -4253,7 +4253,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-unknown-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4267,7 +4267,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-client"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
@@ -4296,7 +4296,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-common"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -4312,7 +4312,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-server"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4339,7 +4339,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -4371,7 +4371,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wasm-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-api-client",
@@ -4392,7 +4392,7 @@ dependencies = [
 
 [[package]]
 name = "fedimintd"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -4724,7 +4724,7 @@ dependencies = [
 
 [[package]]
 name = "gateway-tests"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -5691,6 +5691,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-uring"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b86e202f00093dcba4275d4636b93ef9dd75d025ae560d2521b45ea28ab49013"
+dependencies = [
+ "bitflags 2.9.1",
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "ipconfig"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5757,7 +5768,7 @@ dependencies = [
  "portmapper 0.5.0",
  "rand 0.8.5",
  "rcgen",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "ring 0.17.14",
  "rustls 0.23.28",
  "rustls-webpki 0.102.8",
@@ -5818,7 +5829,7 @@ dependencies = [
  "pkarr",
  "portmapper 0.6.1",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "ring 0.17.14",
  "rustls 0.23.28",
  "rustls-pki-types",
@@ -6017,7 +6028,7 @@ dependencies = [
  "pkarr",
  "postcard",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "rustls 0.23.28",
  "rustls-webpki 0.102.8",
  "serde",
@@ -6065,7 +6076,7 @@ dependencies = [
  "pkarr",
  "postcard",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "rustls 0.23.28",
  "rustls-pki-types",
  "rustls-webpki 0.103.3",
@@ -6375,7 +6386,7 @@ dependencies = [
  "log",
  "prost 0.11.9",
  "rand 0.8.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "rusqlite",
  "serde",
  "serde_json",
@@ -6630,7 +6641,7 @@ dependencies = [
  "bitcoin",
  "cbc",
  "email_address",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "url",
@@ -6638,14 +6649,14 @@ dependencies = [
 
 [[package]]
 name = "lnurlp"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
  "fedimint-core",
  "lightning-invoice",
  "lnurl-rs",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "tokio",
 ]
 
@@ -6875,9 +6886,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "12.3.2"
+version = "12.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0760e92feaf4ee26bd2e616f557de64712bf1e75f3b1b218dfb475c0a84c7943"
+checksum = "16137581c4511d1ed210f2452669006fca0f1e2bb28e00ee37a9e3b87a6e7e8c"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -7781,7 +7792,7 @@ dependencies = [
  "lru 0.13.0",
  "mainline",
  "ntimestamp",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "self_cell",
  "serde",
  "sha1_smol",
@@ -8729,9 +8740,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.20"
+version = "0.12.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eabf4c97d9130e2bf606614eb937e86edac8292eaa6f422f995d7e8de1eb1813"
+checksum = "cbc931937e6ca3a06e3b6c0aa7841849b160a90351d6ab467a8b9b9959767531"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -9873,9 +9884,9 @@ dependencies = [
 
 [[package]]
 name = "test-log"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7f46083d221181166e5b6f6b1e5f1d499f3a76888826e6cb1d057554157cd0f"
+checksum = "1e33b98a582ea0be1168eba097538ee8dd4bbe0f2b01b22ac92ea30054e5be7b"
 dependencies = [
  "test-log-macros",
  "tracing-subscriber",
@@ -9883,9 +9894,9 @@ dependencies = [
 
 [[package]]
 name = "test-log-macros"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "888d0c3c6db53c0fdab160d2ed5e12ba745383d3e85813f2ea0f2b1475ab553f"
+checksum = "451b374529930d7601b1eef8d32bc79ae870b6079b069401709c2a8bf9e75f36"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10070,17 +10081,19 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.45.1"
+version = "1.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
+checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
 dependencies = [
  "backtrace",
  "bytes",
+ "io-uring",
  "libc",
  "mio",
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
+ "slab",
  "socket2",
  "tokio-macros",
  "tracing",
