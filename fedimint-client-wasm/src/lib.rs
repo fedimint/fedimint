@@ -1,24 +1,12 @@
 #![cfg(target_family = "wasm")]
-use std::str::FromStr;
+
 use std::sync::Arc;
 
-use fedimint_client_rpc::{
-    DatabaseFactory, RpcGlobalState, RpcRequest, RpcResponse, RpcResponseHandler,
-};
+use fedimint_client_rpc::{RpcGlobalState, RpcRequest, RpcResponse, RpcResponseHandler};
 use fedimint_core::db::Database;
-use fedimint_core::{apply, async_trait_maybe_send};
-use fedimint_indexeddb::MemAndIndexedDb;
-use serde_json::json;
+use fedimint_cursed_redb::MemAndRedb;
 use wasm_bindgen::prelude::{JsError, JsValue, wasm_bindgen};
-
-struct MemAndIndexedDbLoader;
-
-#[apply(async_trait_maybe_send)]
-impl DatabaseFactory for MemAndIndexedDbLoader {
-    async fn create_database(&self, name: &str) -> anyhow::Result<Database> {
-        Ok(Database::from(MemAndIndexedDb::new(name).await?))
-    }
-}
+use web_sys::FileSystemSyncAccessHandle;
 
 struct JsFunctionWrapper(js_sys::Function);
 
@@ -33,16 +21,20 @@ impl RpcResponseHandler for JsFunctionWrapper {
 
 #[wasm_bindgen]
 struct RpcHandler {
-    state: Arc<RpcGlobalState<MemAndIndexedDbLoader>>,
+    state: Arc<RpcGlobalState>,
 }
 
 #[wasm_bindgen]
 impl RpcHandler {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self {
-            state: Arc::new(RpcGlobalState::new(MemAndIndexedDbLoader)),
-        }
+    pub fn new(sync_handle: FileSystemSyncAccessHandle) -> Self {
+        // Create the database directly
+        let cursed_db = MemAndRedb::new(sync_handle).unwrap();
+        let database = Database::new(cursed_db, Default::default());
+
+        let state = Arc::new(RpcGlobalState::new(database));
+
+        Self { state }
     }
 
     #[wasm_bindgen]

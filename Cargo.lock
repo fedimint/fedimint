@@ -2889,19 +2889,23 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client-rpc"
-version = "0.8.0-alpha"
+version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
  "fedimint-api-client",
+ "fedimint-bip39",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-derive-secret",
  "fedimint-ln-client",
+ "fedimint-meta-client",
  "fedimint-mint-client",
  "fedimint-wallet-client",
  "futures",
  "lightning-invoice",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tokio",
@@ -2913,22 +2917,16 @@ name = "fedimint-client-wasm"
 version = "0.9.0-alpha"
 dependencies = [
  "anyhow",
- "async-stream",
  "async-trait",
- "fedimint-api-client",
- "fedimint-client",
- "fedimint-client-module",
  "fedimint-client-rpc",
  "fedimint-core",
- "fedimint-indexeddb",
- "futures",
- "imbl",
+ "fedimint-cursed-redb",
  "js-sys",
- "rexie",
  "serde_json",
+ "tracing",
  "wasm-bindgen",
  "wasm-bindgen-futures",
- "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]
@@ -3421,21 +3419,6 @@ name = "fedimint-hkdf"
 version = "0.9.0-alpha"
 dependencies = [
  "bitcoin_hashes 0.14.0",
-]
-
-[[package]]
-name = "fedimint-indexeddb"
-version = "0.8.0-alpha"
-dependencies = [
- "anyhow",
- "async-trait",
- "fedimint-core",
- "futures",
- "imbl",
- "js-sys",
- "rexie",
- "wasm-bindgen",
- "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -5490,20 +5473,6 @@ dependencies = [
  "zerofrom",
  "zerotrie",
  "zerovec",
-]
-
-[[package]]
-name = "idb"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3afe8830d5802f769dc0be20a87f9f116798c896650cb6266eb5c19a3c109eed"
-dependencies = [
- "js-sys",
- "num-traits",
- "thiserror 1.0.69",
- "tokio",
- "wasm-bindgen",
- "web-sys",
 ]
 
 [[package]]
@@ -8793,17 +8762,6 @@ name = "retry-error"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eeb501c6079c6e2a1c9761b76ddb12ecb6818b8773748f5e0394b95f838e4a38"
-
-[[package]]
-name = "rexie"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "887466cfa8a12c08ee4b174998135cea8ff0fd84858627cd793e56535a045bc9"
-dependencies = [
- "idb",
- "thiserror 1.0.69",
- "wasm-bindgen",
-]
 
 [[package]]
 name = "rfc6979"
