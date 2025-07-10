@@ -1,0 +1,34 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-core provides common code used by both client and server."
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-client-rpc"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lib]
+name = "fedimint_client_rpc"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-bip39 = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-derive-secret = { workspace = true }
+fedimint-ln-client = { workspace = true, features = ["cli"] }
+fedimint-meta-client = { workspace = true }
+fedimint-mint-client = { workspace = true }
+fedimint-wallet-client = { workspace = true }
+futures = { workspace = true }
+lightning-invoice = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }

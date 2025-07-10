@@ -14,6 +14,7 @@ members = [
   "fedimint-cli",
   "fedimint-client",
   "fedimint-client-module",
+  "fedimint-client-rpc",
   "fedimint-client-wasm",
   "fedimint-core",
   "fedimint-cursed-redb",
@@ -153,6 +154,7 @@ erased-serde = "0.4"
 esplora-client = { version = "0.10.0", default-features = false, features = [
   "async-https-rustls",
 ] }
+
 fedimint-aead = { path = "./crypto/aead", version = "=0.9.0-alpha" }
 fedimint-api-client = { path = "./fedimint-api-client", version = "=0.9.0-alpha" }
 fedimint-bip39 = { path = "./fedimint-bip39", version = "=0.9.0-alpha" }
@@ -160,6 +162,7 @@ fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.9.0-alpha" }
 fedimint-build = { path = "./fedimint-build", version = "=0.9.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.9.0-alpha" }
 fedimint-client-module = { path = "./fedimint-client-module", version = "=0.9.0-alpha" }
+fedimint-client-rpc = { path = "./fedimint-client-rpc", version = "=0.9.0-alpha" }
 fedimint-core = { path = "./fedimint-core", version = "=0.9.0-alpha" }
 fedimint-cursed-redb = { path = "./fedimint-cursed-redb", version = "=0.9.0-alpha" }
 fedimint-db-locked = { path = "./fedimint-db-locked", version = "=0.9.0-alpha" }
