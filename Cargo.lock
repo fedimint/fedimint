@@ -2130,7 +2130,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8ea84d0109517cc2253d4a679bdda1e8989e9bd86987e9e4f75ffdda0095fd1"
 dependencies = [
  "derive-deftly-macros",
- "heck 0.5.0",
+ "heck 0.4.1",
 ]
 
 [[package]]
@@ -2139,7 +2139,7 @@ version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "357422a457ccb850dc8f1c1680e0670079560feaad6c2e247e3f345c4fab8a3f"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "indexmap 2.9.0",
  "itertools 0.14.0",
  "proc-macro-crate 3.3.0",
@@ -2851,7 +2851,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2880,7 +2880,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
@@ -2962,7 +2962,7 @@ dependencies = [
  "serdect",
  "slotmap",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -3080,7 +3080,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "thiserror 2.0.12",
  "tracing",
 ]
@@ -3108,7 +3108,7 @@ dependencies = [
  "futures",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -3145,7 +3145,7 @@ dependencies = [
  "fedimint-empty-common",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "thiserror 2.0.12",
 ]
 
@@ -3172,7 +3172,7 @@ dependencies = [
  "futures",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -3305,7 +3305,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "thiserror 2.0.12",
  "tikv-jemallocator",
  "tokio",
@@ -3338,7 +3338,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "tokio",
  "tracing",
 ]
@@ -3456,7 +3456,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -3498,7 +3498,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "test-log",
  "tokio",
  "tracing",
@@ -3600,7 +3600,7 @@ dependencies = [
  "rand_chacha 0.3.1",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "tokio",
  "tracing",
 ]
@@ -3687,7 +3687,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "thiserror 2.0.12",
  "tracing",
 ]
@@ -3721,7 +3721,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "tracing",
 ]
 
@@ -3783,7 +3783,7 @@ dependencies = [
  "serde_json",
  "serdect",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -3823,7 +3823,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "test-log",
  "tokio",
  "tracing",
@@ -3995,7 +3995,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "subtle",
  "tar",
  "test-log",
@@ -4228,7 +4228,7 @@ dependencies = [
  "fedimint-server-core",
  "fedimint-unknown-common",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -4255,7 +4255,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "tokio",
  "tracing",
 ]
@@ -4298,7 +4298,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.26.4",
+ "strum_macros 0.27.1",
  "tokio",
  "tracing",
 ]
@@ -8267,7 +8267,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.12.1",
  "log",
  "multimap 0.10.1",
@@ -9470,7 +9470,7 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1961e2ef424c1424204d3a5d6975f934f56b6d50ff5732382d84ebf460e147f7"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
