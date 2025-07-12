@@ -220,7 +220,7 @@ honggfuzz = { version = "=0.5.55", default-features = false } # needs to be pinn
 hyper = "1.6"
 imbl = "5.0.0"
 impl-tools = "0.10.3"
-iroh = { version = "=0.35.0", default-features = false }
+iroh = { version = "=0.90.0", default-features = false }
 iroh-base = { version = "=0.35.0", default-features = false }
 iroh-next = { version = "=0.90.0", default-features = false, package = "iroh" }
 iroh-next-base = { version = "=0.90.0", default-features = false, package = "iroh-base" }
