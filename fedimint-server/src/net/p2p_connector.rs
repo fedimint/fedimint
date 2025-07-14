@@ -370,6 +370,7 @@ pub(crate) async fn build_iroh_endpoint(
 
     builder = builder
         .discovery_dht()
+        .discovery_n0()
         .relay_mode(relay_mode)
         .secret_key(secret_key)
         .alpns(vec![alpn.to_vec()]);
