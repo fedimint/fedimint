@@ -26,3 +26,5 @@ procs:
     shell: tail -n +0 -F $FM_LOGS_DIR/bitcoind.log
   devimint:
     shell: tail -n +0 -F $FM_LOGS_DIR/devimint-outer.log
+  recurringd:
+    shell: tail -n +0 -F $FM_LOGS_DIR/recurringd.log
