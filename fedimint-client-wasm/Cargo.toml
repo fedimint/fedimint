@@ -22,21 +22,16 @@ workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 anyhow = { workspace = true }
-async-stream = { workspace = true }
 async-trait = { workspace = true }
-fedimint-api-client = { workspace = true }
-fedimint-client = { workspace = true }
-fedimint-client-module = { workspace = true }
+fedimint-client-rpc = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-client = { workspace = true }
-fedimint-mint-client = { workspace = true }
-fedimint-wallet-client = { workspace = true }
-futures = { workspace = true }
-imbl = { workspace = true }
+fedimint-cursed-redb = { workspace = true }
 js-sys = { workspace = true }
-lightning-invoice = { workspace = true }
-rexie = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-wasm-bindgen-test = { workspace = true }
+web-sys = { version = "0.3", features = [
+  "FileSystemSyncAccessHandle",
+  "FileSystemReadWriteOptions",
+] }
