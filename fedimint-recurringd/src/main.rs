@@ -27,7 +27,7 @@ use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Debug, Parser)]
 struct CliOpts {
@@ -90,6 +90,7 @@ async fn main() -> anyhow::Result<()> {
             recurring_invoice_server,
         });
 
+    info!(api_address = %cli_opts.bind_address, "recurringd started");
     let listener = TcpListener::bind(&cli_opts.bind_address).await?;
     axum::serve(listener, app).await?;
 
