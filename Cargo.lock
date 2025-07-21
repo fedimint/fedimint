@@ -3497,6 +3497,7 @@ dependencies = [
  "fedimint-client-module",
  "fedimint-core",
  "fedimint-derive-secret",
+ "fedimint-eventlog",
  "fedimint-ln-common",
  "fedimint-logging",
  "futures",
