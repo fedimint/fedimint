@@ -371,7 +371,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
 
                 let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_8_0_ALPHA {
-                    (2000, 100)
+                    (2000, 3000)
                 } else if gatewayd_version >= *VERSION_0_6_0_ALPHA {
                     (50000, 5000)
                 } else {
