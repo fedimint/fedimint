@@ -19,6 +19,7 @@ use anyhow::format_err;
 pub use error::*;
 use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
+use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tracing::{Instrument, Span, debug, warn};
@@ -138,11 +139,15 @@ impl SafeUrl {
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
-    pub fn username(&self) -> &str {
-        self.0.username()
+    pub fn username(&self) -> String {
+        percent_decode_str(self.0.username())
+            .decode_utf8_lossy()
+            .into_owned()
     }
-    pub fn password(&self) -> Option<&str> {
-        self.0.password()
+    pub fn password(&self) -> Option<String> {
+        self.0
+            .password()
+            .map(|pw| percent_decode_str(pw).decode_utf8_lossy().into_owned())
     }
     pub fn join(&self, input: &str) -> Result<Self, ParseError> {
         self.0.join(input).map(SafeUrl)

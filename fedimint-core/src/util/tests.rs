@@ -70,6 +70,14 @@ fn test_safe_url() {
     let _: SafeUrl = url::Url::parse("http://1.2.3.4:80/foo").unwrap().into();
 }
 
+#[test]
+fn test_percent_encoding_safe_url() {
+    let url =
+        SafeUrl::parse("http://user=name:p@ssword@127.0.0.1:80").expect("Could not parse safe url");
+    assert_eq!(url.username(), "user=name".to_string());
+    assert_eq!(url.password().expect("No password"), "p@ssword");
+}
+
 #[tokio::test]
 async fn test_next_or_pending() {
     let mut stream = futures::stream::iter(vec![1, 2]);

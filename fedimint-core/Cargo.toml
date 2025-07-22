@@ -50,6 +50,7 @@ macro_rules_attribute = { workspace = true }
 miniscript = { workspace = true, features = ["serde"] }
 n0-future = { workspace = true }
 parity-scale-codec = { workspace = true, features = ["derive"] }
+percent-encoding = { workspace = true }
 rand = { workspace = true }
 scopeguard = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }

@@ -3006,6 +3006,7 @@ dependencies = [
  "miniscript",
  "n0-future",
  "parity-scale-codec",
+ "percent-encoding",
  "rand 0.8.5",
  "scopeguard",
  "secp256k1",
