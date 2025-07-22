@@ -8,7 +8,6 @@ use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonWithKind, ModuleInitRegistry, P2PMessage,
     PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
-    serde_binary_human_readable,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::is_running_in_test_env;
