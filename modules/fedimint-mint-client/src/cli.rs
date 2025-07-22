@@ -12,9 +12,16 @@ use crate::{MintClientModule, OOBNotes, ReissueExternalNotesState};
 enum Opts {
     /// Reissue out of band notes
     Reissue { notes: OOBNotes },
-    /// Verifies the signatures of e-cash notes, but *not* if they have been
-    /// spent already
-    Validate { oob_notes: OOBNotes },
+    /// Verifies the signatures of e-cash notes, if the online flag is specified
+    /// it also checks with the mint if the notes were already spent
+    Validate {
+        /// Whether to check with the mint if the notes were already spent
+        /// (CAUTION: this hurts privacy)
+        #[clap(long)]
+        online: bool,
+        /// E-Cash note to validate
+        oob_notes: OOBNotes,
+    },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -43,12 +50,20 @@ pub(crate) async fn handle_cli_command(
 
             Ok(serde_json::to_value(amount).expect("JSON serialization failed"))
         }
-        Opts::Validate { oob_notes } => {
+        Opts::Validate { oob_notes, online } => {
             let amount = mint.validate_notes(&oob_notes)?;
 
-            Ok(json!({
-                "amount_msat": amount,
-            }))
+            if online {
+                let any_spent = mint.check_note_spent(&oob_notes).await?;
+                Ok(json!({
+                    "any_spent": any_spent,
+                    "amount_msat": amount,
+                }))
+            } else {
+                Ok(json!({
+                    "amount_msat": amount,
+                }))
+            }
         }
     }
 }
