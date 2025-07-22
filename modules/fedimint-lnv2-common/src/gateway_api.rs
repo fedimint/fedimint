@@ -230,7 +230,7 @@ impl PaymentFee {
     /// federation.
     pub const TRANSACTION_FEE_DEFAULT: PaymentFee = PaymentFee {
         base: Amount::from_sats(2),
-        parts_per_million: 100,
+        parts_per_million: 3000,
     };
 
     /// This is the maximum receive fee of half of one percent plus fifty
