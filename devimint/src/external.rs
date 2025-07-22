@@ -63,10 +63,9 @@ impl Bitcoind {
         debug!("Parsed FM_BITCOIN_RPC_URL: {:?}", &url);
 
         let auth = Auth::UserPass(
-            url.username().to_owned(),
+            url.username(),
             url.password()
-                .context("Bitcoin RPC URL is missing password")?
-                .to_owned(),
+                .context("Bitcoin RPC URL is missing password")?,
         );
 
         let host = url

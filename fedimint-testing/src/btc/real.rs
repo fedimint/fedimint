@@ -227,10 +227,7 @@ impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
     pub fn new(url: &SafeUrl, rpc: DynServerBitcoinRpc) -> Self {
-        let auth = Auth::UserPass(
-            url.username().to_owned(),
-            url.password().unwrap().to_owned(),
-        );
+        let auth = Auth::UserPass(url.username(), url.password().unwrap());
 
         let host = url.without_auth().unwrap().to_string();
 
