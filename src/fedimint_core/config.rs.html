@@ -893,33 +893,5 @@
 <a href=#893 id=893 data-nosnippet>893</a>    <span class="prelude-val">Ok</span>(serde_json::from_reader(file)<span class="question-mark">?</span>)
 <a href=#894 id=894 data-nosnippet>894</a>}
 <a href=#895 id=895 data-nosnippet>895</a>
-<a href=#896 id=896 data-nosnippet>896</a><span class="kw">pub mod </span>serde_binary_human_readable {
-<a href=#897 id=897 data-nosnippet>897</a>    <span class="kw">use </span>std::borrow::Cow;
-<a href=#898 id=898 data-nosnippet>898</a>
-<a href=#899 id=899 data-nosnippet>899</a>    <span class="kw">use </span>hex::{FromHex, ToHex};
-<a href=#900 id=900 data-nosnippet>900</a>    <span class="kw">use </span>serde::de::DeserializeOwned;
-<a href=#901 id=901 data-nosnippet>901</a>    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-<a href=#902 id=902 data-nosnippet>902</a>
-<a href=#903 id=903 data-nosnippet>903</a>    <span class="kw">pub fn </span>serialize&lt;T: Serialize, S: Serializer&gt;(x: <span class="kw-2">&amp;</span>T, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
-<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">if </span>s.is_human_readable() {
-<a href=#905 id=905 data-nosnippet>905</a>            <span class="kw">let </span>bytes =
-<a href=#906 id=906 data-nosnippet>906</a>                bincode::serialize(x).map_err(|e| serde::ser::Error::custom(<span class="macro">format!</span>(<span class="string">"{e:?}"</span>)))<span class="question-mark">?</span>;
-<a href=#907 id=907 data-nosnippet>907</a>            s.serialize_str(<span class="kw-2">&amp;</span>bytes.encode_hex::&lt;String&gt;())
-<a href=#908 id=908 data-nosnippet>908</a>        } <span class="kw">else </span>{
-<a href=#909 id=909 data-nosnippet>909</a>            Serialize::serialize(x, s)
-<a href=#910 id=910 data-nosnippet>910</a>        }
-<a href=#911 id=911 data-nosnippet>911</a>    }
-<a href=#912 id=912 data-nosnippet>912</a>
-<a href=#913 id=913 data-nosnippet>913</a>    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">'d</span>, T: DeserializeOwned, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;T, D::Error&gt; {
-<a href=#914 id=914 data-nosnippet>914</a>        <span class="kw">if </span>d.is_human_readable() {
-<a href=#915 id=915 data-nosnippet>915</a>            <span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-<a href=#916 id=916 data-nosnippet>916</a>            <span class="kw">let </span>bytes = Vec::from_hex(hex_str.as_ref()).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
-<a href=#917 id=917 data-nosnippet>917</a>            bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"{e:?}"</span>)))
-<a href=#918 id=918 data-nosnippet>918</a>        } <span class="kw">else </span>{
-<a href=#919 id=919 data-nosnippet>919</a>            Deserialize::deserialize(d)
-<a href=#920 id=920 data-nosnippet>920</a>        }
-<a href=#921 id=921 data-nosnippet>921</a>    }
-<a href=#922 id=922 data-nosnippet>922</a>}
-<a href=#923 id=923 data-nosnippet>923</a>
-<a href=#924 id=924 data-nosnippet>924</a><span class="attr">#[cfg(test)]
-<a href=#925 id=925 data-nosnippet>925</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#896 id=896 data-nosnippet>896</a><span class="attr">#[cfg(test)]
+<a href=#897 id=897 data-nosnippet>897</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
