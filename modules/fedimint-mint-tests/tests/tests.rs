@@ -3,8 +3,10 @@ use std::time::Duration;
 use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client_module::ClientModule;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
@@ -13,9 +15,10 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::api::MintFederationApi;
+use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SpendOOBState,
+    SelectNotesWithAtleastAmount, SpendOOBState, SpendableNoteUndecoded,
 };
 use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
@@ -498,6 +501,169 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
         .expect_err("Zero-amount receives should be forbidden")
         .to_string();
     assert!(err_msg.contains("zero-amount"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn repair_wallet() -> anyhow::Result<()> {
+    // Print notes for client1
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
+    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
+    client.await_primary_module_output(op, outpoint).await?;
+
+    let client_mint = client.get_first_module::<MintClientModule>()?;
+
+    // Check that repair on a good wallet does nothing
+    {
+        let initial_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+        let repair_summary = client_mint
+            .try_repair_wallet()
+            .await
+            .expect("Repair should succeed");
+
+        assert!(
+            repair_summary.spent_notes.is_empty(),
+            "No spent notes should be found"
+        );
+        assert!(
+            repair_summary.used_indices.is_empty(),
+            "No used indices should be found"
+        );
+
+        let new_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+        assert_eq!(
+            initial_balance, new_balance,
+            "Balance should remain unchanged after repair"
+        );
+    }
+
+    // Check that already spent notes are detected and repaired
+    {
+        let (
+            NoteKey {
+                amount: first_note_amount,
+                ..
+            },
+            first_note_undecoded,
+        ): (_, SpendableNoteUndecoded) = client_mint
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&fedimint_mint_client::client_db::NoteKeyPrefix)
+            .await
+            .next()
+            .await
+            .expect("At least one note exists");
+        let first_note = first_note_undecoded.decode().expect("Invalid Note format");
+        let reissue_operation_id = client_mint
+            .reissue_external_notes(
+                OOBNotes::new(
+                    client.federation_id().to_prefix(),
+                    TieredMulti::from_iter(vec![(first_note_amount, first_note)]),
+                ),
+                (),
+            )
+            .await
+            .expect("Reissue should succeed");
+
+        let mut reissue_updates = client_mint
+            .subscribe_reissue_external_notes(reissue_operation_id)
+            .await?
+            .into_stream();
+        loop {
+            match reissue_updates.next().await {
+                None => {
+                    panic!("Reissue updates stream ended unexpectedly");
+                }
+                Some(ReissueExternalNotesState::Done) => {
+                    info!("Reissue completed successfully");
+                    break;
+                }
+                Some(_) => {
+                    continue;
+                }
+            }
+        }
+
+        let initial_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+
+        let repair_summary = client_mint
+            .try_repair_wallet()
+            .await
+            .expect("Repair should succeed");
+
+        assert_eq!(
+            repair_summary.spent_notes.count_items(),
+            1,
+            "One spent note should be found"
+        );
+        assert!(
+            repair_summary.used_indices.is_empty(),
+            "No used indices should be found"
+        );
+
+        let new_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+        assert_eq!(
+            initial_balance
+                .checked_sub(first_note_amount)
+                .expect("Can't underflow"),
+            new_balance,
+            "Balance should go down after repair"
+        );
+    }
+
+    // Check that already used blind nonces are detected and repaired
+    {
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
+            NextECashNoteIndexKey(Amount::from_msats(1));
+        let old_nonce_index = dbtx
+            .get_value(&TEST_NOTE_INDEX_KEY)
+            .await
+            .expect("Amount tier exists");
+        dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &(old_nonce_index - 1))
+            .await
+            .expect("Failed to insert test note index");
+        dbtx.commit_tx().await;
+
+        let initial_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+
+        let repair_summary = client_mint
+            .try_repair_wallet()
+            .await
+            .expect("Repair should succeed");
+
+        assert!(
+            repair_summary.spent_notes.is_empty(),
+            "No spent notes should be found"
+        );
+        assert_eq!(
+            repair_summary.used_indices.count_items(),
+            1,
+            "One used index should be found"
+        );
+
+        let new_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+        assert_eq!(
+            initial_balance, new_balance,
+            "Balance should remain unchanged after repair"
+        );
+    }
 
     Ok(())
 }
