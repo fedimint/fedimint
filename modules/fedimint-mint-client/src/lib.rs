@@ -25,6 +25,8 @@ pub mod event;
 /// API client impl for mint-specific requests
 pub mod api;
 
+mod repair_wallet;
+
 use std::cmp::{Ordering, min};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
