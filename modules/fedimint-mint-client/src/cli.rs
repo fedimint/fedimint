@@ -4,6 +4,7 @@ use anyhow::bail;
 use clap::Parser;
 use futures::StreamExt;
 use serde::Serialize;
+use serde_json::json;
 
 use crate::{MintClientModule, OOBNotes, ReissueExternalNotesState};
 
@@ -11,6 +12,9 @@ use crate::{MintClientModule, OOBNotes, ReissueExternalNotesState};
 enum Opts {
     /// Reissue out of band notes
     Reissue { notes: OOBNotes },
+    /// Verifies the signatures of e-cash notes, but *not* if they have been
+    /// spent already
+    Validate { oob_notes: OOBNotes },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -38,6 +42,13 @@ pub(crate) async fn handle_cli_command(
             }
 
             Ok(serde_json::to_value(amount).expect("JSON serialization failed"))
+        }
+        Opts::Validate { oob_notes } => {
+            let amount = mint.validate_notes(&oob_notes)?;
+
+            Ok(json!({
+                "amount_msat": amount,
+            }))
         }
     }
 }

@@ -105,9 +105,6 @@ pub enum ClientCmd {
         #[clap(long)]
         include_invite: bool,
     },
-    /// Verifies the signatures of e-cash notes, but *not* if they have been
-    /// spent already
-    Validate { oob_notes: OOBNotes },
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
     Split { oob_notes: OOBNotes },
@@ -291,15 +288,6 @@ pub async fn handle_command(
 
             Ok(json!({
                 "notes": notes,
-            }))
-        }
-        ClientCmd::Validate { oob_notes } => {
-            let amount = client
-                .get_first_module::<MintClientModule>()?
-                .validate_notes(&oob_notes)?;
-
-            Ok(json!({
-                "amount_msat": amount,
             }))
         }
         ClientCmd::Split { oob_notes } => {
