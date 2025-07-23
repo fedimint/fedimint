@@ -17,12 +17,14 @@ use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::ModuleKind;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{BoxFuture, FmtCompact, FmtCompactAnyhow, SafeUrl};
 use fedimint_derive_secret::ChildId;
+use fedimint_eventlog::{Event, EventKind};
 use futures::StreamExt;
 use futures::future::select_all;
 use lightning_invoice::Bolt11Invoice;
@@ -249,14 +251,36 @@ impl LightningClientModule {
         )
         .await;
 
-        Self::create_recurring_receive_operation(
+        // We want to increment the invoice counter even if the operation creation
+        // fails. This should never happen and if it does, we'd rather miss an invoice
+        // than get stuck in an infinite loop.
+        let mut dbtx_nc = dbtx.to_ref_nc();
+        if let Ok(operation_id) = Self::create_recurring_receive_operation(
             client,
-            &mut dbtx.to_ref_nc(),
+            &mut dbtx_nc,
             &old_payment_code_entry,
             invoice_idx,
             invoice,
         )
-        .await;
+        .await
+        {
+            client
+                .log_event(
+                    &mut dbtx_nc,
+                    RecurringInvoiceCreatedEvent {
+                        payment_code_idx,
+                        invoice_idx,
+                        operation_id,
+                    },
+                )
+                .await;
+        } else {
+            debug_assert!(
+                false,
+                "Recurring invoice operation creation failed, this should never happen"
+            );
+        }
+        drop(dbtx_nc);
 
         dbtx.commit_tx().await;
     }
@@ -268,7 +292,7 @@ impl LightningClientModule {
         payment_code: &RecurringPaymentCodeEntry,
         invoice_index: u64,
         invoice: lightning_invoice::Bolt11Invoice,
-    ) {
+    ) -> anyhow::Result<OperationId> {
         // TODO: pipe secure secp context to here
         let invoice_key =
             tweak_user_secret_key(SECP256K1, payment_code.root_keypair, invoice_index);
@@ -322,7 +346,10 @@ impl LightningClientModule {
                 invoice_index=%invoice_index,
                 err = %e.fmt_compact_anyhow(),
                 "Failed to create recurring receive operation"
-            )
+            );
+            Err(e)
+        } else {
+            Ok(operation_id)
         }
     }
 
@@ -543,4 +570,23 @@ pub struct RecurringPaymentCodeEntry {
     pub last_derivation_index: u64,
     pub creation_time: SystemTime,
     pub meta: String,
+}
+
+/// Event that is fired when a recurring payment code (i.e. LNURL) had an
+/// invoice generated for it.
+///
+/// It only means we saw a new invoice, the payment status has to be tracked
+/// independently. To do so use the `operation_id` and subscribe to the update
+/// stream using [`LightningClientModule::subscribe_ln_recurring_receive`] with
+/// it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecurringInvoiceCreatedEvent {
+    pub payment_code_idx: u64,
+    pub invoice_idx: u64,
+    pub operation_id: OperationId,
+}
+
+impl Event for RecurringInvoiceCreatedEvent {
+    const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
+    const KIND: EventKind = EventKind::from_static("recurring_invoice_created");
 }
