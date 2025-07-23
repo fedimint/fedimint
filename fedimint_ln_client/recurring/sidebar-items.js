@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["LOG_CLIENT_RECURRING"],"enum":["RecurringPaymentError","RecurringPaymentProtocol"],"mod":["api"],"struct":["PaymentCodeId","PaymentCodeRootKey","RecurringPaymentCodeEntry","ReurringPaymentReceiveMeta"]};
+window.SIDEBAR_ITEMS = {"constant":["LOG_CLIENT_RECURRING"],"enum":["RecurringPaymentError","RecurringPaymentProtocol"],"mod":["api"],"struct":["PaymentCodeId","PaymentCodeRootKey","RecurringInvoiceCreatedEvent","RecurringPaymentCodeEntry","ReurringPaymentReceiveMeta"]};
