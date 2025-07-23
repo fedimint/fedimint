@@ -56,9 +56,9 @@ use tracing::{debug, error, info};
 
 use crate::envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
-    FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_URL_ENV,
-    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
-    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
+    FM_BITCOIND_URL_ENV, FM_BITCOIND_USERNAME_ENV, FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV,
+    FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
     FM_PORT_ESPLORA_ENV,
 };
@@ -86,7 +86,17 @@ struct ServerOpts {
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
     bitcoin_network: Network,
 
-    /// Bitcoind RPC URL, e.g. <http://user:pass@127.0.0.1:8332>
+    /// The username to use when connecting to bitcoind
+    #[arg(long, env = FM_BITCOIND_USERNAME_ENV)]
+    bitcoind_username: Option<String>,
+
+    /// The password to use when connecting to bitcoind
+    #[arg(long, env = FM_BITCOIND_PASSWORD_ENV)]
+    bitcoind_password: Option<String>,
+
+    /// Bitcoind RPC URL, e.g. <http://127.0.0.1:8332>
+    /// This should not include authentication parameters, they should be
+    /// included in `FM_BITCOIND_USERNAME` and `FM_BITCOIND_PASSWORD`
     #[arg(long, env = FM_BITCOIND_URL_ENV)]
     bitcoind_url: Option<SafeUrl>,
 
@@ -196,8 +206,8 @@ struct ServerOpts {
 }
 
 impl ServerOpts {
-    pub async fn get_bitcoind_url(&self) -> anyhow::Result<SafeUrl> {
-        let mut url = self
+    pub async fn get_bitcoind_url_and_password(&self) -> anyhow::Result<(SafeUrl, String)> {
+        let url = self
             .bitcoind_url
             .clone()
             .ok_or_else(|| anyhow::anyhow!("No bitcoind url set"))?;
@@ -207,12 +217,14 @@ impl ServerOpts {
                 .context("Failed to read the password")?
                 .trim()
                 .to_owned();
-            url.set_password(Some(&password))
-                .ok()
-                .ok_or_else(|| anyhow::anyhow!("Failed to set the password from the url"))?;
+            Ok((url, password))
+        } else {
+            let password = self
+                .bitcoind_password
+                .clone()
+                .expect("FM_BITCOIND_URL is set but FM_BITCOIND_PASSWORD is not");
+            Ok((url, password))
         }
-
-        Ok(url)
     }
 }
 
@@ -311,24 +323,38 @@ pub async fn run(
         server_opts.bitcoind_url.as_ref(),
         server_opts.esplora_url.as_ref(),
     ) {
-        (Some(_), None) => BitcoindClient::new(
-            &server_opts
-                .get_bitcoind_url()
+        (Some(_), None) => {
+            let bitcoind_username = server_opts
+                .bitcoind_username
+                .clone()
+                .expect("FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not");
+            let (bitcoind_url, bitcoind_password) = server_opts
+                .get_bitcoind_url_and_password()
                 .await
-                .expect("Failed to get bitcoind url"),
-        )
-        .unwrap()
-        .into_dyn(),
+                .expect("Failed to get bitcoind url");
+            BitcoindClient::new(bitcoind_username, bitcoind_password, &bitcoind_url)
+                .unwrap()
+                .into_dyn()
+        }
         (None, Some(url)) => EsploraClient::new(url).unwrap().into_dyn(),
-        (Some(_), Some(esplora_url)) => BitcoindClientWithFallback::new(
-            &server_opts
-                .get_bitcoind_url()
+        (Some(_), Some(esplora_url)) => {
+            let bitcoind_username = server_opts
+                .bitcoind_username
+                .clone()
+                .expect("FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not");
+            let (bitcoind_url, bitcoind_password) = server_opts
+                .get_bitcoind_url_and_password()
                 .await
-                .expect("Failed to get bitcoind url"),
-            esplora_url,
-        )
-        .unwrap()
-        .into_dyn(),
+                .expect("Failed to get bitcoind url");
+            BitcoindClientWithFallback::new(
+                bitcoind_username,
+                bitcoind_password,
+                &bitcoind_url,
+                esplora_url,
+            )
+            .unwrap()
+            .into_dyn()
+        }
         _ => unreachable!("ArgGroup already enforced XOR relation"),
     };
 
