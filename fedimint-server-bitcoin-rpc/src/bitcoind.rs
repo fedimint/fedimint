@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use bitcoin::{BlockHash, Network, Transaction};
 use bitcoincore_rpc::Error::JsonRpc;
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -19,13 +19,8 @@ pub struct BitcoindClient {
 }
 
 impl BitcoindClient {
-    pub fn new(url: &SafeUrl) -> anyhow::Result<Self> {
-        let auth = Auth::UserPass(
-            url.username().to_owned(),
-            url.password()
-                .context("Bitcoin RPC URL is missing password")?
-                .to_owned(),
-        );
+    pub fn new(username: String, password: String, url: &SafeUrl) -> anyhow::Result<Self> {
+        let auth = Auth::UserPass(username, password);
 
         let url = url
             .without_auth()

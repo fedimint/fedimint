@@ -20,14 +20,19 @@ pub struct BitcoindClientWithFallback {
 }
 
 impl BitcoindClientWithFallback {
-    pub fn new(bitcoind_url: &SafeUrl, esplora_url: &SafeUrl) -> Result<Self> {
+    pub fn new(
+        username: String,
+        password: String,
+        bitcoind_url: &SafeUrl,
+        esplora_url: &SafeUrl,
+    ) -> Result<Self> {
         warn!(
             target: LOG_SERVER,
             %bitcoind_url,
             %esplora_url,
             "Initiallizing bitcoin bitcoind backend with esplora fallback"
         );
-        let bitcoind_client = BitcoindClient::new(bitcoind_url)?;
+        let bitcoind_client = BitcoindClient::new(username, password, bitcoind_url)?;
         let esplora_client = EsploraClient::new(esplora_url)?;
 
         Ok(Self {
