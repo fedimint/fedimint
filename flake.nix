@@ -187,7 +187,8 @@
                 pkgs.wasm-bindgen-cli
                 pkgs.geckodriver
                 pkgs.wasm-pack
-              ] ++ lib.optionals (stdenv.isLinux) [ pkgs.firefox ];
+              ]
+              ++ lib.optionals (stdenv.isLinux) [ pkgs.firefox ];
             };
           }
         );

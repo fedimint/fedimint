@@ -10,12 +10,13 @@ final: prev: {
 
     nativeBuildInputs = [ final.pkg-config ];
 
-    buildInputs =
-      [ final.openssl ]
-      ++ final.lib.optionals final.stdenv.isDarwin [
-        final.curl
-        final.darwin.apple_sdk.frameworks.Security
-      ];
+    buildInputs = [
+      final.openssl
+    ]
+    ++ final.lib.optionals final.stdenv.isDarwin [
+      final.curl
+      final.darwin.apple_sdk.frameworks.Security
+    ];
 
     nativeCheckInputs = [ final.nodejs ];
 

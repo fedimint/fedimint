@@ -56,8 +56,7 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
                 if let Ok(esplora_network) = self.esplora_client.get_network().await {
                     assert_eq!(
                         bitcoind_network, esplora_network,
-                        "Network mismatch: bitcoind reported {:?} but esplora reported {:?}",
-                        bitcoind_network, esplora_network
+                        "Network mismatch: bitcoind reported {bitcoind_network:?} but esplora reported {esplora_network:?}",
                     );
                 }
                 Ok(bitcoind_network)

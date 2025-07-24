@@ -565,19 +565,18 @@ in
 
         FM_DISCOVER_API_VERSION_TIMEOUT = "10";
 
-        buildPhaseCargoCommand =
+        buildPhaseCargoCommand = ''
+          source <(cargo llvm-cov show-env --export-prefix)
+        ''
+        + lib.concatStringsSep "\n" (
+          lib.replicate times ''
+            env RUST_BACKTRACE=1 RUST_LOG=info cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile nix-ccov --test-threads=$(($(nproc) * 2))
           ''
-            source <(cargo llvm-cov show-env --export-prefix)
-          ''
-          + lib.concatStringsSep "\n" (
-            lib.replicate times ''
-              env RUST_BACKTRACE=1 RUST_LOG=info cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile nix-ccov --test-threads=$(($(nproc) * 2))
-            ''
-          )
-          + ''
-            mkdir -p $out
-            cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info
-          '';
+        )
+        + ''
+          mkdir -p $out
+          cargo llvm-cov report --profile $CARGO_PROFILE --lcov --output-path $out/lcov.info
+        '';
         doInstallCargoArtifacts = false;
         nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
         doCheck = false;
@@ -897,7 +896,8 @@ in
             fedimint-dbtool
             fedimint-load-test-tool
             fedimint-recoverytool
-          ] ++ defaultPackages;
+          ]
+          ++ defaultPackages;
           config = {
             Cmd = [ "${pkgs.bash}/bin/bash" ];
           };
