@@ -91,8 +91,9 @@ impl IrohConnector {
             }
 
             #[cfg(not(target_family = "wasm"))]
-            let builder = builder.discovery_dht();
-            let endpoint = builder.bind().await?;
+            let builder = builder.discovery_dht().discovery_n0();
+
+            let endpoint = builder.discovery_n0().bind().await?;
             debug!(
                 target: LOG_NET_IROH,
                 node_id = %endpoint.node_id(),
