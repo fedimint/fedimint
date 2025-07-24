@@ -2897,6 +2897,7 @@ dependencies = [
  "fedimint-api-client",
  "fedimint-bip39",
  "fedimint-client",
+ "fedimint-client-module",
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-ln-client",

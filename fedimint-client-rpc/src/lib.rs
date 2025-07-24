@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,12 +9,14 @@ use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::ClientModule;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{ClientHandleArc, RootSecret};
+use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::impl_db_record;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::{BoxFuture, BoxStream};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
@@ -27,7 +29,7 @@ use lightning_invoice::Bolt11InvoiceDescriptionRef;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing::info;
 
 // Key prefixes for the unified database
@@ -67,6 +69,7 @@ pub enum RpcRequestKind {
     JoinFederation {
         invite_code: String,
         client_name: String,
+        recover: bool,
     },
     OpenClient {
         client_name: String,
@@ -118,6 +121,9 @@ pub struct RpcGlobalState {
     clients: Mutex<HashMap<String, ClientHandleArc>>,
     rpc_handles: std::sync::Mutex<HashMap<u64, AbortHandle>>,
     unified_database: Database,
+    recovery_progress:
+        Arc<RwLock<BTreeMap<FederationId, BTreeMap<ModuleInstanceId, RecoveryProgress>>>>,
+    task_group: TaskGroup,
 }
 
 pub struct HandledRpc<'a> {
@@ -130,6 +136,8 @@ impl RpcGlobalState {
             clients: Mutex::new(HashMap::new()),
             rpc_handles: std::sync::Mutex::new(HashMap::new()),
             unified_database,
+            recovery_progress: Arc::new(RwLock::new(BTreeMap::new())),
+            task_group: TaskGroup::new(),
         }
     }
 
@@ -179,6 +187,7 @@ impl RpcGlobalState {
     async fn handle_join_federation(
         &self,
         invite_code: String,
+        recover: bool,
         client_name: String,
     ) -> anyhow::Result<()> {
         // Check if wallet mnemonic is set
@@ -196,13 +205,25 @@ impl RpcGlobalState {
         let federation_secret = self.derive_federation_secret(&mnemonic, &federation_id);
 
         let builder = Self::client_builder(client_db).await?;
-        let client = Arc::new(
-            builder
-                .preview(&invite_code)
-                .await?
-                .join(RootSecret::StandardDoubleDerive(federation_secret))
-                .await?,
-        );
+        let preview = builder.preview(&invite_code).await?;
+
+        let client = if recover {
+            Arc::new(
+                preview
+                    .recover(RootSecret::StandardDoubleDerive(federation_secret), None)
+                    .await?,
+            )
+        } else {
+            Arc::new(
+                preview
+                    .join(RootSecret::StandardDoubleDerive(federation_secret))
+                    .await?,
+            )
+        };
+
+        if recover {
+            self.spawn_recovery_progress(client.clone()).await;
+        }
 
         self.add_client(client_name, client).await;
         Ok(())
@@ -272,7 +293,8 @@ impl RpcGlobalState {
             let client = self
                 .get_client(&client_name)
                 .await
-                .with_context(|| format!("Client not found: {}", client_name))?;
+                .with_context(|| format!("Client not found: {client_name}"))?;
+
             match module.as_str() {
                 "" => {
                     let mut stream = client.handle_global_rpc(method, payload);
@@ -374,9 +396,10 @@ impl RpcGlobalState {
             })),
             RpcRequestKind::JoinFederation {
                 invite_code,
+                recover,
                 client_name,
             } => Some(Box::pin(try_stream! {
-                self.handle_join_federation(invite_code, client_name)
+                self.handle_join_federation(invite_code, recover, client_name)
                     .await?;
                 yield serde_json::json!(null);
             })),
@@ -544,5 +567,56 @@ impl RpcGlobalState {
         } else {
             Ok(None)
         }
+    }
+
+    /// Spawn recovery progress tracking for a client
+    async fn spawn_recovery_progress(&self, client: ClientHandleArc) {
+        let federation_id = client.federation_id();
+        let recovery_progress = self.recovery_progress.clone();
+        let task_group = self.task_group.clone();
+
+        self.init_recovery_progress_cache(federation_id).await;
+
+        let progress_client = client.clone();
+        let cleanup_recovery_progress = recovery_progress.clone();
+
+        task_group.spawn_cancellable("recovery progress", async move {
+            let mut stream = progress_client.subscribe_to_recovery_progress();
+            let mut all_modules_complete = false;
+
+            while let Some((module_id, progress)) = stream.next().await {
+                {
+                    let mut progress_map = recovery_progress.write().await;
+                    if let Some(federation_progress) = progress_map.get_mut(&federation_id) {
+                        federation_progress.insert(module_id, progress);
+
+                        // Check if all modules are complete
+                        all_modules_complete = federation_progress.values().all(|p| p.is_done());
+                    }
+                }
+
+                // If all modules are complete, we can break early
+                if all_modules_complete {
+                    tracing::info!(
+                        "All recovery modules complete for federation {}",
+                        federation_id
+                    );
+                    break;
+                }
+            }
+
+            let mut progress_map = cleanup_recovery_progress.write().await;
+            progress_map.remove(&federation_id);
+            tracing::info!(
+                "Recovery progress tracking cleaned up for federation {}",
+                federation_id
+            );
+        });
+    }
+
+    /// Initialize recovery progress cache for a federation
+    async fn init_recovery_progress_cache(&self, federation_id: FederationId) {
+        let mut progress = self.recovery_progress.write().await;
+        progress.insert(federation_id, BTreeMap::new());
     }
 }
