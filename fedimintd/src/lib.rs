@@ -71,9 +71,15 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 #[command(version)]
 #[command(
     group(
+        ArgGroup::new("bitcoind_password_auth")
+           .args(["bitcoind_password", "bitcoind_url_password_file"])
+           .multiple(false)
+    ),
+    group(
         ArgGroup::new("bitcoind_auth")
             .args(["bitcoind_url"])
-            .requires_all(["bitcoind_username", "bitcoind_password", "bitcoind_url"])
+            .requires("bitcoind_password_auth")
+            .requires_all(["bitcoind_username", "bitcoind_url"])
     ),
     group(
         ArgGroup::new("bitcoin_rpc")
