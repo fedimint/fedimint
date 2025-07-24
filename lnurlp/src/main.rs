@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let invoice = get_invoice(&args.lnurl, args.amount, args.comment).await?;
 
-    println!("{}", invoice);
+    println!("{invoice}");
     Ok(())
 }
 

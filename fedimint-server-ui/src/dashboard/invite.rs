@@ -2,7 +2,7 @@ use maud::{Markup, html};
 
 // Card with invite code text and copy button
 pub fn render(invite_code: &str) -> Markup {
-    let observer_link = format!("https://observer.fedimint.org/nostr?check={}", invite_code);
+    let observer_link = format!("https://observer.fedimint.org/nostr?check={invite_code}");
 
     html! {
         div class="card h-100" {

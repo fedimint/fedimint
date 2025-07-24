@@ -100,8 +100,8 @@ impl AuditSummary {
         module_instance_id_to_kind: &HashMap<ModuleInstanceId, String>,
     ) -> Self {
         let empty_module_placeholders = module_instance_id_to_kind
-            .iter()
-            .map(|(id, _)| create_empty_module_placeholder(*id))
+            .keys()
+            .map(|id| create_empty_module_placeholder(*id))
             .collect::<Vec<_>>();
         Self {
             net_assets: calculate_net_assets(audit.items.iter())

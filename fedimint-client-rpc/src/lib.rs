@@ -272,7 +272,7 @@ impl RpcGlobalState {
             let client = self
                 .get_client(&client_name)
                 .await
-                .with_context(|| format!("Client not found: {}", client_name))?;
+                .with_context(|| format!("Client not found: {client_name}"))?;
             match module.as_str() {
                 "" => {
                     let mut stream = client.handle_global_rpc(method, payload);
