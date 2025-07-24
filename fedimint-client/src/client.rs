@@ -1460,11 +1460,7 @@ impl Client {
                         Metadata::from_json_serialized(params)
                     };
                     self.backup_to_federation(metadata).await?;
-                    yield serde_json::json!({
-                        "success": true,
-                        "federation_id": self.federation_id().to_string(),
-                        "message": "Backup successfully uploaded to federation"
-                    });
+                    yield serde_json::Value::Null;
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
