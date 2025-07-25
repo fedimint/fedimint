@@ -86,7 +86,23 @@ impl Fixtures {
             };
 
             let server_bitcoin_rpc = match rpc_config.kind.as_ref() {
-                "bitcoind" => BitcoindClient::new(&rpc_config.url).unwrap().into_dyn(),
+                "bitcoind" => {
+                    // Directly extract the authentication details from the url.
+                    // Since this is just testing we can be careful to not use characters that need
+                    // to be URL-encoded
+                    let bitcoind_username = rpc_config.url.username();
+                    let bitcoind_password = rpc_config
+                        .url
+                        .password()
+                        .expect("bitcoind password was not set");
+                    BitcoindClient::new(
+                        bitcoind_username.to_string(),
+                        bitcoind_password.to_string(),
+                        &rpc_config.url,
+                    )
+                    .unwrap()
+                    .into_dyn()
+                }
                 "esplora" => EsploraClient::new(&rpc_config.url).unwrap().into_dyn(),
                 kind => panic!("Unknown bitcoin rpc kind {kind}"),
             };

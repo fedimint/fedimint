@@ -205,6 +205,8 @@ declare_vars! {
         FM_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_BITCOIN_RPC_URL";
         FM_BITCOIN_RPC_KIND: String = "bitcoind"; env: "FM_BITCOIN_RPC_KIND";
         FM_BITCOIND_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: "FM_BITCOIND_URL";
+        FM_BITCOIND_USERNAME: String = "bitcoin"; env: "FM_BITCOIND_USERNAME";
+        FM_BITCOIND_PASSWORD: String = "bitcoin"; env: "FM_BITCOIND_PASSWORD";
         FM_DEFAULT_BITCOIN_RPC_URL: String = f!("http://bitcoin:bitcoin@127.0.0.1:{FM_PORT_BTC_RPC}"); env: FM_DEFAULT_BITCOIN_RPC_URL_ENV;
         FM_DEFAULT_BITCOIN_RPC_KIND: String = "bitcoind"; env: FM_DEFAULT_BITCOIN_RPC_KIND_ENV;
 

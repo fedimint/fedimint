@@ -229,8 +229,8 @@ impl PaymentFee {
     /// This is the fee the gateway uses to cover transaction fees with the
     /// federation.
     pub const TRANSACTION_FEE_DEFAULT: PaymentFee = PaymentFee {
-        base: Amount::from_sats(50),
-        parts_per_million: 5_000,
+        base: Amount::from_sats(2),
+        parts_per_million: 3000,
     };
 
     /// This is the maximum receive fee of half of one percent plus fifty

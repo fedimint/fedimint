@@ -47,10 +47,10 @@ impl fmt::Display for GatewayLdkChainSourceConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GatewayLdkChainSourceConfig::Bitcoind { server_url } => {
-                write!(f, "Bitcoind source with URL: {}", server_url)
+                write!(f, "Bitcoind source with URL: {server_url}")
             }
             GatewayLdkChainSourceConfig::Esplora { server_url } => {
-                write!(f, "Esplora source with URL: {}", server_url)
+                write!(f, "Esplora source with URL: {server_url}")
             }
         }
     }

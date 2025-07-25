@@ -143,7 +143,7 @@ fn format_item_type(item: &ConsensusItem) -> String {
     match item {
         ConsensusItem::Transaction(_) => "Transaction".to_string(),
         ConsensusItem::Module(_) => "Module".to_string(),
-        ConsensusItem::Default { variant, .. } => format!("Unknown ({})", variant),
+        ConsensusItem::Default { variant, .. } => format!("Unknown ({variant})"),
     }
 }
 
