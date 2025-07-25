@@ -1,54 +1,50 @@
-#![allow(clippy::needless_lifetimes)]
+//! A simple port allocation library for Fedimint tests
 
-//! A library for cooperative port allocation between multiple processes.
-//!
-//! Fedimint tests in many places need to allocate ranges of unused ports for
-//! Federations and other software under tests, without being able to `bind`
-//! them beforehand.
-//!
-//! We used to mitigate that using a global per-process atomic counter, as
-//! as simple port allocation mechanism. But this does not prevent conflicts
-//! between different processes.
-//!
-//! Normally this would prevent us from running multiple tests at the same time,
-//! which also makes it impossible to use `cargo nextest`.
-//!
-//! This library keeps track of allocated ports (with an expiration timeout) in
-//! a shared file, protected by an advisory fs lock, and uses `bind` to make
-//! sure a given port is actually free
+// from https://github.com/one-chain-labs/onechain/blob/580efae3893e7ac79dbcc5f401699642e9834d67/crates/sui-pg-temp-db/src/lib.rs#L288-L300
 
-mod data;
-mod envs;
-mod util;
+use tokio::net::{TcpListener, TcpStream};
 
-use std::path::PathBuf;
+/// Allocate a single available port
+///
+/// Return an ephemeral, available port. On unix systems, the port returned will
+/// be in the TIME_WAIT state ensuring that the OS won't hand out this port for
+/// some grace period. Callers should be able to bind to this port given they
+/// use SO_REUSEADDR.
+pub async fn port_alloc() -> u16 {
+    const MAX_PORT_RETRIES: u32 = 1000;
 
-use anyhow::bail;
-
-use crate::data::DataDir;
-use crate::envs::FM_PORTALLOC_DATA_DIR_ENV;
-
-pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
-    if range_size == 0 {
-        bail!("Can't allocate range of 0 ports");
+    for _ in 0..MAX_PORT_RETRIES {
+        if let Ok(port) = get_ephemeral_port().await {
+            return port;
+        }
     }
 
-    let mut data_dir = DataDir::new(data_dir()?)?;
-
-    data_dir.with_lock(|data_dir| {
-        let mut data = data_dir.load_data()?;
-        let base_port = data.get_free_port_range(range_size);
-        data_dir.store_data(&data)?;
-        Ok(base_port)
-    })
+    panic!("Error: could not find an available port");
 }
 
-fn data_dir() -> anyhow::Result<PathBuf> {
-    if let Some(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
-        Ok(PathBuf::from(env))
-    } else if let Some(dir) = dirs::cache_dir() {
-        Ok(dir.join("fm-portalloc"))
-    } else {
-        bail!("Could not determine port alloc data dir. Try setting FM_PORTALLOC_DATA_DIR");
+async fn get_ephemeral_port() -> std::io::Result<u16> {
+    // Request a random available port from the OS
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+    let addr = listener.local_addr()?;
+
+    // Create and accept a connection (which we'll promptly drop) in order to force
+    // the port into the TIME_WAIT state, ensuring that the port will be
+    // reserved from some limited amount of time (roughly 60s on some Linux
+    // systems)
+    let _stream = TcpStream::connect(addr).await?;
+    let (_socket, _) = listener.accept().await?;
+
+    Ok(addr.port())
+}
+
+/// Allocate multiple available ports
+///
+/// Returns a vector of `count` available ports. Each port is independently
+/// verified to be available.
+pub async fn port_alloc_multi(count: usize) -> Vec<u16> {
+    let mut ports = Vec::with_capacity(count);
+    for _ in 0..count {
+        ports.push(port_alloc().await);
     }
+    ports
 }

@@ -22,11 +22,11 @@ rustPlatform.buildRustPackage {
     # rev = "adedee15f1fe460398a7045b292604df2161adc0";
     # hash = "sha256-KnN5C7wFtDF10yxf+1dqIMUb8Q+UuCz4CMQrUFAChuA=";
 
-    # pre-allocation size patch:
-    owner = "dpc";
-    repo = "esplora-electrs";
-    rev = "9339bfaf40b896f9d0b9ee945edc44ef49f99d2b";
-    hash = "sha256-4PL+dvdUOTlX0IcpkcSxZ7TchsCI4fI8OmsFmwrtPHo=";
+    # pre-allocation size and tcp listener patch:
+    owner = "maan2003";
+    repo = "electrs";
+    rev = "3904f42171d441f9bf672fc809d21aaf27268b10";
+    hash = "sha256-sx5QzT46osExj2560iqtof/NAwJsjGNLhhfltbwybps=";
   };
 
   doCheck = false;

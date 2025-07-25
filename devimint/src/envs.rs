@@ -40,9 +40,6 @@ pub const FM_LINK_TEST_DIR_ENV: &str = "FM_LINK_TEST_DIR";
 // Env variable to run a degraded federation with FM_OFFLINE_NODES shutdown
 pub const FM_OFFLINE_NODES_ENV: &str = "FM_OFFLINE_NODES";
 
-// Fix base port for federation (fedimintds) port range
-pub const FM_FEDERATIONS_BASE_PORT_ENV: &str = "FM_FEDERATIONS_BASE_PORT";
-
 // Env variable to set a federation's invite code
 pub const FM_INVITE_CODE_ENV: &str = "FM_INVITE_CODE";
 
