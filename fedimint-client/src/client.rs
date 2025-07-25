@@ -1467,6 +1467,19 @@ impl Client {
                         });
                     }
                 }
+                "backup_to_federation" => {
+                    let metadata = if params.is_null() {
+                        Metadata::from_json_serialized(serde_json::json!({}))
+                    } else {
+                        Metadata::from_json_serialized(params)
+                    };
+                    self.backup_to_federation(metadata).await?;
+                    yield serde_json::json!({
+                        "success": true,
+                        "federation_id": self.federation_id().to_string(),
+                        "message": "Backup successfully uploaded to federation"
+                    });
+                }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
                     unreachable!()
