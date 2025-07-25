@@ -3918,14 +3918,7 @@ dependencies = [
 name = "fedimint-portalloc"
 version = "0.9.0-alpha"
 dependencies = [
- "anyhow",
- "dirs 6.0.0",
- "fedimint-core",
- "fs2",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tracing",
+ "tokio",
 ]
 
 [[package]]
@@ -4560,16 +4553,6 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "walkdir",
-]
-
-[[package]]
-name = "fs2"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]

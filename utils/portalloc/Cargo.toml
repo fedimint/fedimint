@@ -16,14 +16,7 @@ name = "fedimint_portalloc"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
-dirs = { workspace = true }
-fedimint-core = { workspace = true }
-fs2 = { workspace = true }
-rand = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tracing = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
 
 [lints]
 workspace = true

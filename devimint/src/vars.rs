@@ -3,6 +3,8 @@
 mod net_overrides;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
+
+use crate::federation::PORTS_PER_FEDIMINTD;
 pub trait ToEnvVar {
     fn to_env_value(&self) -> Option<String> {
         panic!("Must implement one of the two ToEnvVar methods");
@@ -102,22 +104,18 @@ use fedimint_core::envs::{
     FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, FM_USE_UNKNOWN_MODULE_ENV,
 };
 use fedimint_core::{NumPeers, PeerId};
-use fedimint_portalloc::port_alloc;
+use fedimint_portalloc::{port_alloc, port_alloc_multi};
 use fedimint_server::net::api::ApiSecrets;
 use fedimintd::envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
 use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
-
-use crate::federation::{
-    FEDIMINTD_METRICS_PORT_OFFSET, FEDIMINTD_UI_PORT_OFFSET, PORTS_PER_FEDIMINTD,
-};
 
 pub fn utf8(path: &Path) -> &str {
     path.as_os_str().to_str().expect("must be valid utf8")
 }
 
 declare_vars! {
-    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16) =>
+    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize) =>
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
 
@@ -138,25 +136,24 @@ declare_vars! {
         FM_TEST_FAST_WEAK_CRYPTO: String = "1"; env: "FM_TEST_FAST_WEAK_CRYPTO";
         FM_LOGS_DIR: PathBuf = mkdir(FM_TEST_DIR.join("logs")).await?; env: "FM_LOGS_DIR";
 
-        FM_PORT_BTC_RPC: u16 = port_alloc(1)?; env: "FM_PORT_BTC_RPC";
-        FM_PORT_BTC_P2P: u16 = port_alloc(1)?; env: "FM_PORT_BTC_P2P";
-        FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK";
-        FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_TX";
-        FM_PORT_LND_LISTEN: u16 = port_alloc(1)?; env: "FM_PORT_LND_LISTEN";
-        FM_PORT_LDK: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
-        FM_PORT_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
-        FM_PORT_LND_RPC: u16 = port_alloc(1)?; env: "FM_PORT_LND_RPC";
-        FM_PORT_LND_REST: u16 = port_alloc(1)?; env: "FM_PORT_LND_REST";
-        FM_PORT_ESPLORA: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA";
-        FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_MONITORING";
-        FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
-        FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
-        FM_PORT_GW_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
+        FM_PORT_BTC_RPC: u16 = port_alloc().await; env: "FM_PORT_BTC_RPC";
+        FM_PORT_BTC_P2P: u16 = port_alloc().await; env: "FM_PORT_BTC_P2P";
+        FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK: u16 = port_alloc().await; env: "FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK";
+        FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc().await; env: "FM_PORT_BTC_ZMQ_PUB_RAW_TX";
+        FM_PORT_LND_LISTEN: u16 = port_alloc().await; env: "FM_PORT_LND_LISTEN";
+        FM_PORT_LDK: u16 = port_alloc().await; env: "FM_PORT_LDK";
+        FM_PORT_LDK2: u16 = port_alloc().await; env: "FM_PORT_LDK";
+        FM_PORT_LND_RPC: u16 = port_alloc().await; env: "FM_PORT_LND_RPC";
+        FM_PORT_LND_REST: u16 = port_alloc().await; env: "FM_PORT_LND_REST";
+        FM_PORT_ESPLORA: u16 = port_alloc().await; env: "FM_PORT_ESPLORA";
+        FM_PORT_ESPLORA_MONITORING: u16 = port_alloc().await; env: "FM_PORT_ESPLORA_MONITORING";
+        FM_PORT_GW_LND: u16 = port_alloc().await; env: "FM_PORT_GW_LND";
+        FM_PORT_GW_LDK: u16 = port_alloc().await; env: "FM_PORT_GW_LDK";
+        FM_PORT_GW_LDK2: u16 = port_alloc().await; env: "FM_PORT_GW_LDK2";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
-        FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
+        FM_PORT_RECURRINGD: u16 = port_alloc().await; env: "FM_PORT_RECURRINGD";
 
-        FM_FEDERATION_BASE_PORT: u16 = federation_base_ports; env: "FM_FEDERATION_BASE_PORT";
-        fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";
+        fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new_from_ports(&port_alloc_multi(num_feds * fed_size * PORTS_PER_FEDIMINTD as usize).await, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";
 
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?; env: "FM_LND_DIR";
         FM_LDK_DIR: PathBuf = mkdir(FM_TEST_DIR.join("ldk")).await?; env: "FM_LDK_DIR";
@@ -220,25 +217,8 @@ impl Global {
         num_feds: usize,
         fed_size: usize,
         offline_nodes: usize,
-        federations_base_port: Option<u16>,
     ) -> anyhow::Result<Self> {
-        let federations_base_port = if let Some(federations_base_port) = federations_base_port {
-            federations_base_port
-        } else {
-            port_alloc(
-                (PORTS_PER_FEDIMINTD as usize * fed_size * num_feds)
-                    .try_into()
-                    .unwrap(),
-            )?
-        };
-        let this = Self::init(
-            test_dir,
-            num_feds,
-            fed_size,
-            offline_nodes,
-            federations_base_port,
-        )
-        .await?;
+        let this = Self::init(test_dir, num_feds, fed_size, offline_nodes).await?;
         Ok(this)
     }
 }
@@ -253,9 +233,9 @@ declare_vars! {
         FM_BIND_API: String = format!("127.0.0.1:{}", overrides.api.port()); env: "FM_BIND_API";
         FM_P2P_URL: String =  format!("fedimint://127.0.0.1:{}", overrides.p2p.port()); env: "FM_P2P_URL";
         FM_API_URL: String =  format!("ws://127.0.0.1:{}", overrides.api.port()); env: "FM_API_URL";
-        FM_BIND_UI: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_UI_PORT_OFFSET); env: "FM_BIND_UI";
-        FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: "FM_BIND_METRICS_API";
-        FM_BIND_METRICS: String = format!("127.0.0.1:{}", overrides.base_port + FEDIMINTD_METRICS_PORT_OFFSET); env: "FM_BIND_METRICS";
+        FM_BIND_UI: String = format!("127.0.0.1:{}", overrides.ui); env: "FM_BIND_UI";
+        FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", overrides.metrics); env: "FM_BIND_METRICS_API";
+        FM_BIND_METRICS: String = format!("127.0.0.1:{}", overrides.metrics); env: "FM_BIND_METRICS";
         FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{federation_name}-{peer_id}"))).await?; env: "FM_DATA_DIR";
 
         FM_IROH_P2P_SECRET_KEY_OVERRIDE : String = overrides.p2p.secret_key(); env: FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV;

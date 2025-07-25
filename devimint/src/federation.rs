@@ -307,8 +307,17 @@ impl Federation {
         let mut peer_to_env_vars_map = BTreeMap::new();
 
         let peers: Vec<_> = num_peers.peer_ids().collect();
+        // Extract p2p and api ports for each peer (2 ports per peer)
+        let config_ports: Vec<u16> = process_mgr
+            .globals
+            .fedimintd_overrides
+            .fed_expect(fed_index)
+            .peers
+            .values()
+            .flat_map(|peer| vec![peer.p2p.port(), peer.api.port()])
+            .collect();
         let params: HashMap<PeerId, ConfigGenParams> =
-            local_config_gen_params(&peers, process_mgr.globals.FM_FEDERATION_BASE_PORT)?;
+            local_config_gen_params(&peers, &config_ports)?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
