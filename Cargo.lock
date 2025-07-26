@@ -2165,7 +2165,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8ea84d0109517cc2253d4a679bdda1e8989e9bd86987e9e4f75ffdda0095fd1"
 dependencies = [
  "derive-deftly-macros",
- "heck 0.5.0",
+ "heck 0.4.1",
 ]
 
 [[package]]
@@ -2174,14 +2174,14 @@ version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "357422a457ccb850dc8f1c1680e0670079560feaad6c2e247e3f345c4fab8a3f"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "indexmap 2.9.0",
  "itertools 0.14.0",
  "proc-macro-crate 3.3.0",
  "proc-macro2",
  "quote",
  "sha3",
- "strum 0.27.1",
+ "strum 0.25.0",
  "syn 2.0.104",
  "void",
 ]
@@ -2785,7 +2785,7 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_json",
- "strum 0.27.1",
+ "strum 0.27.2",
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls 0.26.2",
@@ -2885,8 +2885,8 @@ dependencies = [
  "reqwest 0.12.22",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2914,8 +2914,8 @@ dependencies = [
  "reqwest 0.12.22",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
@@ -3012,8 +3012,8 @@ dependencies = [
  "serde_json",
  "serdect",
  "slotmap",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -3085,7 +3085,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3130,8 +3130,8 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "thiserror 2.0.12",
  "tracing",
 ]
@@ -3158,8 +3158,8 @@ dependencies = [
  "fedimint-server-core",
  "futures",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -3178,7 +3178,7 @@ dependencies = [
  "fedimint-testing",
  "futures",
  "rand 0.8.5",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3195,8 +3195,8 @@ dependencies = [
  "fedimint-core",
  "fedimint-empty-common",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "thiserror 2.0.12",
 ]
 
@@ -3222,8 +3222,8 @@ dependencies = [
  "fedimint-server-core",
  "futures",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -3355,8 +3355,8 @@ dependencies = [
  "reqwest 0.12.22",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "thiserror 2.0.12",
  "tikv-jemallocator",
  "tokio",
@@ -3388,8 +3388,8 @@ dependencies = [
  "lightning-invoice",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3507,8 +3507,8 @@ dependencies = [
  "reqwest 0.12.22",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -3549,8 +3549,8 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
  "tokio",
  "tracing",
@@ -3580,7 +3580,7 @@ dependencies = [
  "lightning-invoice",
  "rand 0.8.5",
  "serde_json",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3608,7 +3608,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "strum 0.27.1",
+ "strum 0.27.2",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -3651,8 +3651,8 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3738,8 +3738,8 @@ dependencies = [
  "fedimint-meta-common",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "thiserror 2.0.12",
  "tracing",
 ]
@@ -3772,8 +3772,8 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tracing",
 ]
 
@@ -3834,8 +3834,8 @@ dependencies = [
  "serde-big-array",
  "serde_json",
  "serdect",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -3874,8 +3874,8 @@ dependencies = [
  "itertools 0.14.0",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
  "tokio",
  "tracing",
@@ -3909,7 +3909,7 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4046,8 +4046,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "subtle",
  "tar",
  "test-log",
@@ -4106,7 +4106,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "rand 0.8.5",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4279,8 +4279,8 @@ dependencies = [
  "fedimint-core",
  "fedimint-server-core",
  "fedimint-unknown-common",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -4306,8 +4306,8 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4349,8 +4349,8 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4382,7 +4382,7 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "rand 0.8.5",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -6890,9 +6890,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "12.3.4"
+version = "12.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1eeb3bbebc87062b99fbb8c9067d30dab85469f4cf12248a2667777cc86b282"
+checksum = "487906208f38448e186e3deb02f2b8ef046a9078b0de00bdb28bf4fb9b76951c"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -8305,7 +8305,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.12.1",
  "log",
  "multimap 0.10.1",
@@ -8592,9 +8592,9 @@ dependencies = [
 
 [[package]]
 name = "redb"
-version = "2.6.0"
+version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cef6a6d3a65ea334d6cdfb31fa2525c20184b7aa7bd1ad1e2e37502610d4609f"
+checksum = "fef838cd981b5c46e9e91e20e4623e43b29b5c251eb245b34da0cbd2da09ab27"
 dependencies = [
  "libc",
 ]
@@ -9497,7 +9497,7 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1961e2ef424c1424204d3a5d6975f934f56b6d50ff5732382d84ebf460e147f7"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -9639,11 +9639,11 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.27.1"
+version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
 dependencies = [
- "strum_macros 0.27.1",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -9674,14 +9674,13 @@ dependencies = [
 
 [[package]]
 name = "strum_macros"
-version = "0.27.1"
+version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "rustversion",
  "syn 2.0.104",
 ]
 
