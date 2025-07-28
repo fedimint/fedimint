@@ -21,7 +21,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     bundlers = {
-      url = "github:NixOS/bundlers?rev=ea1e72ad1dbb0864fd55b3ba52ed166cd190afa2";
+      url = "github:NixOS/bundlers?rev=b0bc45a7626d94b4b3a17f8cc3c95e288625c8db";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     advisory-db = {
@@ -241,6 +241,7 @@
 
             # some bundlers want `pname` here, instead of `name`
             pname = name;
+            version = package.version;
 
             dontUnpack = true;
             dontStrip = !pkgs.stdenv.isDarwin;
