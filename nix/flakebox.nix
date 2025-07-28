@@ -841,7 +841,14 @@ in
       {
         fedimintd = pkgs.dockerTools.buildLayeredImage {
           name = "fedimintd";
-          contents = [ fedimint-pkgs ] ++ defaultPackages;
+          contents = [
+            fedimint-pkgs
+          ]
+          ++ defaultPackages
+          ++ [
+            # yq is needed to enable easier config management for start9
+            pkgs.yq-go
+          ];
           config = {
             Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
             Env = [ "FM_DATA_DIR=/data" ];
