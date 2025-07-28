@@ -29,7 +29,7 @@ pub fn render(url: SafeUrl, status: &Option<ServerBitcoinRpcStatus>) -> Markup {
                             @if let Some(sync) = status.sync_percentage {
                                 tr {
                                     th { "Sync Progress" }
-                                    td { (format!("{:.1}%", sync)) }
+                                    td { (format!("{:.1}%", sync * 100.0)) }
                                 }
                             }
                         }
