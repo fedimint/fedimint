@@ -8,7 +8,7 @@ use std::{ffi, marker, ops};
 
 use anyhow::{anyhow, bail};
 use bitcoin::secp256k1::PublicKey;
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
@@ -252,6 +252,11 @@ where
     /// Get a reference to a global Api handle
     pub fn global_api(&self) -> DynGlobalApi {
         self.client.get().api_clone()
+    }
+
+    /// Get a reference to a module Api handle
+    pub fn module_api(&self) -> DynModuleApi {
+        self.global_api().with_module(self.module_instance_id)
     }
 
     /// A set of all decoders of all modules of the client

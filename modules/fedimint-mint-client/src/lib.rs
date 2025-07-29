@@ -79,6 +79,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
+use futures::future::try_join_all;
 use futures::{StreamExt, pin_mut};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
@@ -1724,6 +1725,27 @@ impl MintClientModule {
         }
 
         Ok(notes.total_amount())
+    }
+
+    /// Contacts the mint and checks if the supplied notes were already spent.
+    ///
+    /// **Caution:** This reduces privacy and can lead to race conditions. **DO
+    /// NOT** rely on it for receiving funds unless you really know what you are
+    /// doing.
+    pub async fn check_note_spent(&self, oob_notes: &OOBNotes) -> anyhow::Result<bool> {
+        use crate::api::MintFederationApi;
+
+        let api_client = self.client_ctx.module_api();
+        let any_spent = try_join_all(oob_notes.notes().iter().flat_map(|(_, notes)| {
+            notes
+                .iter()
+                .map(|note| api_client.check_note_spent(note.nonce()))
+        }))
+        .await?
+        .into_iter()
+        .any(|spent| spent);
+
+        Ok(any_spent)
     }
 
     /// Try to cancel a spend operation started with
