@@ -26,7 +26,7 @@ pub fn render(url: SafeUrl, status: &Option<ServerBitcoinRpcStatus>) -> Markup {
                                 th { "Fee Rate" }
                                 td { (format!("{} sats/vB", status.fee_rate.sats_per_kvb / 1000)) }
                             }
-                            @if let Some(sync) = status.sync_percentage {
+                            @if let Some(sync) = status.sync_progress {
                                 tr {
                                     th { "Sync Progress" }
                                     td { (format!("{:.1}%", sync * 100.0)) }

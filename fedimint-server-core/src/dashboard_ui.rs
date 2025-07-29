@@ -85,5 +85,5 @@ pub struct ServerBitcoinRpcStatus {
     pub network: Network,
     pub block_count: u64,
     pub fee_rate: Feerate,
-    pub sync_percentage: Option<f64>,
+    pub sync_progress: Option<f64>,
 }

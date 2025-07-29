@@ -389,7 +389,7 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         inner.pending = filtered.into_values().collect();
     }
 
-    async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+    async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
         Ok(None)
     }
 }

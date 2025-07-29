@@ -103,7 +103,7 @@ impl IServerBitcoinRpc for BitcoindClient {
         }
     }
 
-    async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+    async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
         Ok(Some(
             block_in_place(|| self.client.get_blockchain_info())?.verification_progress,
         ))
