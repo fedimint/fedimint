@@ -1290,7 +1290,7 @@ mod tests {
             // No-op for mock
         }
 
-        async fn get_sync_percentage(&self) -> anyhow::Result<Option<f64>> {
+        async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
             Err(anyhow::anyhow!("Mock sync percentage error"))
         }
     }

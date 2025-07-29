@@ -59,7 +59,7 @@ impl ServerBitcoinRpcMonitor {
     async fn fetch_status(rpc: &DynServerBitcoinRpc) -> Result<ServerBitcoinRpcStatus> {
         let network = rpc.get_network().await?;
         let block_count = rpc.get_block_count().await?;
-        let sync_percentage = rpc.get_sync_percentage().await?;
+        let sync_progress = rpc.get_sync_progress().await?;
 
         let fee_rate = if network == Network::Regtest {
             Feerate { sats_per_kvb: 1000 }
@@ -71,7 +71,7 @@ impl ServerBitcoinRpcMonitor {
             network,
             block_count,
             fee_rate,
-            sync_percentage,
+            sync_progress,
         })
     }
 
@@ -167,7 +167,7 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
 
     /// Returns the node's estimated chain sync percentage as a float between
     /// 0.0 and 1.0, or `None` if the node doesn't support this feature.
-    async fn get_sync_percentage(&self) -> Result<Option<f64>>;
+    async fn get_sync_progress(&self) -> Result<Option<f64>>;
 
     fn into_dyn(self) -> DynServerBitcoinRpc
     where

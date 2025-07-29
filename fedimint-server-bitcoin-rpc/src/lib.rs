@@ -145,8 +145,8 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         self.esplora_client.submit_transaction(transaction).await;
     }
 
-    async fn get_sync_percentage(&self) -> Result<Option<f64>> {
+    async fn get_sync_progress(&self) -> Result<Option<f64>> {
         // We're always in sync, just like esplora
-        self.esplora_client.get_sync_percentage().await
+        self.esplora_client.get_sync_progress().await
     }
 }
