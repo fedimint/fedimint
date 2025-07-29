@@ -8,7 +8,10 @@ use fedimint_core::{Amount, OutPoint, secp256k1};
 use serde::{Deserialize, Serialize};
 
 use crate::LightningInput;
-use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract};
+use crate::contracts::{
+    ContractId, DecryptedPreimage, EncryptedPreimage, EncryptedPreimageUndecoded,
+    IdentifiableContract,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContractOffer {
@@ -59,7 +62,7 @@ pub struct IncomingContract {
     /// Payment hash which's corresponding preimage is being sold
     pub hash: bitcoin::hashes::sha256::Hash,
     /// Encrypted preimage as specified in offer
-    pub encrypted_preimage: EncryptedPreimage,
+    pub encrypted_preimage: EncryptedPreimageUndecoded,
     /// Status of preimage decryption, will either end in failure or contain the
     /// preimage eventually. In case decryption was successful the preimage
     /// is also the public key locking the contract, allowing the offer

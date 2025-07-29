@@ -176,6 +176,13 @@ impl DecryptedPreimage {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Deserialize, Serialize)]
 pub struct EncryptedPreimage(pub threshold_crypto::Ciphertext);
 
+impl From<EncryptedPreimage> for EncryptedPreimageUndecoded {
+    fn from(value: EncryptedPreimage) -> Self {
+        EncryptedPreimageUndecoded {
+            bytes: value.0.to_bytes(),
+        }
+    }
+}
 /// Share to decrypt an [`EncryptedPreimage`]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct PreimageDecryptionShare(pub threshold_crypto::DecryptionShare);
@@ -183,5 +190,36 @@ pub struct PreimageDecryptionShare(pub threshold_crypto::DecryptionShare);
 impl EncryptedPreimage {
     pub fn new(preimage_key: &PreimageKey, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
         EncryptedPreimage(key.encrypt(preimage_key.0))
+    }
+}
+
+/// Undecoded version of [`EncryptedPreimage`] that stores raw bytes to defer
+/// expensive cryptographic validation during decoding until actually needed.
+///
+/// This follows the same pattern as [`SpendableNoteUndecoded`] - stores the
+/// ciphertext as raw bytes to avoid the cost of
+/// `threshold_crypto::Ciphertext::from_bytes()` validation when the encrypted
+/// preimage might be filtered out or unused.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+pub struct EncryptedPreimageUndecoded {
+    /// Raw bytes of the threshold_crypto::Ciphertext, kept in sync with the
+    /// encoded format
+    pub bytes: Vec<u8>,
+}
+
+impl EncryptedPreimageUndecoded {
+    /// Create from an already-decoded EncryptedPreimage
+    pub fn from_decoded(encrypted_preimage: &EncryptedPreimage) -> Self {
+        Self {
+            bytes: encrypted_preimage.0.to_bytes(),
+        }
+    }
+
+    /// Decode into EncryptedPreimage, performing expensive cryptographic
+    /// validation
+    pub fn decode(&self) -> anyhow::Result<EncryptedPreimage> {
+        let ciphertext = threshold_crypto::Ciphertext::from_bytes(&self.bytes)
+            .ok_or_else(|| anyhow::anyhow!("Invalid ciphertext bytes"))?;
+        Ok(EncryptedPreimage(ciphertext))
     }
 }

@@ -398,7 +398,11 @@ impl ServerModule for Lightning {
                     bail!("Contract for this decryption share is not pending");
                 }
 
-                if !self.validate_decryption_share(peer_id, &share, &contract.encrypted_preimage) {
+                let contract_preimage = contract
+                    .encrypted_preimage
+                    .decode()
+                    .expect("Can't fail, read from the db");
+                if !self.validate_decryption_share(peer_id, &share, &contract_preimage) {
                     bail!("Decryption share is invalid");
                 }
 
@@ -424,7 +428,7 @@ impl ServerModule for Lightning {
                     decryption_shares
                         .iter()
                         .map(|(peer, share)| (peer.to_usize(), &share.0)),
-                    &contract.encrypted_preimage.0,
+                    &contract_preimage.0,
                 ) else {
                     // TODO: check if that can happen even though shares are verified
                     // before
@@ -680,11 +684,16 @@ impl ServerModule for Lightning {
                         .await
                         .expect("offer exists if output is valid");
 
+                    let contract_preimage = incoming
+                        .encrypted_preimage
+                        .decode()
+                        .expect("Can't fail, read from the db");
+
                     let decryption_share = self
                         .cfg
                         .private
                         .threshold_sec_key
-                        .decrypt_share(&incoming.encrypted_preimage.0)
+                        .decrypt_share(&contract_preimage.0)
                         .expect("We checked for decryption share validity on contract creation");
 
                     dbtx.insert_new_entry(
@@ -1430,7 +1439,8 @@ mod tests {
                 hash: sha256::Hash::hash(&sha256::Hash::hash(&preimage.0).to_byte_array()),
                 encrypted_preimage: EncryptedPreimage(
                     client_cfg.threshold_pub_key.encrypt(preimage.0),
-                ),
+                )
+                .into(),
                 decrypted_preimage: DecryptedPreimage::Some(preimage.clone()),
                 gateway_key: random_pub_key(),
             },

@@ -2086,7 +2086,7 @@ pub async fn create_incoming_contract_output(
     let our_pub_key = secp256k1::PublicKey::from_keypair(redeem_key);
     let contract = IncomingContract {
         hash: offer.hash,
-        encrypted_preimage: offer.encrypted_preimage.clone(),
+        encrypted_preimage: offer.encrypted_preimage.into(),
         decrypted_preimage: DecryptedPreimage::Pending,
         gateway_key: our_pub_key,
     };

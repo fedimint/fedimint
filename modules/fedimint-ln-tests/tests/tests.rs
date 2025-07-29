@@ -706,7 +706,8 @@ mod fedimint_migration_tests {
         let (_, pk) = fedimint_core::secp256k1::generate_keypair(&mut OsRng);
         let incoming_contract = IncomingContract {
             hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
-            encrypted_preimage: EncryptedPreimage::new(&PreimageKey(BYTE_33), &threshold_key),
+            encrypted_preimage: EncryptedPreimage::new(&PreimageKey(BYTE_33), &threshold_key)
+                .into(),
             decrypted_preimage: DecryptedPreimage::Some(PreimageKey(BYTE_33)),
             gateway_key: pk,
         };
