@@ -135,6 +135,12 @@ function cannot_replay_tx() {
 }
 export -f cannot_replay_tx
 
+function test_offline_client_initialization() {
+  # test runs with all servers offline, so we need to override FM_OFFLINE_NODES
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/test-offline-client-initialization.sh
+}
+export -f test_offline_client_initialization
+
 function circular_deposit() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/circular-deposit-test.sh
 }
@@ -328,6 +334,7 @@ tests_to_run_in_parallel+=(
   "mint_client_sanity"
   "mint_client_restore"
   "cannot_replay_tx"
+  "test_offline_client_initialization"
   "circular_deposit"
   "wallet_recovery"
   "wallet_recovery_2"

@@ -1835,6 +1835,55 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+/// Test that client can init even when the federation is down
+///
+/// See <https://github.com/fedimint/fedimint/issues/6939>
+pub async fn test_offline_client_initialization(
+    dev_fed: DevFed,
+    _process_mgr: &ProcessManager,
+) -> Result<()> {
+    log_binary_versions().await?;
+
+    let DevFed { mut fed, .. } = dev_fed;
+
+    // Ensure federation is properly initialized and all peers are online
+    fed.await_all_peers().await?;
+
+    // Create and join a client while all servers are online
+    let client = fed.new_joined_client("offline-test-client").await?;
+
+    // Verify client can get info while federation is online
+    const INFO_COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+    let online_info =
+        fedimint_core::runtime::timeout(INFO_COMMAND_TIMEOUT, cmd!(client, "info").out_json())
+            .await
+            .context("Client info command timed out while federation was online")?
+            .context("Client info command failed while federation was online")?;
+    info!(target: LOG_DEVIMINT, "Client info while federation online: {:?}", online_info);
+
+    // Shutdown all federation servers
+    info!(target: LOG_DEVIMINT, "Shutting down all federation servers...");
+    fed.terminate_all_servers().await?;
+
+    // Wait a moment to ensure servers are fully shutdown
+    fedimint_core::task::sleep_in_test("wait for federation shutdown", Duration::from_secs(2))
+        .await;
+
+    // Test that client info command still works with all servers offline
+    // This should work because client info doesn't require server communication
+    // for basic federation metadata and local state
+    info!(target: LOG_DEVIMINT, "Testing client info command with all servers offline...");
+    let offline_info =
+        fedimint_core::runtime::timeout(INFO_COMMAND_TIMEOUT, cmd!(client, "info").out_json())
+            .await
+            .context("Client info command timed out while federation was offline")?
+            .context("Client info command failed while federation was offline")?;
+
+    info!(target: LOG_DEVIMINT, "Client info while federation offline: {:?}", offline_info);
+
+    Ok(())
+}
+
 #[derive(Subcommand)]
 pub enum LatencyTest {
     Reissue,
@@ -1898,6 +1947,9 @@ pub enum TestCmd {
     GuardianBackup,
     /// `devfed` then tests that spent ecash cannot be double spent
     CannotReplayTransaction,
+    /// Tests that client info commands work when all federation servers are
+    /// offline
+    TestOfflineClientInitialization,
     /// Test upgrade paths for a given binary
     UpgradeTests {
         #[clap(subcommand)]
@@ -1997,6 +2049,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cannot_replay_tx_test(dev_fed).await?;
+        }
+        TestCmd::TestOfflineClientInitialization => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            test_offline_client_initialization(dev_fed, &process_mgr).await?;
         }
         TestCmd::UpgradeTests { binary, lnv2 } => {
             // TODO: Audit that the environment access only happens in single-threaded code.
