@@ -66,8 +66,8 @@ pub enum RpcRequestKind {
     /// Join federation (requires mnemonic to be set first)
     JoinFederation {
         invite_code: String,
+        force_recover: bool,
         client_name: String,
-        recover: bool,
     },
     OpenClient {
         client_name: String,
@@ -180,8 +180,8 @@ impl RpcGlobalState {
     async fn handle_join_federation(
         &self,
         invite_code: String,
-        recover: bool,
         client_name: String,
+        force_recover: bool,
     ) -> anyhow::Result<()> {
         // Check if wallet mnemonic is set
         let mnemonic = self
@@ -200,7 +200,11 @@ impl RpcGlobalState {
         let builder = Self::client_builder(client_db).await?;
         let preview = builder.preview(&invite_code).await?;
 
-        let client = if recover {
+        let backup_exists = preview
+            .check_backup_exists(RootSecret::StandardDoubleDerive(federation_secret.clone()))
+            .await?;
+
+        let client = if force_recover || backup_exists {
             Arc::new(
                 preview
                     .recover(RootSecret::StandardDoubleDerive(federation_secret), None)
@@ -384,10 +388,10 @@ impl RpcGlobalState {
             })),
             RpcRequestKind::JoinFederation {
                 invite_code,
-                recover,
                 client_name,
+                force_recover,
             } => Some(Box::pin(try_stream! {
-                self.handle_join_federation(invite_code, recover, client_name)
+                self.handle_join_federation(invite_code, client_name, force_recover)
                     .await?;
                 yield serde_json::json!(null);
             })),
