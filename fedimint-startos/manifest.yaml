@@ -1,9 +1,9 @@
-id: fedimintd-mutinynet
-title: "Fedimint - Mutinynet"
-version: 0.7.0
+id: fedimintd
+title: "Fedimint"
+version: 0.8.0
 release-notes: |
-  https://github.com/fedimint/fedimint/releases/tag/v0.7.0
-  This release includes support for sideloading fedimintd that runs on Mutinynet.
+  https://github.com/fedimint/fedimint/releases/tag/v0.8.0
+  This release includes support for sideloading fedimintd.
 license: MIT
 wrapper-repo: "https://github.com/fedimint/fedimint/fedimint-start9"
 upstream-repo: "https://github.com/fedimint/fedimint"
@@ -14,8 +14,6 @@ description:
   short: Federated E-Cash Mint
   long: |
     Fedimint is a federated Chaumian E-Cash Mint to custody and transact bitcoin in a community.
-
-    This Start9 package supports only Mutinynet, which is a test environment where coins have no value.
 assets:
   license: LICENSE
   icon: icon.png
@@ -43,7 +41,11 @@ health-checks:
     inject: true
     system: false
     io-format: json
-config: ~
+config:
+  get:
+    type: script
+  set:
+    type: script
 properties: ~
 volumes:
   main:
@@ -65,8 +67,13 @@ interfaces:
     protocols:
       - http
       - tcp
-dependencies: {}
-# TODO: backup/restore is not tested for mutinynet, however it will be prior to mainnet release
+dependencies:
+  bitcoind:
+    version: ">=0.21.0.0 <30.0.0"
+    requirement:
+      type: "opt-in"
+      how: "Install Bitcoin Core from the Start9 marketplace and select it in Fedimint's config"
+    description: "Provides private, self-hosted blockchain data instead of relying on external Esplora APIs"
 backup:
   create:
     type: docker
@@ -77,10 +84,10 @@ backup:
       - duplicity
       - create
       - /mnt/backup
-      - /root/data
+      - /fedimintd
     mounts:
       BACKUP: "/mnt/backup"
-      main: "/root/data"
+      fedimintd: "/fedimintd"
   restore:
     type: docker
     image: compat
@@ -90,7 +97,7 @@ backup:
       - duplicity
       - restore
       - /mnt/backup
-      - /root/data
+      - /fedimintd
     mounts:
       BACKUP: "/mnt/backup"
-      main: "/root/data"
+      fedimintd: "/fedimintd"
