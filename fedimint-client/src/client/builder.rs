@@ -10,7 +10,9 @@ use fedimint_api_client::api::global_api::with_request_hook::{
     ApiRequestHook, RawFederationApiWithRequestHookExt as _,
 };
 use fedimint_api_client::api::net::Connector;
-use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, ReconnectFederationApi};
+use fedimint_api_client::api::{
+    ApiVersionSet, DynGlobalApi, FederationApiExt as _, ReconnectFederationApi,
+};
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::ClientModuleInit;
@@ -26,10 +28,11 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     Database, IDatabaseTransactionOpsCoreTyped as _, verify_module_db_integrity_dbtx,
 };
+use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::module::ApiVersion;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_core::module::{ApiRequestErased, ApiVersion};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeers, maybe_add_send};
@@ -50,7 +53,7 @@ use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
     self, ApiSecretKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
-    apply_migrations_client_module_dbtx,
+    PendingClientConfigKey, apply_migrations_client_module_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::ClientModuleInitRegistry;
@@ -430,7 +433,11 @@ impl ClientBuilder {
         )
         .await
     }
+
     pub async fn open(self, pre_root_secret: RootSecret) -> anyhow::Result<ClientHandle> {
+        // Check for pending config and migrate if present
+        Self::migrate_pending_config_if_present(&self.db_no_decoders).await;
+
         let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
@@ -587,6 +594,9 @@ impl ClientBuilder {
         });
 
         debug!(target: LOG_CLIENT, ?common_api_versions, "Completed api version negotiation");
+
+        // Asynchronously refetch client config and compare with existing
+        Self::load_and_refresh_client_config_static(&config, &api, &db, &task_group);
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
@@ -933,6 +943,125 @@ impl ClientBuilder {
     /// Register to receiver all new transient (unpersisted) events
     pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
         self.log_event_added_transient_tx.subscribe()
+    }
+
+    /// Check for pending config and migrate it if present.
+    /// Returns the config to use (either the original or the migrated pending
+    /// config).
+    async fn migrate_pending_config_if_present(db: &Database) {
+        if let Some(pending_config) = Client::get_pending_config_from_db(db).await {
+            debug!(target: LOG_CLIENT, "Found pending client config, migrating to current config");
+
+            let mut dbtx = db.begin_transaction().await;
+            // Update the main config with the pending config
+            dbtx.insert_entry(&crate::db::ClientConfigKey, &pending_config)
+                .await;
+            // Remove the pending config
+            dbtx.remove_entry(&PendingClientConfigKey).await;
+            dbtx.commit_tx().await;
+
+            debug!(target: LOG_CLIENT, "Successfully migrated pending config to current config");
+        }
+    }
+
+    /// Asynchronously refetch client config from federation and compare with
+    /// existing. If different, save to pending config in database.
+    fn load_and_refresh_client_config_static(
+        config: &ClientConfig,
+        api: &DynGlobalApi,
+        db: &Database,
+        task_group: &TaskGroup,
+    ) {
+        let config = config.clone();
+        let api = api.clone();
+        let db = db.clone();
+        let task_group = task_group.clone();
+
+        // Spawn background task to refetch config
+        task_group.spawn_cancellable("refresh_client_config_static", async move {
+            Self::refresh_client_config_static(&config, &api, &db).await;
+        });
+    }
+
+    /// Wrapper that handles errors from config refresh with proper logging
+    async fn refresh_client_config_static(
+        config: &ClientConfig,
+        api: &DynGlobalApi,
+        db: &Database,
+    ) {
+        if let Err(error) = Self::refresh_client_config_static_try(config, api, db).await {
+            warn!(
+                target: LOG_CLIENT,
+                err = %error.fmt_compact_anyhow(), "Failed to refresh client config"
+            );
+        }
+    }
+
+    /// Validate that a config update is valid
+    fn validate_config_update(
+        current_config: &ClientConfig,
+        new_config: &ClientConfig,
+    ) -> anyhow::Result<()> {
+        // Global config must not change
+        if current_config.global != new_config.global {
+            bail!("Global configuration changes are not allowed in config updates");
+        }
+
+        // Modules can only be added, existing ones must stay the same
+        for (module_id, current_module_config) in &current_config.modules {
+            match new_config.modules.get(module_id) {
+                Some(new_module_config) => {
+                    if current_module_config != new_module_config {
+                        bail!(
+                            "Module {} configuration changes are not allowed, only additions are permitted",
+                            module_id
+                        );
+                    }
+                }
+                None => {
+                    bail!(
+                        "Module {} was removed in new config, only additions are allowed",
+                        module_id
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Refetch client config from federation and save as pending if different
+    async fn refresh_client_config_static_try(
+        current_config: &ClientConfig,
+        api: &DynGlobalApi,
+        db: &Database,
+    ) -> anyhow::Result<()> {
+        debug!(target: LOG_CLIENT, "Refreshing client config");
+
+        // Fetch latest config from federation
+        let fetched_config = api
+            .request_current_consensus::<ClientConfig>(
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        // Validate the new config before proceeding
+        Self::validate_config_update(current_config, &fetched_config)?;
+
+        // Compare with current config
+        if current_config != &fetched_config {
+            debug!(target: LOG_CLIENT, "Detected federation config change, saving as pending config");
+
+            let mut dbtx = db.begin_transaction().await;
+            dbtx.insert_entry(&PendingClientConfigKey, &fetched_config)
+                .await;
+            dbtx.commit_tx().await;
+        } else {
+            debug!(target: LOG_CLIENT, "No federation config changes detected");
+        }
+
+        Ok(())
     }
 }
 

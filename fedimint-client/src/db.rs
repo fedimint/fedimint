@@ -45,6 +45,7 @@ pub enum DbKeyPrefix {
     ChronologicalOperationLog = 0x2d,
     CommonApiVersionCache = 0x2e,
     ClientConfig = 0x2f,
+    PendingClientConfig = 0x3b,
     ClientInviteCode = 0x30, // Unused; clean out remnant data before re-using!
     ClientInitState = 0x31,
     ClientMetadata = 0x32,
@@ -223,6 +224,15 @@ impl_db_record!(
     key = ClientConfigKey,
     value = ClientConfig,
     db_prefix = DbKeyPrefix::ClientConfig
+);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct PendingClientConfigKey;
+
+impl_db_record!(
+    key = PendingClientConfigKey,
+    value = ClientConfig,
+    db_prefix = DbKeyPrefix::PendingClientConfig
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
