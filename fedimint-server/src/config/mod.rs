@@ -11,7 +11,6 @@ pub use fedimint_core::config::{
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions,
@@ -357,17 +356,6 @@ impl ServerConfig {
             local,
             private,
         }
-    }
-
-    pub fn get_invite_code(&self, api_secret: Option<String>) -> InviteCode {
-        InviteCode::new(
-            self.consensus.api_endpoints()[&self.local.identity]
-                .url
-                .clone(),
-            self.local.identity,
-            self.calculate_federation_id(),
-            api_secret,
-        )
     }
 
     pub fn calculate_federation_id(&self) -> FederationId {
