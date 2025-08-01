@@ -18,6 +18,7 @@ mod secp256k1;
 mod threshold_crypto;
 
 use std::borrow::Cow;
+use std::cmp;
 use std::fmt::{Debug, Formatter};
 use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -651,7 +652,7 @@ impl Decodable for Cow<'static, str> {
 ///
 /// Notably this struct does not ignore any errors. It only skips
 /// decoding when the module decoder is not available.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DynRawFallback<T> {
     Raw {
         module_instance_id: ModuleInstanceId,
@@ -660,6 +661,33 @@ pub enum DynRawFallback<T> {
     },
     Decoded(T),
 }
+
+impl<T> cmp::PartialEq for DynRawFallback<T>
+where
+    T: cmp::PartialEq + Encodable,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::Raw {
+                    module_instance_id: mid_self,
+                    raw: raw_self,
+                },
+                Self::Raw {
+                    module_instance_id: mid_other,
+                    raw: raw_other,
+                },
+            ) => mid_self.eq(mid_other) && raw_self.eq(raw_other),
+            (r @ Self::Raw { .. }, d @ Self::Decoded(_))
+            | (d @ Self::Decoded(_), r @ Self::Raw { .. }) => {
+                r.consensus_encode_to_vec() == d.consensus_encode_to_vec()
+            }
+            (Self::Decoded(s), Self::Decoded(o)) => s == o,
+        }
+    }
+}
+
+impl<T> cmp::Eq for DynRawFallback<T> where T: cmp::Eq + Encodable {}
 
 impl<T> DynRawFallback<T>
 where
