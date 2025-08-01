@@ -10,6 +10,29 @@
 let
   lib = pkgs.lib;
 
+  pickBinary =
+    {
+      pkg,
+      name ? null,
+      bin ? null,
+      bins ? [ ],
+    }:
+    pkgs.stdenv.mkDerivation {
+      system = pkgs.system;
+      pname = if name != null then name else bin;
+      version = pkg.version;
+
+      dontUnpack = true;
+      # just don't mess with it
+      dontStrip = true;
+
+      installPhase = ''
+        mkdir -p $out/bin
+        ${if bin != null then "cp -a ${pkg}/bin/${bin} $out/bin/${bin}" else ""}
+        ${builtins.concatStringsSep "\n" (map (b: "cp -a ${pkg}/bin/${b} $out/bin/${b}") bins)}
+      '';
+    };
+
   # `moreutils/bin/parallel` and `parallel/bin/parallel` conflict, so just use
   # the binary we need from `moreutils`
   moreutils-ts = pkgs.writeShellScriptBin "ts" ''exec ${pkgs.moreutils}/bin/ts "$@"'';
@@ -773,7 +796,7 @@ in
       packages = [ "devimint" ];
     };
 
-    devimint = flakeboxLib.pickBinary {
+    devimint = pickBinary {
       pkg = devimint-pkgs;
       name = "devimint";
       bins = [
@@ -787,29 +810,29 @@ in
       packages = [ "fedimint-load-test-tool" ];
     };
 
-    fedimintd = flakeboxLib.pickBinary {
+    fedimintd = pickBinary {
       pkg = fedimint-pkgs;
       bin = "fedimintd";
     };
 
-    fedimint-cli = flakeboxLib.pickBinary {
+    fedimint-cli = pickBinary {
       pkg = fedimint-pkgs;
       bin = "fedimint-cli";
     };
-    fedimint-dbtool = flakeboxLib.pickBinary {
+    fedimint-dbtool = pickBinary {
       pkg = fedimint-pkgs;
       bin = "fedimint-dbtool";
     };
-    gatewayd = flakeboxLib.pickBinary {
+    gatewayd = pickBinary {
       pkg = gateway-pkgs;
       bin = "gatewayd";
     };
-    gateway-cli = flakeboxLib.pickBinary {
+    gateway-cli = pickBinary {
       pkg = gateway-pkgs;
       bin = "gateway-cli";
     };
 
-    fedimint-recoverytool = flakeboxLib.pickBinary {
+    fedimint-recoverytool = pickBinary {
       pkg = fedimint-pkgs;
       bin = "fedimint-recoverytool";
     };
@@ -819,7 +842,7 @@ in
       packages = [ "fedimint-recurringd" ];
     };
 
-    fedimint-recurringd = flakeboxLib.pickBinary {
+    fedimint-recurringd = pickBinary {
       pkg = fedimint-recurringd-pkgs;
       bin = "fedimint-recurringd";
     };
