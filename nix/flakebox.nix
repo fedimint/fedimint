@@ -257,6 +257,8 @@ let
 
         pkg-config
         moreutils-ts
+        cmake
+        rust-bindgen
 
         # tests
         (hiPrio pkgs.bashInteractive)

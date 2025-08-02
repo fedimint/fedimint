@@ -25,6 +25,7 @@ use fedimint_core::envs::{
     FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
 use fedimint_core::{default_esplora_server, timing};
@@ -370,6 +371,8 @@ pub async fn run(
     };
 
     root_task_group.install_kill_handler();
+
+    install_crypto_provider().await;
 
     let task_group = root_task_group.clone();
     root_task_group.spawn_cancellable("main", async move {
