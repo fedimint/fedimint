@@ -8,7 +8,8 @@ use iroh_base::ticket::{NodeTicket, Ticket};
 
 use super::ToEnvVar;
 use crate::federation::{
-    FEDIMINTD_API_PORT_OFFSET, FEDIMINTD_P2P_PORT_OFFSET, PORTS_PER_FEDIMINTD,
+    FEDIMINTD_API_PORT_OFFSET, FEDIMINTD_METRICS_PORT_OFFSET, FEDIMINTD_P2P_PORT_OFFSET,
+    FEDIMINTD_UI_PORT_OFFSET, PORTS_PER_FEDIMINTD,
 };
 
 #[derive(Debug, Clone)]
@@ -58,45 +59,45 @@ impl FedimintdEndpoint {
 pub struct FedimintdPeerOverrides {
     pub p2p: FedimintdEndpoint,
     pub api: FedimintdEndpoint,
-    pub base_port: u16,
+    pub ui: u16,
+    pub metrics: u16,
 }
 
 impl FedimintdPeerOverrides {
-    fn new(base_port: u16) -> Self {
+    fn new(p2p_port: u16, api_port: u16, ui_port: u16, metrics_port: u16) -> Self {
         Self {
-            p2p: FedimintdEndpoint::new(base_port + FEDIMINTD_P2P_PORT_OFFSET),
-            api: FedimintdEndpoint::new(base_port + FEDIMINTD_API_PORT_OFFSET),
-            base_port,
+            p2p: FedimintdEndpoint::new(p2p_port),
+            api: FedimintdEndpoint::new(api_port),
+            ui: ui_port,
+            metrics: metrics_port,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct FederationNetOverrides {
-    pub base_port: u16,
     pub num_peers: NumPeers,
     pub peers: BTreeMap<PeerId, FedimintdPeerOverrides>,
 }
 
 impl FederationNetOverrides {
-    pub fn new(base_port: u16, num_peers: NumPeers) -> Self {
+    pub fn new_from_ports(ports: &[u16], num_peers: NumPeers) -> Self {
         let peers = num_peers
             .peer_ids()
             .map(|peer_id| {
+                let peer_idx = peer_id.to_usize();
+                let peer_base_idx = peer_idx * PORTS_PER_FEDIMINTD as usize;
                 (peer_id, {
                     FedimintdPeerOverrides::new(
-                        base_port
-                            + u16::try_from(peer_id.to_usize()).expect("Can't fail")
-                                * PORTS_PER_FEDIMINTD,
+                        ports[peer_base_idx + FEDIMINTD_P2P_PORT_OFFSET as usize],
+                        ports[peer_base_idx + FEDIMINTD_API_PORT_OFFSET as usize],
+                        ports[peer_base_idx + FEDIMINTD_UI_PORT_OFFSET as usize],
+                        ports[peer_base_idx + FEDIMINTD_METRICS_PORT_OFFSET as usize],
                     )
                 })
             })
             .collect();
-        Self {
-            base_port,
-            num_peers,
-            peers,
-        }
+        Self { num_peers, peers }
     }
 
     pub fn peer_expect(&self, peer_id: PeerId) -> &FedimintdPeerOverrides {
@@ -110,14 +111,14 @@ pub struct FederationsNetOverrides {
 }
 
 impl FederationsNetOverrides {
-    pub fn new(base_port: u16, num_federations: usize, num_peers: NumPeers) -> Self {
+    pub fn new_from_ports(ports: &[u16], num_federations: usize, num_peers: NumPeers) -> Self {
+        let ports_per_federation = num_peers.total() * PORTS_PER_FEDIMINTD as usize;
         Self {
             federations: (0..num_federations)
                 .map(|fed_i| {
-                    FederationNetOverrides::new(
-                        base_port + fed_i as u16 * PORTS_PER_FEDIMINTD * num_peers.total() as u16,
-                        num_peers,
-                    )
+                    let start = fed_i * ports_per_federation;
+                    let end = start + ports_per_federation;
+                    FederationNetOverrides::new_from_ports(&ports[start..end], num_peers)
                 })
                 .collect(),
         }

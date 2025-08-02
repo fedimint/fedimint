@@ -12,11 +12,16 @@ pub static API_AUTH: LazyLock<ApiAuth> = LazyLock::new(|| ApiAuth("pass".to_stri
 
 /// Creates the config gen params for each peer
 ///
-/// Uses peers * 2 ports offset from `base_port`
+/// Uses 2 ports per peer from the provided ports list (p2p and api)
 pub fn local_config_gen_params(
     peers: &[PeerId],
-    base_port: u16,
+    ports: &[u16],
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
+    assert_eq!(
+        ports.len(),
+        peers.len() * 2,
+        "Expected exactly 2 ports per peer"
+    );
     // Generate TLS cert and private key
     let tls_keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
         .iter()
@@ -32,10 +37,12 @@ pub fn local_config_gen_params(
     let connections: BTreeMap<PeerId, PeerSetupCode> = peers
         .iter()
         .map(|peer| {
-            let peer_port = base_port + u16::from(*peer) * 3;
+            let peer_idx = peer.to_usize();
+            let p2p_port = ports[peer_idx * 2];
+            let api_port = ports[peer_idx * 2 + 1];
 
-            let p2p_url = format!("fedimint://127.0.0.1:{peer_port}");
-            let api_url = format!("ws://127.0.0.1:{}", peer_port + 1);
+            let p2p_url = format!("fedimint://127.0.0.1:{p2p_port}");
+            let api_url = format!("ws://127.0.0.1:{api_port}");
 
             let params = PeerSetupCode {
                 name: format!("peer-{}", peer.to_usize()),

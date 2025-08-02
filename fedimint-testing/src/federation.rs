@@ -16,7 +16,7 @@ use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::net::peers::IP2PConnections;
-use fedimint_core::task::{TaskGroup, block_in_place, sleep_in_test};
+use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_gateway_common::ConnectFedPayload;
 use fedimint_gateway_server::Gateway;
 use fedimint_logging::LOG_TEST;
@@ -174,7 +174,6 @@ impl FederationTest {
 pub struct FederationTestBuilder {
     num_peers: u16,
     num_offline: u16,
-    base_port: u16,
     primary_module_kind: ModuleKind,
     version_hash: String,
     modules: ServerModuleConfigGenParamsRegistry,
@@ -196,8 +195,6 @@ impl FederationTestBuilder {
         Self {
             num_peers,
             num_offline,
-            base_port: block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 3))
-                .expect("Failed to allocate a port range"),
             primary_module_kind,
             version_hash: "fedimint-testing-dummy-version-hash".to_owned(),
             modules: params,
@@ -217,11 +214,6 @@ impl FederationTestBuilder {
         self
     }
 
-    pub fn base_port(mut self, base_port: u16) -> FederationTestBuilder {
-        self.base_port = base_port;
-        self
-    }
-
     pub fn primary_module_kind(mut self, primary_module_kind: ModuleKind) -> FederationTestBuilder {
         self.primary_module_kind = primary_module_kind;
         self
@@ -234,14 +226,21 @@ impl FederationTestBuilder {
 
     #[allow(clippy::too_many_lines)]
     pub async fn build(self) -> FederationTest {
+        // Allocate 3 ports per peer
+        let ports = fedimint_portalloc::port_alloc_multi(self.num_peers as usize * 3).await;
+
         let num_offline = self.num_offline;
         assert!(
             self.num_peers > 3 * self.num_offline,
             "too many peers offline ({num_offline}) to reach consensus"
         );
         let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
+        // Extract only p2p and api ports for local_config_gen_params (2 per peer)
+        let config_ports: Vec<u16> = (0..self.num_peers as usize)
+            .flat_map(|i| vec![ports[i * 3], ports[i * 3 + 1]])
+            .collect();
         let params =
-            local_config_gen_params(&peers, self.base_port).expect("Generates local config");
+            local_config_gen_params(&peers, &config_ports).expect("Generates local config");
 
         let configs = ServerConfig::trusted_dealer_gen(
             self.modules,
@@ -252,11 +251,14 @@ impl FederationTestBuilder {
 
         let task_group = TaskGroup::new();
         for (peer_id, cfg) in configs.clone() {
-            let peer_port = self.base_port + u16::from(peer_id) * 3;
+            let peer_idx = u16::from(peer_id) as usize;
+            let peer_port = ports[peer_idx * 3];
+            let api_port = ports[peer_idx * 3 + 1];
+            let ui_port = ports[peer_idx * 3 + 2];
 
             let p2p_bind = format!("127.0.0.1:{peer_port}").parse().unwrap();
-            let api_bind = format!("127.0.0.1:{}", peer_port + 1).parse().unwrap();
-            let ui_bind = format!("127.0.0.1:{}", peer_port + 2).parse().unwrap();
+            let api_bind = format!("127.0.0.1:{api_port}").parse().unwrap();
+            let ui_bind = format!("127.0.0.1:{ui_port}").parse().unwrap();
 
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
