@@ -30,7 +30,7 @@ use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p::P2PStatusReceivers;
@@ -639,14 +639,21 @@ impl ServerConfig {
             .into_iter()
             .filter(|p| *p != params.identity)
         {
-            ensure!(
-                connections
-                    .receive_from_peer(peer)
-                    .await
-                    .context("Unexpected shutdown of p2p connections")?
-                    == P2PMessage::Checksum(checksum),
-                "Peer {peer} has not send the correct checksum message"
-            );
+            let peer_message = connections
+                .receive_from_peer(peer)
+                .await
+                .context("Unexpected shutdown of p2p connections")?;
+
+            if peer_message != P2PMessage::Checksum(checksum) {
+                warn!(
+                    target: LOG_NET_PEER_DKG,
+                    expected = ?P2PMessage::Checksum(checksum),
+                    received = ?peer_message,
+                    config = ?cfg.consensus,
+                    "Peer {peer} has not sent the correct checksum message"
+                );
+                bail!("Peer {peer} has not send the correct checksum message");
+            }
         }
 
         info!(
