@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, bail, ensure, format_err};
@@ -226,7 +227,7 @@ pub struct ConfigGenParams {
     /// Our own peer id
     pub identity: PeerId,
     /// Our TLS certificate private key
-    pub tls_key: Option<rustls::PrivateKey>,
+    pub tls_key: Option<Arc<rustls::pki_types::PrivateKeyDer<'static>>>,
     /// Optional secret key for our iroh api endpoint
     pub iroh_api_sk: Option<iroh::SecretKey>,
     /// Optional secret key for our iroh p2p endpoint
@@ -342,7 +343,9 @@ impl ServerConfig {
 
         let private = ServerConfigPrivate {
             api_auth: params.api_auth.clone(),
-            tls_key: params.tls_key.map(|key| key.0.encode_hex()),
+            tls_key: params
+                .tls_key
+                .map(|key| key.secret_der().to_vec().encode_hex()),
             iroh_api_sk: params.iroh_api_sk,
             iroh_p2p_sk: params.iroh_p2p_sk,
             broadcast_secret_key,
@@ -661,14 +664,22 @@ impl ServerConfig {
 impl ServerConfig {
     pub fn tls_config(&self) -> TlsConfig {
         TlsConfig {
-            private_key: rustls::PrivateKey(
-                Vec::from_hex(self.private.tls_key.clone().unwrap()).unwrap(),
+            private_key: Arc::new(
+                rustls::pki_types::PrivateKeyDer::try_from(
+                    Vec::from_hex(self.private.tls_key.clone().unwrap()).unwrap(),
+                )
+                .expect("Failed to parse private key"),
             ),
             certificates: self
                 .consensus
                 .tls_certs
                 .iter()
-                .map(|(peer, cert)| (*peer, rustls::Certificate(Vec::from_hex(cert).unwrap())))
+                .map(|(peer, cert)| {
+                    (
+                        *peer,
+                        rustls::pki_types::CertificateDer::from(Vec::from_hex(cert).unwrap()),
+                    )
+                })
                 .collect(),
             peer_names: self
                 .local
@@ -691,7 +702,12 @@ impl ConfigGenParams {
             certificates: self
                 .tls_certs()
                 .iter()
-                .map(|(peer, cert)| (*peer, rustls::Certificate(Vec::from_hex(cert).unwrap())))
+                .map(|(peer, cert)| {
+                    (
+                        *peer,
+                        rustls::pki_types::CertificateDer::from(Vec::from_hex(cert).unwrap()),
+                    )
+                })
                 .collect(),
             peer_names: self
                 .p2p_urls()
