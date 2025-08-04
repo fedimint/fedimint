@@ -16,7 +16,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::retry;
+use fedimint_core::util::{retry, write_overwrite_async};
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
@@ -33,7 +33,7 @@ use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASS
 use crate::federation::Client;
 use crate::gatewayd::LdkChainSource;
 use crate::util::{LoadTestTool, ProcessManager, poll};
-use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
@@ -1896,6 +1896,19 @@ pub async fn test_client_config_change_detection(
 ) -> Result<()> {
     log_binary_versions().await?;
 
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
+    if fedimint_cli_version < *VERSION_0_9_0_ALPHA {
+        info!(target: LOG_DEVIMINT, "Skipping the test - fedimint-cli too old");
+        return Ok(());
+    }
+
+    if fedimintd_version < *VERSION_0_9_0_ALPHA {
+        info!(target: LOG_DEVIMINT, "Skipping the test - fedimintd too old");
+        return Ok(());
+    }
+
     let DevFed { mut fed, .. } = dev_fed;
     let peer_ids: Vec<_> = fed.member_ids().collect();
 
@@ -1915,6 +1928,11 @@ pub async fn test_client_config_change_detection(
     let config_dir = PathBuf::from(&data_dir);
 
     // Shutdown all federation servers
+    //
+    // In prod. one would probably use a coordinated shutdown, just to be
+    // careful, but since the change is only adding a new module that does
+    // not submit CIs without user/admin interaction, there is
+    // no way for the consensus to diverge.
     info!(target: LOG_DEVIMINT, "Shutting down all federation servers...");
     fed.terminate_all_servers().await?;
 
@@ -1942,7 +1960,7 @@ pub async fn test_client_config_change_detection(
         .await
         .context("Failed to wait for client config update")?;
 
-    // Test that client can detect the configuration change
+    // Test that client switched to the new config
     info!(target: LOG_DEVIMINT, "Testing client detection of configuration changes...");
     let updated_config = cmd!(client, "config")
         .out_json()
@@ -1963,21 +1981,15 @@ pub async fn test_client_config_change_detection(
     );
 
     // Check if a new meta module was added
-    let mut found_new_meta = false;
-    for (module_id, module_config) in updated_modules {
-        if module_config["kind"].as_str() == Some("meta")
-            && !initial_modules.contains_key(module_id)
-        {
-            found_new_meta = true;
-            info!(target: LOG_DEVIMINT, "Found new meta module with id: {}", module_id);
-            break;
-        }
-    }
+    let new_meta_module = updated_modules.iter().find(|(module_id, module_config)| {
+        module_config["kind"].as_str() == Some("meta") && !initial_modules.contains_key(*module_id)
+    });
 
-    anyhow::ensure!(
-        found_new_meta,
-        "Expected to find new meta module in updated configuration"
-    );
+    let new_meta_module_id = new_meta_module
+        .map(|(id, _)| id)
+        .with_context(|| "Expected to find new meta module in updated configuration")?;
+
+    info!(target: LOG_DEVIMINT, "Found new meta module with id: {}", new_meta_module_id);
 
     // Verify client operations still work with the new configuration
     info!(target: LOG_DEVIMINT, "Verifying client operations work with new configuration...");
@@ -1993,102 +2005,126 @@ pub async fn test_client_config_change_detection(
 
 /// Modify server configuration files to add a new meta module instance
 async fn modify_server_configs(config_dir: &Path, peer_ids: &[PeerId]) -> Result<()> {
+    for &peer_id in peer_ids {
+        modify_single_peer_config(config_dir, peer_id).await?;
+    }
+    Ok(())
+}
+
+/// Modify configuration files for a single peer to add a new meta module
+/// instance
+async fn modify_single_peer_config(config_dir: &Path, peer_id: PeerId) -> Result<()> {
+    use fedimint_aead::{encrypted_write, get_encryption_key};
+    use fedimint_core::core::ModuleInstanceId;
+    use fedimint_server::config::io::read_server_config;
     use serde_json::Value;
 
-    for &peer_id in peer_ids {
-        info!(target: LOG_DEVIMINT, %peer_id, "Modifying config for peer");
-        let peer_dir = config_dir.join(format!("fedimintd-default-{}", peer_id.to_usize()));
+    info!(target: LOG_DEVIMINT, %peer_id, "Modifying config for peer");
+    let peer_dir = config_dir.join(format!("fedimintd-default-{}", peer_id.to_usize()));
 
-        // Read consensus config
-        let consensus_config_path = peer_dir.join("consensus.json");
-        let consensus_config_content = fs::read_to_string(&consensus_config_path)
-            .await
-            .with_context(|| format!("Failed to read consensus config for peer {peer_id}"))?;
+    // Read consensus config
+    let consensus_config_path = peer_dir.join("consensus.json");
+    let consensus_config_content = fs::read_to_string(&consensus_config_path)
+        .await
+        .with_context(|| format!("Failed to read consensus config for peer {peer_id}"))?;
 
-        let mut consensus_config: Value = serde_json::from_str(&consensus_config_content)
-            .with_context(|| format!("Failed to parse consensus config for peer {peer_id}"))?;
+    let mut consensus_config: Value = serde_json::from_str(&consensus_config_content)
+        .with_context(|| format!("Failed to parse consensus config for peer {peer_id}"))?;
 
-        // Read client config
-        let client_config_path = peer_dir.join("client.json");
-        let client_config_content = fs::read_to_string(&client_config_path)
-            .await
-            .with_context(|| format!("Failed to read client config for peer {peer_id}"))?;
+    // Read the encrypted private config using the server config reader
+    let password = "pass"; // Default password used in devimint
+    let server_config = read_server_config(password, &peer_dir)
+        .with_context(|| format!("Failed to read server config for peer {peer_id}"))?;
 
-        let mut client_config: Value = serde_json::from_str(&client_config_content)
-            .with_context(|| format!("Failed to parse client config for peer {peer_id}"))?;
+    // Find existing meta module in configs to use as template
+    let consensus_config_modules = consensus_config["modules"]
+        .as_object()
+        .with_context(|| format!("No modules found in consensus config for peer {peer_id}"))?;
 
-        // Find existing meta module in both configs to use as template
-        let consensus_config_modules = consensus_config["modules"]
-            .as_object()
-            .with_context(|| format!("No modules found in consensus config for peer {peer_id}"))?;
+    // Look for existing meta module to copy its configuration
+    let existing_meta_consensus = consensus_config_modules
+        .values()
+        .find(|module_config| module_config["kind"].as_str() == Some("meta"));
 
-        let client_consensus_modules = client_config["modules"]
-            .as_object()
-            .with_context(|| format!("No modules found in client config for peer {peer_id}"))?;
+    let existing_meta_consensus = existing_meta_consensus
+        .with_context(|| {
+            format!("No existing meta module found in consensus config for peer {peer_id}")
+        })?
+        .clone();
 
-        // Look for existing meta module to copy its configuration
-        let existing_meta_consensus = consensus_config_modules
-            .values()
-            .find(|module_config| module_config["kind"].as_str() == Some("meta"));
+    // Find existing meta module in private config
+    let existing_meta_instance_id = server_config
+        .consensus
+        .modules
+        .iter()
+        .find(|(_, config)| config.kind.as_str() == "meta")
+        .map(|(id, _)| *id)
+        .with_context(|| {
+            format!("No existing meta module found in private config for peer {peer_id}")
+        })?;
 
-        let existing_meta_client = client_consensus_modules
-            .values()
-            .find(|module_config| module_config["kind"].as_str() == Some("meta"));
+    let existing_meta_private = server_config
+        .private
+        .modules
+        .get(&existing_meta_instance_id)
+        .with_context(|| format!("Failed to get existing meta private config for peer {peer_id}"))?
+        .clone();
 
-        let existing_meta_consensus = existing_meta_consensus
-            .with_context(|| {
-                format!("No existing meta module found in consensus config for peer {peer_id}")
-            })?
-            .clone();
-        let existing_meta_client = existing_meta_client
-            .with_context(|| {
-                format!("No existing meta module found in client config for peer {peer_id}")
-            })?
-            .clone();
+    // Find the highest existing module ID for the new module
+    let last_existing_module_id = consensus_config_modules
+        .keys()
+        .filter_map(|id| id.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0);
 
-        // Find the highest existing module ID for the new module
-        let max_id = consensus_config_modules
-            .keys()
-            .chain(client_consensus_modules.keys())
-            .filter_map(|id| id.parse::<u32>().ok())
-            .max()
-            .unwrap_or(0);
+    let new_module_id = (last_existing_module_id + 1).to_string();
+    let new_module_instance_id = ModuleInstanceId::from((last_existing_module_id + 1) as u16);
 
-        let new_module_id = (max_id + 1).to_string();
+    info!(
+        "Adding new meta module with id {} for peer {} (copying existing meta module config)",
+        new_module_id, peer_id
+    );
 
-        info!(
-            "Adding new meta module with id {} for peer {} (copying existing meta module config)",
-            new_module_id, peer_id
-        );
-
-        // Add new meta module to consensus config by copying existing meta module
-        if let Some(modules) = consensus_config["modules"].as_object_mut() {
-            modules.insert(new_module_id.clone(), existing_meta_consensus);
-        }
-
-        // Add new meta module to client config by copying existing meta module
-        if let Some(modules) = client_config["modules"].as_object_mut() {
-            modules.insert(new_module_id.clone(), existing_meta_client);
-        }
-
-        // Write back the modified configs
-        let updated_consensus_content = serde_json::to_string_pretty(&consensus_config)
-            .with_context(|| format!("Failed to serialize consensus config for peer {peer_id}"))?;
-
-        fs::write(&consensus_config_path, updated_consensus_content)
-            .await
-            .with_context(|| format!("Failed to write consensus config for peer {peer_id}"))?;
-
-        let updated_client_content = serde_json::to_string_pretty(&client_config)
-            .with_context(|| format!("Failed to serialize client config for peer {peer_id}"))?;
-
-        fs::write(&client_config_path, updated_client_content)
-            .await
-            .with_context(|| format!("Failed to write client config for peer {peer_id}"))?;
-
-        info!("Successfully modified configs for peer {}", peer_id);
+    // Add new meta module to consensus config by copying existing meta module
+    if let Some(modules) = consensus_config["modules"].as_object_mut() {
+        modules.insert(new_module_id.clone(), existing_meta_consensus);
     }
 
+    // Add new meta module to private config
+    let mut updated_private_config = server_config.private.clone();
+    updated_private_config
+        .modules
+        .insert(new_module_instance_id, existing_meta_private);
+
+    // Write back the modified consensus and client configs
+    let updated_consensus_content = serde_json::to_string_pretty(&consensus_config)
+        .with_context(|| format!("Failed to serialize consensus config for peer {peer_id}"))?;
+
+    write_overwrite_async(&consensus_config_path, updated_consensus_content)
+        .await
+        .with_context(|| format!("Failed to write consensus config for peer {peer_id}"))?;
+
+    // Write back the modified private config using direct encryption
+    let salt = std::fs::read_to_string(peer_dir.join("private.salt"))
+        .with_context(|| format!("Failed to read salt file for peer {peer_id}"))?;
+    let key = get_encryption_key(password, &salt)
+        .with_context(|| format!("Failed to get encryption key for peer {peer_id}"))?;
+
+    let private_config_bytes = serde_json::to_string(&updated_private_config)
+        .with_context(|| format!("Failed to serialize private config for peer {peer_id}"))?
+        .into_bytes();
+
+    // Remove the existing encrypted file first
+    let encrypted_private_path = peer_dir.join("private.encrypt");
+    if encrypted_private_path.exists() {
+        std::fs::remove_file(&encrypted_private_path)
+            .with_context(|| format!("Failed to remove old private config for peer {peer_id}"))?;
+    }
+
+    encrypted_write(private_config_bytes, &key, encrypted_private_path)
+        .with_context(|| format!("Failed to write encrypted private config for peer {peer_id}"))?;
+
+    info!("Successfully modified configs for peer {}", peer_id);
     Ok(())
 }
 
