@@ -21,6 +21,7 @@ bon = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 esplora-client = { workspace = true }
+fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }

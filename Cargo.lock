@@ -2115,6 +2115,7 @@ dependencies = [
  "chrono",
  "clap",
  "esplora-client 0.12.0",
+ "fedimint-aead",
  "fedimint-api-client",
  "fedimint-build",
  "fedimint-client",
