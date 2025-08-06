@@ -141,6 +141,12 @@ function test_offline_client_initialization() {
 }
 export -f test_offline_client_initialization
 
+function test_client_config_change_detection() {
+  # test modifies server configs and restarts, so we need to override FM_OFFLINE_NODES
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/test-client-config-change-detection.sh
+}
+export -f test_client_config_change_detection
+
 function circular_deposit() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/circular-deposit-test.sh
 }
@@ -335,6 +341,7 @@ tests_to_run_in_parallel+=(
   "mint_client_restore"
   "cannot_replay_tx"
   "test_offline_client_initialization"
+  "test_client_config_change_detection"
   "circular_deposit"
   "wallet_recovery"
   "wallet_recovery_2"

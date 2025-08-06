@@ -387,7 +387,7 @@ impl ServerConfig {
             .consensus
             .modules
             .get(&id)
-            .ok_or_else(|| format_err!("Module {id} not found"))?
+            .ok_or_else(|| format_err!("Typed module {id} not found"))?
             .clone();
         let module = ServerModuleConfig::from(private, consensus);
 
@@ -414,7 +414,7 @@ impl ServerConfig {
             .consensus
             .modules
             .get(&id)
-            .ok_or_else(|| format_err!("Module {id} not found"))?
+            .ok_or_else(|| format_err!("Module config {id} not found"))?
             .clone();
         Ok(ServerModuleConfig::from(private, consensus))
     }
@@ -425,7 +425,7 @@ impl ServerConfig {
     ) -> anyhow::Result<JsonWithKind> {
         Ok(json
             .get(&id)
-            .ok_or_else(|| format_err!("Module {id} not found"))
+            .ok_or_else(|| format_err!("Module cfg {id} not found"))
             .cloned()?
             .with_fixed_empty_value())
     }
