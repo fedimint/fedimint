@@ -99,6 +99,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn log_event_json(
         &self,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
@@ -107,6 +108,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         kind: EventKind,
         payload: serde_json::Value,
         persist: bool,
+        trimable: bool,
     );
 
     async fn read_operation_active_states<'dbtx>(
@@ -696,6 +698,7 @@ where
                 <E as Event>::KIND,
                 serde_json::to_value(event).expect("Can't fail"),
                 <E as Event>::PERSIST,
+                <E as Event>::TRIMABLE,
             )
             .await;
     }

@@ -103,6 +103,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
         persist: bool,
+        trimable: bool,
     ) {
         self.client
             .log_event_raw_dbtx(
@@ -111,6 +112,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
                 module,
                 serde_json::to_vec(&payload).expect("Serialization can't fail"),
                 persist,
+                trimable,
             )
             .await;
     }
