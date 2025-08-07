@@ -209,6 +209,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
         persist: bool,
+        trimable: bool,
     );
 
     async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM>;
@@ -263,6 +264,7 @@ impl IGlobalClientContext for () {
         _module: Option<(ModuleKind, ModuleInstanceId)>,
         _payload: serde_json::Value,
         _persist: bool,
+        _trimable: bool,
     ) {
         unimplemented!("fake implementation, only for tests");
     }
@@ -358,6 +360,7 @@ impl DynGlobalClientContext {
             E::MODULE.map(|m| (m, dbtx.module_id())),
             serde_json::to_value(&event).expect("Payload serialization can't fail"),
             <E as Event>::PERSIST,
+            <E as Event>::TRIMABLE,
         )
         .await;
     }

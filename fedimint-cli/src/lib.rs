@@ -49,7 +49,7 @@ use fedimint_core::setup_code::PeerSetupCode;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, retry};
 use fedimint_core::{Amount, PeerId, TieredMulti, fedimint_build_code_version_env, runtime};
-use fedimint_eventlog::EventLogId;
+use fedimint_eventlog::{EventLogId, EventLogTrimableId};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{LOG_CLIENT, TracingSetup};
 use fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
@@ -596,8 +596,15 @@ Examples:
         #[clap(long)]
         peer_id: u16,
     },
-    /// Dump Client Event Log
+    /// Dump Client's Event Log
     ShowEventLog {
+        #[arg(long)]
+        pos: Option<EventLogId>,
+        #[arg(long, default_value = "10")]
+        limit: u64,
+    },
+    /// Dump Client's Trimable Event Log
+    ShowEventLogTrimable {
         #[arg(long)]
         pos: Option<EventLogId>,
         #[arg(long, default_value = "10")]
@@ -1246,6 +1253,34 @@ impl FedimintCli {
 
                 let events: Vec<_> = client
                     .get_event_log(pos, limit)
+                    .await
+                    .into_iter()
+                    .map(|v| {
+                        let module_id = v.module.as_ref().map(|m| m.1);
+                        let module_kind = v.module.map(|m| m.0);
+                        serde_json::json!({
+                            "id": v.event_id,
+                            "kind": v.event_kind,
+                            "module_kind": module_kind,
+                            "module_id": module_id,
+                            "ts": v.timestamp,
+                            "payload": v.value
+                        })
+                    })
+                    .collect();
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(events).expect("Can be encoded"),
+                ))
+            }
+            Command::Dev(DevCmd::ShowEventLogTrimable { pos, limit }) => {
+                let client = self.client_open(&cli).await?;
+
+                let events: Vec<_> = client
+                    .get_event_log_trimable(
+                        pos.map(|id| EventLogTrimableId::from(u64::from(id))),
+                        limit,
+                    )
                     .await
                     .into_iter()
                     .map(|v| {
