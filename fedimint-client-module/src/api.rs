@@ -51,6 +51,7 @@ impl Event for ApiCallDone {
     const MODULE: Option<fedimint_core::core::ModuleKind> = None;
 
     const KIND: EventKind = EventKind::from_static("api-call-done");
+    const PERSIST: bool = false;
 }
 
 use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind};
