@@ -40,11 +40,22 @@ use tracing::{debug, trace};
 /// which in practice should not be a problem.
 pub const DB_KEY_PREFIX_UNORDERED_EVENT_LOG: u8 = 0x3a;
 pub const DB_KEY_PREFIX_EVENT_LOG: u8 = 0x39;
+pub const DB_KEY_PREFIX_EVENT_LOG_TRIMABLE: u8 = 0x41;
+
+pub enum EventPersistence {
+    /// Not written anywhere, just broadcasted as notification at runtime
+    Transient,
+    /// Persised only to log that gets trimmed
+    Trimable,
+    /// Persisted in both trimmed and untrimmed logs, so potentially
+    /// stored forever.
+    Persistent,
+}
 
 pub trait Event: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE: Option<ModuleKind>;
     const KIND: EventKind;
-    const PERSIST: bool = true;
+    const PERSISTENCE: EventPersistence;
 }
 
 /// An counter that resets on every restart, that guarantees that
@@ -108,6 +119,12 @@ impl EventLogId {
     }
 }
 
+impl From<EventLogId> for u64 {
+    fn from(value: EventLogId) -> Self {
+        value.0
+    }
+}
+
 impl FromStr for EventLogId {
     type Err = <u64 as FromStr>::Err;
 
@@ -139,8 +156,21 @@ impl From<String> for EventKind {
 
 #[derive(Debug, Encodable, Decodable, Clone)]
 pub struct UnorderedEventLogEntry {
-    pub persist: bool,
+    pub flags: u8,
     pub inner: EventLogEntry,
+}
+
+impl UnorderedEventLogEntry {
+    pub const FLAG_PERSIST: u8 = 1;
+    pub const FLAG_TRIMABLE: u8 = 2;
+
+    fn persist(&self) -> bool {
+        self.flags & Self::FLAG_PERSIST != 0
+    }
+
+    fn trimable(&self) -> bool {
+        self.flags & Self::FLAG_TRIMABLE != 0
+    }
 }
 
 #[derive(Debug, Encodable, Decodable, Clone)]
@@ -210,8 +240,63 @@ impl_db_lookup!(key = EventLogId, query_prefix = EventLogIdPrefixAll);
 
 impl_db_lookup!(key = EventLogId, query_prefix = EventLogIdPrefix);
 
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Encodable,
+    Decodable,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+)]
+pub struct EventLogTrimableId(EventLogId);
+
+impl EventLogTrimableId {
+    fn next(&self) -> Self {
+        Self(self.0.next())
+    }
+
+    pub fn saturating_add(self, rhs: u64) -> Self {
+        Self(self.0.saturating_add(rhs))
+    }
+}
+
+impl From<u64> for EventLogTrimableId {
+    fn from(value: u64) -> Self {
+        Self(EventLogId(value))
+    }
+}
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct EventLogTrimableIdPrefixAll;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct EventLogTrimableIdPrefix(EventLogId);
+
+impl_db_record!(
+    key = EventLogTrimableId,
+    value = EventLogEntry,
+    db_prefix = DB_KEY_PREFIX_EVENT_LOG_TRIMABLE,
+);
+
+impl_db_lookup!(
+    key = EventLogTrimableId,
+    query_prefix = EventLogTrimableIdPrefixAll
+);
+
+impl_db_lookup!(
+    key = EventLogTrimableId,
+    query_prefix = EventLogTrimableIdPrefix
+);
+
 #[apply(async_trait_maybe_send!)]
 pub trait DBTransactionEventLogExt {
+    #[allow(clippy::too_many_arguments)]
     async fn log_event_raw(
         &mut self,
         log_ordering_wakeup_tx: watch::Sender<()>,
@@ -219,7 +304,7 @@ pub trait DBTransactionEventLogExt {
         module_kind: Option<ModuleKind>,
         module_id: Option<ModuleInstanceId>,
         payload: Vec<u8>,
-        persist: bool,
+        persist: EventPersistence,
     );
 
     /// Log an event log event
@@ -240,7 +325,7 @@ pub trait DBTransactionEventLogExt {
             E::MODULE,
             module_id,
             serde_json::to_vec(&event).expect("Serialization can't fail"),
-            <E as Event>::PERSIST,
+            <E as Event>::PERSISTENCE,
         )
         .await;
     }
@@ -251,10 +336,19 @@ pub trait DBTransactionEventLogExt {
     /// useful to get the current count of events.
     async fn get_next_event_log_id(&mut self) -> EventLogId;
 
+    /// Next [`EventLogTrimableId`] to use for new ordered trimable events
+    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId;
+
     /// Read a part of the event log.
     async fn get_event_log(
         &mut self,
         pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry>;
+
+    async fn get_event_log_trimable(
+        &mut self,
+        pos: Option<EventLogTrimableId>,
         limit: u64,
     ) -> Vec<PersistedLogEntry>;
 }
@@ -271,7 +365,7 @@ where
         module_kind: Option<ModuleKind>,
         module_id: Option<ModuleInstanceId>,
         payload: Vec<u8>,
-        persist: bool,
+        persist: EventPersistence,
     ) {
         assert_eq!(
             module_kind.is_some(),
@@ -286,7 +380,11 @@ where
             .insert_entry(
                 &unordered_id,
                 &UnorderedEventLogEntry {
-                    persist,
+                    flags: match persist {
+                        EventPersistence::Transient => 0,
+                        EventPersistence::Trimable => UnorderedEventLogEntry::FLAG_TRIMABLE,
+                        EventPersistence::Persistent => UnorderedEventLogEntry::FLAG_PERSIST,
+                    },
                     inner: EventLogEntry {
                         kind,
                         module: module_kind.map(|kind| (kind, module_id.unwrap())),
@@ -314,6 +412,17 @@ where
             .unwrap_or_default()
     }
 
+    async fn get_next_event_log_trimable_id(&mut self) -> EventLogTrimableId {
+        EventLogTrimableId(
+            self.find_by_prefix_sorted_descending(&EventLogTrimableIdPrefixAll)
+                .await
+                .next()
+                .await
+                .map(|(k, _v)| k.0.next())
+                .unwrap_or_default(),
+        )
+    }
+
     async fn get_event_log(
         &mut self,
         pos: Option<EventLogId>,
@@ -324,6 +433,25 @@ where
             .await
             .map(|(k, v)| PersistedLogEntry {
                 event_id: k,
+                event_kind: v.kind,
+                module: v.module,
+                timestamp: v.ts_usecs,
+                value: serde_json::from_slice(&v.payload).unwrap_or_default(),
+            })
+            .collect()
+            .await
+    }
+
+    async fn get_event_log_trimable(
+        &mut self,
+        pos: Option<EventLogTrimableId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry> {
+        let pos = pos.unwrap_or_default();
+        self.find_by_range(pos..pos.saturating_add(limit))
+            .await
+            .map(|(k, v)| PersistedLogEntry {
+                event_id: k.0,
                 event_kind: v.kind,
                 module: v.module,
                 timestamp: v.ts_usecs,
@@ -348,6 +476,11 @@ pub async fn run_event_log_ordering_task(
         .await
         .get_next_event_log_id()
         .await;
+    let mut next_entry_id_trimable = db
+        .begin_transaction_nc()
+        .await
+        .get_next_event_log_trimable_id()
+        .await;
 
     loop {
         let mut dbtx = db.begin_transaction().await;
@@ -364,16 +497,31 @@ pub async fn run_event_log_ordering_task(
                 dbtx.remove_entry(unordered_id).await.is_some(),
                 "Must never fail to remove entry"
             );
-            if entry.persist {
+            if entry.persist() {
+                // Non-trimable events get persisted in both the default event log
+                // and trimable event log
+                if !entry.trimable() {
+                    assert!(
+                        dbtx.insert_entry(&next_entry_id, &entry.inner)
+                            .await
+                            .is_none(),
+                        "Must never overwrite existing event"
+                    );
+                    trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, id=?next_entry_id, "Ordered event log event");
+                    next_entry_id = next_entry_id.next();
+                }
+
+                // Trimable events get persisted only in trimable log
                 assert!(
-                    dbtx.insert_entry(&next_entry_id, &entry.inner)
+                    dbtx.insert_entry(&next_entry_id_trimable, &entry.inner)
                         .await
                         .is_none(),
                     "Must never overwrite existing event"
                 );
                 trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, id=?next_entry_id, "Ordered event log event");
-                next_entry_id = next_entry_id.next();
+                next_entry_id_trimable = next_entry_id_trimable.next();
             } else {
+                // Transient events don't get persisted at all
                 trace!(target: LOG_CLIENT_EVENT_LOG, ?unordered_id, id=?next_entry_id, "Transient event log event");
                 dbtx.on_commit({
                     let log_event_added_transient = log_event_added_transient.clone();
@@ -424,6 +572,48 @@ where
         .unwrap_or_default();
 
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
+
+    loop {
+        let mut dbtx = db.begin_transaction().await;
+
+        match dbtx.get_value(&next_key).await {
+            Some(event) => {
+                (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
+
+                next_key = next_key.next();
+                dbtx.insert_entry(pos_key, &next_key).await;
+
+                dbtx.commit_tx().await;
+            }
+            _ => {
+                if log_event_added.changed().await.is_err() {
+                    break Ok(());
+                }
+            }
+        }
+    }
+}
+
+pub async fn handle_trimable_events<F, R, K>(
+    db: Database,
+    pos_key: &K,
+    mut log_event_added: watch::Receiver<()>,
+    call_fn: F,
+) -> anyhow::Result<()>
+where
+    K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+    K: DatabaseRecord<Value = EventLogTrimableId>,
+    F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+    R: Future<Output = anyhow::Result<()>>,
+{
+    let mut next_key: EventLogTrimableId = db
+        .begin_transaction_nc()
+        .await
+        .get_value(pos_key)
+        .await
+        .unwrap_or_default();
+
+    trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling trimable events");
 
     loop {
         let mut dbtx = db.begin_transaction().await;
@@ -623,7 +813,7 @@ mod tests {
                         None,
                         None,
                         vec![],
-                        true,
+                        crate::EventPersistence::Persistent,
                     )
                     .await;
 

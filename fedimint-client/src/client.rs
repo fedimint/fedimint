@@ -62,7 +62,8 @@ use fedimint_core::{
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt as _, Event, EventKind, EventLogEntry, EventLogId, PersistedLogEntry,
+    DBTransactionEventLogExt as _, Event, EventKind, EventLogEntry, EventLogId, EventLogTrimableId,
+    EventPersistence, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -1489,7 +1490,7 @@ impl Client {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: Vec<u8>,
-        persist: bool,
+        persist: EventPersistence,
     ) where
         Cap: Send,
     {
@@ -1522,12 +1523,41 @@ impl Client {
         .await
     }
 
+    pub async fn handle_trimable_events<F, R, K>(
+        &self,
+        pos_key: &K,
+        call_fn: F,
+    ) -> anyhow::Result<()>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K: DatabaseRecord<Value = EventLogTrimableId>,
+        F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
+        R: Future<Output = anyhow::Result<()>>,
+    {
+        fedimint_eventlog::handle_trimable_events(
+            self.db.clone(),
+            pos_key,
+            self.log_event_added_rx.clone(),
+            call_fn,
+        )
+        .await
+    }
+
     pub async fn get_event_log(
         &self,
         pos: Option<EventLogId>,
         limit: u64,
     ) -> Vec<PersistedLogEntry> {
         self.get_event_log_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
+            .await
+    }
+
+    pub async fn get_event_log_trimable(
+        &self,
+        pos: Option<EventLogTrimableId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry> {
+        self.get_event_log_trimable_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
             .await
     }
 
@@ -1541,6 +1571,18 @@ impl Client {
         Cap: Send,
     {
         dbtx.get_event_log(pos, limit).await
+    }
+
+    pub async fn get_event_log_trimable_dbtx<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        pos: Option<EventLogTrimableId>,
+        limit: u64,
+    ) -> Vec<PersistedLogEntry>
+    where
+        Cap: Send,
+    {
+        dbtx.get_event_log_trimable(pos, limit).await
     }
 
     /// Register to receiver all new transient (unpersisted) events
@@ -1641,7 +1683,7 @@ impl ClientContextIface for Client {
         module_id: ModuleInstanceId,
         kind: EventKind,
         payload: serde_json::Value,
-        persist: bool,
+        persist: EventPersistence,
     ) {
         dbtx.ensure_global()
             .expect("Must be called with global dbtx");

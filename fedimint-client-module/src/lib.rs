@@ -26,7 +26,7 @@ use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync,
 };
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt;
 use module::OutPointRange;
@@ -71,8 +71,8 @@ pub struct TxCreatedEvent {
 
 impl Event for TxCreatedEvent {
     const MODULE: Option<ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("tx-created");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -83,8 +83,8 @@ pub struct TxAcceptedEvent {
 
 impl Event for TxAcceptedEvent {
     const MODULE: Option<ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("tx-accepted");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -95,8 +95,8 @@ pub struct TxRejectedEvent {
 }
 impl Event for TxRejectedEvent {
     const MODULE: Option<ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("tx-rejected");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -112,8 +112,8 @@ impl ModuleRecoveryStarted {
 
 impl Event for ModuleRecoveryStarted {
     const MODULE: Option<ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("module-recovery-started");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -123,8 +123,8 @@ pub struct ModuleRecoveryCompleted {
 
 impl Event for ModuleRecoveryCompleted {
     const MODULE: Option<ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("module-recovery-completed");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 pub type InstancelessDynClientInput = ClientInput<Box<maybe_add_send_sync!(dyn IInput + 'static)>>;
@@ -208,7 +208,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
-        persist: bool,
+        persist: EventPersistence,
     );
 
     async fn transaction_update_stream(&self) -> BoxStream<TxSubmissionStatesSM>;
@@ -262,7 +262,7 @@ impl IGlobalClientContext for () {
         _kind: EventKind,
         _module: Option<(ModuleKind, ModuleInstanceId)>,
         _payload: serde_json::Value,
-        _persist: bool,
+        _persist: EventPersistence,
     ) {
         unimplemented!("fake implementation, only for tests");
     }
@@ -357,7 +357,7 @@ impl DynGlobalClientContext {
             E::KIND,
             E::MODULE.map(|m| (m, dbtx.module_id())),
             serde_json::to_value(&event).expect("Payload serialization can't fail"),
-            <E as Event>::PERSIST,
+            <E as Event>::PERSISTENCE,
         )
         .await;
     }

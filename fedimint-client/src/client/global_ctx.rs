@@ -13,7 +13,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, Operati
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::BoxStream;
 use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync};
-use fedimint_eventlog::EventKind;
+use fedimint_eventlog::{EventKind, EventPersistence};
 
 use super::Client;
 
@@ -102,7 +102,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: serde_json::Value,
-        persist: bool,
+        persist: EventPersistence,
     ) {
         self.client
             .log_event_raw_dbtx(

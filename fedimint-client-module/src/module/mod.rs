@@ -25,7 +25,7 @@ use fedimint_core::{
     Amount, OutPoint, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define,
     maybe_add_send, maybe_add_send_sync,
 };
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
 use serde::de::DeserializeOwned;
@@ -99,6 +99,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn log_event_json(
         &self,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
@@ -106,7 +107,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         module_id: ModuleInstanceId,
         kind: EventKind,
         payload: serde_json::Value,
-        persist: bool,
+        persist: EventPersistence,
     );
 
     async fn read_operation_active_states<'dbtx>(
@@ -695,7 +696,7 @@ where
                 self.module_instance_id,
                 <E as Event>::KIND,
                 serde_json::to_value(event).expect("Can't fail"),
-                <E as Event>::PERSIST,
+                <E as Event>::PERSISTENCE,
             )
             .await;
     }
