@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use fedimint_core::Amount;
 use fedimint_core::core::ModuleKind;
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_mint_common::{KIND, Nonce};
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +17,7 @@ impl Event for NoteCreated {
     const MODULE: Option<ModuleKind> = Some(KIND);
 
     const KIND: EventKind = EventKind::from_static("note-created");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// Event that is emitted when a note is spent.
@@ -30,6 +31,7 @@ impl Event for NoteSpent {
     const MODULE: Option<ModuleKind> = Some(KIND);
 
     const KIND: EventKind = EventKind::from_static("note-spent");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// Event that is emitted when ecash is spent out of band
@@ -53,6 +55,7 @@ impl Event for OOBNotesSpent {
     const MODULE: Option<ModuleKind> = Some(KIND);
 
     const KIND: EventKind = EventKind::from_static("oob-notes-spent");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// Event that is emitted when out of band ecash is reissued
@@ -64,6 +67,6 @@ pub struct OOBNotesReissued {
 
 impl Event for OOBNotesReissued {
     const MODULE: Option<ModuleKind> = Some(KIND);
-
     const KIND: EventKind = EventKind::from_static("oob-notes-reissued");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }

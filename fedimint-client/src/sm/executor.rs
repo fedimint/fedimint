@@ -24,7 +24,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{BoxFuture, FmtCompactAnyhow as _};
 use fedimint_core::{apply, async_trait_maybe_send};
-use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind};
+use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT_REACTOR;
 use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -55,9 +55,8 @@ pub struct StateMachineCreated {
 
 impl Event for StateMachineCreated {
     const MODULE: Option<fedimint_core::core::ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("sm-created");
-    const TRIMABLE: bool = true;
+    const PERSISTENCE: EventPersistence = EventPersistence::Trimable;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -70,9 +69,8 @@ pub struct StateMachineUpdated {
 
 impl Event for StateMachineUpdated {
     const MODULE: Option<fedimint_core::core::ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("sm-updated");
-    const TRIMABLE: bool = true;
+    const PERSISTENCE: EventPersistence = EventPersistence::Trimable;
 }
 
 /// Executor that drives forward state machines under its management.
