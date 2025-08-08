@@ -42,11 +42,20 @@ pub const DB_KEY_PREFIX_UNORDERED_EVENT_LOG: u8 = 0x3a;
 pub const DB_KEY_PREFIX_EVENT_LOG: u8 = 0x39;
 pub const DB_KEY_PREFIX_EVENT_LOG_TRIMABLE: u8 = 0x41;
 
+pub enum EventPersistence {
+    /// Not written anywhere, just broadcasted as notification at runtime
+    Transient,
+    /// Persised only to log that gets trimmed
+    Trimable,
+    /// Persisted in both trimmed and untrimmed logs, so potentially
+    /// stored forever.
+    Persistent,
+}
+
 pub trait Event: serde::Serialize + serde::de::DeserializeOwned {
     const MODULE: Option<ModuleKind>;
     const KIND: EventKind;
-    const PERSIST: bool = true;
-    const TRIMABLE: bool = false;
+    const PERSISTENCE: EventPersistence;
 }
 
 /// An counter that resets on every restart, that guarantees that
@@ -152,15 +161,15 @@ pub struct UnorderedEventLogEntry {
 }
 
 impl UnorderedEventLogEntry {
-    pub const PERSIST: u8 = 1;
-    pub const TRIMABLE: u8 = 2;
+    pub const FLAG_PERSIST: u8 = 1;
+    pub const FLAG_TRIMABLE: u8 = 2;
 
     fn persist(&self) -> bool {
-        self.flags & Self::PERSIST != 0
+        self.flags & Self::FLAG_PERSIST != 0
     }
 
     fn trimable(&self) -> bool {
-        self.flags & Self::TRIMABLE != 0
+        self.flags & Self::FLAG_TRIMABLE != 0
     }
 }
 
@@ -295,8 +304,7 @@ pub trait DBTransactionEventLogExt {
         module_kind: Option<ModuleKind>,
         module_id: Option<ModuleInstanceId>,
         payload: Vec<u8>,
-        persist: bool,
-        trimable: bool,
+        persist: EventPersistence,
     );
 
     /// Log an event log event
@@ -317,8 +325,7 @@ pub trait DBTransactionEventLogExt {
             E::MODULE,
             module_id,
             serde_json::to_vec(&event).expect("Serialization can't fail"),
-            <E as Event>::PERSIST,
-            <E as Event>::TRIMABLE,
+            <E as Event>::PERSISTENCE,
         )
         .await;
     }
@@ -358,8 +365,7 @@ where
         module_kind: Option<ModuleKind>,
         module_id: Option<ModuleInstanceId>,
         payload: Vec<u8>,
-        persist: bool,
-        trimable: bool,
+        persist: EventPersistence,
     ) {
         assert_eq!(
             module_kind.is_some(),
@@ -374,14 +380,10 @@ where
             .insert_entry(
                 &unordered_id,
                 &UnorderedEventLogEntry {
-                    flags: if persist {
-                        UnorderedEventLogEntry::PERSIST
-                    } else {
-                        0
-                    } | if trimable {
-                        UnorderedEventLogEntry::TRIMABLE
-                    } else {
-                        0
+                    flags: match persist {
+                        EventPersistence::Transient => 0,
+                        EventPersistence::Trimable => UnorderedEventLogEntry::FLAG_TRIMABLE,
+                        EventPersistence::Persistent => UnorderedEventLogEntry::FLAG_PERSIST,
                     },
                     inner: EventLogEntry {
                         kind,
@@ -811,8 +813,7 @@ mod tests {
                         None,
                         None,
                         vec![],
-                        true,
-                        false,
+                        crate::EventPersistence::Persistent,
                     )
                     .await;
 

@@ -63,7 +63,7 @@ use fedimint_core::{
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, Event, EventKind, EventLogEntry, EventLogId, EventLogTrimableId,
-    PersistedLogEntry,
+    EventPersistence, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -1490,8 +1490,7 @@ impl Client {
         kind: EventKind,
         module: Option<(ModuleKind, ModuleInstanceId)>,
         payload: Vec<u8>,
-        persist: bool,
-        trimable: bool,
+        persist: EventPersistence,
     ) where
         Cap: Send,
     {
@@ -1504,7 +1503,6 @@ impl Client {
             module_id,
             payload,
             persist,
-            trimable,
         )
         .await;
     }
@@ -1685,8 +1683,7 @@ impl ClientContextIface for Client {
         module_id: ModuleInstanceId,
         kind: EventKind,
         payload: serde_json::Value,
-        persist: bool,
-        trimable: bool,
+        persist: EventPersistence,
     ) {
         dbtx.ensure_global()
             .expect("Must be called with global dbtx");
@@ -1696,7 +1693,6 @@ impl ClientContextIface for Client {
             module_kind.map(|kind| (kind, module_id)),
             serde_json::to_vec(&payload).expect("Serialization can't fail"),
             persist,
-            trimable,
         )
         .await;
     }

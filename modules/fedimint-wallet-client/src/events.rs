@@ -1,7 +1,7 @@
 use bitcoin::Txid;
 use fedimint_core::Amount;
 use fedimint_core::core::ModuleKind;
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use serde::{Deserialize, Serialize};
 
 /// Event that is emitted when the client pegs-out ecash onchain
@@ -15,6 +15,7 @@ impl Event for WithdrawRequest {
     const MODULE: Option<ModuleKind> = Some(fedimint_wallet_common::KIND);
 
     const KIND: EventKind = EventKind::from_static("withdraw-request");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// Event that is emitted when the client confirms an onchain deposit.
@@ -32,6 +33,6 @@ pub struct DepositConfirmed {
 
 impl Event for DepositConfirmed {
     const MODULE: Option<ModuleKind> = Some(fedimint_wallet_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("deposit-confirmed");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }

@@ -1,8 +1,8 @@
 use fedimint_core::Amount;
 use fedimint_core::core::{ModuleKind, OperationId};
 use fedimint_eventlog::{
-    Event, EventKind, PersistedLogEntry, StructuredPaymentEvents, filter_events_by_kind,
-    join_events,
+    Event, EventKind, EventPersistence, PersistedLogEntry, StructuredPaymentEvents,
+    filter_events_by_kind, join_events,
 };
 use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
@@ -25,8 +25,8 @@ pub struct OutgoingPaymentStarted {
 
 impl Event for OutgoingPaymentStarted {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("outgoing-payment-started");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// LNv1 event that is emitted when an outgoing payment attempt has succeeded.
@@ -44,8 +44,8 @@ pub struct OutgoingPaymentSucceeded {
 
 impl Event for OutgoingPaymentSucceeded {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("outgoing-payment-succeeded");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// LNv1 event that is emitted when an outgoing payment attempt has failed.
@@ -63,8 +63,8 @@ pub struct OutgoingPaymentFailed {
 
 impl Event for OutgoingPaymentFailed {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("outgoing-payment-failed");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt has started.
@@ -88,8 +88,8 @@ pub struct IncomingPaymentStarted {
 
 impl Event for IncomingPaymentStarted {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("incoming-payment-started");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt was successful.
@@ -104,8 +104,8 @@ pub struct IncomingPaymentSucceeded {
 
 impl Event for IncomingPaymentSucceeded {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("incoming-payment-succeeded");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// LNv1 event that is emitted when an incoming payment attempt has failed.
@@ -120,8 +120,8 @@ pub struct IncomingPaymentFailed {
 
 impl Event for IncomingPaymentFailed {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("incoming-payment-failed");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// LNv1 event that is emitted when a preimage was successfully revealed to the
@@ -134,8 +134,8 @@ pub struct CompleteLightningPaymentSucceeded {
 
 impl Event for CompleteLightningPaymentSucceeded {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
-
     const KIND: EventKind = EventKind::from_static("complete-lightning-payment-succeeded");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 /// Computes the `StructurePaymentEvents` for all LNv1 payments.
