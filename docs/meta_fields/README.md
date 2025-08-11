@@ -12,6 +12,7 @@ The following meta fields have been defined as part of the core Fedimint protoco
 * [`welcome_message`](welcome_message.md): A welcome message for new users joining the federation
 * [`vetted_gateways`](vetted_gateways.md): A list of gateway identifiers vetted by the federation
 * [`recurringd_api`](recurringd_api.md): The API URL of a recurringd instance that can be used by the clients to create LNURLs
+* [`lnaddress_api`](lnaddress_api.md): The API URL of a Lightning Address Server instance that is used to serve LNURLs
 
 ## Defining new meta fields
 
