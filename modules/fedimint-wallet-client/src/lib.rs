@@ -570,6 +570,7 @@ pub struct WalletClientContext {
 pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
 }
+
 #[derive(Deserialize)]
 struct SubscribeDepositRequest {
     operation_id: OperationId,
