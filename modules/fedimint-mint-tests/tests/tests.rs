@@ -573,24 +573,16 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .await
             .expect("Reissue should succeed");
 
-        let mut reissue_updates = client_mint
+        let reissue_outcome = client_mint
             .subscribe_reissue_external_notes(reissue_operation_id)
             .await?
-            .into_stream();
-        loop {
-            match reissue_updates.next().await {
-                None => {
-                    panic!("Reissue updates stream ended unexpectedly");
-                }
-                Some(ReissueExternalNotesState::Done) => {
-                    info!("Reissue completed successfully");
-                    break;
-                }
-                Some(_) => {
-                    continue;
-                }
-            }
-        }
+            .await_outcome()
+            .await;
+        assert_eq!(
+            reissue_outcome,
+            Some(ReissueExternalNotesState::Done),
+            "Reissue should finish"
+        );
 
         let initial_balance = client_mint
             .get_balance(&mut client_mint.db.begin_transaction_nc().await)
