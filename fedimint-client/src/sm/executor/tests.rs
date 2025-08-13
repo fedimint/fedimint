@@ -12,6 +12,7 @@ use fedimint_core::runtime;
 use fedimint_core::task::TaskGroup;
 use fedimint_logging::LOG_CLIENT_REACTOR;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::watch;
 use tracing::{info, trace};
 
 use super::Executor;
@@ -136,7 +137,13 @@ fn get_executor() -> (Executor, Sender<u64>, Database) {
             broadcast: broadcast.clone(),
         },
     );
-    let executor = executor_builder.build(db.clone(), Notifier::new(), TaskGroup::new());
+    let (log_ordering_wakeup_tx, _log_ordering_wakeup_rx) = watch::channel(());
+    let executor = executor_builder.build(
+        db.clone(),
+        Notifier::new(),
+        TaskGroup::new(),
+        log_ordering_wakeup_tx,
+    );
     executor.start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()));
 
     info!(

@@ -24,14 +24,16 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{BoxFuture, FmtCompactAnyhow as _};
 use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT_REACTOR;
 use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
+use serde::{Deserialize, Serialize};
 use tokio::select;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{Instrument, debug, error, info, trace, warn};
 
-use super::notifier::Notifier;
+use crate::sm::notifier::Notifier;
 use crate::{AddStateMachinesError, AddStateMachinesResult, DynGlobalClientContext};
 
 /// After how many attempts a DB transaction is aborted with an error
@@ -43,6 +45,20 @@ pub(crate) enum ExecutorDbPrefixes {
     ActiveStates = 0xa1,
     /// See [`InactiveStateKey`]
     InactiveStates = 0xa2,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct StateMachineUpdated {
+    operation_id: OperationId,
+    started: bool,
+    terminal: bool,
+    module_id: ModuleInstanceId,
+}
+
+impl Event for StateMachineUpdated {
+    const MODULE: Option<fedimint_core::core::ModuleKind> = None;
+    const KIND: EventKind = EventKind::from_static("sm-updated");
+    const PERSISTENCE: EventPersistence = EventPersistence::Trimable;
 }
 
 /// Executor that drives forward state machines under its management.
@@ -67,6 +83,7 @@ struct ExecutorInner {
     /// was created), it's must be sent through this channel for it to notice.
     sm_update_tx: mpsc::UnboundedSender<DynState>,
     client_task_group: TaskGroup,
+    log_ordering_wakeup_tx: watch::Sender<()>,
 }
 
 enum ExecutorState {
@@ -258,6 +275,19 @@ impl Executor {
                 &ActiveStateMeta::default(),
             )
             .await;
+
+            let operation_id = state.operation_id();
+            self.inner
+                .log_event_dbtx(
+                    dbtx,
+                    StateMachineUpdated {
+                        operation_id,
+                        started: true,
+                        terminal: false,
+                        module_id: state.module_instance_id(),
+                    },
+                )
+                .await;
 
             let notify_sender = self.inner.notifier.sender();
             let sm_updates_tx = self.inner.sm_update_tx.clone();
@@ -660,6 +690,7 @@ impl ExecutorInner {
                                     .autocommit::<'_, '_, _, _, Infallible>(
                                         |dbtx, _| {
                                             let state = state.clone();
+                                            let state_module_instance_id = state.module_instance_id();
                                             let transition_fn = transition_fn.clone();
                                             let transition_outcome = outcome.clone();
                                             Box::pin(async move {
@@ -693,6 +724,15 @@ impl ExecutorInner {
                                                 );
 
                                                 let is_terminal = new_state.is_terminal(context, &global_context);
+
+                                                self.log_event_dbtx(dbtx,
+                                                    StateMachineUpdated{
+                                                        started: false,
+                                                        operation_id,
+                                                        module_id: state_module_instance_id,
+                                                        terminal: is_terminal,
+                                                    }
+                                                ).await;
 
                                                 if is_terminal {
                                                     let k = InactiveStateKey::from_state(
@@ -836,6 +876,15 @@ impl ExecutorInner {
             .collect::<Vec<_>>()
             .await
     }
+
+    pub async fn log_event_dbtx<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)
+    where
+        E: Event + Send,
+        Cap: Send,
+    {
+        dbtx.log_event(self.log_ordering_wakeup_tx.clone(), None, event)
+            .await;
+    }
 }
 
 impl ExecutorInner {
@@ -887,11 +936,18 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub fn build(self, db: Database, notifier: Notifier, client_task_group: TaskGroup) -> Executor {
+    pub fn build(
+        self,
+        db: Database,
+        notifier: Notifier,
+        client_task_group: TaskGroup,
+        log_ordering_wakeup_tx: watch::Sender<()>,
+    ) -> Executor {
         let (sm_update_tx, sm_update_rx) = tokio::sync::mpsc::unbounded_channel();
 
         let inner = Arc::new(ExecutorInner {
             db,
+            log_ordering_wakeup_tx,
             state: std::sync::RwLock::new(ExecutorState::Unstarted { sm_update_rx }),
             module_contexts: self.module_contexts,
             valid_module_ids: self.valid_module_ids,

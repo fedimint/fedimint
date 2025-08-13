@@ -797,7 +797,12 @@ impl ClientBuilder {
                 executor_builder.with_valid_module_id(*module_instance_id);
             }
 
-            executor_builder.build(db.clone(), notifier, task_group.clone())
+            executor_builder.build(
+                db.clone(),
+                notifier,
+                task_group.clone(),
+                log_ordering_wakeup_tx.clone(),
+            )
         };
 
         let recovery_receiver_init_val = module_recovery_progress_receivers

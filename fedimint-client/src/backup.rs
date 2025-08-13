@@ -16,7 +16,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::serde_json;
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
@@ -266,6 +266,7 @@ impl Event for EventBackupDone {
     const MODULE: Option<fedimint_core::core::ModuleKind> = None;
 
     const KIND: EventKind = EventKind::from_static("backup-done");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
 impl Client {

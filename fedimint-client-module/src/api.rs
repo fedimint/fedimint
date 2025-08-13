@@ -23,12 +23,10 @@ pub struct ApiCallStarted {
 
 impl Event for ApiCallStarted {
     const MODULE: Option<fedimint_core::core::ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("api-call-started");
-
     /// These were deemed heavy volume enough and mostly diagnostics, so they
     /// are not persisted
-    const PERSIST: bool = false;
+    const PERSISTENCE: EventPersistence = EventPersistence::Transient;
 }
 
 /// Event log event right after an api call
@@ -49,12 +47,11 @@ pub struct ApiCallDone {
 
 impl Event for ApiCallDone {
     const MODULE: Option<fedimint_core::core::ModuleKind> = None;
-
     const KIND: EventKind = EventKind::from_static("api-call-done");
-    const PERSIST: bool = false;
+    const PERSISTENCE: EventPersistence = EventPersistence::Transient;
 }
 
-use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind};
+use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind, EventPersistence};
 
 /// Convenience extension trait used for wrapping [`IRawFederationApi`] in
 /// a [`ClientRawFederationApi`]

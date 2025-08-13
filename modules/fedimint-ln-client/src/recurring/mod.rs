@@ -24,7 +24,7 @@ use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
 use fedimint_core::util::{BoxFuture, FmtCompact, FmtCompactAnyhow, SafeUrl};
 use fedimint_derive_secret::ChildId;
-use fedimint_eventlog::{Event, EventKind};
+use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use futures::StreamExt;
 use futures::future::select_all;
 use lightning_invoice::Bolt11Invoice;
@@ -589,4 +589,5 @@ pub struct RecurringInvoiceCreatedEvent {
 impl Event for RecurringInvoiceCreatedEvent {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
     const KIND: EventKind = EventKind::from_static("recurring_invoice_created");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
