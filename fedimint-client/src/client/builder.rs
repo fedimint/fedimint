@@ -408,32 +408,6 @@ impl ClientBuilder {
         })
     }
 
-    /// Download most recent valid backup found from the Federation
-    async fn download_backup_from_federation(
-        &self,
-        pre_root_secret: DerivableSecret,
-        config: &ClientConfig,
-        api_secret: Option<String>,
-    ) -> anyhow::Result<Option<ClientBackup>> {
-        let api = DynGlobalApi::from_endpoints(
-            // TODO: change join logic to use FederationId v2
-            config
-                .global
-                .api_endpoints
-                .iter()
-                .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
-            &api_secret,
-        )
-        .await?;
-
-        Client::download_backup_from_federation_static(
-            &api,
-            &Self::federation_root_secret(&pre_root_secret, config),
-            &self.decoders(config),
-        )
-        .await
-    }
-
     pub async fn open(self, pre_root_secret: RootSecret) -> anyhow::Result<ClientHandle> {
         // Check for pending config and migrate if present
         Self::migrate_pending_config_if_present(&self.db_no_decoders).await;
@@ -1188,21 +1162,9 @@ impl ClientPreview {
     pub async fn recover(
         self,
         pre_root_secret: RootSecret,
-        custom_backup: Option<ClientBackup>,
+        backup: Option<ClientBackup>,
     ) -> anyhow::Result<ClientHandle> {
         let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
-
-        let backup = if let Some(backup) = custom_backup {
-            Some(backup)
-        } else {
-            self.inner
-                .download_backup_from_federation(
-                    pre_root_secret.clone(),
-                    &self.config,
-                    self.api_secret.clone(),
-                )
-                .await?
-        };
 
         let client = self
             .inner
@@ -1217,5 +1179,30 @@ impl ClientPreview {
             .await?;
 
         Ok(client)
+    }
+
+    /// Download most recent valid backup found from the Federation
+    pub async fn download_backup_from_federation(
+        &self,
+        pre_root_secret: RootSecret,
+    ) -> anyhow::Result<Option<ClientBackup>> {
+        let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
+        let api = DynGlobalApi::from_endpoints(
+            // TODO: change join logic to use FederationId v2
+            self.config
+                .global
+                .api_endpoints
+                .iter()
+                .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
+            &self.api_secret,
+        )
+        .await?;
+
+        Client::download_backup_from_federation_static(
+            &api,
+            &ClientBuilder::federation_root_secret(&pre_root_secret, &self.config),
+            &self.inner.decoders(&self.config),
+        )
+        .await
     }
 }
