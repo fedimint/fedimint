@@ -48,22 +48,10 @@ pub(crate) enum ExecutorDbPrefixes {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct StateMachineCreated {
-    operation_id: OperationId,
-    module_id: ModuleInstanceId,
-}
-
-impl Event for StateMachineCreated {
-    const MODULE: Option<fedimint_core::core::ModuleKind> = None;
-    const KIND: EventKind = EventKind::from_static("sm-created");
-    const PERSISTENCE: EventPersistence = EventPersistence::Trimable;
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct StateMachineUpdated {
     operation_id: OperationId,
+    started: bool,
     terminal: bool,
-    outcome: serde_json::Value,
     module_id: ModuleInstanceId,
 }
 
@@ -292,8 +280,10 @@ impl Executor {
             self.inner
                 .log_event_dbtx(
                     dbtx,
-                    StateMachineCreated {
+                    StateMachineUpdated {
                         operation_id,
+                        started: true,
+                        terminal: false,
                         module_id: state.module_instance_id(),
                     },
                 )
@@ -737,10 +727,10 @@ impl ExecutorInner {
 
                                                 self.log_event_dbtx(dbtx,
                                                     StateMachineUpdated{
+                                                        started: false,
                                                         operation_id,
                                                         module_id: state_module_instance_id,
                                                         terminal: is_terminal,
-                                                        outcome: transition_outcome
                                                     }
                                                 ).await;
 
