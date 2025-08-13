@@ -511,6 +511,11 @@ impl ClientModule for WalletClientModule {
                         .expect("Serialization error");
                     yield result;
                 }
+                "get_block_count_local" => {
+                    let block_count = self.get_block_count_local().await
+                        .expect("Failed to fetch block count");
+                    yield serde_json::to_value(block_count)?;
+                }
                 "peg_in" => {
                     let req: PegInRequest = serde_json::from_value(request)?;
                     let response = self.peg_in(req)
@@ -565,6 +570,7 @@ pub struct WalletClientContext {
 pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
 }
+
 #[derive(Deserialize)]
 struct SubscribeDepositRequest {
     operation_id: OperationId,
@@ -667,6 +673,10 @@ impl WalletClientModule {
     /// Returns a summary of the wallet's coins
     pub async fn get_wallet_summary(&self) -> anyhow::Result<WalletSummary> {
         Ok(self.module_api.fetch_wallet_summary().await?)
+    }
+
+    pub async fn get_block_count_local(&self) -> anyhow::Result<u32> {
+        Ok(self.module_api.fetch_block_count_local().await?)
     }
 
     pub fn create_withdraw_output(

@@ -1,13 +1,17 @@
+use anyhow::anyhow;
 use bitcoin::{Address, Amount};
-use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_api_client::api::{
+    FederationApiExt, FederationError, FederationResult, IModuleFederationApi, PeerResult,
+};
+use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{NumPeersExt, PeerId, apply, async_trait_maybe_send};
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
-    BLOCK_COUNT_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
-    UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
+    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::{PegOutFees, WalletSummary};
 
@@ -28,6 +32,8 @@ pub trait WalletFederationApi {
     async fn fetch_bitcoin_rpc_config(&self, auth: ApiAuth) -> FederationResult<BitcoinRpcConfig>;
 
     async fn fetch_wallet_summary(&self) -> FederationResult<WalletSummary>;
+
+    async fn fetch_block_count_local(&self) -> FederationResult<u32>;
 
     async fn is_utxo_confirmed(&self, outpoint: bitcoin::OutPoint) -> FederationResult<bool>;
 
@@ -79,6 +85,38 @@ where
             ApiRequestErased::default(),
         )
         .await
+    }
+
+    async fn fetch_block_count_local(&self) -> FederationResult<u32> {
+        let filter_map = |_peer: PeerId, block_count: Option<u32>| -> PeerResult<Option<u32>> {
+            Ok(block_count)
+        };
+
+        let block_count_responses = self
+            .request_with_strategy(
+                FilterMapThreshold::<Option<u32>, Option<u32>>::new(
+                    filter_map,
+                    self.all_peers().to_num_peers().threshold().into(),
+                ),
+                BLOCK_COUNT_LOCAL_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        let mut response: Vec<u32> = block_count_responses.into_values().flatten().collect();
+
+        if response.is_empty() {
+            return Err(FederationError::general(
+                BLOCK_COUNT_LOCAL_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+                anyhow!("No valid block counts received"),
+            ));
+        }
+
+        response.sort_unstable();
+        let final_block_count = response[response.len() / 2];
+
+        Ok(final_block_count)
     }
 
     async fn fetch_peg_out_fees(

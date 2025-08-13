@@ -14,7 +14,7 @@ use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, FederationApiExt as _, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
@@ -1351,6 +1351,10 @@ impl Client {
         }
     }
 
+    async fn fetch_session_count(&self) -> FederationResult<u64> {
+        self.api.session_count().await
+    }
+
     async fn fetch_and_update_config(
         &self,
         config: ClientConfig,
@@ -1436,6 +1440,10 @@ impl Client {
                         .paginate_operations_rev(limit, req.last_seen)
                         .await;
                     yield serde_json::to_value(operations)?;
+                }
+                "session_count" => {
+                    let count = self.fetch_session_count().await?;
+                    yield serde_json::to_value(count)?;
                 }
                 "has_pending_recoveries" => {
                     let has_pending = self.has_pending_recoveries();
