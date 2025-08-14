@@ -362,7 +362,8 @@ jobs:
       - name: Publish tagged release
         if: github.ref_type == 'tag' && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
         run: |
-          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${GITHUB_REF_NAME}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          VERSION_TAG=${GITHUB_REF_NAME#v}
+          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${VERSION_TAG}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   manifest:
     if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
@@ -406,13 +407,14 @@ jobs:
               docker manifest annotate "$image:${LAST_COMMIT_SHA}" "$image:${LAST_COMMIT_SHA}-aarch64-linux" --arch arm64
               docker manifest push "$image:${LAST_COMMIT_SHA}"
             elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
-              echo "Creating manifest for $image:${GITHUB_REF_NAME}"
-              docker manifest create "$image:${GITHUB_REF_NAME}" \
-                "$image:${GITHUB_REF_NAME}-x86_64-linux" \
-                "$image:${GITHUB_REF_NAME}-aarch64-linux"
-              docker manifest annotate "$image:${GITHUB_REF_NAME}" "$image:${GITHUB_REF_NAME}-x86_64-linux" --arch amd64
-              docker manifest annotate "$image:${GITHUB_REF_NAME}" "$image:${GITHUB_REF_NAME}-aarch64-linux" --arch arm64
-              docker manifest push "$image:${GITHUB_REF_NAME}"
+              VERSION_TAG=${GITHUB_REF_NAME#v}
+              echo "Creating manifest for $image:${VERSION_TAG}"
+              docker manifest create "$image:${VERSION_TAG}" \
+                "$image:${VERSION_TAG}-x86_64-linux" \
+                "$image:${VERSION_TAG}-aarch64-linux"
+              docker manifest annotate "$image:${VERSION_TAG}" "$image:${VERSION_TAG}-x86_64-linux" --arch amd64
+              docker manifest annotate "$image:${VERSION_TAG}" "$image:${VERSION_TAG}-aarch64-linux" --arch arm64
+              docker manifest push "$image:${VERSION_TAG}"
             fi
           done
 
@@ -478,7 +480,8 @@ jobs:
       - name: Set BUILD_ID to tag or commit hash
         run: |
           if [[ $GITHUB_REF_TYPE == "tag" ]]; then
-            echo "BUILD_ID=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+            VERSION_TAG=${GITHUB_REF_NAME#v}
+            echo "BUILD_ID=${VERSION_TAG}" >> $GITHUB_ENV
           else
             echo "BUILD_ID=${GITHUB_SHA}" >> $GITHUB_ENV
           fi
