@@ -57,7 +57,7 @@ Using the invite code from your guardian dashboard, join the federation using `f
 docker run -it --rm \
   -e RUST_LOG=off \
   -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
+  fedimint/fedimint-cli:0.7.0 \
   fedimint-cli \
     --data-dir /mutinynet-client \
     join-federation <invite_code>
@@ -73,7 +73,7 @@ Get a new deposit address
 docker run -it --rm \
   -e RUST_LOG=off \
   -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
+  fedimint/fedimint-cli:0.7.0 \
   fedimint-cli \
     --data-dir /mutinynet-client \
     module wallet new-deposit-address
@@ -87,7 +87,7 @@ Await the deposit:
 docker run -it --rm \
   -e RUST_LOG=off \
   -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
+  fedimint/fedimint-cli:0.7.0 \
   fedimint-cli \
     --data-dir /mutinynet-client \
     module wallet await-deposit <address>
@@ -101,7 +101,7 @@ Once you've claimed the deposit, check the wallet balance in the guardian dashbo
 docker run -it --rm \
   -e RUST_LOG=off \
   -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
+  fedimint/fedimint-cli:0.7.0 \
   fedimint-cli \
     --data-dir /mutinynet-client \
     info
@@ -115,7 +115,7 @@ When you're done experimenting with the setup, send your sats back to the friend
 docker run -it --rm \
   -e RUST_LOG=off \
   -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
+  fedimint/fedimint-cli:0.7.0 \
   fedimint-cli \
     --data-dir /mutinynet-client \
     withdraw --amount all --address tb1qd28npep0s8frcm3y7dxqajkcy2m40eysplyr9v
