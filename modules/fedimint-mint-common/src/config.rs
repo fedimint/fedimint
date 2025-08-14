@@ -40,7 +40,7 @@ impl MintGenParamsConsensus {
     }
 
     pub fn fee_consensus(&self) -> FeeConsensus {
-        self.fee_consensus.clone()
+        self.fee_consensus
     }
 
     pub fn gen_denominations(&self) -> Vec<Amount> {
@@ -107,7 +107,7 @@ plugin_types_trait_impl_config!(
     MintClientConfig
 );
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
     base: Amount,
     parts_per_million: u64,
