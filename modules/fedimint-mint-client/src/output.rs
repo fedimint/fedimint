@@ -6,9 +6,9 @@ use fedimint_api_client::api::{
     FederationApiExt, PeerError, SerdeOutputOutcome, deserialize_outcome,
 };
 use fedimint_api_client::query::FilterMapThreshold;
-use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
+use fedimint_client_module::{ClientModule, DynGlobalClientContext};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -334,6 +334,7 @@ impl MintOutputStatesCreatedMulti {
             StateTransition::new(
                 Self::await_outcome_ready(
                     global_context.clone(),
+                    context.clone(),
                     common,
                     context.mint_decoder.clone(),
                     self.issuance_requests.clone(),
@@ -374,6 +375,7 @@ impl MintOutputStatesCreatedMulti {
 
     async fn await_outcome_ready(
         global_context: DynGlobalClientContext,
+        module_context: MintClientContext,
         common: MintOutputCommon,
         module_decoder: Decoder,
         issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
@@ -388,32 +390,14 @@ impl MintOutputStatesCreatedMulti {
         // Wait for the result of the first output only, to save of server side
         // resources
         if let Some((out_idx, (amount, issuance_request))) = issuance_requests_iter.next() {
-            let module_decoder = module_decoder.clone();
-            let tbs_pks = tbs_pks.clone();
-
-            let blinded_sig_share = api
-                .request_with_strategy_retry(
-                    // this query collects a threshold of 2f + 1 valid blind signature
-                    // shares
-                    FilterMapThreshold::new(
-                        move |peer, outcome| {
-                            verify_blind_share(
-                                peer,
-                                &outcome,
-                                amount,
-                                issuance_request.blinded_message(),
-                                &module_decoder,
-                                &tbs_pks,
-                            )
-                            .map_err(PeerError::InvalidResponse)
-                        },
-                        api.all_peers().to_num_peers(),
-                    ),
-                    AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
-                    ApiRequestErased::new(OutPoint {
+            let blinded_sig_share = module_context
+                .await_note_signature_shares(
+                    OutPoint {
                         txid: common.txid(),
                         out_idx,
-                    }),
+                    },
+                    amount,
+                    &issuance_request,
                 )
                 .await;
 
@@ -481,32 +465,11 @@ impl MintOutputStatesCreatedMulti {
             panic!("Unexpected prior state")
         };
 
-        let mut spendable_notes: Vec<(Amount, SpendableNote)> = vec![];
-
-        // Note verification is relatively slow and CPU-bound, so parallelize them
-        blinded_signature_shares
-            .into_par_iter()
-            .map(|(out_idx, blinded_signature_shares)| {
-                let agg_blind_signature = aggregate_signature_shares(
-                    &blinded_signature_shares
-                        .into_iter()
-                        .map(|(peer, share)| (peer.to_usize() as u64, share))
-                        .collect(),
-                );
-
-                // this implies that the mint client config's public keys are inconsistent
-                let (amount, issuance_request) =
-                    created.issuance_requests.get(&out_idx).expect("Must have");
-
-                let amount_key = tbs_pks.tier(amount).expect("Must have keys for any amount");
-
-                let spendable_note = issuance_request.finalize(agg_blind_signature);
-
-                assert!(spendable_note.note().verify(*amount_key), "We checked all signature shares in the trigger future, so the combined signature has to be valid");
-
-                (*amount, spendable_note)
-            })
-            .collect_into_vec(&mut spendable_notes);
+        let spendable_notes = par_finalize_notes(
+            &tbs_pks,
+            blinded_signature_shares,
+            &created.issuance_requests,
+        );
 
         for (amount, spendable_note) in spendable_notes {
             debug!(target: LOG_CLIENT_MODULE_MINT, amount = %amount, note=%spendable_note, "Adding new note from transaction output");
@@ -653,4 +616,89 @@ impl NoteIssuanceRequest {
     pub fn spend_key(&self) -> &Keypair {
         &self.spend_key
     }
+}
+
+impl MintClientContext {
+    pub(crate) async fn await_note_signature_shares(
+        &self,
+        out_point: OutPoint,
+        denomination: Amount,
+        note_issuance_request: &NoteIssuanceRequest,
+    ) -> BTreeMap<PeerId, BlindedSignatureShare> {
+        let global_api = self.client_ctx.global_api();
+
+        let decoder = <MintClientModule as ClientModule>::decoder();
+        let tbs_pks = self.peer_tbs_pks.clone();
+        let num_peers = global_api.all_peers().to_num_peers();
+        let blinded_message = note_issuance_request.blinded_message();
+
+        global_api
+            .request_with_strategy_retry(
+                // this query collects a threshold of 2f + 1 valid blind signature shares
+                FilterMapThreshold::new(
+                    move |peer, outcome| {
+                        verify_blind_share(
+                            peer,
+                            &outcome,
+                            denomination,
+                            blinded_message,
+                            &decoder,
+                            &tbs_pks,
+                        )
+                        .map_err(PeerError::InvalidResponse)
+                    },
+                    num_peers,
+                ),
+                AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
+                ApiRequestErased::new(out_point),
+            )
+            .await
+    }
+}
+
+/// Creates spendable e-cash notes from the blind signature shares and their
+/// issuance requests.
+///
+/// Since this is a CPU-heavy operation it is parallelized.
+pub(crate) fn par_finalize_notes(
+    tbs_pks: &Tiered<AggregatePublicKey>,
+    // out_idx, denomination, blind signature shares
+    blind_sig_shares: Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)>,
+    // out_idx -> issuance request
+    issuance_requests: &BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
+) -> Vec<(Amount, SpendableNote)> {
+    assert_eq!(
+        blind_sig_shares.len(),
+        issuance_requests.len(),
+        "We should have the same number of blind signatures as issuance requests"
+    );
+
+    let mut spendable_notes: Vec<(Amount, SpendableNote)> = vec![];
+
+    // Note verification is relatively slow and CPU-bound, so parallelize them
+    blind_sig_shares
+        .into_par_iter()
+        .map(|(out_idx, blinded_signature_shares)| {
+            let agg_blind_signature = aggregate_signature_shares(
+                &blinded_signature_shares
+                    .into_iter()
+                    .map(|(peer, share)| (peer.to_usize() as u64, share))
+                    .collect(),
+            );
+
+            // this implies that the mint client config's public keys are inconsistent
+            let (amount, issuance_request) =
+                issuance_requests.get(&out_idx).expect("Must have");
+
+            let amount_key = tbs_pks.tier(amount).expect("Must have keys for any amount");
+
+            let spendable_note = issuance_request.finalize(agg_blind_signature);
+
+            assert!(spendable_note.note().verify(*amount_key), "We checked all signature shares in the trigger future, so the combined signature has to be valid");
+
+            (*amount, spendable_note)
+        })
+        .collect_into_vec(&mut spendable_notes);
+
+    spendable_notes
 }
