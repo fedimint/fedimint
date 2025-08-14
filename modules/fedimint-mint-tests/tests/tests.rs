@@ -11,7 +11,7 @@ use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
+use fedimint_core::{Amount, TieredCounts, TieredMulti, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
@@ -19,7 +19,7 @@ use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState,
+    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendExactState, SpendOOBState,
     SpendableNoteUndecoded,
 };
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
@@ -765,6 +765,39 @@ async fn repair_wallet() -> anyhow::Result<()> {
             initial_balance, new_balance,
             "Balance should remain unchanged after repair"
         );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn spend_exact() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
+    let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
+
+    // The wallet won't have any denomination more than 3 times at this point, so if
+    // we can spend exactly 8msat 10 times the exact spend functionality is working.
+    let client_mint = client.get_first_module::<MintClientModule>()?;
+
+    for _ in 0..10 {
+        let operation_id = client_mint
+            .spend_notes_with_exact_denominations(TieredCounts::from_iter(vec![(msats(8), 1)]), ())
+            .await?;
+        let outcome = client_mint
+            .subscribe_spend_notes_with_exact_denominations(operation_id)
+            .await?
+            .await_outcome()
+            .await;
+        let Some(SpendExactState::Success(notes)) = outcome else {
+            panic!("Expected success, got: {outcome:?}");
+        };
+        assert_eq!(notes.total_amount(), msats(8));
+        assert_eq!(notes.count_items(), 1);
     }
 
     Ok(())
