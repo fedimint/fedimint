@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::io::{Error, Write};
 
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use itertools::Itertools;
@@ -185,7 +186,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, Clone, Hash)]
 pub struct TieredCounts(Tiered<usize>);
 
 impl TieredCounts {
@@ -245,6 +246,33 @@ impl TieredCounts {
 impl FromIterator<(Amount, usize)> for TieredCounts {
     fn from_iter<I: IntoIterator<Item = (Amount, usize)>>(iter: I) -> Self {
         Self(iter.into_iter().filter(|(_, count)| *count != 0).collect())
+    }
+}
+
+impl Encodable for TieredCounts {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        let tiered_counts_u64 = self
+            .0
+            .iter()
+            .map(|(amount, &count)| (amount, count as u64))
+            .collect::<Tiered<_>>();
+        tiered_counts_u64.consensus_encode(writer)
+    }
+}
+
+impl Decodable for TieredCounts {
+    fn consensus_decode_partial_from_finite_reader<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let tiered_counts_u64 =
+            Tiered::<u64>::consensus_decode_partial_from_finite_reader(d, modules)?;
+        Ok(Self(
+            tiered_counts_u64
+                .into_iter()
+                .map(|(amount, count)| (amount, count as usize))
+                .collect(),
+        ))
     }
 }
 
