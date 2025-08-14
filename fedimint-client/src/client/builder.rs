@@ -1218,4 +1218,16 @@ impl ClientPreview {
 
         Ok(client)
     }
+
+    /// Checks if a backup exists for this federation with the given root secret
+    pub async fn check_backup_exists(
+        &self,
+        pre_root_secret: DerivableSecret,
+    ) -> anyhow::Result<bool> {
+        let backup = self
+            .inner
+            .download_backup_from_federation(pre_root_secret, &self.config, self.api_secret.clone())
+            .await?;
+        Ok(backup.is_some())
+    }
 }
