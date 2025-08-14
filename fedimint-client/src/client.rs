@@ -81,8 +81,8 @@ use crate::db::{
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChronologicalOperationLogKey,
     ClientConfigKey, ClientMetadataKey, ClientModuleRecovery, ClientModuleRecoveryState,
     EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, apply_migrations_core_client_dbtx, get_decoded_client_secret,
-    verify_client_db_integrity_dbtx,
+    PeerLastApiVersionsSummaryKey, PendingClientConfigKey, apply_migrations_core_client_dbtx,
+    get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -197,6 +197,11 @@ impl Client {
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
         let mut dbtx = db.begin_transaction_nc().await;
         dbtx.get_value(&ClientConfigKey).await
+    }
+
+    pub async fn get_pending_config_from_db(db: &Database) -> Option<ClientConfig> {
+        let mut dbtx = db.begin_transaction_nc().await;
+        dbtx.get_value(&PendingClientConfigKey).await
     }
 
     pub async fn get_api_secret_from_db(db: &Database) -> Option<String> {

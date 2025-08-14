@@ -16,7 +16,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::retry;
+use fedimint_core::util::{retry, write_overwrite_async};
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
@@ -33,7 +33,7 @@ use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASS
 use crate::federation::Client;
 use crate::gatewayd::LdkChainSource;
 use crate::util::{LoadTestTool, ProcessManager, poll};
-use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
@@ -1884,6 +1884,250 @@ pub async fn test_offline_client_initialization(
     Ok(())
 }
 
+/// Test that client can detect federation config changes when servers restart
+/// with new module configurations
+///
+/// This test starts a fresh federation, dumps the client config, then stops all
+/// servers and modifies their configs by adding a new meta module instance. The
+/// client should detect this configuration change after the servers restart.
+pub async fn test_client_config_change_detection(
+    dev_fed: DevFed,
+    process_mgr: &ProcessManager,
+) -> Result<()> {
+    log_binary_versions().await?;
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
+    if fedimint_cli_version < *VERSION_0_9_0_ALPHA {
+        info!(target: LOG_DEVIMINT, "Skipping the test - fedimint-cli too old");
+        return Ok(());
+    }
+
+    if fedimintd_version < *VERSION_0_9_0_ALPHA {
+        info!(target: LOG_DEVIMINT, "Skipping the test - fedimintd too old");
+        return Ok(());
+    }
+
+    let DevFed { mut fed, .. } = dev_fed;
+    let peer_ids: Vec<_> = fed.member_ids().collect();
+
+    fed.await_all_peers().await?;
+
+    let client = fed.new_joined_client("config-change-test-client").await?;
+
+    info!(target: LOG_DEVIMINT, "Getting initial client configuration...");
+    let initial_config = cmd!(client, "config")
+        .out_json()
+        .await
+        .context("Failed to get initial client config")?;
+
+    info!(target: LOG_DEVIMINT, "Initial config modules: {:?}", initial_config["modules"].as_object().unwrap().keys().collect::<Vec<_>>());
+
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
+    let config_dir = PathBuf::from(&data_dir);
+
+    // Shutdown all federation servers
+    //
+    // In prod. one would probably use a coordinated shutdown, just to be
+    // careful, but since the change is only adding a new module that does
+    // not submit CIs without user/admin interaction, there is
+    // no way for the consensus to diverge.
+    info!(target: LOG_DEVIMINT, "Shutting down all federation servers...");
+    fed.terminate_all_servers().await?;
+
+    // Wait for servers to fully shutdown
+    fedimint_core::task::sleep_in_test("wait for federation shutdown", Duration::from_secs(2))
+        .await;
+
+    info!(target: LOG_DEVIMINT, "Modifying server configurations to add new meta module...");
+    modify_server_configs(&config_dir, &peer_ids).await?;
+
+    // Restart all servers with modified configs
+    info!(target: LOG_DEVIMINT, "Restarting all servers with modified configurations...");
+    for peer_id in peer_ids {
+        fed.start_server(process_mgr, peer_id.to_usize()).await?;
+    }
+
+    // Wait for federation to stabilize
+    info!(target: LOG_DEVIMINT, "Wait for peers to get back up");
+    fed.await_all_peers().await?;
+
+    // Use fedimint-cli dev wait to let the client read the new config in background
+    info!(target: LOG_DEVIMINT, "Waiting for client to fetch updated configuration...");
+    cmd!(client, "dev", "wait", "3")
+        .run()
+        .await
+        .context("Failed to wait for client config update")?;
+
+    // Test that client switched to the new config
+    info!(target: LOG_DEVIMINT, "Testing client detection of configuration changes...");
+    let updated_config = cmd!(client, "config")
+        .out_json()
+        .await
+        .context("Failed to get updated client config")?;
+
+    info!(target: LOG_DEVIMINT, "Updated config modules: {:?}", updated_config["modules"].as_object().unwrap().keys().collect::<Vec<_>>());
+
+    // Verify that the configuration has changed (new meta module should be present)
+    let initial_modules = initial_config["modules"].as_object().unwrap();
+    let updated_modules = updated_config["modules"].as_object().unwrap();
+
+    anyhow::ensure!(
+        updated_modules.len() > initial_modules.len(),
+        "Expected more modules in updated config. Initial: {}, Updated: {}",
+        initial_modules.len(),
+        updated_modules.len()
+    );
+
+    // Check if a new meta module was added
+    let new_meta_module = updated_modules.iter().find(|(module_id, module_config)| {
+        module_config["kind"].as_str() == Some("meta") && !initial_modules.contains_key(*module_id)
+    });
+
+    let new_meta_module_id = new_meta_module
+        .map(|(id, _)| id)
+        .with_context(|| "Expected to find new meta module in updated configuration")?;
+
+    info!(target: LOG_DEVIMINT, "Found new meta module with id: {}", new_meta_module_id);
+
+    // Verify client operations still work with the new configuration
+    info!(target: LOG_DEVIMINT, "Verifying client operations work with new configuration...");
+    let final_info = cmd!(client, "info")
+        .out_json()
+        .await
+        .context("Client info command failed with updated configuration")?;
+
+    info!(target: LOG_DEVIMINT, "Client successfully adapted to configuration changes: {:?}", final_info["federation_id"]);
+
+    Ok(())
+}
+
+/// Modify server configuration files to add a new meta module instance
+async fn modify_server_configs(config_dir: &Path, peer_ids: &[PeerId]) -> Result<()> {
+    for &peer_id in peer_ids {
+        modify_single_peer_config(config_dir, peer_id).await?;
+    }
+    Ok(())
+}
+
+/// Modify configuration files for a single peer to add a new meta module
+/// instance
+async fn modify_single_peer_config(config_dir: &Path, peer_id: PeerId) -> Result<()> {
+    use fedimint_aead::{encrypted_write, get_encryption_key};
+    use fedimint_core::core::ModuleInstanceId;
+    use fedimint_server::config::io::read_server_config;
+    use serde_json::Value;
+
+    info!(target: LOG_DEVIMINT, %peer_id, "Modifying config for peer");
+    let peer_dir = config_dir.join(format!("fedimintd-default-{}", peer_id.to_usize()));
+
+    // Read consensus config
+    let consensus_config_path = peer_dir.join("consensus.json");
+    let consensus_config_content = fs::read_to_string(&consensus_config_path)
+        .await
+        .with_context(|| format!("Failed to read consensus config for peer {peer_id}"))?;
+
+    let mut consensus_config: Value = serde_json::from_str(&consensus_config_content)
+        .with_context(|| format!("Failed to parse consensus config for peer {peer_id}"))?;
+
+    // Read the encrypted private config using the server config reader
+    let password = "pass"; // Default password used in devimint
+    let server_config = read_server_config(password, &peer_dir)
+        .with_context(|| format!("Failed to read server config for peer {peer_id}"))?;
+
+    // Find existing meta module in configs to use as template
+    let consensus_config_modules = consensus_config["modules"]
+        .as_object()
+        .with_context(|| format!("No modules found in consensus config for peer {peer_id}"))?;
+
+    // Look for existing meta module to copy its configuration
+    let existing_meta_consensus = consensus_config_modules
+        .values()
+        .find(|module_config| module_config["kind"].as_str() == Some("meta"));
+
+    let existing_meta_consensus = existing_meta_consensus
+        .with_context(|| {
+            format!("No existing meta module found in consensus config for peer {peer_id}")
+        })?
+        .clone();
+
+    // Find existing meta module in private config
+    let existing_meta_instance_id = server_config
+        .consensus
+        .modules
+        .iter()
+        .find(|(_, config)| config.kind.as_str() == "meta")
+        .map(|(id, _)| *id)
+        .with_context(|| {
+            format!("No existing meta module found in private config for peer {peer_id}")
+        })?;
+
+    let existing_meta_private = server_config
+        .private
+        .modules
+        .get(&existing_meta_instance_id)
+        .with_context(|| format!("Failed to get existing meta private config for peer {peer_id}"))?
+        .clone();
+
+    // Find the highest existing module ID for the new module
+    let last_existing_module_id = consensus_config_modules
+        .keys()
+        .filter_map(|id| id.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0);
+
+    let new_module_id = (last_existing_module_id + 1).to_string();
+    let new_module_instance_id = ModuleInstanceId::from((last_existing_module_id + 1) as u16);
+
+    info!(
+        "Adding new meta module with id {} for peer {} (copying existing meta module config)",
+        new_module_id, peer_id
+    );
+
+    // Add new meta module to consensus config by copying existing meta module
+    if let Some(modules) = consensus_config["modules"].as_object_mut() {
+        modules.insert(new_module_id.clone(), existing_meta_consensus);
+    }
+
+    // Add new meta module to private config
+    let mut updated_private_config = server_config.private.clone();
+    updated_private_config
+        .modules
+        .insert(new_module_instance_id, existing_meta_private);
+
+    // Write back the modified consensus and client configs
+    let updated_consensus_content = serde_json::to_string_pretty(&consensus_config)
+        .with_context(|| format!("Failed to serialize consensus config for peer {peer_id}"))?;
+
+    write_overwrite_async(&consensus_config_path, updated_consensus_content)
+        .await
+        .with_context(|| format!("Failed to write consensus config for peer {peer_id}"))?;
+
+    // Write back the modified private config using direct encryption
+    let salt = std::fs::read_to_string(peer_dir.join("private.salt"))
+        .with_context(|| format!("Failed to read salt file for peer {peer_id}"))?;
+    let key = get_encryption_key(password, &salt)
+        .with_context(|| format!("Failed to get encryption key for peer {peer_id}"))?;
+
+    let private_config_bytes = serde_json::to_string(&updated_private_config)
+        .with_context(|| format!("Failed to serialize private config for peer {peer_id}"))?
+        .into_bytes();
+
+    // Remove the existing encrypted file first
+    let encrypted_private_path = peer_dir.join("private.encrypt");
+    if encrypted_private_path.exists() {
+        std::fs::remove_file(&encrypted_private_path)
+            .with_context(|| format!("Failed to remove old private config for peer {peer_id}"))?;
+    }
+
+    encrypted_write(private_config_bytes, &key, encrypted_private_path)
+        .with_context(|| format!("Failed to write encrypted private config for peer {peer_id}"))?;
+
+    info!("Successfully modified configs for peer {}", peer_id);
+    Ok(())
+}
+
 #[derive(Subcommand)]
 pub enum LatencyTest {
     Reissue,
@@ -1950,6 +2194,9 @@ pub enum TestCmd {
     /// Tests that client info commands work when all federation servers are
     /// offline
     TestOfflineClientInitialization,
+    /// Tests that client can detect federation config changes when servers
+    /// restart with new module configurations
+    TestClientConfigChangeDetection,
     /// Test upgrade paths for a given binary
     UpgradeTests {
         #[clap(subcommand)]
@@ -2054,6 +2301,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             test_offline_client_initialization(dev_fed, &process_mgr).await?;
+        }
+        TestCmd::TestClientConfigChangeDetection => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            test_client_config_change_detection(dev_fed, &process_mgr).await?;
         }
         TestCmd::UpgradeTests { binary, lnv2 } => {
             // TODO: Audit that the environment access only happens in single-threaded code.
