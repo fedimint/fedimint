@@ -126,6 +126,11 @@ impl<T> TieredMulti<T> {
         #[cfg(debug_assertions)]
         self.iter().for_each(|(_, v)| debug_assert!(!v.is_empty()));
     }
+
+    /// Returns the number of items in the given amount `tier`
+    pub fn tier_count(&self, tier: Amount) -> usize {
+        self.0.get(tier).map_or(0, Vec::len)
+    }
 }
 
 impl<C> FromIterator<(Amount, C)> for TieredMulti<C> {
