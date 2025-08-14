@@ -9,7 +9,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{apply, async_trait_maybe_send};
-use futures::stream;
+use futures::{StreamExt, stream};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -179,6 +179,23 @@ where
             UpdateStreamOrOutcome::Outcome(outcome) => {
                 Box::pin(stream::once(future::ready(outcome)))
             }
+        }
+    }
+
+    /// Returns the final outcome.
+    ///
+    /// Returns immediately if an outcome has already been cached or consumes
+    /// the update stream to its end if not.
+    pub async fn await_outcome(self) -> U {
+        match self {
+            UpdateStreamOrOutcome::UpdateStream(mut stream) => {
+                let mut last_update = None;
+                while let Some(update) = stream.next().await {
+                    last_update = Some(update);
+                }
+                last_update.expect("Update stream should always yield at least one value")
+            }
+            UpdateStreamOrOutcome::Outcome(outcome) => outcome,
         }
     }
 }

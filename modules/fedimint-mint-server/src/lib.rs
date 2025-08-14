@@ -302,7 +302,7 @@ impl ServerModuleInit for MintInit {
 
         Ok(MintClientConfig {
             tbs_pks,
-            fee_consensus: config.fee_consensus.clone(),
+            fee_consensus: config.fee_consensus,
             peer_tbs_pks: config.peer_tbs_pks.clone(),
             max_notes_per_denomination: config.max_notes_per_denomination,
         })
