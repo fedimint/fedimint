@@ -312,6 +312,13 @@ let
         )
       ];
 
+    prebuild = ''
+      if [ pkgs.stdenv.isAarch64 ]; then
+        export JEMALLOC_SYS_WITH_LG_PAGE=16
+        echo "Setting JEMALLOC_SYS_WITH_LG_PAGE=16 for aarch64"
+      fi
+    '';
+
     # we carefully optimize our debug symbols on cargo level,
     # and in case of errors and panics, would like to see the
     # line numbers etc.
@@ -770,6 +777,11 @@ in
         "fedimint-dbtool"
         "fedimint-recoverytool"
       ];
+
+      preBuild = ''
+        cargo clean
+        export JEMALLOC_SYS_WITH_LG_PAGE=16
+      '';
     };
 
     gateway-pkgs = fedimintBuildPackageGroup {
