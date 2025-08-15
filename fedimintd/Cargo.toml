@@ -49,7 +49,6 @@ tracing = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
-tikv-jemalloc-sys = "0.5"
 
 [lints]
 workspace = true
