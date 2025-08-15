@@ -7,9 +7,13 @@ use fedimint_api_client::api::net::Connector;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleKind, OperationId};
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped, IRawDatabase};
+use fedimint_core::db::{
+    AutocommitResultExt, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    IRawDatabase,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::secp256k1::hashes::sha256;
 use fedimint_core::task::timeout;
 use fedimint_core::util::SafeUrl;
@@ -20,7 +24,7 @@ use fedimint_ln_client::recurring::{
 };
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta,
-    LightningOperationMetaVariant, LnReceiveState,
+    LightningOperationMetaVariant, LnReceiveState, tweak_user_key,
 };
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
@@ -257,44 +261,122 @@ impl RecurringInvoiceServer {
         const DEFAULT_EXPIRY_TIME: u64 = 60 * 60 * 24;
 
         let payment_code = self.get_payment_code(payment_code_id).await?;
-        let invoice_index = self.get_next_invoice_index(payment_code_id).await;
 
         let federation_client = self
             .get_federation_client(payment_code.federation_id)
             .await?;
-        let federation_client_ln_module = federation_client
-            .get_first_module::<LightningClientModule>()
-            .map_err(|e| {
-                warn!("No compatible lightning module found {e}");
-                RecurringPaymentError::NoLightningModuleFound
-            })?;
 
-        let gateway = federation_client_ln_module
-            .get_gateway(None, false)
-            .await?
-            .ok_or(RecurringPaymentError::NoGatewayFound)?;
+        let (operation_id, invoice) = self
+            .db
+            .autocommit(
+                |dbtx, _| {
+                    let federation_client = federation_client.clone();
+                    let payment_code = payment_code.clone();
+                    Box::pin(async move {
+                        let invoice_index = self
+                            .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
+                            .await;
 
-        let lnurl_meta = match payment_code.variant {
-            PaymentCodeVariant::Lnurl { meta } => meta,
-        };
-        let meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
-        let description = Bolt11InvoiceDescription::Hash(meta_hash);
+                        // Check if the invoice index was already used in an aborted call to this
+                        // fn. If so:
+                        //   1. Save the previously generated invoice. We don't want to reuse it
+                        //      since it may be expired and in the future may contain call-specific
+                        //      data, but also want to allow the client to sync past it.
+                        //   2. Increment the invoice index to generate a new invoice since re-using
+                        //      the same index wouldn't work (operation id reuse is forbidden).
+                        let initial_operation_id =
+                            operation_id_from_user_key(payment_code.root_key, invoice_index);
+                        let invoice_index = if let Some(operation) = federation_client
+                            .operation_log()
+                            .get_operation(initial_operation_id)
+                            .await
+                        {
+                            assert_eq!(
+                                operation.operation_module_kind(),
+                                LightningClientModule::kind().as_str()
+                            );
 
-        // TODO: ideally creating the invoice would take a dbtx as argument so we don't
-        // get holes in our used indexes in case this function fails/is cancelled
-        let (operation_id, invoice, _preimage) = federation_client_ln_module
-            .create_bolt11_invoice_for_user_tweaked(
-                amount,
-                description,
-                Some(DEFAULT_EXPIRY_TIME),
-                payment_code.root_key.0,
-                invoice_index,
-                serde_json::Value::Null,
-                Some(gateway),
+                            let LightningOperationMetaVariant::RecurringPaymentReceive(receive) =
+                                operation.meta::<LightningOperationMeta>().variant
+                            else {
+                                panic!(
+                                    "Unexpected operation meta variant: {:?}",
+                                    operation.meta::<LightningOperationMeta>().variant
+                                );
+                            };
+
+                            self.save_bolt11_invoice(
+                                dbtx,
+                                initial_operation_id,
+                                payment_code_id,
+                                invoice_index,
+                                receive.invoice.clone(),
+                            )
+                            .await;
+                            self.get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
+                                .await
+                        } else {
+                            invoice_index
+                        };
+
+                        // This is where the main part starts: generate the invoice and save it to
+                        // the DB
+                        let federation_client_ln_module = federation_client.get_ln_module()?;
+                        let gateway = federation_client_ln_module
+                            .get_gateway(None, false)
+                            .await?
+                            .ok_or(RecurringPaymentError::NoGatewayFound)?;
+
+                        let lnurl_meta = match payment_code.variant {
+                            PaymentCodeVariant::Lnurl { meta } => meta,
+                        };
+                        let meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
+                        let description = Bolt11InvoiceDescription::Hash(meta_hash);
+
+                        // TODO: ideally creating the invoice would take a dbtx as argument so we
+                        // don't have to do the "check if invoice already exists" dance
+                        let (operation_id, invoice, _preimage) = federation_client_ln_module
+                            .create_bolt11_invoice_for_user_tweaked(
+                                amount,
+                                description,
+                                Some(DEFAULT_EXPIRY_TIME),
+                                payment_code.root_key.0,
+                                invoice_index,
+                                serde_json::Value::Null,
+                                Some(gateway),
+                            )
+                            .await?;
+
+                        self.save_bolt11_invoice(
+                            dbtx,
+                            operation_id,
+                            payment_code_id,
+                            invoice_index,
+                            invoice.clone(),
+                        )
+                        .await;
+
+                        Result::<_, anyhow::Error>::Ok((operation_id, invoice))
+                    })
+                },
+                None,
             )
-            .await?;
+            .await
+            .unwrap_autocommit()?;
 
-        let mut dbtx = self.db.begin_transaction().await;
+        await_invoice_confirmed(&federation_client.get_ln_module()?, operation_id).await?;
+
+        Ok((operation_id, federation_client.federation_id(), invoice))
+    }
+
+    async fn save_bolt11_invoice(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        payment_code_id: PaymentCodeId,
+        invoice_index: u64,
+        invoice: Bolt11Invoice,
+    ) {
         dbtx.insert_new_entry(
             &PaymentCodeInvoiceKey {
                 payment_code_id,
@@ -311,11 +393,6 @@ impl RecurringInvoiceServer {
         dbtx.on_commit(move || {
             invoice_generated_notifier.notify_waiters();
         });
-        dbtx.commit_tx().await;
-
-        await_invoice_confirmed(&federation_client_ln_module, operation_id).await?;
-
-        Ok((operation_id, federation_client.federation_id(), invoice))
     }
 
     async fn get_federation_client(
@@ -355,28 +432,23 @@ impl RecurringInvoiceServer {
         }
     }
 
-    async fn get_next_invoice_index(&self, payment_code_id: PaymentCodeId) -> u64 {
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async move {
-                        let next_index = dbtx
-                            .get_value(&PaymentCodeNextInvoiceIndexKey { payment_code_id })
-                            .await
-                            .map(|index| index + 1)
-                            .unwrap_or(0);
-                        dbtx.insert_entry(
-                            &PaymentCodeNextInvoiceIndexKey { payment_code_id },
-                            &next_index,
-                        )
-                        .await;
-                        Result::<_, ()>::Ok(next_index)
-                    })
-                },
-                None,
-            )
+    async fn get_next_invoice_index(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        payment_code_id: PaymentCodeId,
+    ) -> u64 {
+        let next_index = dbtx
+            .get_value(&PaymentCodeNextInvoiceIndexKey { payment_code_id })
             .await
-            .expect("Loops forever and never returns errors internally")
+            .map(|index| index + 1)
+            .unwrap_or(0);
+        dbtx.insert_entry(
+            &PaymentCodeNextInvoiceIndexKey { payment_code_id },
+            &next_index,
+        )
+        .await;
+
+        next_index
     }
 
     pub async fn list_federations(&self) -> Vec<FederationId> {
@@ -527,4 +599,30 @@ impl PaymentStatus {
 pub struct LNURLPayInvoice {
     pub pr: String,
     pub verify: String,
+}
+
+fn operation_id_from_user_key(user_key: PaymentCodeRootKey, index: u64) -> OperationId {
+    let invoice_key = tweak_user_key(SECP256K1, user_key.0, index);
+    let preimage = sha256::Hash::hash(&invoice_key.serialize()[..]);
+    let payment_hash = sha256::Hash::hash(&preimage[..]);
+
+    OperationId(payment_hash.to_byte_array())
+}
+
+trait LnClientContextExt {
+    fn get_ln_module(
+        &self,
+    ) -> Result<ClientModuleInstance<LightningClientModule>, RecurringPaymentError>;
+}
+
+impl LnClientContextExt for ClientHandleArc {
+    fn get_ln_module(
+        &self,
+    ) -> Result<ClientModuleInstance<LightningClientModule>, RecurringPaymentError> {
+        self.get_first_module::<LightningClientModule>()
+            .map_err(|e| {
+                warn!("No compatible lightning module found {e}");
+                RecurringPaymentError::NoLightningModuleFound
+            })
+    }
 }
