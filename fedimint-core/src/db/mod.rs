@@ -225,6 +225,25 @@ pub enum AutocommitError<E> {
     },
 }
 
+pub trait AutocommitResultExt<T, E> {
+    /// Unwraps the "commit failed" error variant. Use this in cases where
+    /// autocommit is instructed to run indefinitely and commit will thus never
+    /// fail.
+    fn unwrap_autocommit(self) -> Result<T, E>;
+}
+
+impl<T, E> AutocommitResultExt<T, E> for Result<T, AutocommitError<E>> {
+    fn unwrap_autocommit(self) -> Result<T, E> {
+        match self {
+            Ok(value) => Ok(value),
+            Err(AutocommitError::CommitFailed { .. }) => {
+                panic!("`unwrap_autocommit` called on a autocommit result with finite retries");
+            }
+            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
+        }
+    }
+}
+
 /// Raw database implementation
 ///
 /// This and [`IRawDatabaseTransaction`] are meant to be implemented
