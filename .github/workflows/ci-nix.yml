@@ -308,6 +308,8 @@ jobs:
 
       - name: Build ${{ matrix.container.name }} container for ${{ matrix.platform.arch }}
         run: |
+          cargo clean
+          export JEMALLOC_SYS_WITH_LG_PAGE=16
           nix build -L .#ci.container.${{ matrix.container.name }} --system ${{ matrix.platform.arch }}
           echo "container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
