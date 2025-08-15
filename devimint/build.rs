@@ -4,7 +4,6 @@ pub const FM_DEVIMINT_STATIC_DATA_DIR_ENV: &str = "FM_DEVIMINT_STATIC_DATA_DIR";
 
 fn main() {
     fedimint_build::set_code_version();
-    fedimint_build::set_large_page_size();
 
     println!("cargo:rerun-if-env-changed={FM_DEVIMINT_STATIC_DATA_DIR_ENV}");
 
