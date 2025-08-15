@@ -4271,6 +4271,7 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "serde_json",
+ "tikv-jemalloc-sys",
  "tikv-jemallocator",
  "tokio",
  "tracing",
