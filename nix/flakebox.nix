@@ -310,6 +310,14 @@ let
               '')
             ]
         )
+      ]
+      ++ lib.optional stdenv.isAarch64 [
+        pkgs.writeShellScriptBin
+        "setJemallocLgPage"
+        ''
+          export JEMALLOC_SYS_WITH_LG_PAGE=16
+          exec "$@"
+        ''
       ];
 
     # we carefully optimize our debug symbols on cargo level,

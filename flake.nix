@@ -337,10 +337,6 @@
                   export REPO_ROOT="$(git rev-parse --show-toplevel)"
                   export PATH="$REPO_ROOT/bin:$PATH"
 
-                  if [ "$(uname -m)" = "aarch64" ]; then
-                    export JEMALLOC_SYS_WITH_LG_PAGE=16
-                  fi
-
                   # workaround https://github.com/rust-lang/cargo/issues/11020
                   cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
                   if (( ''${#cargo_cmd_bins[@]} != 0 )); then
