@@ -295,7 +295,7 @@ jobs:
             run_in_pr: true
         container:
           - name: fedimintd
-            image: m1sterc001guy/fedimintd
+            image: fedimint/fedimintd
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout Code
@@ -314,16 +314,12 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: fedimint
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Publish custom tag
+      - name: Publish
         run: |
-          nix_tag=${{ env.container_tag }}
-          hub_tag="${{ matrix.container.image }}:${{ github.event.inputs.docker_tag }}"
-          docker tag "$nix_tag" "$hub_tag"
-          docker push "$hub_tag"
-
+          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${LAST_COMMIT_SHA}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   manifest:
     if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
