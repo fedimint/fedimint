@@ -135,3 +135,13 @@ pub fn set_code_version() {
         );
     }
 }
+
+/// jemalloc cannot handle 64KB page sizes, which can happen on some aarch64
+/// architectures. This function runs at build time and manually sets it to 16.
+pub fn set_large_page_size() {
+    if let Ok(target_arch) = std::env::var("CARGO_CFG_TARGET_ARCH") {
+        if target_arch == "aarch64" {
+            println!("cargo:rustc-env=JEMALLOC_SYS_WITH_LG_PAGE=16");
+        }
+    }
+}
