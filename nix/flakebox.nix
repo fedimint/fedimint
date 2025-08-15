@@ -777,6 +777,11 @@ in
         "fedimint-dbtool"
         "fedimint-recoverytool"
       ];
+
+      preBuild = ''
+        cargo clean
+        export JEMALLOC_SYS_WITH_LG_PAGE=16
+      '';
     };
 
     gateway-pkgs = fedimintBuildPackageGroup {
