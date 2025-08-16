@@ -9,7 +9,7 @@ jobs:
   validate:
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: marocchino/validate-dependabot@v3
         id: validate
       - uses: marocchino/sticky-pull-request-comment@v2

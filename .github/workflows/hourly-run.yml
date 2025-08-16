@@ -12,7 +12,7 @@ jobs:
     # no one is in the rush for this to funish, so use default (free) Ubuntu instances
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check Nix flake inputs
         uses: DeterminateSystems/flake-checker-action@v12
         with:
@@ -58,7 +58,7 @@ jobs:
           large-packages: true
           swap-storage: true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
 

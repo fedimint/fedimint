@@ -10,7 +10,7 @@ jobs:
   audit:
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Run cargo audit
         run: |
           nix flake update advisory-db || nix flake lock --update-input advisory-db

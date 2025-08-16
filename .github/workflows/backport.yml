@@ -27,7 +27,7 @@ jobs:
     outputs:
       was_successful: ${{ steps.create-pr.outputs.was_successful }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: create-pr
         name: Create backport pull requests
         uses: korthout/backport-action@v3
@@ -43,7 +43,7 @@ jobs:
     # Open an issue only if the backport job failed
     if: ${{ needs.backport.outputs.was_successful == 'false' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set SHORT_PR_TITLE env
         run: |
           # logic to truncate titles needs to be run in a previous step

@@ -31,7 +31,7 @@ jobs:
     name: Flake self-check
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check Nix flake inputs
         if: github.event_name == 'pull_request' && github.base_ref == 'master'
         uses: DeterminateSystems/flake-checker-action@v12
@@ -44,7 +44,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v16
         with:
@@ -91,7 +91,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
@@ -131,7 +131,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - name: Prepare
@@ -221,7 +221,7 @@ jobs:
     # we don't want to stop the world because of it
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v16
         with:
@@ -262,7 +262,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
@@ -317,11 +317,11 @@ jobs:
     steps:
       - name: Checkout Code
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Prepare
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
         uses: ./.github/actions/prepare
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
@@ -371,7 +371,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Prepare
         uses: ./.github/actions/prepare
       - name: Login to Docker Hub
@@ -467,7 +467,7 @@ jobs:
         Please report any issues you encounter.
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v16
         with:
