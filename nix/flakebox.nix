@@ -218,6 +218,7 @@ let
   # env variables we want to set in all nix derivations (but NOT the nix develop shell)
   commonEnvsBuild = commonEnvsShell // {
     FEDIMINT_BUILD_FORCE_GIT_HASH = gitHashPlaceholderValue;
+    JEMALLOC_SYS_WITH_LG_PAGE = 16;
     HOME = "/tmp";
   };
 
