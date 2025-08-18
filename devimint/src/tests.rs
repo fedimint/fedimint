@@ -18,6 +18,7 @@ use fedimint_core::task::block_in_place;
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::{retry, write_overwrite_async};
 use fedimint_core::{Amount, PeerId};
+use fedimint_ln_client::LightningPaymentOutcome;
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_logging::LOG_DEVIMINT;
@@ -177,7 +178,7 @@ pub async fn latency_tests(
             for _ in 0..iterations {
                 let invoice = gw_ldk.create_invoice(1_000_000).await?;
                 let start_time = Instant::now();
-                ln_pay(&client, invoice.to_string(), lnd_gw_id.clone(), false).await?;
+                ln_pay(&client, invoice.to_string(), lnd_gw_id.clone()).await?;
                 gw_ldk
                     .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
                     .await?;
@@ -201,7 +202,7 @@ pub async fn latency_tests(
 
             // give lnd some funds
             let invoice = gw_ldk.create_invoice(10_000_000).await?;
-            ln_pay(&client, invoice.to_string(), lnd_gw_id.clone(), false).await?;
+            ln_pay(&client, invoice.to_string(), lnd_gw_id.clone()).await?;
 
             for _ in 0..iterations {
                 let invoice = ln_invoice(
@@ -763,7 +764,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing outgoing payment from client to LDK via LND gateway");
     let initial_lnd_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     let invoice = gw_ldk.create_invoice(2_000_000).await?;
-    ln_pay(&client, invoice.to_string(), lnd_gw_id.clone(), false).await?;
+    ln_pay(&client, invoice.to_string(), lnd_gw_id.clone()).await?;
     let fed_id = fed.calculate_federation_id();
     gw_ldk
         .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
@@ -1230,7 +1231,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     info!("Making payment while gateway is down");
     let initial_client_balance = client.balance().await?;
     let invoice = gw_ldk_second.create_invoice(3000).await?;
-    ln_pay(&client, invoice.to_string(), lnd_gateway_id, false)
+    ln_pay(&client, invoice.to_string(), lnd_gateway_id)
         .await
         .expect_err("Expected ln-pay to return error because the gateway is not online");
     let new_client_balance = client.balance().await?;
@@ -1354,34 +1355,18 @@ pub async fn do_try_create_and_pay_invoice(
     Ok(())
 }
 
-async fn ln_pay(
-    client: &Client,
-    invoice: String,
-    gw_id: String,
-    finish_in_background: bool,
-) -> anyhow::Result<String> {
-    let value = if finish_in_background {
-        cmd!(
-            client,
-            "ln-pay",
-            invoice,
-            "--finish-in-background",
-            "--gateway-id",
-            gw_id,
-        )
+async fn ln_pay(client: &Client, invoice: String, gw_id: String) -> anyhow::Result<String> {
+    let value = cmd!(client, "ln-pay", invoice, "--gateway-id", gw_id,)
         .out_json()
-        .await?
-    } else {
-        cmd!(client, "ln-pay", invoice, "--gateway-id", gw_id,)
-            .out_json()
-            .await?
-    };
-
-    let operation_id = value["operation_id"]
-        .as_str()
-        .ok_or(anyhow!("Failed to pay invoice"))?
-        .to_string();
-    Ok(operation_id)
+        .await?;
+    let outcome = serde_json::from_value::<LightningPaymentOutcome>(value)
+        .expect("Could not deserialize Lightning payment outcome");
+    match outcome {
+        LightningPaymentOutcome::Success { preimage } => Ok(preimage),
+        LightningPaymentOutcome::Failure { error_message } => {
+            Err(anyhow!("Failed to pay lightning invoice: {error_message}"))
+        }
+    }
 }
 
 async fn ln_invoice(
