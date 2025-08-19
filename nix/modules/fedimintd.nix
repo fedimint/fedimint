@@ -325,7 +325,13 @@ in
               ];
               RestrictNamespaces = true;
               RestrictRealtime = true;
-              SocketBindAllow = "udp:${builtins.toString cfg.api_iroh.port}";
+              SocketBindAllow = [
+                "tcp:${builtins.toString cfg.p2p.port}"
+                "udp:${builtins.toString cfg.p2p.port}"
+                "tcp:${builtins.toString cfg.api_ws.port}"
+                "tcp:${builtins.toString cfg.ui.port}"
+                "udp:${builtins.toString cfg.api_iroh.port}"
+              ];
               SystemCallArchitectures = "native";
               SystemCallFilter = [
                 "@system-service"
