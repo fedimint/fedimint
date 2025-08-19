@@ -622,6 +622,10 @@ impl WalletClientModule {
         self.cfg().network.0
     }
 
+    pub fn get_finality_delay(&self) -> u32 {
+        self.cfg().finality_delay
+    }
+
     pub fn get_fee_consensus(&self) -> FeeConsensus {
         self.cfg().fee_consensus
     }
