@@ -22,7 +22,6 @@
     };
     bundlers = {
       url = "github:NixOS/bundlers?rev=b0bc45a7626d94b4b3a17f8cc3c95e288625c8db";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     advisory-db = {
       url = "github:rustsec/advisory-db";
