@@ -5,3 +5,7 @@
 3. Wait until the web interface health check indicates that Fedimint is ready
 4. Open the Fedimint UI
 5. Follow the guided setup steps in the UI, coordinating with other guardians
+
+## Learn More
+
+Visit [fedimint.org](https://fedimint.org) for comprehensive documentation about the Fedimint protocol, federation concepts, and setup guidance.
