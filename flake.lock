@@ -404,17 +404,17 @@
         "systems": "systems_8"
       },
       "locked": {
-        "lastModified": 1749519225,
-        "narHash": "sha256-ZHzZVuNhgJfFrOWHqD6ExLHw3Pc+aFw99Ee7m8yDTcs=",
+        "lastModified": 1755720430,
+        "narHash": "sha256-oDgZKL9U5RExRgmoTAmy+H+wZaN2/mHBPitT5Hnv1ic=",
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "f96cbeafded56bc6f5c27fbd96e4fcc78b8a8861",
+        "rev": "2f15f65d60c198fe49d849d68c2a2c95dc771ae5",
         "type": "github"
       },
       "original": {
         "owner": "dpc",
         "repo": "flakebox",
-        "rev": "f96cbeafded56bc6f5c27fbd96e4fcc78b8a8861",
+        "rev": "2f15f65d60c198fe49d849d68c2a2c95dc771ae5",
         "type": "github"
       }
     },
