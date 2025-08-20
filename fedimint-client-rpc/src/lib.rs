@@ -200,14 +200,17 @@ impl RpcGlobalState {
         let builder = Self::client_builder(client_db).await?;
         let preview = builder.preview(&invite_code).await?;
 
-        let backup_exists = preview
-            .check_backup_exists(RootSecret::StandardDoubleDerive(federation_secret.clone()))
+        // Check if backup exists
+        let backup = preview
+            .download_backup_from_federation(RootSecret::StandardDoubleDerive(
+                federation_secret.clone(),
+            ))
             .await?;
 
-        let client = if force_recover || backup_exists {
+        let client = if force_recover || backup.is_some() {
             Arc::new(
                 preview
-                    .recover(RootSecret::StandardDoubleDerive(federation_secret), None)
+                    .recover(RootSecret::StandardDoubleDerive(federation_secret), backup)
                     .await?,
             )
         } else {

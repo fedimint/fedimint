@@ -1181,13 +1181,6 @@ impl ClientPreview {
         Ok(client)
     }
 
-    pub async fn check_backup_exists(&self, pre_root_secret: RootSecret) -> anyhow::Result<bool> {
-        let backup = self
-            .download_backup_from_federation(pre_root_secret)
-            .await?;
-        Ok(backup.is_some())
-    }
-
     /// Download most recent valid backup found from the Federation
     pub async fn download_backup_from_federation(
         &self,
