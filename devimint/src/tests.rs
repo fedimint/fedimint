@@ -1359,13 +1359,22 @@ async fn ln_pay(client: &Client, invoice: String, gw_id: String) -> anyhow::Resu
     let value = cmd!(client, "ln-pay", invoice, "--gateway-id", gw_id,)
         .out_json()
         .await?;
-    let outcome = serde_json::from_value::<LightningPaymentOutcome>(value)
-        .expect("Could not deserialize Lightning payment outcome");
-    match outcome {
-        LightningPaymentOutcome::Success { preimage } => Ok(preimage),
-        LightningPaymentOutcome::Failure { error_message } => {
-            Err(anyhow!("Failed to pay lightning invoice: {error_message}"))
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    if fedimint_cli_version >= *VERSION_0_9_0_ALPHA {
+        let outcome = serde_json::from_value::<LightningPaymentOutcome>(value)
+            .expect("Could not deserialize Lightning payment outcome");
+        match outcome {
+            LightningPaymentOutcome::Success { preimage } => Ok(preimage),
+            LightningPaymentOutcome::Failure { error_message } => {
+                Err(anyhow!("Failed to pay lightning invoice: {error_message}"))
+            }
         }
+    } else {
+        let operation_id = value["operation_id"]
+            .as_str()
+            .ok_or(anyhow!("Failed to pay invoice"))?
+            .to_string();
+        Ok(operation_id)
     }
 }
 
