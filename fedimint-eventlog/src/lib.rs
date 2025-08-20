@@ -42,6 +42,13 @@ pub const DB_KEY_PREFIX_UNORDERED_EVENT_LOG: u8 = 0x3a;
 pub const DB_KEY_PREFIX_EVENT_LOG: u8 = 0x39;
 pub const DB_KEY_PREFIX_EVENT_LOG_TRIMABLE: u8 = 0x41;
 
+/// Minimum age in ID count for trimable events to be deleted
+const TRIMABLE_EVENTLOG_MIN_ID_AGE: u64 = 10_000;
+/// Minimum age in microseconds for trimable events to be deleted (14 days)
+const TRIMABLE_EVENTLOG_MIN_TS_AGE: u64 = 14 * 24 * 60 * 60 * 1_000_000;
+/// Maximum number of entries to trim in one operation
+const TRIMABLE_EVENTLOG_MAX_TRIMMED_EVENTS: usize = 100_000;
+
 pub enum EventPersistence {
     /// Not written anywhere, just broadcasted as notification at runtime
     Transient,
@@ -462,6 +469,38 @@ where
     }
 }
 
+/// Trims old entries from the trimable event log
+async fn trim_trimable_log(db: &Database, current_time_usecs: u64) {
+    let mut dbtx = db.begin_transaction().await;
+
+    let current_trimable_id = dbtx.get_next_event_log_trimable_id().await;
+    let min_id_threshold = current_trimable_id
+        .0
+        .saturating_sub(TRIMABLE_EVENTLOG_MIN_ID_AGE);
+    let min_ts_threshold = current_time_usecs.saturating_sub(TRIMABLE_EVENTLOG_MIN_TS_AGE);
+
+    let entries_to_delete: Vec<_> = dbtx
+        .find_by_prefix(&EventLogTrimableIdPrefixAll)
+        .await
+        .take_while(|(id, entry)| {
+            let id_old_enough = id.0 <= min_id_threshold;
+            let ts_old_enough = entry.ts_usecs <= min_ts_threshold;
+
+            // Continue while both conditions are met
+            async move { id_old_enough && ts_old_enough }
+        })
+        .take(TRIMABLE_EVENTLOG_MAX_TRIMMED_EVENTS)
+        .map(|(id, _entry)| id)
+        .collect()
+        .await;
+
+    for id in &entries_to_delete {
+        dbtx.remove_entry(id).await;
+    }
+
+    dbtx.commit_tx().await;
+}
+
 /// The code that handles new unordered events and rewriters them fully ordered
 /// into the final event log.
 pub async fn run_event_log_ordering_task(
@@ -471,6 +510,11 @@ pub async fn run_event_log_ordering_task(
     log_event_added_transient: broadcast::Sender<EventLogEntry>,
 ) {
     debug!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task started");
+
+    let current_time_usecs =
+        u64::try_from(fedimint_core::time::duration_since_epoch().as_micros()).unwrap_or(u64::MAX);
+    trim_trimable_log(&db, current_time_usecs).await;
+
     let mut next_entry_id = db
         .begin_transaction_nc()
         .await
@@ -732,96 +776,4 @@ impl StructuredPaymentEvents {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-    use std::sync::atomic::AtomicU8;
-
-    use anyhow::bail;
-    use fedimint_core::db::IRawDatabaseExt as _;
-    use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::impl_db_record;
-    use fedimint_core::task::TaskGroup;
-    use tokio::sync::{broadcast, watch};
-    use tokio::try_join;
-    use tracing::info;
-
-    use super::{
-        DBTransactionEventLogExt as _, EventLogId, handle_events, run_event_log_ordering_task,
-    };
-    use crate::EventKind;
-
-    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
-    pub struct TestLogIdKey;
-
-    impl_db_record!(key = TestLogIdKey, value = EventLogId, db_prefix = 0x00,);
-
-    #[test_log::test(tokio::test)]
-    async fn sanity_handle_events() {
-        let db = MemDatabase::new().into_database();
-        let tg = TaskGroup::new();
-
-        let (log_event_added_tx, log_event_added_rx) = watch::channel(());
-        let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
-        let (log_event_added_transient_tx, _log_event_added_transient_rx) =
-            broadcast::channel(1024);
-
-        tg.spawn_cancellable(
-            "event log ordering task",
-            run_event_log_ordering_task(
-                db.clone(),
-                log_ordering_wakeup_rx,
-                log_event_added_tx,
-                log_event_added_transient_tx,
-            ),
-        );
-
-        let counter = Arc::new(AtomicU8::new(0));
-
-        let _ = try_join!(
-            handle_events(
-                db.clone(),
-                &TestLogIdKey,
-                log_event_added_rx,
-                move |_dbtx, event| {
-                    let counter = counter.clone();
-                    Box::pin(async move {
-                        info!("{event:?}");
-
-                        assert_eq!(
-                            event.kind,
-                            EventKind::from(format!(
-                                "{}",
-                                counter.load(std::sync::atomic::Ordering::Relaxed)
-                            ))
-                        );
-
-                        if counter.load(std::sync::atomic::Ordering::Relaxed) == 4 {
-                            bail!("Time to wrap up");
-                        }
-                        counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        Ok(())
-                    })
-                },
-            ),
-            async {
-                for i in 0..=4 {
-                    let mut dbtx = db.begin_transaction().await;
-                    dbtx.log_event_raw(
-                        log_ordering_wakeup_tx.clone(),
-                        EventKind::from(format!("{i}")),
-                        None,
-                        None,
-                        vec![],
-                        crate::EventPersistence::Persistent,
-                    )
-                    .await;
-
-                    dbtx.commit_tx().await;
-                }
-
-                Ok(())
-            }
-        );
-    }
-}
+mod tests;
