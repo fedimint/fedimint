@@ -48,3 +48,11 @@ pub const FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV: &str = "FM_GATEWAY_OVERRIDE_L
 
 /// Environment variable to select database backend (rocksdb or cursed-redb)
 pub const FM_DB_BACKEND_ENV: &str = "FM_DB_BACKEND";
+
+pub const FM_BITCOIND_USERNAME_ENV: &str = "FM_BITCOIND_USERNAME";
+
+pub const FM_BITCOIND_PASSWORD_ENV: &str = "FM_BITCOIND_PASSWORD";
+
+pub const FM_BITCOIND_URL_ENV: &str = "FM_BITCOIND_URL";
+
+pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";
