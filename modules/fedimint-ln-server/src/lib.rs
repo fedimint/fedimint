@@ -725,8 +725,17 @@ impl ServerModule for Lightning {
                 .await;
 
                 // TODO: sanity-check encrypted preimage size
-                dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
-                    .await;
+                if dbtx
+                    .insert_entry(&OfferKey(offer.hash), &(*offer).clone())
+                    .await
+                    .is_some()
+                {
+                    // Technically the error isn't due to a duplicate encrypted preimage but due to
+                    // a duplicate payment hash, practically it's the same problem though: re-using
+                    // the invoice key. Since we can't eaily extend the error enum we just re-use
+                    // this variant.
+                    return Err(LightningOutputError::DuplicateEncryptedPreimage);
+                }
 
                 dbtx.on_commit(|| {
                     LN_INCOMING_OFFER.inc();
