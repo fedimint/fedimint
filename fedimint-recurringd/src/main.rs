@@ -6,8 +6,9 @@ use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::{get, put};
+use axum::routing::{get, post, put};
 use axum_auth::AuthBearer;
+use bitcoin::hashes::sha256;
 use clap::Parser;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
@@ -18,6 +19,7 @@ use fedimint_ln_client::recurring::api::{
     RecurringPaymentRegistrationRequest, RecurringPaymentRegistrationResponse,
 };
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey};
+use fedimint_lnv2_common::lnurl::{LnurlRegistrationRequest, LnurlRegistrationResponse};
 use fedimint_logging::TracingSetup;
 use fedimint_recurringd::{LNURLPayInvoice, PaymentCodeInvoice, RecurringInvoiceServer};
 use fedimint_rocksdb::RocksDb;
@@ -83,8 +85,15 @@ async fn main() -> anyhow::Result<()> {
         )
         .layer(cors);
 
+    let api_v2 = axum::Router::new()
+        .route("/register", post(lnv2_register))
+        .route("/pay/{hash}", get(lnv2_pay))
+        .route("/pay/{hash}/invoice", get(lnv2_pay_invoice))
+        .route("/verify/{hash}", get(lnv2_verify));
+
     let app = axum::Router::new()
         .nest("/lnv1", api_v1)
+        .nest("/lnv2", api_v2)
         .with_state(AppState {
             auth_token: cli_opts.bearer_token,
             recurring_invoice_server,
@@ -240,4 +249,62 @@ where
     fn from(err: E) -> Self {
         Self(err.into())
     }
+}
+
+async fn lnv2_register(
+    State(state): State<AppState>,
+    Json(request): Json<LnurlRegistrationRequest>,
+) -> Result<Json<LnurlRegistrationResponse>, ApiError> {
+    let hash = state
+        .recurring_invoice_server
+        .register_lnv2_payment(request)
+        .await?;
+
+    Ok(Json(LnurlRegistrationResponse { hash }))
+}
+
+async fn lnv2_pay(
+    Path(registration_hash): Path<sha256::Hash>,
+    State(state): State<AppState>,
+) -> Result<Json<PayResponse>, ApiError> {
+    let response = state
+        .recurring_invoice_server
+        .lnv2_pay_info(registration_hash);
+
+    Ok(Json(response))
+}
+
+async fn lnv2_pay_invoice(
+    Path(registration_hash): Path<sha256::Hash>,
+    Query(params): Query<GetInvoiceParams>,
+    State(state): State<AppState>,
+) -> Result<Json<LNURLPayInvoice>, ApiError> {
+    let (pr, verify) = state
+        .recurring_invoice_server
+        .lnv2_pay_invoice(registration_hash, params.amount)
+        .await?;
+
+    Ok(Json(LNURLPayInvoice { pr, verify }))
+}
+
+async fn lnv2_verify(
+    Path(entry_hash): Path<sha256::Hash>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    state
+        .recurring_invoice_server
+        .lnv2_verify(entry_hash)
+        .await
+        .map(|preimage| match preimage {
+            Some(preimage) => Json(json!({
+                "status": "OK",
+                "settled": true,
+                "preimage": preimage,
+            })),
+            None => Json(json!({
+                "status": "OK",
+                "settled": false,
+            })),
+        })
+        .map_err(ApiError)
 }

@@ -3,6 +3,7 @@ use std::ops::Add;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::schnorr::Signature;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
@@ -149,6 +150,12 @@ pub struct CreateBolt11InvoicePayload {
     pub amount: Amount,
     pub description: Bolt11InvoiceDescription,
     pub expiry_secs: u32,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct AwaitBolt11PreimagePayload {
+    pub federation_id: FederationId,
+    pub operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]

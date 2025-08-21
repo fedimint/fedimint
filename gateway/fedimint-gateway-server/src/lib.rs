@@ -51,7 +51,7 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET, ModuleInstanceId,
-    ModuleKind,
+    ModuleKind, OperationId,
 };
 use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
@@ -85,7 +85,9 @@ use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
 use fedimint_gwv2_client::events::compute_lnv2_stats;
-use fedimint_gwv2_client::{EXPIRATION_DELTA_MINIMUM_V2, GatewayClientModuleV2, IGatewayClientV2};
+use fedimint_gwv2_client::{
+    EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, IGatewayClientV2,
+};
 use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
@@ -2323,6 +2325,25 @@ impl Gateway {
                 failure_reason: e.to_string(),
             }
         })
+    }
+
+    pub async fn await_bolt11_preimage_v2(
+        &self,
+        federation_id: FederationId,
+        operation_id: OperationId,
+    ) -> Result<Option<[u8; 32]>> {
+        let client = self.select_client(federation_id).await?.into_value();
+
+        let state = client
+            .get_first_module::<GatewayClientModuleV2>()
+            .expect("Must have client module")
+            .await_receive(operation_id)
+            .await;
+
+        match state {
+            FinalReceiveState::Success(preimage) => Ok(Some(preimage)),
+            _ => Ok(None),
+        }
     }
 
     /// Retrieves the persisted `CreateInvoicePayload` from the database
