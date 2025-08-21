@@ -45,6 +45,7 @@ use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
+use fedimint_bitcoind::{BitcoindClient, EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
@@ -289,16 +290,43 @@ impl Gateway {
         .await
     }
 
+    fn get_bitcoind_client(opts: &GatewayOpts) -> BitcoindClient {
+        let bitcoind_username = opts
+            .bitcoind_username
+            .clone()
+            .expect("FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not");
+        let url = opts.bitcoind_url.clone().expect("No bitcoind url set");
+        let password = opts
+            .bitcoind_password
+            .clone()
+            .expect("FM_BITCOIND_URL is set but FM_BITCOIND_PASSWORD is not");
+
+        BitcoindClient::new(url, bitcoind_username, password)
+            .expect("Could not create bitcoind client")
+    }
+
     /// Default function for creating a gateway with the `Mint`, `Wallet`, and
     /// `Gateway` modules.
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
 
+        let dyn_server_bitcoin_rpc = match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
+            (Some(_), None) => Self::get_bitcoind_client(&opts).into_dyn(),
+            (None, Some(url)) => EsploraClient::new(url)
+                .expect("Could not create EsploraClient")
+                .into_dyn(),
+            (Some(_), Some(_)) => {
+                // Use bitcoind by default if both are set
+                Self::get_bitcoind_client(&opts).into_dyn()
+            }
+            _ => unreachable!("ArgGroup already enforced XOR relation"),
+        };
+
         // Gateway module will be attached when the federation clients are created
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
-        registry.attach(WalletClientInit::default());
+        registry.attach(WalletClientInit::new(dyn_server_bitcoin_rpc));
 
         let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())?;
 
