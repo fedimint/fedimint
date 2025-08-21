@@ -747,14 +747,14 @@ async fn wait_for_ready_channel_on_gateway_with_counterparty(
         &format!("Wait for {} channel update", gw.gw_name),
         || async {
             let channels = gw
-                .list_active_channels()
+                .list_channels()
                 .await
                 .context("list channels")
                 .map_err(ControlFlow::Break)?;
 
             if channels
                 .iter()
-                .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey)
+                .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey && channel.is_active)
             {
                 return Ok(());
             }

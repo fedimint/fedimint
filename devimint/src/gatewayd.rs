@@ -32,7 +32,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 
 #[derive(Clone)]
 pub enum LdkChainSource {
@@ -442,7 +442,7 @@ impl Gatewayd {
     }
 
     pub async fn close_all_channels(&self) -> Result<()> {
-        let channels = self.list_active_channels().await?;
+        let channels = self.list_channels().await?;
         for chan in channels {
             let remote_pubkey = chan.remote_pubkey;
             cmd!(
@@ -486,10 +486,16 @@ impl Gatewayd {
         Ok(Txid::from_str(&command.out_string().await?)?)
     }
 
-    pub async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>> {
-        let channels = cmd!(self, "lightning", "list-active-channels")
-            .out_json()
-            .await?;
+    pub async fn list_channels(&self) -> Result<Vec<ChannelInfo>> {
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let channels = if gateway_cli_version >= *VERSION_0_9_0_ALPHA || self.is_forced_current() {
+            cmd!(self, "lightning", "list-channels").out_json().await?
+        } else {
+            cmd!(self, "lightning", "list-active-channels")
+                .out_json()
+                .await?
+        };
+
         let channels = channels
             .as_array()
             .context("channels must be an array")?
@@ -508,6 +514,7 @@ impl Gatewayd {
                 let inbound_liquidity_sats = channel["inbound_liquidity_sats"]
                     .as_u64()
                     .context("inbound_liquidity_sats must be a u64")?;
+                let is_active = channel["is_active"].as_bool().unwrap_or(true);
                 Ok(ChannelInfo {
                     remote_pubkey: remote_pubkey
                         .parse()
@@ -515,6 +522,7 @@ impl Gatewayd {
                     channel_size_sats,
                     outbound_liquidity_sats,
                     inbound_liquidity_sats,
+                    is_active,
                 })
             })
             .collect::<Result<Vec<ChannelInfo>>>()?;

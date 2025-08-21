@@ -1429,11 +1429,11 @@ impl Gateway {
 
     /// Returns a list of Lightning network channels from the Gateway's
     /// Lightning node.
-    pub async fn handle_list_active_channels_msg(
+    pub async fn handle_list_channels_msg(
         &self,
     ) -> AdminResult<Vec<fedimint_gateway_common::ChannelInfo>> {
         let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.list_active_channels().await?;
+        let response = context.lnrpc.list_channels().await?;
         Ok(response.channels)
     }
 

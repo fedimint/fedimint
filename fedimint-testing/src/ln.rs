@@ -17,7 +17,7 @@ use fedimint_gateway_common::{
 use fedimint_lightning::{
     CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
     GetNodeInfoResponse, GetRouteHintsResponse, ILnRpcClient, InterceptPaymentRequest,
-    InterceptPaymentResponse, LightningRpcError, ListActiveChannelsResponse, OpenChannelResponse,
+    InterceptPaymentResponse, LightningRpcError, ListChannelsResponse, OpenChannelResponse,
     PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
 };
 use fedimint_ln_common::PrunedInvoice;
@@ -284,8 +284,8 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn list_active_channels(&self) -> Result<ListActiveChannelsResponse, LightningRpcError> {
-        Err(LightningRpcError::FailedToListActiveChannels {
+    async fn list_channels(&self) -> Result<ListChannelsResponse, LightningRpcError> {
+        Err(LightningRpcError::FailedToListChannels {
             failure_reason: "FakeLightningTest does not support listing active channels"
                 .to_string(),
         })
