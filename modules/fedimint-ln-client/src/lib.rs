@@ -1902,17 +1902,19 @@ impl LightningClientModule {
     ) -> anyhow::Result<LightningPaymentOutcome> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let variant = operation.meta::<LightningOperationMeta>().variant;
-        if !matches!(
-            variant,
-            LightningOperationMetaVariant::Pay(LightningOperationMetaPay { .. })
-        ) {
+        let LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
+            is_internal_payment,
+            ..
+        }) = variant
+        else {
             bail!("Operation is not a lightning payment")
-        }
+        };
 
         let mut final_state = None;
 
         // First check if the outgoing payment is an internal payment
-        if let Ok(updates) = self.subscribe_internal_pay(operation_id).await {
+        if is_internal_payment {
+            let updates = self.subscribe_internal_pay(operation_id).await?;
             let mut stream = updates.into_stream();
             while let Some(update) = stream.next().await {
                 match update {
@@ -1954,15 +1956,8 @@ impl LightningClientModule {
                     InternalPayState::Funding => {}
                 }
             }
-        }
-
-        // Return if internal payment reached a final state
-        if let Some(internal_final_state) = final_state {
-            return Ok(internal_final_state);
-        }
-
-        // If internal fails, check if its an external payment
-        if let Ok(updates) = self.subscribe_ln_pay(operation_id).await {
+        } else {
+            let updates = self.subscribe_ln_pay(operation_id).await?;
             let mut stream = updates.into_stream();
             while let Some(update) = stream.next().await {
                 match update {
@@ -1984,12 +1979,7 @@ impl LightningClientModule {
             }
         }
 
-        // Return if external payment reached a final state
-        if let Some(external_final_state) = final_state {
-            return Ok(external_final_state);
-        }
-
-        Err(anyhow!(
+        final_state.ok_or(anyhow!(
             "Internal or external outgoing lightning payment did not reach a final state"
         ))
     }
