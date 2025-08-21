@@ -26,9 +26,7 @@ use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 
-use super::{
-    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
-};
+use super::{ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, RouteHtlcStream};
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
@@ -581,24 +579,20 @@ impl ILnRpcClient for GatewayLdkClient {
         })
     }
 
-    async fn list_active_channels(&self) -> Result<ListActiveChannelsResponse, LightningRpcError> {
+    async fn list_channels(&self) -> Result<ListChannelsResponse, LightningRpcError> {
         let mut channels = Vec::new();
 
-        for channel_details in self
-            .node
-            .list_channels()
-            .iter()
-            .filter(|channel| channel.is_usable)
-        {
+        for channel_details in self.node.list_channels().iter() {
             channels.push(ChannelInfo {
                 remote_pubkey: channel_details.counterparty_node_id,
                 channel_size_sats: channel_details.channel_value_sats,
                 outbound_liquidity_sats: channel_details.outbound_capacity_msat / 1000,
                 inbound_liquidity_sats: channel_details.inbound_capacity_msat / 1000,
+                is_active: channel_details.is_usable,
             });
         }
 
-        Ok(ListActiveChannelsResponse { channels })
+        Ok(ListChannelsResponse { channels })
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {

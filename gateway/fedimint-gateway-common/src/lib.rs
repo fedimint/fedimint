@@ -40,7 +40,7 @@ pub const GET_BALANCES_ENDPOINT: &str = "/balances";
 pub const GET_INVOICE_ENDPOINT: &str = "/get_invoice";
 pub const GET_LN_ONCHAIN_ADDRESS_ENDPOINT: &str = "/get_ln_onchain_address";
 pub const LEAVE_FED_ENDPOINT: &str = "/leave_fed";
-pub const LIST_ACTIVE_CHANNELS_ENDPOINT: &str = "/list_active_channels";
+pub const LIST_CHANNELS_ENDPOINT: &str = "/list_channels";
 pub const LIST_TRANSACTIONS_ENDPOINT: &str = "/list_transactions";
 pub const MNEMONIC_ENDPOINT: &str = "/mnemonic";
 pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
@@ -300,6 +300,7 @@ pub struct ChannelInfo {
     pub channel_size_sats: u64,
     pub outbound_liquidity_sats: u64,
     pub inbound_liquidity_sats: u64,
+    pub is_active: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

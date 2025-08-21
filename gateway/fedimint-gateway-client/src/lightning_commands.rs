@@ -53,8 +53,8 @@ pub enum LightningCommands {
         #[clap(long)]
         pubkey: bitcoin::secp256k1::PublicKey,
     },
-    /// List active channels.
-    ListActiveChannels,
+    /// List channels.
+    ListChannels,
     /// List the Lightning transactions that the Lightning node has received and
     /// sent
     ListTransactions {
@@ -155,8 +155,8 @@ impl LightningCommands {
                     .await?;
                 print_response(response);
             }
-            Self::ListActiveChannels => {
-                let response = create_client().list_active_channels().await?;
+            Self::ListChannels => {
+                let response = create_client().list_channels().await?;
                 print_response(response);
             }
             Self::GetInvoice { payment_hash } => {

@@ -46,8 +46,8 @@ use tonic_lnd::{Client as LndClient, connect};
 use tracing::{debug, info, trace, warn};
 
 use super::{
-    ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse,
-    MAX_LIGHTNING_RETRIES, RouteHtlcStream,
+    ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, MAX_LIGHTNING_RETRIES,
+    RouteHtlcStream,
 };
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
@@ -1280,13 +1280,13 @@ impl ILnRpcClient for GatewayLndClient {
         })
     }
 
-    async fn list_active_channels(&self) -> Result<ListActiveChannelsResponse, LightningRpcError> {
+    async fn list_channels(&self) -> Result<ListChannelsResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
         match client
             .lightning()
             .list_channels(ListChannelsRequest {
-                active_only: true,
+                active_only: false,
                 inactive_only: false,
                 public_only: false,
                 private_only: false,
@@ -1294,7 +1294,7 @@ impl ILnRpcClient for GatewayLndClient {
             })
             .await
         {
-            Ok(response) => Ok(ListActiveChannelsResponse {
+            Ok(response) => Ok(ListChannelsResponse {
                 channels: response
                     .into_inner()
                     .channels
@@ -1328,11 +1328,12 @@ impl ILnRpcClient for GatewayLndClient {
                             channel_size_sats,
                             outbound_liquidity_sats,
                             inbound_liquidity_sats,
+                            is_active: channel.active,
                         }
                     })
                     .collect(),
             }),
-            Err(e) => Err(LightningRpcError::FailedToListActiveChannels {
+            Err(e) => Err(LightningRpcError::FailedToListChannels {
                 failure_reason: format!("Failed to list active channels {e:?}"),
             }),
         }

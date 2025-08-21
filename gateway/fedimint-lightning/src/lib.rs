@@ -62,7 +62,7 @@ pub enum LightningRpcError {
     #[error("Failed to connect to peer: {failure_reason}")]
     FailedToConnectToPeer { failure_reason: String },
     #[error("Failed to list active channels: {failure_reason}")]
-    FailedToListActiveChannels { failure_reason: String },
+    FailedToListChannels { failure_reason: String },
     #[error("Failed to get balances: {failure_reason}")]
     FailedToGetBalances { failure_reason: String },
     #[error("Failed to sync to chain: {failure_reason}")]
@@ -213,7 +213,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     /// Lists the lightning node's active channels with all peers.
-    async fn list_active_channels(&self) -> Result<ListActiveChannelsResponse, LightningRpcError>;
+    async fn list_channels(&self) -> Result<ListChannelsResponse, LightningRpcError>;
 
     /// Returns a summary of the lightning node's balance, including the onchain
     /// wallet, outbound liquidity, and inbound liquidity.
@@ -389,7 +389,7 @@ pub struct OpenChannelResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ListActiveChannelsResponse {
+pub struct ListChannelsResponse {
     pub channels: Vec<ChannelInfo>,
 }
 
