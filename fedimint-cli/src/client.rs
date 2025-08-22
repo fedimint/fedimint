@@ -15,9 +15,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::{Amount, BitcoinAmountOrAll, TieredCounts, TieredMulti};
 use fedimint_ln_client::cli::LnInvoiceResponse;
-use fedimint_ln_client::{
-    LightningClientModule, LnReceiveState, OutgoingLightningPayment, PayType,
-};
+use fedimint_ln_client::{LightningClientModule, LnReceiveState, OutgoingLightningPayment};
 use fedimint_logging::LOG_CLIENT;
 use fedimint_mint_client::{
     MintClientModule, OOBNotes, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
@@ -140,9 +138,6 @@ pub enum ClientCmd {
         /// Invoice comment/description, used on lnurl
         #[clap(long)]
         lnurl_comment: Option<String>,
-        /// Will return immediately after funding the payment
-        #[clap(long, action)]
-        finish_in_background: bool,
         #[clap(long)]
         gateway_id: Option<secp256k1::PublicKey>,
         #[clap(long, default_value = "false")]
@@ -397,7 +392,6 @@ pub async fn handle_command(
         ClientCmd::LnPay {
             payment_info,
             amount,
-            finish_in_background,
             lnurl_comment,
             gateway_id,
             force_internal,
@@ -417,7 +411,7 @@ pub async fn handle_command(
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let OutgoingLightningPayment {
                 payment_type,
-                contract_id,
+                contract_id: _,
                 fee,
             } = lightning_module
                 .pay_bolt11_invoice(ln_gateway, bolt11, ())
@@ -428,45 +422,16 @@ pub async fn handle_command(
                 "Gateway fee: {fee}, payment operation id: {}",
                 operation_id.fmt_short()
             );
-            if finish_in_background {
-                client
-                    .get_first_module::<LightningClientModule>()?
-                    .wait_for_ln_payment(payment_type, contract_id, true)
-                    .await?;
-                info!(
-                    target: LOG_CLIENT,
-                    "Payment will finish in background, use await-ln-pay to get the result"
-                );
-                Ok(serde_json::json! {
-                    {
-                        "operation_id": operation_id,
-                        "payment_type": payment_type.payment_type(),
-                        "contract_id": contract_id,
-                        "fee": fee,
-                    }
-                })
-            } else {
-                Ok(client
-                    .get_first_module::<LightningClientModule>()?
-                    .wait_for_ln_payment(payment_type, contract_id, false)
-                    .await?
-                    .context("expected a response")?)
-            }
+            let lnv1 = client.get_first_module::<LightningClientModule>()?;
+            let outcome = lnv1.await_outgoing_payment(operation_id).await?;
+            Ok(serde_json::to_value(outcome).expect("Cant fail"))
         }
         ClientCmd::AwaitLnPay { operation_id } => {
             let lightning_module = client.get_first_module::<LightningClientModule>()?;
-            let ln_pay_details = lightning_module
-                .get_ln_pay_details_for(operation_id)
+            let outcome = lightning_module
+                .await_outgoing_payment(operation_id)
                 .await?;
-            let payment_type = if ln_pay_details.is_internal_payment {
-                PayType::Internal(operation_id)
-            } else {
-                PayType::Lightning(operation_id)
-            };
-            Ok(lightning_module
-                .wait_for_ln_payment(payment_type, ln_pay_details.contract_id, false)
-                .await?
-                .context("expected a response")?)
+            Ok(serde_json::to_value(outcome).expect("Cant fail"))
         }
         ClientCmd::ListGateways { no_update } => {
             let lightning_module = client.get_first_module::<LightningClientModule>()?;

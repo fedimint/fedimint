@@ -88,7 +88,6 @@ use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use strum::IntoEnumIterator;
 use tokio::sync::Notify;
 use tracing::{debug, error, info};
@@ -160,6 +159,12 @@ impl ReceivingKey {
             ReceivingKey::External(public_key) => *public_key,
         }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum LightningPaymentOutcome {
+    Success { preimage: String },
+    Failure { error_message: String },
 }
 
 /// The high-level state of an pay operation internal to the federation,
@@ -1888,94 +1893,95 @@ impl LightningClientModule {
         }
     }
 
-    pub async fn wait_for_ln_payment(
+    /// Subscribes to either a internal or external lightning payment and
+    /// returns `LightningPaymentOutcome` that indicates if the payment was
+    /// successful or not.
+    pub async fn await_outgoing_payment(
         &self,
-        payment_type: PayType,
-        contract_id: ContractId,
-        return_on_funding: bool,
-    ) -> anyhow::Result<Option<serde_json::Value>> {
-        match payment_type {
-            PayType::Internal(operation_id) => {
-                let mut updates = self
-                    .subscribe_internal_pay(operation_id)
-                    .await?
-                    .into_stream();
+        operation_id: OperationId,
+    ) -> anyhow::Result<LightningPaymentOutcome> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+        let variant = operation.meta::<LightningOperationMeta>().variant;
+        let LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
+            is_internal_payment,
+            ..
+        }) = variant
+        else {
+            bail!("Operation is not a lightning payment")
+        };
 
-                while let Some(update) = updates.next().await {
-                    match update {
-                        InternalPayState::Preimage(preimage) => {
-                            return Ok(Some(
-                                serde_json::to_value(PayInvoiceResponse {
-                                    operation_id,
-                                    contract_id,
-                                    preimage: preimage.consensus_encode_to_hex(),
-                                })
-                                .unwrap(),
-                            ));
-                        }
-                        InternalPayState::RefundSuccess { out_points, error } => {
-                            let e = format!(
-                                "Internal payment failed. A refund was issued to {out_points:?} Error: {error}"
-                            );
-                            bail!("{e}");
-                        }
-                        InternalPayState::UnexpectedError(e) => {
-                            bail!("{e}");
-                        }
-                        InternalPayState::Funding if return_on_funding => return Ok(None),
-                        InternalPayState::Funding => {}
-                        InternalPayState::RefundError {
-                            error_message,
-                            error,
-                        } => bail!("RefundError: {error_message} {error}"),
-                        InternalPayState::FundingFailed { error } => {
-                            bail!("FundingFailed: {error}")
-                        }
+        let mut final_state = None;
+
+        // First check if the outgoing payment is an internal payment
+        if is_internal_payment {
+            let updates = self.subscribe_internal_pay(operation_id).await?;
+            let mut stream = updates.into_stream();
+            while let Some(update) = stream.next().await {
+                match update {
+                    InternalPayState::Preimage(preimage) => {
+                        final_state = Some(LightningPaymentOutcome::Success {
+                            preimage: preimage.0.consensus_encode_to_hex(),
+                        });
                     }
-                    debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
+                    InternalPayState::RefundSuccess {
+                        out_points: _,
+                        error,
+                    } => {
+                        final_state = Some(LightningPaymentOutcome::Failure {
+                            error_message: format!("LNv1 internal payment was refunded: {error:?}"),
+                        });
+                    }
+                    InternalPayState::FundingFailed { error } => {
+                        final_state = Some(LightningPaymentOutcome::Failure {
+                            error_message: format!(
+                                "LNv1 internal payment funding failed: {error:?}"
+                            ),
+                        });
+                    }
+                    InternalPayState::RefundError {
+                        error_message,
+                        error,
+                    } => {
+                        final_state = Some(LightningPaymentOutcome::Failure {
+                            error_message: format!(
+                                "LNv1 refund failed: {error_message}: {error:?}"
+                            ),
+                        });
+                    }
+                    InternalPayState::UnexpectedError(error) => {
+                        final_state = Some(LightningPaymentOutcome::Failure {
+                            error_message: error,
+                        });
+                    }
+                    InternalPayState::Funding => {}
                 }
             }
-            PayType::Lightning(operation_id) => {
-                let mut updates = self.subscribe_ln_pay(operation_id).await?.into_stream();
-
-                while let Some(update) = updates.next().await {
-                    match update {
-                        LnPayState::Success { preimage } => {
-                            return Ok(Some(
-                                serde_json::to_value(PayInvoiceResponse {
-                                    operation_id,
-                                    contract_id,
-                                    preimage,
-                                })
-                                .unwrap(),
-                            ));
-                        }
-                        LnPayState::Refunded { gateway_error } => {
-                            // TODO: what should be the format here?
-                            return Ok(Some(json! {
-                                {
-                                    "status": "refunded",
-                                    "gateway_error": gateway_error.to_string(),
-                                }
-                            }));
-                        }
-                        LnPayState::Funded { block_height: _ } if return_on_funding => {
-                            return Ok(None);
-                        }
-                        LnPayState::Created
-                        | LnPayState::AwaitingChange
-                        | LnPayState::WaitingForRefund { .. }
-                        | LnPayState::Funded { block_height: _ } => {}
-                        LnPayState::UnexpectedError { error_message } => {
-                            bail!("UnexpectedError: {error_message}")
-                        }
-                        LnPayState::Canceled => bail!("Funding transaction was rejected"),
+        } else {
+            let updates = self.subscribe_ln_pay(operation_id).await?;
+            let mut stream = updates.into_stream();
+            while let Some(update) = stream.next().await {
+                match update {
+                    LnPayState::Success { preimage } => {
+                        final_state = Some(LightningPaymentOutcome::Success { preimage });
                     }
-                    debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
+                    LnPayState::Refunded { gateway_error } => {
+                        final_state = Some(LightningPaymentOutcome::Failure {
+                            error_message: format!(
+                                "LNv1 external payment was refunded: {gateway_error:?}"
+                            ),
+                        });
+                    }
+                    LnPayState::UnexpectedError { error_message } => {
+                        final_state = Some(LightningPaymentOutcome::Failure { error_message });
+                    }
+                    _ => {}
                 }
             }
         }
-        bail!("Lightning Payment failed")
+
+        final_state.ok_or(anyhow!(
+            "Internal or external outgoing lightning payment did not reach a final state"
+        ))
     }
 }
 

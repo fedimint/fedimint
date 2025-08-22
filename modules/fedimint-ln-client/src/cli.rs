@@ -43,9 +43,6 @@ enum Opts {
         /// Invoice comment/description, used on lnurl
         #[clap(long)]
         lnurl_comment: Option<String>,
-        /// Will return immediately after funding the payment
-        #[clap(long, action)]
-        finish_in_background: bool,
         #[clap(long)]
         gateway_id: Option<PublicKey>,
         #[clap(long, default_value = "false")]
@@ -124,7 +121,6 @@ pub(crate) async fn handle_cli_command(
         Opts::Pay {
             payment_info,
             amount,
-            finish_in_background,
             lnurl_comment,
             gateway_id,
             force_internal,
@@ -135,7 +131,7 @@ pub(crate) async fn handle_cli_command(
 
             let OutgoingLightningPayment {
                 payment_type,
-                contract_id,
+                contract_id: _,
                 fee,
             } = module.pay_bolt11_invoice(ln_gateway, bolt11, ()).await?;
             let operation_id = payment_type.operation_id();
@@ -143,25 +139,8 @@ pub(crate) async fn handle_cli_command(
                 "Gateway fee: {fee}, payment operation id: {}",
                 operation_id.fmt_short()
             );
-            if finish_in_background {
-                module
-                    .wait_for_ln_payment(payment_type, contract_id, true)
-                    .await?;
-                info!("Payment will finish in background, use await-ln-pay to get the result");
-                serde_json::json! {
-                    {
-                        "operation_id": operation_id,
-                        "payment_type": payment_type.payment_type(),
-                        "contract_id": contract_id,
-                        "fee": fee,
-                    }
-                }
-            } else {
-                module
-                    .wait_for_ln_payment(payment_type, contract_id, false)
-                    .await?
-                    .context("expected a response")?
-            }
+            let outcome = module.await_outgoing_payment(operation_id).await?;
+            serde_json::to_value(outcome).expect("cant fail")
         }
         Opts::Lnurl(LnurlCommands::Register {
             server_url,
