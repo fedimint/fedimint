@@ -11,6 +11,10 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+bitcoincore = ["bitcoincore-rpc"]
+default = []
+
 [lib]
 name = "fedimint_bitcoind"
 path = "src/lib.rs"
@@ -19,7 +23,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-bitcoincore-rpc = { workspace = true }
+bitcoincore-rpc = { workspace = true, optional = true }
 esplora-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
