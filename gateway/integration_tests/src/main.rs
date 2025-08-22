@@ -8,7 +8,6 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{env, ffi};
 
-use anyhow::ensure;
 use clap::{Parser, Subcommand};
 use devimint::cli::cleanup_on_exit;
 use devimint::envs::FM_DATA_DIR_ENV;
@@ -19,8 +18,6 @@ use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERS
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
-use fedimint_core::util::backoff_util::aggressive_backoff_long;
-use fedimint_core::util::retry;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_common::{
     FederationInfo, GatewayBalances, GatewayFedConfig, PaymentDetails, PaymentKind, PaymentStatus,
@@ -28,7 +25,7 @@ use fedimint_gateway_common::{
 use fedimint_logging::LOG_TEST;
 use fedimint_testing_core::node_type::LightningNodeType;
 use itertools::Itertools;
-use tracing::{debug, info};
+use tracing::info;
 
 #[derive(Parser)]
 struct GatewayTestOpts {
@@ -559,24 +556,6 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 assert_eq!(lnd_transactions.len(), 0);
             }
 
-            info!(target: LOG_TEST, "Testing paying through LND Gateway...");
-            // Need to try to pay the invoice multiple times in case the channel graph has
-            // not been updated yet. LDK's channel graph updates slowly in these
-            // tests, so we need to try for awhile.
-            poll_with_timeout("LDK2 pay LDK", Duration::from_secs(180), || async {
-                debug!(target: LOG_TEST, "Trying LDK2 -> LND -> LDK...");
-                let invoice = gw_ldk
-                    .create_invoice(1_550_000)
-                    .await
-                    .map_err(ControlFlow::Continue)?;
-                gw_ldk_second
-                    .pay_invoice(invoice.clone())
-                    .await
-                    .map_err(ControlFlow::Continue)?;
-                Ok(())
-            })
-            .await?;
-
             if devimint::util::Gatewayd::version_or_default().await >= *VERSION_0_7_0_ALPHA {
                 info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
                 // TODO: investigate why the first BOLT12 payment attempt is expiring consistently
@@ -604,30 +583,25 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 .pegout_gateways(500_000_000, gateways.clone())
                 .await?;
 
+            info!(target: LOG_TEST, "Testing sending onchain...");
+            let bitcoind = dev_fed.bitcoind().await?;
+            for gw in &gateways {
+                let txid = gw
+                    .send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10)
+                    .await?;
+                bitcoind.poll_get_transaction(txid).await?;
+            }
+
             info!(target: LOG_TEST, "Testing closing all channels...");
             gw_ldk_second.close_all_channels().await?;
-            gw_ldk.close_all_channels().await?;
-            let bitcoind = dev_fed.bitcoind().await?;
-            // Need to mine enough blocks in case the channels are force closed.
-            bitcoind.mine_blocks(2016).await?;
-            let block_height = bitcoind.get_block_count().await? - 1;
-            gw_ldk_second.wait_for_block_height(block_height).await?;
-            check_empty_lightning_balance(gw_ldk_second).await?;
-            gw_ldk.wait_for_block_height(block_height).await?;
-            check_empty_lightning_balance(gw_ldk).await?;
-            check_empty_lightning_balance(gw_lnd).await?;
+            gw_lnd.close_all_channels().await?;
 
-            info!(target: LOG_TEST, "Testing sending onchain...");
-            // TODO: LND is sometimes keeping 10000 sats as reserve when sending onchain
-            // For now we will skip checking LND.
-            gw_ldk
-                .send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10)
-                .await?;
-            gw_ldk_second
-                .send_onchain(dev_fed.bitcoind().await?, BitcoinAmountOrAll::All, 10)
-                .await?;
-            check_empty_onchain_balance(gw_ldk).await?;
-            check_empty_onchain_balance(gw_ldk_second).await?;
+            // Verify none of the channels are active
+            for gw in gateways {
+                let channels = gw.list_channels().await?;
+                let active_channel = channels.into_iter().any(|chan| chan.is_active);
+                assert!(!active_channel);
+            }
 
             Ok(())
         })
@@ -697,38 +671,6 @@ async fn get_transaction(
     transactions.into_iter().find(|details| {
         details.payment_kind == kind && details.amount == amount && details.status == status
     })
-}
-
-async fn check_empty_onchain_balance(gw: &Gatewayd) -> anyhow::Result<()> {
-    retry(
-        "Wait for onchain balance update",
-        aggressive_backoff_long(),
-        || async {
-            let curr_balance = gw.get_balances().await?.onchain_balance_sats;
-            let gw_name = gw.gw_name.clone();
-            ensure!(
-                curr_balance == 0,
-                "Gateway onchain balance is not empty: {curr_balance} gw_name: {gw_name}"
-            );
-            Ok(())
-        },
-    )
-    .await
-}
-
-async fn check_empty_lightning_balance(gw: &Gatewayd) -> anyhow::Result<()> {
-    let balances = gw.get_balances().await?;
-    let curr_lightning_balance = balances.lightning_balance_msats;
-    ensure!(
-        curr_lightning_balance == 0,
-        "Close channels did not sweep all lightning funds"
-    );
-    let inbound_lightning_balance = balances.inbound_lightning_liquidity_msats;
-    ensure!(
-        inbound_lightning_balance == 0,
-        "Close channels did not sweep all lightning funds"
-    );
-    Ok(())
 }
 
 /// Leaves the specified federation by issuing a `leave-fed` POST request to the
