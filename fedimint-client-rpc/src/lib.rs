@@ -66,6 +66,7 @@ pub enum RpcRequestKind {
     /// Join federation (requires mnemonic to be set first)
     JoinFederation {
         invite_code: String,
+        force_recover: bool,
         client_name: String,
     },
     OpenClient {
@@ -180,6 +181,7 @@ impl RpcGlobalState {
         &self,
         invite_code: String,
         client_name: String,
+        force_recover: bool,
     ) -> anyhow::Result<()> {
         // Check if wallet mnemonic is set
         let mnemonic = self
@@ -196,13 +198,28 @@ impl RpcGlobalState {
         let federation_secret = self.derive_federation_secret(&mnemonic, &federation_id);
 
         let builder = Self::client_builder(client_db).await?;
-        let client = Arc::new(
-            builder
-                .preview(&invite_code)
-                .await?
-                .join(RootSecret::StandardDoubleDerive(federation_secret))
-                .await?,
-        );
+        let preview = builder.preview(&invite_code).await?;
+
+        // Check if backup exists
+        let backup = preview
+            .download_backup_from_federation(RootSecret::StandardDoubleDerive(
+                federation_secret.clone(),
+            ))
+            .await?;
+
+        let client = if force_recover || backup.is_some() {
+            Arc::new(
+                preview
+                    .recover(RootSecret::StandardDoubleDerive(federation_secret), backup)
+                    .await?,
+            )
+        } else {
+            Arc::new(
+                preview
+                    .join(RootSecret::StandardDoubleDerive(federation_secret))
+                    .await?,
+            )
+        };
 
         self.add_client(client_name, client).await;
         Ok(())
@@ -375,8 +392,9 @@ impl RpcGlobalState {
             RpcRequestKind::JoinFederation {
                 invite_code,
                 client_name,
+                force_recover,
             } => Some(Box::pin(try_stream! {
-                self.handle_join_federation(invite_code, client_name)
+                self.handle_join_federation(invite_code, client_name, force_recover)
                     .await?;
                 yield serde_json::json!(null);
             })),
