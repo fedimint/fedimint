@@ -133,6 +133,7 @@ let
             example = "bitcoin";
             description = "Bitcoin network to participate in.";
           };
+
           bitcoindUrl = mkOption {
             type = types.nullOr types.str;
             default = null;
@@ -140,11 +141,17 @@ let
             description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
           };
 
-          esploraUrl = mkOption {
+          bitcoindUser = mkOption {
             type = types.nullOr types.str;
             default = null;
-            example = "https://mempool.space/signet/api";
-            description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
+            example = "bitcoin";
+            description = "Bitcoind RPC user";
+          };
+
+          bitcoindPassword = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Bitcoind RPC password";
           };
 
           bitcoindSecretFile = mkOption {
@@ -160,6 +167,14 @@ let
               `/etc/nix-bitcoin-secrets/bitcoin-rpcpassword-public` (for nix-bitcoin default)
             '';
           };
+
+          esploraUrl = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "https://mempool.space/signet/api";
+            description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
+          };
+
         };
 
         consensus.finalityDelay = mkOption {
@@ -236,6 +251,23 @@ in
     in
     mkIf (eachFedimintd != { }) {
 
+      assertions = [
+        {
+          assertion = lib.all (
+            fedimintdName: cfg:
+            (cfg.bitcoin.bitcoindUrl != null)
+            -> (cfg.bitcoin.bitcoindUser != null && cfg.bitcoin.bitcoindPassword != null)
+          ) (lib.mapAttrsToList (name: cfg: cfg) eachFedimintd);
+          message = "If bitcoindUrl is set, both bitcoindUser and bitcoindPassword must also be set. Embedded credentials in the bitcoindUrl are not supported anymore, please remove them.";
+        }
+        {
+          assertion = lib.all (
+            fedimintdName: cfg: (cfg.bitcoin.bitcoindUrl != null || cfg.bitcoin.esploraUrl != null)
+          ) (lib.mapAttrsToList (name: cfg: cfg) eachFedimintd);
+          message = "Either bitcoindUrl or esploraUrl must be set for each fedimintd instance";
+        }
+      ];
+
       networking.firewall.allowedTCPPorts = concatLists (
         mapAttrsToList (
           fedimintdName: cfg:
@@ -280,6 +312,8 @@ in
                 FM_BITCOIND_URL = cfg.bitcoin.bitcoindUrl;
                 FM_ESPLORA_URL = cfg.bitcoin.esploraUrl;
                 FM_BITCOIND_URL_PASSWORD_FILE = cfg.bitcoin.bitcoindSecretFile;
+                FM_BITCOIND_USERNAME = cfg.bitcoin.bitcoindUser;
+                FM_BITCOIND_PASSWORD = cfg.bitcoin.bitcoindPassword;
               }
 
               (lib.optionalAttrs (cfg.p2p.url != null) {
@@ -325,7 +359,13 @@ in
               ];
               RestrictNamespaces = true;
               RestrictRealtime = true;
-              SocketBindAllow = "udp:${builtins.toString cfg.api_iroh.port}";
+              SocketBindAllow = [
+                "tcp:${builtins.toString cfg.p2p.port}"
+                "udp:${builtins.toString cfg.p2p.port}"
+                "tcp:${builtins.toString cfg.api_ws.port}"
+                "tcp:${builtins.toString cfg.ui.port}"
+                "udp:${builtins.toString cfg.api_iroh.port}"
+              ];
               SystemCallArchitectures = "native";
               SystemCallFilter = [
                 "@system-service"
