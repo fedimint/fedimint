@@ -18,6 +18,9 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
 
+#[cfg(feature = "bitcoincore")]
+pub mod bitcoincore;
+
 pub fn create_esplora_rpc(url: &SafeUrl) -> Result<DynBitcoindRpc> {
     let url = env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
         .ok()

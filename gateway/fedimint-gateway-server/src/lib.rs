@@ -45,6 +45,8 @@ use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
+use fedimint_bitcoind::bitcoincore::BitcoindClient;
+use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
@@ -64,13 +66,12 @@ use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned};
 use fedimint_core::{
-    Amount, BitcoinAmountOrAll, crit, default_esplora_server, fedimint_build_code_version_env,
-    get_network_for_address,
+    Amount, BitcoinAmountOrAll, crit, fedimint_build_code_version_env, get_network_for_address,
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
-    BackupPayload, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
-    CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
+    BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
+    ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
     DepositAddressPayload, DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig,
     FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
     GetInvoiceResponse, LeaveFedPayload, LightningMode, ListTransactionsPayload,
@@ -86,12 +87,11 @@ use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
 use fedimint_gwv2_client::events::compute_lnv2_stats;
 use fedimint_gwv2_client::{EXPIRATION_DELTA_MINIMUM_V2, GatewayClientModuleV2, IGatewayClientV2};
-use fedimint_lightning::ldk::{self, GatewayLdkChainSourceConfig};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
     InvoiceDescription, LightningContext, LightningRpcError, PayInvoiceResponse, PaymentAction,
-    RouteHtlcStream,
+    RouteHtlcStream, ldk,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::LightningCommonInit;
@@ -108,7 +108,6 @@ use fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,
 };
-use fedimint_wallet_client::envs::FM_PORT_ESPLORA_ENV;
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
@@ -237,6 +236,9 @@ pub struct Gateway {
 
     /// The Bitcoin network that the Lightning network is configured to.
     network: Network,
+
+    /// The source of the Bitcoin blockchain data
+    chain_source: ChainSource,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -268,6 +270,7 @@ impl Gateway {
         gateway_db: Database,
         gateway_state: GatewayState,
         lightning_module_mode: LightningModuleMode,
+        chain_source: ChainSource,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -285,8 +288,30 @@ impl Gateway {
             gateway_db,
             client_builder,
             gateway_state,
+            chain_source,
         )
         .await
+    }
+
+    fn get_bitcoind_client(opts: &GatewayOpts) -> (BitcoindClient, ChainSource) {
+        let bitcoind_username = opts
+            .bitcoind_username
+            .clone()
+            .expect("FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not");
+        let url = opts.bitcoind_url.clone().expect("No bitcoind url set");
+        let password = opts
+            .bitcoind_password
+            .clone()
+            .expect("FM_BITCOIND_URL is set but FM_BITCOIND_PASSWORD is not");
+
+        let chain_source = ChainSource::Bitcoind {
+            username: bitcoind_username.clone(),
+            password: password.clone(),
+            server_url: url.clone(),
+        };
+        let client = BitcoindClient::new(&url, bitcoind_username, password)
+            .expect("Could not create bitcoind client");
+        (client, chain_source)
     }
 
     /// Default function for creating a gateway with the `Mint`, `Wallet`, and
@@ -294,11 +319,34 @@ impl Gateway {
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
 
+        let (dyn_bitcoin_rpc, chain_source) =
+            match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
+                (Some(_), None) => {
+                    let (client, chain_source) = Self::get_bitcoind_client(&opts);
+                    (client.into_dyn(), chain_source)
+                }
+                (None, Some(url)) => {
+                    let client = EsploraClient::new(url)
+                        .expect("Could not create EsploraClient")
+                        .into_dyn();
+                    let chain_source = ChainSource::Esplora {
+                        server_url: url.clone(),
+                    };
+                    (client, chain_source)
+                }
+                (Some(_), Some(_)) => {
+                    // Use bitcoind by default if both are set
+                    let (client, chain_source) = Self::get_bitcoind_client(&opts);
+                    (client.into_dyn(), chain_source)
+                }
+                _ => unreachable!("ArgGroup already enforced XOR relation"),
+            };
+
         // Gateway module will be attached when the federation clients are created
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
-        registry.attach(WalletClientInit::default());
+        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
 
         let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())?;
 
@@ -345,6 +393,7 @@ impl Gateway {
             gateway_db,
             client_builder,
             GatewayState::Disconnected,
+            chain_source,
         )
         .await
     }
@@ -357,6 +406,7 @@ impl Gateway {
         gateway_db: Database,
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
+        chain_source: ChainSource,
     ) -> anyhow::Result<Gateway> {
         // Apply database migrations before using the database to ensure old database
         // structures are readable.
@@ -391,6 +441,7 @@ impl Gateway {
             bcrypt_password_hash: Arc::new(gateway_parameters.bcrypt_password_hash),
             num_route_hints,
             network,
+            chain_source,
         })
     }
 
@@ -2065,57 +2116,20 @@ impl Gateway {
                 None,
             )),
             LightningMode::Ldk {
-                esplora_server_url,
-                bitcoind_rpc_url,
-                network,
                 lightning_port,
                 alias,
-            } => {
-                let chain_source_config = {
-                    match (esplora_server_url, bitcoind_rpc_url) {
-                        (Some(esplora_server_url), None) => GatewayLdkChainSourceConfig::Esplora {
-                            server_url: SafeUrl::parse(&esplora_server_url.clone())
-                                .expect("Could not parse esplora server url"),
-                        },
-                        (None, Some(bitcoind_rpc_url)) => GatewayLdkChainSourceConfig::Bitcoind {
-                            server_url: SafeUrl::parse(&bitcoind_rpc_url.clone())
-                                .expect("Could not parse bitcoind rpc url"),
-                        },
-                        (None, None) => {
-                            info!("No chain source URL provided, defaulting to esplora...");
-                            GatewayLdkChainSourceConfig::Esplora {
-                                server_url: default_esplora_server(
-                                    self.network,
-                                    std::env::var(FM_PORT_ESPLORA_ENV).ok(),
-                                )
-                                .url,
-                            }
-                        }
-                        (Some(_), Some(bitcoind_rpc_url)) => {
-                            warn!(
-                                "Esplora and bitcoind connection parameters are both set, using bitcoind..."
-                            );
-                            GatewayLdkChainSourceConfig::Bitcoind {
-                                server_url: SafeUrl::parse(&bitcoind_rpc_url.clone())
-                                    .expect("Could not parse bitcoind rpc url"),
-                            }
-                        }
-                    }
-                };
-
-                Box::new(
-                    ldk::GatewayLdkClient::new(
-                        &self.client_builder.data_dir().join(LDK_NODE_DB_FOLDER),
-                        chain_source_config,
-                        network,
-                        lightning_port,
-                        alias,
-                        self.mnemonic.clone(),
-                        runtime,
-                    )
-                    .expect("Failed to create LDK client"),
+            } => Box::new(
+                ldk::GatewayLdkClient::new(
+                    &self.client_builder.data_dir().join(LDK_NODE_DB_FOLDER),
+                    self.chain_source.clone(),
+                    self.network,
+                    lightning_port,
+                    alias,
+                    self.mnemonic.clone(),
+                    runtime,
                 )
-            }
+                .expect("Failed to create LDK client"),
+            ),
         }
     }
 }

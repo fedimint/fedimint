@@ -4,11 +4,14 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use bitcoin::Network;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{LightningMode, V1_API_ENDPOINT};
 
 use super::envs;
+use crate::envs::{
+    FM_BITCOIND_PASSWORD_ENV, FM_BITCOIND_URL_ENV, FM_BITCOIND_USERNAME_ENV, FM_ESPLORA_URL_ENV,
+};
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum DatabaseBackend {
@@ -24,6 +27,25 @@ pub enum DatabaseBackend {
 /// `listen`, and `api_addr` are all required.
 #[derive(Parser)]
 #[command(version)]
+#[command(
+    group(
+        ArgGroup::new("bitcoind_password_auth")
+           .args(["bitcoind_password"])
+           .multiple(false)
+    ),
+    group(
+        ArgGroup::new("bitcoind_auth")
+            .args(["bitcoind_url"])
+            .requires("bitcoind_password_auth")
+            .requires_all(["bitcoind_username", "bitcoind_url"])
+    ),
+    group(
+        ArgGroup::new("bitcoin_rpc")
+            .required(true)
+            .multiple(true)
+            .args(["bitcoind_url", "esplora_url"])
+    )
+)]
 pub struct GatewayOpts {
     #[clap(subcommand)]
     pub mode: LightningMode,
@@ -63,6 +85,24 @@ pub struct GatewayOpts {
     /// Database backend to use.
     #[arg(long, env = envs::FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
     pub db_backend: DatabaseBackend,
+
+    /// The username to use when connecting to bitcoind
+    #[arg(long, env = FM_BITCOIND_USERNAME_ENV)]
+    pub bitcoind_username: Option<String>,
+
+    /// The password to use when connecting to bitcoind
+    #[arg(long, env = FM_BITCOIND_PASSWORD_ENV)]
+    pub bitcoind_password: Option<String>,
+
+    /// Bitcoind RPC URL, e.g. <http://127.0.0.1:8332>
+    /// This should not include authentication parameters, they should be
+    /// included in `FM_BITCOIND_USERNAME` and `FM_BITCOIND_PASSWORD`
+    #[arg(long, env = FM_BITCOIND_URL_ENV)]
+    pub bitcoind_url: Option<SafeUrl>,
+
+    /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
+    #[arg(long, env = FM_ESPLORA_URL_ENV)]
+    pub esplora_url: Option<SafeUrl>,
 }
 
 impl GatewayOpts {
