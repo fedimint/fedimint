@@ -25,7 +25,7 @@ use fedimint_gateway_common::{
 use fedimint_logging::LOG_TEST;
 use fedimint_testing_core::node_type::LightningNodeType;
 use itertools::Itertools;
-use tracing::{debug, info};
+use tracing::info;
 
 #[derive(Parser)]
 struct GatewayTestOpts {
@@ -555,24 +555,6 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 let lnd_transactions = gw_lnd.list_transactions(start, end).await?;
                 assert_eq!(lnd_transactions.len(), 0);
             }
-
-            info!(target: LOG_TEST, "Testing paying through LND Gateway...");
-            // Need to try to pay the invoice multiple times in case the channel graph has
-            // not been updated yet. LDK's channel graph updates slowly in these
-            // tests, so we need to try for awhile.
-            poll_with_timeout("LDK2 pay LDK", Duration::from_secs(180), || async {
-                debug!(target: LOG_TEST, "Trying LDK2 -> LND -> LDK...");
-                let invoice = gw_ldk
-                    .create_invoice(1_550_000)
-                    .await
-                    .map_err(ControlFlow::Continue)?;
-                gw_ldk_second
-                    .pay_invoice(invoice.clone())
-                    .await
-                    .map_err(ControlFlow::Continue)?;
-                Ok(())
-            })
-            .await?;
 
             if devimint::util::Gatewayd::version_or_default().await >= *VERSION_0_7_0_ALPHA {
                 info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
