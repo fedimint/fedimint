@@ -292,7 +292,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                 match message {
                     Ok(message) => {
                         PEER_MESSAGES_COUNT
-                            .with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"])
+                            .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "incoming"])
                             .inc();
 
                          self.incoming_sender.send(message).await.ok()?;
@@ -321,7 +321,11 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         peer_message: M,
     ) -> P2PConnectionSMState<M> {
         PEER_MESSAGES_COUNT
-            .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
+            .with_label_values(&[
+                self.our_id_str.as_str(),
+                self.peer_id_str.as_str(),
+                "outgoing",
+            ])
             .inc();
 
         if let Err(e) = connection.send(peer_message).await {
@@ -338,7 +342,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         tokio::select! {
             connection = self.incoming_connections.recv() => {
                 PEER_CONNECT_COUNT
-                    .with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"])
+                    .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "incoming"])
                     .inc();
 
                 info!(target: LOG_NET_PEER, "Connected to peer");
@@ -353,7 +357,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                 match  self.connector.connect(self.peer_id).await {
                     Ok(connection) => {
                         PEER_CONNECT_COUNT
-                            .with_label_values(&[&self.our_id_str, &self.peer_id_str, "outgoing"])
+                            .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "outgoing"])
                             .inc();
 
                         info!(target: LOG_NET_PEER, "Connected to peer");

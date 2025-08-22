@@ -715,7 +715,10 @@ impl ConsensusEngine {
                 TimeReporter::new(format!("audit module {module_instance_id}")).level(Level::TRACE);
 
             let timing_prom = CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS
-                .with_label_values(&[&MODULE_INSTANCE_ID_GLOBAL.to_string(), kind.as_str()])
+                .with_label_values(&[
+                    MODULE_INSTANCE_ID_GLOBAL.to_string().as_str(),
+                    kind.as_str(),
+                ])
                 .start_timer();
 
             module

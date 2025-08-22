@@ -46,7 +46,7 @@ impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
 
                 JSONRPC_API_REQUEST_RESPONSE_CODE
                     .with_label_values(&[
-                        &projected.method,
+                        projected.method.as_str(),
                         &if let Some(code) = res.as_error_code() {
                             Cow::Owned(code.to_string())
                         } else {
