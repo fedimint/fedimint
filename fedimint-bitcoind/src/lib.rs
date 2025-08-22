@@ -64,7 +64,7 @@ pub struct BitcoindClient {
 }
 
 impl BitcoindClient {
-    pub fn new(url: SafeUrl, username: String, password: String) -> anyhow::Result<Self> {
+    pub fn new(url: &SafeUrl, username: String, password: String) -> anyhow::Result<Self> {
         let auth = Auth::UserPass(username, password);
         let url_str = if let Some(port) = url.port() {
             format!(

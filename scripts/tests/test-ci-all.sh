@@ -79,6 +79,11 @@ function gw_liquidity_test() {
 }
 export -f gw_liquidity_test
 
+function gw_esplora_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh esplora-test
+}
+export -f gw_esplora_test
+
 function latency_reissue() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
 }
@@ -330,6 +335,7 @@ tests_to_run_in_parallel+=(
   "gw_restore_test"
   # flaky https://github.com/fedimint/fedimint/issues/7546
   # "gw_liquidity_test"
+  "gw_esplora_test"
   "lnv2_module"
   "devimint_cli_test"
   "devimint_cli_test_single"
