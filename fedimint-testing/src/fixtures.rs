@@ -16,7 +16,7 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_gateway_common::LightningMode;
+use fedimint_gateway_common::{ChainSource, LightningMode};
 use fedimint_gateway_server::Gateway;
 use fedimint_gateway_server::client::GatewayClientBuilder;
 use fedimint_gateway_server::config::{DatabaseBackend, LightningModuleMode};
@@ -253,6 +253,15 @@ impl Fixtures {
         let listen: SocketAddr = "127.0.0.1:9000".parse().unwrap();
         let address: SafeUrl = format!("http://{listen}").parse().unwrap();
 
+        let esplora_server_url = SafeUrl::parse(&format!(
+            "http://127.0.0.1:{}",
+            env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
+        ))
+        .expect("Failed to parse default esplora server");
+        let esplora_chain_source = ChainSource::Esplora {
+            server_url: esplora_server_url,
+        };
+
         Gateway::new_with_custom_registry(
             // Fixtures does not use real lightning connection, so just fake the connection
             // parameters
@@ -276,6 +285,7 @@ impl Fixtures {
             // gateway that it is connected to the mock Lightning node.
             fedimint_gateway_server::GatewayState::Running { lightning_context },
             lightning_module_mode,
+            esplora_chain_source,
         )
         .await
         .expect("Failed to create gateway")

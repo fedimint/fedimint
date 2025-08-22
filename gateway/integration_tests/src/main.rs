@@ -11,14 +11,14 @@ use std::{env, ffi};
 use clap::{Parser, Subcommand};
 use devimint::cli::cleanup_on_exit;
 use devimint::envs::FM_DATA_DIR_ENV;
+use devimint::external::{Bitcoind, Esplora};
 use devimint::federation::Federation;
-use devimint::gatewayd::LdkChainSource;
 use devimint::util::{ProcessManager, poll, poll_with_timeout};
 use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
-use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_core::{Amount, BitcoinAmountOrAll, bitcoin, default_esplora_server};
 use fedimint_gateway_common::{
     FederationInfo, GatewayBalances, GatewayFedConfig, PaymentDetails, PaymentKind, PaymentStatus,
 };
@@ -605,29 +605,35 @@ async fn liquidity_test() -> anyhow::Result<()> {
         .await
 }
 
-/// This test cannot be run in CI because it connects to an external esplora
-/// server
 async fn esplora_test() -> anyhow::Result<()> {
     let args = cli::CommonArgs::parse_from::<_, ffi::OsString>(vec![]);
     let (process_mgr, task_group) = cli::setup(args).await?;
     cleanup_on_exit(
         async {
-            // Spawn mutinynet esplora Gatewayd instance
+            info!("Spawning bitcoind...");
+            let bitcoind = Bitcoind::new(&process_mgr, false).await?;
+            info!("Spawning esplora...");
+            let _esplora = Esplora::new(&process_mgr, bitcoind).await?;
+            let network = bitcoin::Network::from_str(&process_mgr.globals.FM_GATEWAY_NETWORK)
+                .expect("Could not parse network");
+            let esplora_port = process_mgr.globals.FM_PORT_ESPLORA.to_string();
+            let esplora = default_esplora_server(network, Some(esplora_port));
             unsafe {
-                std::env::set_var("FM_GATEWAY_NETWORK", "signet");
-                std::env::set_var("FM_LDK_NETWORK", "signet");
+                std::env::remove_var("FM_BITCOIND_URL");
+                std::env::set_var("FM_ESPLORA_URL", esplora.url.to_string());
             }
+            info!("Spawning ldk gateway...");
             let ldk = Gatewayd::new(
                 &process_mgr,
                 LightningNode::Ldk {
-                    name: "gateway-ldk-mutinynet".to_string(),
+                    name: "gateway-ldk-esplora".to_string(),
                     gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                     ldk_port: process_mgr.globals.FM_PORT_LDK,
-                    chain_source: LdkChainSource::Esplora,
                 },
             )
             .await?;
 
+            info!("Waiting for ldk gatewy to be ready...");
             poll("Waiting for LDK to be ready", || async {
                 let info = ldk.get_info().await.map_err(ControlFlow::Continue)?;
                 let state: String = serde_json::from_value(info["gateway_state"].clone())
@@ -643,7 +649,7 @@ async fn esplora_test() -> anyhow::Result<()> {
             .await?;
 
             ldk.get_ln_onchain_address().await?;
-            info!(target:LOG_TEST, "Successfully connected to mutinynet esplora");
+            info!(target:LOG_TEST, "ldk gateway successfully spawned and connected to esplora");
             Ok(())
         },
         task_group,

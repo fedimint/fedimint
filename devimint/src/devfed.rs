@@ -11,7 +11,7 @@ use tracing::{debug, info};
 use crate::LightningNode;
 use crate::external::{Bitcoind, Esplora, Lnd, NamedGateway, open_channels_between_gateways};
 use crate::federation::{Client, Federation};
-use crate::gatewayd::{Gatewayd, LdkChainSource};
+use crate::gatewayd::Gatewayd;
 use crate::recurringd::Recurringd;
 use crate::util::{ProcessManager, supports_lnv2};
 
@@ -205,7 +205,6 @@ impl DevJitFed {
                         name: "gatewayd-ldk-0".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                         ldk_port: process_mgr.globals.FM_PORT_LDK,
-                        chain_source: LdkChainSource::Bitcoind,
                     },
                 )
                 .await?;
@@ -224,7 +223,6 @@ impl DevJitFed {
                         name: "gatewayd-ldk-1".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK2,
                         ldk_port: process_mgr.globals.FM_PORT_LDK2,
-                        chain_source: LdkChainSource::Bitcoind,
                     },
                 )
                 .await?;

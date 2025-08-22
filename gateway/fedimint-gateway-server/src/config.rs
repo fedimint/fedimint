@@ -86,7 +86,6 @@ pub struct GatewayOpts {
     #[arg(long, env = envs::FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
     pub db_backend: DatabaseBackend,
 
-    // TODO: ArgGroups
     /// The username to use when connecting to bitcoind
     #[arg(long, env = FM_BITCOIND_USERNAME_ENV)]
     pub bitcoind_username: Option<String>,

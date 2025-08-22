@@ -79,6 +79,11 @@ function gw_liquidity_test() {
 }
 export -f gw_liquidity_test
 
+function gw_esplora_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh esplora-test
+}
+export -f gw_esplora_test
+
 function latency_reissue() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
 }
