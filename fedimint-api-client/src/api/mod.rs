@@ -237,6 +237,7 @@ pub trait FederationApiExt: IRawFederationApi {
         }
     }
 
+    #[instrument(target = LOG_CLIENT_NET_API, level = "debug", skip(self, strategy))]
     async fn request_with_strategy_retry<PR: DeserializeOwned + MaybeSend, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
