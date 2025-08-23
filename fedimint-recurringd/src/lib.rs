@@ -34,12 +34,13 @@ use lnurl::lnurl::LnUrl;
 use lnurl::pay::PayResponse;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Notify, RwLock};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::db::{
-    FederationDbPrefix, PaymentCodeEntry, PaymentCodeInvoiceEntry, PaymentCodeInvoiceKey,
-    PaymentCodeKey, PaymentCodeNextInvoiceIndexKey, PaymentCodeVariant,
-    load_federation_client_databases, open_client_db, try_add_federation_database,
+    DbKeyPrefix, FederationDbPrefix, PaymentCodeEntry, PaymentCodeInvoiceEntry,
+    PaymentCodeInvoiceKey, PaymentCodeKey, PaymentCodeNextInvoiceIndexKey, PaymentCodeVariant,
+    SchemaVersionKey, load_federation_client_databases, open_client_db,
+    try_add_federation_database,
 };
 
 mod db;
@@ -47,18 +48,24 @@ mod db;
 #[derive(Clone)]
 pub struct RecurringInvoiceServer {
     db: Database,
-    clients: Arc<RwLock<HashMap<FederationId, ClientHandleArc>>>,
+    clients: Arc<RwLock<HashMap<FederationId, ClientEntry>>>,
     invoice_generated: Arc<Notify>,
     base_url: SafeUrl,
+}
+
+#[derive(Debug, Clone)]
+struct ClientEntry {
+    client: ClientHandleArc,
+    db_prefix: FederationDbPrefix,
 }
 
 impl RecurringInvoiceServer {
     pub async fn new(db: impl IRawDatabase + 'static, base_url: SafeUrl) -> anyhow::Result<Self> {
         let db = Database::new(db, Default::default());
 
-        let mut clients = HashMap::<_, ClientHandleArc>::new();
+        let mut clients = HashMap::<_, ClientEntry>::new();
 
-        for (federation_id, db) in load_federation_client_databases(&db).await {
+        for (federation_id, (db_prefix, db)) in load_federation_client_databases(&db).await {
             let mut client_builder = Client::builder(db).await?;
             client_builder.with_module(LightningClientInit::default());
             client_builder.with_module(MintClientInit);
@@ -68,15 +75,25 @@ impl RecurringInvoiceServer {
                     Self::default_secret(),
                 ))
                 .await?;
-            clients.insert(federation_id, Arc::new(client));
+            clients.insert(
+                federation_id,
+                ClientEntry {
+                    client: Arc::new(client),
+                    db_prefix,
+                },
+            );
         }
 
-        Ok(Self {
+        let slf = Self {
             db,
             clients: Arc::new(RwLock::new(clients)),
             invoice_generated: Arc::new(Default::default()),
             base_url,
-        })
+        };
+
+        slf.run_db_migrations().await;
+
+        Ok(slf)
     }
 
     /// We don't want to hold any money or sign anything ourselves, we only use
@@ -114,7 +131,13 @@ impl RecurringInvoiceServer {
                 try_add_federation_database(&self.db, federation_id, client_db_prefix)
                     .await
                     .expect("We hold a global lock, no parallel joining can happen");
-                clients.insert(federation_id, client);
+                clients.insert(
+                    federation_id,
+                    ClientEntry {
+                        client,
+                        db_prefix: client_db_prefix,
+                    },
+                );
                 Ok(federation_id)
             }
             Err(e) => {
@@ -260,10 +283,18 @@ impl RecurringInvoiceServer {
         // support
         const DEFAULT_EXPIRY_TIME: u64 = 60 * 60 * 24;
 
+        debug!(
+            "Creating BOLT11 invoice for payment code {} with amount {} msats",
+            payment_code_id, amount
+        );
+
         let payment_code = self.get_payment_code(payment_code_id).await?;
 
         let federation_client = self
             .get_federation_client(payment_code.federation_id)
+            .await?;
+        let federation_db_prefix = self
+            .get_federation_db_prefix(payment_code.federation_id)
             .await?;
 
         let (operation_id, invoice) = self
@@ -273,70 +304,32 @@ impl RecurringInvoiceServer {
                     let federation_client = federation_client.clone();
                     let payment_code = payment_code.clone();
                     Box::pin(async move {
-                        let invoice_index = self
-                            .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
-                            .await;
-
-                        // Check if the invoice index was already used in an aborted call to this
-                        // fn. If so:
-                        //   1. Save the previously generated invoice. We don't want to reuse it
-                        //      since it may be expired and in the future may contain call-specific
-                        //      data, but also want to allow the client to sync past it.
-                        //   2. Increment the invoice index to generate a new invoice since re-using
-                        //      the same index wouldn't work (operation id reuse is forbidden).
-                        let initial_operation_id =
-                            operation_id_from_user_key(payment_code.root_key, invoice_index);
-                        let invoice_index = if let Some(operation) = federation_client
-                            .operation_log()
-                            .get_operation(initial_operation_id)
-                            .await
-                        {
-                            assert_eq!(
-                                operation.operation_module_kind(),
-                                LightningClientModule::kind().as_str()
-                            );
-
-                            let LightningOperationMetaVariant::RecurringPaymentReceive(receive) =
-                                operation.meta::<LightningOperationMeta>().variant
-                            else {
-                                panic!(
-                                    "Unexpected operation meta variant: {:?}",
-                                    operation.meta::<LightningOperationMeta>().variant
-                                );
-                            };
-
-                            self.save_bolt11_invoice(
-                                dbtx,
-                                initial_operation_id,
-                                payment_code_id,
-                                invoice_index,
-                                receive.invoice.clone(),
-                            )
-                            .await;
-                            self.get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
-                                .await
-                        } else {
-                            invoice_index
-                        };
-
-                        // This is where the main part starts: generate the invoice and save it to
-                        // the DB
                         let federation_client_ln_module = federation_client.get_ln_module()?;
+
                         let gateway = federation_client_ln_module
                             .get_gateway(None, false)
                             .await?
                             .ok_or(RecurringPaymentError::NoGatewayFound)?;
-
                         let lnurl_meta = match payment_code.variant {
                             PaymentCodeVariant::Lnurl { meta } => meta,
                         };
                         let meta_hash = Sha256(sha256::Hash::hash(lnurl_meta.as_bytes()));
                         let description = Bolt11InvoiceDescription::Hash(meta_hash);
 
-                        // TODO: ideally creating the invoice would take a dbtx as argument so we
-                        // don't have to do the "check if invoice already exists" dance
+                        let invoice_index = self
+                            .get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
+                            .await;
+
                         let (operation_id, invoice, _preimage) = federation_client_ln_module
-                            .create_bolt11_invoice_for_user_tweaked(
+                            .create_bolt11_invoice_for_user_tweaked_dbtx(
+                                // We start the DB transaction in the global DB namespace, but the
+                                // federation client works in the specific federation DB namespace.
+                                // If we don't switch to the federation DB namespace here, the
+                                // state machines will be written into the global DB namespace and
+                                // not be found by the executor. Ask me how I know …
+                                &mut dbtx.to_ref_nc().with_prefix(
+                                    federation_db_prefix.prepend(DbKeyPrefix::ClientDB as u8),
+                                ),
                                 amount,
                                 description,
                                 Some(DEFAULT_EXPIRY_TIME),
@@ -405,6 +398,19 @@ impl RecurringInvoiceServer {
             .get(&federation_id)
             .cloned()
             .ok_or(RecurringPaymentError::UnknownFederationId(federation_id))
+            .map(|client_entry| client_entry.client)
+    }
+
+    async fn get_federation_db_prefix(
+        &self,
+        federation_id: FederationId,
+    ) -> Result<FederationDbPrefix, RecurringPaymentError> {
+        self.clients
+            .read()
+            .await
+            .get(&federation_id)
+            .ok_or(RecurringPaymentError::UnknownFederationId(federation_id))
+            .map(|client_entry| client_entry.db_prefix)
     }
 
     pub async fn await_invoice_index_generated(
@@ -546,6 +552,29 @@ impl RecurringInvoiceServer {
         };
 
         Ok(InvoiceStatus { invoice, status })
+    }
+
+    async fn run_db_migrations(&self) {
+        let migrations = Self::migrations();
+        let schema_version: u64 = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&SchemaVersionKey)
+            .await
+            .unwrap_or_default();
+
+        for (target_schema, migration_fn) in migrations
+            .into_iter()
+            .skip_while(|(target_schema, _)| *target_schema <= schema_version)
+        {
+            let mut dbtx = self.db.begin_transaction().await;
+            dbtx.insert_entry(&SchemaVersionKey, &target_schema).await;
+
+            migration_fn(self, dbtx.to_ref_nc()).await;
+
+            dbtx.commit_tx().await;
+        }
     }
 }
 

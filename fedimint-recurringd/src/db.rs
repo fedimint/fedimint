@@ -1,16 +1,26 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 
+use fedimint_client::{ClientHandleArc, ClientModule};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{AutocommitError, Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::rand::thread_rng;
-use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_core::util::BoxFuture;
+use fedimint_core::{Amount, impl_db_lookup, impl_db_record};
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey, RecurringPaymentProtocol};
+use fedimint_ln_client::{
+    LightningClientModule, LightningOperationMeta, LightningOperationMetaVariant,
+};
 use futures::stream::StreamExt;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::Rng;
 
-use crate::PaymentCodeInvoice;
+use crate::{
+    LnClientContextExt, PaymentCodeInvoice, RecurringInvoiceServer, operation_id_from_user_key,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd, Encodable, Decodable)]
 pub struct FederationDbPrefix([u8; 16]);
@@ -20,7 +30,7 @@ impl FederationDbPrefix {
         FederationDbPrefix(thread_rng().r#gen())
     }
 
-    fn prepend(&self, byte: u8) -> Vec<u8> {
+    pub(crate) fn prepend(&self, byte: u8) -> Vec<u8> {
         let mut full_prefix = Vec::with_capacity(17);
         full_prefix.push(byte);
         full_prefix.extend(&self.0);
@@ -76,21 +86,27 @@ pub async fn try_add_federation_database(
     })
 }
 
-pub async fn load_federation_client_databases(db: &Database) -> HashMap<FederationId, Database> {
+pub async fn load_federation_client_databases(
+    db: &Database,
+) -> HashMap<FederationId, (FederationDbPrefix, Database)> {
     load_federation_clients(db)
         .await
         .into_iter()
-        .map(|(federation_id, db_prefix)| (federation_id, open_client_db(db, db_prefix)))
+        .map(|(federation_id, db_prefix)| {
+            (federation_id, (db_prefix, open_client_db(db, db_prefix)))
+        })
         .collect()
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-enum DbKeyPrefix {
+pub(crate) enum DbKeyPrefix {
     ClientList = 0x00,
     ClientDB = 0x01,
     PaymentCodes = 0x02,
     PaymentCodeNextInvoiceIndex = 0x03,
     PaymentCodeInvoices = 0x04,
+
+    SchemaVersion = 0xff,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -150,10 +166,17 @@ pub struct PaymentCodeNextInvoiceIndexKey {
     pub payment_code_id: PaymentCodeId,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub struct PaymentCodeNextInvoiceIndexKeyPrefix;
+
 impl_db_record!(
     key = PaymentCodeNextInvoiceIndexKey,
     value = u64,
     db_prefix = DbKeyPrefix::PaymentCodeNextInvoiceIndex,
+);
+impl_db_lookup!(
+    key = PaymentCodeNextInvoiceIndexKey,
+    query_prefix = PaymentCodeNextInvoiceIndexKeyPrefix
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -182,3 +205,131 @@ impl_db_lookup!(
     key = PaymentCodeInvoiceKey,
     query_prefix = PaymentCodeInvoicePrefix
 );
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub struct SchemaVersionKey;
+
+impl_db_record!(
+    key = SchemaVersionKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::SchemaVersion,
+);
+
+type DbMigration =
+    for<'a> fn(&'a RecurringInvoiceServer, DatabaseTransaction<'a>) -> BoxFuture<'a, ()>;
+
+impl RecurringInvoiceServer {
+    pub(crate) fn migrations() -> BTreeMap<u64, DbMigration> {
+        vec![(
+            1,
+            (|server: &RecurringInvoiceServer, dbtx| Box::pin(server.db_migration_v1(dbtx)))
+                as DbMigration,
+        )]
+        .into_iter()
+        .collect()
+    }
+
+    /// Backfill DB fix for bug that caused "holes" in invoice indices keeping
+    /// the client from syncing. See <https://github.com/fedimint/fedimint/pull/7653>.
+    async fn db_migration_v1(&self, mut dbtx: DatabaseTransaction<'_>) {
+        const BACKFILL_AMOUNT: Amount = Amount::from_msats(111111);
+
+        let mut payment_codes: HashMap<PaymentCodeId, PaymentCodeEntry> = dbtx
+            .find_by_prefix(&PaymentCodePrefix)
+            .await
+            .map(|(k, v)| (k.payment_code_id, v))
+            .collect()
+            .await;
+
+        let payment_code_indices: HashMap<PaymentCodeId, u64> = dbtx
+            .find_by_prefix(&PaymentCodeNextInvoiceIndexKeyPrefix)
+            .await
+            .map(|(payment_code_key, invoice_idx)| (payment_code_key.payment_code_id, invoice_idx))
+            .collect()
+            .await;
+
+        for (payment_code_id, current_invoice_index) in payment_code_indices {
+            let payment_code_entry = payment_codes
+                .remove(&payment_code_id)
+                .expect("If there's an index, there's a payment code entry");
+
+            let payment_code_invoice_indices: HashSet<_> = dbtx
+                .find_by_prefix(&PaymentCodeInvoicePrefix { payment_code_id })
+                .await
+                .map(|(invoice_key, _)| invoice_key.index)
+                .collect()
+                .await;
+
+            let client = self
+                .get_federation_client(payment_code_entry.federation_id)
+                .await
+                .expect("Federation client exists if we have the code in our DB");
+            let ln_client_module = client.get_ln_module().expect("LN module is present");
+
+            let missing_indices = (1..=current_invoice_index)
+                .filter(|idx| !payment_code_invoice_indices.contains(idx));
+            for missing_index in missing_indices {
+                let initial_operation_id =
+                    operation_id_from_user_key(payment_code_entry.root_key, missing_index);
+                let invoice = if let Some(invoice) =
+                    Self::check_if_invoice_exists(&client, initial_operation_id).await
+                {
+                    invoice
+                } else {
+                    // Generate fake invoice to backfill "holes" in invoice indices
+                    let (_, invoice, _) = ln_client_module
+                        .create_bolt11_invoice_for_user_tweaked_dbtx(
+                            &mut dbtx,
+                            BACKFILL_AMOUNT,
+                            Bolt11InvoiceDescription::Direct(
+                                Description::new("Backfill".to_string()).unwrap(),
+                            ),
+                            Some(3600),
+                            payment_code_entry.root_key.0,
+                            missing_index,
+                            (),
+                            None,
+                        )
+                        .await
+                        .expect("We checked that there is no invoice for that index already");
+                    invoice
+                };
+
+                self.save_bolt11_invoice(
+                    &mut dbtx,
+                    initial_operation_id,
+                    payment_code_id,
+                    missing_index,
+                    invoice,
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn check_if_invoice_exists(
+        federation_client: &ClientHandleArc,
+        operation_id: OperationId,
+    ) -> Option<Bolt11Invoice> {
+        let operation = federation_client
+            .operation_log()
+            .get_operation(operation_id)
+            .await?;
+
+        assert_eq!(
+            operation.operation_module_kind(),
+            LightningClientModule::kind().as_str()
+        );
+
+        let LightningOperationMetaVariant::Receive { invoice, .. } =
+            operation.meta::<LightningOperationMeta>().variant
+        else {
+            panic!(
+                "Unexpected operation meta variant: {:?}",
+                operation.meta::<LightningOperationMeta>().variant
+            );
+        };
+
+        Some(invoice)
+    }
+}
