@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Prepare
         uses: ./.github/actions/prepare
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
