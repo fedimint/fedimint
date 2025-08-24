@@ -32,7 +32,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
+use crate::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 
 #[derive(Clone)]
 pub enum LdkChainSource {
@@ -554,14 +554,6 @@ impl Gatewayd {
     }
 
     pub async fn get_lightning_fee(&self, fed_id: String) -> Result<PaymentFee> {
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        let (fee_key, base_key, ppm_key) =
-            if gatewayd_version >= *VERSION_0_6_0_ALPHA || self.is_forced_current() {
-                ("lightning_fee", "base", "parts_per_million")
-            } else {
-                ("routing_fees", "base_msat", "proportional_millionths")
-            };
-
         let info_value = self.get_info().await?;
         let federations = info_value["federations"]
             .as_array()
@@ -576,17 +568,12 @@ impl Gatewayd {
             })
             .ok_or_else(|| anyhow!("Federation not found"))?;
 
-        let lightning_fee = if gatewayd_version >= *VERSION_0_6_0_ALPHA || self.is_forced_current()
-        {
-            fed["config"][fee_key].clone()
-        } else {
-            fed[fee_key].clone()
-        };
-
-        let base: Amount = serde_json::from_value(lightning_fee[base_key].clone())
+        let lightning_fee = fed["config"]["lightning_fee"].clone();
+        let base: Amount = serde_json::from_value(lightning_fee["base"].clone())
             .map_err(|e| anyhow!("Couldnt parse base: {}", e))?;
-        let parts_per_million: u64 = serde_json::from_value(lightning_fee[ppm_key].clone())
-            .map_err(|e| anyhow!("Couldnt parse parts_per_million: {}", e))?;
+        let parts_per_million: u64 =
+            serde_json::from_value(lightning_fee["parts_per_million"].clone())
+                .map_err(|e| anyhow!("Couldnt parse parts_per_million: {}", e))?;
 
         Ok(PaymentFee {
             base,
@@ -600,32 +587,19 @@ impl Gatewayd {
         base: u64,
         ppm: u64,
     ) -> Result<()> {
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        if !self.is_forced_current() && gatewayd_version < *VERSION_0_6_0_ALPHA {
-            let new_fed_routing_fees = format!("{fed_id},{base},{ppm}");
-            cmd!(
-                self,
-                "set-configuration",
-                "--per-federation-routing-fees",
-                new_fed_routing_fees
-            )
-            .run()
-            .await?;
-        } else {
-            cmd!(
-                self,
-                "cfg",
-                "set-fees",
-                "--federation-id",
-                fed_id,
-                "--ln-base",
-                base,
-                "--ln-ppm",
-                ppm
-            )
-            .run()
-            .await?;
-        }
+        cmd!(
+            self,
+            "cfg",
+            "set-fees",
+            "--federation-id",
+            fed_id,
+            "--ln-base",
+            base,
+            "--ln-ppm",
+            ppm
+        )
+        .run()
+        .await?;
 
         Ok(())
     }
@@ -636,22 +610,19 @@ impl Gatewayd {
         base: u64,
         ppm: u64,
     ) -> Result<()> {
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        if gatewayd_version >= *VERSION_0_6_0_ALPHA || self.is_forced_current() {
-            cmd!(
-                self,
-                "cfg",
-                "set-fees",
-                "--federation-id",
-                fed_id,
-                "--tx-base",
-                base,
-                "--tx-ppm",
-                ppm
-            )
-            .run()
-            .await?;
-        }
+        cmd!(
+            self,
+            "cfg",
+            "set-fees",
+            "--federation-id",
+            fed_id,
+            "--tx-base",
+            base,
+            "--tx-ppm",
+            ppm
+        )
+        .run()
+        .await?;
 
         Ok(())
     }

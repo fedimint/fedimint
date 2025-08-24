@@ -14,7 +14,7 @@ use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::gatewayd::LdkChainSource;
 use devimint::util::{ProcessManager, poll, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
+use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -335,15 +335,9 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 );
 
                 // Get the federation's config and verify it parses correctly
-                let config_val = if gatewayd_version < *VERSION_0_6_0_ALPHA {
-                    cmd!(gw, "config", "--federation-id", fed_id)
-                        .out_json()
-                        .await?
-                } else {
-                    cmd!(gw, "cfg", "client-config", "--federation-id", fed_id)
-                        .out_json()
-                        .await?
-                };
+                let config_val = cmd!(gw, "cfg", "client-config", "--federation-id", fed_id)
+                    .out_json()
+                    .await?;
 
                 serde_json::from_value::<GatewayFedConfig>(config_val)?;
 
@@ -369,10 +363,8 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
 
                 let (default_base, default_ppm) = if gatewayd_version >= *VERSION_0_8_0_ALPHA {
                     (2000, 3000)
-                } else if gatewayd_version >= *VERSION_0_6_0_ALPHA {
-                    (50000, 5000)
                 } else {
-                    (0, 10000)
+                    (50000, 5000)
                 };
 
                 let lightning_fee = gw.get_lightning_fee(new_fed_id.clone()).await?;
@@ -676,7 +668,6 @@ async fn get_transaction(
 /// Leaves the specified federation by issuing a `leave-fed` POST request to the
 /// gateway.
 async fn leave_federation(gw: &Gatewayd, fed_id: String, expected_scid: u64) -> anyhow::Result<()> {
-    let gatewayd_version = util::Gatewayd::version_or_default().await;
     let leave_fed = cmd!(gw, "leave-fed", "--federation-id", fed_id.clone())
         .out_json()
         .await
@@ -685,11 +676,7 @@ async fn leave_federation(gw: &Gatewayd, fed_id: String, expected_scid: u64) -> 
     let federation_id: FederationId = serde_json::from_value(leave_fed["federation_id"].clone())?;
     assert_eq!(federation_id.to_string(), fed_id);
 
-    let scid = if gatewayd_version < *VERSION_0_6_0_ALPHA {
-        serde_json::from_value::<u64>(leave_fed["federation_index"].clone())?
-    } else {
-        serde_json::from_value::<u64>(leave_fed["config"]["federation_index"].clone())?
-    };
+    let scid = serde_json::from_value::<u64>(leave_fed["config"]["federation_index"].clone())?;
 
     assert_eq!(scid, expected_scid);
 
