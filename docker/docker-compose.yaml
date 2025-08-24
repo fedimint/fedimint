@@ -1,0 +1,21 @@
+services:
+  fedimintd:
+    image: fedimint/fedimintd:v0.8.0
+    ports:
+      - 8173:8173/tcp # p2p tls
+      - 8173:8173/udp # p2p iroh
+      - 8174:8174/udp # api iroh
+      - 127.0.0.1:8175:8175/tcp # ui
+    volumes:
+      - fedimintd_data:/data
+    environment:
+      - FM_ENABLE_IROH=true
+      - FM_BITCOIN_NETWORK=bitcoin
+      - FM_ESPLORA_URL=https://mempool.space/api
+      - FM_BIND_P2P=0.0.0.0:8173
+      - FM_BIND_API=0.0.0.0:8174
+      - FM_BIND_UI=0.0.0.0:8175
+    restart: always
+
+volumes:
+  fedimintd_data:
