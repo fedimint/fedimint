@@ -30,12 +30,11 @@ advisable for production deployments.
 Worst-case memory consumption scales with the number of guardians (about 250MB per guardian), while this is only a
 worst-case number for adversarial scenarios, please keep it in mind for larger federations (5-of-7, 7-of-10, …).
 
-## Iroh (Experimental)
+## Setup
 
-To try the experimental Iroh integration with Mutinynet, use the provided Docker Compose setup:
+To deploy a federation using Docker Compose:
 
 ```bash
-cd iroh-fedimintd
 docker compose up -d
 ```
 
@@ -45,78 +44,4 @@ If Docker runs on a remote machine, forward the port locally with:
 
 ```bash
 ssh -NL 8175:127.0.0.1:8175 <your_server>
-```
-
-### Mutinynet Deposit
-
-#### Join
-
-Using the invite code from your guardian dashboard, join the federation using `fedimint-cli`:
-
-```bash
-docker run -it --rm \
-  -e RUST_LOG=off \
-  -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
-  fedimint-cli \
-    --data-dir /mutinynet-client \
-    join-federation <invite_code>
-```
-
-This will join the federation and create a client database in your current directory.
-
-#### Deposit
-
-Get a new deposit address
-
-```bash
-docker run -it --rm \
-  -e RUST_LOG=off \
-  -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
-  fedimint-cli \
-    --data-dir /mutinynet-client \
-    module wallet new-deposit-address
-```
-
-Take the address and request funds from the Mutinynet [faucet](https://faucet.mutinynet.com/). This requires logging in with GitHub.
-
-Await the deposit:
-
-```bash
-docker run -it --rm \
-  -e RUST_LOG=off \
-  -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
-  fedimint-cli \
-    --data-dir /mutinynet-client \
-    module wallet await-deposit <address>
-```
-
-This command may take over 10 minutes to complete since we need several confirmations to claim the deposit.
-
-Once you've claimed the deposit, check the wallet balance in the guardian dashboard and the client balance:
-
-```bash
-docker run -it --rm \
-  -e RUST_LOG=off \
-  -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
-  fedimint-cli \
-    --data-dir /mutinynet-client \
-    info
-```
-
-#### Send Back Sats
-
-When you're done experimenting with the setup, send your sats back to the friendly folks operating the Mutinynet faucet:
-
-```bash
-docker run -it --rm \
-  -e RUST_LOG=off \
-  -v "$(pwd)/mutinynet-client":/mutinynet-client \
-  fedimint/fedimint-cli:v0.7.0 \
-  fedimint-cli \
-    --data-dir /mutinynet-client \
-    withdraw --amount all --address tb1qd28npep0s8frcm3y7dxqajkcy2m40eysplyr9v
 ```
