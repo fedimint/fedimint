@@ -12,13 +12,14 @@ mod receive_sm;
 mod send_sm;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
-use db::{DbKeyPrefix, GatewayKey};
+use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -36,10 +37,12 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, apply, async_trait_maybe_send};
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
@@ -47,7 +50,7 @@ use fedimint_lnv2_common::gateway_api::{
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, KIND, LightningCommonInit, LightningInvoice, LightningModuleTypes,
-    LightningOutput, LightningOutputV0,
+    LightningOutput, LightningOutputV0, lnurl,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -99,21 +102,21 @@ impl SendOperationMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReceiveOperationMeta {
-    pub gateway: SafeUrl,
+    pub gateway: Option<SafeUrl>,
     pub contract: IncomingContract,
-    pub invoice: LightningInvoice,
+    pub invoice: Option<LightningInvoice>,
     pub custom_meta: Value,
 }
 
 impl ReceiveOperationMeta {
     /// Calculate the absolute fee paid to the gateway on success.
-    pub fn gateway_fee(&self) -> Amount {
-        match &self.invoice {
+    pub fn gateway_fee(&self) -> Option<Amount> {
+        self.invoice.clone().map(|invoice| match invoice {
             LightningInvoice::Bolt11(invoice) => {
-                Amount::from_msats(invoice.amount_milli_satoshis().expect("Invoice has amount"))
+                Amount::from_msats(invoice.amount_milli_satoshis().unwrap())
                     .saturating_sub(self.contract.commitment.amount)
             }
-        }
+        })
     }
 }
 
@@ -244,9 +247,7 @@ impl ClientModuleInit for LightningClientInit {
             args.notifier().clone(),
             args.context(),
             args.module_api().clone(),
-            args.module_root_secret()
-                .clone()
-                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
+            args.module_root_secret(),
             self.gateway_conn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
@@ -284,6 +285,7 @@ pub struct LightningClientModule {
     client_ctx: ClientContext<Self>,
     module_api: DynModuleApi,
     keypair: Keypair,
+    lnurl_keypair: Keypair,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     #[allow(unused)] // The field is only used by the cli feature
     admin_auth: Option<ApiAuth>,
@@ -345,7 +347,7 @@ impl LightningClientModule {
         notifier: ModuleNotifier<LightningClientStateMachines>,
         client_ctx: ClientContext<Self>,
         module_api: DynModuleApi,
-        keypair: Keypair,
+        module_root_secret: &DerivableSecret,
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
         admin_auth: Option<ApiAuth>,
         task_group: &TaskGroup,
@@ -364,7 +366,12 @@ impl LightningClientModule {
             notifier,
             client_ctx,
             module_api,
-            keypair,
+            keypair: module_root_secret
+                .child_key(ChildId(0))
+                .to_secp_key(SECP256K1),
+            lnurl_keypair: module_root_secret
+                .child_key(ChildId(1))
+                .to_secp_key(SECP256K1),
             gateway_conn,
             admin_auth,
         }
@@ -748,7 +755,13 @@ impl LightningClientModule {
             .await?;
 
         let operation_id = self
-            .receive_incoming_contract(gateway, contract, invoice.clone(), custom_meta)
+            .receive_incoming_contract(
+                self.keypair.secret_key(),
+                Some(gateway),
+                contract,
+                Some(invoice.clone()),
+                custom_meta,
+            )
             .await
             .expect("The contract has been generated with our public key");
 
@@ -853,14 +866,15 @@ impl LightningClientModule {
     // static module public key.
     async fn receive_incoming_contract(
         &self,
-        gateway: SafeUrl,
+        sk: SecretKey,
+        gateway: Option<SafeUrl>,
         contract: IncomingContract,
-        invoice: Bolt11Invoice,
+        invoice: Option<Bolt11Invoice>,
         custom_meta: Value,
     ) -> Option<OperationId> {
         let operation_id = OperationId::from_encodable(&contract.clone());
 
-        let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(&contract)?;
+        let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(sk, &contract)?;
 
         let receive_sm = LightningClientStateMachines::Receive(ReceiveStateMachine {
             common: ReceiveSMCommon {
@@ -881,7 +895,7 @@ impl LightningClientModule {
                 LightningOperationMeta::Receive(ReceiveOperationMeta {
                     gateway,
                     contract,
-                    invoice: LightningInvoice::Bolt11(invoice),
+                    invoice: invoice.map(LightningInvoice::Bolt11),
                     custom_meta,
                 }),
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
@@ -894,22 +908,18 @@ impl LightningClientModule {
 
     fn recover_contract_keys(
         &self,
+        sk: SecretKey,
         contract: &IncomingContract,
     ) -> Option<(Keypair, AggregateDecryptionKey)> {
-        let ephemeral_tweak = ecdh::SharedSecret::new(
-            &contract.commitment.ephemeral_pk,
-            &self.keypair.secret_key(),
-        )
-        .secret_bytes();
+        let tweak = ecdh::SharedSecret::new(&contract.commitment.ephemeral_pk, &sk);
 
-        let encryption_seed = ephemeral_tweak
+        let encryption_seed = tweak
+            .secret_bytes()
             .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
-        let claim_keypair = self
-            .keypair
-            .secret_key()
-            .mul_tweak(&Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"))
+        let claim_keypair = sk
+            .mul_tweak(&Scalar::from_be_bytes(tweak.secret_bytes()).unwrap())
             .expect("Tweak is valid")
             .keypair(secp256k1::SECP256K1);
 
@@ -987,6 +997,89 @@ impl LightningClientModule {
 
         Ok(state)
     }
+
+    /// Generate an lnurl for the client.
+    pub async fn register_lnurl(
+        &self,
+        recurringd: Option<SafeUrl>,
+        gateway: Option<SafeUrl>,
+    ) -> Result<String, RegisterLnurlError> {
+        let default_recurringd = SafeUrl::from_str("https://recurringd.fedimint.org").unwrap();
+
+        let recurringd = recurringd.unwrap_or(default_recurringd.clone());
+
+        let gateways = if let Some(gateway) = gateway {
+            vec![gateway]
+        } else {
+            let gateways = self
+                .module_api
+                .gateways()
+                .await
+                .map_err(|e| RegisterLnurlError::FederationError(e.to_string()))?;
+
+            if gateways.is_empty() {
+                return Err(RegisterLnurlError::NoVettedGateways);
+            }
+
+            gateways
+        };
+
+        let hash = lnurl::register_lnurl(
+            recurringd.clone(),
+            self.federation_id,
+            self.lnurl_keypair.public_key(),
+            self.cfg.tpe_agg_pk,
+            gateways,
+        )
+        .await
+        .map_err(|e| RegisterLnurlError::RegistrationError(e.to_string()))?;
+
+        Ok(lnurl::construct_lnurl(&recurringd, hash))
+    }
+
+    pub async fn receive_lnurl(&self, batch_size: Option<usize>) -> usize {
+        let batch_size = batch_size.unwrap_or(128);
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+        let stream_index = dbtx
+            .get_value(&IncomingContractStreamIndexKey)
+            .await
+            .unwrap_or(0);
+
+        let (contracts, next_index) = self
+            .module_api
+            .await_incoming_contracts(stream_index, batch_size)
+            .await;
+
+        let mut received_contracts = 0;
+
+        for contract in &contracts {
+            if let Some(operation_id) = self
+                .receive_incoming_contract(
+                    self.lnurl_keypair.secret_key(),
+                    None,
+                    contract.clone(),
+                    None,
+                    Value::Null,
+                )
+                .await
+            {
+                self.await_final_receive_operation_state(operation_id)
+                    .await
+                    .ok();
+
+                received_contracts += 1;
+            }
+        }
+
+        dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
+            .await;
+
+        dbtx.commit_tx().await;
+
+        received_contracts
+    }
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
@@ -1048,6 +1141,16 @@ pub enum ReceiveError {
     InvalidInvoicePaymentHash,
     #[error("The invoice's amount is incorrect")]
     InvalidInvoiceAmount,
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum RegisterLnurlError {
+    #[error("The federation has no vetted gateways")]
+    NoVettedGateways,
+    #[error("Federation returned an error: {0}")]
+    FederationError(String),
+    #[error("Failed to register lnurl: {0}")]
+    RegistrationError(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

@@ -30,9 +30,12 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+    AWAIT_BOLT11_PREIMAGE_ENDPOINT, CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
-use fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
+use fedimint_lnv2_common::gateway_api::{
+    AwaitBolt11PreimagePayload, CreateBolt11InvoicePayload, SendPaymentPayload,
+};
 use fedimint_logging::LOG_GATEWAY;
 use hex::ToHex;
 use serde_json::json;
@@ -123,6 +126,10 @@ fn lnv2_routes() -> Router {
         .route(
             CREATE_BOLT11_INVOICE_ENDPOINT,
             post(create_bolt11_invoice_v2),
+        )
+        .route(
+            AWAIT_BOLT11_PREIMAGE_ENDPOINT,
+            post(await_bolt11_preimage_v2),
         )
 }
 
@@ -411,6 +418,18 @@ async fn create_bolt11_invoice_v2(
 ) -> Result<impl IntoResponse, PublicGatewayError> {
     let invoice = gateway.create_bolt11_invoice_v2(payload).await?;
     Ok(Json(json!(invoice)))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err)]
+async fn await_bolt11_preimage_v2(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<AwaitBolt11PreimagePayload>,
+) -> Result<impl IntoResponse, PublicGatewayError> {
+    let preimage = gateway
+        .await_bolt11_preimage_v2(payload.federation_id, payload.operation_id)
+        .await?;
+
+    Ok(Json(json!(preimage)))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]

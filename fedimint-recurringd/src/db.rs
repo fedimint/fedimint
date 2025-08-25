@@ -1,14 +1,18 @@
 use std::collections::HashMap;
 
+use bitcoin::hashes::sha256;
+use bitcoin::secp256k1::PublicKey;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{AutocommitError, Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::rand::thread_rng;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey, RecurringPaymentProtocol};
 use futures::stream::StreamExt;
 use rand::Rng;
+use tpe::AggregatePublicKey;
 
 use crate::PaymentCodeInvoice;
 
@@ -91,6 +95,8 @@ enum DbKeyPrefix {
     PaymentCodes = 0x02,
     PaymentCodeNextInvoiceIndex = 0x03,
     PaymentCodeInvoices = 0x04,
+    LNV2Registrations = 0x05,
+    LNV2Payments = 0x06,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -181,4 +187,40 @@ impl_db_record!(
 impl_db_lookup!(
     key = PaymentCodeInvoiceKey,
     query_prefix = PaymentCodeInvoicePrefix
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub struct LNV2Registration {
+    pub federation_id: FederationId,
+    pub recipient_pk: PublicKey,
+    pub aggregate_pk: AggregatePublicKey,
+    pub gateways: Vec<SafeUrl>,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub struct LNV2RegistrationKey(pub sha256::Hash);
+
+impl_db_record!(
+    key = LNV2RegistrationKey,
+    value = LNV2Registration,
+    db_prefix = DbKeyPrefix::LNV2Registrations,
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub struct LNV2Payment {
+    pub federation_id: FederationId,
+    pub payment_hash: sha256::Hash,
+    pub operation_id: OperationId,
+    pub gateway: SafeUrl,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub struct LNV2PaymentKey(pub sha256::Hash);
+
+impl_db_record!(
+    key = LNV2PaymentKey,
+    value = LNV2Payment,
+    db_prefix = DbKeyPrefix::LNV2Payments,
 );

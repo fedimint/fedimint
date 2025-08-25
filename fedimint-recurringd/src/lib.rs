@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use fedimint_api_client::api::net::Connector;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_core::config::FederationId;
@@ -26,6 +26,9 @@ use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta,
     LightningOperationMetaVariant, LnReceiveState, tweak_user_key,
 };
+use fedimint_lnv2_common::lnurl::{
+    LnurlRegistrationRequest, await_bolt11_preimage, create_contract_and_fetch_invoice,
+};
 use fedimint_mint_client::MintClientInit;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Sha256};
@@ -37,9 +40,10 @@ use tokio::sync::{Notify, RwLock};
 use tracing::{info, warn};
 
 use crate::db::{
-    FederationDbPrefix, PaymentCodeEntry, PaymentCodeInvoiceEntry, PaymentCodeInvoiceKey,
-    PaymentCodeKey, PaymentCodeNextInvoiceIndexKey, PaymentCodeVariant,
-    load_federation_client_databases, open_client_db, try_add_federation_database,
+    FederationDbPrefix, LNV2Payment, LNV2PaymentKey, LNV2Registration, LNV2RegistrationKey,
+    PaymentCodeEntry, PaymentCodeInvoiceEntry, PaymentCodeInvoiceKey, PaymentCodeKey,
+    PaymentCodeNextInvoiceIndexKey, PaymentCodeVariant, load_federation_client_databases,
+    open_client_db, try_add_federation_database,
 };
 
 mod db;
@@ -547,6 +551,102 @@ impl RecurringInvoiceServer {
 
         Ok(InvoiceStatus { invoice, status })
     }
+
+    pub async fn register_lnv2_payment(
+        &self,
+        request: LnurlRegistrationRequest,
+    ) -> anyhow::Result<sha256::Hash> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        dbtx.insert_entry(
+            &LNV2RegistrationKey(request.consensus_hash()),
+            &LNV2Registration {
+                federation_id: request.federation_id,
+                recipient_pk: request.recipient_pk,
+                aggregate_pk: request.aggregate_pk,
+                gateways: request.gateways.clone(),
+                created_at: timestamp(),
+            },
+        )
+        .await;
+
+        dbtx.commit_tx_result().await?;
+
+        Ok(request.consensus_hash())
+    }
+
+    pub fn lnv2_pay_info(&self, registration_hash: sha256::Hash) -> PayResponse {
+        PayResponse {
+            callback: format!("{}lnv2/pay/{registration_hash}/invoice", self.base_url),
+            max_sendable: 100000000000,
+            min_sendable: 1,
+            tag: Tag::PayRequest,
+            metadata: "LNv2 Payment".to_string(),
+            comment_allowed: None,
+            allows_nostr: None,
+            nostr_pubkey: None,
+        }
+    }
+
+    pub async fn lnv2_pay_invoice(
+        &self,
+        registration_hash: sha256::Hash,
+        amount: Amount,
+    ) -> anyhow::Result<(String, String)> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        let registration = dbtx
+            .get_value(&LNV2RegistrationKey(registration_hash))
+            .await
+            .context("LNV2 registration not found")?;
+
+        let (gateway, operation_id, invoice) = create_contract_and_fetch_invoice(
+            registration.federation_id,
+            registration.recipient_pk,
+            registration.aggregate_pk,
+            registration.gateways,
+            amount,
+            3600,
+        )
+        .await?;
+
+        let payment_entry = LNV2Payment {
+            federation_id: registration.federation_id,
+            payment_hash: *invoice.payment_hash(),
+            operation_id,
+            gateway,
+            created_at: timestamp(),
+        };
+
+        let entry_hash = payment_entry.consensus_hash::<sha256::Hash>();
+
+        dbtx.insert_entry(&LNV2PaymentKey(entry_hash), &payment_entry)
+            .await;
+
+        dbtx.commit_tx_result().await?;
+
+        let verify = format!("{}lnv2/verify/{}", self.base_url, entry_hash);
+
+        Ok((invoice.to_string(), verify))
+    }
+
+    pub async fn lnv2_verify(&self, entry_hash: sha256::Hash) -> anyhow::Result<Option<[u8; 32]>> {
+        let payment_entry = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&LNV2PaymentKey(entry_hash))
+            .await
+            .context("LNV2 payment not found")?;
+
+        await_bolt11_preimage(
+            payment_entry.payment_hash,
+            payment_entry.federation_id,
+            payment_entry.operation_id,
+            payment_entry.gateway,
+        )
+        .await
+    }
 }
 
 async fn await_invoice_confirmed(
@@ -567,6 +667,13 @@ async fn await_invoice_confirmed(
     Err(RecurringPaymentError::Other(anyhow!(
         "BOLT11 invoice not confirmed"
     )))
+}
+
+fn timestamp() -> u64 {
+    fedimint_core::time::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]

@@ -1,7 +1,8 @@
 use anyhow::ensure;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
-use devimint::version_constants::VERSION_0_7_0_ALPHA;
+use devimint::util::{FedimintCli, FedimintdCmd};
+use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::{backoff_util, retry};
@@ -22,6 +23,10 @@ async fn main() -> anyhow::Result<()> {
 
             test_gateway_registration(&dev_fed).await?;
             test_payments(&dev_fed).await?;
+
+            test_lnurl_pay(&dev_fed).await?;
+
+            info!("Testing lnv2 is complete!");
 
             Ok(())
         })
@@ -457,4 +462,100 @@ async fn await_receive_claimed(client: &Client, operation_id: OperationId) -> an
     );
 
     Ok(())
+}
+
+#[allow(dead_code)]
+async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    if FedimintCli::version_or_default().await < *VERSION_0_9_0_ALPHA {
+        return Ok(());
+    }
+
+    if FedimintdCmd::version_or_default().await < *VERSION_0_9_0_ALPHA {
+        return Ok(());
+    }
+
+    info!("Testing LNURL pay...");
+
+    let federation = dev_fed.fed().await?;
+
+    let recurringd_addr = dev_fed.recurringd_connected().await.unwrap().addr.clone();
+
+    let gw_ldk_addr = dev_fed.gw_ldk().await?.addr.clone();
+
+    let client_a = federation
+        .new_joined_client("lnv2-lnurl-test-client-a")
+        .await?;
+
+    let client_b = federation
+        .new_joined_client("lnv2-lnurl-test-client-b")
+        .await?;
+
+    // Generate LNURL using LNv2 client command
+    let lnurl_a = generate_lnurl(&client_a, &recurringd_addr, &gw_ldk_addr).await?;
+    let lnurl_b = generate_lnurl(&client_b, &recurringd_addr, &gw_ldk_addr).await?;
+
+    for _ in 0..5 {
+        let invoice_a = fetch_invoice(&lnurl_a).await?;
+        let invoice_b = fetch_invoice(&lnurl_b).await?;
+
+        dev_fed.gw_lnd().await?.pay_invoice(invoice_a).await?;
+        dev_fed.gw_lnd().await?.pay_invoice(invoice_b).await?;
+    }
+
+    assert_eq!(receive_lnurl(&client_a).await?, 2);
+    assert_eq!(receive_lnurl(&client_a).await?, 1);
+    assert_eq!(receive_lnurl(&client_a).await?, 2);
+
+    assert_eq!(receive_lnurl(&client_b).await?, 3);
+    assert_eq!(receive_lnurl(&client_b).await?, 2);
+
+    Ok(())
+}
+
+async fn receive_lnurl(client: &Client) -> anyhow::Result<u64> {
+    cmd!(
+        client,
+        "module",
+        "lnv2",
+        "lnurl",
+        "receive",
+        "--batch-size",
+        "3"
+    )
+    .out_string()
+    .await
+    .map(|s| s.parse::<u64>().unwrap())
+}
+
+async fn generate_lnurl(
+    client: &Client,
+    recurringd_addr: &str,
+    gw_ldk_addr: &str,
+) -> anyhow::Result<String> {
+    cmd!(
+        client,
+        "module",
+        "lnv2",
+        "lnurl",
+        "register",
+        format!("http://{}/", recurringd_addr),
+        "--gateway",
+        gw_ldk_addr,
+    )
+    .out_json()
+    .await
+    .map(|s| s.as_str().unwrap().to_owned())
+}
+
+async fn fetch_invoice(lnurl: &str) -> anyhow::Result<Bolt11Invoice> {
+    let invoice = cmd!("lnurlp", "--amount", "500sat", lnurl)
+        .out_string()
+        .await?
+        .parse::<lightning_invoice::Bolt11Invoice>()
+        .unwrap();
+
+    // Verify the invoice has the correct amount (500,000 msat = 500 sats)
+    assert_eq!(invoice.amount_milli_satoshis(), Some(500_000));
+
+    Ok(invoice)
 }
