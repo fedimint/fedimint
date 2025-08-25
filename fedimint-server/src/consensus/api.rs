@@ -9,10 +9,9 @@ use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
-    GuardianConfigBackup, LegacyFederationStatus, LegacyP2PConnectionStatus, LegacyPeerStatus,
-    StatusResponse,
+    LegacyFederationStatus, LegacyP2PConnectionStatus, LegacyPeerStatus, StatusResponse,
 };
-use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
+use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, SetupStatus};
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
