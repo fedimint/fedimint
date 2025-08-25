@@ -62,3 +62,11 @@ pub struct SetLocalParamsRequest {
     /// Federation name set by the leader
     pub federation_name: Option<String>,
 }
+
+/// Archive of all the guardian config files that can be used to recover a lost
+/// guardian node.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GuardianConfigBackup {
+    #[serde(with = "crate::hex::serde")]
+    pub tar_archive_bytes: Vec<u8>,
+}
