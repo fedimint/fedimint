@@ -602,6 +602,14 @@ impl IDashboardApi for ConsensusApi {
         self.bitcoin_rpc_connection.status()
     }
 
+    async fn download_guardian_config_backup(
+        &self,
+        password: &str,
+        guardian_auth: &GuardianAuthToken,
+    ) -> GuardianConfigBackup {
+        self.get_guardian_config_backup(password, guardian_auth)
+    }
+
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule> {
         self.modules
             .iter_modules()
