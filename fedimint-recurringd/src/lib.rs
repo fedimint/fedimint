@@ -38,7 +38,7 @@ use tracing::{info, warn};
 
 use crate::db::{
     FederationDbPrefix, PaymentCodeEntry, PaymentCodeInvoiceEntry, PaymentCodeInvoiceKey,
-    PaymentCodeKey, PaymentCodeNextInvoiceIndexKey, PaymentCodeVariant,
+    PaymentCodeKey, PaymentCodeNextInvoiceIndexKey, PaymentCodeVariant, SchemaVersionKey,
     load_federation_client_databases, open_client_db, try_add_federation_database,
 };
 
@@ -71,12 +71,16 @@ impl RecurringInvoiceServer {
             clients.insert(federation_id, Arc::new(client));
         }
 
-        Ok(Self {
-            db,
+        let slf = Self {
+            db: db.clone(),
             clients: Arc::new(RwLock::new(clients)),
             invoice_generated: Arc::new(Default::default()),
             base_url,
-        })
+        };
+
+        slf.run_db_migrations().await;
+
+        Ok(slf)
     }
 
     /// We don't want to hold any money or sign anything ourselves, we only use
@@ -286,31 +290,16 @@ impl RecurringInvoiceServer {
                         //      the same index wouldn't work (operation id reuse is forbidden).
                         let initial_operation_id =
                             operation_id_from_user_key(payment_code.root_key, invoice_index);
-                        let invoice_index = if let Some(operation) = federation_client
-                            .operation_log()
-                            .get_operation(initial_operation_id)
-                            .await
+                        let invoice_index = if let Some(invoice) =
+                            Self::check_if_invoice_exists(&federation_client, initial_operation_id)
+                                .await
                         {
-                            assert_eq!(
-                                operation.operation_module_kind(),
-                                LightningClientModule::kind().as_str()
-                            );
-
-                            let LightningOperationMetaVariant::RecurringPaymentReceive(receive) =
-                                operation.meta::<LightningOperationMeta>().variant
-                            else {
-                                panic!(
-                                    "Unexpected operation meta variant: {:?}",
-                                    operation.meta::<LightningOperationMeta>().variant
-                                );
-                            };
-
                             self.save_bolt11_invoice(
                                 dbtx,
                                 initial_operation_id,
                                 payment_code_id,
                                 invoice_index,
-                                receive.invoice.clone(),
+                                invoice,
                             )
                             .await;
                             self.get_next_invoice_index(&mut dbtx.to_ref_nc(), payment_code_id)
@@ -393,6 +382,32 @@ impl RecurringInvoiceServer {
         dbtx.on_commit(move || {
             invoice_generated_notifier.notify_waiters();
         });
+    }
+
+    async fn check_if_invoice_exists(
+        federation_client: &ClientHandleArc,
+        operation_id: OperationId,
+    ) -> Option<Bolt11Invoice> {
+        let operation = federation_client
+            .operation_log()
+            .get_operation(operation_id)
+            .await?;
+
+        assert_eq!(
+            operation.operation_module_kind(),
+            LightningClientModule::kind().as_str()
+        );
+
+        let LightningOperationMetaVariant::Receive { invoice, .. } =
+            operation.meta::<LightningOperationMeta>().variant
+        else {
+            panic!(
+                "Unexpected operation meta variant: {:?}",
+                operation.meta::<LightningOperationMeta>().variant
+            );
+        };
+
+        Some(invoice)
     }
 
     async fn get_federation_client(
@@ -546,6 +561,29 @@ impl RecurringInvoiceServer {
         };
 
         Ok(InvoiceStatus { invoice, status })
+    }
+
+    async fn run_db_migrations(&self) {
+        let migrations = Self::migrations();
+        let schema_version: u64 = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&SchemaVersionKey)
+            .await
+            .unwrap_or_default();
+
+        for (target_schema, migration_fn) in migrations
+            .into_iter()
+            .skip_while(|(target_schema, _)| *target_schema <= schema_version)
+        {
+            let mut dbtx = self.db.begin_transaction().await;
+            dbtx.insert_entry(&SchemaVersionKey, &target_schema).await;
+
+            migration_fn(self, dbtx.to_ref_nc()).await;
+
+            dbtx.commit_tx().await;
+        }
     }
 }
 
