@@ -8,7 +8,7 @@ use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
 use devimint::util::FedimintCli;
-use devimint::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_8_0_ALPHA};
+use devimint::version_constants::VERSION_0_8_0_ALPHA;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::serde_json;
 use fedimint_core::util::{backoff_util, retry};
@@ -37,8 +37,6 @@ async fn main() -> anyhow::Result<()> {
 async fn wallet_recovery_test_1() -> anyhow::Result<()> {
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
-            let fedimint_cli_version = FedimintCli::version_or_default().await;
-
             let (fed, _bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
             let peg_in_amount_sats = 100_000;
@@ -68,22 +66,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .new_restored("restored-without-backup", fed.invite_code()?)
                     .await?;
 
-                if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
-                    cmd!(restored, "module", "wallet", "await-deposit", operation_id)
-                        .run()
-                        .await?;
-                } else {
-                    cmd!(
-                        restored,
-                        "module",
-                        "wallet",
-                        "await-deposit",
-                        "--operation-id",
-                        operation_id
-                    )
-                    .run()
-                    .await?;
-                }
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
 
                 info!("Check if claimed");
                 assert_eq!(peg_in_amount_sats * 1000, restored.balance().await?);
@@ -112,22 +104,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .new_restored("restored-with-backup", fed.invite_code()?)
                     .await?;
 
-                if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
-                    cmd!(restored, "module", "wallet", "await-deposit", operation_id)
-                        .run()
-                        .await?;
-                } else {
-                    cmd!(
-                        restored,
-                        "module",
-                        "wallet",
-                        "await-deposit",
-                        "--operation-id",
-                        operation_id
-                    )
-                    .run()
-                    .await?;
-                }
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
 
                 info!("Check if claimed");
                 assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
@@ -159,22 +145,16 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                     .new_restored("client-slow-restored-without-backup", fed.invite_code()?)
                     .await?;
 
-                if fedimint_cli_version < *VERSION_0_6_0_ALPHA {
-                    cmd!(restored, "module", "wallet", "await-deposit", operation_id)
-                        .run()
-                        .await?;
-                } else {
-                    cmd!(
-                        restored,
-                        "module",
-                        "wallet",
-                        "await-deposit",
-                        "--operation-id",
-                        operation_id
-                    )
-                    .run()
-                    .await?;
-                }
+                cmd!(
+                    restored,
+                    "module",
+                    "wallet",
+                    "await-deposit",
+                    "--operation-id",
+                    operation_id
+                )
+                .run()
+                .await?;
 
                 info!("Client slow: Check if claimed");
                 assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
