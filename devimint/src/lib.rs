@@ -14,6 +14,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
+#![recursion_limit = "256"]
 
 use std::ffi;
 
