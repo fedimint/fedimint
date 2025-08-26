@@ -593,8 +593,13 @@ async fn liquidity_test() -> anyhow::Result<()> {
             }
 
             info!(target: LOG_TEST, "Testing closing all channels...");
-            gw_ldk_second.close_all_channels().await?;
-            gw_lnd.close_all_channels().await?;
+
+            // Gracefully close one of LND's channel's
+            let gw_ldk_pubkey = gw_ldk.lightning_pubkey().await?;
+            gw_lnd.close_channel(gw_ldk_pubkey, false).await?;
+
+            // Force close LDK's channels
+            gw_ldk_second.close_all_channels(true).await?;
 
             // Verify none of the channels are active
             for gw in gateways {
