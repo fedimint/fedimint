@@ -24,7 +24,7 @@ use lightning::types::payment::{PaymentHash, PaymentPreimage};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use super::{
     ChannelInfo, ILnRpcClient, LightningRpcError, ListActiveChannelsResponse, RouteHtlcStream,
@@ -557,22 +557,40 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn close_channels_with_peer(
         &self,
-        CloseChannelsWithPeerRequest { pubkey }: CloseChannelsWithPeerRequest,
+        CloseChannelsWithPeerRequest { pubkey, force }: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut num_channels_closed = 0;
 
+        info!(%pubkey, "Closing all channels with peer");
         for channel_with_peer in self
             .node
             .list_channels()
             .iter()
             .filter(|channel| channel.counterparty_node_id == pubkey)
         {
-            if self
-                .node
-                .close_channel(&channel_with_peer.user_channel_id, pubkey)
-                .is_ok()
-            {
-                num_channels_closed += 1;
+            if force {
+                match self.node.force_close_channel(
+                    &channel_with_peer.user_channel_id,
+                    pubkey,
+                    Some("User initiated force close".to_string()),
+                ) {
+                    Ok(()) => num_channels_closed += 1,
+                    Err(err) => {
+                        error!(%pubkey, err = %err.fmt_compact(), "Could not force close channel");
+                    }
+                }
+            } else {
+                match self
+                    .node
+                    .close_channel(&channel_with_peer.user_channel_id, pubkey)
+                {
+                    Ok(()) => {
+                        num_channels_closed += 1;
+                    }
+                    Err(err) => {
+                        error!(%pubkey, err = %err.fmt_compact(), "Could not close channel");
+                    }
+                }
             }
         }
 
