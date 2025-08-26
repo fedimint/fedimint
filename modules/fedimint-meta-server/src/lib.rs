@@ -347,11 +347,11 @@ impl ServerModule for Meta {
 
         let new_value = MetaSubmissionValue { salt, value };
         // first of all: any new submission overrides previous submission
-        if let Some(prev_value) = Self::get_submission(dbtx, key, peer_id).await {
-            if prev_value != new_value {
-                dbtx.remove_entry(&MetaSubmissionsKey { key, peer_id })
-                    .await;
-            }
+        if let Some(prev_value) = Self::get_submission(dbtx, key, peer_id).await
+            && prev_value != new_value
+        {
+            dbtx.remove_entry(&MetaSubmissionsKey { key, peer_id })
+                .await;
         }
         // then: if the submission is equal to the current consensus, it's ignored
         if Some(&new_value.value) == Self::get_consensus(dbtx, key).await.as_ref() {

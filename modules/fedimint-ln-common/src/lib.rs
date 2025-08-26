@@ -569,20 +569,20 @@ pub mod serde_option_routing_fees {
         // While we deserialize fields as u64, RoutingFees expects u32 for the fields
         let base_msat = fees["base_msat"].as_u64();
 
-        if let Some(base_msat) = base_msat {
-            if let Some(proportional_millionths) = fees["proportional_millionths"].as_u64() {
-                let base_msat: u32 = base_msat
-                    .try_into()
-                    .map_err(|_| serde::de::Error::custom("base_msat is greater than u32::MAX"))?;
-                let proportional_millionths: u32 =
-                    proportional_millionths.try_into().map_err(|_| {
-                        serde::de::Error::custom("proportional_millionths is greater than u32::MAX")
-                    })?;
-                return Ok(Some(RoutingFees {
-                    base_msat,
-                    proportional_millionths,
-                }));
-            }
+        if let Some(base_msat) = base_msat
+            && let Some(proportional_millionths) = fees["proportional_millionths"].as_u64()
+        {
+            let base_msat: u32 = base_msat
+                .try_into()
+                .map_err(|_| serde::de::Error::custom("base_msat is greater than u32::MAX"))?;
+            let proportional_millionths: u32 =
+                proportional_millionths.try_into().map_err(|_| {
+                    serde::de::Error::custom("proportional_millionths is greater than u32::MAX")
+                })?;
+            return Ok(Some(RoutingFees {
+                base_msat,
+                proportional_millionths,
+            }));
         }
 
         Ok(None)

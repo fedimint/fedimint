@@ -104,7 +104,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
     /// API call to the federation would be inconvenient.
     fn all_peers(&self) -> &BTreeSet<PeerId>;
 
-    /// PeerId of the Guardian node, if set
+    /// `PeerId` of the Guardian node, if set
     ///
     /// This is for using Client in a "Admin" mode, making authenticated
     /// calls to own `fedimintd` instance.
@@ -513,7 +513,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Reset the peer setup codes during the federation setup process
     async fn reset_peer_setup_codes(&self, auth: ApiAuth) -> FederationResult<()>;
 
-    /// Returns the setup code if set_local_params was already called
+    /// Returns the setup code if `set_local_params` was already called
     async fn get_setup_code(&self, auth: ApiAuth) -> FederationResult<Option<String>>;
 
     /// During config gen, used for an API-to-API call that adds a peer's server

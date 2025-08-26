@@ -2232,7 +2232,7 @@ impl<'tx, C> DbMigrationFnContext<'tx, C> {
         (dbtx, ctx)
     }
 
-    pub fn dbtx(&mut self) -> DatabaseTransaction {
+    pub fn dbtx(&mut self) -> DatabaseTransaction<'_> {
         if let Some(module_instance_id) = self.module_instance_id {
             self.dbtx.to_ref_with_prefix_module_id(module_instance_id).0
         } else {

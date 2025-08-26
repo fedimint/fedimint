@@ -650,13 +650,13 @@ fn operation_id_from_user_key(user_key: PaymentCodeRootKey, index: u64) -> Opera
 trait LnClientContextExt {
     fn get_ln_module(
         &self,
-    ) -> Result<ClientModuleInstance<LightningClientModule>, RecurringPaymentError>;
+    ) -> Result<ClientModuleInstance<'_, LightningClientModule>, RecurringPaymentError>;
 }
 
 impl LnClientContextExt for ClientHandleArc {
     fn get_ln_module(
         &self,
-    ) -> Result<ClientModuleInstance<LightningClientModule>, RecurringPaymentError> {
+    ) -> Result<ClientModuleInstance<'_, LightningClientModule>, RecurringPaymentError> {
         self.get_first_module::<LightningClientModule>()
             .map_err(|e| {
                 warn!("No compatible lightning module found {e}");

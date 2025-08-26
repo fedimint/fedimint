@@ -2,11 +2,12 @@ use std::str::FromStr;
 
 use anyhow::ensure;
 use bitcoin::hashes::Hash;
-use fedimint_core::PeerId;
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{PeerId, impl_db_lookup};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::TracingSetup;
 use fedimint_testing::db::{
@@ -20,9 +21,17 @@ use super::{
     FederationConfigKeyPrefix, FederationConfigKeyV0, FederationConfigV0, FederationId,
     GatewayConfigurationKeyV0, GatewayConfigurationV0, GatewayDbExt, GatewayPublicKey,
     IDatabaseTransactionOpsCoreTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
-    PreimageAuthentication, PreimageAuthenticationPrefix, StreamExt,
-    get_gatewayd_database_migrations, migrate_federation_configs, secp256k1, sha256,
+    PreimageAuthentication, StreamExt, get_gatewayd_database_migrations,
+    migrate_federation_configs, secp256k1, sha256,
 };
+
+#[derive(Debug, Encodable, Decodable)]
+struct PreimageAuthenticationPrefix;
+
+impl_db_lookup!(
+    key = PreimageAuthentication,
+    query_prefix = PreimageAuthenticationPrefix
+);
 
 async fn create_gatewayd_db_data(db: Database) {
     let mut dbtx = db.begin_transaction().await;

@@ -17,6 +17,7 @@
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::match_wildcard_for_single_variants)]
 #![allow(clippy::trivially_copy_pass_by_ref)]
+#![allow(clippy::collapsible_if)]
 
 //! Server side fedimint module traits
 

@@ -193,8 +193,7 @@ impl GatewayLdkClient {
             claim_deadline,
             ..
         } = event
-        {
-            if let Err(err) = htlc_stream_sender
+            && let Err(err) = htlc_stream_sender
                 .send(InterceptPaymentRequest {
                     payment_hash: Hash::from_slice(&payment_hash.0).expect("Failed to create Hash"),
                     amount_msat: claimable_amount_msat,
@@ -204,9 +203,8 @@ impl GatewayLdkClient {
                     htlc_id: 0,
                 })
                 .await
-            {
-                warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed send InterceptHtlcRequest to stream");
-            }
+        {
+            warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed send InterceptHtlcRequest to stream");
         }
 
         // The `PaymentClaimable` event is the only event type that we are interested

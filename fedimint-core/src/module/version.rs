@@ -228,7 +228,7 @@ impl MultiApiVersion {
             .1
     }
 
-    fn iter(&self) -> MultiApiVersionIter {
+    fn iter(&self) -> MultiApiVersionIter<'_> {
         MultiApiVersionIter(self.0.iter())
     }
 

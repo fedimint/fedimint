@@ -648,7 +648,7 @@ impl Client {
     }
 
     /// Returns a reference to a typed module client instance by kind
-    pub fn get_first_module<M: ClientModule>(&self) -> anyhow::Result<ClientModuleInstance<M>> {
+    pub fn get_first_module<M: ClientModule>(&self) -> anyhow::Result<ClientModuleInstance<'_, M>> {
         let module_kind = M::kind();
         let id = self
             .get_first_instance(&module_kind)

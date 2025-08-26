@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use std::collections::BTreeMap;
 
 use bitcoin::hashes::{Hash, sha256};
@@ -396,14 +398,6 @@ impl_db_record!(
     key = PreimageAuthentication,
     value = sha256::Hash,
     db_prefix = DbKeyPrefix::PreimageAuthentication
-);
-
-#[derive(Debug, Encodable, Decodable)]
-struct PreimageAuthenticationPrefix;
-
-impl_db_lookup!(
-    key = PreimageAuthentication,
-    query_prefix = PreimageAuthenticationPrefix
 );
 
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDbMigrationFn> {

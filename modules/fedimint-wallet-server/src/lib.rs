@@ -1458,18 +1458,18 @@ impl Wallet {
                 .await;
 
             // Search for tx that this `removed` has as RBF
-            if let Some(rbf) = &removed.rbf {
-                if let Some(tx) = all_transactions.get(&rbf.txid) {
-                    pending_to_remove.push(tx.clone());
-                }
+            if let Some(rbf) = &removed.rbf
+                && let Some(tx) = all_transactions.get(&rbf.txid)
+            {
+                pending_to_remove.push(tx.clone());
             }
 
             // Search for tx that wanted to RBF the `removed` one
             for tx in all_transactions.values() {
-                if let Some(rbf) = &tx.rbf {
-                    if rbf.txid == removed.tx.compute_txid() {
-                        pending_to_remove.push(tx.clone());
-                    }
+                if let Some(rbf) = &tx.rbf
+                    && rbf.txid == removed.tx.compute_txid()
+                {
+                    pending_to_remove.push(tx.clone());
                 }
             }
         }
@@ -1623,7 +1623,7 @@ impl Wallet {
         dbtx.get_value(&UnspentTxOutKey(outpoint)).await.is_some()
     }
 
-    fn offline_wallet(&self) -> StatelessWallet {
+    fn offline_wallet(&self) -> StatelessWallet<'_> {
         StatelessWallet {
             descriptor: &self.cfg.consensus.peg_in_descriptor,
             secret_key: &self.cfg.private.peg_in_key,
@@ -1878,13 +1878,13 @@ impl StatelessWallet<'_> {
         consensus_fee_rate: Feerate,
         network: Network,
     ) -> Result<(), WalletOutputError> {
-        if let WalletOutputV0::PegOut(peg_out) = output {
-            if !peg_out.recipient.is_valid_for_network(network) {
-                return Err(WalletOutputError::WrongNetwork(
-                    NetworkLegacyEncodingWrapper(network),
-                    NetworkLegacyEncodingWrapper(get_network_for_address(&peg_out.recipient)),
-                ));
-            }
+        if let WalletOutputV0::PegOut(peg_out) = output
+            && !peg_out.recipient.is_valid_for_network(network)
+        {
+            return Err(WalletOutputError::WrongNetwork(
+                NetworkLegacyEncodingWrapper(network),
+                NetworkLegacyEncodingWrapper(get_network_for_address(&peg_out.recipient)),
+            ));
         }
 
         // Validate the tx amount is over the dust limit

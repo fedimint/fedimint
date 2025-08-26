@@ -53,10 +53,10 @@ where
             )
             .await;
 
-        if let Err(e) = &response {
-            if e.any_peer_error_method_not_found() {
-                return Ok(ModuleConsensusVersion::new(2, 0));
-            }
+        if let Err(e) = &response
+            && e.any_peer_error_method_not_found()
+        {
+            return Ok(ModuleConsensusVersion::new(2, 0));
         }
 
         response
@@ -70,10 +70,10 @@ where
             )
             .await;
 
-        if let Err(e) = &res {
-            if e.any_peer_error_method_not_found() {
-                return Ok(false);
-            }
+        if let Err(e) = &res
+            && e.any_peer_error_method_not_found()
+        {
+            return Ok(false);
         }
 
         res

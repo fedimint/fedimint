@@ -47,7 +47,7 @@ impl Notifications {
     /// Then waits for the notification when .awaited.
     ///
     /// NOTE: This may some false positives.
-    pub fn register<K>(&self, key: K) -> Notified
+    pub fn register<K>(&self, key: K) -> Notified<'_>
     where
         K: Hash,
     {
