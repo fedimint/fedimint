@@ -605,8 +605,8 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 .await?;
 
             info!(target: LOG_TEST, "Testing closing all channels...");
-            gw_ldk_second.close_all_channels().await?;
-            gw_ldk.close_all_channels().await?;
+            gw_ldk_second.close_all_channels(false).await?;
+            gw_ldk.close_all_channels(false).await?;
             let bitcoind = dev_fed.bitcoind().await?;
             // Need to mine enough blocks in case the channels are force closed.
             bitcoind.mine_blocks(2016).await?;

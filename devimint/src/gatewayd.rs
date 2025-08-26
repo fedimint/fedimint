@@ -32,7 +32,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA};
+use crate::version_constants::{VERSION_0_6_0_ALPHA, VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
 
 #[derive(Clone)]
 pub enum LdkChainSource {
@@ -441,19 +441,38 @@ impl Gatewayd {
         Ok(txid)
     }
 
-    pub async fn close_all_channels(&self) -> Result<()> {
-        let channels = self.list_active_channels().await?;
-        for chan in channels {
-            let remote_pubkey = chan.remote_pubkey;
+    pub async fn close_channel(&self, remote_pubkey: PublicKey, force: bool) -> Result<()> {
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let mut close_channel = if force && gateway_cli_version >= *VERSION_0_8_0_ALPHA {
             cmd!(
                 self,
                 "lightning",
                 "close-channels-with-peer",
                 "--pubkey",
-                remote_pubkey
+                remote_pubkey,
+                "--force",
             )
-            .run()
-            .await?;
+        } else {
+            cmd!(
+                self,
+                "lightning",
+                "close-channels-with-peer",
+                "--pubkey",
+                remote_pubkey,
+            )
+        };
+
+        close_channel.run().await?;
+
+        Ok(())
+    }
+
+    pub async fn close_all_channels(&self, force: bool) -> Result<()> {
+        let channels = self.list_active_channels().await?;
+
+        for chan in channels {
+            let remote_pubkey = chan.remote_pubkey;
+            self.close_channel(remote_pubkey, force).await?;
         }
 
         Ok(())
