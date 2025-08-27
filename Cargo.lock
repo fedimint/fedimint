@@ -238,9 +238,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.98"
+version = "1.0.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
+checksum = "b0674a1ddeecb70197781e945de4b3b8ffb61fa939a5597bcf48503737663100"
 dependencies = [
  "backtrace",
 ]
@@ -256,7 +256,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -306,7 +306,7 @@ dependencies = [
  "rand 0.9.1",
  "safelog",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "time",
  "tor-async-utils",
  "tor-basic-utils",
@@ -367,7 +367,7 @@ dependencies = [
  "nom",
  "num-traits",
  "rusticata-macros",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -378,7 +378,7 @@ checksum = "965c2d33e53cb6b267e148a4cb0760bc01f4904c1cd4bb4002a085bb016d1490"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "synstructure",
 ]
 
@@ -390,7 +390,7 @@ checksum = "3109e49b1e4909e9db6515a30c633684d68cdeaa252f215214cb4fa1a5bfee2c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "synstructure",
 ]
 
@@ -402,7 +402,7 @@ checksum = "7b18050c2cd6fe86c3a76584ef5e0baf286d038cda203eb6223df2cc413565f7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -451,9 +451,9 @@ dependencies = [
 
 [[package]]
 name = "async-lock"
-version = "3.4.0"
+version = "3.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff6e472cdea888a4bd64f342f09b3f50e1886d32afe8df3d663c01140b811b18"
+checksum = "5fd03604047cee9b6ce9de9f70c6cd540a0520c813cbd49bae61f33ab80ed1dc"
 dependencies = [
  "event-listener",
  "event-listener-strategy",
@@ -468,7 +468,7 @@ checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -490,18 +490,18 @@ checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
 name = "async-trait"
-version = "0.1.88"
+version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
+checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -757,14 +757,14 @@ checksum = "604fde5e028fea851ce1d8570bbdc034bec850d157f7569d10f347d06808c05c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
 name = "backon"
-version = "1.5.1"
+version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "302eaff5357a264a2c42f127ecb8bac761cf99749fc3dc95677e2743991f99e7"
+checksum = "592277618714fbcecda9a02ba7a8781f319d26532a88553bbacc77ba5d2b3a8d"
 dependencies = [
  "fastrand",
  "gloo-timers 0.3.0",
@@ -886,7 +886,7 @@ checksum = "1b9bf0bcfc01d6d67f2515b1fd4eab77b220726ed2ade09f9b6c90c286e0b767"
 dependencies = [
  "async-trait",
  "bdk_core",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.1",
  "futures",
 ]
 
@@ -949,7 +949,7 @@ dependencies = [
  "regex",
  "rustc-hash 1.1.0",
  "shlex",
- "syn 2.0.104",
+ "syn 2.0.106",
  "which",
 ]
 
@@ -968,7 +968,7 @@ dependencies = [
  "regex",
  "rustc-hash 2.1.1",
  "shlex",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1142,7 +1142,7 @@ checksum = "e0b121a9fe0df916e362fb3271088d071159cdf11db0e4182d02152850756eff"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1209,7 +1209,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1423,9 +1423,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.41"
+version = "4.5.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be92d32e80243a54711e5d7ce823c35c41c9d929dc4ab58e1276f625841aadf9"
+checksum = "2c5e4fcf9c21d2e544ca1ee9d8552de13019a42aa7dbf32747fa7aaf1df76e57"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1433,9 +1433,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.41"
+version = "4.5.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "707eab41e9622f9139419d573eca0900137718000c517d47da73045f54331c3d"
+checksum = "fecb53a0e6fcfb055f686001bc2e2592fa527efaf38dbe81a6a9563562e57d41"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1445,23 +1445,23 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.5.55"
+version = "4.5.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5abde44486daf70c5be8b8f8f1b66c49f86236edf6fa2abadb4d961c4c6229a"
+checksum = "4d9501bd3f5f09f7bbee01da9a511073ed30a80cd7a509f1214bb74eadea71ad"
 dependencies = [
  "clap",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "4.5.41"
+version = "4.5.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef4f52386a59ca4c860f7393bcf8abd8dfd91ecccc0f774635ff68e92eeef491"
+checksum = "14cb31bb0a7d536caef2639baa7fad459e15c3144efefa6dbd1c84562c4739f6"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1875,7 +1875,7 @@ checksum = "f46882e17999c6cc590af592290432be3bce0428cb0d5f8b6715e4dc7b383eb3"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1933,7 +1933,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.11.1",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1947,7 +1947,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.11.1",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1969,7 +1969,7 @@ checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core 0.20.11",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -1980,7 +1980,7 @@ checksum = "e79f8e61677d5df9167cd85265f8e5f64b215cdea3fb55eebc3e622e44c7a146"
 dependencies = [
  "darling_core 0.21.0",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2037,7 +2037,7 @@ checksum = "8034092389675178f570469e6c3b0465d3d30b4505c294a6550db47f3c17ad18"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2094,8 +2094,8 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha3",
- "strum 0.27.1",
- "syn 2.0.104",
+ "strum 0.27.2",
+ "syn 2.0.106",
  "void",
 ]
 
@@ -2112,8 +2112,8 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sha3",
- "strum 0.27.1",
- "syn 2.0.104",
+ "strum 0.27.2",
+ "syn 2.0.106",
  "void",
 ]
 
@@ -2175,7 +2175,7 @@ dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "unicode-xid",
 ]
 
@@ -2188,7 +2188,7 @@ dependencies = [
  "convert_case 0.7.1",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "unicode-xid",
 ]
 
@@ -2203,7 +2203,7 @@ dependencies = [
  "bon",
  "chrono",
  "clap",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.1",
  "fedimint-aead",
  "fedimint-api-client",
  "fedimint-build",
@@ -2234,7 +2234,7 @@ dependencies = [
  "itertools 0.14.0",
  "nix",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "semver",
  "serde",
  "serde_json",
@@ -2300,7 +2300,7 @@ checksum = "97369cbbc041bc366949bc74d34658d6cda5621039731c6310521892a3a20ae0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2498,7 +2498,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2511,7 +2511,7 @@ dependencies = [
  "num-traits",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2531,7 +2531,7 @@ checksum = "67c78a4d8fdf9953a5c9d458f9efe940fd97a0cab0941c075a813ac594733827"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -2576,14 +2576,14 @@ dependencies = [
 
 [[package]]
 name = "esplora-client"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "209cf00e44b979682b22be38672317d8bb48dd5ea2726e61b762d6b14b5842f2"
+checksum = "a0af349d96a5d9ad77ba59f1437aa6f348b03c5865d4f7d6e7a662d60aedce39"
 dependencies = [
  "bitcoin",
  "hex-conservative 0.2.1",
  "log",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "tokio",
 ]
@@ -2687,8 +2687,8 @@ dependencies = [
  "rustls-pki-types",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-rustls 0.26.2",
  "tracing",
@@ -2715,7 +2715,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.1",
  "fedimint-core",
  "fedimint-logging",
  "tracing",
@@ -2760,7 +2760,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tikv-jemallocator",
  "time",
  "tokio",
@@ -2784,11 +2784,11 @@ dependencies = [
  "fedimint-eventlog",
  "fedimint-logging",
  "futures",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2813,12 +2813,12 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2916,10 +2916,10 @@ dependencies = [
  "serde_json",
  "serdect",
  "slotmap",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-rustls 0.26.2",
  "tokio-test",
@@ -2989,7 +2989,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3001,7 +3001,7 @@ dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -3034,9 +3034,9 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3047,7 +3047,7 @@ dependencies = [
  "anyhow",
  "fedimint-core",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3062,8 +3062,8 @@ dependencies = [
  "fedimint-server-core",
  "futures",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -3082,7 +3082,7 @@ dependencies = [
  "fedimint-testing",
  "futures",
  "rand 0.8.5",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3099,9 +3099,9 @@ dependencies = [
  "fedimint-core",
  "fedimint-empty-common",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3111,7 +3111,7 @@ dependencies = [
  "anyhow",
  "fedimint-core",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3126,8 +3126,8 @@ dependencies = [
  "fedimint-server-core",
  "futures",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -3177,10 +3177,10 @@ dependencies = [
  "fedimint-logging",
  "fedimint-mint-client",
  "lightning-invoice",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
 ]
 
@@ -3215,7 +3215,7 @@ dependencies = [
  "bitcoin",
  "clap",
  "erased-serde",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.1",
  "fedimint-api-client",
  "fedimint-bip39",
  "fedimint-build",
@@ -3256,12 +3256,12 @@ dependencies = [
  "lockable",
  "prost 0.13.5",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.16",
  "tikv-jemallocator",
  "tokio",
  "tokio-stream",
@@ -3292,8 +3292,8 @@ dependencies = [
  "lightning-invoice",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3320,7 +3320,7 @@ dependencies = [
  "futures",
  "lightning-invoice",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio-stream",
  "tracing",
 ]
@@ -3348,7 +3348,7 @@ dependencies = [
  "lightning-invoice",
  "serde",
  "serde_millis",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3376,7 +3376,7 @@ dependencies = [
  "chrono",
  "electrum-client 0.23.1",
  "esplora-client 0.11.0",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.1",
  "libc",
  "lightning",
  "lightning-background-processor",
@@ -3391,7 +3391,7 @@ dependencies = [
  "log",
  "prost 0.11.9",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3420,7 +3420,7 @@ dependencies = [
  "lightning-invoice",
  "lockable",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -3449,12 +3449,12 @@ dependencies = [
  "lightning-invoice",
  "lnurl-rs",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -3472,7 +3472,7 @@ dependencies = [
  "serde",
  "serde-big-array",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3494,8 +3494,8 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
  "tokio",
  "tracing",
@@ -3525,7 +3525,7 @@ dependencies = [
  "lightning-invoice",
  "rand 0.8.5",
  "serde_json",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3553,8 +3553,8 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -3572,10 +3572,10 @@ dependencies = [
  "group",
  "lightning-invoice",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3596,8 +3596,8 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3683,9 +3683,9 @@ dependencies = [
  "fedimint-meta-common",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3699,7 +3699,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3717,8 +3717,8 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tracing",
 ]
 
@@ -3779,10 +3779,10 @@ dependencies = [
  "serde-big-array",
  "serde_json",
  "serdect",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -3796,7 +3796,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-tbs",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -3819,8 +3819,8 @@ dependencies = [
  "itertools 0.14.0",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "test-log",
  "tokio",
  "tracing",
@@ -3854,7 +3854,7 @@ dependencies = [
  "futures",
  "rand 0.8.5",
  "serde",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -3930,7 +3930,7 @@ dependencies = [
  "anyhow",
  "devimint",
  "lightning-invoice",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde_json",
  "tokio",
  "tracing",
@@ -3991,8 +3991,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "subtle",
  "tar",
  "test-log",
@@ -4013,7 +4013,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
- "esplora-client 0.12.0",
+ "esplora-client 0.12.1",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-server-core",
@@ -4051,7 +4051,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "rand 0.8.5",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4073,7 +4073,7 @@ dependencies = [
  "maud",
  "serde",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -4211,7 +4211,7 @@ dependencies = [
  "anyhow",
  "fedimint-core",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -4224,8 +4224,8 @@ dependencies = [
  "fedimint-core",
  "fedimint-server-core",
  "fedimint-unknown-common",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -4251,8 +4251,8 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4269,7 +4269,7 @@ dependencies = [
  "miniscript",
  "serde",
  "test-log",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -4294,8 +4294,8 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum 0.27.2",
+ "strum_macros 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4327,7 +4327,7 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "rand 0.8.5",
- "strum 0.27.1",
+ "strum 0.27.2",
  "tokio",
  "tracing",
 ]
@@ -4484,12 +4484,9 @@ dependencies = [
 
 [[package]]
 name = "fs-lock"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4f2056716254938d208ed159fdd08d9d5f6fc208568fd80a5d8a69d3614b96"
-dependencies = [
- "fs4",
-]
+checksum = "cbe8007099aa47bbb6db591a80b992ba9da3241b086647b8e1d318d8317882c6"
 
 [[package]]
 name = "fs-mistrust"
@@ -4502,7 +4499,7 @@ dependencies = [
  "libc",
  "pwd-grp",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "walkdir",
 ]
 
@@ -4514,16 +4511,6 @@ checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "fs4"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8640e34b88f7652208ce9e88b1a37a2ae95227d84abec377ccd3c5cfeb141ed4"
-dependencies = [
- "rustix 1.0.7",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4630,7 +4617,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5047,7 +5034,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.1",
  "ring",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tinyvec",
  "tokio",
  "tracing",
@@ -5070,7 +5057,7 @@ dependencies = [
  "rand 0.9.1",
  "resolv-conf",
  "smallvec",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
 ]
@@ -5522,7 +5509,7 @@ dependencies = [
  "autocfg",
  "impl-tools-lib",
  "proc-macro-error2",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5534,7 +5521,7 @@ dependencies = [
  "proc-macro-error2",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5545,7 +5532,7 @@ checksum = "a0eb5a3343abf848c0984fe4604b2b105da9539376e24fc0a3b0007411ae4fd9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5724,7 +5711,7 @@ dependencies = [
  "portmapper 0.5.0",
  "rand 0.8.5",
  "rcgen",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "ring",
  "rustls 0.23.28",
  "rustls-webpki 0.102.8",
@@ -5734,7 +5721,7 @@ dependencies = [
  "strum 0.26.3",
  "stun-rs",
  "surge-ping",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "time",
  "tokio",
  "tokio-stream",
@@ -5785,7 +5772,7 @@ dependencies = [
  "pkarr",
  "portmapper 0.6.1",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "ring",
  "rustls 0.23.28",
  "rustls-pki-types",
@@ -5821,7 +5808,7 @@ dependencies = [
  "postcard",
  "rand_core 0.6.4",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "url",
 ]
 
@@ -5879,7 +5866,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -5896,7 +5883,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "rustls 0.23.28",
  "socket2",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
  "web-time",
@@ -5916,7 +5903,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "rustls 0.23.28",
  "socket2",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
  "web-time",
@@ -5936,7 +5923,7 @@ dependencies = [
  "rustls 0.23.28",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tinyvec",
  "tracing",
  "web-time",
@@ -5984,14 +5971,14 @@ dependencies = [
  "pkarr",
  "postcard",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rustls 0.23.28",
  "rustls-webpki 0.102.8",
  "serde",
  "sha1",
  "strum 0.26.3",
  "stun-rs",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-rustls 0.26.2",
  "tokio-util",
@@ -6032,7 +6019,7 @@ dependencies = [
  "pkarr",
  "postcard",
  "rand 0.8.5",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "rustls 0.23.28",
  "rustls-pki-types",
  "rustls-webpki 0.103.3",
@@ -6461,7 +6448,7 @@ checksum = "9d44a6fb8c698180c758fd391ae9631be92a4dbf0a82121e7dd8b1a28d0cfa75"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -6558,7 +6545,7 @@ dependencies = [
  "bitcoin",
  "cbc",
  "email_address",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "serde",
  "serde_json",
  "url",
@@ -6573,7 +6560,7 @@ dependencies = [
  "fedimint-core",
  "lightning-invoice",
  "lnurl-rs",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "tokio",
 ]
 
@@ -6687,7 +6674,7 @@ dependencies = [
  "serde_bencode",
  "serde_bytes",
  "sha1_smol",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tracing",
 ]
 
@@ -6731,7 +6718,7 @@ dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -6800,9 +6787,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "12.3.4"
+version = "12.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1eeb3bbebc87062b99fbb8c9067d30dab85469f4cf12248a2667777cc86b282"
+checksum = "487906208f38448e186e3deb02f2b8ef046a9078b0de00bdb28bf4fb9b76951c"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -7009,7 +6996,7 @@ dependencies = [
  "log",
  "netlink-packet-core",
  "netlink-sys",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -7270,7 +7257,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7527,7 +7514,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7614,7 +7601,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1db05f56d34358a8b1066f67cbb203ee3e7ed2ba674a6263a1d5ec6db2204323"
 dependencies = [
  "memchr",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "ucd-trie",
 ]
 
@@ -7638,7 +7625,7 @@ dependencies = [
  "pest_meta",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7702,7 +7689,7 @@ dependencies = [
  "phf_shared",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7731,7 +7718,7 @@ checksum = "6e918e4ff8c4549eb882f14b3a4bc8c8bc93de829416eacf579f1207a8fbf861"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -7766,12 +7753,12 @@ dependencies = [
  "lru 0.13.0",
  "mainline",
  "ntimestamp",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "self_cell",
  "serde",
  "sha1_smol",
  "simple-dns",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
  "url",
@@ -7851,7 +7838,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8078,7 +8065,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "061c1221631e079b26479d25bbf2275bfe5917ae8419cd7e34f13bfc2aa7539a"
 dependencies = [
  "proc-macro2",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8157,9 +8144,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.95"
+version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778"
+checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
 dependencies = [
  "unicode-ident",
 ]
@@ -8172,7 +8159,7 @@ checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "version_check",
 ]
 
@@ -8188,7 +8175,7 @@ dependencies = [
  "memchr",
  "parking_lot",
  "protobuf",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -8249,7 +8236,7 @@ dependencies = [
  "prost 0.13.5",
  "prost-types 0.13.5",
  "regex",
- "syn 2.0.104",
+ "syn 2.0.106",
  "tempfile",
 ]
 
@@ -8276,7 +8263,7 @@ dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8343,7 +8330,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "rustls 0.23.28",
  "socket2",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
  "web-time",
@@ -8364,7 +8351,7 @@ dependencies = [
  "rustls 0.23.28",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tinyvec",
  "tracing",
  "web-time",
@@ -8562,7 +8549,7 @@ checksum = "dd6f9d3d47bdd2ad6945c5015a226ec6155d0bcdfd8f7cd29f86b71f8de99d2b"
 dependencies = [
  "getrandom 0.2.16",
  "libredox",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -8582,7 +8569,7 @@ checksum = "1165225c21bff1f3bbce98f5a1f889949bc902d3575308cc7b0de30b4f6d27c7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -8679,9 +8666,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.22"
+version = "0.12.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbc931937e6ca3a06e3b6c0aa7841849b160a90351d6ab467a8b9b9959767531"
+checksum = "d429f34c8092b2d42c7c93cec323bb4adeb7c67698f70839adec842ec10c7ceb"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -8973,7 +8960,7 @@ dependencies = [
  "educe",
  "either",
  "fluid-let",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -9151,7 +9138,7 @@ checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9165,9 +9152,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.141"
+version = "1.0.143"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30b9eff21ebe718216c6ec64e1d9ac57087aad11efc64e32002bce4a0d4c03d3"
+checksum = "d401abef1d108fbd9cbaebc3e46611f4b1021f714a0597a71f41ee463f5f4a5a"
 dependencies = [
  "itoa",
  "memchr",
@@ -9243,7 +9230,7 @@ dependencies = [
  "darling 0.20.11",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9385,7 +9372,7 @@ dependencies = [
  "paste",
  "serde",
  "slotmap",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "void",
 ]
 
@@ -9414,7 +9401,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9538,11 +9525,11 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.27.1"
+version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
 dependencies = [
- "strum_macros 0.27.1",
+ "strum_macros 0.27.2",
 ]
 
 [[package]]
@@ -9555,20 +9542,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
 name = "strum_macros"
-version = "0.27.1"
+version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "rustversion",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9639,9 +9625,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.104"
+version = "2.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17b6f705963418cdb9927482fa304bc562ece2fdd4f616084c50b7023b435a40"
+checksum = "ede7c438028d4436d71104916910f5bb611972c5cfd7f89b8300a8186e6fada6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9671,7 +9657,7 @@ checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9793,7 +9779,7 @@ checksum = "451b374529930d7601b1eef8d32bc79ae870b6079b069401709c2a8bf9e75f36"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9807,11 +9793,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.12"
+version = "2.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
+checksum = "3467d614147380f2e4e374161426ff399c91084acd2363eaf549172b3d5e60c0"
 dependencies = [
- "thiserror-impl 2.0.12",
+ "thiserror-impl 2.0.16",
 ]
 
 [[package]]
@@ -9822,18 +9808,18 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.12"
+version = "2.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
+checksum = "6c5e1be1c48b9172ee610da68fd9cd2770e7a4056cb3fc98710ee6906f0c7960"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -9992,7 +9978,7 @@ checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -10054,16 +10040,15 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.15"
+version = "0.7.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66a539a9ad6d5d281510d5bd368c973d636c02dbf8a67300bfb6b950696ad7df"
+checksum = "14307c986784f72ef81c89db7d9e28d6ac26d16213b109ea501696195e6e3ce5"
 dependencies = [
  "bytes",
  "futures-core",
  "futures-io",
  "futures-sink",
  "futures-util",
- "hashbrown 0.15.4",
  "pin-project-lite",
  "tokio",
 ]
@@ -10202,7 +10187,7 @@ dependencies = [
  "prost-build 0.13.5",
  "prost-types 0.13.5",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -10217,7 +10202,7 @@ dependencies = [
  "oneshot-fused-workaround",
  "pin-project",
  "postage",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "void",
 ]
 
@@ -10237,7 +10222,7 @@ dependencies = [
  "serde",
  "slab",
  "smallvec",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -10252,7 +10237,7 @@ dependencies = [
  "educe",
  "getrandom 0.3.3",
  "safelog",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-error",
  "tor-llcrypto",
  "zeroize",
@@ -10274,7 +10259,7 @@ dependencies = [
  "paste",
  "rand 0.9.1",
  "smallvec",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-basic-utils",
  "tor-bytes",
  "tor-cert",
@@ -10298,7 +10283,7 @@ dependencies = [
  "derive_builder_fork_arti",
  "derive_more 2.0.1",
  "digest",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-bytes",
  "tor-checkable",
  "tor-llcrypto",
@@ -10321,7 +10306,7 @@ dependencies = [
  "rand 0.9.1",
  "safelog",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-async-utils",
  "tor-basic-utils",
  "tor-cell",
@@ -10347,7 +10332,7 @@ checksum = "5703d370d4ee4b5c318ac8b944a3b183e2865f6f0104475d36b9e1b8c89f0f38"
 dependencies = [
  "humantime",
  "signature",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-llcrypto",
 ]
 
@@ -10377,7 +10362,7 @@ dependencies = [
  "safelog",
  "serde",
  "static_assertions",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-async-utils",
  "tor-basic-utils",
  "tor-chanmgr",
@@ -10422,8 +10407,8 @@ dependencies = [
  "serde",
  "serde-value",
  "serde_ignored",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "toml",
  "tor-basic-utils",
  "tor-error",
@@ -10441,7 +10426,7 @@ dependencies = [
  "directories",
  "serde",
  "shellexpand",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-error",
  "tor-general-addr",
 ]
@@ -10454,7 +10439,7 @@ checksum = "b5164757c908a50737ebd483a0e29380e53db0b14103f7996751e28964c6d98a"
 dependencies = [
  "digest",
  "hex",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-llcrypto",
 ]
 
@@ -10474,7 +10459,7 @@ dependencies = [
  "httpdate",
  "itertools 0.14.0",
  "memchr",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-circmgr",
  "tor-error",
  "tor-hscrypto",
@@ -10518,8 +10503,8 @@ dependencies = [
  "serde_json",
  "signature",
  "static_assertions",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "time",
  "tor-async-utils",
  "tor-basic-utils",
@@ -10551,8 +10536,8 @@ dependencies = [
  "paste",
  "retry-error",
  "static_assertions",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "tracing",
  "void",
 ]
@@ -10564,7 +10549,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc9d4a8c4593a0c590c66bae348590fb49dbf04da264cacc0631d71a92e5d2ac"
 dependencies = [
  "derive_more 2.0.1",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "void",
 ]
 
@@ -10592,8 +10577,8 @@ dependencies = [
  "rand 0.9.1",
  "safelog",
  "serde",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "tor-async-utils",
  "tor-basic-utils",
  "tor-config",
@@ -10629,8 +10614,8 @@ dependencies = [
  "retry-error",
  "safelog",
  "slotmap-careful",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "tor-async-utils",
  "tor-basic-utils",
  "tor-bytes",
@@ -10673,7 +10658,7 @@ dependencies = [
  "serde",
  "signature",
  "subtle",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-basic-utils",
  "tor-bytes",
  "tor-error",
@@ -10697,7 +10682,7 @@ dependencies = [
  "rand 0.9.1",
  "signature",
  "ssh-key",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-bytes",
  "tor-cert",
  "tor-checkable",
@@ -10729,7 +10714,7 @@ dependencies = [
  "serde",
  "signature",
  "ssh-key",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-basic-utils",
  "tor-bytes",
  "tor-config",
@@ -10762,8 +10747,8 @@ dependencies = [
  "safelog",
  "serde",
  "serde_with",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "tor-basic-utils",
  "tor-bytes",
  "tor-config",
@@ -10804,7 +10789,7 @@ dependencies = [
  "sha3",
  "signature",
  "subtle",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-memquota",
  "visibility",
  "x25519-dalek",
@@ -10819,7 +10804,7 @@ checksum = "8fc97bd804ac7aeaf771dc4507c65f8c5fac1d4f8e469551aaa3bf240fce1171"
 dependencies = [
  "futures",
  "humantime",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-error",
  "tor-rtcompat",
  "tracing",
@@ -10845,7 +10830,7 @@ dependencies = [
  "slotmap-careful",
  "static_assertions",
  "sysinfo",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-async-utils",
  "tor-basic-utils",
  "tor-config",
@@ -10874,8 +10859,8 @@ dependencies = [
  "rand 0.9.1",
  "serde",
  "static_assertions",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "time",
  "tor-basic-utils",
  "tor-error",
@@ -10914,7 +10899,7 @@ dependencies = [
  "signature",
  "smallvec",
  "subtle",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "time",
  "tinystr",
  "tor-basic-utils",
@@ -10951,7 +10936,7 @@ dependencies = [
  "sanitize-filename",
  "serde",
  "serde_json",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "time",
  "tor-async-utils",
  "tor-basic-utils",
@@ -10996,7 +10981,7 @@ dependencies = [
  "static_assertions",
  "subtle",
  "sync_wrapper 1.0.2",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-util",
  "tor-async-utils",
@@ -11032,7 +11017,7 @@ dependencies = [
  "caret",
  "paste",
  "serde_with",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-bytes",
 ]
 
@@ -11071,7 +11056,7 @@ dependencies = [
  "pin-project",
  "rustls-pki-types",
  "rustls-webpki 0.103.3",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tokio",
  "tokio-util",
  "tor-error",
@@ -11099,8 +11084,8 @@ dependencies = [
  "pin-project",
  "priority-queue",
  "slotmap-careful",
- "strum 0.27.1",
- "thiserror 2.0.12",
+ "strum 0.27.2",
+ "thiserror 2.0.16",
  "tor-error",
  "tor-general-addr",
  "tor-rtcompat",
@@ -11121,7 +11106,7 @@ dependencies = [
  "educe",
  "safelog",
  "subtle",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-bytes",
  "tor-error",
 ]
@@ -11135,7 +11120,7 @@ dependencies = [
  "derive-deftly 1.2.0",
  "derive_more 2.0.1",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "tor-memquota",
 ]
 
@@ -11230,7 +11215,7 @@ checksum = "81383ab64e72a7a8b8e13130c49e3dab29def6d0c7d76a03087b3cf71c5c6903"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -11318,7 +11303,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04659ddb06c87d233c566112c1c9c5b9e98256d9af50ec3bc9c8327f873a7568"
 dependencies = [
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -11483,7 +11468,7 @@ checksum = "d674d135b4a8c1d7e813e2f8d1c9a58308aee4a680323066025e53132218bd91"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -11577,7 +11562,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "wasm-bindgen-shared",
 ]
 
@@ -11612,7 +11597,7 @@ checksum = "8ae87ea40c9f689fc23f209965b6fb8a99ad69aeeb0231408be24920604395de"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -11647,7 +11632,7 @@ checksum = "17d5042cc5fa009658f9a7333ef24291b1291a25b6382dd68862a7f3b969f69b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -11839,7 +11824,7 @@ checksum = "83577b051e2f49a058c308f17f273b570a6a758386fc291b5f6a934dd84e48c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -11850,7 +11835,7 @@ checksum = "a47fddd13af08290e67f4acabf4b459f647552718f683a7b415d290ac744a836"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -11861,7 +11846,7 @@ checksum = "bd9211b69f8dcdfa817bfd14bf1c97c9188afa36f4750130fcdf3f400eca9fa8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -12175,7 +12160,7 @@ dependencies = [
  "futures",
  "log",
  "serde",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "windows 0.59.0",
  "windows-core 0.59.0",
 ]
@@ -12199,7 +12184,7 @@ dependencies = [
  "pharos",
  "rustc_version",
  "send_wrapper 0.6.0",
- "thiserror 2.0.12",
+ "thiserror 2.0.16",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -12297,7 +12282,7 @@ checksum = "38da3c9736e16c5d3c8c597a9aaa5d1fa565d0532ae05e27c24aa62fb32c0ab6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "synstructure",
 ]
 
@@ -12324,7 +12309,7 @@ checksum = "9ecf5b4cc5364572d7f4c329661bcc82724222973f2cab6f050a4e5c22f75181"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -12344,7 +12329,7 @@ checksum = "d71e5d6e06ab090c67b5e44993ec16b72dcbaabc526db883a360057678b48502"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
  "synstructure",
 ]
 
@@ -12365,7 +12350,7 @@ checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -12398,7 +12383,7 @@ checksum = "5b96237efa0c878c64bd89c436f661be4e46b2f3eff1ebb976f7ef2321d2f58f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.106",
 ]
 
 [[package]]
