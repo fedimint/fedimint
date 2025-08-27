@@ -20,7 +20,9 @@ use base64::Engine as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError, PeerError};
-use fedimint_core::admin_client::{PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus};
+use fedimint_core::admin_client::{
+    GuardianConfigBackup, PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus,
+};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
@@ -1260,14 +1262,6 @@ pub enum LegacyP2PConnectionStatus {
 pub struct StatusResponse {
     pub server: ServerStatusLegacy,
     pub federation: Option<LegacyFederationStatus>,
-}
-
-/// Archive of all the guardian config files that can be used to recover a lost
-/// guardian node.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GuardianConfigBackup {
-    #[serde(with = "fedimint_core::hex::serde")]
-    pub tar_archive_bytes: Vec<u8>,
 }
 
 #[cfg(test)]
