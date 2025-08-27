@@ -1,5 +1,20 @@
 # Docker support
 
+> **⚠️ Scope of Support**
+> The Docker Compose configuration provided here is suitable for production use **when deployed as-is**.
+> We provide support only for:
+> - Unmodified Docker Compose deployments following our exact instructions
+> - Issues with the base configuration we provide
+>
+> We **do not** provide support for:
+> - Modified Docker Compose configurations
+> - Deployments using orchestration platforms (Kubernetes, Portainer, Docker Swarm, etc.)
+> - Custom networking setups beyond basic SSH port forwarding
+>
+> If you modify this configuration or integrate it into your own infrastructure, you are expected
+> to have the technical expertise to debug and resolve issues independently. For managed deployments
+> with full support, consider Start9 or similar node-in-a-box solutions.
+
 Our CI [automatically](https://github.com/fedimint/fedimint/blob/67760e2f21d2fa628ec9cd549b4bfb65571e4511/.github/workflows/ci-nix.yml#L375C3-L375C13)
 publishes [docker container images of all fedimintd components](https://hub.docker.com/u/fedimint).
 
