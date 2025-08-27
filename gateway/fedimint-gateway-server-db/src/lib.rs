@@ -398,6 +398,7 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::PreimageAuthentication
 );
 
+#[allow(dead_code)] // used in tests
 #[derive(Debug, Encodable, Decodable)]
 struct PreimageAuthenticationPrefix;
 

@@ -1,7 +1,7 @@
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::impl_db_record;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{impl_db_lookup, impl_db_record};
 use strum::EnumIter;
 
 #[repr(u8)]
@@ -23,12 +23,8 @@ pub enum DbKeyPrefix {
 #[derive(Debug, Encodable, Decodable)]
 pub struct GatewayKey(pub PublicKey);
 
-#[derive(Debug, Encodable, Decodable)]
-pub struct GatewayPrefix;
-
 impl_db_record!(
     key = GatewayKey,
     value = SafeUrl,
     db_prefix = DbKeyPrefix::Gateway,
 );
-impl_db_lookup!(key = GatewayKey, query_prefix = GatewayPrefix);
