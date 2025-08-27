@@ -1,18 +1,20 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
 
 //! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
 //! model) interact with the Lightning network through a Lightning gateway.
 
-extern crate core;
-
 pub mod config;
 pub mod contracts;
 pub mod endpoint_constants;
 pub mod gateway_api;
+pub mod lnurl;
+pub mod tweak;
 
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::schnorr::Signature;
