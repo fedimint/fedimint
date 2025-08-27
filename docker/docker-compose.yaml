@@ -1,6 +1,6 @@
 services:
   fedimintd:
-    image: fedimint/fedimintd:v0.8.0
+    image: fedimint/fedimintd:v0.8.1
     ports:
       - 8173:8173/tcp # p2p tls
       - 8173:8173/udp # p2p iroh
