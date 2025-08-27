@@ -544,7 +544,7 @@ impl GatewayClientModuleV2 {
         Ok(self.await_receive(operation_id).await)
     }
 
-    async fn await_receive(&self, operation_id: OperationId) -> FinalReceiveState {
+    pub async fn await_receive(&self, operation_id: OperationId) -> FinalReceiveState {
         let mut stream = self.notifier.subscribe(operation_id).await;
 
         loop {
