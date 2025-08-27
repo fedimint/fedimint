@@ -32,9 +32,27 @@ enum Opts {
     },
     /// Await the final state of the receive operation.
     AwaitReceive { operation_id: OperationId },
+    /// Lnurl subcommands
+    #[command(subcommand)]
+    Lnurl(LnurlOpts),
     /// Gateway subcommands
     #[command(subcommand)]
     Gateways(GatewaysOpts),
+}
+
+#[derive(Clone, Subcommand, Serialize)]
+enum LnurlOpts {
+    /// Generate a new lnurl.
+    Generate {
+        recurringd: SafeUrl,
+        #[arg(long)]
+        gateway: Option<SafeUrl>,
+    },
+    /// Receive an lnurl.
+    Receive {
+        #[arg(long)]
+        batch_size: Option<usize>,
+    },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -90,6 +108,15 @@ pub(crate) async fn handle_cli_command(
                 .await_final_receive_operation_state(operation_id)
                 .await?,
         ),
+        Opts::Lnurl(lnurl_opts) => match lnurl_opts {
+            LnurlOpts::Generate {
+                recurringd,
+                gateway,
+            } => json(lightning.generate_lnurl(recurringd, gateway).await?),
+            LnurlOpts::Receive { batch_size } => {
+                json(lightning.receive_lnurl(batch_size, Value::Null).await)
+            }
+        },
         Opts::Gateways(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
             GatewaysOpts::Map => json(

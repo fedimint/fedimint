@@ -63,13 +63,10 @@ impl GatewayConnection for RealGatewayConnection {
         gateway_api: SafeUrl,
         federation_id: &FederationId,
     ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
+        let endpoint = gateway_api.join(ROUTING_INFO_ENDPOINT).unwrap();
+
         reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join(ROUTING_INFO_ENDPOINT)
-                    .expect("'routing_info' contains no invalid characters for a URL")
-                    .as_str(),
-            )
+            .post(endpoint.as_str())
             .json(federation_id)
             .send()
             .await
@@ -88,13 +85,10 @@ impl GatewayConnection for RealGatewayConnection {
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
     ) -> Result<Bolt11Invoice, GatewayConnectionError> {
+        let endpoint = gateway_api.join(CREATE_BOLT11_INVOICE_ENDPOINT).unwrap();
+
         reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join(CREATE_BOLT11_INVOICE_ENDPOINT)
-                    .expect("'create_bolt11_invoice' contains no invalid characters for a URL")
-                    .as_str(),
-            )
+            .post(endpoint.as_str())
             .json(&CreateBolt11InvoicePayload {
                 federation_id,
                 contract,
@@ -119,13 +113,10 @@ impl GatewayConnection for RealGatewayConnection {
         invoice: LightningInvoice,
         auth: Signature,
     ) -> Result<Result<[u8; 32], Signature>, GatewayConnectionError> {
+        let endpoint = gateway_api.join(SEND_PAYMENT_ENDPOINT).unwrap();
+
         reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join(SEND_PAYMENT_ENDPOINT)
-                    .expect("'send_payment' contains no invalid characters for a URL")
-                    .as_str(),
-            )
+            .post(endpoint.as_str())
             .json(&SendPaymentPayload {
                 federation_id,
                 outpoint,

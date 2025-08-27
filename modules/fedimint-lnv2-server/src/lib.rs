@@ -36,9 +36,9 @@ use fedimint_lnv2_common::config::{
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, DECRYPTION_KEY_SHARE_ENDPOINT, GATEWAYS_ENDPOINT,
-    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT,
+    AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, DECRYPTION_KEY_SHARE_ENDPOINT,
+    GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
@@ -63,10 +63,11 @@ use tracing::trace;
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, DecryptionKeyShareKey,
-    DecryptionKeySharePrefix, GatewayKey, GatewayPrefix, IncomingContractKey,
-    IncomingContractOutpointKey, IncomingContractOutpointPrefix, IncomingContractPrefix,
-    OutgoingContractKey, OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey,
-    UnixTimeVotePrefix,
+    DecryptionKeySharePrefix, GatewayKey, GatewayPrefix, IncomingContractIndexKey,
+    IncomingContractIndexPrefix, IncomingContractKey, IncomingContractOutpointKey,
+    IncomingContractOutpointPrefix, IncomingContractPrefix, IncomingContractStreamIndexKey,
+    IncomingContractStreamKey, IncomingContractStreamPrefix, OutgoingContractKey,
+    OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -75,6 +76,7 @@ pub struct LightningInit;
 impl ModuleInit for LightningInit {
     type Common = LightningCommonInit;
 
+    #[allow(clippy::too_many_lines)]
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -167,6 +169,36 @@ impl ModuleInit for LightningInit {
                         (),
                         lightning,
                         "Lightning Gateways"
+                    );
+                }
+                DbKeyPrefix::IncomingContractStreamIndex => {
+                    push_db_pair_items!(
+                        dbtx,
+                        IncomingContractStreamIndexKey,
+                        IncomingContractStreamIndexKey,
+                        u64,
+                        lightning,
+                        "Lightning Incoming Contract Stream Index"
+                    );
+                }
+                DbKeyPrefix::IncomingContractStream => {
+                    push_db_pair_items!(
+                        dbtx,
+                        IncomingContractStreamPrefix(0),
+                        IncomingContractStreamKey,
+                        IncomingContract,
+                        lightning,
+                        "Lightning Incoming Contract Stream"
+                    );
+                }
+                DbKeyPrefix::IncomingContractIndex => {
+                    push_db_pair_items!(
+                        dbtx,
+                        IncomingContractIndexPrefix,
+                        IncomingContractIndexKey,
+                        u64,
+                        lightning,
+                        "Lightning Incoming Contract Index"
                     );
                 }
             }
@@ -444,6 +476,13 @@ impl ServerModule for Lightning {
                     .await
                     .ok_or(LightningInputError::UnknownContract)?;
 
+                if let Some(index) = dbtx
+                    .remove_entry(&IncomingContractIndexKey(*outpoint))
+                    .await
+                {
+                    dbtx.remove_entry(&IncomingContractStreamKey(index)).await;
+                }
+
                 if !contract
                     .verify_agg_decryption_key(&self.cfg.consensus.tpe_agg_pk, agg_decryption_key)
                 {
@@ -498,6 +537,20 @@ impl ServerModule for Lightning {
                     &outpoint,
                 )
                 .await;
+
+                let stream_index = dbtx
+                    .get_value(&IncomingContractStreamIndexKey)
+                    .await
+                    .unwrap_or(0);
+
+                dbtx.insert_entry(&IncomingContractStreamKey(stream_index), contract)
+                    .await;
+
+                dbtx.insert_entry(&IncomingContractIndexKey(outpoint), &stream_index)
+                    .await;
+
+                dbtx.insert_entry(&IncomingContractStreamIndexKey, &(stream_index + 1))
+                    .await;
 
                 let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
 
@@ -601,6 +654,19 @@ impl ServerModule for Lightning {
                     let db = context.db();
 
                     Ok(module.outgoing_contract_expiration(db, outpoint).await)
+                }
+            },
+            api_endpoint! {
+                AWAIT_INCOMING_CONTRACTS_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &Lightning, context, params: (u64, usize)| -> (Vec<IncomingContract>, u64) {
+                    let db = context.db();
+
+                    if params.1 == 0 {
+                        return Err(ApiError::bad_request("Batch size must be greater than 0".to_string()));
+                    }
+
+                    Ok(module.await_incoming_contracts(db, params.0, params.1).await)
                 }
             },
             api_endpoint! {
@@ -765,6 +831,36 @@ impl Lightning {
         let expiration = contract.expiration.saturating_sub(consensus_block_count);
 
         Some((contract.contract_id(), expiration))
+    }
+
+    async fn await_incoming_contracts(
+        &self,
+        db: Database,
+        start: u64,
+        n: usize,
+    ) -> (Vec<IncomingContract>, u64) {
+        let filter = |next_index: Option<u64>| next_index.filter(|i| *i > start);
+
+        let (mut next_index, mut dbtx) = db
+            .wait_key_check(&IncomingContractStreamIndexKey, filter)
+            .await;
+
+        let mut contracts = Vec::with_capacity(n);
+
+        let range = IncomingContractStreamKey(start)..IncomingContractStreamKey(u64::MAX);
+
+        for (key, contract) in dbtx
+            .find_by_range(range)
+            .await
+            .take(n)
+            .collect::<Vec<(IncomingContractStreamKey, IncomingContract)>>()
+            .await
+        {
+            contracts.push(contract.clone());
+            next_index = key.0 + 1;
+        }
+
+        (contracts, next_index)
     }
 
     async fn add_gateway(db: Database, gateway: SafeUrl) -> bool {

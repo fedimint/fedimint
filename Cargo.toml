@@ -140,6 +140,7 @@ bitvec = "1.0.1"
 bls12_381 = "0.8.0"
 bon = "3.6.5"
 bytes = "1.10.1"
+chacha20poly1305 = "0.10.1"
 chrono = "0.4.41"
 clap = { version = "4.5.41", features = ["derive", "env"] }
 clap_complete = "4.5.55"

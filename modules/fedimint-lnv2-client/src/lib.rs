@@ -18,7 +18,7 @@ use std::time::Duration;
 use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
-use db::{DbKeyPrefix, GatewayKey};
+use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -36,10 +36,12 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, apply, async_trait_maybe_send};
+use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
@@ -47,7 +49,7 @@ use fedimint_lnv2_common::gateway_api::{
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, KIND, LightningCommonInit, LightningInvoice, LightningModuleTypes,
-    LightningOutput, LightningOutputV0,
+    LightningOutput, LightningOutputV0, lnurl, tweak,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -75,6 +77,7 @@ const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 pub enum LightningOperationMeta {
     Send(SendOperationMeta),
     Receive(ReceiveOperationMeta),
+    LnurlReceive(LnurlReceiveOperationMeta),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +118,12 @@ impl ReceiveOperationMeta {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LnurlReceiveOperationMeta {
+    pub contract: IncomingContract,
+    pub custom_meta: Value,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -244,9 +253,7 @@ impl ClientModuleInit for LightningClientInit {
             args.notifier().clone(),
             args.context(),
             args.module_api().clone(),
-            args.module_root_secret()
-                .clone()
-                .to_secp_key(fedimint_core::secp256k1::SECP256K1),
+            args.module_root_secret(),
             self.gateway_conn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
@@ -284,6 +291,7 @@ pub struct LightningClientModule {
     client_ctx: ClientContext<Self>,
     module_api: DynModuleApi,
     keypair: Keypair,
+    lnurl_keypair: Keypair,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     #[allow(unused)] // The field is only used by the cli feature
     admin_auth: Option<ApiAuth>,
@@ -329,14 +337,6 @@ impl ClientModule for LightningClientModule {
     }
 }
 
-fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
-    let keypair = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
-
-    let tweak = ecdh::SharedSecret::new(&static_pk, &keypair.secret_key());
-
-    (tweak.secret_bytes(), keypair.public_key())
-}
-
 impl LightningClientModule {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -345,7 +345,7 @@ impl LightningClientModule {
         notifier: ModuleNotifier<LightningClientStateMachines>,
         client_ctx: ClientContext<Self>,
         module_api: DynModuleApi,
-        keypair: Keypair,
+        module_root_secret: &DerivableSecret,
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
         admin_auth: Option<ApiAuth>,
         task_group: &TaskGroup,
@@ -364,7 +364,12 @@ impl LightningClientModule {
             notifier,
             client_ctx,
             module_api,
-            keypair,
+            keypair: module_root_secret
+                .child_key(ChildId(0))
+                .to_secp_key(SECP256K1),
+            lnurl_keypair: module_root_secret
+                .child_key(ChildId(1))
+                .to_secp_key(SECP256K1),
             gateway_conn,
             admin_auth,
         }
@@ -504,7 +509,7 @@ impl LightningClientModule {
 
         let operation_id = self.get_next_operation_id(&invoice).await?;
 
-        let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(self.keypair.public_key());
+        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
 
         let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
             .expect("32 bytes, within curve order")
@@ -745,7 +750,16 @@ impl LightningClientModule {
             .await?;
 
         let operation_id = self
-            .receive_incoming_contract(gateway, contract, invoice.clone(), custom_meta)
+            .receive_incoming_contract(
+                self.keypair.secret_key(),
+                contract.clone(),
+                LightningOperationMeta::Receive(ReceiveOperationMeta {
+                    gateway,
+                    contract,
+                    invoice: LightningInvoice::Bolt11(invoice.clone()),
+                    custom_meta,
+                }),
+            )
             .await
             .expect("The contract has been generated with our public key");
 
@@ -763,7 +777,7 @@ impl LightningClientModule {
         description: Bolt11InvoiceDescription,
         gateway: Option<SafeUrl>,
     ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
-        let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
+        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
             .consensus_hash::<sha256::Hash>()
@@ -795,7 +809,7 @@ impl LightningClientModule {
 
         // The dust limit ensures that the incoming contract can be claimed without
         // additional funds as the contracts amount is sufficient to cover the fees
-        if contract_amount < Amount::from_sats(50) {
+        if contract_amount < Amount::from_sats(5) {
             return Err(ReceiveError::DustAmount);
         }
 
@@ -850,14 +864,13 @@ impl LightningClientModule {
     // static module public key.
     async fn receive_incoming_contract(
         &self,
-        gateway: SafeUrl,
+        sk: SecretKey,
         contract: IncomingContract,
-        invoice: Bolt11Invoice,
-        custom_meta: Value,
+        operation_meta: LightningOperationMeta,
     ) -> Option<OperationId> {
         let operation_id = OperationId::from_encodable(&contract.clone());
 
-        let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(&contract)?;
+        let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(sk, &contract)?;
 
         let receive_sm = LightningClientStateMachines::Receive(ReceiveStateMachine {
             common: ReceiveSMCommon {
@@ -875,12 +888,7 @@ impl LightningClientModule {
             .manual_operation_start(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                LightningOperationMeta::Receive(ReceiveOperationMeta {
-                    gateway,
-                    contract,
-                    invoice: LightningInvoice::Bolt11(invoice),
-                    custom_meta,
-                }),
+                operation_meta,
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
             )
             .await
@@ -891,22 +899,18 @@ impl LightningClientModule {
 
     fn recover_contract_keys(
         &self,
+        sk: SecretKey,
         contract: &IncomingContract,
     ) -> Option<(Keypair, AggregateDecryptionKey)> {
-        let ephemeral_tweak = ecdh::SharedSecret::new(
-            &contract.commitment.ephemeral_pk,
-            &self.keypair.secret_key(),
-        )
-        .secret_bytes();
+        let tweak = ecdh::SharedSecret::new(&contract.commitment.ephemeral_pk, &sk);
 
-        let encryption_seed = ephemeral_tweak
+        let encryption_seed = tweak
+            .secret_bytes()
             .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
-        let claim_keypair = self
-            .keypair
-            .secret_key()
-            .mul_tweak(&Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"))
+        let claim_keypair = sk
+            .mul_tweak(&Scalar::from_be_bytes(tweak.secret_bytes()).expect("Within curve order"))
             .expect("Tweak is valid")
             .keypair(secp256k1::SECP256K1);
 
@@ -984,6 +988,88 @@ impl LightningClientModule {
 
         Ok(state)
     }
+
+    /// Generate an lnurl for the client. You can optionally specify a gateway
+    /// to use for testing purposes.
+    pub async fn generate_lnurl(
+        &self,
+        recurringd: SafeUrl,
+        gateway: Option<SafeUrl>,
+    ) -> Result<String, RegisterLnurlError> {
+        let gateways = if let Some(gateway) = gateway {
+            vec![gateway]
+        } else {
+            let gateways = self
+                .module_api
+                .gateways()
+                .await
+                .map_err(|e| RegisterLnurlError::FederationError(e.to_string()))?;
+
+            if gateways.is_empty() {
+                return Err(RegisterLnurlError::NoVettedGateways);
+            }
+
+            gateways
+        };
+
+        let lnurl = lnurl::generate_lnurl(
+            recurringd,
+            self.federation_id,
+            self.lnurl_keypair.public_key(),
+            self.cfg.tpe_agg_pk,
+            gateways,
+        )
+        .await
+        .map_err(|e| RegisterLnurlError::RegistrationError(e.to_string()))?;
+
+        Ok(lnurl)
+    }
+
+    /// Receive an lnurl. You can optionally specify the batch size, meaning the
+    /// maximum number of contracts we fetch from the federation at once,
+    /// otherwise we default to 128.
+    pub async fn receive_lnurl(&self, batch_size: Option<usize>, custom_meta: Value) -> usize {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+        let stream_index = dbtx
+            .get_value(&IncomingContractStreamIndexKey)
+            .await
+            .unwrap_or(0);
+
+        let (contracts, next_index) = self
+            .module_api
+            .await_incoming_contracts(stream_index, batch_size.unwrap_or(128))
+            .await;
+
+        let mut received_contracts = 0;
+
+        for contract in &contracts {
+            if let Some(operation_id) = self
+                .receive_incoming_contract(
+                    self.lnurl_keypair.secret_key(),
+                    contract.clone(),
+                    LightningOperationMeta::LnurlReceive(LnurlReceiveOperationMeta {
+                        contract: contract.clone(),
+                        custom_meta: custom_meta.clone(),
+                    }),
+                )
+                .await
+            {
+                self.await_final_receive_operation_state(operation_id)
+                    .await
+                    .ok();
+
+                received_contracts += 1;
+            }
+        }
+
+        dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
+            .await;
+
+        dbtx.commit_tx().await;
+
+        received_contracts
+    }
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
@@ -1045,6 +1131,16 @@ pub enum ReceiveError {
     InvalidInvoicePaymentHash,
     #[error("The invoice's amount is incorrect")]
     InvalidInvoiceAmount,
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum RegisterLnurlError {
+    #[error("The federation has no vetted gateways")]
+    NoVettedGateways,
+    #[error("Federation returned an error: {0}")]
+    FederationError(String),
+    #[error("Failed to register lnurl: {0}")]
+    RegistrationError(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
