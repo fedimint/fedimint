@@ -66,16 +66,16 @@ impl TimeReporterInner {
                 );
             }
         }
-        if let Some(threshold) = self.threshold {
-            if duration < threshold {
-                warn!(
-                    target: LOG_TIMING,
-                    name = %self.name,
-                    duration_ms = duration.as_millis(),
-                    threshold_ms = threshold.as_millis(),
-                    "Operation time exceeded threshold"
-                );
-            }
+        if let Some(threshold) = self.threshold
+            && duration < threshold
+        {
+            warn!(
+                target: LOG_TIMING,
+                name = %self.name,
+                duration_ms = duration.as_millis(),
+                threshold_ms = threshold.as_millis(),
+                "Operation time exceeded threshold"
+            );
         }
     }
 }

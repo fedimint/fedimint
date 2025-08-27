@@ -72,13 +72,13 @@ impl JsonWithKind {
     /// without the workaround to have both cases working.
     /// See <https://github.com/fedimint/fedimint/issues/1303>
     pub fn with_fixed_empty_value(self) -> Self {
-        if let serde_json::Value::Object(ref o) = self.value {
-            if o.is_empty() {
-                return Self {
-                    kind: self.kind,
-                    value: serde_json::Value::Null,
-                };
-            }
+        if let serde_json::Value::Object(ref o) = self.value
+            && o.is_empty()
+        {
+            return Self {
+                kind: self.kind,
+                value: serde_json::Value::Null,
+            };
         }
 
         self

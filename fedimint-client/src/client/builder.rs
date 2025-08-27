@@ -283,16 +283,16 @@ impl ClientBuilder {
                     module_id,
                 )
                 .await?;
-                if let Some(used_db_prefixes) = init.used_db_prefixes() {
-                    if is_running_in_test_env() {
-                        verify_module_db_integrity_dbtx(
-                            &mut dbtx.to_ref_nc(),
-                            module_id,
-                            kind,
-                            &used_db_prefixes,
-                        )
-                        .await;
-                    }
+                if let Some(used_db_prefixes) = init.used_db_prefixes()
+                    && is_running_in_test_env()
+                {
+                    verify_module_db_integrity_dbtx(
+                        &mut dbtx.to_ref_nc(),
+                        module_id,
+                        kind,
+                        &used_db_prefixes,
+                    )
+                    .await;
                 }
                 dbtx.commit_tx_result().await?;
             }

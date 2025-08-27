@@ -82,10 +82,10 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         // if the channel is empty we want to return the batch immediately in order to
         // not delay the creation of our next unit, even if the batch is empty
         while let Ok(item) = self.mempool_item_receiver.try_recv() {
-            if let ConsensusItem::Transaction(transaction) = &item {
-                if !self.submitted_transactions.insert(transaction.tx_hash()) {
-                    continue;
-                }
+            if let ConsensusItem::Transaction(transaction) = &item
+                && !self.submitted_transactions.insert(transaction.tx_hash())
+            {
+                continue;
             }
 
             let n_bytes_item = item.consensus_encode_to_vec().len();

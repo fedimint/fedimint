@@ -561,20 +561,16 @@ async fn migrate_federation_configs(
         // Try and decode the key as a FederationId and the value as a FederationConfig
         // The key should be 33 bytes because a FederationID is 32 bytes and there is a
         // 1 byte prefix.
-        if problem_key.len() == 33 {
-            if let Ok(federation_id) = FederationId::consensus_decode_whole(
+        if problem_key.len() == 33
+            && let Ok(federation_id) = FederationId::consensus_decode_whole(
                 &problem_key[1..33],
                 &ModuleDecoderRegistry::default(),
-            ) {
-                if let Ok(federation_config) = FederationConfig::consensus_decode_whole(
-                    &value,
-                    &ModuleDecoderRegistry::default(),
-                ) {
-                    if federation_id == federation_config.invite_code.federation_id() {
-                        continue;
-                    }
-                }
-            }
+            )
+            && let Ok(federation_config) =
+                FederationConfig::consensus_decode_whole(&value, &ModuleDecoderRegistry::default())
+            && federation_id == federation_config.invite_code.federation_id()
+        {
+            continue;
         }
 
         dbtx.raw_remove_entry(&problem_key).await?;

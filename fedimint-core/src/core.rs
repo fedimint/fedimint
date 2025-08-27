@@ -72,10 +72,10 @@ impl OperationId {
         Self(encodable.consensus_hash::<sha256::Hash>().to_byte_array())
     }
 
-    pub fn fmt_short(&self) -> OperationIdShortFmt {
+    pub fn fmt_short(&'_ self) -> OperationIdShortFmt<'_> {
         OperationIdShortFmt(self)
     }
-    pub fn fmt_full(&self) -> OperationIdFullFmt {
+    pub fn fmt_full(&'_ self) -> OperationIdFullFmt<'_> {
         OperationIdFullFmt(self)
     }
 }

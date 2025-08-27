@@ -40,28 +40,28 @@ impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
     fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
         let mut projected = self.project();
         let res = projected.fut.poll(cx);
-        if let Poll::Ready(res) = &res {
-            if let Some(timer) = projected.timer.take() {
-                timer.observe_duration();
+        if let Poll::Ready(res) = &res
+            && let Some(timer) = projected.timer.take()
+        {
+            timer.observe_duration();
 
-                JSONRPC_API_REQUEST_RESPONSE_CODE
-                    .with_label_values(&[
-                        projected.method.as_str(),
-                        &if let Some(code) = res.as_error_code() {
-                            Cow::Owned(code.to_string())
-                        } else {
-                            Cow::Borrowed("0")
-                        },
-                        if res.is_subscription() {
-                            "subscription"
-                        } else if res.is_batch() {
-                            "batch"
-                        } else {
-                            "default"
-                        },
-                    ])
-                    .inc();
-            }
+            JSONRPC_API_REQUEST_RESPONSE_CODE
+                .with_label_values(&[
+                    projected.method.as_str(),
+                    &if let Some(code) = res.as_error_code() {
+                        Cow::Owned(code.to_string())
+                    } else {
+                        Cow::Borrowed("0")
+                    },
+                    if res.is_subscription() {
+                        "subscription"
+                    } else if res.is_batch() {
+                        "batch"
+                    } else {
+                        "default"
+                    },
+                ])
+                .inc();
         }
         res
     }

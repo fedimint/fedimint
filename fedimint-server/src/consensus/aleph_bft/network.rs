@@ -52,13 +52,13 @@ impl aleph_bft::Network<NetworkData> for Network {
 
     async fn next_event(&mut self) -> Option<NetworkData> {
         loop {
-            if let P2PMessage::Aleph(bytes) = self.connections.receive().await?.1 {
-                if let Ok(network_data) = NetworkData::decode(&mut IoReader(bytes.as_slice())) {
-                    // in order to bound the RAM consumption of a session we have to bound an
-                    // individual units size, hence the size of its attached unitdata in memory
-                    if network_data.included_data().iter().all(UnitData::is_valid) {
-                        return Some(network_data);
-                    }
+            if let P2PMessage::Aleph(bytes) = self.connections.receive().await?.1
+                && let Ok(network_data) = NetworkData::decode(&mut IoReader(bytes.as_slice()))
+            {
+                // in order to bound the RAM consumption of a session we have to bound an
+                // individual units size, hence the size of its attached unitdata in memory
+                if network_data.included_data().iter().all(UnitData::is_valid) {
+                    return Some(network_data);
                 }
             }
         }
