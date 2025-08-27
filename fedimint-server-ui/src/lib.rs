@@ -19,6 +19,7 @@ pub const ROOT_ROUTE: &str = "/";
 pub const LOGIN_ROUTE: &str = "/login";
 pub const EXPLORER_IDX_ROUTE: &str = "/explorer";
 pub const EXPLORER_ROUTE: &str = "/explorer/{session_idx}";
+pub const DOWNLOAD_BACKUP_ROUTE: &str = "/download-backup";
 
 pub fn common_head(title: &str) -> Markup {
     html! {

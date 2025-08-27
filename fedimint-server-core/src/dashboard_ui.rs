@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use fedimint_core::admin_client::GuardianConfigBackup;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
@@ -11,6 +12,7 @@ use fedimint_core::session_outcome::SessionStatusV2;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, PeerId};
 
+use crate::net::GuardianAuthToken;
 use crate::{DynServerModule, ServerModule};
 
 pub type DynDashboardApi = Arc<dyn IDashboardApi + Send + Sync + 'static>;
@@ -53,6 +55,13 @@ pub trait IDashboardApi {
 
     /// Get the status of the bitcoin backend
     async fn bitcoin_rpc_status(&self) -> Option<ServerBitcoinRpcStatus>;
+
+    /// Download a backup of the guardian's configuration
+    async fn download_guardian_config_backup(
+        &self,
+        password: &str,
+        guardian_auth: &GuardianAuthToken,
+    ) -> GuardianConfigBackup;
 
     /// Get reference to a server module instance by module kind
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule>;
