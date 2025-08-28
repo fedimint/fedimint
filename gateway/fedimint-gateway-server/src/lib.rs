@@ -293,7 +293,10 @@ impl Gateway {
         .await
     }
 
-    async fn get_bitcoind_client(opts: &GatewayOpts) -> (BitcoindClient, ChainSource) {
+    async fn get_bitcoind_client(
+        opts: &GatewayOpts,
+        network: bitcoin::Network,
+    ) -> (BitcoindClient, ChainSource) {
         let bitcoind_username = opts
             .bitcoind_username
             .clone()
@@ -314,7 +317,7 @@ impl Gateway {
         let mut rng = rand::thread_rng();
         let random_num: u32 = rng.r#gen();
         let wallet_name = format!("gatewayd-{}", random_num);
-        let client = BitcoindClient::new(&url, bitcoind_username, password, wallet_name)
+        let client = BitcoindClient::new(&url, bitcoind_username, password, wallet_name, network)
             .await
             .expect("Could not create bitcoind client");
         (client, chain_source)
@@ -324,11 +327,13 @@ impl Gateway {
     /// `Gateway` modules.
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
+        let mut gateway_parameters = opts.to_gateway_parameters()?;
 
         let (dyn_bitcoin_rpc, chain_source) =
             match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
                 (Some(_), None) => {
-                    let (client, chain_source) = Self::get_bitcoind_client(&opts).await;
+                    let (client, chain_source) =
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network).await;
                     (client.into_dyn(), chain_source)
                 }
                 (None, Some(url)) => {
@@ -342,7 +347,8 @@ impl Gateway {
                 }
                 (Some(_), Some(_)) => {
                     // Use bitcoind by default if both are set
-                    let (client, chain_source) = Self::get_bitcoind_client(&opts).await;
+                    let (client, chain_source) =
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network).await;
                     (client.into_dyn(), chain_source)
                 }
                 _ => unreachable!("ArgGroup already enforced XOR relation"),
@@ -383,8 +389,6 @@ impl Gateway {
             version = %fedimint_build_code_version_env!(),
             "Starting gatewayd",
         );
-
-        let mut gateway_parameters = opts.to_gateway_parameters()?;
 
         if gateway_parameters.lightning_module_mode != LightningModuleMode::LNv2
             && matches!(opts.mode, LightningMode::Ldk { .. })
