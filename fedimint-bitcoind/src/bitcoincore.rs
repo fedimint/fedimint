@@ -11,13 +11,16 @@ use tracing::info;
 
 use crate::{IBitcoindRpc, format_err};
 
+// TODO: Probably needs to be unique so that it doesn't clash with other wallets
+const WATCH_ONLY_WALLET: &str = "watchonly";
+
 #[derive(Debug)]
 pub struct BitcoindClient {
     client: ::bitcoincore_rpc::Client,
 }
 
 impl BitcoindClient {
-    pub fn new(url: &SafeUrl, username: String, password: String) -> anyhow::Result<Self> {
+    pub async fn new(url: &SafeUrl, username: String, password: String) -> anyhow::Result<Self> {
         let auth = Auth::UserPass(username, password);
         let url_str = if let Some(port) = url.port() {
             format!(
@@ -32,9 +35,19 @@ impl BitcoindClient {
                 url.host_str().unwrap_or("127.0.0.1")
             )
         };
-        Ok(Self {
-            client: ::bitcoincore_rpc::Client::new(&url_str, auth)?,
-        })
+        let client = ::bitcoincore_rpc::Client::new(&url_str, auth)?;
+        Self::create_watch_only_wallet(&client).await?;
+        Ok(Self { client })
+    }
+
+    async fn create_watch_only_wallet(client: &::bitcoincore_rpc::Client) -> anyhow::Result<()> {
+        // TODO: Probably need to check if the wallet has already been created
+        info!(target: LOG_BITCOIND_CORE, wallet_name = WATCH_ONLY_WALLET, "Creating watch only wallet");
+        block_in_place(|| {
+            client.create_wallet(WATCH_ONLY_WALLET, Some(true), Some(true), None, None)
+        })?;
+
+        Ok(())
     }
 }
 
@@ -49,6 +62,14 @@ impl IBitcoindRpc for BitcoindClient {
             Some(hash) => Some(block_in_place(|| self.client.get_block_header_info(&hash))?.height),
         };
         Ok(height.map(|h| h as u64))
+    }
+
+    async fn watch_script_history(&self, script: &ScriptBuf) -> anyhow::Result<()> {
+        let address = script.to_string();
+        info!(target: LOG_BITCOIND_CORE, %address, "Watching script history");
+        let descriptor = format!("addr({address})");
+        let descriptor_info = block_in_place(|| self.client.get_descriptor_info(&descriptor))?;
+        Ok(())
     }
 
     async fn get_script_history(

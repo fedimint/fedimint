@@ -293,7 +293,7 @@ impl Gateway {
         .await
     }
 
-    fn get_bitcoind_client(opts: &GatewayOpts) -> (BitcoindClient, ChainSource) {
+    async fn get_bitcoind_client(opts: &GatewayOpts) -> (BitcoindClient, ChainSource) {
         let bitcoind_username = opts
             .bitcoind_username
             .clone()
@@ -310,6 +310,7 @@ impl Gateway {
             server_url: url.clone(),
         };
         let client = BitcoindClient::new(&url, bitcoind_username, password)
+            .await
             .expect("Could not create bitcoind client");
         (client, chain_source)
     }
@@ -322,7 +323,7 @@ impl Gateway {
         let (dyn_bitcoin_rpc, chain_source) =
             match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
                 (Some(_), None) => {
-                    let (client, chain_source) = Self::get_bitcoind_client(&opts);
+                    let (client, chain_source) = Self::get_bitcoind_client(&opts).await;
                     (client.into_dyn(), chain_source)
                 }
                 (None, Some(url)) => {
@@ -336,7 +337,7 @@ impl Gateway {
                 }
                 (Some(_), Some(_)) => {
                     // Use bitcoind by default if both are set
-                    let (client, chain_source) = Self::get_bitcoind_client(&opts);
+                    let (client, chain_source) = Self::get_bitcoind_client(&opts).await;
                     (client.into_dyn(), chain_source)
                 }
                 _ => unreachable!("ArgGroup already enforced XOR relation"),
