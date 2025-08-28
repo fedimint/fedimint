@@ -81,13 +81,31 @@ impl IBitcoindRpc for EsploraClient {
         &self,
         script: &ScriptBuf,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
-        let transactions = self
-            .client
-            .scripthash_txs(script, None)
-            .await?
-            .into_iter()
-            .map(|tx| tx.to_tx())
-            .collect::<Vec<_>>();
+        const MAX_TX_HISTORY: usize = 1000;
+
+        let mut transactions = Vec::new();
+        let mut last_seen: Option<Txid> = None;
+
+        loop {
+            let page = self.client.scripthash_txs(script, last_seen).await?;
+
+            if page.is_empty() {
+                break;
+            }
+
+            for tx in &page {
+                transactions.push(tx.to_tx());
+            }
+
+            if transactions.len() >= MAX_TX_HISTORY {
+                return Err(format_err!(
+                    "Script history exceeds maximum limit of {}",
+                    MAX_TX_HISTORY
+                ));
+            }
+
+            last_seen = Some(page.last().expect("page not empty").txid);
+        }
 
         Ok(transactions)
     }
