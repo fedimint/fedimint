@@ -537,6 +537,12 @@ impl ClientModule for WalletClientModule {
                     for await state in self.subscribe_deposit(req.operation_id).await?.into_stream() {
                         yield serde_json::to_value(state)?;
                     }
+                },
+                "subscribe_withdraw" => {
+                    let req: SubscribeWithdrawRequest = serde_json::from_value(request)?;
+                    for await state in self.subscribe_withdraw_updates(req.operation_id).await?.into_stream(){
+                        yield serde_json::to_value(state)?;
+                    }
                 }
                 _ => {
                     Err(anyhow::format_err!("Unknown method: {}", method))?;
@@ -573,6 +579,11 @@ pub struct PegInRequest {
 
 #[derive(Deserialize)]
 struct SubscribeDepositRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SubscribeWithdrawRequest {
     operation_id: OperationId,
 }
 
