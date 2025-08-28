@@ -31,24 +31,33 @@ understanding in this area.
 
 ## Overview
 
-What federation really is are 4 or more Guardians independently running `fedimintd` node software.
+### Setting Up a Federation
+You can create a Fedimint in two ways:
+- Single Guardian Federation — A single guardian operating their own mint.
+- Group Federation — Multiple guardians running the mint together (minimum of 4 guardians).
 
-A `fedimintd` setup requires:
-
-* setting DNS domain
-* prunned `bitcoind` node
-* TLS termination software like `caddy` or `nginx`
-
+### Step By Step Ceremony
+1. Install & Launch `fedimintd`
+	Each participating guardian runs their own instance of fedimintd.
+	See below [self-hosted solutions](#self-hosted-solutions) or [hosted solutions](#hosted-solutions) for installation options.
+2. Set a Password
+	When starting fedimintd for the first time, each guardian must create a secure password.
+3. Generate Setup Code
+	After entering the password, a unique setup code is generated for each guardian.
+4. Exchange Setup Codes
+	All guardians must share their setup codes with each other (every guardian needs every other guardian’s code).
+5. Distributed Key Generation (DKG)
+	Once all setup codes are entered, the DKG process begins. This is where the federation’s cryptographic keys are jointly created.
+	This step may take some time while all guardians connect.
+6. Federation Complete!
+	Once DKG finishes, your federation is live. Your guardian dashboard will be available for monitoring. You now have a functioning Fedimint!
 
 In addition, a practical federation requires a Lightning Gateway
 to join the federation, and someone needs to set it up and
 run, though one gateway can join and server multiple
-federations.
+federations. It is currently recommend to use an existing Lightning Gateway, but you can run your own.
 
-A `ln-gateway` setup requires:
-
-* an unprunned `bitcoind` node
-* possibly setting up lightning node
+See [here](../docs/gateway.md) for more information about the Lightning Gateway.
 
 ## Self-hosted solutions
 
