@@ -269,7 +269,7 @@ impl ClientModuleInit for WalletClientInit {
     /// Wallet recovery
     ///
     /// Query bitcoin rpc for history of addresses from last known used
-    /// addresses (or index 0) until MAX_GAP unused ones.
+    /// addresses (or index 0) until `MAX_GAP` unused ones.
     ///
     /// Notably does not persist the progress of addresses being queried,
     /// because it is not expected that it would take long enough to bother.
@@ -1434,12 +1434,12 @@ async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleA
             break;
         }
 
-        if let Ok(module_consensus_version) = module_api.module_consensus_version().await {
-            if SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version {
-                dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-                dbtx.commit_tx().await;
-                break;
-            }
+        if let Ok(module_consensus_version) = module_api.module_consensus_version().await
+            && SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version
+        {
+            dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
+            dbtx.commit_tx().await;
+            break;
         }
 
         drop(dbtx);

@@ -242,12 +242,9 @@ impl BitcoinTest for FakeBitcoinTest {
             let mut fee = Amount::ZERO;
             let maybe_tx = pending.iter().find(|tx| tx.compute_txid() == *txid);
 
-            let tx = match maybe_tx {
-                None => {
-                    sleep_in_test("no transaction found", Duration::from_millis(100)).await;
-                    continue;
-                }
-                Some(tx) => tx,
+            let Some(tx) = maybe_tx else {
+                sleep_in_test("no transaction found", Duration::from_millis(100)).await;
+                continue;
             };
 
             for input in &tx.input {

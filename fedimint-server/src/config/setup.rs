@@ -146,13 +146,12 @@ impl ISetupApi for SetupApi {
         name: String,
         federation_name: Option<String>,
     ) -> anyhow::Result<String> {
-        if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone() {
-            if existing_local_parameters.auth == auth
-                && existing_local_parameters.name == name
-                && existing_local_parameters.federation_name == federation_name
-            {
-                return Ok(existing_local_parameters.setup_code().encode_base32());
-            }
+        if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
+            && existing_local_parameters.auth == auth
+            && existing_local_parameters.name == name
+            && existing_local_parameters.federation_name == federation_name
+        {
+            return Ok(existing_local_parameters.setup_code().encode_base32());
         }
 
         ensure!(!name.is_empty(), "The guardian name is empty");

@@ -81,16 +81,16 @@ impl aleph_bft::Keychain for Keychain {
         signature: &Self::Signature,
         node_index: aleph_bft::NodeIndex,
     ) -> bool {
-        if let Some(public_key) = self.pks.get(&super::to_peer_id(node_index)) {
-            if let Ok(sig) = schnorr::Signature::from_slice(&signature.0) {
-                return secp256k1::SECP256K1
-                    .verify_schnorr(
-                        &sig,
-                        &self.tagged_message(message),
-                        &public_key.x_only_public_key().0,
-                    )
-                    .is_ok();
-            }
+        if let Some(public_key) = self.pks.get(&super::to_peer_id(node_index))
+            && let Ok(sig) = schnorr::Signature::from_slice(&signature.0)
+        {
+            return secp256k1::SECP256K1
+                .verify_schnorr(
+                    &sig,
+                    &self.tagged_message(message),
+                    &public_key.x_only_public_key().0,
+                )
+                .is_ok();
         }
 
         false

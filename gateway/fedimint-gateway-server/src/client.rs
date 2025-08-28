@@ -187,12 +187,12 @@ impl GatewayClientBuilder {
     /// federation's config.
     async fn verify_client_config(db: &Database, federation_id: FederationId) -> AdminResult<()> {
         let mut dbtx = db.begin_transaction_nc().await;
-        if let Some(config) = dbtx.get_value(&ClientConfigKey).await {
-            if config.calculate_federation_id() != federation_id {
-                return Err(AdminGatewayError::ClientCreationError(anyhow::anyhow!(
-                    "Federation Id did not match saved federation ID".to_string()
-                )));
-            }
+        if let Some(config) = dbtx.get_value(&ClientConfigKey).await
+            && config.calculate_federation_id() != federation_id
+        {
+            return Err(AdminGatewayError::ClientCreationError(anyhow::anyhow!(
+                "Federation Id did not match saved federation ID".to_string()
+            )));
         }
         Ok(())
     }

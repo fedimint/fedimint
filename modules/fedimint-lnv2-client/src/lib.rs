@@ -433,8 +433,8 @@ impl LightningClientModule {
             return Err(SelectGatewayError::NoVettedGateways);
         }
 
-        if let Some(invoice) = invoice {
-            if let Some(gateway) = self
+        if let Some(invoice) = invoice
+            && let Some(gateway) = self
                 .client_ctx
                 .module_db()
                 .begin_transaction_nc()
@@ -442,11 +442,9 @@ impl LightningClientModule {
                 .get_value(&GatewayKey(invoice.recover_payee_pub_key()))
                 .await
                 .filter(|gateway| gateways.contains(gateway))
-            {
-                if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
-                    return Ok((gateway, routing_info));
-                }
-            }
+            && let Ok(Some(routing_info)) = self.routing_info(&gateway).await
+        {
+            return Ok((gateway, routing_info));
         }
 
         for gateway in gateways {
@@ -673,12 +671,11 @@ impl LightningClientModule {
                                 if let Some(preimage) = module_api.await_preimage(
                                     state.common.outpoint,
                                     0
-                                ).await {
-                                    if state.common.contract.verify_preimage(&preimage) {
+                                ).await
+                                    && state.common.contract.verify_preimage(&preimage) {
                                         yield SendOperationState::Success(preimage);
                                         return;
                                     }
-                                }
 
                                 yield SendOperationState::Failure;
                                 return;

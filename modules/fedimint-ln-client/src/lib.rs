@@ -1269,10 +1269,10 @@ impl LightningClientModule {
         };
 
         // Verify that no other outgoing contract exists or the value is empty
-        if let Ok(Some(contract)) = self.module_api.fetch_contract(contract_id).await {
-            if contract.amount.msats != 0 {
-                bail!(PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id });
-            }
+        if let Ok(Some(contract)) = self.module_api.fetch_contract(contract_id).await
+            && contract.amount.msats != 0
+        {
+            bail!(PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id });
         }
 
         // TODO: return fee from create_outgoing_output or even let user supply

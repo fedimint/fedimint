@@ -342,18 +342,18 @@ impl LightningPayFunded {
                             error_message,
                         } => {
                             // Retry faster if we could not contact the gateway
-                            if let Some(error_code) = error_code {
-                                if error_code == StatusCode::NOT_FOUND.as_u16() {
-                                    warn!(
-                                        ?error_message,
-                                        ?payload,
-                                        ?gateway,
-                                        ?RETRY_DELAY,
-                                        "Could not contact gateway"
-                                    );
-                                    sleep(RETRY_DELAY).await;
-                                    continue;
-                                }
+                            if let Some(error_code) = error_code
+                                && error_code == StatusCode::NOT_FOUND.as_u16()
+                            {
+                                warn!(
+                                    ?error_message,
+                                    ?payload,
+                                    ?gateway,
+                                    ?RETRY_DELAY,
+                                    "Could not contact gateway"
+                                );
+                                sleep(RETRY_DELAY).await;
+                                continue;
                             }
                         }
                         GatewayPayError::OutgoingContractError => {

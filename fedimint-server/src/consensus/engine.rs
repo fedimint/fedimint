@@ -551,14 +551,12 @@ impl ConsensusEngine {
 
             for checkpoint in fs::read_dir(checkpoint_dir)?.flatten() {
                 // Validate that the directory is a session index
-                if let Ok(file_name) = checkpoint.file_name().into_string() {
-                    if let Ok(session) = file_name.parse::<u64>() {
-                        if current_session >= self.db_checkpoint_retention
-                            && session < current_session - self.db_checkpoint_retention
-                        {
-                            fs::remove_dir_all(checkpoint.path())?;
-                        }
-                    }
+                if let Ok(file_name) = checkpoint.file_name().into_string()
+                    && let Ok(session) = file_name.parse::<u64>()
+                    && current_session >= self.db_checkpoint_retention
+                    && session < current_session - self.db_checkpoint_retention
+                {
+                    fs::remove_dir_all(checkpoint.path())?;
                 }
             }
         } else {

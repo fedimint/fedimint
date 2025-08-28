@@ -370,11 +370,11 @@ impl<T> Spanned<T> {
 /// version hash, then exits the process.
 pub fn handle_version_hash_command(version_hash: &str) {
     let mut args = std::env::args();
-    if let Some(ref arg) = args.nth(1) {
-        if arg.as_str() == "version-hash" {
-            println!("{version_hash}");
-            std::process::exit(0);
-        }
+    if let Some(ref arg) = args.nth(1)
+        && arg.as_str() == "version-hash"
+    {
+        println!("{version_hash}");
+        std::process::exit(0);
     }
 }
 

@@ -311,10 +311,10 @@ impl Decodable for OOBNotes {
             _ => {}
         }
 
-        if let Some((_, invite)) = maybe_invite {
-            if invite.is_empty() {
-                return Err(DecodeError::from_str("Invite didn't contain API endpoints"));
-            }
+        if let Some((_, invite)) = maybe_invite
+            && invite.is_empty()
+        {
+            return Err(DecodeError::from_str("Invite didn't contain API endpoints"));
         }
 
         Ok(OOBNotes(inner))
@@ -1928,7 +1928,7 @@ pub struct SpendOOBRefund {
 /// and fee per note transaction input.
 #[apply(async_trait_maybe_send!)]
 pub trait NotesSelector<Note = SpendableNoteUndecoded>: Send + Sync {
-    /// Select notes from stream for requested_amount.
+    /// Select notes from stream for `requested_amount`.
     /// The stream must produce items in non- decreasing order of amount.
     async fn select_notes(
         &self,
