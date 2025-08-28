@@ -11,16 +11,18 @@ use tracing::info;
 
 use crate::{IBitcoindRpc, format_err};
 
-// TODO: Probably needs to be unique so that it doesn't clash with other wallets
-const WATCH_ONLY_WALLET: &str = "watchonly";
-
 #[derive(Debug)]
 pub struct BitcoindClient {
     client: ::bitcoincore_rpc::Client,
 }
 
 impl BitcoindClient {
-    pub async fn new(url: &SafeUrl, username: String, password: String) -> anyhow::Result<Self> {
+    pub async fn new(
+        url: &SafeUrl,
+        username: String,
+        password: String,
+        wallet_name: String,
+    ) -> anyhow::Result<Self> {
         let auth = Auth::UserPass(username, password);
         let url_str = if let Some(port) = url.port() {
             format!(
@@ -36,16 +38,17 @@ impl BitcoindClient {
             )
         };
         let client = ::bitcoincore_rpc::Client::new(&url_str, auth)?;
-        Self::create_watch_only_wallet(&client).await?;
+        Self::create_watch_only_wallet(&client, wallet_name).await?;
         Ok(Self { client })
     }
 
-    async fn create_watch_only_wallet(client: &::bitcoincore_rpc::Client) -> anyhow::Result<()> {
+    async fn create_watch_only_wallet(
+        client: &::bitcoincore_rpc::Client,
+        wallet_name: String,
+    ) -> anyhow::Result<()> {
         // TODO: Probably need to check if the wallet has already been created
-        info!(target: LOG_BITCOIND_CORE, wallet_name = WATCH_ONLY_WALLET, "Creating watch only wallet");
-        block_in_place(|| {
-            client.create_wallet(WATCH_ONLY_WALLET, Some(true), Some(true), None, None)
-        })?;
+        info!(target: LOG_BITCOIND_CORE, %wallet_name, "Creating watch only wallet");
+        block_in_place(|| client.create_wallet(&wallet_name, Some(true), Some(true), None, None))?;
 
         Ok(())
     }

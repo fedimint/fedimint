@@ -196,7 +196,9 @@ impl DevJitFed {
 
         let gw_ldk = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
+            let bitcoind = bitcoind.clone();
             move || async move {
+                bitcoind.get_try().await?;
                 debug!(target: LOG_DEVIMINT, "Starting ldk gateway...");
                 let start_time = fedimint_core::time::now();
                 let ldk_gw = Gatewayd::new(
@@ -214,7 +216,9 @@ impl DevJitFed {
         });
         let gw_ldk_second = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
+            let bitcoind = bitcoind.clone();
             move || async move {
+                bitcoind.get_try().await?;
                 debug!(target: LOG_DEVIMINT, "Starting ldk gateway 2...");
                 let start_time = fedimint_core::time::now();
                 let ldk_gw2 = Gatewayd::new(

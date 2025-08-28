@@ -113,7 +113,7 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
-use rand::thread_rng;
+use rand::{Rng, thread_rng};
 use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
 
@@ -237,7 +237,7 @@ pub struct Gateway {
     /// The Bitcoin network that the Lightning network is configured to.
     network: Network,
 
-    /// The source of the Bitcoin blockchain data
+    // The source of the Bitcoin blockchain data
     chain_source: ChainSource,
 }
 
@@ -309,7 +309,12 @@ impl Gateway {
             password: password.clone(),
             server_url: url.clone(),
         };
-        let client = BitcoindClient::new(&url, bitcoind_username, password)
+        // TODO: Use a persistent gateway identifier
+        // Generate a random name for the wallet name
+        let mut rng = rand::thread_rng();
+        let random_num: u32 = rng.r#gen();
+        let wallet_name = format!("gatewayd-{}", random_num);
+        let client = BitcoindClient::new(&url, bitcoind_username, password, wallet_name)
             .await
             .expect("Could not create bitcoind client");
         (client, chain_source)
