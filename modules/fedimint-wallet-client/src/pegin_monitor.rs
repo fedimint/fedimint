@@ -120,7 +120,7 @@ pub(crate) async fn run_peg_in_monitor(
         let now = time::now();
         let next_wakeup = NextActions::from_db_state(&db).await.next.unwrap_or_else(||
             /* for simplicity just wake up every hour, even when there's no need */
-             ( now + Duration::from_secs(60 * 60)));
+              now + Duration::from_secs(60 * 60));
         let next_wakeup_duration = next_wakeup
             .duration_since(now)
             .unwrap_or_default()
