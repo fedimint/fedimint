@@ -10,6 +10,7 @@ use fedimint_core::iroh_prod::FM_DNS_PKARR_RELAY_PROD;
 use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
 };
+use fedimint_core::task::spawn;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::LOG_NET_IROH;
 use futures::Future;
@@ -18,6 +19,7 @@ use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, SecretKey};
 use iroh_base::ticket::NodeTicket;
+use iroh_next::Watcher as _;
 use serde_json::Value;
 use tracing::{debug, trace, warn};
 use url::Url;
@@ -39,6 +41,40 @@ pub struct IrohConnector {
 }
 
 impl IrohConnector {
+    #[cfg(not(target_family = "wasm"))]
+    fn spawn_connection_monitoring_stable(endpoint: &Endpoint, node_id: NodeId) {
+        if let Ok(mut conn_type_watcher) = endpoint.conn_type(node_id) {
+            #[allow(clippy::let_underscore_future)]
+            let _ = spawn("iroh connection (stable)", async move {
+                if let Ok(conn_type) = conn_type_watcher.get() {
+                    debug!(target: LOG_NET_IROH, %node_id, type = %conn_type, "Connection type (initial)");
+                }
+                while let Ok(event) = conn_type_watcher.updated().await {
+                    debug!(target: LOG_NET_IROH, %node_id, type = %event, "Connection type (changed)");
+                }
+            });
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn spawn_connection_monitoring_next(
+        endpoint: &iroh_next::Endpoint,
+        node_addr: &iroh_next::NodeAddr,
+    ) {
+        if let Some(mut conn_type_watcher) = endpoint.conn_type(node_addr.node_id) {
+            let node_id = node_addr.node_id;
+            #[allow(clippy::let_underscore_future)]
+            let _ = spawn("iroh connection (next)", async move {
+                if let Ok(conn_type) = conn_type_watcher.get() {
+                    debug!(target: LOG_NET_IROH, %node_id, type = %conn_type, "Connection type (initial)");
+                }
+                while let Ok(event) = conn_type_watcher.updated().await {
+                    debug!(target: LOG_NET_IROH, node_id = %node_id, %event, "Connection type changed");
+                }
+            });
+        }
+    }
+
     pub async fn new(
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
@@ -155,9 +191,16 @@ impl IClientConnector for IrohConnector {
                 match connection_override {
                     Some(node_addr) => {
                         trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                        endpoint_stable
+                        let conn = endpoint_stable
                             .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                            .await
+                            .await;
+
+                        #[cfg(not(target_family = "wasm"))]
+                        if conn.is_ok() {
+                            Self::spawn_connection_monitoring_stable(&endpoint_stable, node_id);
+                        }
+
+                        conn
                     }
                     None => endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
                 }.map_err(PeerError::Connection)
@@ -169,9 +212,17 @@ impl IClientConnector for IrohConnector {
             match connection_override {
                 Some(node_addr) => {
                     trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                    endpoint_next
-                        .connect(node_addr_stable_to_next(&node_addr), FEDIMINT_API_ALPN)
-                        .await
+                    let node_addr = node_addr_stable_to_next(&node_addr);
+                    let conn = endpoint_next
+                        .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                        .await;
+
+                    #[cfg(not(target_family = "wasm"))]
+                    if conn.is_ok() {
+                        Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
+                    }
+
+                    conn
                 }
                 None => endpoint_next.connect(
                         iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
