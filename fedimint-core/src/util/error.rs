@@ -10,7 +10,7 @@ where
     E: error::Error,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut source_opt: Option<&(dyn std::error::Error)> = Some(self.0);
+        let mut source_opt: Option<&dyn std::error::Error> = Some(self.0);
 
         while source_opt.is_some() {
             let source = source_opt.take().expect("Just checked");
