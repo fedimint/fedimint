@@ -18,6 +18,9 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
 
+#[cfg(feature = "bitcoincore")]
+pub mod bitcoincore;
+
 pub fn create_esplora_rpc(url: &SafeUrl) -> Result<DynBitcoindRpc> {
     let url = env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
         .ok()
@@ -37,6 +40,9 @@ pub type DynBitcoindRpc = Arc<dyn IBitcoindRpc + Send + Sync>;
 pub trait IBitcoindRpc: Debug + Send + Sync + 'static {
     /// If a transaction is included in a block, returns the block height.
     async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>>;
+
+    /// Watches for a script and returns any transaction associated with it
+    async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()>;
 
     /// Get script transaction history
     async fn get_script_history(&self, script: &ScriptBuf) -> Result<Vec<Transaction>>;
@@ -75,6 +81,11 @@ impl IBitcoindRpc for EsploraClient {
             .await?
             .block_height
             .map(u64::from))
+    }
+
+    async fn watch_script_history(&self, _: &ScriptBuf) -> anyhow::Result<()> {
+        // no watching needed, has all the history already
+        Ok(())
     }
 
     async fn get_script_history(

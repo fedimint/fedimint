@@ -1,4 +1,3 @@
-use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,7 +11,9 @@ use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
-use fedimint_gateway_common::{GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse};
+use fedimint_gateway_common::{
+    ChainSource, GetInvoiceRequest, GetInvoiceResponse, ListTransactionsResponse,
+};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
 use ldk_node::lightning::ln::msgs::SocketAddress;
@@ -34,25 +35,6 @@ use crate::{
     OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
     SendOnchainResponse,
 };
-
-#[derive(Clone)]
-pub enum GatewayLdkChainSourceConfig {
-    Bitcoind { server_url: SafeUrl },
-    Esplora { server_url: SafeUrl },
-}
-
-impl fmt::Display for GatewayLdkChainSourceConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            GatewayLdkChainSourceConfig::Bitcoind { server_url } => {
-                write!(f, "Bitcoind source with URL: {server_url}")
-            }
-            GatewayLdkChainSourceConfig::Esplora { server_url } => {
-                write!(f, "Esplora source with URL: {server_url}")
-            }
-        }
-    }
-}
 
 pub struct GatewayLdkClient {
     /// The underlying lightning node.
@@ -89,7 +71,7 @@ impl GatewayLdkClient {
     /// There's no need to manually stop the node.
     pub fn new(
         data_dir: &Path,
-        chain_source_config: GatewayLdkChainSourceConfig,
+        chain_source: ChainSource,
         network: Network,
         lightning_port: u16,
         alias: String,
@@ -119,8 +101,12 @@ impl GatewayLdkClient {
 
         node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
 
-        match chain_source_config.clone() {
-            GatewayLdkChainSourceConfig::Bitcoind { server_url } => {
+        match chain_source.clone() {
+            ChainSource::Bitcoind {
+                username,
+                password,
+                server_url,
+            } => {
                 node_builder.set_chain_source_bitcoind_rpc(
                     server_url
                         .host_str()
@@ -129,11 +115,11 @@ impl GatewayLdkClient {
                     server_url
                         .port()
                         .expect("Could not retrieve port from bitcoind RPC url"),
-                    server_url.username().to_string(),
-                    server_url.password().unwrap_or_default().to_string(),
+                    username,
+                    password,
                 );
             }
-            GatewayLdkChainSourceConfig::Esplora { server_url } => {
+            ChainSource::Esplora { server_url } => {
                 node_builder.set_chain_source_esplora(get_esplora_url(server_url)?, None);
             }
         };
@@ -142,7 +128,7 @@ impl GatewayLdkClient {
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
-        info!(chain_source = %chain_source_config, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
+        info!(chain_source = %chain_source, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
         let node = Arc::new(node_builder.build()?);
         node.start_with_runtime(runtime).map_err(|err| {
             crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt;
 use std::time::{Duration, SystemTime};
 
 use bitcoin::address::NetworkUnchecked;
@@ -6,8 +7,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network};
 use clap::Subcommand;
 use envs::{
-    FM_LDK_ALIAS_ENV, FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
-    FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::{FederationId, JsonClientConfig};
@@ -430,18 +430,6 @@ pub enum LightningMode {
     },
     #[clap(name = "ldk")]
     Ldk {
-        /// LDK esplora server URL
-        #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
-        esplora_server_url: Option<String>,
-
-        /// LDK bitcoind server URL
-        #[arg(long = "ldk-bitcoind-rpc-url", env = FM_LDK_BITCOIND_RPC_URL)]
-        bitcoind_rpc_url: Option<String>,
-
-        /// LDK network (defaults to regtest if not provided)
-        #[arg(long = "ldk-network", env = FM_LDK_NETWORK, default_value = "regtest")]
-        network: Network,
-
         /// LDK lightning server port
         #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
         lightning_port: u16,
@@ -450,4 +438,33 @@ pub enum LightningMode {
         #[arg(long = "ldk-alias", env = FM_LDK_ALIAS_ENV)]
         alias: String,
     },
+}
+
+#[derive(Clone)]
+pub enum ChainSource {
+    Bitcoind {
+        username: String,
+        password: String,
+        server_url: SafeUrl,
+    },
+    Esplora {
+        server_url: SafeUrl,
+    },
+}
+
+impl fmt::Display for ChainSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ChainSource::Bitcoind {
+                username: _,
+                password: _,
+                server_url,
+            } => {
+                write!(f, "Bitcoind source with URL: {server_url}")
+            }
+            ChainSource::Esplora { server_url } => {
+                write!(f, "Esplora source with URL: {server_url}")
+            }
+        }
+    }
 }
