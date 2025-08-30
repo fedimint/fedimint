@@ -18,6 +18,7 @@ path = "tests/tests.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bitcoin = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-client = { workspace = true }
@@ -33,6 +34,9 @@ fedimint-lnv2-server = { workspace = true }
 fedimint-testing = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
+lnurl-rs = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 substring = { workspace = true }
 tokio = { workspace = true }

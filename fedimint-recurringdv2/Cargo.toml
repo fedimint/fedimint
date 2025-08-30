@@ -1,0 +1,30 @@
+[package]
+authors = ["The Fedimint Developers"]
+description = "Recurring payment server v2"
+edition = "2021"
+license = "MIT"
+name = "fedimint-recurringdv2"
+version = "0.9.0-alpha"
+
+[[bin]]
+name = "fedimint-recurringdv2"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+bitcoin = { workspace = true, features = ["serde"] }
+chacha20poly1305 = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+fedimint-core = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
+fedimint-logging = { workspace = true }
+lightning-invoice = { workspace = true }
+lnurl-rs = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tpe = { workspace = true }
+tracing = { workspace = true }

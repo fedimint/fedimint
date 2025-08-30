@@ -148,3 +148,14 @@ pub const FM_RECURRING_API_BEARER_TOKEN_ENV: &str = "FM_RECURRING_API_BEARER_TOK
 
 // Env variable to override recurringd binary set:
 pub const FM_RECURRINGD_BASE_EXECUTABLE_ENV: &str = "FM_RECURRINGD_BASE_EXECUTABLE";
+
+// recurringdv2.rs
+
+// Env variable for recurringdv2 bind address
+pub const FM_RECURRINGDV2_BIND_ADDRESS_ENV: &str = "FM_RECURRINGDV2_BIND_ADDRESS";
+
+// Env variable for recurringdv2 base URL
+pub const FM_RECURRINGDV2_BASE_URL_ENV: &str = "FM_RECURRINGDV2_BASE_URL";
+
+// Env variable to override recurringdv2 binary set:
+pub const FM_RECURRINGDV2_BASE_EXECUTABLE_ENV: &str = "FM_RECURRINGDV2_BASE_EXECUTABLE";
