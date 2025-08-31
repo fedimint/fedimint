@@ -313,7 +313,7 @@ tower-http = { version = "0.6.6", features = ["cors"] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.9.0-alpha" }
 tracing = "0.1.41"
 tracing-opentelemetry = "0.24.0"
-tracing-subscriber = "0.3.19"
+tracing-subscriber = "0.3.20"
 tracing-test = "0.2.5"
 url = "2.5.4"
 wasm-bindgen = "=0.2.100" # must match the nix provided wasm-bindgen-cli version
