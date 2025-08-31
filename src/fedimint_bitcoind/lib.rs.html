@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-bitcoind/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-84e720fa.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_bitcoind" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (ccf3198de 2025-06-05)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-4e99c027.js"></script><script defer src="../../static.files/src-script-63605ae7.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_bitcoind/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-bitcoind/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_bitcoind" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0-nightly (498ae9fed 2025-07-28)" data-channel="nightly" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-68b7e25d.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_bitcoind/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="attr">#![deny(clippy::pedantic)]
 <a href=#2 id=2 data-nosnippet>2</a>#![allow(clippy::cast_possible_truncation)]
 <a href=#3 id=3 data-nosnippet>3</a>#![allow(clippy::cast_sign_loss)]
 <a href=#4 id=4 data-nosnippet>4</a>#![allow(clippy::missing_errors_doc)]
@@ -81,27 +81,45 @@
 <a href=#81 id=81 data-nosnippet>81</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#82 id=82 data-nosnippet>82</a>        script: <span class="kw-2">&amp;</span>ScriptBuf,
 <a href=#83 id=83 data-nosnippet>83</a>    ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
-<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">let </span>transactions = <span class="self">self
-<a href=#85 id=85 data-nosnippet>85</a>            </span>.client
-<a href=#86 id=86 data-nosnippet>86</a>            .scripthash_txs(script, <span class="prelude-val">None</span>)
-<a href=#87 id=87 data-nosnippet>87</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#88 id=88 data-nosnippet>88</a>            </span>.into_iter()
-<a href=#89 id=89 data-nosnippet>89</a>            .map(|tx| tx.to_tx())
-<a href=#90 id=90 data-nosnippet>90</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">const </span>MAX_TX_HISTORY: usize = <span class="number">1000</span>;
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="kw">let </span><span class="kw-2">mut </span>transactions = Vec::new();
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="kw">let </span><span class="kw-2">mut </span>last_seen: <span class="prelude-ty">Option</span>&lt;Txid&gt; = <span class="prelude-val">None</span>;
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="kw">loop </span>{
+<a href=#90 id=90 data-nosnippet>90</a>            <span class="kw">let </span>page = <span class="self">self</span>.client.scripthash_txs(script, last_seen).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#91 id=91 data-nosnippet>91</a>
-<a href=#92 id=92 data-nosnippet>92</a>        <span class="prelude-val">Ok</span>(transactions)
-<a href=#93 id=93 data-nosnippet>93</a>    }
-<a href=#94 id=94 data-nosnippet>94</a>
-<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; anyhow::Result&lt;TxOutProof&gt; {
-<a href=#96 id=96 data-nosnippet>96</a>        <span class="kw">let </span>proof = <span class="self">self
-<a href=#97 id=97 data-nosnippet>97</a>            </span>.client
-<a href=#98 id=98 data-nosnippet>98</a>            .get_merkle_block(<span class="kw-2">&amp;</span>txid)
-<a href=#99 id=99 data-nosnippet>99</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#100 id=100 data-nosnippet>100</a>            </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">"No merkle proof found"</span>))<span class="question-mark">?</span>;
-<a href=#101 id=101 data-nosnippet>101</a>
-<a href=#102 id=102 data-nosnippet>102</a>        <span class="prelude-val">Ok</span>(TxOutProof {
-<a href=#103 id=103 data-nosnippet>103</a>            block_header: proof.header,
-<a href=#104 id=104 data-nosnippet>104</a>            merkle_proof: proof.txn,
-<a href=#105 id=105 data-nosnippet>105</a>        })
-<a href=#106 id=106 data-nosnippet>106</a>    }
-<a href=#107 id=107 data-nosnippet>107</a>}</code></pre></div></section></main></body></html>
+<a href=#92 id=92 data-nosnippet>92</a>            <span class="kw">if </span>page.is_empty() {
+<a href=#93 id=93 data-nosnippet>93</a>                <span class="kw">break</span>;
+<a href=#94 id=94 data-nosnippet>94</a>            }
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a>            <span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>page {
+<a href=#97 id=97 data-nosnippet>97</a>                transactions.push(tx.to_tx());
+<a href=#98 id=98 data-nosnippet>98</a>            }
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a>            <span class="kw">if </span>transactions.len() &gt;= MAX_TX_HISTORY {
+<a href=#101 id=101 data-nosnippet>101</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(
+<a href=#102 id=102 data-nosnippet>102</a>                    <span class="string">"Script history exceeds maximum limit of {}"</span>,
+<a href=#103 id=103 data-nosnippet>103</a>                    MAX_TX_HISTORY
+<a href=#104 id=104 data-nosnippet>104</a>                ));
+<a href=#105 id=105 data-nosnippet>105</a>            }
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a>            last_seen = <span class="prelude-val">Some</span>(page.last().expect(<span class="string">"page not empty"</span>).txid);
+<a href=#108 id=108 data-nosnippet>108</a>        }
+<a href=#109 id=109 data-nosnippet>109</a>
+<a href=#110 id=110 data-nosnippet>110</a>        <span class="prelude-val">Ok</span>(transactions)
+<a href=#111 id=111 data-nosnippet>111</a>    }
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; anyhow::Result&lt;TxOutProof&gt; {
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="kw">let </span>proof = <span class="self">self
+<a href=#115 id=115 data-nosnippet>115</a>            </span>.client
+<a href=#116 id=116 data-nosnippet>116</a>            .get_merkle_block(<span class="kw-2">&amp;</span>txid)
+<a href=#117 id=117 data-nosnippet>117</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#118 id=118 data-nosnippet>118</a>            </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">"No merkle proof found"</span>))<span class="question-mark">?</span>;
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="prelude-val">Ok</span>(TxOutProof {
+<a href=#121 id=121 data-nosnippet>121</a>            block_header: proof.header,
+<a href=#122 id=122 data-nosnippet>122</a>            merkle_proof: proof.txn,
+<a href=#123 id=123 data-nosnippet>123</a>        })
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>}</code></pre></div></section></main></body></html>

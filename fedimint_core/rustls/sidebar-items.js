@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["install_crypto_provider"],"static":["INSTALL_CRYPTO"]};

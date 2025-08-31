@@ -1,11 +1,11 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-gwv2-client/src/events.rs`."><title>events.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-84e720fa.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_gwv2_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (ccf3198de 2025-06-05)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-4e99c027.js"></script><script defer src="../../static.files/src-script-63605ae7.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_gwv2_client/</div>events.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::time::SystemTime;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-gwv2-client/src/events.rs`."><title>events.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_gwv2_client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0-nightly (498ae9fed 2025-07-28)" data-channel="nightly" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-68b7e25d.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_gwv2_client/</div>events.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::time::SystemTime;
 <a href=#2 id=2 data-nosnippet>2</a>
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>fedimint_core::Amount;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>fedimint_core::config::FederationId;
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::core::ModuleKind;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_eventlog::{
-<a href=#7 id=7 data-nosnippet>7</a>    Event, EventKind, PersistedLogEntry, StructuredPaymentEvents, filter_events_by_kind,
-<a href=#8 id=8 data-nosnippet>8</a>    join_events,
+<a href=#7 id=7 data-nosnippet>7</a>    Event, EventKind, EventPersistence, PersistedLogEntry, StructuredPaymentEvents,
+<a href=#8 id=8 data-nosnippet>8</a>    filter_events_by_kind, join_events,
 <a href=#9 id=9 data-nosnippet>9</a>};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_lnv2_common::contracts::{Commitment, OutgoingContract, PaymentImage};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -37,8 +37,8 @@
 <a href=#37 id=37 data-nosnippet>37</a>
 <a href=#38 id=38 data-nosnippet>38</a><span class="kw">impl </span>Event <span class="kw">for </span>OutgoingPaymentStarted {
 <a href=#39 id=39 data-nosnippet>39</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
-<a href=#40 id=40 data-nosnippet>40</a>
-<a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"outgoing-payment-started"</span>);
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"outgoing-payment-started"</span>);
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#42 id=42 data-nosnippet>42</a>}
 <a href=#43 id=43 data-nosnippet>43</a>
 <a href=#44 id=44 data-nosnippet>44</a><span class="doccomment">/// Event that is emitted when an outgoing payment attempt has succeeded.
@@ -53,8 +53,8 @@
 <a href=#53 id=53 data-nosnippet>53</a>
 <a href=#54 id=54 data-nosnippet>54</a><span class="kw">impl </span>Event <span class="kw">for </span>OutgoingPaymentSucceeded {
 <a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
-<a href=#56 id=56 data-nosnippet>56</a>
-<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"outgoing-payment-succeeded"</span>);
+<a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"outgoing-payment-succeeded"</span>);
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#58 id=58 data-nosnippet>58</a>}
 <a href=#59 id=59 data-nosnippet>59</a>
 <a href=#60 id=60 data-nosnippet>60</a><span class="doccomment">/// Event that is emitted when an outgoing payment attempt has failed.
@@ -69,8 +69,8 @@
 <a href=#69 id=69 data-nosnippet>69</a>
 <a href=#70 id=70 data-nosnippet>70</a><span class="kw">impl </span>Event <span class="kw">for </span>OutgoingPaymentFailed {
 <a href=#71 id=71 data-nosnippet>71</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
-<a href=#72 id=72 data-nosnippet>72</a>
-<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"outgoing-payment-failed"</span>);
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"outgoing-payment-failed"</span>);
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#74 id=74 data-nosnippet>74</a>}
 <a href=#75 id=75 data-nosnippet>75</a>
 <a href=#76 id=76 data-nosnippet>76</a><span class="doccomment">/// Event that is emitted when an incoming payment attempt has started. Includes
@@ -91,8 +91,8 @@
 <a href=#91 id=91 data-nosnippet>91</a>
 <a href=#92 id=92 data-nosnippet>92</a><span class="kw">impl </span>Event <span class="kw">for </span>IncomingPaymentStarted {
 <a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
-<a href=#94 id=94 data-nosnippet>94</a>
-<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"incoming-payment-started"</span>);
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"incoming-payment-started"</span>);
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#96 id=96 data-nosnippet>96</a>}
 <a href=#97 id=97 data-nosnippet>97</a>
 <a href=#98 id=98 data-nosnippet>98</a><span class="doccomment">/// Event that is emitted when an incoming payment attempt has succeeded.
@@ -105,8 +105,8 @@
 <a href=#105 id=105 data-nosnippet>105</a>
 <a href=#106 id=106 data-nosnippet>106</a><span class="kw">impl </span>Event <span class="kw">for </span>IncomingPaymentSucceeded {
 <a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
-<a href=#108 id=108 data-nosnippet>108</a>
-<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"incoming-payment-succeeded"</span>);
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"incoming-payment-succeeded"</span>);
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#110 id=110 data-nosnippet>110</a>}
 <a href=#111 id=111 data-nosnippet>111</a>
 <a href=#112 id=112 data-nosnippet>112</a><span class="doccomment">/// Event that is emitted when an incoming payment attempt has failed.
@@ -121,8 +121,8 @@
 <a href=#121 id=121 data-nosnippet>121</a>
 <a href=#122 id=122 data-nosnippet>122</a><span class="kw">impl </span>Event <span class="kw">for </span>IncomingPaymentFailed {
 <a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
-<a href=#124 id=124 data-nosnippet>124</a>
-<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"incoming-payment-failed"</span>);
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"incoming-payment-failed"</span>);
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#126 id=126 data-nosnippet>126</a>}
 <a href=#127 id=127 data-nosnippet>127</a>
 <a href=#128 id=128 data-nosnippet>128</a><span class="doccomment">/// Event that is emitted when a preimage is revealed to the Lightning network.
@@ -136,8 +136,8 @@
 <a href=#136 id=136 data-nosnippet>136</a>
 <a href=#137 id=137 data-nosnippet>137</a><span class="kw">impl </span>Event <span class="kw">for </span>CompleteLightningPaymentSucceeded {
 <a href=#138 id=138 data-nosnippet>138</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
-<a href=#139 id=139 data-nosnippet>139</a>
-<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"complete-lightning-payment-succeeded"</span>);
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"complete-lightning-payment-succeeded"</span>);
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 <a href=#141 id=141 data-nosnippet>141</a>}
 <a href=#142 id=142 data-nosnippet>142</a>
 <a href=#143 id=143 data-nosnippet>143</a><span class="doccomment">/// Computes the `StructurePaymentEvents` for all LNv2 payments.

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/btc/mock.rs`."><title>mock.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-84e720fa.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.89.0-nightly (ccf3198de 2025-06-05)" data-channel="nightly" data-search-js="search-f7877310.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-4e99c027.js"></script><script defer src="../../../static.files/src-script-63605ae7.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-fd3af306.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_testing/btc/</div>mock.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::collections::BTreeMap;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-testing/src/btc/mock.rs`."><title>mock.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_testing" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0-nightly (498ae9fed 2025-07-28)" data-channel="nightly" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-68b7e25d.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_testing/btc/</div>mock.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::collections::BTreeMap;
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::iter::repeat_n;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::sync::Arc;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>std::time::Duration;
@@ -242,154 +242,151 @@
 <a href=#242 id=242 data-nosnippet>242</a>            <span class="kw">let </span><span class="kw-2">mut </span>fee = Amount::ZERO;
 <a href=#243 id=243 data-nosnippet>243</a>            <span class="kw">let </span>maybe_tx = pending.iter().find(|tx| tx.compute_txid() == <span class="kw-2">*</span>txid);
 <a href=#244 id=244 data-nosnippet>244</a>
-<a href=#245 id=245 data-nosnippet>245</a>            <span class="kw">let </span>tx = <span class="kw">match </span>maybe_tx {
-<a href=#246 id=246 data-nosnippet>246</a>                <span class="prelude-val">None </span>=&gt; {
-<a href=#247 id=247 data-nosnippet>247</a>                    sleep_in_test(<span class="string">"no transaction found"</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-<a href=#248 id=248 data-nosnippet>248</a>                    <span class="kw">continue</span>;
-<a href=#249 id=249 data-nosnippet>249</a>                }
-<a href=#250 id=250 data-nosnippet>250</a>                <span class="prelude-val">Some</span>(tx) =&gt; tx,
-<a href=#251 id=251 data-nosnippet>251</a>            };
-<a href=#252 id=252 data-nosnippet>252</a>
-<a href=#253 id=253 data-nosnippet>253</a>            <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.input {
-<a href=#254 id=254 data-nosnippet>254</a>                fee += <span class="kw-2">*</span>addresses
-<a href=#255 id=255 data-nosnippet>255</a>                    .get(<span class="kw-2">&amp;</span>input.previous_output.txid)
-<a href=#256 id=256 data-nosnippet>256</a>                    .expect(<span class="string">"previous transaction should be known"</span>);
-<a href=#257 id=257 data-nosnippet>257</a>            }
-<a href=#258 id=258 data-nosnippet>258</a>
-<a href=#259 id=259 data-nosnippet>259</a>            <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>tx.output {
-<a href=#260 id=260 data-nosnippet>260</a>                fee -= output.value.into();
-<a href=#261 id=261 data-nosnippet>261</a>            }
-<a href=#262 id=262 data-nosnippet>262</a>
-<a href=#263 id=263 data-nosnippet>263</a>            <span class="kw">return </span>fee;
-<a href=#264 id=264 data-nosnippet>264</a>        }
-<a href=#265 id=265 data-nosnippet>265</a>    }
-<a href=#266 id=266 data-nosnippet>266</a>
-<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-<a href=#268 id=268 data-nosnippet>268</a>        <span class="self">self</span>.inner
-<a href=#269 id=269 data-nosnippet>269</a>            .read()
-<a href=#270 id=270 data-nosnippet>270</a>            .expect(<span class="string">"RwLock poisoned"</span>)
-<a href=#271 id=271 data-nosnippet>271</a>            .txid_to_block_height
-<a href=#272 id=272 data-nosnippet>272</a>            .get(txid)
-<a href=#273 id=273 data-nosnippet>273</a>            .map(|height| height.to_owned() <span class="kw">as </span>u64)
-<a href=#274 id=274 data-nosnippet>274</a>    }
-<a href=#275 id=275 data-nosnippet>275</a>
-<a href=#276 id=276 data-nosnippet>276</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-<a href=#277 id=277 data-nosnippet>277</a>        <span class="self">self</span>.inner.read().expect(<span class="string">"RwLock poisoned"</span>).blocks.len() <span class="kw">as </span>u64
-<a href=#278 id=278 data-nosnippet>278</a>    }
-<a href=#279 id=279 data-nosnippet>279</a>
-<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
-<a href=#281 id=281 data-nosnippet>281</a>        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
-<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw">let </span>mempool_transactions = inner.pending.clone();
-<a href=#283 id=283 data-nosnippet>283</a>        mempool_transactions
-<a href=#284 id=284 data-nosnippet>284</a>            .iter()
-<a href=#285 id=285 data-nosnippet>285</a>            .find(|tx| tx.compute_txid() == <span class="kw-2">*</span>txid)
-<a href=#286 id=286 data-nosnippet>286</a>            .map(std::borrow::ToOwned::to_owned)
-<a href=#287 id=287 data-nosnippet>287</a>    }
-<a href=#288 id=288 data-nosnippet>288</a>}
-<a href=#289 id=289 data-nosnippet>289</a>
-<a href=#290 id=290 data-nosnippet>290</a><span class="attr">#[async_trait]
-<a href=#291 id=291 data-nosnippet>291</a></span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>FakeBitcoinTest {
-<a href=#292 id=292 data-nosnippet>292</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
-<a href=#293 id=293 data-nosnippet>293</a>        <span class="kw">for </span>(height, block) <span class="kw">in </span><span class="self">self</span>.inner.read().unwrap().blocks.iter().enumerate() {
-<a href=#294 id=294 data-nosnippet>294</a>            <span class="kw">if </span>block.txdata.iter().any(|tx| <span class="kw-2">&amp;</span>tx.compute_txid() == txid) {
-<a href=#295 id=295 data-nosnippet>295</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(height <span class="kw">as </span>u64));
-<a href=#296 id=296 data-nosnippet>296</a>            }
-<a href=#297 id=297 data-nosnippet>297</a>        }
-<a href=#298 id=298 data-nosnippet>298</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
-<a href=#299 id=299 data-nosnippet>299</a>    }
-<a href=#300 id=300 data-nosnippet>300</a>
-<a href=#301 id=301 data-nosnippet>301</a>    <span class="kw">async fn </span>get_script_history(
-<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#303 id=303 data-nosnippet>303</a>        script: <span class="kw-2">&amp;</span>bitcoin::ScriptBuf,
-<a href=#304 id=304 data-nosnippet>304</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
-<a href=#305 id=305 data-nosnippet>305</a>        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
-<a href=#306 id=306 data-nosnippet>306</a>        <span class="prelude-val">Ok</span>(inner.scripts.get(script).cloned().unwrap_or_default())
-<a href=#307 id=307 data-nosnippet>307</a>    }
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;TxOutProof&gt; {
-<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
-<a href=#311 id=311 data-nosnippet>311</a>        <span class="kw">let </span>proof = inner.proofs.get(<span class="kw-2">&amp;</span>txid);
-<a href=#312 id=312 data-nosnippet>312</a>        <span class="prelude-val">Ok</span>(proof.ok_or(<span class="macro">format_err!</span>(<span class="string">"No proof stored"</span>))<span class="question-mark">?</span>.clone())
-<a href=#313 id=313 data-nosnippet>313</a>    }
-<a href=#314 id=314 data-nosnippet>314</a>}
-<a href=#315 id=315 data-nosnippet>315</a>
-<a href=#316 id=316 data-nosnippet>316</a><span class="kw">fn </span>output_sum(tx: <span class="kw-2">&amp;</span>Transaction) -&gt; u64 {
-<a href=#317 id=317 data-nosnippet>317</a>    tx.output.iter().map(|output| output.value.to_sat()).sum()
-<a href=#318 id=318 data-nosnippet>318</a>}
-<a href=#319 id=319 data-nosnippet>319</a>
-<a href=#320 id=320 data-nosnippet>320</a><span class="kw">fn </span>inputs(tx: <span class="kw-2">&amp;</span>Transaction) -&gt; Vec&lt;OutPoint&gt; {
-<a href=#321 id=321 data-nosnippet>321</a>    tx.input.iter().map(|input| input.previous_output).collect()
-<a href=#322 id=322 data-nosnippet>322</a>}
-<a href=#323 id=323 data-nosnippet>323</a>
-<a href=#324 id=324 data-nosnippet>324</a><span class="attr">#[async_trait::async_trait]
-<a href=#325 id=325 data-nosnippet>325</a></span><span class="kw">impl </span>IServerBitcoinRpc <span class="kw">for </span>FakeBitcoinTest {
-<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
-<a href=#327 id=327 data-nosnippet>327</a>        BitcoinRpcConfig {
-<a href=#328 id=328 data-nosnippet>328</a>            kind: <span class="string">"mock_kind"</span>.to_string(),
-<a href=#329 id=329 data-nosnippet>329</a>            url: <span class="string">"http://mock"</span>.parse().unwrap(),
-<a href=#330 id=330 data-nosnippet>330</a>        }
-<a href=#331 id=331 data-nosnippet>331</a>    }
-<a href=#332 id=332 data-nosnippet>332</a>
-<a href=#333 id=333 data-nosnippet>333</a>    <span class="kw">fn </span>get_url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SafeUrl {
-<a href=#334 id=334 data-nosnippet>334</a>        <span class="string">"http://mock"</span>.parse().unwrap()
-<a href=#335 id=335 data-nosnippet>335</a>    }
-<a href=#336 id=336 data-nosnippet>336</a>
-<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Network&gt; {
-<a href=#338 id=338 data-nosnippet>338</a>        <span class="prelude-val">Ok</span>(bitcoin::Network::Regtest)
-<a href=#339 id=339 data-nosnippet>339</a>    }
-<a href=#340 id=340 data-nosnippet>340</a>
-<a href=#341 id=341 data-nosnippet>341</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-<a href=#342 id=342 data-nosnippet>342</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.inner.read().unwrap().blocks.len() <span class="kw">as </span>u64)
-<a href=#343 id=343 data-nosnippet>343</a>    }
-<a href=#344 id=344 data-nosnippet>344</a>
-<a href=#345 id=345 data-nosnippet>345</a>    <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::BlockHash&gt; {
-<a href=#346 id=346 data-nosnippet>346</a>        <span class="self">self</span>.inner
-<a href=#347 id=347 data-nosnippet>347</a>            .read()
-<a href=#348 id=348 data-nosnippet>348</a>            .unwrap()
-<a href=#349 id=349 data-nosnippet>349</a>            .blocks
-<a href=#350 id=350 data-nosnippet>350</a>            .get(height <span class="kw">as </span>usize)
-<a href=#351 id=351 data-nosnippet>351</a>            .map(|block| block.header.block_hash())
-<a href=#352 id=352 data-nosnippet>352</a>            .context(<span class="string">"No block with that height found"</span>)
-<a href=#353 id=353 data-nosnippet>353</a>    }
-<a href=#354 id=354 data-nosnippet>354</a>
-<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: <span class="kw-2">&amp;</span>bitcoin::BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Block&gt; {
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="self">self</span>.inner
-<a href=#357 id=357 data-nosnippet>357</a>            .read()
-<a href=#358 id=358 data-nosnippet>358</a>            .unwrap()
-<a href=#359 id=359 data-nosnippet>359</a>            .blocks
-<a href=#360 id=360 data-nosnippet>360</a>            .iter()
-<a href=#361 id=361 data-nosnippet>361</a>            .find(|block| block.header.block_hash() == <span class="kw-2">*</span>block_hash)
-<a href=#362 id=362 data-nosnippet>362</a>            .context(<span class="string">"No block with that hash found"</span>)
-<a href=#363 id=363 data-nosnippet>363</a>            .cloned()
-<a href=#364 id=364 data-nosnippet>364</a>    }
-<a href=#365 id=365 data-nosnippet>365</a>
-<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">async fn </span>get_feerate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
-<a href=#367 id=367 data-nosnippet>367</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(Feerate { sats_per_kvb: <span class="number">2000 </span>}))
-<a href=#368 id=368 data-nosnippet>368</a>    }
-<a href=#369 id=369 data-nosnippet>369</a>
-<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: bitcoin::Transaction) {
-<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write().unwrap();
-<a href=#372 id=372 data-nosnippet>372</a>        inner.pending.push(transaction);
-<a href=#373 id=373 data-nosnippet>373</a>
-<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span><span class="kw-2">mut </span>filtered = BTreeMap::&lt;Vec&lt;OutPoint&gt;, bitcoin::Transaction&gt;::new();
-<a href=#375 id=375 data-nosnippet>375</a>
-<a href=#376 id=376 data-nosnippet>376</a>        <span class="comment">// Simulate the mempool keeping txs with higher fees (less output)
-<a href=#377 id=377 data-nosnippet>377</a>        // TODO: This looks borked, should remove from `filtered` on higher fee or
-<a href=#378 id=378 data-nosnippet>378</a>        // something, and check per-input anyway. Probably doesn't matter, and I
-<a href=#379 id=379 data-nosnippet>379</a>        // don't want to touch it.
-<a href=#380 id=380 data-nosnippet>380</a>        </span><span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>inner.pending {
-<a href=#381 id=381 data-nosnippet>381</a>            <span class="kw">match </span>filtered.get(<span class="kw-2">&amp;</span>inputs(tx)) {
-<a href=#382 id=382 data-nosnippet>382</a>                <span class="prelude-val">Some</span>(found) <span class="kw">if </span>output_sum(tx) &gt; output_sum(found) =&gt; {}
-<a href=#383 id=383 data-nosnippet>383</a>                <span class="kw">_ </span>=&gt; {
-<a href=#384 id=384 data-nosnippet>384</a>                    filtered.insert(inputs(tx), tx.clone());
-<a href=#385 id=385 data-nosnippet>385</a>                }
-<a href=#386 id=386 data-nosnippet>386</a>            }
-<a href=#387 id=387 data-nosnippet>387</a>        }
+<a href=#245 id=245 data-nosnippet>245</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(tx) = maybe_tx <span class="kw">else </span>{
+<a href=#246 id=246 data-nosnippet>246</a>                sleep_in_test(<span class="string">"no transaction found"</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+<a href=#247 id=247 data-nosnippet>247</a>                <span class="kw">continue</span>;
+<a href=#248 id=248 data-nosnippet>248</a>            };
+<a href=#249 id=249 data-nosnippet>249</a>
+<a href=#250 id=250 data-nosnippet>250</a>            <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.input {
+<a href=#251 id=251 data-nosnippet>251</a>                fee += <span class="kw-2">*</span>addresses
+<a href=#252 id=252 data-nosnippet>252</a>                    .get(<span class="kw-2">&amp;</span>input.previous_output.txid)
+<a href=#253 id=253 data-nosnippet>253</a>                    .expect(<span class="string">"previous transaction should be known"</span>);
+<a href=#254 id=254 data-nosnippet>254</a>            }
+<a href=#255 id=255 data-nosnippet>255</a>
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>tx.output {
+<a href=#257 id=257 data-nosnippet>257</a>                fee -= output.value.into();
+<a href=#258 id=258 data-nosnippet>258</a>            }
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>            <span class="kw">return </span>fee;
+<a href=#261 id=261 data-nosnippet>261</a>        }
+<a href=#262 id=262 data-nosnippet>262</a>    }
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="self">self</span>.inner
+<a href=#266 id=266 data-nosnippet>266</a>            .read()
+<a href=#267 id=267 data-nosnippet>267</a>            .expect(<span class="string">"RwLock poisoned"</span>)
+<a href=#268 id=268 data-nosnippet>268</a>            .txid_to_block_height
+<a href=#269 id=269 data-nosnippet>269</a>            .get(txid)
+<a href=#270 id=270 data-nosnippet>270</a>            .map(|height| height.to_owned() <span class="kw">as </span>u64)
+<a href=#271 id=271 data-nosnippet>271</a>    }
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="self">self</span>.inner.read().expect(<span class="string">"RwLock poisoned"</span>).blocks.len() <span class="kw">as </span>u64
+<a href=#275 id=275 data-nosnippet>275</a>    }
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;bitcoin::Transaction&gt; {
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">let </span>mempool_transactions = inner.pending.clone();
+<a href=#280 id=280 data-nosnippet>280</a>        mempool_transactions
+<a href=#281 id=281 data-nosnippet>281</a>            .iter()
+<a href=#282 id=282 data-nosnippet>282</a>            .find(|tx| tx.compute_txid() == <span class="kw-2">*</span>txid)
+<a href=#283 id=283 data-nosnippet>283</a>            .map(std::borrow::ToOwned::to_owned)
+<a href=#284 id=284 data-nosnippet>284</a>    }
+<a href=#285 id=285 data-nosnippet>285</a>}
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a><span class="attr">#[async_trait]
+<a href=#288 id=288 data-nosnippet>288</a></span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>FakeBitcoinTest {
+<a href=#289 id=289 data-nosnippet>289</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
+<a href=#290 id=290 data-nosnippet>290</a>        <span class="kw">for </span>(height, block) <span class="kw">in </span><span class="self">self</span>.inner.read().unwrap().blocks.iter().enumerate() {
+<a href=#291 id=291 data-nosnippet>291</a>            <span class="kw">if </span>block.txdata.iter().any(|tx| <span class="kw-2">&amp;</span>tx.compute_txid() == txid) {
+<a href=#292 id=292 data-nosnippet>292</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(height <span class="kw">as </span>u64));
+<a href=#293 id=293 data-nosnippet>293</a>            }
+<a href=#294 id=294 data-nosnippet>294</a>        }
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+<a href=#296 id=296 data-nosnippet>296</a>    }
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="kw">async fn </span>get_script_history(
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#300 id=300 data-nosnippet>300</a>        script: <span class="kw-2">&amp;</span>bitcoin::ScriptBuf,
+<a href=#301 id=301 data-nosnippet>301</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="prelude-val">Ok</span>(inner.scripts.get(script).cloned().unwrap_or_default())
+<a href=#304 id=304 data-nosnippet>304</a>    }
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;TxOutProof&gt; {
+<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
+<a href=#308 id=308 data-nosnippet>308</a>        <span class="kw">let </span>proof = inner.proofs.get(<span class="kw-2">&amp;</span>txid);
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="prelude-val">Ok</span>(proof.ok_or(<span class="macro">format_err!</span>(<span class="string">"No proof stored"</span>))<span class="question-mark">?</span>.clone())
+<a href=#310 id=310 data-nosnippet>310</a>    }
+<a href=#311 id=311 data-nosnippet>311</a>}
+<a href=#312 id=312 data-nosnippet>312</a>
+<a href=#313 id=313 data-nosnippet>313</a><span class="kw">fn </span>output_sum(tx: <span class="kw-2">&amp;</span>Transaction) -&gt; u64 {
+<a href=#314 id=314 data-nosnippet>314</a>    tx.output.iter().map(|output| output.value.to_sat()).sum()
+<a href=#315 id=315 data-nosnippet>315</a>}
+<a href=#316 id=316 data-nosnippet>316</a>
+<a href=#317 id=317 data-nosnippet>317</a><span class="kw">fn </span>inputs(tx: <span class="kw-2">&amp;</span>Transaction) -&gt; Vec&lt;OutPoint&gt; {
+<a href=#318 id=318 data-nosnippet>318</a>    tx.input.iter().map(|input| input.previous_output).collect()
+<a href=#319 id=319 data-nosnippet>319</a>}
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a><span class="attr">#[async_trait::async_trait]
+<a href=#322 id=322 data-nosnippet>322</a></span><span class="kw">impl </span>IServerBitcoinRpc <span class="kw">for </span>FakeBitcoinTest {
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+<a href=#324 id=324 data-nosnippet>324</a>        BitcoinRpcConfig {
+<a href=#325 id=325 data-nosnippet>325</a>            kind: <span class="string">"mock_kind"</span>.to_string(),
+<a href=#326 id=326 data-nosnippet>326</a>            url: <span class="string">"http://mock"</span>.parse().unwrap(),
+<a href=#327 id=327 data-nosnippet>327</a>        }
+<a href=#328 id=328 data-nosnippet>328</a>    }
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a>    <span class="kw">fn </span>get_url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SafeUrl {
+<a href=#331 id=331 data-nosnippet>331</a>        <span class="string">"http://mock"</span>.parse().unwrap()
+<a href=#332 id=332 data-nosnippet>332</a>    }
+<a href=#333 id=333 data-nosnippet>333</a>
+<a href=#334 id=334 data-nosnippet>334</a>    <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Network&gt; {
+<a href=#335 id=335 data-nosnippet>335</a>        <span class="prelude-val">Ok</span>(bitcoin::Network::Regtest)
+<a href=#336 id=336 data-nosnippet>336</a>    }
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+<a href=#339 id=339 data-nosnippet>339</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.inner.read().unwrap().blocks.len() <span class="kw">as </span>u64)
+<a href=#340 id=340 data-nosnippet>340</a>    }
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::BlockHash&gt; {
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="self">self</span>.inner
+<a href=#344 id=344 data-nosnippet>344</a>            .read()
+<a href=#345 id=345 data-nosnippet>345</a>            .unwrap()
+<a href=#346 id=346 data-nosnippet>346</a>            .blocks
+<a href=#347 id=347 data-nosnippet>347</a>            .get(height <span class="kw">as </span>usize)
+<a href=#348 id=348 data-nosnippet>348</a>            .map(|block| block.header.block_hash())
+<a href=#349 id=349 data-nosnippet>349</a>            .context(<span class="string">"No block with that height found"</span>)
+<a href=#350 id=350 data-nosnippet>350</a>    }
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: <span class="kw-2">&amp;</span>bitcoin::BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Block&gt; {
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="self">self</span>.inner
+<a href=#354 id=354 data-nosnippet>354</a>            .read()
+<a href=#355 id=355 data-nosnippet>355</a>            .unwrap()
+<a href=#356 id=356 data-nosnippet>356</a>            .blocks
+<a href=#357 id=357 data-nosnippet>357</a>            .iter()
+<a href=#358 id=358 data-nosnippet>358</a>            .find(|block| block.header.block_hash() == <span class="kw-2">*</span>block_hash)
+<a href=#359 id=359 data-nosnippet>359</a>            .context(<span class="string">"No block with that hash found"</span>)
+<a href=#360 id=360 data-nosnippet>360</a>            .cloned()
+<a href=#361 id=361 data-nosnippet>361</a>    }
+<a href=#362 id=362 data-nosnippet>362</a>
+<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">async fn </span>get_feerate(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(Feerate { sats_per_kvb: <span class="number">2000 </span>}))
+<a href=#365 id=365 data-nosnippet>365</a>    }
+<a href=#366 id=366 data-nosnippet>366</a>
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: bitcoin::Transaction) {
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write().unwrap();
+<a href=#369 id=369 data-nosnippet>369</a>        inner.pending.push(transaction);
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span><span class="kw-2">mut </span>filtered = BTreeMap::&lt;Vec&lt;OutPoint&gt;, bitcoin::Transaction&gt;::new();
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="comment">// Simulate the mempool keeping txs with higher fees (less output)
+<a href=#374 id=374 data-nosnippet>374</a>        // TODO: This looks borked, should remove from `filtered` on higher fee or
+<a href=#375 id=375 data-nosnippet>375</a>        // something, and check per-input anyway. Probably doesn't matter, and I
+<a href=#376 id=376 data-nosnippet>376</a>        // don't want to touch it.
+<a href=#377 id=377 data-nosnippet>377</a>        </span><span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>inner.pending {
+<a href=#378 id=378 data-nosnippet>378</a>            <span class="kw">match </span>filtered.get(<span class="kw-2">&amp;</span>inputs(tx)) {
+<a href=#379 id=379 data-nosnippet>379</a>                <span class="prelude-val">Some</span>(found) <span class="kw">if </span>output_sum(tx) &gt; output_sum(found) =&gt; {}
+<a href=#380 id=380 data-nosnippet>380</a>                <span class="kw">_ </span>=&gt; {
+<a href=#381 id=381 data-nosnippet>381</a>                    filtered.insert(inputs(tx), tx.clone());
+<a href=#382 id=382 data-nosnippet>382</a>                }
+<a href=#383 id=383 data-nosnippet>383</a>            }
+<a href=#384 id=384 data-nosnippet>384</a>        }
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a>        inner.pending = filtered.into_values().collect();
+<a href=#387 id=387 data-nosnippet>387</a>    }
 <a href=#388 id=388 data-nosnippet>388</a>
-<a href=#389 id=389 data-nosnippet>389</a>        inner.pending = filtered.into_values().collect();
-<a href=#390 id=390 data-nosnippet>390</a>    }
-<a href=#391 id=391 data-nosnippet>391</a>
-<a href=#392 id=392 data-nosnippet>392</a>    <span class="kw">async fn </span>get_sync_percentage(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt; {
-<a href=#393 id=393 data-nosnippet>393</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
-<a href=#394 id=394 data-nosnippet>394</a>    }
-<a href=#395 id=395 data-nosnippet>395</a>}</code></pre></div></section></main></body></html>
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">async fn </span>get_sync_progress(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;f64&gt;&gt; {
+<a href=#390 id=390 data-nosnippet>390</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+<a href=#391 id=391 data-nosnippet>391</a>    }
+<a href=#392 id=392 data-nosnippet>392</a>}</code></pre></div></section></main></body></html>
