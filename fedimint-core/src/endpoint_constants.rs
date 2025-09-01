@@ -17,6 +17,7 @@ pub const SESSION_COUNT_ENDPOINT: &str = "session_count";
 pub const AWAIT_SESSION_OUTCOME_ENDPOINT: &str = "await_session_outcome";
 pub const AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT: &str = "await_signed_session_outcome";
 pub const SESSION_STATUS_ENDPOINT: &str = "session_status";
+pub const UNIT_COUNT_ENDPOINT: &str = "unit_count";
 pub const SESSION_STATUS_V2_ENDPOINT: &str = "signed_session_status";
 pub const SHUTDOWN_ENDPOINT: &str = "shutdown";
 pub const CONFIG_GEN_PEERS_ENDPOINT: &str = "config_gen_peers";

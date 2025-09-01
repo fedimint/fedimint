@@ -32,7 +32,7 @@ use fedimint_core::endpoint_constants::{
     RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
     SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
     SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, UNIT_COUNT_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -94,6 +94,7 @@ pub struct ConsensusApi {
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
+    pub unit_count_receiver: watch::Receiver<usize>,
 }
 
 impl ConsensusApi {
@@ -192,6 +193,11 @@ impl ConsensusApi {
 
     pub async fn session_count(&self) -> u64 {
         get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+    }
+
+    pub fn unit_count(&self) -> u64 {
+        let count = *self.unit_count_receiver.borrow();
+        count as u64
     }
 
     pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
@@ -700,6 +706,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> sha256::Hash {
                 Ok(legacy_consensus_config_hash(&fedimint.cfg.consensus))
+            }
+        },
+        api_endpoint! {
+            UNIT_COUNT_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> SerdeModuleEncoding<u64> {
+                let count:u64 = fedimint.unit_count();
+                Ok((&count).into())
             }
         },
         api_endpoint! {

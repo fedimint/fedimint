@@ -72,6 +72,7 @@ pub struct ConsensusEngine {
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub db_checkpoint_retention: u64,
+    pub unit_count_sender: watch::Sender<usize>,
 }
 
 impl ConsensusEngine {
@@ -166,8 +167,12 @@ impl ConsensusEngine {
 
             info!(target: LOG_CONSENSUS, session_index, "Starting consensus session");
 
-            self.run_session(self.connections.clone(), session_index)
-                .await?;
+            self.run_session(
+                self.connections.clone(),
+                session_index,
+                self.unit_count_sender.clone(),
+            )
+            .await?;
 
             info!(target: LOG_CONSENSUS, session_index, "Completed consensus session");
 
@@ -189,6 +194,7 @@ impl ConsensusEngine {
         &self,
         connections: DynP2PConnections<P2PMessage>,
         session_index: u64,
+        unit_count_sender: watch::Sender<usize>,
     ) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
@@ -259,7 +265,7 @@ impl ConsensusEngine {
                         timestamp_sender,
                         self.is_recovery().await,
                     ),
-                    FinalizationHandler::new(unit_data_sender),
+                    FinalizationHandler::new(unit_data_sender, unit_count_sender),
                     BackupWriter::new(self.db.clone()).await,
                     BackupReader::new(self.db.clone()),
                 ),

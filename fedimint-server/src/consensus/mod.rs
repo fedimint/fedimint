@@ -169,6 +169,7 @@ pub async fn run(
     let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
     let (ord_latency_sender, ord_latency_receiver) = watch::channel(None);
+    let (unit_count_sender, unit_count_receiver) = watch::channel(0);
 
     let mut ci_status_senders = BTreeMap::new();
     let mut ci_status_receivers = BTreeMap::new();
@@ -198,6 +199,7 @@ pub async fn run(
         bitcoin_rpc_connection: server_bitcoin_rpc_monitor,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
+        unit_count_receiver,
     };
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
@@ -275,6 +277,7 @@ pub async fn run(
         task_group: task_group.clone(),
         data_dir,
         db_checkpoint_retention,
+        unit_count_sender,
     }
     .run()
     .await?;
