@@ -238,7 +238,6 @@ impl ClientModuleInit for WalletClientInit {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
         };
-        data.print_descriptor();
 
         let db = args.db().clone();
 
@@ -338,22 +337,6 @@ pub struct WalletClientModuleData {
 }
 
 impl WalletClientModuleData {
-    fn print_descriptor(&self) {
-        let secret_tweak_key = self
-            .module_root_secret
-            .child_key(WALLET_TWEAK_CHILD_ID)
-            .to_secp_key(fedimint_core::secp256k1::SECP256K1);
-
-        let public_tweak_key = secret_tweak_key.public_key();
-
-        let descriptor = self
-            .cfg
-            .peg_in_descriptor
-            .tweak(&public_tweak_key, bitcoin::secp256k1::SECP256K1);
-
-        tracing::info!(target: LOG_CLIENT_MODULE_WALLET, %descriptor, "Wallet descriptor");
-    }
-
     fn derive_deposit_address(
         &self,
         idx: TweakIdx,
@@ -910,7 +893,7 @@ impl WalletClientModule {
                             vec![]
                         ).await?;
 
-                        tracing::info!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
+                        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
 
                         // Begin watching the script address
                         self.rpc.watch_script_history(&address.script_pubkey()).await?;

@@ -1,6 +1,7 @@
 use bitcoin::{Address, ScriptBuf, Txid};
 use bitcoincore_rpc::json::ImportDescriptors;
-use bitcoincore_rpc::{Auth, RpcApi};
+use bitcoincore_rpc::jsonrpc::error::Error as JsonRpcError;
+use bitcoincore_rpc::{Auth, Error as RpcError, RpcApi};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::block_in_place;
@@ -19,11 +20,11 @@ pub struct BitcoindClient {
 }
 
 impl BitcoindClient {
-    pub async fn new(
+    pub fn new(
         url: &SafeUrl,
         username: String,
         password: String,
-        wallet_name: String,
+        wallet_name: &str,
         network: bitcoin::Network,
     ) -> anyhow::Result<Self> {
         let auth = Auth::UserPass(username, password);
@@ -44,7 +45,7 @@ impl BitcoindClient {
         let default_url_str = format!("{url_str}/wallet/");
         info!(target: LOG_BITCOIND_CORE, %url_str, "Creating default bitcoind client");
         let default_client = ::bitcoincore_rpc::Client::new(&default_url_str, auth.clone())?;
-        Self::create_watch_only_wallet(&default_client, wallet_name.clone()).await?;
+        Self::create_watch_only_wallet(&default_client, wallet_name)?;
 
         let wallet_url_str = format!("{url_str}/wallet/{wallet_name}");
         info!(target: LOG_BITCOIND_CORE, %wallet_url_str, "Creating wallet bitcoind client");
@@ -52,16 +53,23 @@ impl BitcoindClient {
         Ok(Self { client, network })
     }
 
-    async fn create_watch_only_wallet(
+    fn create_watch_only_wallet(
         client: &::bitcoincore_rpc::Client,
-        wallet_name: String,
+        wallet_name: &str,
     ) -> anyhow::Result<()> {
-        // TODO: Probably need to check if the wallet has already been created
-        // or handle failure where it has already been created
-        info!(target: LOG_BITCOIND_CORE, %wallet_name, "Creating watch only wallet");
-        block_in_place(|| client.create_wallet(&wallet_name, Some(true), Some(true), None, None))?;
+        let create_wallet = block_in_place(|| {
+            client.create_wallet(wallet_name, Some(true), Some(true), None, None)
+        });
 
-        Ok(())
+        match create_wallet {
+            Ok(_) => Ok(()),
+            Err(RpcError::JsonRpc(JsonRpcError::Rpc(rpc_err))) if rpc_err.code == -4 => {
+                // Wallet already exists → treat as success
+                info!(target: LOG_BITCOIND_CORE, %wallet_name, "Wallet already exists, continuing");
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -78,7 +86,7 @@ impl IBitcoindRpc for BitcoindClient {
     }
 
     async fn watch_script_history(&self, script: &ScriptBuf) -> anyhow::Result<()> {
-        let address = Address::from_script(&script, self.network)?.to_string();
+        let address = Address::from_script(script, self.network)?.to_string();
         debug!(target: LOG_BITCOIND_CORE, %address, "Watching script history");
 
         // First get the checksum for the descriptor
@@ -89,25 +97,37 @@ impl IBitcoindRpc for BitcoindClient {
             .ok_or(anyhow::anyhow!("No checksum"))?;
 
         // Import the descriptor
-        let res = self.client.import_descriptors(ImportDescriptors {
-            descriptor: format!("{descriptor}#{}", checksum),
-            timestamp: bitcoincore_rpc::json::Timestamp::Now,
-            active: Some(false),
-            range: None,
-            next_index: None,
-            internal: None,
-            label: Some(address.clone()),
+        let import_results = block_in_place(|| {
+            self.client.import_descriptors(ImportDescriptors {
+                descriptor: format!("{descriptor}#{checksum}"),
+                timestamp: bitcoincore_rpc::json::Timestamp::Now,
+                active: Some(false),
+                range: None,
+                next_index: None,
+                internal: None,
+                label: Some(address.clone()),
+            })
         })?;
-        // TODO: verify that it was successful
-        info!(target: LOG_BITCOIND_CORE, %address, ?res, "Successfully imported the descriptor for the address");
-        Ok(())
+
+        // Verify that the import was successful
+        if import_results.iter().all(|r| r.success) {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "Importing descriptor failed: {:?}",
+                import_results
+                    .into_iter()
+                    .filter(|r| !r.success)
+                    .collect::<Vec<_>>()
+            ))
+        }
     }
 
     async fn get_script_history(
         &self,
         script: &ScriptBuf,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
-        let address = Address::from_script(&script, self.network)?.to_string();
+        let address = Address::from_script(script, self.network)?.to_string();
         let mut results = vec![];
         let list = block_in_place(|| {
             self.client

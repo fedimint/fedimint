@@ -293,10 +293,10 @@ impl Gateway {
         .await
     }
 
-    async fn get_bitcoind_client(
+    fn get_bitcoind_client(
         opts: &GatewayOpts,
         network: bitcoin::Network,
-    ) -> (BitcoindClient, ChainSource) {
+    ) -> anyhow::Result<(BitcoindClient, ChainSource)> {
         let bitcoind_username = opts
             .bitcoind_username
             .clone()
@@ -316,11 +316,9 @@ impl Gateway {
         // Generate a random name for the wallet name
         let mut rng = rand::thread_rng();
         let random_num: u32 = rng.r#gen();
-        let wallet_name = format!("gatewayd-{}", random_num);
-        let client = BitcoindClient::new(&url, bitcoind_username, password, wallet_name, network)
-            .await
-            .expect("Could not create bitcoind client");
-        (client, chain_source)
+        let wallet_name = format!("gatewayd-{random_num}");
+        let client = BitcoindClient::new(&url, bitcoind_username, password, &wallet_name, network)?;
+        Ok((client, chain_source))
     }
 
     /// Default function for creating a gateway with the `Mint`, `Wallet`, and
@@ -333,7 +331,7 @@ impl Gateway {
             match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
                 (Some(_), None) => {
                     let (client, chain_source) =
-                        Self::get_bitcoind_client(&opts, gateway_parameters.network).await;
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network)?;
                     (client.into_dyn(), chain_source)
                 }
                 (None, Some(url)) => {
@@ -348,7 +346,7 @@ impl Gateway {
                 (Some(_), Some(_)) => {
                     // Use bitcoind by default if both are set
                     let (client, chain_source) =
-                        Self::get_bitcoind_client(&opts, gateway_parameters.network).await;
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network)?;
                     (client.into_dyn(), chain_source)
                 }
                 _ => unreachable!("ArgGroup already enforced XOR relation"),
