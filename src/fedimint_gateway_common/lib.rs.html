@@ -1,13 +1,13 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/fedimint-gateway-common/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_gateway_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0-nightly (498ae9fed 2025-07-28)" data-channel="nightly" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-68b7e25d.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">fedimint_gateway_common/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::collections::BTreeMap;
-<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::time::{Duration, SystemTime};
-<a href=#3 id=3 data-nosnippet>3</a>
-<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>bitcoin::hashes::sha256;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoin::{Address, Network};
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>clap::Subcommand;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>envs::{
-<a href=#9 id=9 data-nosnippet>9</a>    FM_LDK_ALIAS_ENV, FM_LDK_BITCOIND_RPC_URL, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK,
-<a href=#10 id=10 data-nosnippet>10</a>    FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+<a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::fmt;
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::time::{Duration, SystemTime};
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoin::hashes::sha256;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>bitcoin::{Address, Network};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>clap::Subcommand;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>envs::{
+<a href=#10 id=10 data-nosnippet>10</a>    FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 <a href=#11 id=11 data-nosnippet>11</a>};
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::config::{FederationId, JsonClientConfig};
@@ -430,24 +430,41 @@
 <a href=#430 id=430 data-nosnippet>430</a>    },
 <a href=#431 id=431 data-nosnippet>431</a>    <span class="attr">#[clap(name = <span class="string">"ldk"</span>)]
 <a href=#432 id=432 data-nosnippet>432</a>    </span>Ldk {
-<a href=#433 id=433 data-nosnippet>433</a>        <span class="doccomment">/// LDK esplora server URL
-<a href=#434 id=434 data-nosnippet>434</a>        </span><span class="attr">#[arg(long = <span class="string">"ldk-esplora-server-url"</span>, env = FM_LDK_ESPLORA_SERVER_URL)]
-<a href=#435 id=435 data-nosnippet>435</a>        </span>esplora_server_url: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#433 id=433 data-nosnippet>433</a>        <span class="doccomment">/// LDK lightning server port
+<a href=#434 id=434 data-nosnippet>434</a>        </span><span class="attr">#[arg(long = <span class="string">"ldk-lightning-port"</span>, env = FM_PORT_LDK)]
+<a href=#435 id=435 data-nosnippet>435</a>        </span>lightning_port: u16,
 <a href=#436 id=436 data-nosnippet>436</a>
-<a href=#437 id=437 data-nosnippet>437</a>        <span class="doccomment">/// LDK bitcoind server URL
-<a href=#438 id=438 data-nosnippet>438</a>        </span><span class="attr">#[arg(long = <span class="string">"ldk-bitcoind-rpc-url"</span>, env = FM_LDK_BITCOIND_RPC_URL)]
-<a href=#439 id=439 data-nosnippet>439</a>        </span>bitcoind_rpc_url: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#440 id=440 data-nosnippet>440</a>
-<a href=#441 id=441 data-nosnippet>441</a>        <span class="doccomment">/// LDK network (defaults to regtest if not provided)
-<a href=#442 id=442 data-nosnippet>442</a>        </span><span class="attr">#[arg(long = <span class="string">"ldk-network"</span>, env = FM_LDK_NETWORK, default_value = <span class="string">"regtest"</span>)]
-<a href=#443 id=443 data-nosnippet>443</a>        </span>network: Network,
-<a href=#444 id=444 data-nosnippet>444</a>
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="doccomment">/// LDK lightning server port
-<a href=#446 id=446 data-nosnippet>446</a>        </span><span class="attr">#[arg(long = <span class="string">"ldk-lightning-port"</span>, env = FM_PORT_LDK)]
-<a href=#447 id=447 data-nosnippet>447</a>        </span>lightning_port: u16,
-<a href=#448 id=448 data-nosnippet>448</a>
-<a href=#449 id=449 data-nosnippet>449</a>        <span class="doccomment">/// LDK's Alias
-<a href=#450 id=450 data-nosnippet>450</a>        </span><span class="attr">#[arg(long = <span class="string">"ldk-alias"</span>, env = FM_LDK_ALIAS_ENV)]
-<a href=#451 id=451 data-nosnippet>451</a>        </span>alias: String,
+<a href=#437 id=437 data-nosnippet>437</a>        <span class="doccomment">/// LDK's Alias
+<a href=#438 id=438 data-nosnippet>438</a>        </span><span class="attr">#[arg(long = <span class="string">"ldk-alias"</span>, env = FM_LDK_ALIAS_ENV)]
+<a href=#439 id=439 data-nosnippet>439</a>        </span>alias: String,
+<a href=#440 id=440 data-nosnippet>440</a>    },
+<a href=#441 id=441 data-nosnippet>441</a>}
+<a href=#442 id=442 data-nosnippet>442</a>
+<a href=#443 id=443 data-nosnippet>443</a><span class="attr">#[derive(Clone)]
+<a href=#444 id=444 data-nosnippet>444</a></span><span class="kw">pub enum </span>ChainSource {
+<a href=#445 id=445 data-nosnippet>445</a>    Bitcoind {
+<a href=#446 id=446 data-nosnippet>446</a>        username: String,
+<a href=#447 id=447 data-nosnippet>447</a>        password: String,
+<a href=#448 id=448 data-nosnippet>448</a>        server_url: SafeUrl,
+<a href=#449 id=449 data-nosnippet>449</a>    },
+<a href=#450 id=450 data-nosnippet>450</a>    Esplora {
+<a href=#451 id=451 data-nosnippet>451</a>        server_url: SafeUrl,
 <a href=#452 id=452 data-nosnippet>452</a>    },
-<a href=#453 id=453 data-nosnippet>453</a>}</code></pre></div></section></main></body></html>
+<a href=#453 id=453 data-nosnippet>453</a>}
+<a href=#454 id=454 data-nosnippet>454</a>
+<a href=#455 id=455 data-nosnippet>455</a><span class="kw">impl </span>fmt::Display <span class="kw">for </span>ChainSource {
+<a href=#456 id=456 data-nosnippet>456</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#457 id=457 data-nosnippet>457</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#458 id=458 data-nosnippet>458</a>            ChainSource::Bitcoind {
+<a href=#459 id=459 data-nosnippet>459</a>                username: <span class="kw">_</span>,
+<a href=#460 id=460 data-nosnippet>460</a>                password: <span class="kw">_</span>,
+<a href=#461 id=461 data-nosnippet>461</a>                server_url,
+<a href=#462 id=462 data-nosnippet>462</a>            } =&gt; {
+<a href=#463 id=463 data-nosnippet>463</a>                <span class="macro">write!</span>(f, <span class="string">"Bitcoind source with URL: {server_url}"</span>)
+<a href=#464 id=464 data-nosnippet>464</a>            }
+<a href=#465 id=465 data-nosnippet>465</a>            ChainSource::Esplora { server_url } =&gt; {
+<a href=#466 id=466 data-nosnippet>466</a>                <span class="macro">write!</span>(f, <span class="string">"Esplora source with URL: {server_url}"</span>)
+<a href=#467 id=467 data-nosnippet>467</a>            }
+<a href=#468 id=468 data-nosnippet>468</a>        }
+<a href=#469 id=469 data-nosnippet>469</a>    }
+<a href=#470 id=470 data-nosnippet>470</a>}</code></pre></div></section></main></body></html>

@@ -331,163 +331,165 @@
 <a href=#331 id=331 data-nosnippet>331</a>
 <a href=#332 id=332 data-nosnippet>332</a>                    <span class="kw">let </span>use_decoy = || <span class="kw">async </span>{
 <a href=#333 id=333 data-nosnippet>333</a>                        <span class="kw">if let </span><span class="prelude-val">Some</span>(decoy) = decoy.as_ref() {
-<a href=#334 id=334 data-nosnippet>334</a>                            <span class="kw">let _ </span>= btc_rpc.get_script_history(decoy).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#335 id=335 data-nosnippet>335</a>                        }
-<a href=#336 id=336 data-nosnippet>336</a>                        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
-<a href=#337 id=337 data-nosnippet>337</a>                    };
-<a href=#338 id=338 data-nosnippet>338</a>
-<a href=#339 id=339 data-nosnippet>339</a>                    <span class="kw">if </span>use_decoy_before_real_query {
-<a href=#340 id=340 data-nosnippet>340</a>                        use_decoy().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#341 id=341 data-nosnippet>341</a>                    }
-<a href=#342 id=342 data-nosnippet>342</a>                    <span class="kw">let </span>history = btc_rpc.get_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#343 id=343 data-nosnippet>343</a>
-<a href=#344 id=344 data-nosnippet>344</a>                    <span class="kw">if </span>!use_decoy_before_real_query {
-<a href=#345 id=345 data-nosnippet>345</a>                        use_decoy().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#346 id=346 data-nosnippet>346</a>                    }
-<a href=#347 id=347 data-nosnippet>347</a>
-<a href=#348 id=348 data-nosnippet>348</a>                    <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), <span class="string">"Checked address"</span>);
+<a href=#334 id=334 data-nosnippet>334</a>                            btc_rpc.watch_script_history(decoy).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#335 id=335 data-nosnippet>335</a>                            <span class="kw">let _ </span>= btc_rpc.get_script_history(decoy).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#336 id=336 data-nosnippet>336</a>                        }
+<a href=#337 id=337 data-nosnippet>337</a>                        <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(())
+<a href=#338 id=338 data-nosnippet>338</a>                    };
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a>                    <span class="kw">if </span>use_decoy_before_real_query {
+<a href=#341 id=341 data-nosnippet>341</a>                        use_decoy().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#342 id=342 data-nosnippet>342</a>                    }
+<a href=#343 id=343 data-nosnippet>343</a>                    btc_rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#344 id=344 data-nosnippet>344</a>                    <span class="kw">let </span>history = btc_rpc.get_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>                    <span class="kw">if </span>!use_decoy_before_real_query {
+<a href=#347 id=347 data-nosnippet>347</a>                        use_decoy().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#348 id=348 data-nosnippet>348</a>                    }
 <a href=#349 id=349 data-nosnippet>349</a>
-<a href=#350 id=350 data-nosnippet>350</a>                    <span class="prelude-val">Ok</span>(history)
-<a href=#351 id=351 data-nosnippet>351</a>                }).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#352 id=352 data-nosnippet>352</a>
-<a href=#353 id=353 data-nosnippet>353</a>        <span class="self">self</span>.state.new_start_idx = <span class="prelude-val">Some</span>(new_start_idx);
-<a href=#354 id=354 data-nosnippet>354</a>        <span class="self">self</span>.state.tweak_idxes_with_pegins = <span class="prelude-val">Some</span>(tweak_idxes_with_pegins);
-<a href=#355 id=355 data-nosnippet>355</a>
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="prelude-val">Ok</span>(())
-<a href=#357 id=357 data-nosnippet>357</a>    }
-<a href=#358 id=358 data-nosnippet>358</a>
-<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">async fn </span>finalize_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">let </span>now = fedimint_core::time::now();
-<a href=#361 id=361 data-nosnippet>361</a>
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw">let </span><span class="kw-2">mut </span>tweak_idx = TweakIdx(<span class="number">0</span>);
+<a href=#350 id=350 data-nosnippet>350</a>                    <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), <span class="string">"Checked address"</span>);
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a>                    <span class="prelude-val">Ok</span>(history)
+<a href=#353 id=353 data-nosnippet>353</a>                }).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="self">self</span>.state.new_start_idx = <span class="prelude-val">Some</span>(new_start_idx);
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="self">self</span>.state.tweak_idxes_with_pegins = <span class="prelude-val">Some</span>(tweak_idxes_with_pegins);
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a>        <span class="prelude-val">Ok</span>(())
+<a href=#359 id=359 data-nosnippet>359</a>    }
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="kw">async fn </span>finalize_dbtx(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="kw">let </span>now = fedimint_core::time::now();
 <a href=#363 id=363 data-nosnippet>363</a>
-<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">let </span>new_start_idx = <span class="self">self
-<a href=#365 id=365 data-nosnippet>365</a>            </span>.state
-<a href=#366 id=366 data-nosnippet>366</a>            .new_start_idx
-<a href=#367 id=367 data-nosnippet>367</a>            .expect(<span class="string">"Must have new_star_idx already set by previous steps"</span>);
-<a href=#368 id=368 data-nosnippet>368</a>
-<a href=#369 id=369 data-nosnippet>369</a>        <span class="kw">let </span>tweak_idxes_with_pegins = <span class="self">self
-<a href=#370 id=370 data-nosnippet>370</a>            </span>.state
-<a href=#371 id=371 data-nosnippet>371</a>            .tweak_idxes_with_pegins
-<a href=#372 id=372 data-nosnippet>372</a>            .clone()
-<a href=#373 id=373 data-nosnippet>373</a>            .expect(<span class="string">"Must be set by previous steps"</span>);
-<a href=#374 id=374 data-nosnippet>374</a>
-<a href=#375 id=375 data-nosnippet>375</a>        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, <span class="question-mark">?</span>new_start_idx, <span class="string">"Finalizing recovery"</span>);
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">let </span><span class="kw-2">mut </span>tweak_idx = TweakIdx(<span class="number">0</span>);
+<a href=#365 id=365 data-nosnippet>365</a>
+<a href=#366 id=366 data-nosnippet>366</a>        <span class="kw">let </span>new_start_idx = <span class="self">self
+<a href=#367 id=367 data-nosnippet>367</a>            </span>.state
+<a href=#368 id=368 data-nosnippet>368</a>            .new_start_idx
+<a href=#369 id=369 data-nosnippet>369</a>            .expect(<span class="string">"Must have new_star_idx already set by previous steps"</span>);
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span>tweak_idxes_with_pegins = <span class="self">self
+<a href=#372 id=372 data-nosnippet>372</a>            </span>.state
+<a href=#373 id=373 data-nosnippet>373</a>            .tweak_idxes_with_pegins
+<a href=#374 id=374 data-nosnippet>374</a>            .clone()
+<a href=#375 id=375 data-nosnippet>375</a>            .expect(<span class="string">"Must be set by previous steps"</span>);
 <a href=#376 id=376 data-nosnippet>376</a>
-<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">while </span>tweak_idx &lt; new_start_idx {
-<a href=#378 id=378 data-nosnippet>378</a>            <span class="kw">let </span>(_script, _address, _tweak_key, operation_id) =
-<a href=#379 id=379 data-nosnippet>379</a>                <span class="self">self</span>.data.derive_peg_in_script(tweak_idx);
-<a href=#380 id=380 data-nosnippet>380</a>            dbtx.insert_new_entry(
-<a href=#381 id=381 data-nosnippet>381</a>                <span class="kw-2">&amp;</span>PegInTweakIndexKey(tweak_idx),
-<a href=#382 id=382 data-nosnippet>382</a>                <span class="kw-2">&amp;</span>PegInTweakIndexData {
-<a href=#383 id=383 data-nosnippet>383</a>                    creation_time: now,
-<a href=#384 id=384 data-nosnippet>384</a>                    next_check_time: <span class="kw">if </span>tweak_idxes_with_pegins.contains(<span class="kw-2">&amp;</span>tweak_idx) {
-<a href=#385 id=385 data-nosnippet>385</a>                        <span class="comment">// The addresses that were already used before, or didn't seem to
-<a href=#386 id=386 data-nosnippet>386</a>                        // contain anything don't need automatic
-<a href=#387 id=387 data-nosnippet>387</a>                        // peg-in attempt, and can be re-attempted
-<a href=#388 id=388 data-nosnippet>388</a>                        // manually if needed.
-<a href=#389 id=389 data-nosnippet>389</a>                        </span><span class="prelude-val">Some</span>(now)
-<a href=#390 id=390 data-nosnippet>390</a>                    } <span class="kw">else </span>{
-<a href=#391 id=391 data-nosnippet>391</a>                        <span class="prelude-val">None
-<a href=#392 id=392 data-nosnippet>392</a>                    </span>},
-<a href=#393 id=393 data-nosnippet>393</a>                    last_check_time: <span class="prelude-val">None</span>,
-<a href=#394 id=394 data-nosnippet>394</a>                    operation_id,
-<a href=#395 id=395 data-nosnippet>395</a>                    claimed: <span class="macro">vec!</span>[],
-<a href=#396 id=396 data-nosnippet>396</a>                },
-<a href=#397 id=397 data-nosnippet>397</a>            )
-<a href=#398 id=398 data-nosnippet>398</a>            .<span class="kw">await</span>;
-<a href=#399 id=399 data-nosnippet>399</a>            tweak_idx = tweak_idx.next();
-<a href=#400 id=400 data-nosnippet>400</a>        }
-<a href=#401 id=401 data-nosnippet>401</a>
-<a href=#402 id=402 data-nosnippet>402</a>        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>new_start_idx)
-<a href=#403 id=403 data-nosnippet>403</a>            .<span class="kw">await</span>;
-<a href=#404 id=404 data-nosnippet>404</a>        <span class="prelude-val">Ok</span>(())
-<a href=#405 id=405 data-nosnippet>405</a>    }
-<a href=#406 id=406 data-nosnippet>406</a>}
-<a href=#407 id=407 data-nosnippet>407</a>
-<a href=#408 id=408 data-nosnippet>408</a><span class="doccomment">/// We will check this many addresses after last actually used
-<a href=#409 id=409 data-nosnippet>409</a>/// one before we give up
-<a href=#410 id=410 data-nosnippet>410</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>ONCHAIN_RECOVER_MAX_GAP: u64 = <span class="number">10</span>;
-<a href=#411 id=411 data-nosnippet>411</a>
-<a href=#412 id=412 data-nosnippet>412</a><span class="doccomment">/// When scanning the history of the Federation, there's no need to be
-<a href=#413 id=413 data-nosnippet>413</a>/// so cautious about the privacy (as it's perfectly private), so might
-<a href=#414 id=414 data-nosnippet>414</a>/// as well increase the gap limit.
-<a href=#415 id=415 data-nosnippet>415</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>FEDERATION_RECOVER_MAX_GAP: u64 = <span class="number">50</span>;
-<a href=#416 id=416 data-nosnippet>416</a>
-<a href=#417 id=417 data-nosnippet>417</a><span class="doccomment">/// New client will start deriving new addresses from last used one
-<a href=#418 id=418 data-nosnippet>418</a>/// plus that many indexes. This should be less than
-<a href=#419 id=419 data-nosnippet>419</a>/// `MAX_GAP`, but more than 0: We want to make sure we detect
-<a href=#420 id=420 data-nosnippet>420</a>/// deposits that might have been made after multiple successive recoveries,
-<a href=#421 id=421 data-nosnippet>421</a>/// but we want also to avoid accidental address re-use.
-<a href=#422 id=422 data-nosnippet>422</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>RECOVER_NUM_IDX_ADD_TO_LAST_USED: u64 = <span class="number">8</span>;
-<a href=#423 id=423 data-nosnippet>423</a>
-<a href=#424 id=424 data-nosnippet>424</a><span class="attr">#[derive(Clone, PartialEq, Eq, Debug)]
-<a href=#425 id=425 data-nosnippet>425</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>RecoverScanOutcome {
-<a href=#426 id=426 data-nosnippet>426</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) last_used_idx: <span class="prelude-ty">Option</span>&lt;TweakIdx&gt;,
-<a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) new_start_idx: TweakIdx,
-<a href=#428 id=428 data-nosnippet>428</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) tweak_idxes_with_pegins: BTreeSet&lt;TweakIdx&gt;,
-<a href=#429 id=429 data-nosnippet>429</a>}
-<a href=#430 id=430 data-nosnippet>430</a>
-<a href=#431 id=431 data-nosnippet>431</a><span class="doccomment">/// A part of `WalletClientInit::recover` extracted out to be easy to
-<a href=#432 id=432 data-nosnippet>432</a>/// test, as a side-effect free.
-<a href=#433 id=433 data-nosnippet>433</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>recover_scan_idxes_for_activity&lt;F, FF, T&gt;(
-<a href=#434 id=434 data-nosnippet>434</a>    scan_from_idx: TweakIdx,
-<a href=#435 id=435 data-nosnippet>435</a>    used_tweak_idxes: <span class="kw-2">&amp;</span>BTreeSet&lt;TweakIdx&gt;,
-<a href=#436 id=436 data-nosnippet>436</a>    check_addr_history: F,
-<a href=#437 id=437 data-nosnippet>437</a>) -&gt; anyhow::Result&lt;RecoverScanOutcome&gt;
-<a href=#438 id=438 data-nosnippet>438</a><span class="kw">where
-<a href=#439 id=439 data-nosnippet>439</a>    </span>F: Fn(TweakIdx) -&gt; FF,
-<a href=#440 id=440 data-nosnippet>440</a>    FF: Future&lt;Output = anyhow::Result&lt;Vec&lt;T&gt;&gt;&gt;,
-<a href=#441 id=441 data-nosnippet>441</a>{
-<a href=#442 id=442 data-nosnippet>442</a>    <span class="kw">let </span>tweak_indexes_to_scan = (scan_from_idx.<span class="number">0</span>..).map(TweakIdx).filter(|tweak_idx| {
-<a href=#443 id=443 data-nosnippet>443</a>        <span class="kw">let </span>already_used = used_tweak_idxes.contains(tweak_idx);
-<a href=#444 id=444 data-nosnippet>444</a>
-<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw">if </span>already_used {
-<a href=#446 id=446 data-nosnippet>446</a>            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET,
-<a href=#447 id=447 data-nosnippet>447</a>                %tweak_idx,
-<a href=#448 id=448 data-nosnippet>448</a>                <span class="string">"Skipping checking history of an address, as it was previously used"
-<a href=#449 id=449 data-nosnippet>449</a>            </span>);
-<a href=#450 id=450 data-nosnippet>450</a>        }
-<a href=#451 id=451 data-nosnippet>451</a>
-<a href=#452 id=452 data-nosnippet>452</a>        !already_used
-<a href=#453 id=453 data-nosnippet>453</a>    });
-<a href=#454 id=454 data-nosnippet>454</a>
-<a href=#455 id=455 data-nosnippet>455</a>    <span class="comment">// Last tweak index which had on-chain activity, used to implement a gap limit,
-<a href=#456 id=456 data-nosnippet>456</a>    // i.e. scanning a certain number of addresses past the last one that had
-<a href=#457 id=457 data-nosnippet>457</a>    // activity.
-<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>last_used_idx = used_tweak_idxes.last().copied();
-<a href=#459 id=459 data-nosnippet>459</a>    <span class="comment">// When we didn't find any used idx yet, assume that last one before
-<a href=#460 id=460 data-nosnippet>460</a>    // `scan_from_idx` was used.
-<a href=#461 id=461 data-nosnippet>461</a>    </span><span class="kw">let </span>fallback_last_used_idx = scan_from_idx.prev().unwrap_or_default();
-<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">let </span><span class="kw-2">mut </span>tweak_idxes_with_pegins = BTreeSet::new();
-<a href=#463 id=463 data-nosnippet>463</a>
-<a href=#464 id=464 data-nosnippet>464</a>    <span class="kw">for </span>cur_tweak_idx <span class="kw">in </span>tweak_indexes_to_scan {
-<a href=#465 id=465 data-nosnippet>465</a>        <span class="kw">if </span>ONCHAIN_RECOVER_MAX_GAP
-<a href=#466 id=466 data-nosnippet>466</a>            &lt;= cur_tweak_idx.saturating_sub(last_used_idx.unwrap_or(fallback_last_used_idx))
-<a href=#467 id=467 data-nosnippet>467</a>        {
-<a href=#468 id=468 data-nosnippet>468</a>            <span class="kw">break</span>;
-<a href=#469 id=469 data-nosnippet>469</a>        }
-<a href=#470 id=470 data-nosnippet>470</a>
-<a href=#471 id=471 data-nosnippet>471</a>        <span class="kw">let </span>history = retry(
-<a href=#472 id=472 data-nosnippet>472</a>            <span class="string">"Check address history"</span>,
-<a href=#473 id=473 data-nosnippet>473</a>            backoff_util::background_backoff(),
-<a href=#474 id=474 data-nosnippet>474</a>            || <span class="kw">async </span>{ check_addr_history(cur_tweak_idx).<span class="kw">await </span>},
-<a href=#475 id=475 data-nosnippet>475</a>        )
-<a href=#476 id=476 data-nosnippet>476</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#477 id=477 data-nosnippet>477</a>
-<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">if </span>!history.is_empty() {
-<a href=#479 id=479 data-nosnippet>479</a>            tweak_idxes_with_pegins.insert(cur_tweak_idx);
-<a href=#480 id=480 data-nosnippet>480</a>            last_used_idx = <span class="prelude-val">Some</span>(cur_tweak_idx);
-<a href=#481 id=481 data-nosnippet>481</a>        }
-<a href=#482 id=482 data-nosnippet>482</a>    }
-<a href=#483 id=483 data-nosnippet>483</a>
-<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">let </span>new_start_idx = last_used_idx
-<a href=#485 id=485 data-nosnippet>485</a>        .unwrap_or(fallback_last_used_idx)
-<a href=#486 id=486 data-nosnippet>486</a>        .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
-<a href=#487 id=487 data-nosnippet>487</a>
-<a href=#488 id=488 data-nosnippet>488</a>    <span class="prelude-val">Ok</span>(RecoverScanOutcome {
-<a href=#489 id=489 data-nosnippet>489</a>        last_used_idx,
-<a href=#490 id=490 data-nosnippet>490</a>        new_start_idx,
-<a href=#491 id=491 data-nosnippet>491</a>        tweak_idxes_with_pegins,
-<a href=#492 id=492 data-nosnippet>492</a>    })
-<a href=#493 id=493 data-nosnippet>493</a>}</code></pre></div></section></main></body></html>
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, <span class="question-mark">?</span>new_start_idx, <span class="string">"Finalizing recovery"</span>);
+<a href=#378 id=378 data-nosnippet>378</a>
+<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw">while </span>tweak_idx &lt; new_start_idx {
+<a href=#380 id=380 data-nosnippet>380</a>            <span class="kw">let </span>(_script, _address, _tweak_key, operation_id) =
+<a href=#381 id=381 data-nosnippet>381</a>                <span class="self">self</span>.data.derive_peg_in_script(tweak_idx);
+<a href=#382 id=382 data-nosnippet>382</a>            dbtx.insert_new_entry(
+<a href=#383 id=383 data-nosnippet>383</a>                <span class="kw-2">&amp;</span>PegInTweakIndexKey(tweak_idx),
+<a href=#384 id=384 data-nosnippet>384</a>                <span class="kw-2">&amp;</span>PegInTweakIndexData {
+<a href=#385 id=385 data-nosnippet>385</a>                    creation_time: now,
+<a href=#386 id=386 data-nosnippet>386</a>                    next_check_time: <span class="kw">if </span>tweak_idxes_with_pegins.contains(<span class="kw-2">&amp;</span>tweak_idx) {
+<a href=#387 id=387 data-nosnippet>387</a>                        <span class="comment">// The addresses that were already used before, or didn't seem to
+<a href=#388 id=388 data-nosnippet>388</a>                        // contain anything don't need automatic
+<a href=#389 id=389 data-nosnippet>389</a>                        // peg-in attempt, and can be re-attempted
+<a href=#390 id=390 data-nosnippet>390</a>                        // manually if needed.
+<a href=#391 id=391 data-nosnippet>391</a>                        </span><span class="prelude-val">Some</span>(now)
+<a href=#392 id=392 data-nosnippet>392</a>                    } <span class="kw">else </span>{
+<a href=#393 id=393 data-nosnippet>393</a>                        <span class="prelude-val">None
+<a href=#394 id=394 data-nosnippet>394</a>                    </span>},
+<a href=#395 id=395 data-nosnippet>395</a>                    last_check_time: <span class="prelude-val">None</span>,
+<a href=#396 id=396 data-nosnippet>396</a>                    operation_id,
+<a href=#397 id=397 data-nosnippet>397</a>                    claimed: <span class="macro">vec!</span>[],
+<a href=#398 id=398 data-nosnippet>398</a>                },
+<a href=#399 id=399 data-nosnippet>399</a>            )
+<a href=#400 id=400 data-nosnippet>400</a>            .<span class="kw">await</span>;
+<a href=#401 id=401 data-nosnippet>401</a>            tweak_idx = tweak_idx.next();
+<a href=#402 id=402 data-nosnippet>402</a>        }
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>new_start_idx)
+<a href=#405 id=405 data-nosnippet>405</a>            .<span class="kw">await</span>;
+<a href=#406 id=406 data-nosnippet>406</a>        <span class="prelude-val">Ok</span>(())
+<a href=#407 id=407 data-nosnippet>407</a>    }
+<a href=#408 id=408 data-nosnippet>408</a>}
+<a href=#409 id=409 data-nosnippet>409</a>
+<a href=#410 id=410 data-nosnippet>410</a><span class="doccomment">/// We will check this many addresses after last actually used
+<a href=#411 id=411 data-nosnippet>411</a>/// one before we give up
+<a href=#412 id=412 data-nosnippet>412</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>ONCHAIN_RECOVER_MAX_GAP: u64 = <span class="number">10</span>;
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a><span class="doccomment">/// When scanning the history of the Federation, there's no need to be
+<a href=#415 id=415 data-nosnippet>415</a>/// so cautious about the privacy (as it's perfectly private), so might
+<a href=#416 id=416 data-nosnippet>416</a>/// as well increase the gap limit.
+<a href=#417 id=417 data-nosnippet>417</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>FEDERATION_RECOVER_MAX_GAP: u64 = <span class="number">50</span>;
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a><span class="doccomment">/// New client will start deriving new addresses from last used one
+<a href=#420 id=420 data-nosnippet>420</a>/// plus that many indexes. This should be less than
+<a href=#421 id=421 data-nosnippet>421</a>/// `MAX_GAP`, but more than 0: We want to make sure we detect
+<a href=#422 id=422 data-nosnippet>422</a>/// deposits that might have been made after multiple successive recoveries,
+<a href=#423 id=423 data-nosnippet>423</a>/// but we want also to avoid accidental address re-use.
+<a href=#424 id=424 data-nosnippet>424</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>RECOVER_NUM_IDX_ADD_TO_LAST_USED: u64 = <span class="number">8</span>;
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a><span class="attr">#[derive(Clone, PartialEq, Eq, Debug)]
+<a href=#427 id=427 data-nosnippet>427</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>RecoverScanOutcome {
+<a href=#428 id=428 data-nosnippet>428</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) last_used_idx: <span class="prelude-ty">Option</span>&lt;TweakIdx&gt;,
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) new_start_idx: TweakIdx,
+<a href=#430 id=430 data-nosnippet>430</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) tweak_idxes_with_pegins: BTreeSet&lt;TweakIdx&gt;,
+<a href=#431 id=431 data-nosnippet>431</a>}
+<a href=#432 id=432 data-nosnippet>432</a>
+<a href=#433 id=433 data-nosnippet>433</a><span class="doccomment">/// A part of `WalletClientInit::recover` extracted out to be easy to
+<a href=#434 id=434 data-nosnippet>434</a>/// test, as a side-effect free.
+<a href=#435 id=435 data-nosnippet>435</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>recover_scan_idxes_for_activity&lt;F, FF, T&gt;(
+<a href=#436 id=436 data-nosnippet>436</a>    scan_from_idx: TweakIdx,
+<a href=#437 id=437 data-nosnippet>437</a>    used_tweak_idxes: <span class="kw-2">&amp;</span>BTreeSet&lt;TweakIdx&gt;,
+<a href=#438 id=438 data-nosnippet>438</a>    check_addr_history: F,
+<a href=#439 id=439 data-nosnippet>439</a>) -&gt; anyhow::Result&lt;RecoverScanOutcome&gt;
+<a href=#440 id=440 data-nosnippet>440</a><span class="kw">where
+<a href=#441 id=441 data-nosnippet>441</a>    </span>F: Fn(TweakIdx) -&gt; FF,
+<a href=#442 id=442 data-nosnippet>442</a>    FF: Future&lt;Output = anyhow::Result&lt;Vec&lt;T&gt;&gt;&gt;,
+<a href=#443 id=443 data-nosnippet>443</a>{
+<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">let </span>tweak_indexes_to_scan = (scan_from_idx.<span class="number">0</span>..).map(TweakIdx).filter(|tweak_idx| {
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="kw">let </span>already_used = used_tweak_idxes.contains(tweak_idx);
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a>        <span class="kw">if </span>already_used {
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET,
+<a href=#449 id=449 data-nosnippet>449</a>                %tweak_idx,
+<a href=#450 id=450 data-nosnippet>450</a>                <span class="string">"Skipping checking history of an address, as it was previously used"
+<a href=#451 id=451 data-nosnippet>451</a>            </span>);
+<a href=#452 id=452 data-nosnippet>452</a>        }
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>        !already_used
+<a href=#455 id=455 data-nosnippet>455</a>    });
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a>    <span class="comment">// Last tweak index which had on-chain activity, used to implement a gap limit,
+<a href=#458 id=458 data-nosnippet>458</a>    // i.e. scanning a certain number of addresses past the last one that had
+<a href=#459 id=459 data-nosnippet>459</a>    // activity.
+<a href=#460 id=460 data-nosnippet>460</a>    </span><span class="kw">let </span><span class="kw-2">mut </span>last_used_idx = used_tweak_idxes.last().copied();
+<a href=#461 id=461 data-nosnippet>461</a>    <span class="comment">// When we didn't find any used idx yet, assume that last one before
+<a href=#462 id=462 data-nosnippet>462</a>    // `scan_from_idx` was used.
+<a href=#463 id=463 data-nosnippet>463</a>    </span><span class="kw">let </span>fallback_last_used_idx = scan_from_idx.prev().unwrap_or_default();
+<a href=#464 id=464 data-nosnippet>464</a>    <span class="kw">let </span><span class="kw-2">mut </span>tweak_idxes_with_pegins = BTreeSet::new();
+<a href=#465 id=465 data-nosnippet>465</a>
+<a href=#466 id=466 data-nosnippet>466</a>    <span class="kw">for </span>cur_tweak_idx <span class="kw">in </span>tweak_indexes_to_scan {
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">if </span>ONCHAIN_RECOVER_MAX_GAP
+<a href=#468 id=468 data-nosnippet>468</a>            &lt;= cur_tweak_idx.saturating_sub(last_used_idx.unwrap_or(fallback_last_used_idx))
+<a href=#469 id=469 data-nosnippet>469</a>        {
+<a href=#470 id=470 data-nosnippet>470</a>            <span class="kw">break</span>;
+<a href=#471 id=471 data-nosnippet>471</a>        }
+<a href=#472 id=472 data-nosnippet>472</a>
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="kw">let </span>history = retry(
+<a href=#474 id=474 data-nosnippet>474</a>            <span class="string">"Check address history"</span>,
+<a href=#475 id=475 data-nosnippet>475</a>            backoff_util::background_backoff(),
+<a href=#476 id=476 data-nosnippet>476</a>            || <span class="kw">async </span>{ check_addr_history(cur_tweak_idx).<span class="kw">await </span>},
+<a href=#477 id=477 data-nosnippet>477</a>        )
+<a href=#478 id=478 data-nosnippet>478</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#479 id=479 data-nosnippet>479</a>
+<a href=#480 id=480 data-nosnippet>480</a>        <span class="kw">if </span>!history.is_empty() {
+<a href=#481 id=481 data-nosnippet>481</a>            tweak_idxes_with_pegins.insert(cur_tweak_idx);
+<a href=#482 id=482 data-nosnippet>482</a>            last_used_idx = <span class="prelude-val">Some</span>(cur_tweak_idx);
+<a href=#483 id=483 data-nosnippet>483</a>        }
+<a href=#484 id=484 data-nosnippet>484</a>    }
+<a href=#485 id=485 data-nosnippet>485</a>
+<a href=#486 id=486 data-nosnippet>486</a>    <span class="kw">let </span>new_start_idx = last_used_idx
+<a href=#487 id=487 data-nosnippet>487</a>        .unwrap_or(fallback_last_used_idx)
+<a href=#488 id=488 data-nosnippet>488</a>        .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a>    <span class="prelude-val">Ok</span>(RecoverScanOutcome {
+<a href=#491 id=491 data-nosnippet>491</a>        last_used_idx,
+<a href=#492 id=492 data-nosnippet>492</a>        new_start_idx,
+<a href=#493 id=493 data-nosnippet>493</a>        tweak_idxes_with_pegins,
+<a href=#494 id=494 data-nosnippet>494</a>    })
+<a href=#495 id=495 data-nosnippet>495</a>}</code></pre></div></section></main></body></html>

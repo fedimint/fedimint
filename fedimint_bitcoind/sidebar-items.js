@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["create_esplora_rpc"],"struct":["EsploraClient"],"trait":["IBitcoindRpc"],"type":["DynBitcoindRpc"]};
+window.SIDEBAR_ITEMS = {"fn":["create_esplora_rpc"],"mod":["bitcoincore"],"struct":["EsploraClient"],"trait":["IBitcoindRpc"],"type":["DynBitcoindRpc"]};
