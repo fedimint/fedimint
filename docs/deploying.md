@@ -48,14 +48,14 @@ You can create a Fedimint in two ways:
 	All guardians must share their setup codes with each other (every guardian needs every other guardian’s code).
 5. Distributed Key Generation (DKG)
 	Once all setup codes are entered, the DKG process begins. This is where the federation’s cryptographic keys are jointly created.
-	This step may take some time while all guardians connect.
+	This step may take some time while all guardians connect. The UI will be unavailable until DKG has finished. Please be patient.
 6. Federation Complete!
 	Once DKG finishes, your federation is live. Your guardian dashboard will be available for monitoring. You now have a functioning Fedimint!
 
 In addition, a practical federation requires a Lightning Gateway
 to join the federation, and someone needs to set it up and
 run, though one gateway can join and server multiple
-federations. It is currently recommend to use an existing Lightning Gateway, but you can run your own.
+federations. It is currently recommend to use an existing Lightning Gateway, but you can run your own. [Reach out on Discord for more information](https://chat.fedimint.org).
 
 See [here](../docs/gateway.md) for more information about the Lightning Gateway.
 
