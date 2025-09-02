@@ -32,9 +32,8 @@ use tracing::{debug, error, info};
 use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
-use crate::gatewayd::LdkChainSource;
 use crate::util::{LoadTestTool, ProcessManager, poll};
-use crate::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
+use crate::version_constants::VERSION_0_9_0_ALPHA;
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
@@ -1239,12 +1238,6 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
-    let chain_source = if crate::util::Gatewayd::version_or_default().await < *VERSION_0_7_0_ALPHA {
-        LdkChainSource::Bitcoind
-    } else {
-        // Reboot Ldk with Esplora after v0.7.0 when LDK handles esplora URLs properly
-        LdkChainSource::Esplora
-    };
     let (new_gw_lnd, new_gw_ldk) = try_join!(
         Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
         Gatewayd::new(
@@ -1253,7 +1246,6 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
                 name: gw_ldk_name,
                 gw_port: gw_ldk_port,
                 ldk_port: gw_lightning_port,
-                chain_source,
             }
         )
     )?;

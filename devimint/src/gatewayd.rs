@@ -11,7 +11,7 @@ use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash, default_esplora_server};
+use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
 use fedimint_gateway_common::{
     ChannelInfo, CreateOfferResponse, GatewayBalances, GetInvoiceResponse,
     ListTransactionsResponse, MnemonicResponse, PaymentDetails, PaymentStatus,
@@ -33,12 +33,6 @@ use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
 use crate::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
-
-#[derive(Clone)]
-pub enum LdkChainSource {
-    Bitcoind,
-    Esplora,
-}
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -66,7 +60,6 @@ impl Gatewayd {
                 name,
                 gw_port,
                 ldk_port,
-                chain_source: _,
             } => (name.to_owned(), gw_port.to_owned(), ldk_port.to_owned()),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
@@ -92,11 +85,21 @@ impl Gatewayd {
                 "LNv1".to_string(),
             );
         }
+
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         if ln_type == LightningNodeType::Ldk {
             gateway_env.insert("FM_LDK_ALIAS".to_owned(), gw_name.clone());
-            Self::set_ldk_chain_source(&ln, &mut gateway_env, process_mgr);
+
+            // Prior to `v0.9.0`, only LDK could connect to bitcoind
+            if gatewayd_version < *VERSION_0_9_0_ALPHA {
+                let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
+                gateway_env.insert(
+                    "FM_LDK_BITCOIND_RPC_URL".to_owned(),
+                    format!("http://bitcoin:bitcoin@127.0.0.1:{btc_rpc_port}"),
+                );
+            }
         }
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+
         let process = process_mgr
             .spawn_daemon(
                 &gw_name,
@@ -125,44 +128,6 @@ impl Gatewayd {
         )
         .await?;
         Ok(gatewayd)
-    }
-
-    fn set_ldk_chain_source(
-        ln: &LightningNode,
-        gateway_env: &mut HashMap<String, String>,
-        process_mgr: &ProcessManager,
-    ) {
-        let network = if let Ok(network) = std::env::var("FM_GATEWAY_NETWORK") {
-            bitcoin::Network::from_str(&network).expect("Invalid network specified")
-        } else {
-            bitcoin::Network::Regtest
-        };
-        if let LightningNode::Ldk {
-            name: _,
-            gw_port: _,
-            ldk_port: _,
-            chain_source,
-        } = ln
-        {
-            match chain_source {
-                LdkChainSource::Bitcoind => {
-                    let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
-                    gateway_env.insert(
-                        "FM_LDK_BITCOIND_RPC_URL".to_owned(),
-                        format!("http://bitcoin:bitcoin@127.0.0.1:{btc_rpc_port}"),
-                    );
-                }
-                LdkChainSource::Esplora => {
-                    let esplora_port = process_mgr.globals.FM_PORT_ESPLORA.to_string();
-                    gateway_env.insert(
-                        "FM_LDK_ESPLORA_SERVER_URL".to_owned(),
-                        default_esplora_server(network, Some(esplora_port))
-                            .url
-                            .to_string(),
-                    );
-                }
-            }
-        }
     }
 
     fn is_forced_current(&self) -> bool {
@@ -195,7 +160,6 @@ impl Gatewayd {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
-                chain_source: _,
             } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
