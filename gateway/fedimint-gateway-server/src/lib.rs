@@ -51,14 +51,11 @@ use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_MINT, LEGACY_HARDCODED_INSTANCE_ID_WALLET, ModuleInstanceId,
-    ModuleKind,
-};
 use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -105,15 +102,12 @@ use fedimint_lnv2_common::gateway_api::{
 };
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
-    SelectNotesWithExactAmount,
+    MintClientInit, MintClientModule, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
 };
-use fedimint_wallet_client::{
-    WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
-};
+use fedimint_wallet_client::{WalletClientInit, WalletClientModule, WithdrawState};
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
-use rand::{Rng, thread_rng};
+use rand::rngs::OsRng;
 use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
 
@@ -144,12 +138,6 @@ const DB_FILE: &str = "gatewayd.db";
 /// Name of the folder that the gateway uses to store its node database when
 /// running in LDK mode.
 const LDK_NODE_DB_FOLDER: &str = "ldk_node";
-
-/// The non-lightning default module types that the Gateway supports.
-const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
-    (LEGACY_HARDCODED_INSTANCE_ID_MINT, &MintCommonInit::KIND),
-    (LEGACY_HARDCODED_INSTANCE_ID_WALLET, &WalletCommonInit::KIND),
-];
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// ```mermaid
@@ -293,9 +281,12 @@ impl Gateway {
         .await
     }
 
+    /// Returns a bitcoind client using the credentials that were passed in from
+    /// the environment variables.
     fn get_bitcoind_client(
         opts: &GatewayOpts,
         network: bitcoin::Network,
+        gateway_id: &PublicKey,
     ) -> anyhow::Result<(BitcoindClient, ChainSource)> {
         let bitcoind_username = opts
             .bitcoind_username
@@ -312,11 +303,7 @@ impl Gateway {
             password: password.clone(),
             server_url: url.clone(),
         };
-        // TODO: Use a persistent gateway identifier
-        // Generate a random name for the wallet name
-        let mut rng = rand::thread_rng();
-        let random_num: u32 = rng.r#gen();
-        let wallet_name = format!("gatewayd-{random_num}");
+        let wallet_name = format!("gatewayd-{gateway_id}");
         let client = BitcoindClient::new(&url, bitcoind_username, password, &wallet_name, network)?;
         Ok((client, chain_source))
     }
@@ -326,39 +313,7 @@ impl Gateway {
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
         let mut gateway_parameters = opts.to_gateway_parameters()?;
-
-        let (dyn_bitcoin_rpc, chain_source) =
-            match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
-                (Some(_), None) => {
-                    let (client, chain_source) =
-                        Self::get_bitcoind_client(&opts, gateway_parameters.network)?;
-                    (client.into_dyn(), chain_source)
-                }
-                (None, Some(url)) => {
-                    let client = EsploraClient::new(url)
-                        .expect("Could not create EsploraClient")
-                        .into_dyn();
-                    let chain_source = ChainSource::Esplora {
-                        server_url: url.clone(),
-                    };
-                    (client, chain_source)
-                }
-                (Some(_), Some(_)) => {
-                    // Use bitcoind by default if both are set
-                    let (client, chain_source) =
-                        Self::get_bitcoind_client(&opts, gateway_parameters.network)?;
-                    (client.into_dyn(), chain_source)
-                }
-                _ => unreachable!("ArgGroup already enforced XOR relation"),
-            };
-
-        // Gateway module will be attached when the federation clients are created
-        // because the LN RPC will be injected with `GatewayClientGen`.
-        let mut registry = ClientModuleInitRegistry::new();
-        registry.attach(MintClientInit);
-        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
-
-        let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())?;
+        let decoders = ModuleDecoderRegistry::default();
 
         let db_path = opts.data_dir.join(DB_FILE);
         let gateway_db = match opts.db_backend {
@@ -374,6 +329,38 @@ impl Gateway {
                 )
             }
         };
+
+        let gateway_id = Self::load_or_create_gateway_id(&gateway_db).await;
+        let (dyn_bitcoin_rpc, chain_source) =
+            match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
+                (Some(_), None) => {
+                    let (client, chain_source) =
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network, &gateway_id)?;
+                    (client.into_dyn(), chain_source)
+                }
+                (None, Some(url)) => {
+                    let client = EsploraClient::new(url)
+                        .expect("Could not create EsploraClient")
+                        .into_dyn();
+                    let chain_source = ChainSource::Esplora {
+                        server_url: url.clone(),
+                    };
+                    (client, chain_source)
+                }
+                (Some(_), Some(_)) => {
+                    // Use bitcoind by default if both are set
+                    let (client, chain_source) =
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network, &gateway_id)?;
+                    (client.into_dyn(), chain_source)
+                }
+                _ => unreachable!("ArgGroup already enforced XOR relation"),
+            };
+
+        // Gateway module will be attached when the federation clients are created
+        // because the LN RPC will be injected with `GatewayClientGen`.
+        let mut registry = ClientModuleInitRegistry::new();
+        registry.attach(MintClientInit);
+        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
 
         let client_builder = GatewayClientBuilder::new(
             opts.data_dir.clone(),
@@ -1932,7 +1919,7 @@ impl Gateway {
                     )?
                 } else {
                     debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
-                    Bip39RootSecretStrategy::<12>::random(&mut thread_rng())
+                    Bip39RootSecretStrategy::<12>::random(&mut OsRng)
                 };
 
                 Client::store_encodable_client_secret(gateway_db, mnemonic.to_entropy())
