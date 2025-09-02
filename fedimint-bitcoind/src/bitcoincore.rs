@@ -9,7 +9,7 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_BITCOIND_CORE;
-use tracing::{debug, info};
+use tracing::{debug, warn};
 
 use crate::{IBitcoindRpc, format_err};
 
@@ -43,12 +43,10 @@ impl BitcoindClient {
         };
 
         let default_url_str = format!("{url_str}/wallet/");
-        info!(target: LOG_BITCOIND_CORE, %url_str, "Creating default bitcoind client");
         let default_client = ::bitcoincore_rpc::Client::new(&default_url_str, auth.clone())?;
         Self::create_watch_only_wallet(&default_client, wallet_name)?;
 
         let wallet_url_str = format!("{url_str}/wallet/{wallet_name}");
-        info!(target: LOG_BITCOIND_CORE, %wallet_url_str, "Creating wallet bitcoind client");
         let client = ::bitcoincore_rpc::Client::new(&wallet_url_str, auth)?;
         Ok(Self { client, network })
     }
@@ -65,7 +63,6 @@ impl BitcoindClient {
             Ok(_) => Ok(()),
             Err(RpcError::JsonRpc(JsonRpcError::Rpc(rpc_err))) if rpc_err.code == -4 => {
                 // Wallet already exists → treat as success
-                info!(target: LOG_BITCOIND_CORE, %wallet_name, "Wallet already exists, continuing");
                 Ok(())
             }
             Err(e) => Err(e.into()),
@@ -77,7 +74,7 @@ impl BitcoindClient {
 impl IBitcoindRpc for BitcoindClient {
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
         let info = block_in_place(|| self.client.get_transaction(txid, Some(true)))
-            .map_err(|error| info!(target: LOG_BITCOIND_CORE, ?error, "Unable to get transaction"));
+            .map_err(|error| warn!(target: LOG_BITCOIND_CORE, ?error, "Unable to get transaction"));
         let height = match info.ok().and_then(|info| info.info.blockhash) {
             None => None,
             Some(hash) => Some(block_in_place(|| self.client.get_block_header_info(&hash))?.height),
@@ -134,7 +131,6 @@ impl IBitcoindRpc for BitcoindClient {
                 .list_transactions(Some(&address), None, None, Some(true))
         })?;
         for tx in list {
-            info!(target: LOG_BITCOIND_CORE, %address, ?tx, "Listing transactions for address");
             let tx = block_in_place(|| self.client.get_transaction(&tx.info.txid, Some(true)))?;
             let raw_tx = tx.transaction()?;
             results.push(raw_tx);

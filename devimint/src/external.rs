@@ -76,7 +76,7 @@ impl Bitcoind {
         let wallet_name = "";
         let host = format!("{host}wallet/{wallet_name}");
 
-        info!(target: LOG_DEVIMINT, "bitcoind host: {:?}, auth: {:?}", &host, auth);
+        debug!(target: LOG_DEVIMINT, "bitcoind host: {:?}, auth: {:?}", &host, auth);
         let client =
             Self::new_bitcoin_rpc(&host, auth.clone()).context("Failed to connect to bitcoind")?;
         let wallet_client = JitTry::new_try(move || async move {
@@ -115,7 +115,7 @@ impl Bitcoind {
     }
 
     pub(crate) async fn init(client: &bitcoincore_rpc::Client, skip_setup: bool) -> Result<()> {
-        info!(target: LOG_DEVIMINT, "Setting up bitcoind...");
+        debug!(target: LOG_DEVIMINT, "Setting up bitcoind...");
         // create RPC wallet
         for attempt in 0.. {
             match block_in_place(|| client.create_wallet("", None, None, None, None)) {
@@ -133,8 +133,6 @@ impl Bitcoind {
                 }
             }
         }
-
-        info!(target: LOG_DEVIMINT, "Created devimint wallet");
 
         if !skip_setup {
             // mine blocks

@@ -85,10 +85,21 @@ impl Gatewayd {
                 "LNv1".to_string(),
             );
         }
+
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         if ln_type == LightningNodeType::Ldk {
             gateway_env.insert("FM_LDK_ALIAS".to_owned(), gw_name.clone());
+
+            // Prior to `v0.9.0`, only LDK could connect to bitcoind
+            if gatewayd_version < *VERSION_0_9_0_ALPHA {
+                let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
+                gateway_env.insert(
+                    "FM_LDK_BITCOIND_RPC_URL".to_owned(),
+                    format!("http://bitcoin:bitcoin@127.0.0.1:{btc_rpc_port}"),
+                );
+            }
         }
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+
         let process = process_mgr
             .spawn_daemon(
                 &gw_name,
