@@ -2573,4 +2573,23 @@ impl IGatewayClientV1 for Gateway {
 
         lightning_context.lnrpc.complete_htlc(htlc).await
     }
+
+    async fn is_lnv2_direct_swap(
+        &self,
+        payment_hash: sha256::Hash,
+        amount: Amount,
+    ) -> anyhow::Result<
+        Option<(
+            fedimint_lnv2_common::contracts::IncomingContract,
+            ClientHandleArc,
+        )>,
+    > {
+        let (contract, client) = self
+            .get_registered_incoming_contract_and_client_v2(
+                PaymentImage::Hash(payment_hash),
+                amount.msats,
+            )
+            .await?;
+        Ok(Some((contract, client)))
+    }
 }
