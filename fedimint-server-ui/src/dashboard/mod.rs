@@ -24,7 +24,7 @@ use crate::{
     login_form_response, login_submit_response,
 };
 
-pub fn dashboard_layout(content: Markup) -> Markup {
+pub fn dashboard_layout(content: Markup, fedimintd_version: Option<&str>) -> Markup {
     html! {
         (DOCTYPE)
         html {
@@ -33,8 +33,13 @@ pub fn dashboard_layout(content: Markup) -> Markup {
             }
             body {
                 div class="container" {
-                    header class="text-center" {
-                        h1 class="header-title" { "Fedimint Guardian UI" }
+                    header class="text-center mb-4" {
+                        h1 class="header-title mb-1" { "Fedimint Guardian UI" }
+                        @if let Some(version) = fedimintd_version {
+                            div {
+                                small class="text-muted" { "v" (version) }
+                            }
+                        }
                     }
 
                     (content)
@@ -74,6 +79,7 @@ async fn dashboard_view(
     let guardian_names = state.api.guardian_names().await;
     let federation_name = state.api.federation_name().await;
     let session_count = state.api.session_count().await;
+    let fedimintd_version = state.api.fedimintd_version().await;
     let consensus_ord_latency = state.api.consensus_ord_latency().await;
     let p2p_connection_status = state.api.p2p_connection_status().await;
     let invite_code = state.api.federation_invite_code().await;
@@ -136,7 +142,7 @@ async fn dashboard_view(
         }
     };
 
-    Html(dashboard_layout(content).into_string()).into_response()
+    Html(dashboard_layout(content, Some(&fedimintd_version)).into_string()).into_response()
 }
 
 pub fn router(api: DynDashboardApi) -> Router {

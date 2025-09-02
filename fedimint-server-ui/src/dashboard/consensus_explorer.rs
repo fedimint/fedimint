@@ -135,7 +135,7 @@ pub async fn consensus_explorer_view(
         }
     };
 
-    Html(dashboard_layout(content).into_string()).into_response()
+    Html(dashboard_layout(content, None).into_string()).into_response()
 }
 
 /// Format the type of consensus item for display

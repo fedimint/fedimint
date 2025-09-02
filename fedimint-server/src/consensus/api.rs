@@ -614,6 +614,10 @@ impl IDashboardApi for ConsensusApi {
                 }
             })
     }
+
+    async fn fedimintd_version(&self) -> String {
+        self.code_version_str.clone()
+    }
 }
 
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
