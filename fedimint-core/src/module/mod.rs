@@ -19,9 +19,11 @@
 pub mod audit;
 pub mod registry;
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
+use std::ops;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -52,8 +54,117 @@ use crate::{Amount, apply, async_trait_maybe_send, maybe_add_send, maybe_add_sen
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InputMeta {
-    pub amount: TransactionItemAmount,
+    pub amount: TransactionItemAmounts,
     pub pub_key: secp256k1::PublicKey,
+}
+
+/// Unit of account for a given amount.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub struct AmountUnit(u64);
+
+impl AmountUnit {
+    /// [`AmountUnit`] with id `0` is reserved for the native Bitcoin currency.
+    /// So e.g. for a mainnet Federation it's a real Bitcoin (msats), for a
+    /// signet one it's a Signet msats, etc.
+    pub const BITCOIN: Self = Self(0);
+
+    pub fn is_bitcoin(self) -> bool {
+        self == Self::BITCOIN
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct AmountWithUnit {
+    amounts: Amount,
+    unit: AmountUnit,
+}
+
+/// Multi-unit amount
+///
+/// Basically (potentially) multiple amounts, each of different unit.
+///
+/// Note: implementation must be careful not to add zero-amount
+/// entries, as these could mess up equality comparisons, etc.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct Amounts(BTreeMap<AmountUnit, Amount>);
+
+// Note: no `impl ops::DerefMut` as it could easily accidentally break the
+// invariant
+impl ops::Deref for Amounts {
+    type Target = BTreeMap<AmountUnit, Amount>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Amounts {
+    pub const ZERO: Self = Self(BTreeMap::new());
+
+    pub fn new_bitcoin(amount: Amount) -> Self {
+        if amount == Amount::ZERO {
+            Self(BTreeMap::from([]))
+        } else {
+            Self(BTreeMap::from([(AmountUnit::BITCOIN, amount)]))
+        }
+    }
+
+    pub fn checked_add(mut self, rhs: &Self) -> Option<Self> {
+        self.checked_add_mut(rhs);
+
+        Some(self)
+    }
+
+    pub fn checked_add_mut(&mut self, rhs: &Self) -> Option<&mut Self> {
+        for (unit, amount) in &rhs.0 {
+            debug_assert!(
+                *amount != Amount::ZERO,
+                "`Amounts` must not add (/remove) zero-amount entries"
+            );
+            let prev = self.0.entry(*unit).or_default();
+
+            *prev = prev.checked_add(*amount)?;
+        }
+
+        Some(self)
+    }
+    pub fn checked_add_bitcoin(mut self, amount: Amount) -> Option<Self> {
+        if amount == Amount::ZERO {
+            return Some(self);
+        }
+
+        let prev = self.0.entry(AmountUnit::BITCOIN).or_default();
+
+        *prev = prev.checked_add(amount)?;
+
+        Some(self)
+    }
+
+    pub fn checked_add_unit(mut self, amount: Amount, unit: AmountUnit) -> Option<Self> {
+        if amount == Amount::ZERO {
+            return Some(self);
+        }
+
+        let prev = self.0.entry(unit).or_default();
+
+        *prev = prev.checked_add(amount)?;
+
+        Some(self)
+    }
+
+    pub fn remove(&mut self, unit: &AmountUnit) -> Option<Amount> {
+        self.0.remove(unit)
+    }
+}
+
+impl IntoIterator for Amounts {
+    type Item = (AmountUnit, Amount);
+
+    type IntoIter = <BTreeMap<AmountUnit, Amount> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }
 
 /// Information about the amount represented by an input or output.
@@ -61,16 +172,25 @@ pub struct InputMeta {
 /// * For **inputs** the amount is funding the transaction while the fee is
 ///   consuming funding
 /// * For **outputs** the amount and the fee consume funding
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct TransactionItemAmount {
-    pub amount: Amount,
-    pub fee: Amount,
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct TransactionItemAmounts {
+    pub amounts: Amounts,
+    pub fees: Amounts,
 }
 
-impl TransactionItemAmount {
+impl TransactionItemAmounts {
+    pub fn checked_add(self, rhs: &Self) -> Option<Self> {
+        Some(Self {
+            amounts: self.amounts.checked_add(&rhs.amounts)?,
+            fees: self.fees.checked_add(&rhs.fees)?,
+        })
+    }
+}
+
+impl TransactionItemAmounts {
     pub const ZERO: Self = Self {
-        amount: Amount::ZERO,
-        fee: Amount::ZERO,
+        amounts: Amounts::ZERO,
+        fees: Amounts::ZERO,
     };
 }
 

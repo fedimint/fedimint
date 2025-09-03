@@ -21,9 +21,9 @@ use fedimint_core::db::{
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
-    api_endpoint,
+    Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
+    TransactionItemAmounts, api_endpoint,
 };
 use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
@@ -530,9 +530,9 @@ impl ServerModule for Lightning {
         };
 
         Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount,
-                fee: self.cfg.consensus.fee_consensus.fee(amount),
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(amount),
+                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
             },
             pub_key,
         })
@@ -543,7 +543,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a LightningOutput,
         outpoint: OutPoint,
-    ) -> Result<TransactionItemAmount, LightningOutputError> {
+    ) -> Result<TransactionItemAmounts, LightningOutputError> {
         let amount = match output.ensure_v0_ref()? {
             LightningOutputV0::Outgoing(contract) => {
                 dbtx.insert_new_entry(&OutgoingContractKey(outpoint), contract)
@@ -592,9 +592,9 @@ impl ServerModule for Lightning {
             }
         };
 
-        Ok(TransactionItemAmount {
-            amount,
-            fee: self.cfg.consensus.fee_consensus.fee(amount),
+        Ok(TransactionItemAmounts {
+            amounts: Amounts::new_bitcoin(amount),
+            fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
         })
     }
 

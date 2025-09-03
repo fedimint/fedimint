@@ -15,7 +15,7 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_empty_common::config::{
@@ -211,7 +211,7 @@ impl ServerModule for Empty {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a EmptyOutput,
         _out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, EmptyOutputError> {
+    ) -> Result<TransactionItemAmounts, EmptyOutputError> {
         Err(EmptyOutputError::NotSupported)
     }
 

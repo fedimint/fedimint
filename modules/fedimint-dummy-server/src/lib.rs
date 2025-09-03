@@ -16,8 +16,8 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    Amounts, ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_dummy_common::config::{
@@ -258,9 +258,9 @@ impl ServerModule for Dummy {
             .await;
 
         Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: input.amount,
-                fee: self.cfg.consensus.tx_fee,
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(input.amount),
+                fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
             },
             // IMPORTANT: include the pubkey to validate the user signed this tx
             pub_key: input.account,
@@ -272,7 +272,7 @@ impl ServerModule for Dummy {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a DummyOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, DummyOutputError> {
+    ) -> Result<TransactionItemAmounts, DummyOutputError> {
         // Add output funds to the user's account
         let current_funds = dbtx.get_value(&DummyFundsKeyV1(output.account)).await;
         let updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;
@@ -284,9 +284,9 @@ impl ServerModule for Dummy {
         dbtx.insert_entry(&DummyOutcomeKey(out_point), &outcome)
             .await;
 
-        Ok(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.consensus.tx_fee,
+        Ok(TransactionItemAmounts {
+            amounts: Amounts::new_bitcoin(output.amount),
+            fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
         })
     }
 

@@ -146,6 +146,10 @@ impl fmt::Debug for TransactionSignature {
 
 #[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
 pub enum TransactionError {
+    /// Transaction was not balanced
+    ///
+    /// Note: since this type existed before multi-unit amounts were implemented
+    /// and can't change shape, the unit of the imbalance is not specified.
     #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
     UnbalancedTransaction {
         inputs: Amount,

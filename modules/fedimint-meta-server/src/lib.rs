@@ -27,7 +27,7 @@ use fedimint_core::module::serde_json::Value;
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
     InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmount, api_endpoint, serde_json,
+    TransactionItemAmounts, api_endpoint, serde_json,
 };
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
@@ -406,7 +406,7 @@ impl ServerModule for Meta {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a MetaOutput,
         _out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, MetaOutputError> {
+    ) -> Result<TransactionItemAmounts, MetaOutputError> {
         Err(MetaOutputError::NotSupported)
     }
 

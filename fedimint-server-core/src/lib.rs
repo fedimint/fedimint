@@ -26,7 +26,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
-    ModuleInit, TransactionItemAmount,
+    ModuleInit, TransactionItemAmounts,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 pub use init::*;
@@ -122,7 +122,7 @@ pub trait ServerModule: Debug + Sized {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError>;
+    ) -> Result<TransactionItemAmounts, <Self::Common as ModuleCommon>::OutputError>;
 
     /// **Deprecated**: Modules should not be using it. Instead, they should
     /// implement their own custom endpoints with semantics, versioning,
@@ -254,7 +254,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, DynOutputError>;
+    ) -> Result<TransactionItemAmounts, DynOutputError>;
 
     /// See [`ServerModule::verify_input_submission`]
     #[doc(hidden)]
@@ -408,7 +408,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, DynOutputError> {
+    ) -> Result<TransactionItemAmounts, DynOutputError> {
         <Self as ServerModule>::process_output(
             self,
             dbtx,
