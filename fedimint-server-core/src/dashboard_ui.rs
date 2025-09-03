@@ -66,6 +66,9 @@ pub trait IDashboardApi {
     /// Get reference to a server module instance by module kind
     fn get_module_by_kind(&self, kind: ModuleKind) -> Option<&DynServerModule>;
 
+    /// Get the fedimintd version
+    async fn fedimintd_version(&self) -> String;
+
     /// Create a trait object
     fn into_dyn(self) -> DynDashboardApi
     where
