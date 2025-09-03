@@ -1,7 +1,7 @@
 use anyhow::ensure;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
-use devimint::version_constants::VERSION_0_7_0_ALPHA;
+use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::{backoff_util, retry};
@@ -211,6 +211,18 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         await_receive_claimed(&client, receive_op).await?;
     }
 
+    let mut lnv1_swap = 0;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+    if gatewayd_version >= *VERSION_0_9_0_ALPHA && gateway_cli_version >= *VERSION_0_9_0_ALPHA {
+        info!("Testing LNv1 client can pay LNv2 invoice...");
+        let lnd_gw_id = gw_lnd.gateway_id().await?;
+        let (invoice, receive_op) = receive(&client, &gw_lnd.addr, 1_000_000).await?;
+        test_send_lnv1(&client, &lnd_gw_id, &invoice.to_string()).await?;
+        lnv1_swap += 1;
+        await_receive_claimed(&client, receive_op).await?;
+    }
+
     info!("Testing payments from client to gateways...");
 
     for (gw_send, gw_receive) in gateway_pairs {
@@ -293,9 +305,9 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let lnd_payment_summary = gw_lnd.payment_summary().await?;
 
-        assert_eq!(lnd_payment_summary.outgoing.total_success, 4);
+        assert_eq!(lnd_payment_summary.outgoing.total_success, 4 + lnv1_swap);
         assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
-        assert_eq!(lnd_payment_summary.incoming.total_success, 3);
+        assert_eq!(lnd_payment_summary.incoming.total_success, 3 + lnv1_swap);
         assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
 
         assert!(lnd_payment_summary.outgoing.median_latency.is_some());
@@ -438,6 +450,26 @@ async fn test_send(
         serde_json::to_value(final_state).expect("JSON serialization failed"),
     );
 
+    Ok(())
+}
+
+async fn test_send_lnv1(
+    client: &Client,
+    gateway_id: &String,
+    invoice: &String,
+) -> anyhow::Result<()> {
+    let payment_result = cmd!(
+        client,
+        "module",
+        "ln",
+        "pay",
+        invoice,
+        "--gateway-id",
+        gateway_id
+    )
+    .out_json()
+    .await?;
+    assert!(payment_result.get("Success").is_some() || payment_result.get("preimage").is_some());
     Ok(())
 }
 
