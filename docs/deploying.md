@@ -37,19 +37,19 @@ You can create a Fedimint in two ways:
 - Group Federation — Multiple guardians running the mint together (minimum of 4 guardians).
 
 ### Step By Step Ceremony
-1. Install & Launch `fedimintd`
-	Each participating guardian runs their own instance of fedimintd.
+1. **Install & Launch `fedimintd`:**
+    Each participating guardian runs their own instance of fedimintd.
 	See below [self-hosted solutions](#self-hosted-solutions) or [hosted solutions](#hosted-solutions) for installation options.
-2. Set a Password
+2. **Set a Password:**
 	When starting fedimintd for the first time, each guardian must create a secure password.
-3. Generate Setup Code
+3. **Generate Setup Code:**
 	After entering the password, a unique setup code is generated for each guardian.
-4. Exchange Setup Codes
+4. **Exchange Setup Codes:**
 	All guardians must share their setup codes with each other (every guardian needs every other guardian’s code).
-5. Distributed Key Generation (DKG)
+5. **Distributed Key Generation (DKG):**
 	Once all setup codes are entered, the DKG process begins. This is where the federation’s cryptographic keys are jointly created.
 	This step may take some time while all guardians connect. The UI will be unavailable until DKG has finished. Please be patient.
-6. Federation Complete!
+6. **Federation Complete!:**
 	Once DKG finishes, your federation is live. Your guardian dashboard will be available for monitoring. You now have a functioning Fedimint!
 
 In addition, a practical federation requires a Lightning Gateway
