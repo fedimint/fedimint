@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -5,7 +6,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use bitcoin::hashes::{Hash, sha256};
-use bitcoin::{FeeRate, Network};
+use bitcoin::{FeeRate, Network, OutPoint};
 use fedimint_bip39::Mnemonic;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
@@ -24,8 +25,9 @@ use lightning::offers::offer::{Offer, OfferId};
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{RwLock, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, RouteHtlcStream};
 use crate::{
@@ -56,6 +58,12 @@ pub struct GatewayLdkClient {
     /// calls with the same offer to execute in parallel. This helps ensure
     /// that the function is idempotent.
     outbound_offer_lock_pool: lockable::LockPool<LdkOfferId>,
+
+    /// A map keyed by the `UserChannelId` of a channel that is currently
+    /// opening. The `Sender` is used to communicate the `OutPoint` back to
+    /// the API handler from the event handler when the channel has been
+    /// opened and is now pending.
+    pending_channels: Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<OutPoint>>>>,
 }
 
 impl std::fmt::Debug for GatewayLdkClient {
@@ -139,9 +147,17 @@ impl GatewayLdkClient {
         let task_group = TaskGroup::new();
 
         let node_clone = node.clone();
+        let pending_channels = Arc::new(RwLock::new(BTreeMap::new()));
+        let pending_channels_clone = pending_channels.clone();
         task_group.spawn("ldk lightning node event handler", |handle| async move {
             loop {
-                Self::handle_next_event(&node_clone, &htlc_stream_sender, &handle).await;
+                Self::handle_next_event(
+                    &node_clone,
+                    &htlc_stream_sender,
+                    &handle,
+                    pending_channels_clone.clone(),
+                )
+                .await;
             }
         });
 
@@ -152,6 +168,7 @@ impl GatewayLdkClient {
             htlc_stream_receiver_or: Some(htlc_stream_receiver),
             outbound_lightning_payment_lock_pool: lockable::LockPool::new(),
             outbound_offer_lock_pool: lockable::LockPool::new(),
+            pending_channels,
         })
     }
 
@@ -159,6 +176,7 @@ impl GatewayLdkClient {
         node: &ldk_node::Node,
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
         handle: &TaskHandle,
+        pending_channels: Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<OutPoint>>>>,
     ) {
         // We manually check for task termination in case we receive a payment while the
         // task is shutting down. In that case, we want to finish the payment
@@ -172,29 +190,52 @@ impl GatewayLdkClient {
             }
         };
 
-        if let ldk_node::Event::PaymentClaimable {
-            payment_id: _,
-            payment_hash,
-            claimable_amount_msat,
-            claim_deadline,
-            ..
-        } = event
-            && let Err(err) = htlc_stream_sender
-                .send(InterceptPaymentRequest {
-                    payment_hash: Hash::from_slice(&payment_hash.0).expect("Failed to create Hash"),
-                    amount_msat: claimable_amount_msat,
-                    expiry: claim_deadline.unwrap_or_default(),
-                    short_channel_id: None,
-                    incoming_chan_id: 0,
-                    htlc_id: 0,
-                })
-                .await
-        {
-            warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed send InterceptHtlcRequest to stream");
+        match event {
+            ldk_node::Event::PaymentClaimable {
+                payment_id: _,
+                payment_hash,
+                claimable_amount_msat,
+                claim_deadline,
+                custom_records: _,
+            } => {
+                if let Err(err) = htlc_stream_sender
+                    .send(InterceptPaymentRequest {
+                        payment_hash: Hash::from_slice(&payment_hash.0)
+                            .expect("Failed to create Hash"),
+                        amount_msat: claimable_amount_msat,
+                        expiry: claim_deadline.unwrap_or_default(),
+                        short_channel_id: None,
+                        incoming_chan_id: 0,
+                        htlc_id: 0,
+                    })
+                    .await
+                {
+                    warn!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed send InterceptHtlcRequest to stream");
+                }
+            }
+            ldk_node::Event::ChannelPending {
+                channel_id,
+                user_channel_id,
+                former_temporary_channel_id: _,
+                counterparty_node_id: _,
+                funding_txo,
+            } => {
+                info!(target: LOG_LIGHTNING, %channel_id, "LDK Channel is pending");
+                let mut channels = pending_channels.write().await;
+                if let Some(sender) = channels.remove(&UserChannelId(user_channel_id)) {
+                    let _ = sender.send(funding_txo);
+                } else {
+                    debug!(
+                        ?user_channel_id,
+                        "No channel pending channel open for user channel id"
+                    );
+                }
+            }
+            _ => {}
         }
 
-        // The `PaymentClaimable` event is the only event type that we are interested
-        // in. We can safely ignore all other events.
+        // `PaymentClaimable` and `ChannelPending` events are the only event types that
+        // we are interested in. We can safely ignore all other events.
         if let Err(err) = node.event_handled() {
             warn!(err = %err.fmt_compact(), "LDK could not mark event handled");
         }
@@ -496,44 +537,39 @@ impl ILnRpcClient for GatewayLdkClient {
             Some(push_amount_sats * 1000)
         };
 
-        let user_channel_id = self
-            .node
-            .open_announced_channel(
-                pubkey,
-                SocketAddress::from_str(&host).map_err(|e| {
-                    LightningRpcError::FailedToConnectToPeer {
-                        failure_reason: e.to_string(),
-                    }
-                })?,
-                channel_size_sats,
-                push_amount_msats_or,
-                None,
-            )
-            .map_err(|e| LightningRpcError::FailedToOpenChannel {
-                failure_reason: e.to_string(),
-            })?;
+        let (tx, rx) = oneshot::channel::<OutPoint>();
 
-        // The channel isn't always visible immediately, so we need to poll for it.
-        for _ in 0..10 {
-            let funding_txid_or = self
+        {
+            let mut channels = self.pending_channels.write().await;
+            let user_channel_id = self
                 .node
-                .list_channels()
-                .iter()
-                .find(|channel| channel.user_channel_id == user_channel_id)
-                .and_then(|channel| channel.funding_txo)
-                .map(|funding_txo| funding_txo.txid);
+                .open_announced_channel(
+                    pubkey,
+                    SocketAddress::from_str(&host).map_err(|e| {
+                        LightningRpcError::FailedToConnectToPeer {
+                            failure_reason: e.to_string(),
+                        }
+                    })?,
+                    channel_size_sats,
+                    push_amount_msats_or,
+                    None,
+                )
+                .map_err(|e| LightningRpcError::FailedToOpenChannel {
+                    failure_reason: e.to_string(),
+                })?;
 
-            if let Some(funding_txid) = funding_txid_or {
-                return Ok(OpenChannelResponse {
-                    funding_txid: funding_txid.to_string(),
-                });
-            }
-
-            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+            channels.insert(UserChannelId(user_channel_id), tx);
         }
 
-        Err(LightningRpcError::FailedToOpenChannel {
-            failure_reason: "Channel could not be opened".to_string(),
+        let outpoint = rx
+            .await
+            .map_err(|err| LightningRpcError::FailedToOpenChannel {
+                failure_reason: err.to_string(),
+            })?;
+        let funding_txid = outpoint.txid;
+
+        Ok(OpenChannelResponse {
+            funding_txid: funding_txid.to_string(),
         })
     }
 
@@ -875,6 +911,21 @@ struct LdkOfferId(OfferId);
 impl std::hash::Hash for LdkOfferId {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         state.write(&self.0.0);
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct UserChannelId(pub ldk_node::UserChannelId);
+
+impl PartialOrd for UserChannelId {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for UserChannelId {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.0.cmp(&other.0.0)
     }
 }
 
