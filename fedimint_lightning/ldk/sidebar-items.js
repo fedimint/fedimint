@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_esplora_url","get_preimage_and_payment_hash"],"struct":["GatewayLdkClient","LdkOfferId"]};
+window.SIDEBAR_ITEMS = {"fn":["get_esplora_url","get_preimage_and_payment_hash"],"struct":["GatewayLdkClient","LdkOfferId","UserChannelId"]};
