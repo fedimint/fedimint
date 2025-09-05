@@ -7,6 +7,7 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle, ClientInputSM};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 use fedimint_core::{Amount, TransactionId, runtime};
 use fedimint_mint_common::MintInput;
 
@@ -325,7 +326,7 @@ async fn try_cancel_oob_spend_multi(
         .map(|(amount, spendable_note)| ClientInput {
             input: MintInput::new_v0(amount, spendable_note.note()),
             keys: vec![spendable_note.spend_key],
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         })
         .collect();
 

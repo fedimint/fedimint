@@ -693,7 +693,6 @@ impl FedimintCli {
         let db = cli.load_database().await?;
         let mut client_builder = Client::builder(db).await.map_err_cli()?;
         client_builder.with_module_inits(self.module_inits.clone());
-        client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
         client_builder.with_connector(cli.connector());
 

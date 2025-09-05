@@ -11,6 +11,7 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
 };
 use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::module::Amounts;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::FmtCompactAnyhow as _;
@@ -438,7 +439,7 @@ async fn claim_peg_in(
         let client_input = ClientInput::<WalletInput> {
             input: wallet_input,
             keys: vec![tweak_key],
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         };
 
         if amount <= client_ctx.self_ref().cfg().fee_consensus.peg_in_abs {
