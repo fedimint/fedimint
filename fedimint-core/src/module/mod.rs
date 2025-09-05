@@ -19,7 +19,7 @@
 pub mod audit;
 pub mod registry;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
@@ -109,6 +109,10 @@ impl Amounts {
         }
     }
 
+    pub fn new_bitcoin_msats(msats: u64) -> Self {
+        Self::new_bitcoin(Amount::from_msats(msats))
+    }
+
     pub fn checked_add(mut self, rhs: &Self) -> Option<Self> {
         self.checked_add_mut(rhs);
 
@@ -154,6 +158,32 @@ impl Amounts {
 
     pub fn remove(&mut self, unit: &AmountUnit) -> Option<Amount> {
         self.0.remove(unit)
+    }
+
+    pub fn get_bitcoin(&self) -> Amount {
+        self.get(&AmountUnit::BITCOIN).copied().unwrap_or_default()
+    }
+
+    pub fn expect_only_bitcoin(&self) -> Amount {
+        #[allow(clippy::option_if_let_else)] // I like it explicitly split into two cases --dpc
+        match self.get(&AmountUnit::BITCOIN) {
+            Some(amount) => {
+                assert!(
+                    self.len() == 1,
+                    "Amounts expected to contain only bitcoin and no other currencies"
+                );
+                *amount
+            }
+            None => Amount::ZERO,
+        }
+    }
+
+    pub fn iter_units(&self) -> impl Iterator<Item = AmountUnit> {
+        self.0.keys().copied()
+    }
+
+    pub fn units(&self) -> BTreeSet<AmountUnit> {
+        self.0.keys().copied().collect()
     }
 }
 

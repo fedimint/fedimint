@@ -6,7 +6,7 @@ use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::module::ModuleConsensusVersion;
+use fedimint_core::module::{Amounts, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Secp256k1;
 use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -28,14 +28,14 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
     let (_, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1_dummy_module.receive_money_hack(outpoint).await?;
-    assert_eq!(client1.get_balance_err().await?, sats(1000));
+    assert_eq!(client1.get_balance_for_btc().await?, sats(1000));
 
     let outpoint = client1_dummy_module
         .send_money(client2_dummy_module.account(), sats(250))
         .await?;
     client2_dummy_module.receive_money_hack(outpoint).await?;
-    assert_eq!(client1.get_balance_err().await?, sats(750));
-    assert_eq!(client2.get_balance_err().await?, sats(250));
+    assert_eq!(client1.get_balance_for_btc().await?, sats(750));
+    assert_eq!(client2.get_balance_for_btc().await?, sats(250));
     Ok(())
 }
 
@@ -91,7 +91,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
             amount: sats(1000),
             account: account_kp.public_key(),
         },
-        amount: sats(1000),
+        amounts: Amounts::new_bitcoin_msats(1000),
         keys: vec![account_kp],
     };
 
@@ -126,7 +126,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
             amount: sats(1000),
             account: dummy_module.account(),
         },
-        amount: sats(1000),
+        amounts: Amounts::new_bitcoin(sats(1000)),
     };
     let tx = TransactionBuilder::new()
         .with_outputs(ClientOutputBundle::new_no_sm(vec![output]).into_dyn(dummy_module.id));

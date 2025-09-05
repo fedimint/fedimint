@@ -7,6 +7,7 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, DynState, State, S
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::util::FmtCompact as _;
@@ -290,7 +291,7 @@ impl LightningReceiveConfirmedInvoice {
         let input = contract.claim();
         let client_input = ClientInput::<LightningInput> {
             input,
-            amount: contract.amount,
+            amounts: Amounts::new_bitcoin(contract.amount),
             keys: vec![keypair],
         };
 

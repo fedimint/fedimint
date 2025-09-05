@@ -51,15 +51,15 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit,
-    MultiApiVersion,
+    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion,
+    ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{
-    Amount, BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send,
-    push_db_pair_items, runtime, secp256k1,
+    BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items,
+    runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -481,18 +481,18 @@ impl ClientModule for WalletClientModule {
 
     fn input_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<Amount> {
-        Some(self.cfg().fee_consensus.peg_in_abs)
+    ) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(self.cfg().fee_consensus.peg_in_abs))
     }
 
     fn output_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<Amount> {
-        Some(self.cfg().fee_consensus.peg_out_abs)
+    ) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(self.cfg().fee_consensus.peg_out_abs))
     }
 
     async fn handle_rpc(
@@ -720,7 +720,10 @@ impl WalletClientModule {
         };
 
         Ok(ClientOutputBundle::new(
-            vec![ClientOutput::<WalletOutput> { output, amount }],
+            vec![ClientOutput::<WalletOutput> {
+                output,
+                amounts: Amounts::new_bitcoin(amount),
+            }],
             vec![ClientOutputSM::<WalletClientStates> {
                 state_machines: Arc::new(sm_gen),
             }],
@@ -777,7 +780,10 @@ impl WalletClientModule {
         };
 
         Ok(ClientOutputBundle::new(
-            vec![ClientOutput::<WalletOutput> { output, amount }],
+            vec![ClientOutput::<WalletOutput> {
+                output,
+                amounts: Amounts::new_bitcoin(amount),
+            }],
             vec![ClientOutputSM::<WalletClientStates> {
                 state_machines: Arc::new(sm_gen),
             }],

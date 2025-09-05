@@ -6,7 +6,7 @@ use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{DatabaseTransaction, NonCommittable};
-use fedimint_core::util::Spanned;
+use fedimint_core::util::{FmtCompactAnyhow as _, Spanned};
 use fedimint_gateway_common::FederationInfo;
 use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
 use fedimint_gw_client::GatewayClientModule;
@@ -206,9 +206,9 @@ impl FederationManager {
             .expect("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.")
             .borrow()
             .with(|client| async move {
-                let balance_msat = client.get_balance().await
+                let balance_msat = client.get_balance_for_btc().await
                     // If primary module is not available, we're not really connected yet
-                    .ok_or_else(|| FederationNotConnected { federation_id_prefix: federation_id.to_prefix() })?;
+                    .map_err(|_err| FederationNotConnected { federation_id_prefix: federation_id.to_prefix() })?;
 
                 let config = dbtx.load_federation_config(federation_id).await.ok_or(FederationNotConnected {
                     federation_id_prefix: federation_id.to_prefix(),
@@ -236,10 +236,20 @@ impl FederationManager {
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {
-            let Some(balance_msat) = client.borrow().with(|client| client.get_balance()).await
-            else {
-                warn!(target: LOG_GATEWAY, "Skipped Federation due to lack of primary module");
-                continue;
+            let balance_msat = match client
+                .borrow()
+                .with(|client| client.get_balance_for_btc())
+                .await
+            {
+                Ok(balance_msat) => balance_msat,
+                Err(err) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact_anyhow(),
+                        "Skipped Federation due to lack of primary module"
+                    );
+                    continue;
+                }
             };
 
             let config = dbtx.load_federation_config(*federation_id).await;

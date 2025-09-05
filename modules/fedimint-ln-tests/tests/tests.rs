@@ -10,7 +10,7 @@ use fedimint_client::transaction::{
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::module::CommonModuleInit as _;
+use fedimint_core::module::{Amounts, CommonModuleInit as _};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -201,7 +201,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
-    let prev_balance = client2.get_balance_err().await?;
+    let prev_balance = client2.get_balance_for_btc().await?;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
@@ -220,7 +220,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected internal payment!"),
     }
 
-    let same_balance = client2.get_balance_err().await?;
+    let same_balance = client2.get_balance_for_btc().await?;
     assert_eq!(prev_balance, same_balance);
 
     Ok(())
@@ -315,7 +315,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let prev_balance = client.get_balance_err().await?;
+    let prev_balance = client.get_balance_for_btc().await?;
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
@@ -339,7 +339,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let same_balance = client.get_balance_err().await?;
+    let same_balance = client.get_balance_for_btc().await?;
     assert_eq!(prev_balance, same_balance);
 
     drop(gw);
@@ -512,7 +512,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance_err().await?, sats(250));
+    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
 
     // TEST internal payment when there is a registered gateway
     let gw = gateway(&fixtures, &fed).await;
@@ -571,7 +571,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance_err().await?, sats(250));
+    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
 
     Ok(())
 }
@@ -648,7 +648,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
         assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
         assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
     }
-    assert_eq!(new_client.get_balance_err().await?, sats(250));
+    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
 
     Ok(())
 }
@@ -700,7 +700,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     let transaction_builder_1 = TransactionBuilder::new().with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_1,
-            amount: Amount::ZERO,
+            amounts: Amounts::ZERO,
         }])
         .into_dyn(ln_module.id),
     );
@@ -716,7 +716,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     let transaction_builder_2 = TransactionBuilder::new().with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_2,
-            amount: Amount::ZERO,
+            amounts: Amounts::ZERO,
         }])
         .into_dyn(ln_module.id),
     );

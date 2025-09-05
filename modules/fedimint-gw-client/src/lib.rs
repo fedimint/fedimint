@@ -32,7 +32,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
+use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::util::{FmtCompact, SafeUrl, Spanned};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, secp256k1};
 use fedimint_derive_secret::ChildId;
@@ -221,21 +221,23 @@ impl ClientModule for GatewayClientModule {
 
     fn input_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _input: &<Self::Common as fedimint_core::module::ModuleCommon>::Input,
-    ) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.contract_input)
+    ) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(self.cfg.fee_consensus.contract_input))
     }
 
     fn output_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         output: &<Self::Common as fedimint_core::module::ModuleCommon>::Output,
-    ) -> Option<Amount> {
+    ) -> Option<Amounts> {
         match output.maybe_v0_ref()? {
-            LightningOutputV0::Contract(_) => Some(self.cfg.fee_consensus.contract_output),
+            LightningOutputV0::Contract(_) => {
+                Some(Amounts::new_bitcoin(self.cfg.fee_consensus.contract_output))
+            }
             LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
-                Some(Amount::ZERO)
+                Some(Amounts::ZERO)
             }
         }
     }
@@ -292,7 +294,7 @@ impl GatewayClientModule {
 
         let client_output = ClientOutput::<LightningOutputV0> {
             output: incoming_output,
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachines> {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
@@ -352,7 +354,7 @@ impl GatewayClientModule {
 
         let client_output = ClientOutput::<LightningOutputV0> {
             output: incoming_output,
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         };
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachines> {
             state_machines: Arc::new(move |out_point_range| {
@@ -472,7 +474,7 @@ impl GatewayClientModule {
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         };
 
         let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
@@ -514,7 +516,7 @@ impl GatewayClientModule {
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
-            amount: client_output.amount,
+            amounts: client_output.amounts,
         };
         let tx = TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),

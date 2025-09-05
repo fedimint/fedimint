@@ -7,6 +7,7 @@ use fedimint_client_module::ClientModule;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::module::Amounts;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
@@ -69,7 +70,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
                 signature: tbs::Signature(G1Affine::generator()),
             },
         }),
-        amount: Amount::from_msats(1024),
+        amounts: Amounts::new_bitcoin_msats(1024),
         keys: vec![keypair],
     };
 
@@ -136,8 +137,8 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, SpendOOBState::Success);
     info!("### REISSUE: DONE");
 
-    assert!(client1.get_balance_err().await? >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
-    assert!(client2.get_balance_err().await? >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));
+    assert!(client1.get_balance_for_btc().await? >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
+    assert!(client2.get_balance_for_btc().await? >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));
     Ok(())
 }
 
@@ -247,7 +248,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
 
     assert_eq!(
-        client1.get_balance_err().await?,
+        client1.get_balance_for_btc().await?,
         sats(1000).saturating_sub(total_amount_spent)
     );
 
@@ -285,7 +286,8 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     }
 
     assert!(
-        client2.get_balance_err().await? >= total_amount_spent.saturating_sub(EXPECTED_MAXIMUM_FEE)
+        client2.get_balance_for_btc().await?
+            >= total_amount_spent.saturating_sub(EXPECTED_MAXIMUM_FEE)
     );
 
     Ok(())
@@ -365,7 +367,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
-        let balance = client.get_balance_err().await?;
+        let balance = client.get_balance_for_btc().await?;
         let expected_min_balance = sats(1000).saturating_sub(EXPECTED_MAXIMUM_FEE);
         if expected_min_balance <= balance {
             return Ok(());
@@ -442,7 +444,7 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
-        let balance = client.get_balance_err().await?;
+        let balance = client.get_balance_for_btc().await?;
         let expected_min_balance = sats(1000)
             .saturating_sub(EXPECTED_MAXIMUM_FEE)
             .saturating_sub(single_note.0);

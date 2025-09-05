@@ -12,7 +12,7 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::module::serde_json;
+use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
 use fedimint_core::{Amount, BitcoinHash, Feerate, InPoint, PeerId, TransactionId, sats};
@@ -58,7 +58,7 @@ async fn peg_in<'a>(
     finality_delay: u64,
     fed: &FederationTest,
 ) -> anyhow::Result<(BoxStream<'a, Amount>, bitcoin::Transaction)> {
-    let mut balance_sub = client.subscribe_balance_changes().await;
+    let mut balance_sub = client.subscribe_balance_changes(AmountUnit::BITCOIN).await;
     let initial_balance = balance_sub.ok().await?;
 
     await_consensus_upgrade(client, fed).await?;
@@ -87,7 +87,7 @@ async fn peg_in<'a>(
         .await_num_deposits_by_operation_id(op, 1)
         .await?;
     assert_eq!(
-        client.get_balance_err().await?,
+        client.get_balance_for_btc().await?,
         initial_balance + sats(PEG_IN_AMOUNT_SATS)
     );
     assert_eq!(
@@ -229,7 +229,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, 1).await?;
     await_consensus_upgrade(&client, &fed).await?;
 
-    assert_eq!(client.get_balance_err().await?, sats(0));
+    assert_eq!(client.get_balance_for_btc().await?, sats(0));
     let (op, address, _) = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
@@ -320,8 +320,11 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     ));
 
     info!("Checking balance after deposit");
-    let mut balance_sub = client.subscribe_balance_changes().await;
-    assert_eq!(client.get_balance_err().await?, sats(PEG_IN_AMOUNT_SATS));
+    let mut balance_sub = client.subscribe_balance_changes(AmountUnit::BITCOIN).await;
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        sats(PEG_IN_AMOUNT_SATS)
+    );
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
 
     assert_eq!(deposit_updates.next().await, None);
@@ -339,7 +342,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
-    assert_eq!(client.get_balance_err().await?, balance_after_peg_out);
+    assert_eq!(client.get_balance_for_btc().await?, balance_after_peg_out);
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
@@ -377,7 +380,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let starting_balance = client.get_balance_err().await?;
+    let starting_balance = client.get_balance_for_btc().await?;
     info!(?starting_balance, "Starting balance");
 
     await_consensus_upgrade(&client, &fed).await?;
@@ -407,7 +410,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
             .await_num_deposits_by_operation_id(op, 1)
             .await?;
         assert_eq!(
-            client.get_balance_err().await?,
+            client.get_balance_for_btc().await?,
             sats(PEG_IN_AMOUNT_SATS) + starting_balance
         );
         info!(?height, ?tx, "First peg-in transaction claimed");
@@ -432,7 +435,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
         bitcoin.mine_blocks(finality_delay).await;
         wallet_module.await_num_deposits(tweak_idx, 2).await?;
         assert_eq!(
-            client.get_balance_err().await?,
+            client.get_balance_for_btc().await?,
             sats(PEG_IN_AMOUNT_SATS * 2) + starting_balance
         );
         info!(?height, ?tx, "Second peg-in transaction claimed");
@@ -481,7 +484,10 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 
     // Check that we get our money back if the peg-out fails
     assert_eq!(balance_sub.next().await.unwrap(), sats(PEG_IN_AMOUNT_SATS));
-    assert_eq!(client.get_balance_err().await?, sats(PEG_IN_AMOUNT_SATS));
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        sats(PEG_IN_AMOUNT_SATS)
+    );
 
     Ok(())
 }
@@ -523,7 +529,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let balance_after_normal_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
     assert_eq!(
-        client.get_balance_err().await?,
+        client.get_balance_for_btc().await?,
         balance_after_normal_peg_out
     );
     assert_eq!(balance_sub.ok().await?, balance_after_normal_peg_out);
@@ -563,7 +569,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
             Some(100),
         ),
         || async {
-            let current_balance = client.get_balance_err().await?;
+            let current_balance = client.get_balance_for_btc().await?;
             if current_balance == balance_after_normal_peg_out {
                 Ok(())
             } else {
@@ -611,7 +617,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
         .await?;
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees1.amount().to_sat());
-    assert_eq!(client.get_balance_err().await?, balance_after_peg_out);
+    assert_eq!(client.get_balance_for_btc().await?, balance_after_peg_out);
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
@@ -662,7 +668,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
             - fees2.amount().to_sat(),
     );
     assert_eq!(
-        client.get_balance_err().await?,
+        client.get_balance_for_btc().await?,
         balance_after_second_peg_out
     );
     assert_eq!(balance_sub.ok().await?, balance_after_second_peg_out);
@@ -832,7 +838,7 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, 1).await?;
     await_consensus_upgrade(&client, &fed).await?;
 
-    assert_eq!(client.get_balance_err().await?, sats(0));
+    assert_eq!(client.get_balance_for_btc().await?, sats(0));
     let (op, address, _) = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
@@ -889,7 +895,7 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     ));
 
     info!("Checking balance after deposit");
-    assert_eq!(client.get_balance_err().await?, Amount::ZERO);
+    assert_eq!(client.get_balance_for_btc().await?, Amount::ZERO);
     Ok(())
 }
 

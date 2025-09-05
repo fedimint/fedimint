@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use fedimint_api_client::api::net::Connector;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{ModuleKind, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitResultExt, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
     IRawDatabase,
@@ -62,7 +62,6 @@ impl RecurringInvoiceServer {
             let mut client_builder = Client::builder().await?;
             client_builder.with_module(LightningClientInit::default());
             client_builder.with_module(MintClientInit);
-            client_builder.with_primary_module_kind(ModuleKind::from_static_str("mint"));
             let client = client_builder
                 .open(
                     db,
@@ -140,7 +139,6 @@ impl RecurringInvoiceServer {
         client_builder.with_connector(Connector::default());
         client_builder.with_module(LightningClientInit::default());
         client_builder.with_module(MintClientInit);
-        client_builder.with_primary_module_kind(ModuleKind::from_static_str("mint"));
 
         let client = client_builder
             .preview(invite_code)

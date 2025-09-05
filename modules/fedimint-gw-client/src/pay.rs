@@ -9,6 +9,7 @@ use fedimint_client_module::transaction::{
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
 use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
 use fedimint_ln_client::api::LnFederationApi;
@@ -730,7 +731,7 @@ impl GatewayPayClaimOutgoingContract {
         let claim_input = contract.claim(preimage.clone());
         let client_input = ClientInput::<LightningInput> {
             input: claim_input,
-            amount: contract.amount,
+            amounts: Amounts::new_bitcoin(contract.amount),
             keys: vec![context.redeem_key],
         };
 
@@ -938,7 +939,7 @@ impl GatewayPayCancelContract {
         );
         let client_output = ClientOutput::<LightningOutput> {
             output: cancel_output,
-            amount: Amount::ZERO,
+            amounts: Amounts::ZERO,
         };
 
         match global_context

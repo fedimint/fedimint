@@ -40,7 +40,6 @@ pub struct FederationTest {
     configs: BTreeMap<PeerId, ServerConfig>,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
-    primary_module_kind: ModuleKind,
     _task: TaskGroup,
     num_peers: u16,
     num_offline: u16,
@@ -119,7 +118,6 @@ impl FederationTest {
         info!(target: LOG_TEST, "Setting new client with config");
         let mut client_builder = Client::builder().await.expect("Failed to build client");
         client_builder.with_module_inits(self.client_init.clone());
-        client_builder.with_primary_module_kind(self.primary_module_kind.clone());
         if let Some(admin_creds) = admin_creds {
             client_builder.set_admin_creds(admin_creds);
         }
@@ -366,7 +364,6 @@ impl FederationTestBuilder {
             configs,
             server_init: self.server_init,
             client_init: self.client_init,
-            primary_module_kind: self.primary_module_kind,
             _task: task_group,
             num_peers: self.num_peers,
             num_offline: self.num_offline,
