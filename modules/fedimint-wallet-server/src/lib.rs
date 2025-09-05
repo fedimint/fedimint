@@ -719,7 +719,7 @@ impl ServerModule for Wallet {
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(amount),
-                fees: Amounts::new_bitcoin(fee),
+                fee,
             },
             pub_key,
         })
@@ -814,7 +814,7 @@ impl ServerModule for Wallet {
         calculate_pegout_metrics(dbtx, amount, fee);
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(amount),
-            fees: Amounts::new_bitcoin(fee),
+            fee,
         })
     }
 

@@ -1,7 +1,7 @@
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::{Amounts, CoreConsensusVersion, TransactionItemAmounts};
 use fedimint_core::transaction::{TRANSACTION_OVERFLOW_ERROR, Transaction, TransactionError};
-use fedimint_core::{InPoint, OutPoint};
+use fedimint_core::{Amount, InPoint, OutPoint};
 use fedimint_server_core::ServerModuleRegistry;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -121,35 +121,29 @@ pub async fn process_transaction_with_dbtx(
 #[derive(Clone)]
 #[allow(clippy::struct_field_names)]
 pub struct FundingVerifier {
-    input_amounts: Amounts,
-    output_amounts: Amounts,
-    fee_amounts: Amounts,
+    input: Amounts,
+    output: Amounts,
+    fee: Amount,
 }
 
 impl FundingVerifier {
-    pub fn add_input(
-        &mut self,
-        input_amounts: TransactionItemAmounts,
-    ) -> Result<(), TransactionError> {
-        self.input_amounts
-            .checked_add_mut(&input_amounts.amounts)
+    pub fn add_input(&mut self, input: TransactionItemAmounts) -> Result<(), TransactionError> {
+        self.input
+            .checked_add_mut(&input.amounts)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
-        self.fee_amounts
-            .checked_add_mut(&input_amounts.fees)
+        self.fee
+            .checked_add(input.fee)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
 
         Ok(())
     }
 
-    pub fn add_output(
-        &mut self,
-        output_amounts: TransactionItemAmounts,
-    ) -> Result<(), TransactionError> {
-        self.output_amounts
-            .checked_add_mut(&output_amounts.amounts)
+    pub fn add_output(&mut self, output: TransactionItemAmounts) -> Result<(), TransactionError> {
+        self.output
+            .checked_add_mut(&output.amounts)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
-        self.fee_amounts
-            .checked_add_mut(&output_amounts.fees)
+        self.fee
+            .checked_add(output.fee)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
 
         Ok(())
@@ -160,17 +154,13 @@ impl FundingVerifier {
         const OVERPAY_MIN_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 1);
 
         let outputs_and_fees = self
-            .output_amounts
+            .output
             .clone()
-            .checked_add(&self.fee_amounts)
+            .checked_add_bitcoin(self.fee)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
 
         for (out_unit, out_amount) in outputs_and_fees {
-            let input_amount = self
-                .input_amounts
-                .get(&out_unit)
-                .copied()
-                .unwrap_or_default();
+            let input_amount = self.input.get(&out_unit).copied().unwrap_or_default();
 
             if input_amount < out_amount
                 // In early versions we did not allow any overpaying
@@ -178,32 +168,28 @@ impl FundingVerifier {
             {
                 return Err(TransactionError::UnbalancedTransaction {
                     inputs: input_amount,
-                    outputs: self
-                        .output_amounts
-                        .get(&out_unit)
-                        .copied()
-                        .unwrap_or_default(),
-                    fee: self.fee_amounts.get(&out_unit).copied().unwrap_or_default(),
+                    outputs: self.output.get(&out_unit).copied().unwrap_or_default(),
+                    fee: if out_unit.is_bitcoin() {
+                        self.fee
+                    } else {
+                        Amount::default()
+                    },
                 });
             }
 
-            self.input_amounts.remove(&out_unit);
+            self.input.remove(&out_unit);
         }
 
         if version < OVERPAY_MIN_VERSION {
-            if let Some((inputs_unit, inputs_amount)) = self.input_amounts.into_iter().next() {
+            if let Some((inputs_unit, inputs_amount)) = self.input.into_iter().next() {
                 return Err(TransactionError::UnbalancedTransaction {
                     inputs: inputs_amount,
-                    outputs: self
-                        .output_amounts
-                        .get(&inputs_unit)
-                        .copied()
-                        .unwrap_or_default(),
-                    fee: self
-                        .fee_amounts
-                        .get(&inputs_unit)
-                        .copied()
-                        .unwrap_or_default(),
+                    outputs: self.output.get(&inputs_unit).copied().unwrap_or_default(),
+                    fee: if inputs_unit.is_bitcoin() {
+                        self.fee
+                    } else {
+                        Amount::default()
+                    },
                 });
             }
         }
@@ -215,9 +201,9 @@ impl FundingVerifier {
 impl Default for FundingVerifier {
     fn default() -> Self {
         FundingVerifier {
-            input_amounts: Amounts::ZERO,
-            output_amounts: Amounts::ZERO,
-            fee_amounts: Amounts::ZERO,
+            input: Amounts::ZERO,
+            output: Amounts::ZERO,
+            fee: Amount::ZERO,
         }
     }
 }

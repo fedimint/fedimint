@@ -495,7 +495,7 @@ impl ServerModule for Mint {
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(amount),
-                fees: Amounts::new_bitcoin(fee),
+                fee,
             },
             pub_key: *input.note.spend_key(),
         })
@@ -544,7 +544,7 @@ impl ServerModule for Mint {
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(amount),
-            fees: Amounts::new_bitcoin(fee),
+            fee,
         })
     }
 

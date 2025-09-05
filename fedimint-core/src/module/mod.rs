@@ -65,6 +65,10 @@ impl AmountUnit {
     /// So e.g. for a mainnet Federation it's a real Bitcoin (msats), for a
     /// signet one it's a Signet msats, etc.
     pub const BITCOIN: Self = Self(0);
+
+    pub fn is_bitcoin(self) -> bool {
+        self == Self::BITCOIN
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -117,6 +121,17 @@ impl Amounts {
 
         Some(self)
     }
+    pub fn checked_add_bitcoin(mut self, amount: Amount) -> Option<Self> {
+        if amount == Amount::ZERO {
+            return Some(self);
+        }
+
+        let prev = self.0.entry(AmountUnit::BITCOIN).or_default();
+
+        *prev = prev.checked_add(amount)?;
+
+        Some(self)
+    }
 
     pub fn checked_add_mut(&mut self, rhs: &Self) -> Option<&mut Self> {
         for (unit, amount) in &rhs.0 {
@@ -155,14 +170,14 @@ impl IntoIterator for Amounts {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TransactionItemAmounts {
     pub amounts: Amounts,
-    pub fees: Amounts,
+    pub fee: Amount,
 }
 
 impl TransactionItemAmounts {
     pub fn checked_add(self, rhs: &Self) -> Option<Self> {
         Some(Self {
             amounts: self.amounts.checked_add(&rhs.amounts)?,
-            fees: self.fees.checked_add(&rhs.fees)?,
+            fee: self.fee.checked_add(rhs.fee)?,
         })
     }
 }
@@ -170,7 +185,7 @@ impl TransactionItemAmounts {
 impl TransactionItemAmounts {
     pub const ZERO: Self = Self {
         amounts: Amounts::ZERO,
-        fees: Amounts::ZERO,
+        fee: Amount::ZERO,
     };
 }
 

@@ -258,7 +258,7 @@ impl ServerModule for Dummy {
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(input.amount),
-                fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
+                fee: self.cfg.consensus.tx_fee,
             },
             // IMPORTANT: include the pubkey to validate the user signed this tx
             pub_key: input.account,
@@ -284,7 +284,7 @@ impl ServerModule for Dummy {
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(output.amount),
-            fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
+            fee: self.cfg.consensus.tx_fee,
         })
     }
 

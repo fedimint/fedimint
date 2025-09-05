@@ -462,7 +462,7 @@ impl ServerModule for Lightning {
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(amount),
-                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
+                fee: self.cfg.consensus.fee_consensus.fee(amount),
             },
             pub_key,
         })
@@ -510,7 +510,7 @@ impl ServerModule for Lightning {
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(amount),
-            fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
+            fee: self.cfg.consensus.fee_consensus.fee(amount),
         })
     }
 

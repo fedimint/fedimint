@@ -598,7 +598,7 @@ impl ServerModule for Lightning {
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(input.amount),
-                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.contract_input),
+                fee: self.cfg.consensus.fee_consensus.contract_input,
             },
             pub_key,
         })
@@ -698,7 +698,7 @@ impl ServerModule for Lightning {
 
                 Ok(TransactionItemAmounts {
                     amounts: Amounts::new_bitcoin(contract.amount),
-                    fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.contract_output),
+                    fee: self.cfg.consensus.fee_consensus.contract_output,
                 })
             }
             LightningOutputV0::Offer(offer) => {
@@ -1479,7 +1479,7 @@ mod tests {
         let expected_input_meta = InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(amount),
-                fees: Amounts::ZERO,
+                fee: Amount::ZERO,
             },
             pub_key: preimage
                 .to_public_key()
@@ -1550,7 +1550,7 @@ mod tests {
         let expected_input_meta = InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_bitcoin(amount),
-                fees: Amounts::ZERO,
+                fee: Amount::ZERO,
             },
             pub_key: gateway_key,
         };
