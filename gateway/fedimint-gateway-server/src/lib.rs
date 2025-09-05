@@ -362,12 +362,8 @@ impl Gateway {
         registry.attach(MintClientInit);
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
 
-        let client_builder = GatewayClientBuilder::new(
-            opts.data_dir.clone(),
-            registry,
-            fedimint_mint_client::KIND,
-            opts.db_backend,
-        );
+        let client_builder =
+            GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend);
 
         info!(
             target: LOG_GATEWAY,

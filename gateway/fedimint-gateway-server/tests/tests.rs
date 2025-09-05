@@ -15,6 +15,7 @@ use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
+use fedimint_core::module::Amounts;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::time::now;
 use fedimint_core::util::{NextOrPending, backoff_util, retry};
@@ -400,7 +401,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let claim_input = outgoing_contract.claim(preimage);
             let client_input = ClientInput::<LightningInput> {
                 input: claim_input,
-                amount: outgoing_contract.amount,
+                amounts: Amounts::new_bitcoin(outgoing_contract.amount),
                 keys: vec![gateway_module.redeem_key],
             };
 
@@ -673,7 +674,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             });
             let client_output = ClientOutput {
                 output: ln_output,
-                amount: Amount::ZERO,
+                amounts: Amounts::ZERO,
             };
             // The client's receive state machine can be empty because the gateway should
             // not fund this contract
