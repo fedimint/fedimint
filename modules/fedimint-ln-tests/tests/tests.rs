@@ -10,7 +10,7 @@ use fedimint_client::transaction::{
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::module::CommonModuleInit as _;
+use fedimint_core::module::{Amounts, CommonModuleInit as _};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -647,7 +647,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     let transaction_builder_1 = TransactionBuilder::new().with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_1,
-            amount: Amount::ZERO,
+            amounts: Amounts::ZERO,
         }])
         .into_dyn(ln_module.id),
     );
@@ -663,7 +663,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     let transaction_builder_2 = TransactionBuilder::new().with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_2,
-            amount: Amount::ZERO,
+            amounts: Amounts::ZERO,
         }])
         .into_dyn(ln_module.id),
     );

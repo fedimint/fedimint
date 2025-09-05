@@ -4,6 +4,7 @@ use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::OutPoint;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
@@ -116,7 +117,7 @@ impl ReceiveStateMachine {
                 outpoint,
                 old_state.common.agg_decryption_key,
             )),
-            amount: old_state.common.contract.commitment.amount,
+            amounts: Amounts::new_bitcoin(old_state.common.contract.commitment.amount),
             keys: vec![old_state.common.claim_keypair],
         };
 

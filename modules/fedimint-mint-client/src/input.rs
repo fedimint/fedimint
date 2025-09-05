@@ -4,6 +4,7 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::MintInput;
@@ -179,7 +180,7 @@ impl MintInputStateCreated {
         let refund_input = ClientInput::<MintInput> {
             input: MintInput::new_v0(amount, spendable_note.note()),
             keys: vec![spendable_note.spend_key],
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         };
 
         let change_range = global_context
@@ -274,7 +275,7 @@ impl MintInputStateCreatedBundle {
             inputs.push(ClientInput::<MintInput> {
                 input: MintInput::new_v0(amount, spendable_note.note()),
                 keys: vec![spendable_note.spend_key],
-                amount,
+                amounts: Amounts::new_bitcoin(amount),
             });
         }
 
@@ -381,7 +382,7 @@ impl MintInputStateRefundedBundle {
             let refund_input = ClientInput::<MintInput> {
                 input: MintInput::new_v0(amount, spendable_note.note()),
                 keys: vec![spendable_note.spend_key],
-                amount,
+                amounts: Amounts::new_bitcoin(amount),
             };
             let change_range = global_context
                 .claim_inputs(

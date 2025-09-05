@@ -9,7 +9,7 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::ApiRequestErased;
+use fedimint_core::module::{Amounts, ApiRequestErased};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::IncomingContract;
@@ -253,7 +253,7 @@ impl ReceiveStateMachine {
                 old_state.common.outpoint,
                 agg_decryption_key,
             )),
-            amount: old_state.common.contract.commitment.amount,
+            amounts: Amounts::new_bitcoin(old_state.common.contract.commitment.amount),
             keys: vec![old_state.common.refund_keypair],
         };
 
