@@ -25,8 +25,8 @@ use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, info, warn};
 
 use super::{GatewayClientContext, GatewayExtReceiveStates};
-use crate::GatewayClientModule;
 use crate::events::{OutgoingPaymentFailed, OutgoingPaymentSucceeded};
+use crate::{GatewayClientModule, SwapParameters};
 
 const TIMELOCK_DELTA: u64 = 10;
 
@@ -266,6 +266,81 @@ impl GatewayPayInvoice {
         }
     }
 
+    /// Checks the gateway's database to determine if the current gateway
+    /// generated the invoice using the LNv2 protocol. If it did, the
+    /// gateway can buy the preimage and use it to claim the LNv1
+    /// `OutgoingContract`.
+    async fn buy_lnv2_preimage(
+        context: &GatewayClientContext,
+        contract: OutgoingContractAccount,
+        swap_parameters: SwapParameters,
+        common: GatewayPayCommon,
+    ) -> Option<GatewayPayStateMachine> {
+        let amount = swap_parameters.amount_msat;
+        if let Ok(Some((lnv2_incoming_contract, client))) = context
+            .lightning_manager
+            .is_lnv2_direct_swap(swap_parameters.payment_hash, amount)
+            .await
+        {
+            let state = match client
+                .get_first_module::<fedimint_gwv2_client::GatewayClientModuleV2>()
+                .expect("Must have client module")
+                .relay_direct_swap(lnv2_incoming_contract, amount.msats)
+                .await
+            {
+                Ok(final_receive_state) => match final_receive_state {
+                    fedimint_gwv2_client::FinalReceiveState::Success(preimage) => {
+                        GatewayPayStateMachine {
+                            common,
+                            state: GatewayPayStates::ClaimOutgoingContract(Box::new(
+                                GatewayPayClaimOutgoingContract {
+                                    contract,
+                                    preimage: Preimage(preimage),
+                                },
+                            )),
+                        }
+                    }
+                    state => GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract: contract.clone(),
+                                error: OutgoingPaymentError {
+                                    contract_id: contract.contract.contract_id(),
+                                    contract: Some(contract.clone()),
+                                    error_type: OutgoingPaymentErrorType::SwapFailed {
+                                        swap_error: format!(
+                                            "Failed to initiate LNv1 -> LNv2 swap. LNv2 state: {state:?}"
+                                        ),
+                                    },
+                                },
+                            },
+                        )),
+                    },
+                },
+                Err(err) => GatewayPayStateMachine {
+                    common,
+                    state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                        contract: contract.clone(),
+                        error: OutgoingPaymentError {
+                            contract_id: contract.contract.contract_id(),
+                            contract: Some(contract.clone()),
+                            error_type: OutgoingPaymentErrorType::SwapFailed {
+                                swap_error: format!(
+                                    "Failed to initiate LNv1 -> LNv2 swap. Err: {err}"
+                                ),
+                            },
+                        },
+                    })),
+                },
+            };
+
+            return Some(state);
+        }
+
+        None
+    }
+
     async fn buy_preimage(
         context: GatewayClientContext,
         contract: OutgoingContractAccount,
@@ -292,6 +367,21 @@ impl GatewayPayInvoice {
                     error: err,
                 })),
             };
+        }
+
+        // Not all clients support LNv2 yet, so here we check if we are trying to pay an
+        // LNv2 invoice. If this gateway also supports LNv2, the gateway can do
+        // a swap between LNv1 `OutgoingContract` and an
+        // LNv2 `IncomingContract`.
+        let swap_parameters: anyhow::Result<SwapParameters> =
+            payment_parameters.payment_data.clone().try_into();
+        if let Ok(swap_parameters) = swap_parameters {
+            if let Some(new_state) =
+                Self::buy_lnv2_preimage(&context, contract.clone(), swap_parameters, common.clone())
+                    .await
+            {
+                return new_state;
+            }
         }
 
         match context

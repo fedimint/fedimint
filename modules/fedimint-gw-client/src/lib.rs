@@ -931,4 +931,15 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         &self,
         htlc_response: InterceptPaymentResponse,
     ) -> Result<(), LightningRpcError>;
+
+    async fn is_lnv2_direct_swap(
+        &self,
+        payment_hash: sha256::Hash,
+        amount: Amount,
+    ) -> anyhow::Result<
+        Option<(
+            fedimint_lnv2_common::contracts::IncomingContract,
+            ClientHandleArc,
+        )>,
+    >;
 }

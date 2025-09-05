@@ -32,9 +32,11 @@ fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-gwv2-client = { workspace = true }
 fedimint-lightning = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }
