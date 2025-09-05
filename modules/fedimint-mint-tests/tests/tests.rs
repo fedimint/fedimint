@@ -7,6 +7,7 @@ use fedimint_client_module::ClientModule;
 use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::module::Amounts;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
@@ -69,7 +70,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
                 signature: tbs::Signature(G1Affine::generator()),
             },
         }),
-        amount: Amount::from_msats(1024),
+        amounts: Amounts::new_bitcoin_msats(1024),
         keys: vec![keypair],
     };
 

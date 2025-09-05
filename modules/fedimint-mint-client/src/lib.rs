@@ -68,7 +68,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
@@ -655,18 +655,18 @@ impl ClientModule for MintClientModule {
 
     fn input_fee(
         &self,
-        amount: Amount,
+        amount: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.fee(amount))
+        Some(self.cfg.fee_consensus.fee(amount.get_bitcoin()))
     }
 
     fn output_fee(
         &self,
-        amount: Amount,
+        amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.fee(amount))
+        Some(self.cfg.fee_consensus.fee(amount.get_bitcoin()))
     }
 
     #[cfg(feature = "cli")]
@@ -717,23 +717,26 @@ impl ClientModule for MintClientModule {
 
         input_amount += consolidation_inputs
             .iter()
-            .map(|input| input.0.amount)
+            .map(|input| input.0.amounts.get_bitcoin())
             .sum();
 
         output_amount += consolidation_inputs
             .iter()
-            .map(|input| self.cfg.fee_consensus.fee(input.0.amount))
+            .map(|input| self.cfg.fee_consensus.fee(input.0.amounts.get_bitcoin()))
             .sum();
 
         let additional_inputs = self
             .create_sufficient_input(dbtx, output_amount.saturating_sub(input_amount))
             .await?;
 
-        input_amount += additional_inputs.iter().map(|input| input.0.amount).sum();
+        input_amount += additional_inputs
+            .iter()
+            .map(|input| input.0.amounts.get_bitcoin())
+            .sum();
 
         output_amount += additional_inputs
             .iter()
-            .map(|input| self.cfg.fee_consensus.fee(input.0.amount))
+            .map(|input| self.cfg.fee_consensus.fee(input.0.amounts.get_bitcoin()))
             .sum();
 
         let outputs = self
@@ -1066,7 +1069,7 @@ impl MintClientModule {
 
                 outputs.push(ClientOutput {
                     output: MintOutput::new_v0(amount, blind_nonce),
-                    amount,
+                    amounts: Amounts::new_bitcoin(amount),
                 });
 
                 issuance_requests.push((amount, issuance_request));
@@ -1262,7 +1265,7 @@ impl MintClientModule {
                 ClientInput {
                     input: MintInput::new_v0(amount, note),
                     keys: vec![spendable_note.spend_key],
-                    amount,
+                    amounts: Amounts::new_bitcoin(amount),
                 },
                 spendable_note,
             ));
@@ -2403,7 +2406,7 @@ pub(crate) fn create_bundle_for_inputs(
     let mut input_states = Vec::new();
 
     for (input, spendable_note) in inputs_and_notes {
-        input_states.push((input.amount, spendable_note));
+        input_states.push((input.amounts.clone(), spendable_note));
         inputs.push(input);
     }
 
@@ -2416,7 +2419,10 @@ pub(crate) fn create_bundle_for_inputs(
                 out_point_range,
             },
             state: MintInputStates::CreatedBundle(MintInputStateCreatedBundle {
-                notes: input_states.clone(),
+                notes: input_states
+                    .iter()
+                    .map(|(amounts, note)| (amounts.expect_only_bitcoin(), *note))
+                    .collect(),
             }),
         })]
     });

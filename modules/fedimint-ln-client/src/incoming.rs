@@ -16,6 +16,7 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 use fedimint_core::runtime::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::LightningInput;
@@ -319,7 +320,7 @@ impl DecryptingPreimageState {
         let claim_input = contract.claim();
         let client_input = ClientInput::<LightningInput> {
             input: claim_input,
-            amount: contract.amount,
+            amounts: Amounts::new_bitcoin(contract.amount),
             keys: vec![context.redeem_key],
         };
 

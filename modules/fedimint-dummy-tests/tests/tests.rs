@@ -6,7 +6,7 @@ use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::module::ModuleConsensusVersion;
+use fedimint_core::module::{Amounts, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Secp256k1;
 use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -91,7 +91,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
             amount: sats(1000),
             account: account_kp.public_key(),
         },
-        amount: sats(1000),
+        amounts: Amounts::new_bitcoin_msats(1000),
         keys: vec![account_kp],
     };
 
@@ -126,7 +126,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
             amount: sats(1000),
             account: dummy_module.account(),
         },
-        amount: sats(1000),
+        amounts: Amounts::new_bitcoin(sats(1000)),
     };
     let tx = TransactionBuilder::new()
         .with_outputs(ClientOutputBundle::new_no_sm(vec![output]).into_dyn(dummy_module.id));

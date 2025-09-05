@@ -28,7 +28,8 @@ use fedimint_core::db::{
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::{
-    ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    Amounts, ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
+    MultiApiVersion,
 };
 use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 use fedimint_core::util::{BoxStream, NextOrPending};
@@ -83,7 +84,7 @@ impl ClientModule for DummyClientModule {
 
     fn input_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amount> {
         Some(self.cfg.tx_fee)
@@ -91,7 +92,7 @@ impl ClientModule for DummyClientModule {
 
     fn output_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
         Some(self.cfg.tx_fee)
@@ -133,7 +134,7 @@ impl ClientModule for DummyClientModule {
                         amount: missing_input_amount,
                         account: self.key.public_key(),
                     },
-                    amount: missing_input_amount,
+                    amounts: Amounts::new_bitcoin(missing_input_amount),
                     keys: vec![self.key],
                 };
                 let input_sm = ClientInputSM {
@@ -162,7 +163,7 @@ impl ClientModule for DummyClientModule {
                         amount: missing_output_amount,
                         account: self.key.public_key(),
                     },
-                    amount: missing_output_amount,
+                    amounts: Amounts::new_bitcoin(missing_output_amount),
                 };
 
                 let output_sm = ClientOutputSM {
@@ -247,7 +248,7 @@ impl DummyClientModule {
                 amount,
                 account: account_kp.public_key(),
             },
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
             keys: vec![account_kp],
         };
 
@@ -302,7 +303,7 @@ impl DummyClientModule {
         // Create output using another account
         let output = ClientOutput {
             output: DummyOutput { amount, account },
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         };
 
         // Build and send tx to the fed

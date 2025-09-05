@@ -11,7 +11,7 @@ use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule}
 use fedimint_client_module::sm::Context;
 use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
-use fedimint_core::module::{ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
+use fedimint_core::module::{Amounts, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 use fedimint_core::{Amount, apply, async_trait_maybe_send};
 pub use fedimint_empty_common as common;
 use fedimint_empty_common::config::EmptyClientConfig;
@@ -60,7 +60,7 @@ impl ClientModule for EmptyClientModule {
 
     fn input_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amount> {
         unreachable!()
@@ -68,7 +68,7 @@ impl ClientModule for EmptyClientModule {
 
     fn output_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
         unreachable!()

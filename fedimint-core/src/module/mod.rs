@@ -107,6 +107,10 @@ impl Amounts {
         }
     }
 
+    pub fn new_bitcoin_msats(msats: u64) -> Self {
+        Self::new_bitcoin(Amount::from_msats(msats))
+    }
+
     pub fn checked_add(mut self, rhs: &Self) -> Option<Self> {
         for (unit, amount) in &rhs.0 {
             debug_assert!(
@@ -149,6 +153,24 @@ impl Amounts {
 
     pub fn remove(&mut self, unit: &AmountUnit) -> Option<Amount> {
         self.0.remove(unit)
+    }
+
+    pub fn get_bitcoin(&self) -> Amount {
+        self.get(&AmountUnit::BITCOIN).copied().unwrap_or_default()
+    }
+
+    pub fn expect_only_bitcoin(&self) -> Amount {
+        #[allow(clippy::option_if_let_else)] // I like it explicitly split into two cases --dpc
+        match self.get(&AmountUnit::BITCOIN) {
+            Some(amount) => {
+                assert!(
+                    1 < self.len(),
+                    "Amounts expected to contain only bitcoin and no other currencies"
+                );
+                *amount
+            }
+            None => Amount::ZERO,
+        }
     }
 }
 

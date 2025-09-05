@@ -47,7 +47,7 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
-    ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
+    Amounts, ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
     SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
@@ -330,35 +330,36 @@ impl Client {
     /// # Panics
     /// If any of the input or output versions in the transaction builder are
     /// unknown by the respective module.
-    fn transaction_builder_balance(&self, builder: &TransactionBuilder) -> (Amount, Amount) {
+    fn transaction_builder_get_balance(&self, builder: &TransactionBuilder) -> (Amounts, Amounts) {
         // FIXME: prevent overflows, currently not suitable for untrusted input
-        let mut in_amount = Amount::ZERO;
-        let mut out_amount = Amount::ZERO;
+        let mut in_amounts = Amounts::ZERO;
+        let mut out_amounts = Amounts::ZERO;
         let mut fee_amount = Amount::ZERO;
 
         for input in builder.inputs() {
             let module = self.get_module(input.input.module_instance_id());
 
-            let item_fee = module.input_fee(input.amount, &input.input).expect(
+            let item_fee = module.input_fee(&input.amounts, &input.input).expect(
                 "We only build transactions with input versions that are supported by the module",
             );
 
-            in_amount += input.amount;
+            in_amounts.checked_add_mut(&input.amounts);
             fee_amount += item_fee;
         }
 
         for output in builder.outputs() {
             let module = self.get_module(output.output.module_instance_id());
 
-            let item_fee = module.output_fee(output.amount, &output.output).expect(
+            let item_fee = module.output_fee(&output.amounts, &output.output).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
 
-            out_amount += output.amount;
+            out_amounts.checked_add_mut(&output.amounts);
             fee_amount += item_fee;
         }
 
-        (in_amount, out_amount + fee_amount)
+        out_amounts.checked_add_mut(&Amounts::new_bitcoin(fee_amount));
+        (in_amounts, out_amounts)
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
@@ -426,7 +427,11 @@ impl Client {
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
-        let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
+        let (input_amounts, _output_amounts) =
+            self.transaction_builder_get_balance(&partial_transaction);
+
+        let input_amount = input_amounts.get_bitcoin();
+        let output_amount = input_amounts.get_bitcoin();
 
         let (added_input_bundle, change_outputs) = self
             .primary_module()
@@ -451,9 +456,14 @@ impl Client {
             .with_inputs(added_input_bundle)
             .with_outputs(change_outputs);
 
-        let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
+        let (input_amounts, output_amounts) =
+            self.transaction_builder_get_balance(&partial_transaction);
 
-        assert!(input_amount >= output_amount, "Transaction is underfunded");
+        for (unit, output_amount) in output_amounts {
+            let input_amount = input_amounts.get(&unit).copied().unwrap_or_default();
+
+            assert!(input_amount >= output_amount, "Transaction is underfunded");
+        }
 
         let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
 

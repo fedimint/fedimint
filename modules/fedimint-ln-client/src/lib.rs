@@ -48,7 +48,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{
     All, Keypair, PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification,
@@ -469,7 +469,7 @@ impl ClientModule for LightningClientModule {
 
     fn input_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amount> {
         Some(self.cfg.fee_consensus.contract_input)
@@ -477,7 +477,7 @@ impl ClientModule for LightningClientModule {
 
     fn output_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
         match output.maybe_v0_ref()? {
@@ -852,7 +852,7 @@ impl LightningClientModule {
         Ok((
             ClientOutput {
                 output: ln_output,
-                amount: contract_amount,
+                amounts: Amounts::new_bitcoin(contract_amount),
             },
             ClientOutputSM {
                 state_machines: sm_gen,
@@ -892,7 +892,7 @@ impl LightningClientModule {
 
         let client_output = ClientOutput::<LightningOutputV0> {
             output: incoming_output,
-            amount,
+            amounts: Amounts::new_bitcoin(amount),
         };
 
         let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
@@ -1062,7 +1062,7 @@ impl LightningClientModule {
             ClientOutputBundle::new(
                 vec![ClientOutput {
                     output: ln_output,
-                    amount: Amount::ZERO,
+                    amounts: Amounts::ZERO,
                 }],
                 vec![ClientOutputSM {
                     state_machines: sm_gen,
@@ -1296,7 +1296,7 @@ impl LightningClientModule {
         let output = self.client_ctx.make_client_outputs(ClientOutputBundle::new(
             vec![ClientOutput {
                 output: LightningOutput::V0(client_output.output),
-                amount: client_output.amount,
+                amounts: client_output.amounts,
             }],
             vec![client_output_sm],
         ));
@@ -1589,7 +1589,7 @@ impl LightningClientModule {
         let input = incoming_contract_account.claim();
         let client_input = ClientInput::<LightningInput> {
             input,
-            amount: incoming_contract_account.amount,
+            amounts: Amounts::new_bitcoin(incoming_contract_account.amount),
             keys: vec![key_pair],
         };
 

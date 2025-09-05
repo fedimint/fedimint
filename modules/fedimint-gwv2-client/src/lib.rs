@@ -29,7 +29,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::now;
@@ -145,15 +145,15 @@ impl ClientModule for GatewayClientModuleV2 {
     }
     fn input_fee(
         &self,
-        amount: Amount,
+        amount: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.fee(amount))
+        Some(self.cfg.fee_consensus.fee(amount.expect_only_bitcoin()))
     }
 
     fn output_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amount> {
         let amount = match output.ensure_v0_ref().ok()? {
@@ -415,7 +415,7 @@ impl GatewayClientModuleV2 {
 
         let client_output = ClientOutput::<LightningOutput> {
             output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
-            amount: contract.commitment.amount,
+            amounts: Amounts::new_bitcoin(contract.commitment.amount),
         };
         let commitment = contract.commitment.clone();
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
@@ -493,7 +493,7 @@ impl GatewayClientModuleV2 {
 
         let client_output = ClientOutput::<LightningOutput> {
             output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
-            amount: contract.commitment.amount,
+            amounts: Amounts::new_bitcoin(contract.commitment.amount),
         };
         let commitment = contract.commitment.clone();
         let client_output_sm = ClientOutputSM::<GatewayClientStateMachinesV2> {
