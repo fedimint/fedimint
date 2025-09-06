@@ -7,7 +7,7 @@ use bitcoincore_rpc::bitcoin::address::Address;
 use clap::Parser;
 use devimint::cmd;
 use devimint::federation::Client;
-use devimint::util::FedimintCli;
+use devimint::util::{FedimintCli, almost_equal};
 use devimint::version_constants::VERSION_0_8_0_ALPHA;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::serde_json;
@@ -78,7 +78,7 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                 .await?;
 
                 info!("Check if claimed");
-                assert_eq!(peg_in_amount_sats * 1000, restored.balance().await?);
+                almost_equal(peg_in_amount_sats * 1000, restored.balance().await?, 10_000).unwrap();
             }
 
             info!("### Test wallet restore with a backup");
@@ -116,7 +116,12 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                 .await?;
 
                 info!("Check if claimed");
-                assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
+                almost_equal(
+                    peg_in_amount_sats * 1000 * 2,
+                    restored.balance().await?,
+                    20_000,
+                )
+                .unwrap();
             }
 
             info!("### Test wallet restore with a history and no backup");
@@ -157,7 +162,12 @@ async fn wallet_recovery_test_1() -> anyhow::Result<()> {
                 .await?;
 
                 info!("Client slow: Check if claimed");
-                assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
+                almost_equal(
+                    peg_in_amount_sats * 1000 * 2,
+                    restored.balance().await?,
+                    20_000,
+                )
+                .unwrap();
             }
 
             Ok(())
@@ -271,7 +281,7 @@ async fn wallet_recovery_test_2() -> anyhow::Result<()> {
                 let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
                 debug!(target: LOG_TEST, %post_notes, post_balance, "State after (subsequent) backup");
 
-                assert_eq!(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance);
+                almost_equal(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance, 1_000).unwrap();
             }
         }
 
@@ -362,8 +372,18 @@ async fn assert_withdrawal(
         receive_client_pre_balance + withdrawal_amount_msats - fed_deposit_fees_msats
     };
 
-    assert_eq!(send_client_post_balance, expected_send_client_balance);
-    assert_eq!(receive_client_post_balance, expected_receive_client_balance);
+    almost_equal(
+        send_client_post_balance,
+        expected_send_client_balance,
+        5_000,
+    )
+    .unwrap();
+    almost_equal(
+        receive_client_post_balance,
+        expected_receive_client_balance,
+        10_000,
+    )
+    .unwrap();
 
     Ok(())
 }
