@@ -11,7 +11,9 @@ use bitcoin::Txid;
 use clap::Subcommand;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
+use fedimint_core::envs::{
+    FM_ENABLE_MINT_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set,
+};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
@@ -32,7 +34,7 @@ use tracing::{debug, error, info};
 use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
-use crate::util::{LoadTestTool, ProcessManager, poll};
+use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
 use crate::version_constants::VERSION_0_9_0_ALPHA;
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
 
@@ -707,16 +709,18 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .to_owned();
 
     let client_post_spend_balance = client.balance().await?;
-    assert_eq!(
+    almost_equal(
         client_post_spend_balance,
-        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
-    );
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT,
+        10_000,
+    )
+    .unwrap();
 
     // Test we can reissue our own notes
     cmd!(client, "reissue", notes).out_json().await?;
 
     let client_post_spend_balance = client.balance().await?;
-    assert_eq!(client_post_spend_balance, CLIENT_START_AMOUNT);
+    almost_equal(client_post_spend_balance, CLIENT_START_AMOUNT, 10_000).unwrap();
 
     let reissue_amount: u64 = 409_600;
 
@@ -773,7 +777,12 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_lnd_outgoing_client_balance = client.balance().await?;
     let final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 2_000_000,
+        almost_equal(
+            final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance,
+            2_000_000,
+            1_000
+        )
+        .is_ok(),
         "LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000",
         (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
     );
@@ -803,12 +812,22 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let final_lnd_incoming_client_balance = client.balance().await?;
     let final_lnd_incoming_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     anyhow::ensure!(
-        final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == 1_300_000,
+        almost_equal(
+            final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance,
+            1_300_000,
+            2_000
+        )
+        .is_ok(),
         "Client balance changed by {} on LND incoming payment, expected 1_300_000",
         (final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1_300_000,
+        almost_equal(
+            final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance,
+            1_300_000,
+            2_000
+        )
+        .is_ok(),
         "LND Gateway balance changed by {} on LND incoming payment, expected 1_300_000",
         (final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance)
     );
@@ -824,10 +843,12 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let post_deposit_walletng_balance = client.balance().await?;
 
-    assert_eq!(
+    almost_equal(
         post_deposit_walletng_balance,
-        initial_walletng_balance + 100_000_000 // deposit in msats
-    );
+        initial_walletng_balance + 100_000_000, // deposit in msats
+        2_000,
+    )
+    .unwrap();
 
     // ## Withdraw
     info!("Testing client withdraw");
@@ -861,7 +882,12 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let post_withdraw_walletng_balance = client.balance().await?;
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
 
-    assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
+    almost_equal(
+        post_withdraw_walletng_balance,
+        expected_wallet_balance,
+        2_000,
+    )
+    .unwrap();
 
     // # peer-version command
     let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")
@@ -1747,8 +1773,7 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
 
     let client = fed.new_joined_client("cannot-replay-client").await?;
 
-    // Make the start and spend amount the same so we spend all ecash
-    const CLIENT_START_AMOUNT: u64 = 5_000_000_000;
+    const CLIENT_START_AMOUNT: u64 = 10_000_000_000;
     const CLIENT_SPEND_AMOUNT: u64 = 5_000_000_000;
 
     let initial_client_balance = client.balance().await?;
@@ -1771,14 +1796,16 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
         .to_owned();
 
     let client_post_spend_balance = client.balance().await?;
-    assert_eq!(
+    crate::util::almost_equal(
         client_post_spend_balance,
-        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
-    );
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT,
+        10_000,
+    )
+    .unwrap();
 
     cmd!(client, "reissue", notes).out_json().await?;
     let client_post_reissue_balance = client.balance().await?;
-    assert_eq!(client_post_reissue_balance, CLIENT_START_AMOUNT);
+    crate::util::almost_equal(client_post_reissue_balance, CLIENT_START_AMOUNT, 20_000).unwrap();
 
     // Attempt to spend the same ecash from the forked client
     let double_spend_notes = cmd!(double_spend_client, "spend", CLIENT_SPEND_AMOUNT)
@@ -1791,20 +1818,24 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
         .to_owned();
 
     let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
-    assert_eq!(
+    crate::util::almost_equal(
         double_spend_client_post_spend_balance,
-        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
-    );
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT,
+        10_000,
+    )
+    .unwrap();
 
     cmd!(double_spend_client, "reissue", double_spend_notes)
         .assert_error_contains("The transaction had an invalid input")
         .await?;
 
     let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
-    assert_eq!(
+    crate::util::almost_equal(
         double_spend_client_post_spend_balance,
-        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT
-    );
+        CLIENT_START_AMOUNT - CLIENT_SPEND_AMOUNT,
+        10_000,
+    )
+    .unwrap();
 
     Ok(())
 }
@@ -2181,6 +2212,9 @@ pub enum TestCmd {
 }
 
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
+    // Always enable mint base fees in devimint for testing
+    unsafe { std::env::set_var(FM_ENABLE_MINT_BASE_FEES_ENV, "1") };
+
     match cmd {
         TestCmd::WasmTestSetup { exec } => {
             let (process_mgr, task_group) = setup(common_args).await?;
@@ -2242,6 +2276,9 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             cli_tests(dev_fed).await?;
         }
         TestCmd::LoadTestToolTest => {
+            // For the load test tool test, explicitly disable mint base fees
+            // (override the default set at function entry)
+            unsafe { std::env::set_var(FM_ENABLE_MINT_BASE_FEES_ENV, "0") };
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_load_test_tool_test(dev_fed).await?;

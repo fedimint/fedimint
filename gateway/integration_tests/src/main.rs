@@ -13,7 +13,7 @@ use devimint::cli::cleanup_on_exit;
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::external::{Bitcoind, Esplora};
 use devimint::federation::Federation;
-use devimint::util::{ProcessManager, poll, poll_with_timeout};
+use devimint::util::{ProcessManager, almost_equal, poll, poll_with_timeout};
 use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
@@ -178,10 +178,12 @@ async fn stop_and_recover_gateway(
         .ecash_balances
         .first()
         .expect("Should have one joined federation");
-    assert_eq!(
+    almost_equal(
+        ecash_balance.ecash_balance_msats.sats_round_down(),
         10_000_000,
-        ecash_balance.ecash_balance_msats.sats_round_down()
-    );
+        10,
+    )
+    .unwrap();
     let after_onchain_balance = gateway_balances.onchain_balance_sats;
     assert_eq!(before_onchain_balance, after_onchain_balance);
     info!(target: LOG_TEST, "Verified balances after recovery");
@@ -444,7 +446,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                         .expect("fed should have balance");
 
                 assert_eq!(first_fed_balance_msat, Amount::ZERO);
-                assert_eq!(second_fed_balance_msat, pegin_amount);
+                almost_equal(second_fed_balance_msat.msats, pegin_amount.msats, 10_000).unwrap();
 
                 leave_federation(gw, fed_id, 1).await?;
                 leave_federation(gw, new_fed_id, 2).await?;
@@ -511,10 +513,12 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 let after_send_ecash_balance = gw_send.ecash_balance(fed_id.clone()).await?;
                 let after_receive_ecash_balance = gw_receive.ecash_balance(fed_id.clone()).await?;
                 assert_eq!(prev_send_ecash_balance - 500_000, after_send_ecash_balance);
-                assert_eq!(
+                almost_equal(
                     prev_receive_ecash_balance + 500_000,
-                    after_receive_ecash_balance
-                );
+                    after_receive_ecash_balance,
+                    2_000,
+                )
+                .unwrap();
             }
 
             info!(target: LOG_TEST, "Testing payments between gateways...");

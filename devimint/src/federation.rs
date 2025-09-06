@@ -44,7 +44,7 @@ use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
 use crate::version_constants::VERSION_0_7_0_ALPHA;
-use crate::{poll_eq, vars};
+use crate::{poll_almost_equal, poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
 /// Number of ports we allocate for every `fedimintd` instance
@@ -710,7 +710,7 @@ impl Federation {
                     .ecash_balance(fed_id.clone())
                     .await
                     .map_err(ControlFlow::Continue)?;
-                poll_eq!(gateway_balance, amount * 1000)
+                poll_almost_equal!(gateway_balance, amount * 1000)
             })
         }))
         .await?;
@@ -786,11 +786,17 @@ impl Federation {
                 .1
                 .fees;
             let total_fee = fees.amount().to_sat() * 1000;
-            assert_eq!(
-                prev_balance - amount - total_fee,
+            crate::util::almost_equal(
                 after_fed_ecash_balance.msats,
-                "new balance did not equal prev balance minus withdraw_amount minus fees"
-            );
+                prev_balance - amount - total_fee,
+                2000,
+            )
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "new balance did not equal prev balance minus withdraw_amount minus fees: {}",
+                    e
+                )
+            })?;
         }
 
         Ok(())
