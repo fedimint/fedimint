@@ -422,6 +422,27 @@ macro_rules! poll_eq {
     };
 }
 
+#[macro_export]
+macro_rules! poll_almost_equal {
+    ($left:expr_2021, $right:expr_2021) => {
+        match ($left, $right) {
+            (left, right) => $crate::util::almost_equal(left, right, 10_000)
+                .map_err(|e| std::ops::ControlFlow::Continue(anyhow::anyhow!(e))),
+        }
+    };
+}
+
+pub fn almost_equal(a: u64, b: u64, max: u64) -> Result<(), String> {
+    if a.abs_diff(b) <= max {
+        Ok(())
+    } else {
+        Err(format!(
+            "Expected difference is {max} but we found {}",
+            a.abs_diff(b)
+        ))
+    }
+}
+
 // Allow macro to be used within the crate. See https://stackoverflow.com/a/31749071.
 pub(crate) use cmd;
 

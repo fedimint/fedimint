@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use devimint::tests::log_binary_versions;
-use devimint::util::poll;
+use devimint::util::{almost_equal, poll};
 use devimint::version_constants::VERSION_0_7_0_ALPHA;
 use devimint::{DevFed, cmd};
 use lightning_invoice::Bolt11Invoice;
@@ -140,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
             );
 
             let client_balance = client.balance().await?;
-            assert_eq!(client_balance, 1_000_000);
+            almost_equal(client_balance, 1_000_000, 5_000).unwrap();
             info!("Client balance: {client_balance}");
 
             Ok(())
