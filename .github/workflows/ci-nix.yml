@@ -603,6 +603,45 @@ jobs:
           prerelease: ${{ env.IS_PRERELEASE }}
           body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
 
+  check-nixos-up-to-date:
+    name: "Check NixOS/nixpkgs on ${{ matrix.arch }}"
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            runs-on: [self-hosted, linux, x64]
+          - arch: arm64
+            runs-on: [self-hosted, linux, arm64]
+    runs-on: ${{ matrix.runs-on }}
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - name: Check NixOS system age
+        run: |
+          if [ ! -f /etc/nixpkgs-last-modified ]; then
+            echo "ERROR: /etc/nixpkgs-last-modified file not found"
+            exit 1
+          fi
+
+          MAX_AGE_DAYS=45
+
+          last_modified=$(cat /etc/nixpkgs-last-modified)
+          current_time=$(date +%s)
+          age_seconds=$((current_time - last_modified))
+          age_days=$((age_seconds / 86400))
+
+          echo "System last modified: $(date -d @$last_modified '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Current time: $(date -d @$current_time '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "System age: $age_days days"
+
+          if [ $age_days -gt $MAX_AGE_DAYS ]; then
+            echo "ERROR: NixOS system is $age_days days old (older than $MAX_AGE_DAYS days)"
+            exit 1
+          else
+            echo "SUCCESS: NixOS system is $age_days days old (within $MAX_AGE_DAYS day limit)"
+          fi
+
   status:
     name: Status
     needs: [lint, shell, build, cross, containers, pkgs]
@@ -624,7 +663,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
-    needs: [ lint, build, shell, cross, containers, pkgs ]
+    needs: [ lint, build, shell, cross, containers, pkgs]
 
     steps:
     - name: Discord notifications on failure
