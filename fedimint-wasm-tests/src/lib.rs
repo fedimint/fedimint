@@ -286,8 +286,8 @@ mod tests {
                 Some(ReissueExternalNotesState::Failed(error)) => {
                     return Err(anyhow!("reissue failed {error}"));
                 }
+                Some(_) => {}
                 None => return Err(anyhow!("reissue failed")),
-                _ => {}
             }
         }
         Ok(())
@@ -333,7 +333,7 @@ mod tests {
 
         futures::future::try_join_all(
             (0..10)
-                .map(|_| receive_once(client.clone(), Amount::from_sats(25), ln_gateway.clone())),
+                .map(|_| receive_once(client.clone(), Amount::from_sats(50), ln_gateway.clone())),
         )
         .await?;
         futures::future::try_join_all((0..10).map(|_| send_and_recv_ecash_once(client.clone())))
