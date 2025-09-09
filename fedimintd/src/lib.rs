@@ -492,7 +492,7 @@ pub fn default_modules(
                 },
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                     // TODO: actually make the relative fee configurable
-                    fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(100).unwrap(),
+                    fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(0).unwrap(),
                     network,
                 },
             },
