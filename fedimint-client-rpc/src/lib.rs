@@ -162,7 +162,6 @@ impl RpcGlobalState {
         builder.with_module(LightningClientInit::default());
         builder.with_module(WalletClientInit(None));
         builder.with_module(MetaClientInit);
-        builder.with_primary_module_kind(fedimint_mint_client::KIND);
         Ok(builder)
     }
 

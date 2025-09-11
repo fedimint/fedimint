@@ -5,6 +5,7 @@ use std::sync::Arc;
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::module::Amounts;
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -212,7 +213,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
             OutPoint { txid, out_idx: 0 },
             OutgoingWitness::Claim(MOCK_INVOICE_PREIMAGE),
         )),
-        amount: contract.amount,
+        amounts: Amounts::new_bitcoin(contract.amount),
         keys: vec![mock::gateway_keypair()],
     };
 
