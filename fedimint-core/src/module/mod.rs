@@ -69,6 +69,10 @@ impl AmountUnit {
     pub fn is_bitcoin(self) -> bool {
         self == Self::BITCOIN
     }
+
+    pub fn new_custom(unit: u64) -> Self {
+        Self(unit)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -109,6 +113,14 @@ impl Amounts {
 
     pub fn new_bitcoin_msats(msats: u64) -> Self {
         Self::new_bitcoin(Amount::from_msats(msats))
+    }
+
+    pub fn new_custom(unit: AmountUnit, amount: Amount) -> Self {
+        if amount == Amount::ZERO {
+            Self(BTreeMap::from([]))
+        } else {
+            Self(BTreeMap::from([(unit, amount)]))
+        }
     }
 
     pub fn checked_add(mut self, rhs: &Self) -> Option<Self> {
