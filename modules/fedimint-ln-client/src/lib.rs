@@ -80,7 +80,6 @@ use fedimint_ln_common::{
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
-use itertools::Itertools;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
@@ -664,13 +663,19 @@ struct GetGatewayRequest {
     force_internal: bool,
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum GatewayStatus {
+    OnlineVetted,
+    OnlineNonVetted,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum PayBolt11InvoiceError {
     #[error("Previous payment attempt({}) still in progress", .operation_id.fmt_full())]
     PreviousPaymentAttemptStillInProgress { operation_id: OperationId },
-    #[error("No LN gateway available")]
+    #[error("No gateway available")]
     NoLnGatewayAvailable,
-    #[error("All gateways failed")]
+    #[error("No Lightning Gateway was reachable")]
     AllGatewaysFailed,
     #[error("Funded contract already exists: {contract_id}")]
     FundedContractAlreadyExists { contract_id: ContractId },
@@ -682,7 +687,7 @@ pub enum PayBolt11InvoiceError {
 pub enum CreateInvoiceError {
     #[error("No gateways available")]
     NoGateways,
-    #[error("All gateways failed")]
+    #[error("No Lightning Gateway was reachable")]
     AllGatewaysFailed,
     #[error("Other error: {0}")]
     Other(#[from] anyhow::Error),
@@ -1087,27 +1092,26 @@ impl LightningClientModule {
         ))
     }
 
-    async fn select_gateway_with_policy<T, E, F, Fut>(
+    async fn select_available_gateway(
         &self,
         maybe_gateway: Option<LightningGateway>,
-        operation: F,
-    ) -> anyhow::Result<T, E>
-    where
-        F: Fn(LightningGateway) -> Fut,
-        Fut: Future<Output = anyhow::Result<T, E>>,
-        E: std::fmt::Debug + From<anyhow::Error> + std::error::Error + Send + Sync + 'static,
-    {
+    ) -> anyhow::Result<LightningGateway> {
         if let Some(gw) = maybe_gateway {
             let gw_id = gw.gateway_id;
-            return operation(gw.clone())
+            if self
+                .gateway_conn
+                .verify_gateway_availability(&gw)
                 .await
-                .with_context(|| format!("Failed with specified gateway: {}", gw_id))
-                .map_err(E::from);
+                .is_ok()
+            {
+                return Ok(gw);
+            }
+            return Err(anyhow::anyhow!("Specified gateway is offline: {}", gw_id));
         }
 
-        let gateways = self.list_gateways().await;
+        let gateways: Vec<LightningGatewayAnnouncement> = self.list_gateways().await;
         if gateways.is_empty() {
-            return Err(E::from(anyhow!("No gateways available")));
+            return Err(anyhow::anyhow!("No gateways available"));
         }
 
         let gateways_with_status =
@@ -1121,35 +1125,27 @@ impl LightningClientModule {
             }))
             .await;
 
-        let sorted_gateways = gateways_with_status
-            .into_iter()
-            .sorted_by(|(a, a_online), (b, b_online)| {
-                let a_priority = match (a_online, a.vetted) {
-                    (true, true) => 0,   // Online+Vetted
-                    (true, false) => 1,  // Online
-                    (false, true) => 2,  // Offline+Vetted
-                    (false, false) => 3, // Offline
-                };
-                let b_priority = match (b_online, b.vetted) {
-                    (true, true) => 0,
-                    (true, false) => 1,
-                    (false, true) => 2,
-                    (false, false) => 3,
-                };
-                a_priority.cmp(&b_priority)
-            })
-            .collect::<Vec<_>>();
+        let mut sorted_gateways: Vec<(LightningGatewayAnnouncement, GatewayStatus)> =
+            gateways_with_status
+                .into_iter()
+                .filter(|(_, online)| *online)
+                .map(|(ann, _)| {
+                    let status = if ann.vetted {
+                        GatewayStatus::OnlineVetted
+                    } else {
+                        GatewayStatus::OnlineNonVetted
+                    };
+                    (ann, status)
+                })
+                .collect();
 
-        for (gw, _online) in sorted_gateways {
-            match operation(gw.info.clone()).await {
-                Ok(result) => return Ok(result),
-                Err(_err) => {
-                    continue;
-                }
-            }
+        sorted_gateways.sort_by_key(|(_, status)| status.clone());
+
+        if sorted_gateways.is_empty() {
+            return Err(anyhow::anyhow!("No Lightning Gateway was reachable"));
         }
 
-        Err(E::from(anyhow!("All gateways failed")))
+        Ok(sorted_gateways[0].0.info.clone())
     }
 
     /// Selects a Lightning Gateway from a given `gateway_id` from the gateway
@@ -1327,26 +1323,25 @@ impl LightningClientModule {
                 contract_id,
             )
         } else {
+            let gateway = self
+                .select_available_gateway(maybe_gateway)
+                .await
+                .map_err(PayBolt11InvoiceError::Other)?;
+
             let (output, output_sm, contract_id) = self
-                .select_gateway_with_policy(maybe_gateway, move |gateway| {
-                    let invoice_for_outgoing = invoice_for_outgoing.clone();
-                    async move {
-                        self.create_outgoing_output(
-                            operation_id,
-                            invoice_for_outgoing,
-                            gateway,
-                            self.client_ctx
-                                .get_config()
-                                .await
-                                .global
-                                .calculate_federation_id(),
-                            rand::rngs::OsRng,
-                        )
+                .create_outgoing_output(
+                    operation_id,
+                    invoice_for_outgoing,
+                    gateway,
+                    self.client_ctx
+                        .get_config()
                         .await
-                        .map_err(PayBolt11InvoiceError::Other)
-                    }
-                })
-                .await?;
+                        .global
+                        .calculate_federation_id(),
+                    rand::rngs::OsRng,
+                )
+                .await
+                .map_err(PayBolt11InvoiceError::Other)?;
             (
                 PayType::Lightning(operation_id),
                 output,
@@ -1787,14 +1782,12 @@ impl LightningClientModule {
             let markers = self.client_ctx.get_internal_payment_markers()?;
             (markers.0, markers.1, vec![])
         } else {
-            self.select_gateway_with_policy(gateway, |gateway| async move {
-                Ok::<_, CreateInvoiceError>((
-                    gateway.node_pub_key,
-                    gateway.federation_index,
-                    gateway.route_hints,
-                ))
-            })
-            .await?
+            let gateway = self.select_available_gateway(gateway).await?;
+            (
+                gateway.node_pub_key,
+                gateway.federation_index,
+                gateway.route_hints,
+            )
         };
 
         debug!(target: LOG_CLIENT_MODULE_LN, ?gateway_id, %amount, "Selected LN gateway for invoice generation");
