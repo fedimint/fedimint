@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["run_devfed_test"],"macro":["cmd","poll_eq"],"mod":["cli","devfed","envs","external","faucet","federation","gatewayd","recurringd","run_devfed_test_builder","tests","util","vars","version_constants"],"struct":["RunDevfedTestBuilder"]};
+window.SIDEBAR_ITEMS = {"fn":["run_devfed_test"],"macro":["cmd","poll_almost_equal","poll_eq"],"mod":["cli","devfed","envs","external","faucet","federation","gatewayd","recurringd","run_devfed_test_builder","tests","util","vars","version_constants"],"struct":["RunDevfedTestBuilder"]};
