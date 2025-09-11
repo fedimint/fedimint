@@ -53,70 +53,73 @@
 <a href=#53 id=53 data-nosnippet>53</a>        <span class="kw">let </span>process = process_mgr
 <a href=#54 id=54 data-nosnippet>54</a>            .spawn_daemon(
 <a href=#55 id=55 data-nosnippet>55</a>                <span class="string">"recurringd"</span>,
-<a href=#56 id=56 data-nosnippet>56</a>                <span class="macro">cmd!</span>(<span class="string">"fedimint-recurringd"</span>).envs(recurring_env),
-<a href=#57 id=57 data-nosnippet>57</a>            )
-<a href=#58 id=58 data-nosnippet>58</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#59 id=59 data-nosnippet>59</a>
-<a href=#60 id=60 data-nosnippet>60</a>        <span class="kw">let </span>log_path = process_mgr.globals.FM_LOGS_DIR.join(<span class="string">"recurringd.log"</span>);
-<a href=#61 id=61 data-nosnippet>61</a>
-<a href=#62 id=62 data-nosnippet>62</a>        <span class="kw">let </span>recurringd = <span class="self">Self </span>{
-<a href=#63 id=63 data-nosnippet>63</a>            process,
-<a href=#64 id=64 data-nosnippet>64</a>            addr: bind_address,
-<a href=#65 id=65 data-nosnippet>65</a>            api_url,
-<a href=#66 id=66 data-nosnippet>66</a>            log_path,
-<a href=#67 id=67 data-nosnippet>67</a>        };
-<a href=#68 id=68 data-nosnippet>68</a>
-<a href=#69 id=69 data-nosnippet>69</a>        <span class="comment">// Poll to ensure the service is ready by checking the /federations endpoint
-<a href=#70 id=70 data-nosnippet>70</a>        </span>poll(<span class="string">"waiting for recurringd to be ready"</span>, || <span class="kw">async </span>{
-<a href=#71 id=71 data-nosnippet>71</a>            <span class="kw">match </span>get(<span class="macro">format!</span>(<span class="string">"http://{}/lnv1/federations"</span>, recurringd.addr)).<span class="kw">await </span>{
-<a href=#72 id=72 data-nosnippet>72</a>                <span class="prelude-val">Ok</span>(response) <span class="kw">if </span>response.status().is_success() =&gt; <span class="prelude-val">Ok</span>(()),
-<a href=#73 id=73 data-nosnippet>73</a>                <span class="kw">_ </span>=&gt; {
-<a href=#74 id=74 data-nosnippet>74</a>                    sleep(tokio::time::Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-<a href=#75 id=75 data-nosnippet>75</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
-<a href=#76 id=76 data-nosnippet>76</a>                        <span class="string">"recurringd not ready yet"
-<a href=#77 id=77 data-nosnippet>77</a>                    </span>)))
-<a href=#78 id=78 data-nosnippet>78</a>                }
-<a href=#79 id=79 data-nosnippet>79</a>            }
-<a href=#80 id=80 data-nosnippet>80</a>        })
-<a href=#81 id=81 data-nosnippet>81</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#82 id=82 data-nosnippet>82</a>
-<a href=#83 id=83 data-nosnippet>83</a>        <span class="macro">info!</span>(<span class="string">"Recurringd started at {}"</span>, recurringd.addr);
-<a href=#84 id=84 data-nosnippet>84</a>        <span class="prelude-val">Ok</span>(recurringd)
-<a href=#85 id=85 data-nosnippet>85</a>    }
-<a href=#86 id=86 data-nosnippet>86</a>
-<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#88 id=88 data-nosnippet>88</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
-<a href=#89 id=89 data-nosnippet>89</a>    </span>}
-<a href=#90 id=90 data-nosnippet>90</a>
-<a href=#91 id=91 data-nosnippet>91</a>    <span class="comment">// Add a federation to recurringd
-<a href=#92 id=92 data-nosnippet>92</a>    </span><span class="kw">pub async fn </span>add_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, invite_code: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-<a href=#93 id=93 data-nosnippet>93</a>        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"http://{}/lnv1/federations"</span>, <span class="self">self</span>.addr);
-<a href=#94 id=94 data-nosnippet>94</a>        <span class="kw">let </span>client = reqwest::Client::new();
-<a href=#95 id=95 data-nosnippet>95</a>        <span class="kw">let </span>response = client
-<a href=#96 id=96 data-nosnippet>96</a>            .put(<span class="kw-2">&amp;</span>url)
-<a href=#97 id=97 data-nosnippet>97</a>            .header(<span class="string">"Authorization"</span>, <span class="string">"Bearer devimint-recurring-token"</span>)
-<a href=#98 id=98 data-nosnippet>98</a>            .header(<span class="string">"Content-Type"</span>, <span class="string">"application/json"</span>)
-<a href=#99 id=99 data-nosnippet>99</a>            .json(<span class="kw-2">&amp;</span><span class="macro">serde_json::json!</span>({ <span class="string">"invite"</span>: invite_code }))
-<a href=#100 id=100 data-nosnippet>100</a>            .send()
-<a href=#101 id=101 data-nosnippet>101</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#102 id=102 data-nosnippet>102</a>
-<a href=#103 id=103 data-nosnippet>103</a>        <span class="prelude-val">Ok</span>(response.text().<span class="kw">await</span><span class="question-mark">?</span>)
-<a href=#104 id=104 data-nosnippet>104</a>    }
+<a href=#56 id=56 data-nosnippet>56</a>                <span class="macro">cmd!</span>(<span class="string">"fedimint-recurringd"</span>)
+<a href=#57 id=57 data-nosnippet>57</a>                    .arg(<span class="kw-2">&amp;</span><span class="string">"--encryption-key"</span>)
+<a href=#58 id=58 data-nosnippet>58</a>                    .arg(<span class="kw-2">&amp;</span><span class="string">"01234567890123456789012345678901"</span>)
+<a href=#59 id=59 data-nosnippet>59</a>                    .envs(recurring_env),
+<a href=#60 id=60 data-nosnippet>60</a>            )
+<a href=#61 id=61 data-nosnippet>61</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#62 id=62 data-nosnippet>62</a>
+<a href=#63 id=63 data-nosnippet>63</a>        <span class="kw">let </span>log_path = process_mgr.globals.FM_LOGS_DIR.join(<span class="string">"recurringd.log"</span>);
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="kw">let </span>recurringd = <span class="self">Self </span>{
+<a href=#66 id=66 data-nosnippet>66</a>            process,
+<a href=#67 id=67 data-nosnippet>67</a>            addr: bind_address,
+<a href=#68 id=68 data-nosnippet>68</a>            api_url,
+<a href=#69 id=69 data-nosnippet>69</a>            log_path,
+<a href=#70 id=70 data-nosnippet>70</a>        };
+<a href=#71 id=71 data-nosnippet>71</a>
+<a href=#72 id=72 data-nosnippet>72</a>        <span class="comment">// Poll to ensure the service is ready by checking the /federations endpoint
+<a href=#73 id=73 data-nosnippet>73</a>        </span>poll(<span class="string">"waiting for recurringd to be ready"</span>, || <span class="kw">async </span>{
+<a href=#74 id=74 data-nosnippet>74</a>            <span class="kw">match </span>get(<span class="macro">format!</span>(<span class="string">"http://{}/lnv1/federations"</span>, recurringd.addr)).<span class="kw">await </span>{
+<a href=#75 id=75 data-nosnippet>75</a>                <span class="prelude-val">Ok</span>(response) <span class="kw">if </span>response.status().is_success() =&gt; <span class="prelude-val">Ok</span>(()),
+<a href=#76 id=76 data-nosnippet>76</a>                <span class="kw">_ </span>=&gt; {
+<a href=#77 id=77 data-nosnippet>77</a>                    sleep(tokio::time::Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+<a href=#78 id=78 data-nosnippet>78</a>                    <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(
+<a href=#79 id=79 data-nosnippet>79</a>                        <span class="string">"recurringd not ready yet"
+<a href=#80 id=80 data-nosnippet>80</a>                    </span>)))
+<a href=#81 id=81 data-nosnippet>81</a>                }
+<a href=#82 id=82 data-nosnippet>82</a>            }
+<a href=#83 id=83 data-nosnippet>83</a>        })
+<a href=#84 id=84 data-nosnippet>84</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="macro">info!</span>(<span class="string">"Recurringd started at {}"</span>, recurringd.addr);
+<a href=#87 id=87 data-nosnippet>87</a>        <span class="prelude-val">Ok</span>(recurringd)
+<a href=#88 id=88 data-nosnippet>88</a>    }
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">pub async fn </span>terminate(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#91 id=91 data-nosnippet>91</a>        <span class="self">self</span>.process.terminate().<span class="kw">await
+<a href=#92 id=92 data-nosnippet>92</a>    </span>}
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="comment">// Add a federation to recurringd
+<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="kw">pub async fn </span>add_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, invite_code: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"http://{}/lnv1/federations"</span>, <span class="self">self</span>.addr);
+<a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">let </span>client = reqwest::Client::new();
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw">let </span>response = client
+<a href=#99 id=99 data-nosnippet>99</a>            .put(<span class="kw-2">&amp;</span>url)
+<a href=#100 id=100 data-nosnippet>100</a>            .header(<span class="string">"Authorization"</span>, <span class="string">"Bearer devimint-recurring-token"</span>)
+<a href=#101 id=101 data-nosnippet>101</a>            .header(<span class="string">"Content-Type"</span>, <span class="string">"application/json"</span>)
+<a href=#102 id=102 data-nosnippet>102</a>            .json(<span class="kw-2">&amp;</span><span class="macro">serde_json::json!</span>({ <span class="string">"invite"</span>: invite_code }))
+<a href=#103 id=103 data-nosnippet>103</a>            .send()
+<a href=#104 id=104 data-nosnippet>104</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#105 id=105 data-nosnippet>105</a>
-<a href=#106 id=106 data-nosnippet>106</a>    <span class="comment">// List federations registered with recurringd
-<a href=#107 id=107 data-nosnippet>107</a>    </span><span class="kw">pub async fn </span>list_federations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-<a href=#108 id=108 data-nosnippet>108</a>        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"http://{}/lnv1/federations"</span>, <span class="self">self</span>.addr);
-<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">let </span>client = reqwest::Client::new();
-<a href=#110 id=110 data-nosnippet>110</a>        <span class="kw">let </span>response = client
-<a href=#111 id=111 data-nosnippet>111</a>            .get(<span class="kw-2">&amp;</span>url)
-<a href=#112 id=112 data-nosnippet>112</a>            .header(<span class="string">"Authorization"</span>, <span class="string">"Bearer devimint-recurring-token"</span>)
-<a href=#113 id=113 data-nosnippet>113</a>            .send()
-<a href=#114 id=114 data-nosnippet>114</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#115 id=115 data-nosnippet>115</a>
-<a href=#116 id=116 data-nosnippet>116</a>        <span class="prelude-val">Ok</span>(response.text().<span class="kw">await</span><span class="question-mark">?</span>)
-<a href=#117 id=117 data-nosnippet>117</a>    }
+<a href=#106 id=106 data-nosnippet>106</a>        <span class="prelude-val">Ok</span>(response.text().<span class="kw">await</span><span class="question-mark">?</span>)
+<a href=#107 id=107 data-nosnippet>107</a>    }
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="comment">// List federations registered with recurringd
+<a href=#110 id=110 data-nosnippet>110</a>    </span><span class="kw">pub async fn </span>list_federations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"http://{}/lnv1/federations"</span>, <span class="self">self</span>.addr);
+<a href=#112 id=112 data-nosnippet>112</a>        <span class="kw">let </span>client = reqwest::Client::new();
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">let </span>response = client
+<a href=#114 id=114 data-nosnippet>114</a>            .get(<span class="kw-2">&amp;</span>url)
+<a href=#115 id=115 data-nosnippet>115</a>            .header(<span class="string">"Authorization"</span>, <span class="string">"Bearer devimint-recurring-token"</span>)
+<a href=#116 id=116 data-nosnippet>116</a>            .send()
+<a href=#117 id=117 data-nosnippet>117</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#118 id=118 data-nosnippet>118</a>
-<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">pub fn </span>api_url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SafeUrl {
-<a href=#120 id=120 data-nosnippet>120</a>        <span class="self">self</span>.api_url.clone()
-<a href=#121 id=121 data-nosnippet>121</a>    }
-<a href=#122 id=122 data-nosnippet>122</a>}</code></pre></div></section></main></body></html>
+<a href=#119 id=119 data-nosnippet>119</a>        <span class="prelude-val">Ok</span>(response.text().<span class="kw">await</span><span class="question-mark">?</span>)
+<a href=#120 id=120 data-nosnippet>120</a>    }
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">pub fn </span>api_url(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SafeUrl {
+<a href=#123 id=123 data-nosnippet>123</a>        <span class="self">self</span>.api_url.clone()
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>}</code></pre></div></section></main></body></html>

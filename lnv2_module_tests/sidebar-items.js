@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["add_gateway","await_receive_claimed","main","receive","remove_gateway","test_fees","test_gateway_registration","test_payments","test_send","test_send_lnv1"]};
+window.SIDEBAR_ITEMS = {"fn":["add_gateway","await_receive_claimed","fetch_invoice","generate_lnurl","main","receive","receive_lnurl","remove_gateway","test_fees","test_gateway_registration","test_lnurl_pay","test_payments","test_send","test_send_lnv1","verify_payment","verify_payment_wait"],"struct":["LnUrlPayInvoiceResponse","LnUrlPayResponse"]};

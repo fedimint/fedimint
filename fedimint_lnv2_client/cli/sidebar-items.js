@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewaysOpts","Opts"],"fn":["handle_cli_command","json"]};
+window.SIDEBAR_ITEMS = {"enum":["GatewaysOpts","LnurlOpts","Opts"],"fn":["handle_cli_command","json"]};

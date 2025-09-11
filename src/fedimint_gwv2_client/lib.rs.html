@@ -544,7 +544,7 @@
 <a href=#544 id=544 data-nosnippet>544</a>        <span class="prelude-val">Ok</span>(<span class="self">self</span>.await_receive(operation_id).<span class="kw">await</span>)
 <a href=#545 id=545 data-nosnippet>545</a>    }
 <a href=#546 id=546 data-nosnippet>546</a>
-<a href=#547 id=547 data-nosnippet>547</a>    <span class="kw">async fn </span>await_receive(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; FinalReceiveState {
+<a href=#547 id=547 data-nosnippet>547</a>    <span class="kw">pub async fn </span>await_receive(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; FinalReceiveState {
 <a href=#548 id=548 data-nosnippet>548</a>        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
 <a href=#549 id=549 data-nosnippet>549</a>
 <a href=#550 id=550 data-nosnippet>550</a>        <span class="kw">loop </span>{
