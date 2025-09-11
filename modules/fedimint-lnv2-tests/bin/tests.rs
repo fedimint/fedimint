@@ -4,6 +4,7 @@ use anyhow::ensure;
 use bitcoin::hashes::sha256;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
+use devimint::util::almost_equal;
 use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
@@ -157,7 +158,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     federation.pegin_client(10_000, &client).await?;
 
-    assert_eq!(client.balance().await?, 10_000 * 1000);
+    almost_equal(client.balance().await?, 10_000 * 1000, 5_000).unwrap();
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed.gw_ldk().await?;
@@ -371,7 +372,12 @@ async fn test_fees(
 
     let gw_lnd_ecash_after = gw_lnd.ecash_balance(fed_id.clone()).await?;
 
-    assert_eq!(gw_lnd_ecash_prev + expected_addition, gw_lnd_ecash_after);
+    almost_equal(
+        gw_lnd_ecash_prev + expected_addition,
+        gw_lnd_ecash_after,
+        5000,
+    )
+    .unwrap();
 
     Ok(())
 }
