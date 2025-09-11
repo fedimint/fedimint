@@ -18,6 +18,9 @@ pub enum DbKeyPrefix {
     DecryptionKeyShare = 0x06,
     Preimage = 0x07,
     Gateway = 0x08,
+    IncomingContractStreamIndex = 0x09,
+    IncomingContractStream = 0x10,
+    IncomingContractIndex = 0x11,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -154,3 +157,63 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = GatewayKey, query_prefix = GatewayPrefix);
+
+/// Incoming contracts are indexed in three ways:
+/// 1) A sequential stream mapping: `stream_index (u64)` -> `IncomingContract`
+///    This enables efficient streaming reads using
+///    `IncomingContractStreamPrefix(start)`.
+/// 2) A global monotonically increasing index: `IncomingContractStreamIndexKey`
+///    -> `u64` This stores the next stream index to be assigned and is used to
+///    wait for new icoming contracts to arrive.
+/// 3) A reverse lookup from `OutPoint` -> `stream_index` (via
+///    `IncomingContractIndexKey`) This allows finding a specific incoming
+///    contract's stream position by its `OutPoint`, while still supporting
+///    sequential reads via the stream prefix. This is used to remove the
+///    contract from the stream once it has been spent.
+///
+/// The combination allows both random access (by `OutPoint`) and ordered
+/// iteration over all unspent incoming contracts (by `stream_index`).
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct IncomingContractStreamIndexKey;
+
+impl_db_record!(
+    key = IncomingContractStreamIndexKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::IncomingContractStreamIndex,
+    notify_on_modify = true
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct IncomingContractStreamKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct IncomingContractStreamPrefix(pub u64);
+
+impl_db_record!(
+    key = IncomingContractStreamKey,
+    value = IncomingContract,
+    db_prefix = DbKeyPrefix::IncomingContractStream,
+);
+
+impl_db_lookup!(
+    key = IncomingContractStreamKey,
+    query_prefix = IncomingContractStreamPrefix
+);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct IncomingContractIndexKey(pub OutPoint);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct IncomingContractIndexPrefix;
+
+impl_db_record!(
+    key = IncomingContractIndexKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::IncomingContractIndex,
+);
+
+impl_db_lookup!(
+    key = IncomingContractIndexKey,
+    query_prefix = IncomingContractIndexPrefix
+);

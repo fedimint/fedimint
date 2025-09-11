@@ -8,6 +8,7 @@ use strum::EnumIter;
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
     Gateway = 0x41,
+    IncomingContractStreamIndex = 0x42,
     #[allow(dead_code)]
     /// Prefixes between 0xb0..=0xcf shall all be considered allocated for
     /// historical and future external use
@@ -27,4 +28,13 @@ impl_db_record!(
     key = GatewayKey,
     value = SafeUrl,
     db_prefix = DbKeyPrefix::Gateway,
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct IncomingContractStreamIndexKey;
+
+impl_db_record!(
+    key = IncomingContractStreamIndexKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::IncomingContractStreamIndex
 );

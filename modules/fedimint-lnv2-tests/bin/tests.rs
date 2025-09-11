@@ -1,12 +1,20 @@
+use std::str::FromStr;
+
 use anyhow::ensure;
+use bitcoin::hashes::sha256;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
+use fedimint_core::encoding::Encodable;
+use fedimint_core::task;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
+use fedimint_lnv2_common::lnurl::VerifyResponse;
 use lightning_invoice::Bolt11Invoice;
+use lnurl::lnurl::LnUrl;
+use serde::Deserialize;
 use substring::Substring;
 use tokio::try_join;
 use tracing::info;
@@ -22,6 +30,9 @@ async fn main() -> anyhow::Result<()> {
 
             test_gateway_registration(&dev_fed).await?;
             test_payments(&dev_fed).await?;
+            test_lnurl_pay(&dev_fed).await?;
+
+            info!("Testing LNV2 is complete!");
 
             Ok(())
         })
@@ -495,4 +506,211 @@ async fn await_receive_claimed(client: &Client, operation_id: OperationId) -> an
     );
 
     Ok(())
+}
+
+#[allow(dead_code)]
+async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    if util::FedimintCli::version_or_default().await < *VERSION_0_9_0_ALPHA {
+        return Ok(());
+    }
+
+    if util::FedimintdCmd::version_or_default().await < *VERSION_0_9_0_ALPHA {
+        return Ok(());
+    }
+
+    if util::Gatewayd::version_or_default().await < *VERSION_0_9_0_ALPHA {
+        return Ok(());
+    }
+
+    info!("Testing LNURL pay...");
+
+    let federation = dev_fed.fed().await?;
+
+    let gw_lnd = dev_fed.gw_lnd().await?;
+    let gw_ldk = dev_fed.gw_ldk().await?;
+
+    let gateway_matrix = [
+        (gw_lnd, gw_lnd),
+        (gw_lnd, gw_ldk),
+        (gw_ldk, gw_lnd),
+        (gw_ldk, gw_ldk),
+    ];
+
+    let recurringd = dev_fed.recurringd().await?.api_url().to_string();
+
+    let client_a = federation
+        .new_joined_client("lnv2-lnurl-test-client-a")
+        .await?;
+
+    let client_b = federation
+        .new_joined_client("lnv2-lnurl-test-client-b")
+        .await?;
+
+    federation.pegin_client(10_000, &client_a).await?;
+    federation.pegin_client(10_000, &client_b).await?;
+
+    assert_eq!(client_a.balance().await?, 10_000 * 1000);
+    assert_eq!(client_b.balance().await?, 10_000 * 1000);
+
+    for (gw_send, gw_receive) in gateway_matrix {
+        info!(
+            "Testing lnurl payments: client -> {} -> {} -> client",
+            gw_send.ln.ln_type(),
+            gw_receive.ln.ln_type()
+        );
+
+        // Generate LNURL using LNv2 client command
+        let lnurl_a = generate_lnurl(&client_a, &recurringd, &gw_receive.addr).await?;
+        let lnurl_b = generate_lnurl(&client_b, &recurringd, &gw_receive.addr).await?;
+
+        let (invoice_a, verify_url_a) = fetch_invoice(lnurl_a.clone(), 500_000).await?;
+        let (invoice_b, verify_url_b) = fetch_invoice(lnurl_b.clone(), 500_000).await?;
+
+        let verify_task_a = task::spawn("verify_task_a", verify_payment_wait(verify_url_a.clone()));
+        let verify_task_b = task::spawn("verify_task_b", verify_payment_wait(verify_url_b.clone()));
+
+        let response_a = verify_payment(&verify_url_a).await?;
+        let response_b = verify_payment(&verify_url_b).await?;
+
+        assert!(!response_a.settled);
+        assert!(!response_b.settled);
+
+        assert!(response_a.preimage.is_none());
+        assert!(response_b.preimage.is_none());
+
+        test_send(
+            &client_a,
+            &gw_send.addr,
+            &invoice_b.to_string(),
+            FinalSendOperationState::Success,
+        )
+        .await?;
+
+        test_send(
+            &client_b,
+            &gw_send.addr,
+            &invoice_a.to_string(),
+            FinalSendOperationState::Success,
+        )
+        .await?;
+
+        let response_a = verify_payment(&verify_url_a).await?;
+        let response_b = verify_payment(&verify_url_b).await?;
+
+        assert!(response_a.settled);
+        assert!(response_b.settled);
+
+        let payment_hash = response_a
+            .preimage
+            .expect("Payment A should be settled")
+            .consensus_hash::<sha256::Hash>();
+
+        assert_eq!(payment_hash, *invoice_a.payment_hash());
+
+        let payment_hash = response_b
+            .preimage
+            .expect("Payment B should be settled")
+            .consensus_hash::<sha256::Hash>();
+
+        assert_eq!(payment_hash, *invoice_b.payment_hash());
+
+        assert_eq!(verify_task_a.await??.preimage, response_a.preimage);
+        assert_eq!(verify_task_b.await??.preimage, response_b.preimage);
+    }
+
+    assert_eq!(receive_lnurl(&client_a).await?, 1);
+    assert_eq!(receive_lnurl(&client_a).await?, 2);
+    assert_eq!(receive_lnurl(&client_a).await?, 1);
+
+    assert_eq!(receive_lnurl(&client_b).await?, 3);
+    assert_eq!(receive_lnurl(&client_b).await?, 1);
+
+    Ok(())
+}
+
+async fn receive_lnurl(client: &Client) -> anyhow::Result<u64> {
+    cmd!(
+        client,
+        "module",
+        "lnv2",
+        "lnurl",
+        "receive",
+        "--batch-size",
+        "3"
+    )
+    .out_string()
+    .await
+    .map(|s| s.parse::<u64>().unwrap())
+}
+
+async fn generate_lnurl(
+    client: &Client,
+    recurringd_base_url: &str,
+    gw_ldk_addr: &str,
+) -> anyhow::Result<String> {
+    cmd!(
+        client,
+        "module",
+        "lnv2",
+        "lnurl",
+        "generate",
+        recurringd_base_url,
+        "--gateway",
+        gw_ldk_addr,
+    )
+    .out_json()
+    .await
+    .map(|s| s.as_str().unwrap().to_owned())
+}
+
+async fn verify_payment(verify_url: &str) -> anyhow::Result<VerifyResponse> {
+    let response = reqwest::get(verify_url)
+        .await?
+        .json::<VerifyResponse>()
+        .await?;
+
+    Ok(response)
+}
+
+async fn verify_payment_wait(verify_url: String) -> anyhow::Result<VerifyResponse> {
+    let response = reqwest::get(format!("{verify_url}?wait"))
+        .await?
+        .json::<VerifyResponse>()
+        .await?;
+
+    Ok(response)
+}
+
+#[derive(Deserialize, Clone)]
+struct LnUrlPayResponse {
+    callback: String,
+}
+
+#[derive(Deserialize, Clone)]
+struct LnUrlPayInvoiceResponse {
+    pr: Bolt11Invoice,
+    verify: String,
+}
+
+async fn fetch_invoice(lnurl: String, amount_msat: u64) -> anyhow::Result<(Bolt11Invoice, String)> {
+    let endpoint = LnUrl::from_str(&lnurl)?;
+
+    let response = reqwest::get(endpoint.url)
+        .await?
+        .json::<LnUrlPayResponse>()
+        .await?;
+
+    let callback_url = format!("{}?amount={}", response.callback, amount_msat);
+
+    let response = reqwest::get(callback_url)
+        .await?
+        .json::<LnUrlPayInvoiceResponse>()
+        .await?;
+
+    ensure!(
+        response.pr.amount_milli_satoshis() == Some(amount_msat),
+        "Invoice amount is not set"
+    );
+
+    Ok((response.pr, response.verify))
 }

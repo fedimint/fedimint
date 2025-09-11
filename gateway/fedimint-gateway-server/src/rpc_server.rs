@@ -1,11 +1,15 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::Request;
-use axum::http::{StatusCode, header};
+use anyhow::anyhow;
+use axum::body::Body;
+use axum::extract::{Path, Query, Request};
+use axum::http::{Response, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
+use bitcoin::hashes::sha256;
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact;
@@ -33,6 +37,7 @@ use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
+use fedimint_lnv2_common::lnurl::VerifyResponse;
 use fedimint_logging::LOG_GATEWAY;
 use hex::ToHex;
 use serde_json::json;
@@ -42,6 +47,32 @@ use tracing::{info, instrument, warn};
 
 use crate::Gateway;
 use crate::error::{AdminGatewayError, PublicGatewayError};
+
+/// LNURL-compliant error response for verify endpoints
+struct LnurlError {
+    code: StatusCode,
+    reason: anyhow::Error,
+}
+
+impl LnurlError {
+    fn internal(reason: anyhow::Error) -> Self {
+        Self {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            reason,
+        }
+    }
+}
+
+impl IntoResponse for LnurlError {
+    fn into_response(self) -> Response<Body> {
+        let json = Json(serde_json::json!({
+            "status": "ERROR",
+            "reason": self.reason.to_string(),
+        }));
+
+        (self.code, json).into_response()
+    }
+}
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
 pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
@@ -124,6 +155,7 @@ fn lnv2_routes() -> Router {
             CREATE_BOLT11_INVOICE_ENDPOINT,
             post(create_bolt11_invoice_v2),
         )
+        .route("/verify/{payment_hash}", get(verify_bolt11_preimage_v2_get))
 }
 
 /// Gateway Webserver Routes. The gateway supports three types of routes
@@ -411,6 +443,19 @@ async fn create_bolt11_invoice_v2(
 ) -> Result<impl IntoResponse, PublicGatewayError> {
     let invoice = gateway.create_bolt11_invoice_v2(payload).await?;
     Ok(Json(json!(invoice)))
+}
+
+async fn verify_bolt11_preimage_v2_get(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Path(payment_hash): Path<sha256::Hash>,
+    Query(query): Query<HashMap<String, String>>,
+) -> Result<Json<VerifyResponse>, LnurlError> {
+    let response = gateway
+        .verify_bolt11_preimage_v2(payment_hash, query.contains_key("wait"))
+        .await
+        .map_err(|e| LnurlError::internal(anyhow!(e)))?;
+
+    Ok(Json(response))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]

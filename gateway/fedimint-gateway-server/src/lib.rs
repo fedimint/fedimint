@@ -51,6 +51,7 @@ use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
+use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
@@ -83,7 +84,9 @@ use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
 use fedimint_gwv2_client::events::compute_lnv2_stats;
-use fedimint_gwv2_client::{EXPIRATION_DELTA_MINIMUM_V2, GatewayClientModuleV2, IGatewayClientV2};
+use fedimint_gwv2_client::{
+    EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, IGatewayClientV2,
+};
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
@@ -100,6 +103,7 @@ use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
     CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
 };
+use fedimint_lnv2_common::lnurl::VerifyResponse;
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
@@ -2331,6 +2335,55 @@ impl Gateway {
             LightningRpcError::FailedToGetInvoice {
                 failure_reason: e.to_string(),
             }
+        })
+    }
+
+    pub async fn verify_bolt11_preimage_v2(
+        &self,
+        payment_hash: sha256::Hash,
+        wait: bool,
+    ) -> std::result::Result<VerifyResponse, String> {
+        let registered_contract = self
+            .gateway_db
+            .begin_transaction_nc()
+            .await
+            .load_registered_incoming_contract(PaymentImage::Hash(payment_hash))
+            .await
+            .ok_or("Unknown payment hash".to_string())?;
+
+        let client = self
+            .select_client(registered_contract.federation_id)
+            .await
+            .map_err(|_| "Not connected to federation".to_string())?
+            .into_value();
+
+        let operation_id = OperationId::from_encodable(&registered_contract.contract);
+
+        if !(wait || client.operation_exists(operation_id).await) {
+            return Ok(VerifyResponse {
+                status: "OK".to_string(),
+                settled: false,
+                preimage: None,
+            });
+        }
+
+        let state = client
+            .get_first_module::<GatewayClientModuleV2>()
+            .expect("Must have client module")
+            .await_receive(operation_id)
+            .await;
+
+        let preimage = match state {
+            FinalReceiveState::Success(preimage) => Ok(preimage),
+            FinalReceiveState::Failure => Err("Payment has failed".to_string()),
+            FinalReceiveState::Refunded => Err("Payment has been refunded".to_string()),
+            FinalReceiveState::Rejected => Err("Payment has been rejected".to_string()),
+        }?;
+
+        Ok(VerifyResponse {
+            status: "OK".to_string(),
+            settled: true,
+            preimage: Some(preimage),
         })
     }
 

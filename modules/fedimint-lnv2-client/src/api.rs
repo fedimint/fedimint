@@ -9,9 +9,11 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_lnv2_common::ContractId;
+use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT,
+    AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT,
 };
 use rand::seq::SliceRandom;
 
@@ -26,6 +28,8 @@ pub trait LightningFederationApi {
     ) -> Option<OutPoint>;
 
     async fn await_preimage(&self, contract_id: OutPoint, expiration: u64) -> Option<[u8; 32]>;
+
+    async fn await_incoming_contracts(&self, start: u64, n: usize) -> (Vec<IncomingContract>, u64);
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>>;
 
@@ -65,6 +69,14 @@ where
         self.request_current_consensus_retry(
             AWAIT_PREIMAGE_ENDPOINT.to_string(),
             ApiRequestErased::new((outpoint, expiration)),
+        )
+        .await
+    }
+
+    async fn await_incoming_contracts(&self, start: u64, n: usize) -> (Vec<IncomingContract>, u64) {
+        self.request_current_consensus_retry(
+            AWAIT_INCOMING_CONTRACTS_ENDPOINT.to_string(),
+            ApiRequestErased::new((start, n)),
         )
         .await
     }

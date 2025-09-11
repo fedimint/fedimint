@@ -28,6 +28,8 @@ use tokio::net::TcpListener;
 use tower_http::cors;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, info};
+mod encrypt;
+mod v2;
 
 #[derive(Debug, Parser)]
 struct CliOpts {
@@ -43,6 +45,8 @@ struct CliOpts {
     bearer_token: String,
     #[clap(long, env = "FM_RECURRING_DATA_DIR")]
     data_dir: PathBuf,
+    #[clap(long, env = "FM_RECURRING_ENCRYPTION_KEY")]
+    encryption_key: Option<String>,
 }
 
 #[derive(Clone)]
@@ -58,7 +62,8 @@ async fn main() -> anyhow::Result<()> {
     let cli_opts = CliOpts::parse();
 
     let db = RocksDb::open(cli_opts.data_dir).await?;
-    let recurring_invoice_server = RecurringInvoiceServer::new(db, cli_opts.api_address).await?;
+    let recurring_invoice_server =
+        RecurringInvoiceServer::new(db, cli_opts.api_address.clone()).await?;
 
     let cors = CorsLayer::new()
         .allow_origin(cors::Any)
@@ -83,12 +88,16 @@ async fn main() -> anyhow::Result<()> {
         )
         .layer(cors);
 
-    let app = axum::Router::new()
+    let mut app = axum::Router::new()
         .nest("/lnv1", api_v1)
         .with_state(AppState {
             auth_token: cli_opts.bearer_token,
             recurring_invoice_server,
         });
+
+    if let Some(encryption_key) = cli_opts.encryption_key {
+        app = app.merge(v2::router(cli_opts.api_address, encryption_key));
+    }
 
     info!(api_address = %cli_opts.bind_address, "recurringd started");
     let listener = TcpListener::bind(&cli_opts.bind_address).await?;
