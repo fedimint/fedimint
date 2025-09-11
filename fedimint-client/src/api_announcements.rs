@@ -76,7 +76,7 @@ pub(crate) async fn refresh_api_announcement_sync(
                 some_success |= true
             }
             Err(e) => {
-                warn!(target: LOG_CLIENT, %peer_id, ?e, "Failed to process API announcements");
+                warn!(target: LOG_CLIENT, %peer_id, err = %e.fmt_compact_anyhow(), "Failed to process API announcements");
             }
         }
     }
