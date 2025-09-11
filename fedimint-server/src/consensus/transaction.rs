@@ -118,8 +118,7 @@ pub async fn process_transaction_with_dbtx(
     Ok(())
 }
 
-#[derive(Clone)]
-#[allow(clippy::struct_field_names)]
+#[derive(Clone, Debug)]
 pub struct FundingVerifier {
     inputs: Amounts,
     outputs: Amounts,
@@ -127,7 +126,10 @@ pub struct FundingVerifier {
 }
 
 impl FundingVerifier {
-    pub fn add_input(&mut self, input: TransactionItemAmounts) -> Result<(), TransactionError> {
+    pub fn add_input(
+        &mut self,
+        input: TransactionItemAmounts,
+    ) -> Result<&mut Self, TransactionError> {
         self.inputs
             .checked_add_mut(&input.amounts)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
@@ -135,13 +137,13 @@ impl FundingVerifier {
             .checked_add_mut(&input.fees)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
 
-        Ok(())
+        Ok(self)
     }
 
     pub fn add_output(
         &mut self,
         output_amounts: TransactionItemAmounts,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<&mut Self, TransactionError> {
         self.outputs
             .checked_add_mut(&output_amounts.amounts)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
@@ -149,7 +151,7 @@ impl FundingVerifier {
             .checked_add_mut(&output_amounts.fees)
             .ok_or(TRANSACTION_OVERFLOW_ERROR)?;
 
-        Ok(())
+        Ok(self)
     }
 
     pub fn verify_funding(mut self, version: CoreConsensusVersion) -> Result<(), TransactionError> {
@@ -203,3 +205,6 @@ impl Default for FundingVerifier {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
