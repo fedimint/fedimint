@@ -5,6 +5,7 @@ use crate::base32;
 use crate::encoding::{Decodable, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::util::SafeUrl;
+use bitcoin::Network;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]
 /// Connection information sent between peers in order to start config gen
@@ -15,6 +16,8 @@ pub struct PeerSetupCode {
     pub endpoints: PeerEndpoints,
     /// Federation name set by the leader
     pub federation_name: Option<String>,
+    /// Federation Network
+    pub network: Option<Network>,
 }
 
 impl PeerSetupCode {
