@@ -12,7 +12,7 @@ use clap::Subcommand;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{
-    FM_ENABLE_MINT_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set,
+    FM_DISABLE_MINT_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
@@ -2212,9 +2212,6 @@ pub enum TestCmd {
 }
 
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
-    // Always enable mint base fees in devimint for testing
-    unsafe { std::env::set_var(FM_ENABLE_MINT_BASE_FEES_ENV, "1") };
-
     match cmd {
         TestCmd::WasmTestSetup { exec } => {
             let (process_mgr, task_group) = setup(common_args).await?;
@@ -2277,8 +2274,8 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         }
         TestCmd::LoadTestToolTest => {
             // For the load test tool test, explicitly disable mint base fees
-            // (override the default set at function entry)
-            unsafe { std::env::set_var(FM_ENABLE_MINT_BASE_FEES_ENV, "0") };
+            unsafe { std::env::set_var(FM_DISABLE_MINT_BASE_FEES_ENV, "1") };
+
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_load_test_tool_test(dev_fed).await?;

@@ -18,8 +18,8 @@ pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 
 pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
 
-/// Enable mint base fees for testing and development environments
-pub const FM_ENABLE_MINT_BASE_FEES_ENV: &str = "FM_ENABLE_MINT_BASE_FEES";
+/// Disable mint base fees for testing and development environments
+pub const FM_DISABLE_MINT_BASE_FEES_ENV: &str = "FM_DISABLE_MINT_BASE_FEES";
 
 /// Print sensitive secrets without redacting them. Use only for debugging.
 pub const FM_DEBUG_SHOW_SECRETS_ENV: &str = "FM_DEBUG_SHOW_SECRETS";
