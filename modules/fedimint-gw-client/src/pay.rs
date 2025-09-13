@@ -375,13 +375,12 @@ impl GatewayPayInvoice {
         // LNv2 `IncomingContract`.
         let swap_parameters: anyhow::Result<SwapParameters> =
             payment_parameters.payment_data.clone().try_into();
-        if let Ok(swap_parameters) = swap_parameters {
-            if let Some(new_state) =
+        if let Ok(swap_parameters) = swap_parameters
+            && let Some(new_state) =
                 Self::buy_lnv2_preimage(&context, contract.clone(), swap_parameters, common.clone())
                     .await
-            {
-                return new_state;
-            }
+        {
+            return new_state;
         }
 
         match context
