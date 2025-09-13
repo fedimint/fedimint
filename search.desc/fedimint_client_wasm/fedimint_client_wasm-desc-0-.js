@@ -1,1 +1,0 @@
-searchState.loadedDescShard("fedimint_client_wasm", 0, "")

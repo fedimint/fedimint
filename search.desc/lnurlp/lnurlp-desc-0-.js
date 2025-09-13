@@ -1,1 +1,0 @@
-searchState.loadedDescShard("lnurlp", 0, "A tiny command line tool to fetch BOLT11 invoices from …\nThe amount in millisatoshis to request\nOptional comment to include with the payment\nReturns the argument unchanged.\nGet LN invoice with given settings\nCalls <code>U::from(self)</code>.\nThe LNURL to fetch the invoice from (can be LNURL or …")

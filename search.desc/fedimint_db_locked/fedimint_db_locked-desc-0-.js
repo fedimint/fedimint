@@ -1,1 +1,0 @@
-searchState.loadedDescShard("fedimint_db_locked", 0, "Locked version of database\nBuilder for <code>Locked</code>\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nCreate a <code>Self</code> by acquiring a lock file\nCreate <code>Locked</code> by giving it the database to wrap")

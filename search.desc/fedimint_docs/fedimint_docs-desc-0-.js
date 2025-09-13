@@ -1,1 +1,0 @@
-searchState.loadedDescShard("fedimint_docs", 0, "Fedimint Architecture\nModular Architecture")

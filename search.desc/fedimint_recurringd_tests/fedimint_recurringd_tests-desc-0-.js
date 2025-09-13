@@ -1,1 +1,0 @@
-searchState.loadedDescShard("fedimint_recurringd_tests", 0, "")
