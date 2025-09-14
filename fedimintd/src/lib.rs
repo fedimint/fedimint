@@ -21,7 +21,7 @@ use envs::FM_BITCOIND_URL_PASSWORD_FILE_ENV;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MINT_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV,
+    BitcoinRpcConfig, FM_DISABLE_MINT_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV,
     FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
@@ -453,11 +453,11 @@ pub fn default_modules(
             local: EmptyGenParams::default(),
             consensus: MintGenParamsConsensus::new(
                 2,
-                if is_env_var_set(FM_ENABLE_MINT_BASE_FEES_ENV) {
+                if is_env_var_set(FM_DISABLE_MINT_BASE_FEES_ENV) {
+                    fedimint_mint_common::config::FeeConsensus::zero()
+                } else {
                     fedimint_mint_common::config::FeeConsensus::new(0)
                         .expect("Relative fee is within range")
-                } else {
-                    fedimint_mint_common::config::FeeConsensus::zero()
                 },
             ),
         },
