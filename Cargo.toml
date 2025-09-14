@@ -382,6 +382,5 @@ debug = false
 opt-level = 1
 
 [profile.release]
-codegen-units = 4
 debug = "line-tables-only"
-lto = "fat"
+lto = "thin"
