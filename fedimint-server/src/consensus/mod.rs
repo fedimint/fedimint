@@ -182,6 +182,7 @@ pub async fn run(
 
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
+        cfg_dir: data_dir.clone(),
         db: db.clone(),
         modules: module_registry.clone(),
         client_cfg: client_cfg.clone(),
@@ -198,6 +199,7 @@ pub async fn run(
         bitcoin_rpc_connection: server_bitcoin_rpc_monitor,
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
+        task_group: task_group.clone(),
     };
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");

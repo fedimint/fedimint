@@ -90,6 +90,13 @@ impl ProcessHandle {
         inner.terminate().await?;
         Ok(())
     }
+
+    pub async fn await_terminated(&self) -> Result<()> {
+        let mut inner = self.0.lock().await;
+        inner.await_terminated().await?;
+        Ok(())
+    }
+
     pub async fn is_running(&self) -> bool {
         self.0.lock().await.child.is_some()
     }
@@ -136,6 +143,31 @@ impl ProcessHandleInner {
                 }
             }
         }
+        // only drop the child handle if succeeded to terminate
+        self.child.take();
+        Ok(())
+    }
+
+    async fn await_terminated(&mut self) -> anyhow::Result<()> {
+        match self
+            .child
+            .as_mut()
+            .expect("Process not running")
+            .wait()
+            .await
+        {
+            Ok(_status) => {
+                debug!(
+                    target: LOG_DEVIMINT,
+                    name=%self.name,
+                    "child process terminated"
+                );
+            }
+            Err(err) => {
+                bail!("Failed to wait for child process {}: {}", self.name, err);
+            }
+        }
+
         // only drop the child handle if succeeded to terminate
         self.child.take();
         Ok(())

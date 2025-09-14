@@ -536,6 +536,15 @@ impl Federation {
         Ok(())
     }
 
+    pub async fn await_server_terminated(&mut self, peer_id: usize) -> Result<()> {
+        let Some(fedimintd) = self.members.get_mut(&peer_id) else {
+            bail!("fedimintd-{peer_id} does not exist");
+        };
+        fedimintd.await_terminated().await?;
+        self.members.remove(&peer_id);
+        Ok(())
+    }
+
     /// Starts all peers not currently running.
     pub async fn start_all_servers(&mut self, process_mgr: &ProcessManager) -> Result<()> {
         info!("starting all servers");
@@ -890,6 +899,28 @@ impl Federation {
         .await
     }
 
+    pub async fn await_peer(&self, peer_id: usize) -> Result<()> {
+        poll("Waiting for all peers to be online", || async {
+            cmd!(
+                self.internal_client()
+                    .await
+                    .map_err(ControlFlow::Continue)?,
+                "dev",
+                "api",
+                "--peer-id",
+                peer_id,
+                "--module",
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                "block_count"
+            )
+            .run()
+            .await
+            .map_err(ControlFlow::Continue)?;
+            Ok(())
+        })
+        .await
+    }
+
     /// Mines enough blocks to finalize mempool transactions, then waits for
     /// federation to process finalized blocks.
     ///
@@ -954,6 +985,10 @@ impl Fedimintd {
 
     pub async fn terminate(self) -> Result<()> {
         self.process.terminate().await
+    }
+
+    pub async fn await_terminated(&self) -> Result<()> {
+        self.process.await_terminated().await
     }
 }
 

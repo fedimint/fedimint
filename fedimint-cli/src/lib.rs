@@ -409,6 +409,12 @@ enum AdminCmd {
     },
     /// Show statistics about client backups stored by the federation
     BackupStatistics,
+    /// Change guardian password, will shut down fedimintd and requrie manual
+    /// restart
+    ChangePassword {
+        /// New password to set
+        new_password: String,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -952,6 +958,18 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     serde_json::to_value(backup_statistics).expect("Can be encoded"),
                 ))
+            }
+            Command::Admin(AdminCmd::ChangePassword { new_password }) => {
+                let client = self.client_open(&cli).await?;
+
+                cli.admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .await?
+                    .change_password(cli.auth()?, &new_password)
+                    .await?;
+
+                warn!(target: LOG_CLIENT, "Password changed, please restart fedimintd manually");
+
+                Ok(CliOutput::Raw(json!(null)))
             }
             Command::Dev(DevCmd::Api {
                 method,

@@ -28,6 +28,7 @@ use fedimint_testing_core::node_type::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
 use tokio::net::TcpStream;
+use tokio::time::timeout;
 use tokio::{fs, try_join};
 use tracing::{debug, error, info};
 
@@ -2133,6 +2134,91 @@ async fn modify_single_peer_config(config_dir: &Path, peer_id: PeerId) -> Result
     Ok(())
 }
 
+pub async fn test_guardian_password_change(
+    dev_fed: DevFed,
+    process_mgr: &ProcessManager,
+) -> Result<()> {
+    log_binary_versions().await?;
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
+    if fedimint_cli_version < *VERSION_0_9_0_ALPHA {
+        info!(target: LOG_DEVIMINT, "Skipping the test - fedimint-cli too old");
+        return Ok(());
+    }
+
+    if fedimintd_version < *VERSION_0_9_0_ALPHA {
+        info!(target: LOG_DEVIMINT, "Skipping the test - fedimintd too old");
+        return Ok(());
+    }
+
+    let DevFed { mut fed, .. } = dev_fed;
+    fed.await_all_peers().await?;
+
+    let client = fed.new_joined_client("config-change-test-client").await?;
+
+    let data_dir: PathBuf = fed
+        .vars
+        .get(&2)
+        .expect("peer not found")
+        .FM_DATA_DIR
+        .clone();
+    let file_exists = |file: &str| {
+        let path = data_dir.join(file);
+        path.exists()
+    };
+    let pre_password_file_exists = file_exists("password.secret");
+
+    info!(target: LOG_DEVIMINT, "Changing password");
+    cmd!(
+        client,
+        "--our-id",
+        "2",
+        "--password",
+        "pass",
+        "admin",
+        "change-password",
+        "foobar"
+    )
+    .run()
+    .await
+    .context("Failed to change guardian password")?;
+
+    info!(target: LOG_DEVIMINT, "Waiting for fedimintd 2 to be shut down");
+    timeout(Duration::from_secs(30), fed.await_server_terminated(2))
+        .await
+        .context("Fedimintd didn't shut down in time after password change")??;
+
+    info!(target: LOG_DEVIMINT, "Restarting fedimintd 2");
+    fed.start_server(process_mgr, 2).await?;
+
+    info!(target: LOG_DEVIMINT, "Wait for fedimintd 2 to come online again");
+    fed.await_peer(2).await?;
+
+    info!(target: LOG_DEVIMINT, "Testing password change worked");
+    cmd!(
+        client,
+        "--our-id",
+        "2",
+        "--password",
+        "foobar",
+        "admin",
+        "backup-statistics"
+    )
+    .run()
+    .await
+    .context("Failed to run guardian command with new password")?;
+
+    assert!(!file_exists("private.bak"));
+    assert!(!file_exists("password.bak"));
+    assert!(!file_exists("private.new"));
+    assert!(!file_exists("password.new"));
+    assert_eq!(file_exists("password.secret"), pre_password_file_exists);
+
+    Ok(())
+}
+
 #[derive(Subcommand)]
 pub enum LatencyTest {
     Reissue,
@@ -2202,6 +2288,9 @@ pub enum TestCmd {
     /// Tests that client can detect federation config changes when servers
     /// restart with new module configurations
     TestClientConfigChangeDetection,
+    /// Tests that guardian password change works and the guardian can restart
+    /// afterwards
+    TestGuardianPasswordChange,
     /// Test upgrade paths for a given binary
     UpgradeTests {
         #[clap(subcommand)]
@@ -2317,6 +2406,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             test_client_config_change_detection(dev_fed, &process_mgr).await?;
+        }
+        TestCmd::TestGuardianPasswordChange => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            test_guardian_password_change(dev_fed, &process_mgr).await?;
         }
         TestCmd::UpgradeTests { binary, lnv2 } => {
             // TODO: Audit that the environment access only happens in single-threaded code.
