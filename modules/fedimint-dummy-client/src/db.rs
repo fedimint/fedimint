@@ -3,12 +3,13 @@ use std::io::Cursor;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::AmountUnit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{Amount, TransactionId, impl_db_record};
+use fedimint_core::{Amount, TransactionId, impl_db_lookup, impl_db_record};
 use strum_macros::EnumIter;
 use tracing::warn;
 
-use crate::states::DummyStateMachineV1;
+use crate::states::{DummyStateMachine, DummyStateMachineV1};
 
 #[repr(u8)]
 #[derive(Clone, Debug, EnumIter)]
@@ -50,6 +51,25 @@ impl_db_record!(
     key = DummyClientFundsKeyV1,
     value = Amount,
     db_prefix = DbKeyPrefix::ClientFunds,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct DummyClientFundsKey {
+    pub unit: AmountUnit,
+}
+
+impl_db_record!(
+    key = DummyClientFundsKey,
+    value = Amount,
+    db_prefix = DbKeyPrefix::ClientFunds,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct DummyClientFundsKeyV2PrefixAll;
+
+impl_db_lookup!(
+    key = DummyClientFundsKey,
+    query_prefix = DummyClientFundsKeyV2PrefixAll,
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
@@ -104,6 +124,44 @@ pub(crate) fn get_v1_migrated_state(
         unreachable.operation_id,
     );
     let bytes = new_state.consensus_encode_to_vec();
+    Ok(Some((bytes, operation_id)))
+}
+
+/// [`AmountUnit`] was added to the state
+pub(crate) fn get_v2_migrated_state(
+    operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
+) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+    let decoders = ModuleDecoderRegistry::default();
+    let dummy_sm_variant = u16::consensus_decode_partial(cursor, &decoders)?;
+
+    let _state_length = u16::consensus_decode_partial(cursor, &decoders)?;
+
+    match dummy_sm_variant {
+        0 | 1 | 3 => {}
+        _ => {
+            return Ok(None);
+        }
+    }
+
+    let (amount, txid, op_id) =
+        <(Amount, TransactionId, OperationId)>::consensus_decode_partial(cursor, &decoders)?;
+
+    // TODO: should this be the case? Does not seem like it.
+    // debug_assert_eq!(operation_id, op_id);
+
+    let bytes = match dummy_sm_variant {
+        0 => DummyStateMachine::Input(amount, AmountUnit::BITCOIN, txid, op_id)
+            .consensus_encode_to_vec(),
+        1 => DummyStateMachine::Output(amount, AmountUnit::BITCOIN, txid, op_id)
+            .consensus_encode_to_vec(),
+        3 => DummyStateMachine::OutputDone(amount, AmountUnit::BITCOIN, txid, op_id)
+            .consensus_encode_to_vec(),
+        _ => unreachable!(),
+    };
+
+    debug_assert!(DummyStateMachine::consensus_decode_whole(&bytes, &decoders).is_ok());
+
     Ok(Some((bytes, operation_id)))
 }
 

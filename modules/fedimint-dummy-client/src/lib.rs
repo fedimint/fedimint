@@ -10,7 +10,10 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, anyhow, bail, format_err};
 use common::broken_fed_key_pair;
-use db::{DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey, migrate_to_v1};
+use db::{
+    DbKeyPrefix, DummyClientFundsKey, DummyClientFundsKeyV1, DummyClientFundsKeyV2PrefixAll,
+    DummyClientNameKey, migrate_to_v1,
+};
 use fedimint_api_client::api::{FederationApiExt, SerdeOutputOutcome, deserialize_outcome};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -40,8 +43,8 @@ use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
-    DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, KIND,
-    fed_key_pair,
+    DummyCommonInit, DummyInput, DummyInputV1, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
+    DummyOutputV1, KIND, fed_key_pair,
 };
 use futures::{StreamExt, pin_mut};
 use states::DummyStateMachine;
@@ -127,7 +130,7 @@ impl ClientModule for DummyClientModule {
                 let missing_input_amount = output_amount.saturating_sub(input_amount);
 
                 // Check and subtract from our funds
-                let our_funds = get_funds(dbtx).await;
+                let our_funds = get_funds(dbtx, unit).await;
 
                 if our_funds < missing_input_amount {
                     return Err(format_err!("Insufficient funds"));
@@ -135,13 +138,16 @@ impl ClientModule for DummyClientModule {
 
                 let updated = our_funds.saturating_sub(missing_input_amount);
 
-                dbtx.insert_entry(&DummyClientFundsKeyV1, &updated).await;
+                dbtx.insert_entry(&DummyClientFundsKey { unit }, &updated)
+                    .await;
 
                 let input = ClientInput {
-                    input: DummyInput {
+                    input: DummyInputV1 {
                         amount: missing_input_amount,
+                        unit,
                         account: self.key.public_key(),
-                    },
+                    }
+                    .into(),
                     amounts: Amounts::new_bitcoin(missing_input_amount),
                     keys: vec![self.key],
                 };
@@ -149,6 +155,7 @@ impl ClientModule for DummyClientModule {
                     state_machines: Arc::new(move |out_point_range| {
                         vec![DummyStateMachine::Input(
                             missing_input_amount,
+                            unit,
                             out_point_range.txid(),
                             operation_id,
                         )]
@@ -167,10 +174,12 @@ impl ClientModule for DummyClientModule {
             Ordering::Greater => {
                 let missing_output_amount = input_amount.saturating_sub(output_amount);
                 let output = ClientOutput {
-                    output: DummyOutput {
+                    output: DummyOutputV1 {
                         amount: missing_output_amount,
+                        unit,
                         account: self.key.public_key(),
-                    },
+                    }
+                    .into(),
                     amounts: Amounts::new_bitcoin(missing_output_amount),
                 };
 
@@ -178,6 +187,7 @@ impl ClientModule for DummyClientModule {
                     state_machines: Arc::new(move |out_point_range| {
                         vec![DummyStateMachine::Output(
                             missing_output_amount,
+                            unit,
                             out_point_range.txid(),
                             operation_id,
                         )]
@@ -203,7 +213,7 @@ impl ClientModule for DummyClientModule {
             .await
             .filter_map(|state| async move {
                 match state {
-                    DummyStateMachine::OutputDone(_, txid, _) => {
+                    DummyStateMachine::OutputDone(_, _, txid, _) => {
                         if txid != out_point.txid {
                             return None;
                         }
@@ -225,7 +235,7 @@ impl ClientModule for DummyClientModule {
         if unit != AmountUnit::BITCOIN {
             return Amount::ZERO;
         }
-        get_funds(dbtc).await
+        get_funds(dbtc, unit).await
     }
 
     async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
@@ -238,7 +248,7 @@ impl ClientModule for DummyClientModule {
                 .subscribe_all_operations()
                 .filter_map(|state| async move {
                     match state {
-                        DummyStateMachine::OutputDone(_, _, _)
+                        DummyStateMachine::OutputDone(_, _, _, _)
                         | DummyStateMachine::Input { .. }
                         | DummyStateMachine::Refund(_) => Some(()),
                         _ => None,
@@ -252,17 +262,20 @@ impl DummyClientModule {
     pub async fn print_using_account(
         &self,
         amount: Amount,
+        unit: AmountUnit,
         account_kp: Keypair,
     ) -> anyhow::Result<(OperationId, OutPoint)> {
         let op_id = OperationId(rand::random());
 
         // TODO: Building a tx could be easier
         // Create input using the fed's account
-        let input = ClientInput {
-            input: DummyInput {
+        let input = ClientInput::<DummyInput> {
+            input: DummyInputV1 {
                 amount,
+                unit,
                 account: account_kp.public_key(),
-            },
+            }
+            .into(),
             amounts: Amounts::new_bitcoin(amount),
             keys: vec![account_kp],
         };
@@ -299,25 +312,36 @@ impl DummyClientModule {
 
     /// Request the federation prints money for us
     pub async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(amount, fed_key_pair()).await
+        self.print_using_account(amount, AmountUnit::BITCOIN, fed_key_pair())
+            .await
     }
 
     /// Use a broken printer to print a liability instead of money
     /// If the federation is honest, should always fail
     pub async fn print_liability(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(amount, broken_fed_key_pair())
+        self.print_using_account(amount, AmountUnit::BITCOIN, broken_fed_key_pair())
             .await
     }
 
     /// Send money to another user
-    pub async fn send_money(&self, account: PublicKey, amount: Amount) -> anyhow::Result<OutPoint> {
+    pub async fn send_money(
+        &self,
+        account: PublicKey,
+        amount: Amount,
+        unit: AmountUnit,
+    ) -> anyhow::Result<OutPoint> {
         self.db.ensure_isolated().expect("must be isolated");
 
         let op_id = OperationId(rand::random());
 
         // Create output using another account
-        let output = ClientOutput {
-            output: DummyOutput { amount, account },
+        let output = ClientOutput::<DummyOutput> {
+            output: DummyOutputV1 {
+                amount,
+                unit,
+                account,
+            }
+            .into(),
             amounts: Amounts::new_bitcoin(amount),
         };
 
@@ -365,7 +389,7 @@ impl DummyClientModule {
 
         let outcome = deserialize_outcome::<DummyOutputOutcome>(&outcome, &self.decoder())?;
 
-        if outcome.1 != self.key.public_key() {
+        if outcome.2 != self.key.public_key() {
             return Err(format_err!("Wrong account id"));
         }
 
@@ -374,7 +398,8 @@ impl DummyClientModule {
         // before the receive. The actual state machine is supposed to update the
         // balance, but `receive_money` is typically paired with `send_money`
         // which creates a state machine only on the sender's client.
-        dbtx.insert_entry(&DummyClientFundsKeyV1, &outcome.0).await;
+        dbtx.insert_entry(&DummyClientFundsKey { unit: outcome.1 }, &outcome.0)
+            .await;
         dbtx.commit_tx().await;
 
         Ok(())
@@ -386,13 +411,30 @@ impl DummyClientModule {
     }
 }
 
-async fn get_funds(dbtx: &mut DatabaseTransaction<'_>) -> Amount {
-    let funds = dbtx.get_value(&DummyClientFundsKeyV1).await;
+async fn get_funds(dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    let funds = dbtx.get_value(&DummyClientFundsKey { unit }).await;
     funds.unwrap_or(Amount::ZERO)
 }
 
 async fn get_funds_all(dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
-    Amounts::new_custom(AmountUnit::BITCOIN, get_funds(dbtx).await)
+    use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+
+    let funds_entries = dbtx
+        .find_by_prefix(&DummyClientFundsKeyV2PrefixAll)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut result = Amounts::ZERO;
+    for (key, amount) in funds_entries {
+        if amount > Amount::ZERO {
+            result = result
+                .checked_add_unit(amount, key.unit)
+                .expect("We can't overfolow here");
+        }
+    }
+
+    result
 }
 
 #[derive(Debug, Clone)]
@@ -470,6 +512,11 @@ impl ClientModuleInit for DummyClientInit {
             })
         });
 
+        migrations.insert(DatabaseVersion(2), |_, active_states, inactive_states| {
+            Box::pin(async {
+                migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
+            })
+        });
         migrations
     }
 }

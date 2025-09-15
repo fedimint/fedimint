@@ -1592,6 +1592,7 @@ fn decode_value<V: DatabaseValue>(
     V::from_bytes(value_bytes, decoders)
 }
 
+#[track_caller]
 fn decode_value_expect<V: DatabaseValue>(
     value_bytes: &[u8],
     decoders: &ModuleDecoderRegistry,
@@ -1608,6 +1609,7 @@ fn decode_value_expect<V: DatabaseValue>(
     })
 }
 
+#[track_caller]
 fn decode_key_expect<K: DatabaseKey>(key_bytes: &[u8], decoders: &ModuleDecoderRegistry) -> K {
     trace!(
         bytes = %AbbreviateHexBytes(key_bytes),

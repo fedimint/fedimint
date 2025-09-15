@@ -6,12 +6,14 @@ use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::module::{Amounts, ModuleConsensusVersion};
+use fedimint_core::module::{AmountUnit, Amounts, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Secp256k1;
 use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
-use fedimint_dummy_common::{DummyInput, DummyOutput, KIND, broken_fed_key_pair};
+use fedimint_dummy_common::{
+    DummyInput, DummyInputV1, DummyOutput, DummyOutputV1, KIND, broken_fed_key_pair,
+};
 use fedimint_dummy_server::DummyInit;
 use fedimint_testing::fixtures::Fixtures;
 
@@ -31,7 +33,11 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     assert_eq!(client1.get_balance_for_btc().await?, sats(1000));
 
     let outpoint = client1_dummy_module
-        .send_money(client2_dummy_module.account(), sats(250))
+        .send_money(
+            client2_dummy_module.account(),
+            sats(250),
+            AmountUnit::BITCOIN,
+        )
         .await?;
     client2_dummy_module.receive_money_hack(outpoint).await?;
     assert_eq!(client1.get_balance_for_btc().await?, sats(750));
@@ -86,11 +92,13 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
     let dummy = client.get_first_module::<DummyClientModule>()?;
     let op_id = OperationId(rand::random());
     let account_kp = broken_fed_key_pair();
-    let input = ClientInput {
-        input: DummyInput {
+    let input = ClientInput::<DummyInput> {
+        input: DummyInputV1 {
             amount: sats(1000),
+            unit: AmountUnit::BITCOIN,
             account: account_kp.public_key(),
-        },
+        }
+        .into(),
         amounts: Amounts::new_bitcoin_msats(1000),
         keys: vec![account_kp],
     };
@@ -121,12 +129,13 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let client = fed.new_client().await;
 
     let dummy_module = client.get_first_module::<DummyClientModule>()?;
-    let output = ClientOutput {
-        output: DummyOutput {
+    let output = ClientOutput::<DummyOutput> {
+        output: DummyOutputV1 {
             amount: sats(1000),
-
+            unit: AmountUnit::BITCOIN,
             account: dummy_module.account(),
-        },
+        }
+        .into(),
         amounts: Amounts::new_bitcoin(sats(1000)),
     };
     let tx = TransactionBuilder::new()
@@ -156,6 +165,7 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
+    use fedimint_core::module::AmountUnit;
     use fedimint_core::{Amount, BitcoinHash, OutPoint, TransactionId, secp256k1};
     use fedimint_dummy_client::db::{
         DummyClientFundsKeyV0, DummyClientFundsKeyV1, DummyClientNameKey,
@@ -199,7 +209,7 @@ mod fedimint_migration_tests {
         let txid = TransactionId::from_slice(&BYTE_32).unwrap();
         dbtx.insert_new_entry(
             &DummyOutcomeKey(OutPoint { txid, out_idx: 0 }),
-            &DummyOutputOutcome(Amount::from_sats(1000), pk),
+            &DummyOutputOutcome(Amount::from_sats(1000), AmountUnit::BITCOIN, pk),
         )
         .await;
 
@@ -366,7 +376,7 @@ mod fedimint_migration_tests {
             let mut input_count = 0;
             for active_state in active_states {
                 match active_state {
-                    DummyStateMachine::Input(_, _, _)  => {
+                    DummyStateMachine::Input(_, _, _, _)  => {
                         input_count += 1;
                     }
                     DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),
@@ -379,7 +389,7 @@ mod fedimint_migration_tests {
             let mut input_count = 0;
             for inactive_state in inactive_states {
                 match inactive_state {
-                    DummyStateMachine::Input( _, _, _) => {
+                    DummyStateMachine::Input(_, _, _, _) => {
                         input_count += 1;
                     }
                     DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),
