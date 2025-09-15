@@ -353,7 +353,7 @@ async fn migrate_db_v0(
         .await
         .filter_map(|history_item: ModuleHistoryItem<_>| async move {
             match history_item {
-                ModuleHistoryItem::Output(mint_output) => Some(
+                ModuleHistoryItem::Output(mint_output, _) => Some(
                     mint_output
                         .ensure_v0_ref()
                         .expect("This migration only runs while we only have v0 outputs")
