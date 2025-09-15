@@ -777,10 +777,19 @@ impl ClientModule for MintClientModule {
         self.await_output_finalized(operation_id, out_point).await
     }
 
-    async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amount {
+    async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+        if unit != AmountUnit::BITCOIN {
+            return Amount::ZERO;
+        }
         self.get_note_counts_by_denomination(dbtx)
             .await
             .total_amount()
+    }
+
+    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+        Amounts::new_bitcoin(
+            <Self as ClientModule>::get_balance(self, dbtx, AmountUnit::BITCOIN).await,
+        )
     }
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
@@ -836,9 +845,12 @@ impl ClientModule for MintClientModule {
     }
 
     async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
-        let balance = ClientModule::get_balance(self, dbtx).await;
-        if Amount::from_sats(0) < balance {
-            bail!("Outstanding balance: {balance}");
+        let balance = ClientModule::get_balances(self, dbtx).await;
+
+        for (unit, amount) in balance {
+            if Amount::from_units(0) < amount {
+                bail!("Outstanding balance: {amount}, unit: {unit:?}");
+            }
         }
 
         if !self.client_ctx.get_own_active_states().await.is_empty() {
@@ -846,6 +858,7 @@ impl ClientModule for MintClientModule {
         }
         Ok(())
     }
+
     async fn handle_rpc(
         &self,
         method: String,

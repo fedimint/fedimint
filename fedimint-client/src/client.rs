@@ -169,6 +169,12 @@ pub struct GetOperationIdRequest {
     operation_id: OperationId,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetBalanceChangesRequest {
+    #[serde(default)]
+    unit: AmountUnit,
+}
+
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
@@ -688,7 +694,7 @@ impl Client {
 
     /// Waits for an output from the primary module to reach its final
     /// state.
-    pub async fn await_primary_module_output(
+    pub async fn await_primary_bitcoin_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
@@ -759,13 +765,13 @@ impl Client {
 
     /// Waits for outputs from the primary module to reach its final
     /// state.
-    pub async fn await_primary_module_outputs(
+    pub async fn await_primary_bitcoin_module_outputs(
         &self,
         operation_id: OperationId,
         outputs: Vec<OutPoint>,
     ) -> anyhow::Result<()> {
         for out_point in outputs {
-            self.await_primary_module_output(operation_id, out_point)
+            self.await_primary_bitcoin_module_output(operation_id, out_point)
                 .await?;
         }
 
@@ -782,7 +788,7 @@ impl Client {
     }
 
     /// Balance available to the client for spending
-    pub async fn get_balance(&self) -> Amount {
+    pub async fn get_bitcoin_balance(&self) -> Amount {
         self.get_balance_for_unit(AmountUnit::BITCOIN).await
     }
 
@@ -791,16 +797,16 @@ impl Client {
             .primary_module_for_unit(unit)
             .expect("No primary module available");
         module
-            .get_balance(id, &mut self.db().begin_transaction_nc().await)
+            .get_balance(id, &mut self.db().begin_transaction_nc().await, unit)
             .await
     }
 
     /// Returns a stream that yields the current client balance every time it
     /// changes.
-    pub async fn subscribe_balance_changes(&self) -> BoxStream<'static, Amount> {
+    pub async fn subscribe_balance_changes(&self, unit: AmountUnit) -> BoxStream<'static, Amount> {
         let (primary_module_id, primary_module) = self.primary_module_for_bitcoin();
         let mut balance_changes = primary_module.subscribe_balance_changes().await;
-        let initial_balance = self.get_balance().await;
+        let initial_balance = self.get_bitcoin_balance().await;
         let db = self.db().clone();
         let primary_module = primary_module.clone();
         let primary_module_instance = primary_module_id;
@@ -811,7 +817,7 @@ impl Client {
             while let Some(()) = balance_changes.next().await {
                 let mut dbtx = db.begin_transaction_nc().await;
                 let balance = primary_module
-                    .get_balance(primary_module_instance, &mut dbtx)
+                    .get_balance(primary_module_instance, &mut dbtx, unit)
                     .await;
 
                 // Deduplicate in case modules cannot always tell if the balance actually changed
@@ -1450,11 +1456,12 @@ impl Client {
         Box::pin(try_stream! {
             match method.as_str() {
                 "get_balance" => {
-                    let balance = self.get_balance().await;
+                    let balance = self.get_bitcoin_balance().await;
                     yield serde_json::to_value(balance)?;
                 }
                 "subscribe_balance_changes" => {
-                    let mut stream = self.subscribe_balance_changes().await;
+                    let req: GetBalanceChangesRequest= serde_json::from_value(params)?;
+                    let mut stream = self.subscribe_balance_changes(req.unit).await;
                     while let Some(balance) = stream.next().await {
                         yield serde_json::to_value(balance)?;
                     }
@@ -1742,7 +1749,7 @@ impl ClientContextIface for Client {
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
     ) -> anyhow::Result<()> {
-        Client::await_primary_module_outputs(self, operation_id, outputs).await
+        Client::await_primary_bitcoin_module_outputs(self, operation_id, outputs).await
     }
 
     fn operation_log(&self) -> &dyn IOperationLog {

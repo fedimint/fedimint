@@ -246,7 +246,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
-            assert_eq!(user_client.get_balance().await, sats(1000));
+            assert_eq!(user_client.get_bitcoin_balance().await, sats(1000));
 
             // Create test invoice
             let invoice = other_lightning_client.invoice(sats(250), None)?;
@@ -259,8 +259,8 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             )
             .await?;
 
-            assert_eq!(user_client.get_balance().await, sats(1000 - 250));
-            assert_eq!(gateway_client.get_balance().await, sats(250));
+            assert_eq!(user_client.get_bitcoin_balance().await, sats(1000 - 250));
+            assert_eq!(gateway_client.get_bitcoin_balance().await, sats(250));
 
             Ok(())
         },
@@ -276,7 +276,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
-            assert_eq!(user_client.get_balance().await, sats(1000));
+            assert_eq!(user_client.get_bitcoin_balance().await, sats(1000));
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let gateway_id = gateway.gateway_id();
@@ -365,7 +365,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let dummy_module = user_client.get_first_module::<DummyClientModule>().unwrap();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
-            assert_eq!(user_client.get_balance().await, sats(1000));
+            assert_eq!(user_client.get_bitcoin_balance().await, sats(1000));
 
             // Fund outgoing contract that the user client expects the gateway to pay
             let invoice = other_lightning_client.invoice(sats(250), None)?;
@@ -427,7 +427,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                     .await
                     .is_err()
             );
-            assert_eq!(gateway_client.get_balance().await, sats(0));
+            assert_eq!(gateway_client.get_bitcoin_balance().await, sats(0));
             Ok::<_, anyhow::Error>(())
         },
     )
@@ -445,7 +445,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
-            assert_eq!(user_client.get_balance().await, sats(1000));
+            assert_eq!(user_client.get_bitcoin_balance().await, sats(1000));
 
             // Create invoice that cannot be paid
             let invoice = other_lightning_client.unpayable_invoice(sats(250), None);
@@ -506,7 +506,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
         dummy_module.receive_money(outpoint).await?;
-        assert_eq!(gateway_client.get_balance().await, sats(1000));
+        assert_eq!(gateway_client.get_bitcoin_balance().await, sats(1000));
 
         // User client creates invoice in federation
         let invoice_amount = sats(100);
@@ -549,7 +549,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         );
         assert_eq!(
             initial_gateway_balance.saturating_sub(invoice_amount),
-            gateway_client.get_balance().await
+            gateway_client.get_bitcoin_balance().await
         );
 
         Ok(())
@@ -566,7 +566,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
         let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
         dummy_module.receive_money(outpoint).await?;
-        assert_eq!(gateway_client.get_balance().await, sats(1000));
+        assert_eq!(gateway_client.get_bitcoin_balance().await, sats(1000));
 
         // Create HTLC that doesn't correspond to an offer in the federation
         let htlc = Htlc {
@@ -652,7 +652,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 .print_money(initial_gateway_balance)
                 .await?;
             gateway_dummy_module.receive_money(outpoint).await?;
-            assert_eq!(gateway_client.get_balance().await, sats(1000));
+            assert_eq!(gateway_client.get_bitcoin_balance().await, sats(1000));
 
             // Create test invoice
             let invoice = other_lightning_client.unpayable_invoice(sats(250), None);
@@ -744,7 +744,10 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                         gateway_dummy_module.receive_money(outpoint).await?;
                     }
 
-                    assert_eq!(initial_gateway_balance, gateway_client.get_balance().await);
+                    assert_eq!(
+                        initial_gateway_balance,
+                        gateway_client.get_bitcoin_balance().await
+                    );
                 }
                 unexpected_state => panic!(
                     "Gateway receive state machine entered unexpected state: {unexpected_state:?}"
@@ -775,7 +778,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(2000)).await?;
             dummy_module.receive_money(outpoint).await?;
-            assert_eq!(user_client.get_balance().await, sats(2000));
+            assert_eq!(user_client.get_bitcoin_balance().await, sats(2000));
 
             // User client pays test invoice
             let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
@@ -819,7 +822,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             }
 
             // Balance should be unchanged
-            assert_eq!(gateway_client.get_balance().await, sats(0));
+            assert_eq!(gateway_client.get_bitcoin_balance().await, sats(0));
 
             Ok(())
         },
@@ -871,7 +874,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = client1_dummy_module.print_money(deposit_amt).await?;
         client1_dummy_module.receive_money(outpoint).await?;
-        assert_eq!(client1.get_balance().await, deposit_amt);
+        assert_eq!(client1.get_bitcoin_balance().await, deposit_amt);
 
         // User creates invoice in federation 2
         let invoice_amt = msats(2_500);
@@ -907,12 +910,12 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds);
         let claimed = receive_sub.ok().await?;
         assert_matches!(claimed, LnReceiveState::Claimed);
-        assert_eq!(client2.get_balance().await, invoice_amt);
+        assert_eq!(client2.get_bitcoin_balance().await, invoice_amt);
 
         // Check gateway balances after facilitating direct swap between federations
-        let gateway_fed1_balance = gateway_client.get_balance().await;
+        let gateway_fed1_balance = gateway_client.get_bitcoin_balance().await;
         let gateway_fed2_client = gateway.select_client(id2).await?.into_value();
-        let gateway_fed2_balance = gateway_fed2_client.get_balance().await;
+        let gateway_fed2_balance = gateway_fed2_client.get_bitcoin_balance().await;
 
         // Balance in gateway of sending federation is deducted the invoice amount
         assert_eq!(
@@ -978,11 +981,14 @@ async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, m
         .expect("Could not print primary module liquidity");
 
     client
-        .await_primary_module_output(op, outpoints)
+        .await_primary_bitcoin_module_output(op, outpoints)
         .await
         .expect("Could not await primary module liquidity");
 
-    assert_eq!(client.get_balance().await, Amount::from_msats(msats));
+    assert_eq!(
+        client.get_bitcoin_balance().await,
+        Amount::from_msats(msats)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

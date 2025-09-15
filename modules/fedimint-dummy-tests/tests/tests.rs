@@ -28,14 +28,14 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
     let (_, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1_dummy_module.receive_money(outpoint).await?;
-    assert_eq!(client1.get_balance().await, sats(1000));
+    assert_eq!(client1.get_bitcoin_balance().await, sats(1000));
 
     let outpoint = client1_dummy_module
         .send_money(client2_dummy_module.account(), sats(250))
         .await?;
     client2_dummy_module.receive_money(outpoint).await?;
-    assert_eq!(client1.get_balance().await, sats(750));
-    assert_eq!(client2.get_balance().await, sats(250));
+    assert_eq!(client1.get_bitcoin_balance().await, sats(750));
+    assert_eq!(client2.get_bitcoin_balance().await, sats(250));
     Ok(())
 }
 
@@ -124,6 +124,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let output = ClientOutput {
         output: DummyOutput {
             amount: sats(1000),
+
             account: dummy_module.account(),
         },
         amounts: Amounts::new_bitcoin(sats(1000)),
@@ -365,7 +366,7 @@ mod fedimint_migration_tests {
             let mut input_count = 0;
             for active_state in active_states {
                 match active_state {
-                    DummyStateMachine::Input(_, _, _) => {
+                    DummyStateMachine::Input(_, _, _)  => {
                         input_count += 1;
                     }
                     DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),
@@ -378,7 +379,7 @@ mod fedimint_migration_tests {
             let mut input_count = 0;
             for inactive_state in inactive_states {
                 match inactive_state {
-                    DummyStateMachine::Input(_, _, _) => {
+                    DummyStateMachine::Input( _, _, _) => {
                         input_count += 1;
                     }
                     DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),

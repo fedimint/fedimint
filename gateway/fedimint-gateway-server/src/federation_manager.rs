@@ -210,7 +210,7 @@ impl FederationManager {
             .expect("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.")
             .borrow()
             .with(|client| async move {
-                let balance_msat = client.get_balance().await;
+                let balance_msat = client.get_bitcoin_balance().await;
 
                 let config = dbtx.load_federation_config(federation_id).await.ok_or(FederationNotConnected {
                     federation_id_prefix: federation_id.to_prefix(),
@@ -238,7 +238,10 @@ impl FederationManager {
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {
-            let balance_msat = client.borrow().with(|client| client.get_balance()).await;
+            let balance_msat = client
+                .borrow()
+                .with(|client| client.get_bitcoin_balance())
+                .await;
 
             let config = dbtx.load_federation_config(*federation_id).await;
             if let Some(config) = config {

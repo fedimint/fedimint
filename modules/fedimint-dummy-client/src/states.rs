@@ -12,6 +12,17 @@ use crate::{DummyClientContext, get_funds};
 
 /// Tracks a transaction
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum DummyStateMachineV1 {
+    Input(Amount, TransactionId, OperationId),
+    Output(Amount, TransactionId, OperationId),
+    InputDone(OperationId),
+    OutputDone(Amount, TransactionId, OperationId),
+    Refund(OperationId),
+    Unreachable(OperationId, Amount),
+}
+
+/// Tracks a transaction
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum DummyStateMachine {
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),

@@ -8,7 +8,7 @@ use fedimint_core::{Amount, TransactionId, impl_db_record};
 use strum_macros::EnumIter;
 use tracing::warn;
 
-use crate::states::DummyStateMachine;
+use crate::states::DummyStateMachineV1;
 
 #[repr(u8)]
 #[derive(Clone, Debug, EnumIter)]
@@ -98,7 +98,7 @@ pub(crate) fn get_v1_migrated_state(
 
     // Migrate `Unreachable` states to `OutputDone`
     let unreachable = Unreachable::consensus_decode_partial(cursor, &decoders)?;
-    let new_state = DummyStateMachine::OutputDone(
+    let new_state = DummyStateMachineV1::OutputDone(
         unreachable.amount,
         unreachable.txid,
         unreachable.operation_id,

@@ -892,7 +892,13 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Returns the balance held by this module and available for funding
     /// transactions.
-    async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>) -> Amount {
+    async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>, _unit: AmountUnit) -> Amount {
+        unimplemented!()
+    }
+
+    /// Returns the balance held by this module and available for funding
+    /// transactions.
+    async fn get_balances(&self, _dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
         unimplemented!()
     }
 
@@ -1013,6 +1019,7 @@ pub trait IClientModule: Debug {
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
+        unit: AmountUnit,
     ) -> Amount;
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
@@ -1132,10 +1139,12 @@ where
         &self,
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
+        unit: AmountUnit,
     ) -> Amount {
         <T as ClientModule>::get_balance(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
+            unit,
         )
         .await
     }
