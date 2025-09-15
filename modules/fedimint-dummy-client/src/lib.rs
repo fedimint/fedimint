@@ -8,7 +8,7 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use anyhow::{Context as _, anyhow, format_err};
+use anyhow::{Context as _, anyhow, bail, format_err};
 use common::broken_fed_key_pair;
 use db::{DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey, migrate_to_v1};
 use fedimint_api_client::api::{FederationApiExt, SerdeOutputOutcome, deserialize_outcome};
@@ -109,6 +109,7 @@ impl ClientModule for DummyClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
     ) -> anyhow::Result<(
@@ -116,6 +117,10 @@ impl ClientModule for DummyClientModule {
         ClientOutputBundle<DummyOutput, DummyStateMachine>,
     )> {
         dbtx.ensure_isolated().expect("must be isolated");
+
+        if unit != AmountUnit::BITCOIN {
+            bail!("Module can only handle Bitcoin");
+        }
 
         match input_amount.cmp(&output_amount) {
             Ordering::Less => {

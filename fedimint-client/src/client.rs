@@ -465,6 +465,7 @@ impl Client {
                     module_id,
                     dbtx,
                     operation_id,
+                    *unit,
                     input_amount,
                     output_amount,
                 )

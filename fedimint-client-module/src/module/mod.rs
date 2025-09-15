@@ -868,6 +868,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
         _operation_id: OperationId,
+        _unit: AmountUnit,
         _input_amount: Amount,
         _output_amount: Amount,
     ) -> anyhow::Result<(
@@ -997,6 +998,7 @@ pub trait IClientModule: Debug {
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
     ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)>;
@@ -1097,6 +1099,7 @@ where
         module_instance: ModuleInstanceId,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
     ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)> {
@@ -1104,6 +1107,7 @@ where
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
             operation_id,
+            unit,
             input_amount,
             output_amount,
         )
