@@ -770,6 +770,12 @@ macro_rules! extensible_associated_module_type {
             }
         }
 
+        impl std::convert::From<$name_v0> for $name {
+            fn from(v: $name_v0) -> Self {
+                Self::V0(v)
+            }
+        }
+
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 use $crate::bitcoin::hashes::hex::DisplayHex;

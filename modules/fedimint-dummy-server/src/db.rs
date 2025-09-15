@@ -1,7 +1,10 @@
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::AmountUnit;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::{Amount, OutPoint, impl_db_lookup, impl_db_record};
+use fedimint_dummy_common::DummyOutputOutcomeV0;
 use fedimint_server_core::migration::ServerModuleDbMigrationFnContext;
 use futures::StreamExt;
 use serde::Serialize;
@@ -72,6 +75,35 @@ pub async fn migrate_to_v1(
     for (v0_key, _v0_val) in v0_entries {
         let v1_key = DummyFundsKeyV1(v0_key.0);
         dbtx.insert_new_entry(&v1_key, &Amount::ZERO).await;
+    }
+    Ok(())
+}
+
+pub async fn migrate_to_v2(
+    mut ctx: ServerModuleDbMigrationFnContext<'_, Dummy>,
+) -> Result<(), anyhow::Error> {
+    const OUTCOME_RAW_KEY_PREFIX: [u8; 1] = [DbKeyPrefix::Outcome as u8];
+
+    let mut dbtx = ctx.dbtx();
+
+    // Select old entries
+    let raw_entries = dbtx
+        .raw_find_by_prefix(&OUTCOME_RAW_KEY_PREFIX)
+        .await?
+        .collect::<Vec<(Vec<u8>, Vec<u8>)>>()
+        .await;
+
+    // Remove old entries
+    dbtx.raw_remove_by_prefix(&OUTCOME_RAW_KEY_PREFIX).await?;
+
+    // Migrate to new entries
+    for (key, val) in raw_entries {
+        let old = DummyOutputOutcomeV0::consensus_decode_whole(&val, &ModuleRegistry::default())?;
+        dbtx.raw_insert_bytes(
+            &key,
+            &DummyOutputOutcome(old.0, AmountUnit::BITCOIN, old.1).consensus_encode_to_vec(),
+        )
+        .await?;
     }
     Ok(())
 }
