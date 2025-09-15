@@ -38,7 +38,7 @@ fn fixtures() -> Fixtures {
         MintGenParams {
             consensus: MintGenParamsConsensus::new(
                 2,
-                FeeConsensus::new(1_000).expect("Relative fee is within range"),
+                Some(FeeConsensus::new(1_000).expect("Relative fee is within range")),
             ),
 
             local: EmptyGenParams {},

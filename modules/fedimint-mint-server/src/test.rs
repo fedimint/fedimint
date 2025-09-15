@@ -25,10 +25,11 @@ fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
             local: EmptyGenParams::default(),
             consensus: MintGenParamsConsensus::new(
                 2,
-                FeeConsensus::new(1000).expect("Relative fee is within range"),
+                Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
             ),
         })
         .unwrap(),
+        false,
     );
     let client_cfg = ClientModuleConfig::from_typed(
         0,

@@ -51,6 +51,7 @@ pub fn local_config_gen_params(
                     cert: tls_keys[peer].0.as_ref().to_vec(),
                 },
                 federation_name: None,
+                disable_base_fees: None,
             };
             (*peer, params)
         })
@@ -67,6 +68,7 @@ pub fn local_config_gen_params(
                 iroh_p2p_sk: None,
                 peers: connections.clone(),
                 meta: BTreeMap::new(),
+                disable_base_fees: false,
             };
             Ok((*peer, params))
         })

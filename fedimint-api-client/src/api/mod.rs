@@ -504,6 +504,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         name: String,
         federation_name: Option<String>,
+        disable_base_fees: Option<bool>,
         auth: ApiAuth,
     ) -> FederationResult<String>;
 

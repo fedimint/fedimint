@@ -313,6 +313,7 @@ impl ServerModuleInit for WalletInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        _disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let secp = bitcoin::secp256k1::Secp256k1::new();
@@ -351,6 +352,7 @@ impl ServerModuleInit for WalletInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        _disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();

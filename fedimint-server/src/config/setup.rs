@@ -16,7 +16,8 @@ use fedimint_core::endpoint_constants::{
     SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT, START_DKG_ENDPOINT,
 };
 use fedimint_core::envs::{
-    FM_IROH_API_SECRET_KEY_OVERRIDE_ENV, FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV,
+    FM_DISABLE_BASE_FEES_ENV, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV,
+    FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, is_env_var_set,
 };
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
@@ -62,6 +63,8 @@ pub struct LocalParams {
     name: String,
     /// Federation name set by the leader
     federation_name: Option<String>,
+    /// Whether to disable base fees, set by the leader
+    disable_base_fees: Option<bool>,
 }
 
 impl LocalParams {
@@ -70,6 +73,7 @@ impl LocalParams {
             name: self.name.clone(),
             endpoints: self.endpoints.clone(),
             federation_name: self.federation_name.clone(),
+            disable_base_fees: self.disable_base_fees,
         }
     }
 }
@@ -145,11 +149,13 @@ impl ISetupApi for SetupApi {
         auth: ApiAuth,
         name: String,
         federation_name: Option<String>,
+        disable_base_fees: Option<bool>,
     ) -> anyhow::Result<String> {
         if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
             && existing_local_parameters.auth == auth
             && existing_local_parameters.name == name
             && existing_local_parameters.federation_name == federation_name
+            && existing_local_parameters.disable_base_fees == disable_base_fees
         {
             return Ok(existing_local_parameters.setup_code().encode_base32());
         }
@@ -202,6 +208,7 @@ impl ISetupApi for SetupApi {
                 },
                 name,
                 federation_name,
+                disable_base_fees,
             }
         } else {
             let (tls_cert, tls_key) =
@@ -228,6 +235,7 @@ impl ISetupApi for SetupApi {
                 },
                 name,
                 federation_name,
+                disable_base_fees,
             }
         };
 
@@ -272,6 +280,18 @@ impl ISetupApi for SetupApi {
             );
         }
 
+        if let Some(disable_base_fees) = state
+            .setup_codes
+            .iter()
+            .chain(once(&local_params.setup_code()))
+            .find_map(|info| info.disable_base_fees)
+        {
+            ensure!(
+                info.disable_base_fees.is_none(),
+                "Base fees setting has already been configured to disabled={disable_base_fees}"
+            );
+        }
+
         state.setup_codes.insert(info.clone());
 
         Ok(info.name)
@@ -300,6 +320,12 @@ impl ISetupApi for SetupApi {
             .find_map(|info| info.federation_name.clone())
             .context("We need one guardian to configure the federations name")?;
 
+        let disable_base_fees = state
+            .setup_codes
+            .iter()
+            .find_map(|info| info.disable_base_fees)
+            .unwrap_or(is_env_var_set(FM_DISABLE_BASE_FEES_ENV));
+
         let our_id = state
             .setup_codes
             .iter()
@@ -320,6 +346,7 @@ impl ISetupApi for SetupApi {
                 META_FEDERATION_NAME_KEY.to_string(),
                 federation_name,
             )]),
+            disable_base_fees,
         };
 
         self.sender
@@ -374,7 +401,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                 config.set_local_parameters(auth, request.name, request.federation_name)
+                 config.set_local_parameters(auth, request.name, request.federation_name, request.disable_base_fees)
                     .await
                     .map_err(|e| ApiError::bad_request(e.to_string()))
             }

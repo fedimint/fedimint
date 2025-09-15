@@ -28,6 +28,8 @@ pub(crate) struct SetupInput {
     #[serde(default)]
     pub is_lead: bool,
     pub federation_name: String,
+    #[serde(default)]
+    pub disable_base_fees: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -102,6 +104,18 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
 
                     div class="toggle-content mt-3" {
                         input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
+
+                        div class="form-check mt-3" {
+                            input type="checkbox" class="form-check-input" id="disable_base_fees" name="disable_base_fees" value="true";
+                            label class="form-check-label" for="disable_base_fees" {
+                                "Disable base fees for this federation"
+                            }
+                        }
+
+                        div class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
+                            strong { "Warning: " }
+                            "The base fee accounts for the cost a user's transaction incurs onto the federation when it's stored on disk indefinitely - it amounts to 1-3 sats per transaction and is independent of the economic value transferred. We strongly recommend against disabling the base fee - this cannot be changed once the federation is running."
+                        }
                     }
                 }
             }
@@ -127,9 +141,21 @@ async fn setup_submit(
         None
     };
 
+    // Only use disable_base_fees if is_lead is true
+    let disable_base_fees = if input.is_lead {
+        Some(input.disable_base_fees)
+    } else {
+        None
+    };
+
     match state
         .api
-        .set_local_parameters(ApiAuth(input.password), input.name, federation_name)
+        .set_local_parameters(
+            ApiAuth(input.password),
+            input.name,
+            federation_name,
+            disable_base_fees,
+        )
         .await
     {
         Ok(_) => Redirect::to(LOGIN_ROUTE).into_response(),

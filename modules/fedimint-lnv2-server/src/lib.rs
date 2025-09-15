@@ -31,8 +31,8 @@ use fedimint_core::{
     push_db_pair_items,
 };
 use fedimint_lnv2_common::config::{
-    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigPrivate,
-    LightningGenParams,
+    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
+    LightningConfigPrivate, LightningGenParams,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -240,6 +240,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self
             .parse_params(params)
@@ -257,7 +258,13 @@ impl ServerModuleInit for LightningInit {
                     consensus: LightningConfigConsensus {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
-                        fee_consensus: params.consensus.fee_consensus.clone(),
+                        fee_consensus: params.consensus.fee_consensus.clone().unwrap_or(
+                            if disable_base_fees {
+                                FeeConsensus::zero()
+                            } else {
+                                FeeConsensus::new(0).expect("Relative fee is within range")
+                            },
+                        ),
                         network: params.consensus.network,
                     },
                     private: LightningConfigPrivate {
@@ -274,6 +281,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let (polynomial, sks) = peers.run_dkg_g1().await?;
@@ -286,7 +294,13 @@ impl ServerModuleInit for LightningInit {
                     .peer_ids()
                     .map(|peer| (peer, PublicKeyShare(eval_poly_g1(&polynomial, &peer))))
                     .collect(),
-                fee_consensus: params.consensus.fee_consensus.clone(),
+                fee_consensus: params.consensus.fee_consensus.clone().unwrap_or(
+                    if disable_base_fees {
+                        FeeConsensus::zero()
+                    } else {
+                        FeeConsensus::new(0).expect("Relative fee is within range")
+                    },
+                ),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
