@@ -714,6 +714,7 @@ impl ClientModule for MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        unit: AmountUnit,
         mut input_amount: Amount,
         mut output_amount: Amount,
     ) -> anyhow::Result<(
@@ -721,6 +722,10 @@ impl ClientModule for MintClientModule {
         ClientOutputBundle<MintOutput, MintClientStateMachines>,
     )> {
         let consolidation_inputs = self.consolidate_notes(dbtx).await?;
+
+        if unit != AmountUnit::BITCOIN {
+            bail!("Module can only handle Bitcoin");
+        }
 
         input_amount += consolidation_inputs
             .iter()
