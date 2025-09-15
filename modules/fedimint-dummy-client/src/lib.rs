@@ -221,8 +221,15 @@ impl ClientModule for DummyClientModule {
         stream.next_or_pending().await
     }
 
-    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>) -> Amount {
+    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+        if unit != AmountUnit::BITCOIN {
+            return Amount::ZERO;
+        }
         get_funds(dbtc).await
+    }
+
+    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+        get_funds_all(dbtx).await
     }
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
@@ -382,6 +389,10 @@ impl DummyClientModule {
 async fn get_funds(dbtx: &mut DatabaseTransaction<'_>) -> Amount {
     let funds = dbtx.get_value(&DummyClientFundsKeyV1).await;
     funds.unwrap_or(Amount::ZERO)
+}
+
+async fn get_funds_all(dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    Amounts::new_custom(AmountUnit::BITCOIN, get_funds(dbtx).await)
 }
 
 #[derive(Debug, Clone)]

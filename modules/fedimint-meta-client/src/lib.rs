@@ -29,7 +29,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::util::backoff_util::FibonacciBackoff;
 use fedimint_core::util::{backoff_util, retry};
-use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_MODULE_META;
 pub use fedimint_meta_common as common;
 use fedimint_meta_common::{DEFAULT_META_KEY, MetaCommonInit, MetaModuleTypes};
@@ -137,10 +137,6 @@ impl ClientModule for MetaClientModule {
         _output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts> {
         unreachable!()
-    }
-
-    async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>) -> Amount {
-        Amount::ZERO
     }
 
     #[cfg(feature = "cli")]

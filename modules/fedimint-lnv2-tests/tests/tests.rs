@@ -51,7 +51,9 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
         .print_money(sats(10_000))
         .await?;
 
-    client.await_primary_module_output(op, outpoint).await?;
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let gateway_api = mock::gateway();
     let invoice = mock::payable_invoice();
@@ -105,7 +107,9 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
         .print_money(sats(10_000))
         .await?;
 
-    client.await_primary_module_output(op, outpoint).await?;
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
@@ -142,7 +146,9 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
         .print_money(sats(10_000))
         .await?;
 
-    client.await_primary_module_output(op, outpoint).await?;
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
@@ -178,7 +184,9 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
         .print_money(sats(10_000))
         .await?;
 
-    client.await_primary_module_output(op, outpoint).await?;
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?

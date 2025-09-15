@@ -59,7 +59,21 @@ pub struct InputMeta {
 }
 
 /// Unit of account for a given amount.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Deserialize,
+    Serialize,
+    Encodable,
+    Decodable,
+    Default,
+)]
 pub struct AmountUnit(u64);
 
 impl AmountUnit {
@@ -74,6 +88,10 @@ impl AmountUnit {
 
     pub fn new_custom(unit: u64) -> Self {
         Self(unit)
+    }
+
+    pub const fn bitcoin() -> Self {
+        Self::BITCOIN
     }
 }
 
@@ -144,16 +162,9 @@ impl Amounts {
 
         Some(self)
     }
-    pub fn checked_add_bitcoin(mut self, amount: Amount) -> Option<Self> {
-        if amount == Amount::ZERO {
-            return Some(self);
-        }
 
-        let prev = self.0.entry(AmountUnit::BITCOIN).or_default();
-
-        *prev = prev.checked_add(amount)?;
-
-        Some(self)
+    pub fn checked_add_bitcoin(self, amount: Amount) -> Option<Self> {
+        self.checked_add_unit(amount, AmountUnit::BITCOIN)
     }
 
     pub fn checked_add_unit(mut self, amount: Amount, unit: AmountUnit) -> Option<Self> {

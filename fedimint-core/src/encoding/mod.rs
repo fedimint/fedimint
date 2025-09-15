@@ -385,6 +385,8 @@ macro_rules! impl_encode_decode_tuple {
 impl_encode_decode_tuple!(T1, T2);
 impl_encode_decode_tuple!(T1, T2, T3);
 impl_encode_decode_tuple!(T1, T2, T3, T4);
+impl_encode_decode_tuple!(T1, T2, T3, T4, T5);
+impl_encode_decode_tuple!(T1, T2, T3, T4, T5, T6);
 
 impl<T> Encodable for Option<T>
 where

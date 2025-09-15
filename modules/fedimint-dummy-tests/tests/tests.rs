@@ -124,6 +124,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let output = ClientOutput {
         output: DummyOutput {
             amount: sats(1000),
+
             account: dummy_module.account(),
         },
         amounts: Amounts::new_bitcoin(sats(1000)),
@@ -365,7 +366,7 @@ mod fedimint_migration_tests {
             let mut input_count = 0;
             for active_state in active_states {
                 match active_state {
-                    DummyStateMachine::Input(_, _, _) => {
+                    DummyStateMachine::Input(_, _, _)  => {
                         input_count += 1;
                     }
                     DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),
@@ -378,7 +379,7 @@ mod fedimint_migration_tests {
             let mut input_count = 0;
             for inactive_state in inactive_states {
                 match inactive_state {
-                    DummyStateMachine::Input(_, _, _) => {
+                    DummyStateMachine::Input( _, _, _) => {
                         input_count += 1;
                     }
                     DummyStateMachine::Unreachable(_, _) => panic!("State machine migration failed, active states still contain Unreachable state"),

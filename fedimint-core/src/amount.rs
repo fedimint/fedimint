@@ -38,6 +38,7 @@ pub fn sats(amount: u64) -> Amount {
 )]
 #[serde(transparent)]
 pub struct Amount {
+    // TODO: rename to `units`, with backward compat for the serialization?
     pub msats: u64,
 }
 
@@ -47,6 +48,10 @@ impl Amount {
     /// Create an amount from a number of millisatoshis.
     pub const fn from_msats(msats: u64) -> Self {
         Self { msats }
+    }
+
+    pub const fn from_units(units: u64) -> Self {
+        Self { msats: units }
     }
 
     /// Create an amount from a number of satoshis.

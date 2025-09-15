@@ -980,7 +980,7 @@ async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, m
         .expect("Could not print primary module liquidity");
 
     client
-        .await_primary_module_output(op, outpoints)
+        .await_primary_bitcoin_module_output(op, outpoints)
         .await
         .expect("Could not await primary module liquidity");
 

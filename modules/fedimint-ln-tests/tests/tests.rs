@@ -94,7 +94,9 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let extra_meta = "internal payment with no gateway registered".to_string();
     let desc = Description::new("with-markers".to_string())?;
@@ -156,7 +158,9 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -289,7 +293,9 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 
     // Print money for client
     let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
-    client.await_primary_module_output(op, outpoint).await?;
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
@@ -356,7 +362,9 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -459,7 +467,9 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -587,7 +597,9 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // generate a new keypair
     let keypair = Keypair::new_global(&mut OsRng);

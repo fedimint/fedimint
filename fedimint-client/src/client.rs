@@ -172,6 +172,12 @@ pub struct GetOperationIdRequest {
     operation_id: OperationId,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetBalanceChangesRequest {
+    #[serde(default = "AmountUnit::bitcoin")]
+    unit: AmountUnit,
+}
+
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
@@ -686,7 +692,7 @@ impl Client {
 
     /// Waits for an output from the primary module to reach its final
     /// state.
-    pub async fn await_primary_module_output(
+    pub async fn await_primary_bitcoin_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
@@ -757,13 +763,13 @@ impl Client {
 
     /// Waits for outputs from the primary module to reach its final
     /// state.
-    pub async fn await_primary_module_outputs(
+    pub async fn await_primary_bitcoin_module_outputs(
         &self,
         operation_id: OperationId,
         outputs: Vec<OutPoint>,
     ) -> anyhow::Result<()> {
         for out_point in outputs {
-            self.await_primary_module_output(operation_id, out_point)
+            self.await_primary_bitcoin_module_output(operation_id, out_point)
                 .await?;
         }
 
@@ -793,7 +799,7 @@ impl Client {
             .primary_module_for_unit(unit)
             .ok_or_else(|| anyhow!("Primary module not available"))?;
         Ok(module
-            .get_balance(id, &mut self.db().begin_transaction_nc().await)
+            .get_balance(id, &mut self.db().begin_transaction_nc().await, unit)
             .await)
     }
 
@@ -832,7 +838,7 @@ impl Client {
             while let Some(()) = balance_changes.next().await {
                 let mut dbtx = db.begin_transaction_nc().await;
                 let balance = primary_module
-                    .get_balance(primary_module_id, &mut dbtx)
+                     .get_balance(primary_module_id, &mut dbtx, unit)
                     .await;
 
                 // Deduplicate in case modules cannot always tell if the balance actually changed
@@ -1674,7 +1680,8 @@ impl Client {
                     yield serde_json::to_value(balance)?;
                 }
                 "subscribe_balance_changes" => {
-                    let mut stream = self.subscribe_balance_changes(AmountUnit::BITCOIN).await;
+                    let req: GetBalanceChangesRequest= serde_json::from_value(params)?;
+                    let mut stream = self.subscribe_balance_changes(req.unit).await;
                     while let Some(balance) = stream.next().await {
                         yield serde_json::to_value(balance)?;
                     }
@@ -1979,7 +1986,7 @@ impl ClientContextIface for Client {
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
     ) -> anyhow::Result<()> {
-        Client::await_primary_module_outputs(self, operation_id, outputs).await
+        Client::await_primary_bitcoin_module_outputs(self, operation_id, outputs).await
     }
 
     fn operation_log(&self) -> &dyn IOperationLog {
