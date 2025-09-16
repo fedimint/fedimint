@@ -32,6 +32,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
+use std::iter::repeat;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -331,7 +332,16 @@ impl FromStr for OOBNotes {
 
     /// Decode a set of out-of-band e-cash notes from a base64 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s: String = s.chars().filter(|&c| !c.is_whitespace()).collect();
+        let mut s: String = s.chars().filter(|&c| !c.is_whitespace()).collect();
+
+        // If the lengths isn't divisible by 4, add padding so we can cut off padding
+        // ('=') characters at encoding time.
+        if s.len() % 4 != 0 {
+            // base64 strings of len % 4 == 1 are invalid, so we will only ever pad once or
+            // twice.
+            let padding_to_add = 4 - s.len() % 4;
+            s.extend(repeat('=').take(padding_to_add));
+        }
 
         let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(&s) {
             bytes
@@ -2754,5 +2764,26 @@ mod tests {
                 }
             })
         );
+    }
+
+    #[test]
+    fn test_can_parse_oob_notes_without_padding() {
+        const PADDED_1_OOB_NOTES_STR: &str = "AgEEJj0IZQBTAQEBi9tGqlhC9cW6vRu4c1KLhLzYcC7p6GAO4D1stRIG1RKxIoqm6s9kdeG817_Inypo1L0vtxfZDRArrY1bYxFrTfaA_wZRUyR5dlBBxrvF1pA=";
+        const UNPADDED_1_OOB_NOTES_STR: &str = "AgEEJj0IZQBTAQEBi9tGqlhC9cW6vRu4c1KLhLzYcC7p6GAO4D1stRIG1RKxIoqm6s9kdeG817_Inypo1L0vtxfZDRArrY1bYxFrTfaA_wZRUyR5dlBBxrvF1pA";
+
+        let notes_with_padding = OOBNotes::from_str(&PADDED_1_OOB_NOTES_STR)
+            .expect("Parsing notes with padding should work");
+        let notes_without_padding = OOBNotes::from_str(&UNPADDED_1_OOB_NOTES_STR)
+            .expect("Parsing notes without padding should work");
+        assert_eq!(notes_with_padding, notes_without_padding);
+
+        const PADDED_2_OOB_NOTES_STR: &str = "AgEEJj0IZQD3AwIBj0c3vwCSrs09GEhbUWmjMrw-2H9mOuTsTOWCuzF4EfGJsf7UZMGzpCgemRf1ByaVvsICsrLIJG5E6CRREB2FXcKHKkpPLCn3VtUBP-PW3E8IAa4hbRef5e3Z541tJNLqlqHXQ9KOSIkLYR9CWckw3ZY4hfodv6yLLoBITaBOQoB6Hox9sa3kMFgz1tkWdF7XvNOrhk_c2Bzt8b3dEpXj9Cx5IAGTpDTAi5ikr491ouSuzkfzttc1nNlttg5DhDsc4A2ncyuBNMwGzd-S_o4ZA9uuimYKI5H0D8ref2L2Vul1KTZVSHV8gtu6MKzMVeWPe_8Eqw==";
+        const UNPADDED_2_OOB_NOTES_STR: &str = "AgEEJj0IZQD3AwIBj0c3vwCSrs09GEhbUWmjMrw-2H9mOuTsTOWCuzF4EfGJsf7UZMGzpCgemRf1ByaVvsICsrLIJG5E6CRREB2FXcKHKkpPLCn3VtUBP-PW3E8IAa4hbRef5e3Z541tJNLqlqHXQ9KOSIkLYR9CWckw3ZY4hfodv6yLLoBITaBOQoB6Hox9sa3kMFgz1tkWdF7XvNOrhk_c2Bzt8b3dEpXj9Cx5IAGTpDTAi5ikr491ouSuzkfzttc1nNlttg5DhDsc4A2ncyuBNMwGzd-S_o4ZA9uuimYKI5H0D8ref2L2Vul1KTZVSHV8gtu6MKzMVeWPe_8Eqw";
+
+        let notes_with_padding = OOBNotes::from_str(&PADDED_2_OOB_NOTES_STR)
+            .expect("Parsing notes with padding should work");
+        let notes_without_padding = OOBNotes::from_str(&UNPADDED_2_OOB_NOTES_STR)
+            .expect("Parsing notes without padding should work");
+        assert_eq!(notes_with_padding, notes_without_padding);
     }
 }
