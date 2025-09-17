@@ -13,7 +13,7 @@ use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use crate::util::SafeUrl;
-use crate::{NumPeersExt, PeerId, base32};
+use crate::{NumPeersExt, PeerId};
 
 /// Information required for client to join Federation
 ///
@@ -170,24 +170,6 @@ impl InviteCode {
             })
             .expect("Ensured by constructor")
     }
-
-    pub fn encode_base32(&self) -> String {
-        format!(
-            "fedimint{}",
-            base32::encode(&self.consensus_encode_to_vec())
-        )
-    }
-
-    pub fn decode_base32(s: &str) -> anyhow::Result<Self> {
-        ensure!(s.starts_with("fedimint"), "Invalid Prefix");
-
-        let params = Self::consensus_decode_whole(
-            &base32::decode(&s[8..])?,
-            &ModuleDecoderRegistry::default(),
-        )?;
-
-        Ok(params)
-    }
 }
 
 /// For extendability [`InviteCode`] consists of parts, where client can ignore
@@ -232,7 +214,7 @@ impl FromStr for InviteCode {
     type Err = anyhow::Error;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
-        if let Ok(invite_code) = Self::decode_base32(encoded) {
+        if let Ok(invite_code) = crate::base32::decode_oob(encoded) {
             return Ok(invite_code);
         }
 
@@ -288,7 +270,7 @@ mod tests {
         let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
         let invite_code = InviteCode::from_str(invite_code_str).expect("valid invite code");
 
-        InviteCode::from_str(&invite_code.encode_base32())
+        InviteCode::from_str(&crate::base32::encode_oob(&invite_code))
             .expect("Failed to parse base 32 invite code");
 
         assert_eq!(invite_code.to_string(), invite_code_str);

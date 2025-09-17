@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use anyhow::Context;
+use anyhow::{Context, ensure};
+
+use crate::encoding::{Decodable, Encodable};
+use crate::module::registry::ModuleDecoderRegistry;
 
 /// Lowercase RFC 4648 Base32hex alphabet (32 characters).
 const RFC4648: [u8; 32] = *b"0123456789abcdefghijklmnopqrstuv";
@@ -65,11 +68,35 @@ pub fn decode(input: &str) -> anyhow::Result<Vec<u8>> {
     Ok(output)
 }
 
+pub fn encode_oob<T: Encodable>(encodable: &T) -> String {
+    format!("fedimint{}", encode(&encodable.consensus_encode_to_vec()))
+}
+
+pub fn decode_oob<T: Decodable>(s: &str) -> anyhow::Result<T> {
+    let s = s.to_lowercase();
+
+    ensure!(s.starts_with("fedimint"), "Invalid Prefix");
+
+    Ok(T::consensus_decode_whole(
+        &decode(&s[8..])?,
+        &ModuleDecoderRegistry::default(),
+    )?)
+}
+
 #[test]
 fn test_base_32_roundtrip() {
     let data: [u8; 10] = [0x50, 0xAB, 0x3F, 0x77, 0x01, 0xCD, 0x55, 0xFE, 0x10, 0x99];
 
     for n in 1..10 {
-        assert_eq!(decode(&encode(&data[0..n])).unwrap(), data[0..n]);
+        let bytes = data[0..n].to_vec();
+
+        assert_eq!(decode(&encode(&bytes)).unwrap(), bytes);
+
+        assert_eq!(decode_oob::<Vec<u8>>(&encode_oob(&bytes)).unwrap(), bytes);
+
+        assert_eq!(
+            decode_oob::<Vec<u8>>(&encode_oob(&bytes).to_ascii_uppercase()).unwrap(),
+            bytes
+        );
     }
 }

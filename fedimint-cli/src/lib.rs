@@ -48,7 +48,9 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::setup_code::PeerSetupCode;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, retry};
-use fedimint_core::{Amount, PeerId, TieredMulti, fedimint_build_code_version_env, runtime};
+use fedimint_core::{
+    Amount, PeerId, TieredMulti, base32, fedimint_build_code_version_env, runtime,
+};
 use fedimint_eventlog::{EventLogId, EventLogTrimableId};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{LOG_CLIENT, TracingSetup};
@@ -1110,7 +1112,7 @@ impl FedimintCli {
                     })
                 }
                 DecodeType::SetupCode { setup_code } => {
-                    let setup_code = PeerSetupCode::decode_base32(&setup_code)
+                    let setup_code = base32::decode_oob(&setup_code)
                         .map_err_cli_msg("failed to decode setup code")?;
 
                     Ok(CliOutput::SetupCode { setup_code })
