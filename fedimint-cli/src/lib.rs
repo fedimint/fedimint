@@ -39,6 +39,7 @@ use fedimint_client::module::module::init::ClientModuleInit;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc, RootSecret};
+use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
@@ -48,7 +49,9 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::setup_code::PeerSetupCode;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, retry};
-use fedimint_core::{Amount, PeerId, TieredMulti, fedimint_build_code_version_env, runtime};
+use fedimint_core::{
+    Amount, PeerId, TieredMulti, base32, fedimint_build_code_version_env, runtime,
+};
 use fedimint_eventlog::{EventLogId, EventLogTrimableId};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{LOG_CLIENT, TracingSetup};
@@ -1148,7 +1151,7 @@ impl FedimintCli {
                     })
                 }
                 DecodeType::SetupCode { setup_code } => {
-                    let setup_code = PeerSetupCode::decode_base32(&setup_code)
+                    let setup_code = base32::decode_prefixed(FEDIMINT_PREFIX, &setup_code)
                         .map_err_cli_msg("failed to decode setup code")?;
 
                     Ok(CliOutput::SetupCode { setup_code })
