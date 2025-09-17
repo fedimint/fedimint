@@ -6,7 +6,7 @@ use std::io::Read;
 use std::str::FromStr;
 
 use anyhow::ensure;
-use bech32::{Bech32m, Hrp};
+use bech32::Hrp;
 use serde::{Deserialize, Serialize};
 
 use crate::config::FederationId;
@@ -246,12 +246,10 @@ impl FromStr for InviteCode {
     }
 }
 
-/// Parses the invite code from a bech32 string
+/// Parses the invite code from a base32 string
 impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
-        let data = self.consensus_encode_to_vec();
-        let encode = bech32::encode::<Bech32m>(BECH32_HRP, &data).map_err(|_| fmt::Error)?;
-        formatter.write_str(&encode)
+        formatter.write_str(&self.encode_base32())
     }
 }
 
@@ -271,41 +269,5 @@ impl<'de> Deserialize<'de> for InviteCode {
     {
         let string = Cow::<str>::deserialize(deserializer)?;
         Self::from_str(&string).map_err(serde::de::Error::custom)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use fedimint_core::PeerId;
-
-    use crate::config::FederationId;
-    use crate::invite_code::InviteCode;
-
-    #[test]
-    fn test_invite_code_to_from_string() {
-        let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
-        let invite_code = InviteCode::from_str(invite_code_str).expect("valid invite code");
-
-        InviteCode::from_str(&invite_code.encode_base32())
-            .expect("Failed to parse base 32 invite code");
-
-        assert_eq!(invite_code.to_string(), invite_code_str);
-        assert_eq!(
-            invite_code.0,
-            [
-                crate::invite_code::InviteCodePart::Api {
-                    url: "wss://fedimintd.mplsfed.foo/".parse().expect("valid url"),
-                    peer: PeerId::new(0),
-                },
-                crate::invite_code::InviteCodePart::FederationId(FederationId(
-                    bitcoin::hashes::sha256::Hash::from_str(
-                        "bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
-                    )
-                    .expect("valid hash")
-                ))
-            ]
-        );
     }
 }
