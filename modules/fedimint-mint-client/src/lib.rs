@@ -58,6 +58,7 @@ use fedimint_client_module::transaction::{
     ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
+use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -74,7 +75,7 @@ use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
-    async_trait_maybe_send, push_db_pair_items,
+    async_trait_maybe_send, base32, push_db_pair_items,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -329,17 +330,24 @@ const BASE64_URL_SAFE: base64::engine::GeneralPurpose = base64::engine::GeneralP
 impl FromStr for OOBNotes {
     type Err = anyhow::Error;
 
-    /// Decode a set of out-of-band e-cash notes from a base64 string.
+    /// Decode a set of out-of-band e-cash notes from a base64 or base32 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s: String = s.chars().filter(|&c| !c.is_whitespace()).collect();
 
-        let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(&s) {
-            bytes
+        let oob_notes_bytes = if let Ok(oob_notes_bytes) =
+            base32::decode_prefixed_bytes(FEDIMINT_PREFIX, &s)
+        {
+            oob_notes_bytes
+        } else if let Ok(oob_notes_bytes) = BASE64_URL_SAFE.decode(&s) {
+            oob_notes_bytes
+        } else if let Ok(oob_notes_bytes) = base64::engine::general_purpose::STANDARD.decode(&s) {
+            oob_notes_bytes
         } else {
-            base64::engine::general_purpose::STANDARD.decode(&s)?
+            bail!("OOBNotes were not a well-formed base64(URL-safe) or base32 string");
         };
-        let oob_notes: OOBNotes =
-            Decodable::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())?;
+
+        let oob_notes =
+            OOBNotes::consensus_decode_whole(&oob_notes_bytes, &ModuleDecoderRegistry::default())?;
 
         ensure!(!oob_notes.notes().is_empty(), "OOBNotes cannot be empty");
 
@@ -2451,6 +2459,7 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin_hashes::Hash;
+    use fedimint_core::base32::FEDIMINT_PREFIX;
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
     use fedimint_core::invite_code::InviteCode;
@@ -2634,14 +2643,21 @@ mod tests {
 
     fn test_roundtrip_serialize_str<T, F>(data: T, assertions: F)
     where
-        T: FromStr + Display,
+        T: FromStr + Display + crate::Encodable + crate::Decodable,
         <T as FromStr>::Err: std::fmt::Debug,
         F: Fn(T),
     {
-        let data_str = data.to_string();
-        assertions(data);
-        let data_parsed = data_str.parse().expect("Deserialization failed");
+        let data_parsed = data.to_string().parse().expect("Deserialization failed");
+
         assertions(data_parsed);
+
+        let data_parsed = crate::base32::encode_prefixed(FEDIMINT_PREFIX, &data)
+            .parse()
+            .expect("Deserialization failed");
+
+        assertions(data_parsed);
+
+        assertions(data);
     }
 
     #[test]

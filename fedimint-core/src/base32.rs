@@ -1,9 +1,16 @@
 use std::collections::BTreeMap;
 
-use anyhow::Context;
+use anyhow::{Context, ensure};
+
+use crate::encoding::{Decodable, Encodable};
+use crate::module::registry::ModuleDecoderRegistry;
 
 /// Lowercase RFC 4648 Base32hex alphabet (32 characters).
 const RFC4648: [u8; 32] = *b"0123456789abcdefghijklmnopqrstuv";
+
+/// Prefix used for some of the user-facing Base32 encodings in Fedimint to
+/// allow easy identification
+pub const FEDIMINT_PREFIX: &str = "fedimint";
 
 /// Encodes the input bytes as Base32 (hex variant) using lowercase characters
 pub fn encode(input: &[u8]) -> String {
@@ -65,11 +72,49 @@ pub fn decode(input: &str) -> anyhow::Result<Vec<u8>> {
     Ok(output)
 }
 
+pub fn encode_prefixed<T: Encodable>(prefix: &str, encodable: &T) -> String {
+    encode_prefixed_bytes(prefix, &encodable.consensus_encode_to_vec())
+}
+
+pub fn encode_prefixed_bytes(prefix: &str, bytes: &[u8]) -> String {
+    format!("{prefix}{}", encode(bytes))
+}
+
+pub fn decode_prefixed<T: Decodable>(prefix: &str, s: &str) -> anyhow::Result<T> {
+    Ok(T::consensus_decode_whole(
+        &decode_prefixed_bytes(prefix, s)?,
+        &ModuleDecoderRegistry::default(),
+    )?)
+}
+
+pub fn decode_prefixed_bytes(prefix: &str, s: &str) -> anyhow::Result<Vec<u8>> {
+    let s = s.to_lowercase();
+    ensure!(s.starts_with(prefix), "Invalid Prefix");
+    decode(&s[prefix.len()..])
+}
+
 #[test]
 fn test_base_32_roundtrip() {
+    const TEST_PREFIX: &str = "test";
     let data: [u8; 10] = [0x50, 0xAB, 0x3F, 0x77, 0x01, 0xCD, 0x55, 0xFE, 0x10, 0x99];
 
     for n in 1..10 {
-        assert_eq!(decode(&encode(&data[0..n])).unwrap(), data[0..n]);
+        let bytes = data[0..n].to_vec();
+
+        assert_eq!(decode(&encode(&bytes)).unwrap(), bytes);
+
+        assert_eq!(
+            decode_prefixed::<Vec<u8>>(TEST_PREFIX, &encode_prefixed(TEST_PREFIX, &bytes)).unwrap(),
+            bytes
+        );
+
+        assert_eq!(
+            decode_prefixed::<Vec<u8>>(
+                TEST_PREFIX,
+                &encode_prefixed(TEST_PREFIX, &bytes).to_ascii_uppercase()
+            )
+            .unwrap(),
+            bytes
+        );
     }
 }
