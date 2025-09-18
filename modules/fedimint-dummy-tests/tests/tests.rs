@@ -29,7 +29,7 @@ async fn can_print_and_send_money_bitcoin() -> anyhow::Result<()> {
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
     let (_, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
-    client1_dummy_module.receive_money(outpoint).await?;
+    client1_dummy_module.receive_money_hack(outpoint).await?;
     assert_eq!(client1.get_bitcoin_balance().await, sats(1000));
 
     let outpoint = client1_dummy_module
@@ -39,7 +39,7 @@ async fn can_print_and_send_money_bitcoin() -> anyhow::Result<()> {
             AmountUnit::BITCOIN,
         )
         .await?;
-    client2_dummy_module.receive_money(outpoint).await?;
+    client2_dummy_module.receive_money_hack(outpoint).await?;
     assert_eq!(client1.get_bitcoin_balance().await, sats(750));
     assert_eq!(client2.get_bitcoin_balance().await, sats(250));
     Ok(())
@@ -59,7 +59,7 @@ async fn can_print_and_send_money_other_unit() -> anyhow::Result<()> {
     let (_, outpoint) = client1_dummy_module
         .print_money_units(sats(1000), custom_unit, fed_key_pair())
         .await?;
-    client1_dummy_module.receive_money(outpoint).await?;
+    client1_dummy_module.receive_money_hack(outpoint).await?;
     assert_eq!(
         client1_dummy_module.get_balance(custom_unit).await?,
         sats(1000)
@@ -68,7 +68,7 @@ async fn can_print_and_send_money_other_unit() -> anyhow::Result<()> {
     let outpoint = client1_dummy_module
         .send_money(client2_dummy_module.account(), sats(250), custom_unit)
         .await?;
-    client2_dummy_module.receive_money(outpoint).await?;
+    client2_dummy_module.receive_money_hack(outpoint).await?;
     assert_eq!(
         client1_dummy_module.get_balance(custom_unit).await?,
         sats(750)
