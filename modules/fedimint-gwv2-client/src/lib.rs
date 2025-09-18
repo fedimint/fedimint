@@ -33,6 +33,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::now;
+use fedimint_core::util::Spanned;
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
@@ -645,4 +646,6 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         federation_id: &FederationId,
         amount: u64,
     ) -> anyhow::Result<Amount>;
+
+    async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>>;
 }

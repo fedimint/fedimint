@@ -233,6 +233,17 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         test_send_lnv1(&client, &lnd_gw_id, &invoice.to_string()).await?;
         lnv1_swap += 1;
         await_receive_claimed(&client, receive_op).await?;
+
+        info!("Testing LNv2 client can pay LNv1 invoice...");
+        let (invoice, receive_op) = test_receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
+        test_send(
+            &client,
+            &gw_lnd.addr,
+            &invoice.to_string(),
+            FinalSendOperationState::Success,
+        )
+        .await?;
+        await_receive_claimed(&client, receive_op).await?;
     }
 
     info!("Testing payments from client to gateways...");
@@ -476,11 +487,38 @@ async fn test_send(
     Ok(())
 }
 
-async fn test_send_lnv1(
+async fn test_receive_lnv1(
     client: &Client,
     gateway_id: &String,
-    invoice: &String,
-) -> anyhow::Result<()> {
+    amount_msats: u64,
+) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
+    let invoice_response = cmd!(
+        client,
+        "module",
+        "ln",
+        "invoice",
+        amount_msats,
+        "--gateway-id",
+        gateway_id
+    )
+    .out_json()
+    .await?;
+    let invoice = serde_json::from_value::<Bolt11Invoice>(
+        invoice_response
+            .get("invoice")
+            .expect("Invoice should be present")
+            .clone(),
+    )?;
+    let operation_id = serde_json::from_value::<OperationId>(
+        invoice_response
+            .get("operation_id")
+            .expect("OperationId should be present")
+            .clone(),
+    )?;
+    Ok((invoice, operation_id))
+}
+
+async fn test_send_lnv1(client: &Client, gateway_id: &str, invoice: &str) -> anyhow::Result<()> {
     let payment_result = cmd!(
         client,
         "module",

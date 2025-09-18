@@ -172,6 +172,10 @@ impl SendStateMachine {
             return Err(Cancelled::Underfunded);
         };
 
+        if context.gateway.is_lnv1_invoice(&invoice).await.is_some() {
+            tracing::info!("LNV1 INVOICE, THIS IS POTENTIALLY SWAPPABLE");
+        }
+
         match context
             .gateway
             .is_direct_swap(&invoice)

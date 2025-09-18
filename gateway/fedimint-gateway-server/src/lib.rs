@@ -2505,6 +2505,26 @@ impl IGatewayClientV2 for Gateway {
             .send_fee_minimum
             .add_to(amount))
     }
+
+    async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>> {
+        let rhints = invoice.route_hints();
+        match rhints.first().and_then(|rh| rh.0.last()) {
+            None => None,
+            Some(hop) => match self.get_lightning_context().await {
+                Ok(lightning_context) => {
+                    if hop.src_node_id != lightning_context.lightning_public_key {
+                        return None;
+                    }
+
+                    self.federation_manager
+                        .read()
+                        .await
+                        .get_client_for_index(hop.short_channel_id)
+                }
+                Err(_) => None,
+            },
+        }
+    }
 }
 
 #[async_trait]
