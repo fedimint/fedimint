@@ -224,6 +224,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     }
 
     let mut lnv1_swap = 0;
+    let mut lnv2_swap = 0;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
     let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     if gatewayd_version >= *VERSION_0_9_0_ALPHA && gateway_cli_version >= *VERSION_0_9_0_ALPHA {
@@ -235,7 +236,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         await_receive_claimed(&client, receive_op).await?;
 
         info!("Testing LNv2 client can pay LNv1 invoice...");
-        let (invoice, receive_op) = test_receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
+        let (invoice, receive_op) = receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
         test_send(
             &client,
             &gw_lnd.addr,
@@ -243,7 +244,8 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             FinalSendOperationState::Success,
         )
         .await?;
-        await_receive_claimed(&client, receive_op).await?;
+        lnv2_swap += 1;
+        await_receive_lnv1(&client, receive_op).await?;
     }
 
     info!("Testing payments from client to gateways...");
@@ -334,8 +336,12 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let lnd_payment_summary = gw_lnd.payment_summary().await?;
 
-        assert_eq!(lnd_payment_summary.outgoing.total_success, 4 + lnv1_swap);
+        assert_eq!(
+            lnd_payment_summary.outgoing.total_success,
+            4 + lnv1_swap + lnv2_swap
+        );
         assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
+        // LNv1 does not count swaps as incoming payments
         assert_eq!(lnd_payment_summary.incoming.total_success, 3 + lnv1_swap);
         assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
 
@@ -487,7 +493,7 @@ async fn test_send(
     Ok(())
 }
 
-async fn test_receive_lnv1(
+async fn receive_lnv1(
     client: &Client,
     gateway_id: &String,
     amount_msats: u64,
@@ -549,6 +555,14 @@ async fn await_receive_claimed(client: &Client, operation_id: OperationId) -> an
             .expect("JSON serialization failed"),
     );
 
+    Ok(())
+}
+
+async fn await_receive_lnv1(client: &Client, operation_id: OperationId) -> anyhow::Result<()> {
+    let lnv1_response = cmd!(client, "await-invoice", operation_id.fmt_full())
+        .out_json()
+        .await?;
+    assert!(lnv1_response.get("total_amount_msat").is_some());
     Ok(())
 }
 

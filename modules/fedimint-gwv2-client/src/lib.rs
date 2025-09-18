@@ -647,5 +647,15 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         amount: u64,
     ) -> anyhow::Result<Amount>;
 
+    /// Check if this invoice was created using LNv1 and if the gateway is
+    /// connected to the target federation.
     async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>>;
+
+    /// Perform a swap from an LNv2 `OutgoingContract` to an LNv1
+    /// `IncomingContract`
+    async fn relay_lnv1_swap(
+        &self,
+        client: &ClientHandleArc,
+        invoice: &Bolt11Invoice,
+    ) -> anyhow::Result<FinalReceiveState>;
 }

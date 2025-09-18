@@ -172,8 +172,27 @@ impl SendStateMachine {
             return Err(Cancelled::Underfunded);
         };
 
-        if context.gateway.is_lnv1_invoice(&invoice).await.is_some() {
-            tracing::info!("LNV1 INVOICE, THIS IS POTENTIALLY SWAPPABLE");
+        // To make gateway operation easier, we check if the invoice was created using
+        // the LNv1 protocol and if the gateway supports the target federation.
+        // If it does, we can fund an LNv1 incoming contract to satisfy the LNv2
+        // outgoing payment.
+        if let Some(client) = context.gateway.is_lnv1_invoice(&invoice).await {
+            let final_state = context
+                .gateway
+                .relay_lnv1_swap(client.value(), &invoice)
+                .await;
+            return match final_state {
+                Ok(final_receive_state) => match final_receive_state {
+                    FinalReceiveState::Rejected => Err(Cancelled::Rejected),
+                    FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
+                        preimage,
+                        target_federation: Some(client.value().federation_id()),
+                    }),
+                    FinalReceiveState::Refunded => Err(Cancelled::Refunded),
+                    FinalReceiveState::Failure => Err(Cancelled::Failure),
+                },
+                Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
+            };
         }
 
         match context

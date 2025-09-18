@@ -82,7 +82,10 @@ use fedimint_gateway_common::{
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
-use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
+use fedimint_gw_client::{
+    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, IGatewayClientV1,
+    SwapParameters,
+};
 use fedimint_gwv2_client::events::compute_lnv2_stats;
 use fedimint_gwv2_client::{
     EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, IGatewayClientV2,
@@ -2524,6 +2527,55 @@ impl IGatewayClientV2 for Gateway {
                 Err(_) => None,
             },
         }
+    }
+
+    async fn relay_lnv1_swap(
+        &self,
+        client: &ClientHandleArc,
+        invoice: &Bolt11Invoice,
+    ) -> anyhow::Result<FinalReceiveState> {
+        let swap_params = SwapParameters {
+            payment_hash: *invoice.payment_hash(),
+            amount_msat: Amount::from_msats(
+                invoice
+                    .amount_milli_satoshis()
+                    .ok_or(anyhow!("Amountless invoice not supported"))?,
+            ),
+        };
+        let lnv1 = client
+            .get_first_module::<GatewayClientModule>()
+            .expect("No LNv1 module");
+        let operation_id = lnv1.gateway_handle_direct_swap(swap_params).await?;
+        let mut stream = lnv1
+            .gateway_subscribe_ln_receive(operation_id)
+            .await?
+            .into_stream();
+        let mut final_state = FinalReceiveState::Failure;
+        while let Some(update) = stream.next().await {
+            match update {
+                GatewayExtReceiveStates::Funding => {}
+                GatewayExtReceiveStates::FundingFailed { error: _ } => {
+                    final_state = FinalReceiveState::Rejected;
+                }
+                GatewayExtReceiveStates::Preimage(preimage) => {
+                    final_state = FinalReceiveState::Success(preimage.0);
+                }
+                GatewayExtReceiveStates::RefundError {
+                    error_message: _,
+                    error: _,
+                } => {
+                    final_state = FinalReceiveState::Failure;
+                }
+                GatewayExtReceiveStates::RefundSuccess {
+                    out_points: _,
+                    error: _,
+                } => {
+                    final_state = FinalReceiveState::Refunded;
+                }
+            }
+        }
+
+        Ok(final_state)
     }
 }
 
