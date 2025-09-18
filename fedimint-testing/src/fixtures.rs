@@ -19,7 +19,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{ChainSource, LightningMode};
 use fedimint_gateway_server::Gateway;
 use fedimint_gateway_server::client::GatewayClientBuilder;
-use fedimint_gateway_server::config::{DatabaseBackend, LightningModuleMode};
+use fedimint_gateway_server::config::DatabaseBackend;
 use fedimint_lightning::{ILnRpcClient, LightningContext};
 use fedimint_logging::TracingSetup;
 use fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
@@ -208,7 +208,7 @@ impl Fixtures {
     }
 
     /// Creates a new Gateway that can be used for module tests.
-    pub async fn new_gateway(&self, lightning_module_mode: LightningModuleMode) -> Gateway {
+    pub async fn new_gateway(&self) -> Gateway {
         let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
         let decoders = server_gens.available_decoders(module_kinds).unwrap();
@@ -284,7 +284,6 @@ impl Fixtures {
             // webserver or intercept HTLCs, so this is necessary for instructing the
             // gateway that it is connected to the mock Lightning node.
             fedimint_gateway_server::GatewayState::Running { lightning_context },
-            lightning_module_mode,
             esplora_chain_source,
         )
         .await

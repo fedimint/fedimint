@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -78,10 +77,6 @@ pub struct GatewayOpts {
     )]
     num_route_hints: u32,
 
-    /// The Lightning module to use: LNv1, LNv2, or both
-    #[arg(long = "lightning-module-mode", env = envs::FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV, default_value_t = LightningModuleMode::LNv1)]
-    lightning_module_mode: LightningModuleMode,
-
     /// Database backend to use.
     #[arg(long, env = envs::FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
     pub db_backend: DatabaseBackend,
@@ -124,7 +119,6 @@ impl GatewayOpts {
             bcrypt_password_hash,
             network: self.network,
             num_route_hints: self.num_route_hints,
-            lightning_module_mode: self.lightning_module_mode,
         })
     }
 }
@@ -142,36 +136,4 @@ pub struct GatewayParameters {
     pub bcrypt_password_hash: bcrypt::HashParts,
     pub network: Network,
     pub num_route_hints: u32,
-    pub lightning_module_mode: LightningModuleMode,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum LightningModuleMode {
-    LNv1,
-    LNv2,
-    All,
-}
-
-impl Display for LightningModuleMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LightningModuleMode::LNv1 => write!(f, "LNv1"),
-            LightningModuleMode::LNv2 => write!(f, "LNv2"),
-            LightningModuleMode::All => write!(f, "All"),
-        }
-    }
-}
-
-impl FromStr for LightningModuleMode {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mode = match s {
-            "LNv1" => LightningModuleMode::LNv1,
-            "LNv2" => LightningModuleMode::LNv2,
-            _ => LightningModuleMode::All,
-        };
-
-        Ok(mode)
-    }
 }

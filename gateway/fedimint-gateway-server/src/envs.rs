@@ -41,11 +41,6 @@ pub const FM_DEBUG_GATEWAY_ENV: &str = "FM_DEBUG_GATEWAY";
 /// bitcoin node to sync to the chain.
 pub const FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV: &str = "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
 
-/// Environment variable that instructs the gateway to skip checking if the
-/// Bitcoin network is set to mainnet and the lightning module mode is set to
-/// `All`
-pub const FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV: &str = "FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK";
-
 /// Environment variable to select database backend (rocksdb or cursed-redb)
 pub const FM_DB_BACKEND_ENV: &str = "FM_DB_BACKEND";
 
