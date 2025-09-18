@@ -16,7 +16,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
+    Amounts, ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
@@ -290,7 +290,7 @@ impl ServerModule for Dummy {
             .await;
 
         // Update the output outcome the user can query
-        let outcome = DummyOutputOutcome(updated_funds, AmountUnit::BITCOIN, output.account);
+        let outcome = DummyOutputOutcome(updated_funds, output.unit, output.account);
         dbtx.insert_entry(&DummyOutcomeKey(out_point), &outcome)
             .await;
 

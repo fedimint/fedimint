@@ -8,7 +8,7 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use anyhow::{Context as _, anyhow, bail, format_err};
+use anyhow::{Context as _, anyhow, format_err};
 use common::broken_fed_key_pair;
 use db::{
     DbKeyPrefix, DummyClientFundsKey, DummyClientFundsKeyV1, DummyClientFundsKeyV2PrefixAll,
@@ -105,7 +105,9 @@ impl ClientModule for DummyClientModule {
     }
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
-        PrimaryModuleSupport::selected(PrimaryModulePriority::LOW, [AmountUnit::BITCOIN])
+        PrimaryModuleSupport::Any {
+            priority: PrimaryModulePriority::LOW,
+        }
     }
 
     async fn create_final_inputs_and_outputs(
@@ -121,10 +123,6 @@ impl ClientModule for DummyClientModule {
     )> {
         dbtx.ensure_isolated().expect("must be isolated");
 
-        if unit != AmountUnit::BITCOIN {
-            bail!("Module can only handle Bitcoin");
-        }
-
         match input_amount.cmp(&output_amount) {
             Ordering::Less => {
                 let missing_input_amount = output_amount.saturating_sub(input_amount);
@@ -137,7 +135,6 @@ impl ClientModule for DummyClientModule {
                 }
 
                 let updated = our_funds.saturating_sub(missing_input_amount);
-
                 dbtx.insert_entry(&DummyClientFundsKey { unit }, &updated)
                     .await;
 
@@ -148,7 +145,7 @@ impl ClientModule for DummyClientModule {
                         account: self.key.public_key(),
                     }
                     .into(),
-                    amounts: Amounts::new_bitcoin(missing_input_amount),
+                    amounts: Amounts::new_custom(unit, missing_input_amount),
                     keys: vec![self.key],
                 };
                 let input_sm = ClientInputSM {
@@ -180,7 +177,7 @@ impl ClientModule for DummyClientModule {
                         account: self.key.public_key(),
                     }
                     .into(),
-                    amounts: Amounts::new_bitcoin(missing_output_amount),
+                    amounts: Amounts::new_custom(unit, missing_output_amount),
                 };
 
                 let output_sm = ClientOutputSM {
@@ -232,9 +229,6 @@ impl ClientModule for DummyClientModule {
     }
 
     async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
-        if unit != AmountUnit::BITCOIN {
-            return Amount::ZERO;
-        }
         get_funds(dbtc, unit).await
     }
 
@@ -259,7 +253,7 @@ impl ClientModule for DummyClientModule {
 }
 
 impl DummyClientModule {
-    pub async fn print_using_account(
+    pub async fn print_money_units(
         &self,
         amount: Amount,
         unit: AmountUnit,
@@ -276,7 +270,7 @@ impl DummyClientModule {
                 account: account_kp.public_key(),
             }
             .into(),
-            amounts: Amounts::new_bitcoin(amount),
+            amounts: Amounts::new_custom(unit, amount),
             keys: vec![account_kp],
         };
 
@@ -312,14 +306,14 @@ impl DummyClientModule {
 
     /// Request the federation prints money for us
     pub async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(amount, AmountUnit::BITCOIN, fed_key_pair())
+        self.print_money_units(amount, AmountUnit::BITCOIN, fed_key_pair())
             .await
     }
 
     /// Use a broken printer to print a liability instead of money
     /// If the federation is honest, should always fail
     pub async fn print_liability(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(amount, AmountUnit::BITCOIN, broken_fed_key_pair())
+        self.print_money_units(amount, AmountUnit::BITCOIN, broken_fed_key_pair())
             .await
     }
 
@@ -342,7 +336,7 @@ impl DummyClientModule {
                 account,
             }
             .into(),
-            amounts: Amounts::new_bitcoin(amount),
+            amounts: Amounts::new_custom(unit, amount),
         };
 
         // Build and send tx to the fed
@@ -393,13 +387,14 @@ impl DummyClientModule {
             return Err(format_err!("Wrong account id"));
         }
 
-        // HACK: This is a terrible hack. The balance is set
+        // HACK: This is a terrible hack. The balance for the unit is set
         // straight to the amount from the output, assuming that no funds were available
-        // before the receive. The actual state machine is supposed to update the
-        // balance, but `receive_money` is typically paired with `send_money`
-        // which creates a state machine only on the sender's client.
+        // before. The actual state machine is supposed to update the balance,
+        // but `receive_money` is typically paired with `send_money` which
+        // creates a state machine only on the sender's client.
         dbtx.insert_entry(&DummyClientFundsKey { unit: outcome.1 }, &outcome.0)
             .await;
+
         dbtx.commit_tx().await;
 
         Ok(())
@@ -408,6 +403,12 @@ impl DummyClientModule {
     /// Return our account
     pub fn account(&self) -> PublicKey {
         self.key.public_key()
+    }
+
+    /// Get balance for a specific amount unit
+    pub async fn get_balance(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        Ok(get_funds(&mut dbtx, unit).await)
     }
 }
 

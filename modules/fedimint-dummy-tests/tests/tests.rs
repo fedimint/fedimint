@@ -12,7 +12,7 @@ use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
 use fedimint_dummy_common::{
-    DummyInput, DummyInputV1, DummyOutput, DummyOutputV1, KIND, broken_fed_key_pair,
+    DummyInput, DummyInputV1, DummyOutput, DummyOutputV1, KIND, broken_fed_key_pair, fed_key_pair,
 };
 use fedimint_dummy_server::DummyInit;
 use fedimint_testing::fixtures::Fixtures;
@@ -22,7 +22,7 @@ fn fixtures() -> Fixtures {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn can_print_and_send_money() -> anyhow::Result<()> {
+async fn can_print_and_send_money_bitcoin() -> anyhow::Result<()> {
     let fed = fixtures().new_fed_degraded().await;
     let (client1, client2) = fed.two_clients().await;
 
@@ -42,6 +42,41 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     client2_dummy_module.receive_money_hack(outpoint).await?;
     assert_eq!(client1.get_balance_for_btc().await?, sats(750));
     assert_eq!(client2.get_balance_for_btc().await?, sats(250));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_print_and_send_money_other_unit() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
+
+    // Use a custom AmountUnit with value 1
+    let custom_unit = AmountUnit::new_custom(1);
+
+    let (_, outpoint) = client1_dummy_module
+        .print_money_units(sats(1000), custom_unit, fed_key_pair())
+        .await?;
+    client1_dummy_module.receive_money_hack(outpoint).await?;
+    assert_eq!(
+        client1_dummy_module.get_balance(custom_unit).await?,
+        sats(1000)
+    );
+
+    let outpoint = client1_dummy_module
+        .send_money(client2_dummy_module.account(), sats(250), custom_unit)
+        .await?;
+    client2_dummy_module.receive_money_hack(outpoint).await?;
+    assert_eq!(
+        client1_dummy_module.get_balance(custom_unit).await?,
+        sats(750)
+    );
+    assert_eq!(
+        client2_dummy_module.get_balance(custom_unit).await?,
+        sats(250)
+    );
     Ok(())
 }
 
