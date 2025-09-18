@@ -74,18 +74,14 @@ impl GatewayClientBuilder {
 
         let mut registry = self.registry.clone();
 
-        if gateway.is_running_lnv1() {
-            registry.attach(GatewayClientInit {
-                federation_index,
-                lightning_manager: gateway.clone(),
-            });
-        }
+        registry.attach(GatewayClientInit {
+            federation_index,
+            lightning_manager: gateway.clone(),
+        });
 
-        if gateway.is_running_lnv2() {
-            registry.attach(GatewayClientInitV2 {
-                gateway: gateway.clone(),
-            });
-        }
+        registry.attach(GatewayClientInitV2 {
+            gateway: gateway.clone(),
+        });
 
         let mut client_builder = Client::builder(db)
             .await
