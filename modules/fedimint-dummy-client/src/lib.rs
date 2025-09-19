@@ -334,7 +334,7 @@ impl DummyClientModule {
     }
 
     /// Wait to receive money at an outpoint
-    pub async fn receive_money(&self, outpoint: OutPoint) -> anyhow::Result<()> {
+    pub async fn receive_money_hack(&self, outpoint: OutPoint) -> anyhow::Result<()> {
         let mut dbtx = self.db.begin_transaction().await;
 
         #[allow(deprecated)]
@@ -353,6 +353,11 @@ impl DummyClientModule {
             return Err(format_err!("Wrong account id"));
         }
 
+        // HACK: This is a terrible hack. The balance is set
+        // straight to the amount from the output, assuming that no funds were available
+        // before the receive. The actual state machine is supposed to update the
+        // balance, but `receive_money` is typically paired with `send_money`
+        // which creates a state machine only on the sender's client.
         dbtx.insert_entry(&DummyClientFundsKeyV1, &outcome.0).await;
         dbtx.commit_tx().await;
 
