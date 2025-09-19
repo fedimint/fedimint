@@ -7,6 +7,7 @@ use bitcoin::Network;
 use clap::Parser;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{LightningMode, V1_API_ENDPOINT};
+use fedimint_lnv2_common::gateway_api::PaymentFee;
 
 use super::envs;
 
@@ -63,6 +64,14 @@ pub struct GatewayOpts {
     /// Database backend to use.
     #[arg(long, env = envs::FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
     pub db_backend: DatabaseBackend,
+
+    /// The default routing fees that are applied to new federations
+    #[arg(long = "default-routing-fees", env = envs::FM_DEFAULT_ROUTING_FEES_ENV, default_value_t = PaymentFee::TRANSACTION_FEE_DEFAULT)]
+    default_routing_fees: PaymentFee,
+
+    /// The default transaction fees that are applied to new federations
+    #[arg(long = "default-transaction-fees", env = envs::FM_DEFAULT_TRANSACTION_FEES_ENV, default_value_t = PaymentFee::TRANSACTION_FEE_DEFAULT)]
+    default_transaction_fees: PaymentFee,
 }
 
 impl GatewayOpts {
@@ -85,6 +94,8 @@ impl GatewayOpts {
             network: self.network,
             num_route_hints: self.num_route_hints,
             lightning_module_mode: self.lightning_module_mode,
+            default_routing_fees: self.default_routing_fees,
+            default_transaction_fees: self.default_transaction_fees,
         })
     }
 }
@@ -103,6 +114,8 @@ pub struct GatewayParameters {
     pub network: Network,
     pub num_route_hints: u32,
     pub lightning_module_mode: LightningModuleMode,
+    pub default_routing_fees: PaymentFee,
+    pub default_transaction_fees: PaymentFee,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
