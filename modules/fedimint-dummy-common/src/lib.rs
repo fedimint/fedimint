@@ -8,9 +8,9 @@ use std::fmt;
 use config::DummyClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::module::{AmountUnit, CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
-use fedimint_core::{Amount, plugin_types_trait_impl_common};
+use fedimint_core::{Amount, extensible_associated_module_type, plugin_types_trait_impl_common};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -29,36 +29,64 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct DummyConsensusItem;
 
-/// Input for a fedimint transaction
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct DummyInput {
+pub struct DummyInputV0 {
     pub amount: Amount,
     /// Associate the input with a user's pubkey
     pub account: PublicKey,
 }
 
-/// Output for a fedimint transaction
+/// Input for a fedimint transaction
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct DummyOutput {
+pub struct DummyInputV1 {
+    pub amount: Amount,
+    pub unit: AmountUnit,
+    /// Associate the input with a user's pubkey
+    pub account: PublicKey,
+}
+
+extensible_associated_module_type!(DummyInput, DummyInputV1, UnknownDummyInputVariantError);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct DummyOutputV0 {
     pub amount: Amount,
     /// Associate the output with a user's pubkey
     pub account: PublicKey,
 }
 
+/// Output for a fedimint transaction
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct DummyOutputV1 {
+    pub amount: Amount,
+    pub unit: AmountUnit,
+    /// Associate the output with a user's pubkey
+    pub account: PublicKey,
+}
+
+extensible_associated_module_type!(DummyOutput, DummyOutputV1, UnknownDummyOutputVariantError);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct DummyOutputOutcomeV0(pub Amount, pub PublicKey);
+
 /// Information needed by a client to update output funds
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct DummyOutputOutcome(pub Amount, pub PublicKey);
+pub struct DummyOutputOutcome(pub Amount, pub AmountUnit, pub PublicKey);
 
 /// Errors that might be returned by the server
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum DummyInputError {
     #[error("Not enough funds")]
     NotEnoughFunds,
+    #[error("Invalid version")]
+    InvalidVersion,
 }
 
 /// Errors that might be returned by the server
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
-pub enum DummyOutputError {}
+pub enum DummyOutputError {
+    #[error("Invalid version")]
+    InvalidVersion,
+}
 
 /// Contains the types defined above
 pub struct DummyModuleTypes;
@@ -95,13 +123,13 @@ impl fmt::Display for DummyClientConfig {
         write!(f, "DummyClientConfig")
     }
 }
-impl fmt::Display for DummyInput {
+impl fmt::Display for DummyInputV1 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DummyInput {}", self.amount)
     }
 }
 
-impl fmt::Display for DummyOutput {
+impl fmt::Display for DummyOutputV1 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "DummyOutput {}", self.amount)
     }

@@ -229,12 +229,8 @@ impl Fixtures {
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
 
         // Create federation client builder for the gateway
-        let client_builder: GatewayClientBuilder = GatewayClientBuilder::new(
-            path.clone(),
-            registry,
-            ModuleKind::from_static_str("dummy"),
-            DatabaseBackend::RocksDb,
-        );
+        let client_builder: GatewayClientBuilder =
+            GatewayClientBuilder::new(path.clone(), registry, DatabaseBackend::RocksDb);
 
         let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
 
