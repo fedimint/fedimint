@@ -213,7 +213,7 @@ async fn gateway_pay_valid_invoice(
             match gw_pay_sub.ok().await? {
                 GatewayExtPayStates::Success { out_points, .. } => {
                     for outpoint in out_points {
-                        dummy_module.receive_money(outpoint).await?;
+                        dummy_module.receive_money_hack(outpoint).await?;
                     }
                 }
                 _ => {
@@ -244,7 +244,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
-            dummy_module.receive_money(outpoint).await?;
+            dummy_module.receive_money_hack(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
             // Create test invoice
@@ -274,7 +274,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
-            dummy_module.receive_money(outpoint).await?;
+            dummy_module.receive_money_hack(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
@@ -363,7 +363,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>().unwrap();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
-            dummy_module.receive_money(outpoint).await?;
+            dummy_module.receive_money_hack(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
             // Fund outgoing contract that the user client expects the gateway to pay
@@ -422,7 +422,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             // Assert that we did not get paid for claiming a contract with a bogus preimage
             assert!(
                 dummy_module
-                    .receive_money(OutPoint { txid, out_idx: 0 })
+                    .receive_money_hack(OutPoint { txid, out_idx: 0 })
                     .await
                     .is_err()
             );
@@ -443,7 +443,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
-            dummy_module.receive_money(outpoint).await?;
+            dummy_module.receive_money_hack(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
 
             // Create invoice that cannot be paid
@@ -504,7 +504,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         let initial_gateway_balance = sats(1000);
         let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
-        dummy_module.receive_money(outpoint).await?;
+        dummy_module.receive_money_hack(outpoint).await?;
         assert_eq!(gateway_client.get_balance().await, sats(1000));
 
         // User client creates invoice in federation
@@ -564,7 +564,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
         let initial_gateway_balance = sats(1000);
         let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
-        dummy_module.receive_money(outpoint).await?;
+        dummy_module.receive_money_hack(outpoint).await?;
         assert_eq!(gateway_client.get_balance().await, sats(1000));
 
         // Create HTLC that doesn't correspond to an offer in the federation
@@ -650,7 +650,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let (_, outpoint) = gateway_dummy_module
                 .print_money(initial_gateway_balance)
                 .await?;
-            gateway_dummy_module.receive_money(outpoint).await?;
+            gateway_dummy_module.receive_money_hack(outpoint).await?;
             assert_eq!(gateway_client.get_balance().await, sats(1000));
 
             // Create test invoice
@@ -740,7 +740,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 } => {
                     // Assert that the gateway got it's refund
                     for outpoint in out_points {
-                        gateway_dummy_module.receive_money(outpoint).await?;
+                        gateway_dummy_module.receive_money_hack(outpoint).await?;
                     }
 
                     assert_eq!(initial_gateway_balance, gateway_client.get_balance().await);
@@ -773,7 +773,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(2000)).await?;
-            dummy_module.receive_money(outpoint).await?;
+            dummy_module.receive_money_hack(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(2000));
 
             // User client pays test invoice
@@ -869,7 +869,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         let deposit_amt = msats(5_000);
         let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = client1_dummy_module.print_money(deposit_amt).await?;
-        client1_dummy_module.receive_money(outpoint).await?;
+        client1_dummy_module.receive_money_hack(outpoint).await?;
         assert_eq!(client1.get_balance().await, deposit_amt);
 
         // User creates invoice in federation 2
