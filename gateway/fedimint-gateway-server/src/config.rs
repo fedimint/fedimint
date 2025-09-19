@@ -6,6 +6,7 @@ use bitcoin::Network;
 use clap::{ArgGroup, Parser};
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{LightningMode, V1_API_ENDPOINT};
+use fedimint_lnv2_common::gateway_api::PaymentFee;
 
 use super::envs;
 use crate::envs::{
@@ -98,6 +99,14 @@ pub struct GatewayOpts {
     /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
     pub esplora_url: Option<SafeUrl>,
+
+    /// The default routing fees that are applied to new federations
+    #[arg(long = "default-routing-fees", env = envs::FM_DEFAULT_ROUTING_FEES_ENV, default_value_t = PaymentFee::TRANSACTION_FEE_DEFAULT)]
+    default_routing_fees: PaymentFee,
+
+    /// The default transaction fees that are applied to new federations
+    #[arg(long = "default-transaction-fees", env = envs::FM_DEFAULT_TRANSACTION_FEES_ENV, default_value_t = PaymentFee::TRANSACTION_FEE_DEFAULT)]
+    default_transaction_fees: PaymentFee,
 }
 
 impl GatewayOpts {
@@ -119,6 +128,8 @@ impl GatewayOpts {
             bcrypt_password_hash,
             network: self.network,
             num_route_hints: self.num_route_hints,
+            default_routing_fees: self.default_routing_fees,
+            default_transaction_fees: self.default_transaction_fees,
         })
     }
 }
@@ -136,4 +147,6 @@ pub struct GatewayParameters {
     pub bcrypt_password_hash: bcrypt::HashParts,
     pub network: Network,
     pub num_route_hints: u32,
+    pub default_routing_fees: PaymentFee,
+    pub default_transaction_fees: PaymentFee,
 }

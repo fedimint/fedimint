@@ -44,10 +44,22 @@ pub const FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV: &str = "FM_GATEWAY_SKIP_WAIT_FOR_SY
 /// Environment variable to select database backend (rocksdb or cursed-redb)
 pub const FM_DB_BACKEND_ENV: &str = "FM_DB_BACKEND";
 
+/// The username to use when connecting to a bitcoin node over RPC
 pub const FM_BITCOIND_USERNAME_ENV: &str = "FM_BITCOIND_USERNAME";
 
+/// The password to use when connecting to a bitcoin node over RPC
 pub const FM_BITCOIND_PASSWORD_ENV: &str = "FM_BITCOIND_PASSWORD";
 
+/// The URL to use when connecting to a bitcoin node over RPC.
+/// Should not include authentication parameters: (e.g `http://127.0.0.1:8332`)
 pub const FM_BITCOIND_URL_ENV: &str = "FM_BITCOIND_URL";
 
+/// The URL to use when connecting to an Esplora server for bitcoin blockchain
+/// data
 pub const FM_ESPLORA_URL_ENV: &str = "FM_ESPLORA_URL";
+
+/// Environment variable for customizing the default routing fees
+pub const FM_DEFAULT_ROUTING_FEES_ENV: &str = "FM_DEFAULT_ROUTING_FEES";
+
+/// Environment variable for customizing the default transaction fees
+pub const FM_DEFAULT_TRANSACTION_FEES_ENV: &str = "FM_DEFAULT_TRANSACTION_FEES";

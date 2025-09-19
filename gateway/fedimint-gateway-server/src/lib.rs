@@ -228,8 +228,14 @@ pub struct Gateway {
     /// The Bitcoin network that the Lightning network is configured to.
     network: Network,
 
-    // The source of the Bitcoin blockchain data
+    /// The source of the Bitcoin blockchain data
     chain_source: ChainSource,
+
+    /// The default routing fees for new federations
+    default_routing_fees: PaymentFee,
+
+    /// The default transaction fees for new federations
+    default_transaction_fees: PaymentFee,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -273,6 +279,8 @@ impl Gateway {
                 bcrypt_password_hash,
                 network,
                 num_route_hints,
+                default_routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                default_transaction_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
             },
             gateway_db,
             client_builder,
@@ -430,6 +438,8 @@ impl Gateway {
             num_route_hints,
             network,
             chain_source,
+            default_routing_fees: gateway_parameters.default_routing_fees,
+            default_transaction_fees: gateway_parameters.default_transaction_fees,
         })
     }
 
@@ -1177,8 +1187,8 @@ impl Gateway {
         let federation_config = FederationConfig {
             invite_code,
             federation_index,
-            lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-            transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            lightning_fee: self.default_routing_fees,
+            transaction_fee: self.default_transaction_fees,
             connector,
         };
 
