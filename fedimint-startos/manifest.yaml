@@ -1,11 +1,11 @@
 id: fedimintd
 title: "Fedimint"
-version: 0.8.1
+version: 0.8.1.1
 release-notes: |
   https://github.com/fedimint/fedimint/releases/tag/v0.8.1
   This release includes support for sideloading fedimintd.
 license: MIT
-wrapper-repo: "https://github.com/fedimint/fedimint/fedimint-startos"
+wrapper-repo: "https://github.com/fedimint/fedimint/tree/master/fedimint-startos"
 upstream-repo: "https://github.com/fedimint/fedimint"
 support-site: "https://github.com/fedimint/fedimint/issues"
 marketing-site: "https://fedimint.org/"
