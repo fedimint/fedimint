@@ -1,4 +1,5 @@
 use std::ops::Add;
+use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::schnorr::Signature;
@@ -280,5 +281,32 @@ impl From<PaymentFee> for RoutingFees {
 impl std::fmt::Display for PaymentFee {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{},{}", self.base, self.parts_per_million)
+    }
+}
+
+impl FromStr for PaymentFee {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(',');
+        let base_str = parts
+            .next()
+            .ok_or(anyhow::anyhow!("Failed to parse base fee"))?;
+        let ppm_str = parts.next().ok_or(anyhow::anyhow!("Failed to parse ppm"))?;
+
+        // Ensure no extra parts
+        if parts.next().is_some() {
+            return Err(anyhow::anyhow!(
+                "Failed to parse fees. Expected format <base>,<ppm>"
+            ));
+        }
+
+        let base = Amount::from_str(base_str)?;
+        let parts_per_million = ppm_str.parse::<u64>()?;
+
+        Ok(PaymentFee {
+            base,
+            parts_per_million,
+        })
     }
 }
