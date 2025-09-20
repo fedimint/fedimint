@@ -32,7 +32,8 @@ use fedimint_core::{
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
-    MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate, MintGenParams,
+    FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
+    MintGenParams,
 };
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
@@ -154,6 +155,7 @@ impl ServerModuleInit for MintInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
@@ -187,7 +189,13 @@ impl ServerModuleInit for MintInit {
                                 (key_peer, keys)
                             })
                             .collect(),
-                        fee_consensus: params.consensus.fee_consensus(),
+                        fee_consensus: params.consensus.fee_consensus().unwrap_or(
+                            if disable_base_fees {
+                                FeeConsensus::zero()
+                            } else {
+                                FeeConsensus::new(0).expect("Relative fee is within range")
+                            },
+                        ),
                         max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
                     },
                     private: MintConfigPrivate {
@@ -213,6 +221,7 @@ impl ServerModuleInit for MintInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
@@ -244,7 +253,14 @@ impl ServerModuleInit for MintInit {
                         (peer, pks)
                     })
                     .collect(),
-                fee_consensus: params.consensus.fee_consensus(),
+                fee_consensus: params
+                    .consensus
+                    .fee_consensus()
+                    .unwrap_or(if disable_base_fees {
+                        FeeConsensus::zero()
+                    } else {
+                        FeeConsensus::new(0).expect("Relative fee is within range")
+                    }),
                 max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },
         };

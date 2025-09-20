@@ -61,6 +61,8 @@ pub struct SetLocalParamsRequest {
     pub name: String,
     /// Federation name set by the leader
     pub federation_name: Option<String>,
+    /// Whether to disable base fees, set by the leader
+    pub disable_base_fees: Option<bool>,
 }
 
 /// Archive of all the guardian config files that can be used to recover a lost

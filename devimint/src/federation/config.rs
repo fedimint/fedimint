@@ -43,7 +43,7 @@ pub fn attach_default_module_init_params(
             local: EmptyGenParams::default(),
             consensus: MintGenParamsConsensus::new(
                 2,
-                fedimint_mint_common::config::FeeConsensus::zero(),
+                Some(fedimint_mint_common::config::FeeConsensus::zero()),
             ),
         },
     );
@@ -74,8 +74,10 @@ pub fn attach_default_module_init_params(
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
-                    fee_consensus: fedimint_lnv2_common::config::FeeConsensus::new(1000)
-                        .expect("Relative fee is within range"),
+                    fee_consensus: Some(
+                        fedimint_lnv2_common::config::FeeConsensus::new(1000)
+                            .expect("Relative fee is within range"),
+                    ),
                     network,
                 },
             },

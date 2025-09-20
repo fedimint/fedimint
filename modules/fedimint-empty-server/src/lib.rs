@@ -106,6 +106,7 @@ impl ServerModuleInit for EmptyInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        _disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let _params = self.parse_params(params).unwrap();
         // Generate a config for each peer
@@ -126,6 +127,7 @@ impl ServerModuleInit for EmptyInit {
         &self,
         _peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        _disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig> {
         let _params = self.parse_params(params).unwrap();
 

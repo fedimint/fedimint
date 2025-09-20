@@ -1139,6 +1139,7 @@ fn build_wallet_server_configs(
                 fee_consensus: Default::default(),
             },
         })?,
+        false,
     );
     let client_cfg = fedimint_core::config::ClientModuleConfig::from_typed(
         0,

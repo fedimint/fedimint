@@ -228,6 +228,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        _disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
         let sks = threshold_crypto::SecretKeySet::random(peers.to_num_peers().degree(), &mut OsRng);
@@ -260,6 +261,7 @@ impl ServerModuleInit for LightningInit {
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        _disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
@@ -1323,6 +1325,7 @@ mod tests {
                 },
             })
             .expect("valid config params"),
+            false, // disable_base_fees
         );
 
         let client_cfg = ServerModuleInit::get_client_config(

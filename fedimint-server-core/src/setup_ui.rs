@@ -27,6 +27,7 @@ pub trait ISetupApi {
         auth: ApiAuth,
         name: String,
         federation_name: Option<String>,
+        disable_base_fees: Option<bool>,
     ) -> Result<String>;
 
     /// Add peer connection info

@@ -238,6 +238,8 @@ pub struct ConfigGenParams {
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
+    /// Whether to disable base fees for this federation
+    pub disable_base_fees: bool,
 }
 
 impl ServerConfigConsensus {
@@ -491,7 +493,11 @@ impl ServerConfig {
                     registry
                         .get(kind)
                         .expect("Module not registered")
-                        .trusted_dealer_gen(&peer0.peer_ids(), module_params),
+                        .trusted_dealer_gen(
+                            &peer0.peer_ids(),
+                            module_params,
+                            params[&PeerId::from(0)].disable_base_fees,
+                        ),
                 )
             })
             .collect();
@@ -611,7 +617,7 @@ impl ServerConfig {
             let cfg = registry
                 .get(kind)
                 .with_context(|| format!("Module of kind {kind} not found"))?
-                .distributed_gen(&handle, module_params)
+                .distributed_gen(&handle, module_params, params.disable_base_fees)
                 .await?;
 
             module_cfgs.insert(module_id, cfg);

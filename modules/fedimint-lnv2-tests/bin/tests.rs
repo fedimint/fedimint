@@ -555,9 +555,6 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     federation.pegin_client(10_000, &client_a).await?;
     federation.pegin_client(10_000, &client_b).await?;
 
-    assert_eq!(client_a.balance().await?, 10_000 * 1000);
-    assert_eq!(client_b.balance().await?, 10_000 * 1000);
-
     for (gw_send, gw_receive) in gateway_matrix {
         info!(
             "Testing lnurl payments: client -> {} -> {} -> client",

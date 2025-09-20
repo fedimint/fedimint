@@ -62,12 +62,14 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
@@ -183,12 +185,14 @@ pub trait ServerModuleInit: ModuleInit + Sized {
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
@@ -272,16 +276,18 @@ where
         &self,
         peers: &[PeerId],
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, params)
+        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, params, disable_base_fees)
     }
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
         params: &ConfigGenModuleParams,
+        disable_base_fees: bool,
     ) -> anyhow::Result<ServerModuleConfig> {
-        <Self as ServerModuleInit>::distributed_gen(self, peers, params).await
+        <Self as ServerModuleInit>::distributed_gen(self, peers, params, disable_base_fees).await
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
