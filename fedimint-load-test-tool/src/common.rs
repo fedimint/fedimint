@@ -15,6 +15,8 @@ use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::util::backoff_util::aggressive_backoff;
+use fedimint_core::util::retry;
 use fedimint_core::{Amount, OutPoint, PeerId, TieredCounts, secp256k1};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
@@ -358,6 +360,22 @@ pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<Tiered
 }
 
 pub async fn remint_denomination(
+    client: &ClientHandleArc,
+    denomination: Amount,
+    quantity: u16,
+) -> anyhow::Result<()> {
+    retry(
+        format!("remint_{denomination}_{quantity}"),
+        aggressive_backoff(),
+        || {
+            let client = client.clone();
+            async move { try_remint_denomination(&client, denomination, quantity).await }
+        },
+    )
+    .await
+}
+
+pub async fn try_remint_denomination(
     client: &ClientHandleArc,
     denomination: Amount,
     quantity: u16,
