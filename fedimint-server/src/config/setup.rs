@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::config::META_FEDERATION_NAME_KEY;
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
     ADD_PEER_SETUP_CODE_ENDPOINT, GET_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
@@ -25,6 +25,7 @@ use fedimint_core::setup_code::PeerEndpoints;
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::net::check_auth;
 use fedimint_server_core::setup_ui::ISetupApi;
+use fedimint_wallet_common::config::WalletGenParams;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
@@ -35,6 +36,7 @@ use tracing::warn;
 use crate::config::{ConfigGenParams, ConfigGenSettings, PeerSetupCode};
 use crate::net::api::HasApiContext;
 use crate::net::p2p_connector::gen_cert_and_key;
+use bitcoin::Network;
 
 /// State held by the API after receiving a `ConfigGenConnectionsRequest`
 #[derive(Debug, Clone, Default)]
@@ -62,6 +64,8 @@ pub struct LocalParams {
     name: String,
     /// Federation name set by the leader
     federation_name: Option<String>,
+    /// Federation Network
+    network: Option<Network>,
 }
 
 impl LocalParams {
@@ -70,6 +74,7 @@ impl LocalParams {
             name: self.name.clone(),
             endpoints: self.endpoints.clone(),
             federation_name: self.federation_name.clone(),
+            network: self.network.clone(),
         }
     }
 }
@@ -174,6 +179,20 @@ impl ISetupApi for SetupApi {
             "Local parameters have already been set"
         );
 
+        let network = self
+            .settings
+            .modules
+            .iter_modules()
+            .find(|(_, kind, _)| *kind == &ModuleKind::from_static_str("wallet"))
+            .and_then(|(id, _, _)| {
+                self.settings.modules.get(id).and_then(|params| {
+                    params
+                        .to_typed::<WalletGenParams>()
+                        .ok()
+                        .map(|params| params.consensus.network)
+                })
+            });
+
         let lp = if self.settings.enable_iroh {
             warn!(target: LOG_SERVER, "Iroh support is experimental");
 
@@ -202,6 +221,7 @@ impl ISetupApi for SetupApi {
                 },
                 name,
                 federation_name,
+                network,
             }
         } else {
             let (tls_cert, tls_key) =
@@ -228,6 +248,7 @@ impl ISetupApi for SetupApi {
                 },
                 name,
                 federation_name,
+                network,
             }
         };
 
@@ -259,6 +280,14 @@ impl ISetupApi for SetupApi {
             discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
             "Guardian has different endpoint variant (TCP/Iroh) than us.",
         );
+
+        if info.network != local_params.network {
+            return Err(anyhow::anyhow!(
+                "Peer's Bitcoin network {} does not match {}",
+                info.network.map(|n| n.to_string()).unwrap_or("none".to_string()),
+                local_params.network.map(|n| n.to_string()).unwrap_or("none".to_string())
+            ));
+        }
 
         if let Some(federation_name) = state
             .setup_codes

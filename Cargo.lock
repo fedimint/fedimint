@@ -4001,6 +4001,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-metrics",
  "fedimint-server-core",
+ "fedimint-wallet-common",
  "futures",
  "group",
  "hex",
