@@ -38,7 +38,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
-use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+use fedimint_logging::LOG_CONSENSUS;
 pub use fedimint_server_core as core;
 use fedimint_server_core::ServerModuleInitRegistry;
 use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
@@ -49,10 +49,13 @@ use net::api::ApiSecrets;
 use net::p2p::P2PStatusReceivers;
 use net::p2p_connector::IrohConnector;
 use tokio::net::TcpListener;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::config::ConfigGenSettings;
-use crate::config::io::{SALT_FILE, write_server_config};
+use crate::config::io::{
+    SALT_FILE, finalize_password_change, recover_interrupted_password_change, trim_password,
+    write_server_config,
+};
 use crate::config::setup::SetupApi;
 use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
@@ -202,23 +205,15 @@ async fn update_server_info_version_dbtx(
 }
 
 pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
+    recover_interrupted_password_change(data_dir)?;
+
     // Attempt get the config with local password, otherwise start config gen
     let path = data_dir.join(PLAINTEXT_PASSWORD);
     if let Ok(password_untrimmed) = fs::read_to_string(&path) {
-        // We definitely don't want leading/trailing newlines, and user
-        // editing the file manually will probably get a free newline added
-        // by the text editor.
-        let password = password_untrimmed.trim_matches('\n');
-        // In the future we also don't want to support any leading/trailing newlines
-        let password_fully_trimmed = password.trim();
-        if password_fully_trimmed != password {
-            warn!(
-                target: LOG_CORE,
-                path = %path.display(),
-                "Password in the password file contains leading/trailing whitespaces. This will an error in the future."
-            );
-        }
-        return Ok(Some(read_server_config(password, data_dir)?));
+        let password = trim_password(&password_untrimmed);
+        let cfg = read_server_config(password, data_dir)?;
+        finalize_password_change(data_dir)?;
+        return Ok(Some(cfg));
     }
 
     Ok(None)

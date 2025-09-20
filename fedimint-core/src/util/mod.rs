@@ -245,11 +245,13 @@ impl FromStr for SafeUrl {
 /// exists)
 #[cfg(not(target_family = "wasm"))]
 pub fn write_new<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Result<()> {
-    fs::File::options()
+    let mut file = fs::File::options()
         .write(true)
         .create_new(true)
-        .open(path)?
-        .write_all(contents.as_ref())
+        .open(path)?;
+    file.write_all(contents.as_ref())?;
+    file.sync_all()?;
+    Ok(())
 }
 
 #[cfg(not(target_family = "wasm"))]

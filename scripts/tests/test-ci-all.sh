@@ -152,6 +152,12 @@ function test_client_config_change_detection() {
 }
 export -f test_client_config_change_detection
 
+function test_guardian_password_change() {
+  # test modifies server configs and restarts, so we need to override FM_OFFLINE_NODES
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/test-guardian-password-change.sh
+}
+export -f test_guardian_password_change
+
 function circular_deposit() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/circular-deposit-test.sh
 }
@@ -346,6 +352,7 @@ tests_to_run_in_parallel+=(
   "cannot_replay_tx"
   "test_offline_client_initialization"
   "test_client_config_change_detection"
+  "test_guardian_password_change"
   "circular_deposit"
   "wallet_recovery"
   "wallet_recovery_2"

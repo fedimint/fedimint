@@ -58,11 +58,15 @@ pub fn decrypt<'c>(ciphertext: &'c mut [u8], key: &LessSafeKey) -> Result<&'c [u
 /// Write `data` encrypted to a `file` with a random `nonce` that will be
 /// encoded in the file
 pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> Result<()> {
-    Ok(fs::File::options()
+    let mut file = fs::File::options()
         .write(true)
         .create_new(true)
-        .open(file)?
-        .write_all(hex::encode(encrypt(data, key)?).as_bytes())?)
+        .open(file)?;
+
+    file.write_all(hex::encode(encrypt(data, key)?).as_bytes())?;
+    file.sync_all()?;
+
+    Ok(())
 }
 
 /// Reads encrypted data from a file
