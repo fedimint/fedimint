@@ -7,7 +7,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
+use fedimint_core::{
+    OutPoint, TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record,
+};
 use fedimint_server_core::migration::{
     DynModuleHistoryItem, DynServerDbMigrationFn, IServerDbMigrationContext,
 };
@@ -108,43 +110,51 @@ impl IServerDbMigrationContext for ServerDbMigrationContext {
             .collect::<Vec<_>>()
             .await;
 
-        let stream = dbtx
-            .find_by_prefix(&SignedSessionOutcomePrefix)
-            .await
-            // Transform the session stream into an accepted item stream
-            .flat_map(|(_, signed_session_outcome): (_, SignedSessionOutcome)| {
-                futures::stream::iter(signed_session_outcome.session_outcome.items)
-            })
-            // Append the accepted items from the current session after all the signed session items
-            // have been processed
-            .chain(futures::stream::iter(active_session_items))
-            .flat_map(move |item| {
-                let history_items = match item.item {
-                    ConsensusItem::Transaction(tx) => tx
-                        .inputs
-                        .into_iter()
-                        .filter_map(|input| {
-                            (input.module_instance_id() == module_instance_id)
-                                .then_some(DynModuleHistoryItem::Input(input))
-                        })
-                        .chain(tx.outputs.into_iter().filter_map(|output| {
-                            (output.module_instance_id() == module_instance_id)
-                                .then_some(DynModuleHistoryItem::Output(output))
-                        }))
-                        .collect::<Vec<_>>(),
-                    ConsensusItem::Module(mci) => {
-                        if mci.module_instance_id() == module_instance_id {
-                            vec![DynModuleHistoryItem::ConsensusItem(mci)]
-                        } else {
-                            vec![]
-                        }
-                    }
-                    ConsensusItem::Default { .. } => {
-                        unreachable!("We never save unknown CIs on the server side")
-                    }
-                };
-                futures::stream::iter(history_items)
-            });
+        let stream =
+            dbtx.find_by_prefix(&SignedSessionOutcomePrefix)
+                .await
+                // Transform the session stream into an accepted item stream
+                .flat_map(|(_, signed_session_outcome): (_, SignedSessionOutcome)| {
+                    futures::stream::iter(signed_session_outcome.session_outcome.items)
+                })
+                // Append the accepted items from the current session after all the signed session
+                // items have been processed
+                .chain(futures::stream::iter(active_session_items))
+                .flat_map(move |item| {
+                    let history_items =
+                        match item.item {
+                            ConsensusItem::Transaction(tx) => {
+                                let txid = tx.tx_hash();
+                                let input_items = tx.inputs.into_iter().filter_map(|input| {
+                                    (input.module_instance_id() == module_instance_id)
+                                        .then_some(DynModuleHistoryItem::Input(input))
+                                });
+
+                                let output_items = tx.outputs.into_iter().zip(0..).filter_map(
+                                    |(output, out_idx)| {
+                                        (output.module_instance_id() == module_instance_id)
+                                            .then_some(DynModuleHistoryItem::Output(
+                                                output,
+                                                OutPoint { txid, out_idx },
+                                            ))
+                                    },
+                                );
+
+                                input_items.chain(output_items).collect::<Vec<_>>()
+                            }
+                            ConsensusItem::Module(mci) => {
+                                if mci.module_instance_id() == module_instance_id {
+                                    vec![DynModuleHistoryItem::ConsensusItem(mci)]
+                                } else {
+                                    vec![]
+                                }
+                            }
+                            ConsensusItem::Default { .. } => {
+                                unreachable!("We never save unknown CIs on the server side")
+                            }
+                        };
+                    futures::stream::iter(history_items)
+                });
 
         Box::pin(stream)
     }

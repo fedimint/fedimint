@@ -241,7 +241,7 @@ pub async fn migrate_to_v1(
 
                     Some(outpoint)
                 }
-                ModuleHistoryItem::Output(_) | ModuleHistoryItem::ConsensusItem(_) => None,
+                ModuleHistoryItem::Output(_, _) | ModuleHistoryItem::ConsensusItem(_) => None,
             }
         })
         .collect::<Vec<_>>()

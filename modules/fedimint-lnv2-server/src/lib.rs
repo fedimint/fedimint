@@ -15,7 +15,9 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -48,6 +50,7 @@ use fedimint_lnv2_common::{
 use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
+use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::net::check_auth;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
@@ -340,6 +343,20 @@ impl ServerModuleInit for LightningInit {
         })
     }
 
+    fn get_database_migrations(
+        &self,
+    ) -> BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Lightning>> {
+        let mut migrations: BTreeMap<DatabaseVersion, ServerModuleDbMigrationFn<Lightning>> =
+            BTreeMap::new();
+
+        migrations.insert(
+            DatabaseVersion(0),
+            Box::new(move |ctx| Box::pin(crate::db::migrate_to_v1(ctx))),
+        );
+
+        migrations
+    }
+
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
         Some(DbKeyPrefix::iter().map(|p| p as u8).collect())
     }
@@ -490,12 +507,12 @@ impl ServerModule for Lightning {
                     .await
                     .ok_or(LightningInputError::UnknownContract)?;
 
-                if let Some(index) = dbtx
+                let index = dbtx
                     .remove_entry(&IncomingContractIndexKey(*outpoint))
                     .await
-                {
-                    dbtx.remove_entry(&IncomingContractStreamKey(index)).await;
-                }
+                    .expect("Incoming contract index should exist");
+
+                dbtx.remove_entry(&IncomingContractStreamKey(index)).await;
 
                 if !contract
                     .verify_agg_decryption_key(&self.cfg.consensus.tpe_agg_pk, agg_decryption_key)

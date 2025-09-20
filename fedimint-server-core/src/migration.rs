@@ -10,7 +10,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::util::BoxStream;
-use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_core::{OutPoint, apply, async_trait_maybe_send};
 use futures::StreamExt as _;
 
 use crate::ServerModule;
@@ -19,14 +19,14 @@ use crate::ServerModule;
 pub enum DynModuleHistoryItem {
     ConsensusItem(DynModuleConsensusItem),
     Input(DynInput),
-    Output(DynOutput),
+    Output(DynOutput, OutPoint),
 }
 
 /// Typed history item of a module
 pub enum ModuleHistoryItem<M: ModuleCommon> {
     ConsensusItem(M::ConsensusItem),
     Input(M::Input),
-    Output(M::Output),
+    Output(M::Output, OutPoint),
 }
 
 /// An interface a server module db migration context needs to implement
@@ -124,12 +124,13 @@ where
                             .expect("Wrong module type")
                             .clone(),
                     ),
-                    DynModuleHistoryItem::Output(output) => ModuleHistoryItem::Output(
+                    DynModuleHistoryItem::Output(output, outpoint) => ModuleHistoryItem::Output(
                         output
                             .as_any()
                             .downcast_ref::<<<M as ServerModule>::Common as ModuleCommon>::Output>()
                             .expect("Wrong module type")
                             .clone(),
+                        outpoint,
                     ),
                 }),
         )
