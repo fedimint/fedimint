@@ -74,7 +74,7 @@ use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
-    async_trait_maybe_send, push_db_pair_items,
+    async_trait_maybe_send, base32, push_db_pair_items,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -329,17 +329,18 @@ const BASE64_URL_SAFE: base64::engine::GeneralPurpose = base64::engine::GeneralP
 impl FromStr for OOBNotes {
     type Err = anyhow::Error;
 
-    /// Decode a set of out-of-band e-cash notes from a base64 string.
+    /// Decode a set of out-of-band e-cash notes from a base64 or base32 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s: String = s.chars().filter(|&c| !c.is_whitespace()).collect();
 
-        let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(&s) {
-            bytes
-        } else {
-            base64::engine::general_purpose::STANDARD.decode(&s)?
-        };
-        let oob_notes: OOBNotes =
-            Decodable::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())?;
+        if let Ok(oob_notes) = base32::decode_oob(&s) {
+            return Ok(oob_notes);
+        }
+
+        let oob_notes: OOBNotes = Decodable::consensus_decode_whole(
+            &BASE64_URL_SAFE.decode(&s)?,
+            &ModuleDecoderRegistry::default(),
+        )?;
 
         ensure!(!oob_notes.notes().is_empty(), "OOBNotes cannot be empty");
 
@@ -2618,14 +2619,21 @@ mod tests {
 
     fn test_roundtrip_serialize_str<T, F>(data: T, assertions: F)
     where
-        T: FromStr + Display,
+        T: FromStr + Display + crate::Encodable + crate::Decodable,
         <T as FromStr>::Err: std::fmt::Debug,
         F: Fn(T),
     {
-        let data_str = data.to_string();
-        assertions(data);
-        let data_parsed = data_str.parse().expect("Deserialization failed");
+        let data_parsed = data.to_string().parse().expect("Deserialization failed");
+
         assertions(data_parsed);
+
+        let data_parsed = crate::base32::encode_oob(&data)
+            .parse()
+            .expect("Deserialization failed");
+
+        assertions(data_parsed);
+
+        assertions(data);
     }
 
     #[test]

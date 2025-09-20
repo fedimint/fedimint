@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use anyhow::{Context, ensure};
 use async_trait::async_trait;
-use fedimint_core::PeerId;
 use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::ModuleInstanceId;
@@ -23,6 +22,7 @@ use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion, api_endpoint,
 };
 use fedimint_core::setup_code::PeerEndpoints;
+use fedimint_core::{PeerId, base32};
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::net::check_auth;
 use fedimint_server_core::setup_ui::ISetupApi;
@@ -117,7 +117,7 @@ impl ISetupApi for SetupApi {
             .await
             .local_params
             .as_ref()
-            .map(|lp| lp.setup_code().encode_base32())
+            .map(|lp| base32::encode_oob(&lp.setup_code()))
     }
 
     async fn auth(&self) -> Option<ApiAuth> {
@@ -157,7 +157,7 @@ impl ISetupApi for SetupApi {
             && existing_local_parameters.federation_name == federation_name
             && existing_local_parameters.disable_base_fees == disable_base_fees
         {
-            return Ok(existing_local_parameters.setup_code().encode_base32());
+            return Ok(base32::encode_oob(&existing_local_parameters.setup_code()));
         }
 
         ensure!(!name.is_empty(), "The guardian name is empty");
@@ -241,11 +241,11 @@ impl ISetupApi for SetupApi {
 
         state.local_params = Some(lp.clone());
 
-        Ok(lp.setup_code().encode_base32())
+        Ok(base32::encode_oob(&lp.setup_code()))
     }
 
     async fn add_peer_setup_code(&self, info: String) -> anyhow::Result<String> {
-        let info = PeerSetupCode::decode_base32(&info)?;
+        let info = base32::decode_oob(&info)?;
 
         let mut state = self.state.lock().await;
 
