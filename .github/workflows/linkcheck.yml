@@ -7,7 +7,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     continue-on-error: true # can fail for external reasons, so don't be a blocker
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Persist lychee cache, so we don't bother with checking same links all the time
       # Should also minimize number of flakes.
