@@ -307,7 +307,10 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
                         ))?;
                     let mut cursor = std::io::Cursor::new(&bytes);
 
-                    let decoded = #decode_block;
+                    let decoded = anyhow::Context::context(
+                        (|| -> anyhow::Result<_> {
+                          Ok(#decode_block)
+                        })(), concat!("Decoding variant ", stringify!(#variant_ident), " (idx: ", #variant_idx, ")"))?;
 
                     let read_bytes = cursor.position();
                     let total_bytes = bytes.len() as u64;
