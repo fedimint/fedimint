@@ -503,7 +503,7 @@ impl GatewayClientModule {
     /// Attempt buying preimage from this federation in order to fulfill a pay
     /// request in another federation served by this gateway. In direct swap
     /// scenario, the gateway DOES NOT send payment over the lightning network
-    async fn gateway_handle_direct_swap(
+    pub async fn gateway_handle_direct_swap(
         &self,
         swap_params: SwapParameters,
     ) -> anyhow::Result<OperationId> {
@@ -856,9 +856,9 @@ impl TryFrom<InterceptPaymentRequest> for Htlc {
 }
 
 #[derive(Debug, Clone)]
-struct SwapParameters {
-    payment_hash: sha256::Hash,
-    amount_msat: Amount,
+pub struct SwapParameters {
+    pub payment_hash: sha256::Hash,
+    pub amount_msat: Amount,
 }
 
 impl TryFrom<PaymentData> for SwapParameters {
@@ -932,6 +932,8 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         htlc_response: InterceptPaymentResponse,
     ) -> Result<(), LightningRpcError>;
 
+    /// Check if the gateway satisfy the LNv1 payment by funding an LNv2
+    /// `IncomingContract`
     async fn is_lnv2_direct_swap(
         &self,
         payment_hash: sha256::Hash,

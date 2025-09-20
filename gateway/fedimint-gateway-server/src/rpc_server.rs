@@ -169,14 +169,8 @@ fn lnv2_routes() -> Router {
 fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
     // Public routes on gateway webserver
     let mut public_routes = Router::new().route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
-
-    if gateway.is_running_lnv1() {
-        public_routes = public_routes.merge(lnv1_routes());
-    }
-
-    if gateway.is_running_lnv2() {
-        public_routes = public_routes.merge(lnv2_routes());
-    }
+    public_routes = public_routes.merge(lnv1_routes());
+    public_routes = public_routes.merge(lnv2_routes());
 
     // Authenticated routes used for gateway administration
     let authenticated_routes = Router::new()
