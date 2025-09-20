@@ -134,7 +134,14 @@ impl FederationTest {
 
     /// Return first invite code for gateways
     pub fn invite_code(&self) -> InviteCode {
-        self.configs[&PeerId::from(0)].get_invite_code(None)
+        let peer_id = PeerId::from(0);
+        let cfg = &self.configs[&peer_id];
+        InviteCode::new(
+            cfg.consensus.api_endpoints[&peer_id].url.clone(),
+            peer_id,
+            cfg.calculate_federation_id(),
+            None,
+        )
     }
 
     ///  Return the federation id
