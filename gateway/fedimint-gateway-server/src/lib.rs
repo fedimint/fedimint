@@ -82,7 +82,10 @@ use fedimint_gateway_common::{
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
-use fedimint_gw_client::{GatewayClientModule, GatewayExtPayStates, IGatewayClientV1};
+use fedimint_gw_client::{
+    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, IGatewayClientV1,
+    SwapParameters,
+};
 use fedimint_gwv2_client::events::compute_lnv2_stats;
 use fedimint_gwv2_client::{
     EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, IGatewayClientV2,
@@ -2504,6 +2507,75 @@ impl IGatewayClientV2 for Gateway {
             .ok_or(anyhow!("Routing Info not available"))?
             .send_fee_minimum
             .add_to(amount))
+    }
+
+    async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>> {
+        let rhints = invoice.route_hints();
+        match rhints.first().and_then(|rh| rh.0.last()) {
+            None => None,
+            Some(hop) => match self.get_lightning_context().await {
+                Ok(lightning_context) => {
+                    if hop.src_node_id != lightning_context.lightning_public_key {
+                        return None;
+                    }
+
+                    self.federation_manager
+                        .read()
+                        .await
+                        .get_client_for_index(hop.short_channel_id)
+                }
+                Err(_) => None,
+            },
+        }
+    }
+
+    async fn relay_lnv1_swap(
+        &self,
+        client: &ClientHandleArc,
+        invoice: &Bolt11Invoice,
+    ) -> anyhow::Result<FinalReceiveState> {
+        let swap_params = SwapParameters {
+            payment_hash: *invoice.payment_hash(),
+            amount_msat: Amount::from_msats(
+                invoice
+                    .amount_milli_satoshis()
+                    .ok_or(anyhow!("Amountless invoice not supported"))?,
+            ),
+        };
+        let lnv1 = client
+            .get_first_module::<GatewayClientModule>()
+            .expect("No LNv1 module");
+        let operation_id = lnv1.gateway_handle_direct_swap(swap_params).await?;
+        let mut stream = lnv1
+            .gateway_subscribe_ln_receive(operation_id)
+            .await?
+            .into_stream();
+        let mut final_state = FinalReceiveState::Failure;
+        while let Some(update) = stream.next().await {
+            match update {
+                GatewayExtReceiveStates::Funding => {}
+                GatewayExtReceiveStates::FundingFailed { error: _ } => {
+                    final_state = FinalReceiveState::Rejected;
+                }
+                GatewayExtReceiveStates::Preimage(preimage) => {
+                    final_state = FinalReceiveState::Success(preimage.0);
+                }
+                GatewayExtReceiveStates::RefundError {
+                    error_message: _,
+                    error: _,
+                } => {
+                    final_state = FinalReceiveState::Failure;
+                }
+                GatewayExtReceiveStates::RefundSuccess {
+                    out_points: _,
+                    error: _,
+                } => {
+                    final_state = FinalReceiveState::Refunded;
+                }
+            }
+        }
+
+        Ok(final_state)
     }
 }
 
