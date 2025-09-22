@@ -15,13 +15,13 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::endpoint_constants::{
 <a href=#16 id=16 data-nosnippet>16</a>    ADD_CONFIG_GEN_PEER_ENDPOINT, ADD_PEER_SETUP_CODE_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT,
 <a href=#17 id=17 data-nosnippet>17</a>    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT,
-<a href=#18 id=18 data-nosnippet>18</a>    BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-<a href=#19 id=19 data-nosnippet>19</a>    FEDIMINTD_VERSION_ENDPOINT, GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-<a href=#20 id=20 data-nosnippet>20</a>    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
-<a href=#21 id=21 data-nosnippet>21</a>    RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-<a href=#22 id=22 data-nosnippet>22</a>    SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-<a href=#23 id=23 data-nosnippet>23</a>    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
-<a href=#24 id=24 data-nosnippet>24</a>    START_CONSENSUS_ENDPOINT, START_DKG_ENDPOINT, STATUS_ENDPOINT,
+<a href=#18 id=18 data-nosnippet>18</a>    BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT, CHANGE_PASSWORD_ENDPOINT,
+<a href=#19 id=19 data-nosnippet>19</a>    CONFIG_GEN_PEERS_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GET_SETUP_CODE_ENDPOINT,
+<a href=#20 id=20 data-nosnippet>20</a>    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT,
+<a href=#21 id=21 data-nosnippet>21</a>    RESET_PEER_SETUP_CODES_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT,
+<a href=#22 id=22 data-nosnippet>22</a>    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+<a href=#23 id=23 data-nosnippet>23</a>    SET_PASSWORD_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+<a href=#24 id=24 data-nosnippet>24</a>    SIGN_API_ANNOUNCEMENT_ENDPOINT, START_CONSENSUS_ENDPOINT, START_DKG_ENDPOINT, STATUS_ENDPOINT,
 <a href=#25 id=25 data-nosnippet>25</a>    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
 <a href=#26 id=26 data-nosnippet>26</a>    VERIFY_CONFIG_HASH_ENDPOINT,
 <a href=#27 id=27 data-nosnippet>27</a>};
@@ -580,4 +580,13 @@
 <a href=#580 id=580 data-nosnippet>580</a>        )
 <a href=#581 id=581 data-nosnippet>581</a>        .<span class="kw">await
 <a href=#582 id=582 data-nosnippet>582</a>    </span>}
-<a href=#583 id=583 data-nosnippet>583</a>}</code></pre></div></section></main></body></html>
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a>    <span class="kw">async fn </span>change_password(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth, new_password: <span class="kw-2">&amp;</span>str) -&gt; FederationResult&lt;()&gt; {
+<a href=#585 id=585 data-nosnippet>585</a>        <span class="self">self</span>.request_admin(
+<a href=#586 id=586 data-nosnippet>586</a>            CHANGE_PASSWORD_ENDPOINT,
+<a href=#587 id=587 data-nosnippet>587</a>            ApiRequestErased::new(new_password),
+<a href=#588 id=588 data-nosnippet>588</a>            auth,
+<a href=#589 id=589 data-nosnippet>589</a>        )
+<a href=#590 id=590 data-nosnippet>590</a>        .<span class="kw">await
+<a href=#591 id=591 data-nosnippet>591</a>    </span>}
+<a href=#592 id=592 data-nosnippet>592</a>}</code></pre></div></section></main></body></html>
