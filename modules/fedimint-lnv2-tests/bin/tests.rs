@@ -224,6 +224,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     }
 
     let mut lnv1_swap = 0;
+    let mut lnv2_swap = 0;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
     let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     if gatewayd_version >= *VERSION_0_9_0_ALPHA && gateway_cli_version >= *VERSION_0_9_0_ALPHA {
@@ -233,6 +234,18 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         test_send_lnv1(&client, &lnd_gw_id, &invoice.to_string()).await?;
         lnv1_swap += 1;
         await_receive_claimed(&client, receive_op).await?;
+
+        info!("Testing LNv2 client can pay LNv1 invoice...");
+        let (invoice, receive_op) = receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
+        test_send(
+            &client,
+            &gw_lnd.addr,
+            &invoice.to_string(),
+            FinalSendOperationState::Success,
+        )
+        .await?;
+        lnv2_swap += 1;
+        await_receive_lnv1(&client, receive_op).await?;
     }
 
     info!("Testing payments from client to gateways...");
@@ -323,8 +336,12 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
         let lnd_payment_summary = gw_lnd.payment_summary().await?;
 
-        assert_eq!(lnd_payment_summary.outgoing.total_success, 4 + lnv1_swap);
+        assert_eq!(
+            lnd_payment_summary.outgoing.total_success,
+            4 + lnv1_swap + lnv2_swap
+        );
         assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
+        // LNv1 does not count swaps as incoming payments
         assert_eq!(lnd_payment_summary.incoming.total_success, 3 + lnv1_swap);
         assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
 
@@ -476,11 +493,38 @@ async fn test_send(
     Ok(())
 }
 
-async fn test_send_lnv1(
+async fn receive_lnv1(
     client: &Client,
     gateway_id: &String,
-    invoice: &String,
-) -> anyhow::Result<()> {
+    amount_msats: u64,
+) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
+    let invoice_response = cmd!(
+        client,
+        "module",
+        "ln",
+        "invoice",
+        amount_msats,
+        "--gateway-id",
+        gateway_id
+    )
+    .out_json()
+    .await?;
+    let invoice = serde_json::from_value::<Bolt11Invoice>(
+        invoice_response
+            .get("invoice")
+            .expect("Invoice should be present")
+            .clone(),
+    )?;
+    let operation_id = serde_json::from_value::<OperationId>(
+        invoice_response
+            .get("operation_id")
+            .expect("OperationId should be present")
+            .clone(),
+    )?;
+    Ok((invoice, operation_id))
+}
+
+async fn test_send_lnv1(client: &Client, gateway_id: &str, invoice: &str) -> anyhow::Result<()> {
     let payment_result = cmd!(
         client,
         "module",
@@ -511,6 +555,14 @@ async fn await_receive_claimed(client: &Client, operation_id: OperationId) -> an
             .expect("JSON serialization failed"),
     );
 
+    Ok(())
+}
+
+async fn await_receive_lnv1(client: &Client, operation_id: OperationId) -> anyhow::Result<()> {
+    let lnv1_response = cmd!(client, "await-invoice", operation_id.fmt_full())
+        .out_json()
+        .await?;
+    assert!(lnv1_response.get("total_amount_msat").is_some());
     Ok(())
 }
 
