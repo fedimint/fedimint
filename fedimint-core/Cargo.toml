@@ -40,7 +40,11 @@ group = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
 imbl = { workspace = true }
+iroh = { workspace = true, features = [
+  "discovery-pkarr-dht",
+], default-features = false }
 iroh-base = { workspace = true, features = ["key"] }
+iroh-relay = { workspace = true, default-features = false }
 itertools = { workspace = true }
 jsonrpsee-core = { workspace = true, features = ["client"] }
 lightning = { workspace = true }
@@ -63,6 +67,7 @@ thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true, features = ["serde"] }
+z32 = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
