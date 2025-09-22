@@ -1,0 +1,19 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-util-error provides error formatting utilities for the Fedimint ecosystem."
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-util-error"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lib]
+name = "fedimint_util_error"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

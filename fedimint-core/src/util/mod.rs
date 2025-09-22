@@ -1,7 +1,6 @@
 pub mod backoff_util;
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
-mod error;
 pub mod update_merge;
 
 use std::convert::Infallible;
@@ -16,8 +15,8 @@ use std::sync::LazyLock;
 use std::{fs, io};
 
 use anyhow::format_err;
-pub use error::*;
 use fedimint_logging::LOG_CORE;
+pub use fedimint_util_error::*;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
