@@ -605,6 +605,10 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Get the invite code for the federation guardian.
     /// For instance, useful after DKG
     async fn get_invite_code(&self, guardian: PeerId) -> PeerResult<InviteCode>;
+
+    /// Change the password used to encrypt the configs and for guardian
+    /// authentication
+    async fn change_password(&self, auth: ApiAuth, new_password: &str) -> FederationResult<()>;
 }
 
 pub fn deserialize_outcome<R>(

@@ -26,13 +26,13 @@ use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    BACKUP_STATISTICS_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
-    CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    BACKUP_STATISTICS_ENDPOINT, CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
+    CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT,
+    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
+    P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -47,6 +47,7 @@ use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{
     SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
 };
+use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
@@ -63,6 +64,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
+    reencrypt_private_config,
 };
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
@@ -77,6 +79,8 @@ use crate::net::p2p::P2PStatusReceivers;
 pub struct ConsensusApi {
     /// Our server configuration
     pub cfg: ServerConfig,
+    /// Directory where config files are stored
+    pub cfg_dir: PathBuf,
     /// Database for serving the API
     pub db: Database,
     /// Modules registered with the federation
@@ -94,6 +98,7 @@ pub struct ConsensusApi {
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub supported_api_versions: SupportedApiVersionsSummary,
     pub code_version_str: String,
+    pub task_group: TaskGroup,
 }
 
 impl ConsensusApi {
@@ -493,6 +498,24 @@ impl ConsensusApi {
             .await
             .expect("Will not terminate on error")
     }
+
+    /// Changes the guardian password by re-encrypting the private config and
+    /// changing the on-disk password file if present. `fedimintd` is shut down
+    /// afterward, the user's service manager (e.g. `systemd` is expected to
+    /// restart it).
+    fn change_guardian_password(
+        &self,
+        new_password: &str,
+        _auth: &GuardianAuthToken,
+    ) -> Result<(), ApiError> {
+        reencrypt_private_config(&self.cfg_dir, &self.cfg.private, new_password)
+            .map_err(|e| ApiError::server_error(format!("Failed to change password: {e}")))?;
+
+        info!(target: LOG_NET_API, "Successfully changed guardian password, shutting down to restart with new password");
+        self.task_group.shutdown();
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -861,6 +884,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |_fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
                 check_auth(context)?;
                 Ok(backup_statistics_static(&mut context.dbtx().into_nc()).await)
+            }
+        },
+        api_endpoint! {
+            CHANGE_PASSWORD_ENDPOINT,
+            ApiVersion::new(0, 6),
+            async |fedimint: &ConsensusApi, context, new_password: String| -> () {
+                let auth = check_auth(context)?;
+                fedimint.change_guardian_password(&new_password, &auth)
             }
         },
     ]
