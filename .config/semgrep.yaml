@@ -104,7 +104,7 @@ rules:
   patterns:
     # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
     # so matching this one with raw regexes instead
-    - pattern-regex: '%e\b|%err\b|%error\b'
+    - pattern-regex: '%e\b|%err\b|%error\b|\?e'
     - pattern-not-regex: '%e[a-zA-Z\.]*(fmt_compact|as_str)'
   severity: ERROR
 
