@@ -6,7 +6,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::envs::parse_kv_list_from_env;
-use fedimint_core::iroh_prod::FM_DNS_PKARR_RELAY_PROD;
+use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
 };
@@ -96,7 +96,7 @@ impl IrohConnector {
     ) -> anyhow::Result<Self> {
         let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
             || {
-                FM_DNS_PKARR_RELAY_PROD
+                FM_IROH_DNS_FEDIMINT_PROD
                     .into_iter()
                     .map(|url| Url::parse(url).expect("Hardcoded, can't fail"))
                     .collect()
