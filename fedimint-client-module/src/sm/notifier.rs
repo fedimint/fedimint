@@ -2,8 +2,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
-use fedimint_core::util::BoxStream;
 use fedimint_core::util::broadcaststream::BroadcastStream;
+use fedimint_core::util::{BoxStream, FmtCompact};
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
 use tracing::{debug, error, trace};
@@ -141,7 +141,7 @@ where
             BroadcastStream::new(self.broadcast.subscribe())
                 .take_while(|res| {
                     let cont = if let Err(err) = res {
-                        error!(target: LOG_CLIENT, ?err, "ModuleNotifier stream stopped on error");
+                        error!(target: LOG_CLIENT, err = %err.fmt_compact(), "ModuleNotifier stream stopped on error");
                         false
                     } else {
                         true

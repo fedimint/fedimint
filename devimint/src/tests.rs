@@ -1690,6 +1690,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .map(|o| o["descriptor"].as_str().unwrap())
         .collect::<HashSet<_>>();
 
+    // nosemgrep: use-err-formatting
     debug!(target: LOG_DEVIMINT, ?epochs_descriptors, "recoverytool descriptors using epochs method");
 
     // Epochs method includes descriptors from spent outputs, so we only need to

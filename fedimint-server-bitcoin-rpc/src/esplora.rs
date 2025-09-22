@@ -5,7 +5,7 @@ use anyhow::{Context, bail};
 use bitcoin::{BlockHash, Network, Transaction};
 use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_logging::{LOG_BITCOIND_ESPLORA, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::{debug, info};
@@ -123,13 +123,13 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        let _ = self.client.broadcast(&transaction).await.map_err(|error| {
+        let _ = self.client.broadcast(&transaction).await.map_err(|err| {
             // `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
             // from detecting errors for transactions already submitted.
             // TODO: Suppress `esplora-client` already submitted errors when client is
             // updated
             // https://github.com/fedimint/fedimint/issues/3732
-            info!(target: LOG_BITCOIND_ESPLORA, ?error, "Error broadcasting transaction");
+            info!(target: LOG_BITCOIND_ESPLORA, err = %err.fmt_compact(), "Error broadcasting transaction");
         });
     }
 

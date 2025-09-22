@@ -33,7 +33,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
-use fedimint_core::util::{SafeUrl, Spanned};
+use fedimint_core::util::{FmtCompact, SafeUrl, Spanned};
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, secp256k1};
 use fedimint_derive_secret::ChildId;
 use fedimint_lightning::{
@@ -401,7 +401,7 @@ impl GatewayClientModule {
         match self.module_api.register_gateway(&registration_info).await {
             Err(e) => {
                 warn!(
-                    ?e,
+                    e = %e.fmt_compact(),
                     "Failed to register gateway {gateway_id} with federation {federation_id}"
                 );
             }

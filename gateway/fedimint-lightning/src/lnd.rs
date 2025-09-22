@@ -351,7 +351,7 @@ impl GatewayLndClient {
                         match stream {
                             Ok(stream) => stream.into_inner(),
                             Err(e) => {
-                                crit!(target: LOG_LIGHTNING, err = ?e, "Failed to establish htlc stream");
+                                crit!(target: LOG_LIGHTNING, err = %e.fmt_compact(), "Failed to establish htlc stream");
                                 return;
                             }
                         }
