@@ -16,7 +16,7 @@ use fedimint_wallet_client::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
 use fedimint_wallet_server::WalletInit;
-use fedimintd::envs::{FM_DISABLE_META_MODULE_ENV, FM_PORT_ESPLORA_ENV};
+use fedimintd_envs::{FM_DISABLE_META_MODULE_ENV, FM_PORT_ESPLORA_ENV};
 
 use crate::util::supports_lnv2;
 

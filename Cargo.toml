@@ -38,6 +38,7 @@ members = [
   "fedimint-testing-core",
   "fedimint-wasm-tests",
   "fedimintd",
+  "fedimintd-envs",
   "fuzz",
   "gateway/fedimint-gateway-client",
   "gateway/fedimint-gateway-common",
@@ -210,6 +211,7 @@ fedimint-wallet-client = { path = "./modules/fedimint-wallet-client", version = 
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.9.0-alpha" }
 fedimint-wallet-server = { path = "./modules/fedimint-wallet-server", version = "=0.9.0-alpha" }
 fedimintd = { path = "./fedimintd", version = "=0.9.0-alpha" }
+fedimintd-envs = { path = "./fedimintd-envs", version = "=0.9.0-alpha" }
 ff = "0.13.1"
 fs-lock = "0.1.10"
 fs2 = "0.4.3"

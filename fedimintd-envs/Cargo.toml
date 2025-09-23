@@ -1,0 +1,16 @@
+[package]
+authors = ["The Fedimint Developers"]
+description = "Environment variable constants for fedimintd"
+edition = "2021"
+license = "MIT"
+name = "fedimintd-envs"
+readme = "../README.md"
+repository = "https://github.com/fedimint/fedimint"
+version = { workspace = true }
+
+[lib]
+name = "fedimintd_envs"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
