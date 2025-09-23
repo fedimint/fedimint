@@ -76,7 +76,7 @@
 <a href=#76 id=76 data-nosnippet>76</a>                some_success |= <span class="bool-val">true
 <a href=#77 id=77 data-nosnippet>77</a>            </span>}
 <a href=#78 id=78 data-nosnippet>78</a>            <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#79 id=79 data-nosnippet>79</a>                <span class="macro">warn!</span>(target: LOG_CLIENT, %peer_id, <span class="question-mark">?</span>e, <span class="string">"Failed to process API announcements"</span>);
+<a href=#79 id=79 data-nosnippet>79</a>                <span class="macro">warn!</span>(target: LOG_CLIENT, %peer_id, err = %e.fmt_compact_anyhow(), <span class="string">"Failed to process API announcements"</span>);
 <a href=#80 id=80 data-nosnippet>80</a>            }
 <a href=#81 id=81 data-nosnippet>81</a>        }
 <a href=#82 id=82 data-nosnippet>82</a>    }
