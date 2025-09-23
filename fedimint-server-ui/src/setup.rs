@@ -87,11 +87,11 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
             }
 
             div class="form-group mb-4" {
-                input type="text" class="form-control" id="name" name="name" placeholder="Guardian name" required;
+                input type="text" class="form-control" id="name" name="name" placeholder="Your guardian name" required;
             }
 
             div class="form-group mb-4" {
-                input type="password" class="form-control" id="password" name="password" placeholder="Secure password" required;
+                input type="password" class="form-control" id="password" name="password" placeholder="Set password" required;
             }
 
             div class="form-group mb-4" {
@@ -99,7 +99,8 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                     input type="checkbox" class="form-check-input toggle-control" id="is_lead" name="is_lead" value="true";
 
                     label class="form-check-label" for="is_lead" {
-                        "I am the guardian setting up the global configuration for this federation."
+                        "Set global configuration. "
+                        b { "Only one guardian must enable this." }
                     }
 
                     div class="toggle-content mt-3" {
@@ -114,14 +115,14 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
 
                         div class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
                             strong { "Warning: " }
-                            "The base fee accounts for the cost a user's transaction incurs onto the federation when it's stored on disk indefinitely - it amounts to 1-3 sats per transaction and is independent of the economic value transferred. We strongly recommend against disabling the base fee - this cannot be changed once the federation is running."
+                            "Base fees discourage spam and wasting storage space. Typical fee is only 1-3 sats per transaction irrespective of the value transferred. We recommend enabling the base fee and it cannot be changed later."
                         }
                     }
                 }
             }
 
             div class="button-container" {
-                button type="submit" class="btn btn-primary setup-btn" { "Set Parameters" }
+                button type="submit" class="btn btn-primary setup-btn" { "OK" }
             }
         }
     };
@@ -217,6 +218,9 @@ async fn federation_setup(
 
     let content = html! {
         section class="mb-4" {
+            h4 { "Your setup code" }
+
+            p { "Share it with other guardians." }
             div class="alert alert-info mb-3" {
                 (our_connection_info)
             }
@@ -232,6 +236,10 @@ async fn federation_setup(
         hr class="my-4" {}
 
         section class="mb-4" {
+            h4 { "Other guardians" }
+
+            p { "Add setup code of every other guardian." }
+
             ul class="list-group mb-4" {
                 @for peer in connected_peers {
                     li class="list-group-item" { (peer) }
@@ -241,7 +249,7 @@ async fn federation_setup(
             form method="post" action=(ADD_SETUP_CODE_ROUTE) {
                 div class="mb-3" {
                     input type="text" class="form-control mb-2" id="peer_info" name="peer_info"
-                        placeholder="Paste setup code from fellow guardian" required;
+                        placeholder="Paste setup code" required;
                 }
 
                 div class="row mt-3" {
@@ -264,13 +272,13 @@ async fn federation_setup(
 
         section class="mb-4" {
             div class="alert alert-warning mb-4" {
-                "Make sure all information is correct and every guardian is ready before launching the federation. This process cannot be reversed once started."
+                "Verify " b { "all" } " other guardians were added. This process cannot be reversed once started."
             }
 
             div class="text-center" {
                 form method="post" action=(START_DKG_ROUTE) {
                     button type="submit" class="btn btn-warning setup-btn" {
-                        "🚀 Launch Federation"
+                        "🚀 Confirm"
                     }
                 }
             }
@@ -308,18 +316,32 @@ async fn post_start_dkg(
 ) -> impl IntoResponse {
     match state.api.start_dkg().await {
         Ok(()) => {
-            // Show simple DKG success page
+            // Show DKG progress page with htmx polling
             let content = html! {
                 div class="alert alert-success my-4" {
-                    "The distributed key generation has been started successfully. You can monitor the progress in your server logs."
+                    "Setting up Federation..."
                 }
+
                 p class="text-center" {
-                    "Once the distributed key generation completes, the Guardian Dashboard will become available at the root URL."
+                    "All guardians need to confirm their settings. Once completed you will be redirected to the Dashboard."
                 }
-                div class="button-container mt-4" {
-                    a href=(ROOT_ROUTE) class="btn btn-primary setup-btn" {
-                        "Go to Dashboard"
+
+                // Hidden div that will poll and redirect when the normal UI is ready
+                div
+                    hx-get=(ROOT_ROUTE)
+                    hx-trigger="every 2s"
+                    hx-swap="none"
+                    hx-on--after-request={
+                        "if (event.detail.xhr.status === 200) { window.location.href = '" (ROOT_ROUTE) "'; }"
                     }
+                    style="display: none;"
+                {}
+
+                div class="text-center mt-4" {
+                    div class="spinner-border text-primary" role="status" {
+                        span class="visually-hidden" { "Loading..." }
+                    }
+                    p class="mt-2 text-muted" { "Waiting for federation setup to complete..." }
                 }
             };
 
