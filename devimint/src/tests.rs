@@ -21,10 +21,12 @@ use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::LightningPaymentOutcome;
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
+use fedimint_lnv2_client::FinalSendOperationState;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
+use substring::Substring;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use tokio::{fs, try_join};
@@ -183,6 +185,16 @@ pub async fn latency_tests(
                     .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
                     .await?;
                 ln_sends.push(start_time.elapsed());
+
+                if crate::util::supports_lnv2() {
+                    let invoice = gw_lnd.create_invoice(1_000_000).await?;
+
+                    let start_time = Instant::now();
+
+                    lnv2_send(&client, &gw_ldk.addr, &invoice.to_string()).await?;
+
+                    ln_sends.push(start_time.elapsed());
+                }
             }
             let ln_sends_stats = stats_for(ln_sends);
             println!("### LATENCY LN SEND: {ln_sends_stats}");
@@ -1446,6 +1458,37 @@ async fn lnv2_receive(
         .out_json()
         .await?,
     )?)
+}
+
+async fn lnv2_send(client: &Client, gateway: &String, invoice: &String) -> anyhow::Result<()> {
+    let send_op = serde_json::from_value::<OperationId>(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "send",
+            invoice,
+            "--gateway",
+            gateway
+        )
+        .out_json()
+        .await?,
+    )?;
+
+    assert_eq!(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "await-send",
+            serde_json::to_string(&send_op)?.substring(1, 65)
+        )
+        .out_json()
+        .await?,
+        serde_json::to_value(FinalSendOperationState::Success).expect("JSON serialization failed"),
+    );
+
+    Ok(())
 }
 
 pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {

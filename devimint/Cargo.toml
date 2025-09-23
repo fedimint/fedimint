@@ -29,6 +29,7 @@ fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-ln-server = { workspace = true }
+fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -55,6 +56,7 @@ reqwest = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+substring = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 tonic_lnd = { workspace = true }
