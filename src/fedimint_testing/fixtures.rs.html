@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_gateway_common::{ChainSource, LightningMode};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_gateway_server::Gateway;
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_gateway_server::client::GatewayClientBuilder;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_gateway_server::config::{DatabaseBackend, LightningModuleMode};
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_gateway_server::config::DatabaseBackend;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_lightning::{ILnRpcClient, LightningContext};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_logging::TracingSetup;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_server::core::{DynServerModuleInit, IServerModuleInit, ServerModuleInitRegistry};
@@ -208,7 +208,7 @@
 <a href=#208 id=208 data-nosnippet>208</a>    }
 <a href=#209 id=209 data-nosnippet>209</a>
 <a href=#210 id=210 data-nosnippet>210</a>    <span class="doccomment">/// Creates a new Gateway that can be used for module tests.
-<a href=#211 id=211 data-nosnippet>211</a>    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, lightning_module_mode: LightningModuleMode) -&gt; Gateway {
+<a href=#211 id=211 data-nosnippet>211</a>    </span><span class="kw">pub async fn </span>new_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Gateway {
 <a href=#212 id=212 data-nosnippet>212</a>        <span class="kw">let </span>server_gens = ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone());
 <a href=#213 id=213 data-nosnippet>213</a>        <span class="kw">let </span>module_kinds = <span class="self">self</span>.params.iter_modules().map(|(id, kind, <span class="kw">_</span>)| (id, kind));
 <a href=#214 id=214 data-nosnippet>214</a>        <span class="kw">let </span>decoders = server_gens.available_decoders(module_kinds).unwrap();
@@ -284,39 +284,38 @@
 <a href=#284 id=284 data-nosnippet>284</a>            // webserver or intercept HTLCs, so this is necessary for instructing the
 <a href=#285 id=285 data-nosnippet>285</a>            // gateway that it is connected to the mock Lightning node.
 <a href=#286 id=286 data-nosnippet>286</a>            </span>fedimint_gateway_server::GatewayState::Running { lightning_context },
-<a href=#287 id=287 data-nosnippet>287</a>            lightning_module_mode,
-<a href=#288 id=288 data-nosnippet>288</a>            esplora_chain_source,
-<a href=#289 id=289 data-nosnippet>289</a>        )
-<a href=#290 id=290 data-nosnippet>290</a>        .<span class="kw">await
-<a href=#291 id=291 data-nosnippet>291</a>        </span>.expect(<span class="string">"Failed to create gateway"</span>)
-<a href=#292 id=292 data-nosnippet>292</a>    }
-<a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>    <span class="doccomment">/// Get a server bitcoin RPC config
-<a href=#295 id=295 data-nosnippet>295</a>    </span><span class="kw">pub fn </span>bitcoin_server(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
-<a href=#296 id=296 data-nosnippet>296</a>        <span class="self">self</span>.bitcoin_rpc.clone()
-<a href=#297 id=297 data-nosnippet>297</a>    }
-<a href=#298 id=298 data-nosnippet>298</a>
-<a href=#299 id=299 data-nosnippet>299</a>    <span class="kw">pub fn </span>client_esplora_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynBitcoindRpc {
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">if </span>Fixtures::is_real_test() {
-<a href=#301 id=301 data-nosnippet>301</a>            create_esplora_rpc(
-<a href=#302 id=302 data-nosnippet>302</a>                <span class="kw-2">&amp;</span>SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
-<a href=#303 id=303 data-nosnippet>303</a>                    <span class="string">"http://127.0.0.1:{}/"</span>,
-<a href=#304 id=304 data-nosnippet>304</a>                    env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
-<a href=#305 id=305 data-nosnippet>305</a>                ))
-<a href=#306 id=306 data-nosnippet>306</a>                .expect(<span class="string">"Failed to parse default esplora server"</span>),
-<a href=#307 id=307 data-nosnippet>307</a>            )
-<a href=#308 id=308 data-nosnippet>308</a>            .unwrap()
-<a href=#309 id=309 data-nosnippet>309</a>        } <span class="kw">else </span>{
-<a href=#310 id=310 data-nosnippet>310</a>            <span class="self">self</span>.fake_bitcoin_rpc.clone().unwrap()
-<a href=#311 id=311 data-nosnippet>311</a>        }
-<a href=#312 id=312 data-nosnippet>312</a>    }
-<a href=#313 id=313 data-nosnippet>313</a>
-<a href=#314 id=314 data-nosnippet>314</a>    <span class="doccomment">/// Get a test bitcoin fixture
-<a href=#315 id=315 data-nosnippet>315</a>    </span><span class="kw">pub fn </span>bitcoin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt; {
-<a href=#316 id=316 data-nosnippet>316</a>        <span class="self">self</span>.bitcoin.clone()
-<a href=#317 id=317 data-nosnippet>317</a>    }
-<a href=#318 id=318 data-nosnippet>318</a>
-<a href=#319 id=319 data-nosnippet>319</a>    <span class="kw">pub fn </span>server_bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynServerBitcoinRpc {
-<a href=#320 id=320 data-nosnippet>320</a>        <span class="self">self</span>.server_bitcoin_rpc.clone()
-<a href=#321 id=321 data-nosnippet>321</a>    }
-<a href=#322 id=322 data-nosnippet>322</a>}</code></pre></div></section></main></body></html>
+<a href=#287 id=287 data-nosnippet>287</a>            esplora_chain_source,
+<a href=#288 id=288 data-nosnippet>288</a>        )
+<a href=#289 id=289 data-nosnippet>289</a>        .<span class="kw">await
+<a href=#290 id=290 data-nosnippet>290</a>        </span>.expect(<span class="string">"Failed to create gateway"</span>)
+<a href=#291 id=291 data-nosnippet>291</a>    }
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>    <span class="doccomment">/// Get a server bitcoin RPC config
+<a href=#294 id=294 data-nosnippet>294</a>    </span><span class="kw">pub fn </span>bitcoin_server(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="self">self</span>.bitcoin_rpc.clone()
+<a href=#296 id=296 data-nosnippet>296</a>    }
+<a href=#297 id=297 data-nosnippet>297</a>
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="kw">pub fn </span>client_esplora_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynBitcoindRpc {
+<a href=#299 id=299 data-nosnippet>299</a>        <span class="kw">if </span>Fixtures::is_real_test() {
+<a href=#300 id=300 data-nosnippet>300</a>            create_esplora_rpc(
+<a href=#301 id=301 data-nosnippet>301</a>                <span class="kw-2">&amp;</span>SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+<a href=#302 id=302 data-nosnippet>302</a>                    <span class="string">"http://127.0.0.1:{}/"</span>,
+<a href=#303 id=303 data-nosnippet>303</a>                    env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
+<a href=#304 id=304 data-nosnippet>304</a>                ))
+<a href=#305 id=305 data-nosnippet>305</a>                .expect(<span class="string">"Failed to parse default esplora server"</span>),
+<a href=#306 id=306 data-nosnippet>306</a>            )
+<a href=#307 id=307 data-nosnippet>307</a>            .unwrap()
+<a href=#308 id=308 data-nosnippet>308</a>        } <span class="kw">else </span>{
+<a href=#309 id=309 data-nosnippet>309</a>            <span class="self">self</span>.fake_bitcoin_rpc.clone().unwrap()
+<a href=#310 id=310 data-nosnippet>310</a>        }
+<a href=#311 id=311 data-nosnippet>311</a>    }
+<a href=#312 id=312 data-nosnippet>312</a>
+<a href=#313 id=313 data-nosnippet>313</a>    <span class="doccomment">/// Get a test bitcoin fixture
+<a href=#314 id=314 data-nosnippet>314</a>    </span><span class="kw">pub fn </span>bitcoin(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;<span class="kw">dyn </span>BitcoinTest&gt; {
+<a href=#315 id=315 data-nosnippet>315</a>        <span class="self">self</span>.bitcoin.clone()
+<a href=#316 id=316 data-nosnippet>316</a>    }
+<a href=#317 id=317 data-nosnippet>317</a>
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw">pub fn </span>server_bitcoin_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynServerBitcoinRpc {
+<a href=#319 id=319 data-nosnippet>319</a>        <span class="self">self</span>.server_bitcoin_rpc.clone()
+<a href=#320 id=320 data-nosnippet>320</a>    }
+<a href=#321 id=321 data-nosnippet>321</a>}</code></pre></div></section></main></body></html>

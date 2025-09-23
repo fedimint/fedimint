@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DatabaseBackend","LightningModuleMode"],"struct":["GatewayOpts","GatewayParameters"]};
+window.SIDEBAR_ITEMS = {"enum":["DatabaseBackend"],"struct":["GatewayOpts","GatewayParameters"]};
