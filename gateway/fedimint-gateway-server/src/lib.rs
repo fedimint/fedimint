@@ -39,7 +39,7 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 pub use config::GatewayParameters;
 use config::{DatabaseBackend, GatewayOpts};
-use envs::{FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV, FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV};
+use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
@@ -118,7 +118,6 @@ use rand::rngs::OsRng;
 use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
 
-use crate::config::LightningModuleMode;
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
@@ -216,9 +215,6 @@ pub struct Gateway {
     /// The socket the gateway listens on.
     listen: SocketAddr,
 
-    /// The "module mode" of the gateway. Options are LNv1, LNv2, or All.
-    lightning_module_mode: LightningModuleMode,
-
     /// The task group for all tasks related to the gateway.
     task_group: TaskGroup,
 
@@ -264,7 +260,6 @@ impl Gateway {
         num_route_hints: u32,
         gateway_db: Database,
         gateway_state: GatewayState,
-        lightning_module_mode: LightningModuleMode,
         chain_source: ChainSource,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
@@ -278,7 +273,6 @@ impl Gateway {
                 bcrypt_password_hash,
                 network,
                 num_route_hints,
-                lightning_module_mode,
             },
             gateway_db,
             client_builder,
@@ -319,7 +313,7 @@ impl Gateway {
     /// `Gateway` modules.
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
-        let mut gateway_parameters = opts.to_gateway_parameters()?;
+        let gateway_parameters = opts.to_gateway_parameters()?;
         let decoders = ModuleDecoderRegistry::default();
 
         let db_path = opts.data_dir.join(DB_FILE);
@@ -382,13 +376,6 @@ impl Gateway {
             "Starting gatewayd",
         );
 
-        if gateway_parameters.lightning_module_mode != LightningModuleMode::LNv2
-            && matches!(opts.mode, LightningMode::Ldk { .. })
-        {
-            warn!(target: LOG_GATEWAY, "Overriding LDK Gateway to only run LNv2...");
-            gateway_parameters.lightning_module_mode = LightningModuleMode::LNv2;
-        }
-
         Gateway::new(
             opts.mode,
             gateway_parameters,
@@ -438,7 +425,6 @@ impl Gateway {
             gateway_db,
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
-            lightning_module_mode: gateway_parameters.lightning_module_mode,
             task_group,
             bcrypt_password_hash: Arc::new(gateway_parameters.bcrypt_password_hash),
             num_route_hints,
@@ -485,7 +471,6 @@ impl Gateway {
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> anyhow::Result<TaskShutdownToken> {
         install_crypto_provider().await;
-        self.verify_lightning_module_mode()?;
         self.register_clients_timer();
         self.load_clients().await?;
         self.start_gateway(runtime);
@@ -494,24 +479,6 @@ impl Gateway {
         run_webserver(Arc::new(self)).await?;
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
-    }
-
-    /// Verifies that the gateway is not running on mainnet with
-    /// `LightningModuleMode::All`
-    fn verify_lightning_module_mode(&self) -> anyhow::Result<()> {
-        if !is_env_var_set(FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV)
-            && self.network == Network::Bitcoin
-            && self.lightning_module_mode == LightningModuleMode::All
-        {
-            crit!(
-                "It is not recommended to run the Gateway with `LightningModuleMode::All`, because LNv2 invoices cannot be paid with LNv1 clients. If you really know what you're doing and want to bypass this, please set FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK"
-            );
-            return Err(anyhow!(
-                "Cannot run gateway with LightningModuleMode::All on mainnet"
-            ));
-        }
-
-        Ok(())
     }
 
     /// Begins the task for listening for intercepted payments from the
@@ -626,7 +593,7 @@ impl Gateway {
             .await;
         info!(target: LOG_GATEWAY, "Gateway is running");
 
-        if self.is_running_lnv1() {
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
             // Re-register the gateway with all federations after connecting to the
             // lightning node
             let mut dbtx = self.gateway_db.begin_transaction_nc().await;
@@ -1248,8 +1215,9 @@ impl Gateway {
             config: federation_config.clone(),
         };
 
-        if self.is_running_lnv1() {
-            Self::check_lnv1_federation_network(&client, self.network).await?;
+        Self::check_lnv1_federation_network(&client, self.network).await?;
+        Self::check_lnv2_federation_network(&client, self.network).await?;
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
             client
                 .get_first_module::<GatewayClientModule>()?
                 .try_register_with_federation(
@@ -1262,10 +1230,6 @@ impl Gateway {
                     self.gateway_id,
                 )
                 .await;
-        }
-
-        if self.is_running_lnv2() {
-            Self::check_lnv2_federation_network(&client, self.network).await?;
         }
 
         // no need to enter span earlier, because connect-fed has a span
@@ -1384,7 +1348,9 @@ impl Gateway {
             dbtx.load_federation_configs().await
         };
 
-        for config in &mut fed_configs.values_mut() {
+        let federation_manager = self.federation_manager.read().await;
+
+        for (federation_id, config) in &mut fed_configs {
             let mut lightning_fee = config.lightning_fee;
             if let Some(lightning_base) = lightning_base {
                 lightning_fee.base = lightning_base;
@@ -1403,9 +1369,21 @@ impl Gateway {
                 transaction_fee.parts_per_million = transaction_ppm;
             }
 
+            let client =
+                federation_manager
+                    .client(federation_id)
+                    .ok_or(FederationNotConnected {
+                        federation_id_prefix: federation_id.to_prefix(),
+                    })?;
+            let client_config = client.value().config().await;
+            let contains_lnv2 = client_config
+                .modules
+                .values()
+                .any(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
+
             // Check if the lightning fee + transaction fee is higher than the send limit
             let send_fees = lightning_fee + transaction_fee;
-            if !self.is_running_lnv1() && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
+            if contains_lnv2 && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
                 return Err(AdminGatewayError::GatewayConfigurationError(format!(
                     "Total Send fees exceeded {}",
                     PaymentFee::SEND_FEE_LIMIT
@@ -1413,7 +1391,7 @@ impl Gateway {
             }
 
             // Check if the transaction fee is higher than the receive limit
-            if !self.is_running_lnv1() && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
+            if contains_lnv2 && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
                 return Err(AdminGatewayError::GatewayConfigurationError(format!(
                     "Transaction fees exceeded RECEIVE LIMIT {}",
                     PaymentFee::RECEIVE_FEE_LIMIT
@@ -1427,7 +1405,7 @@ impl Gateway {
 
         dbtx.commit_tx().await;
 
-        if self.is_running_lnv1() {
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
             let register_task_group = TaskGroup::new();
 
             self.register_federations(&fed_configs, &register_task_group)
@@ -1756,22 +1734,12 @@ impl Gateway {
                 .value();
             let all_events = &get_events_for_duration(client, start, end).await;
 
-            if self.is_running_lnv1() && self.is_running_lnv2() {
-                let (mut lnv1_outgoing, mut lnv1_incoming) = compute_lnv1_stats(all_events);
-                let (mut lnv2_outgoing, mut lnv2_incoming) = compute_lnv2_stats(all_events);
-                outgoing.combine(&mut lnv1_outgoing);
-                incoming.combine(&mut lnv1_incoming);
-                outgoing.combine(&mut lnv2_outgoing);
-                incoming.combine(&mut lnv2_incoming);
-            } else if self.is_running_lnv1() {
-                let (mut lnv1_outgoing, mut lnv1_incoming) = compute_lnv1_stats(all_events);
-                outgoing.combine(&mut lnv1_outgoing);
-                incoming.combine(&mut lnv1_incoming);
-            } else {
-                let (mut lnv2_outgoing, mut lnv2_incoming) = compute_lnv2_stats(all_events);
-                outgoing.combine(&mut lnv2_outgoing);
-                incoming.combine(&mut lnv2_incoming);
-            }
+            let (mut lnv1_outgoing, mut lnv1_incoming) = compute_lnv1_stats(all_events);
+            let (mut lnv2_outgoing, mut lnv2_incoming) = compute_lnv2_stats(all_events);
+            outgoing.combine(&mut lnv1_outgoing);
+            incoming.combine(&mut lnv1_incoming);
+            outgoing.combine(&mut lnv2_outgoing);
+            incoming.combine(&mut lnv2_incoming);
         }
 
         Ok(PaymentSummaryResponse {
@@ -1979,10 +1947,9 @@ impl Gateway {
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
     fn register_clients_timer(&self) {
-        // Only spawn background registration thread if gateway is running LNv1
-        if self.is_running_lnv1() {
-            let lightning_module_mode = self.lightning_module_mode;
-            info!(target: LOG_GATEWAY, lightning_module_mode = %lightning_module_mode, "Spawning register task...");
+        // Only spawn background registration thread if gateway is LND
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+            info!(target: LOG_GATEWAY, "Spawning register task...");
             let gateway = self.clone();
             let register_task_group = self.task_group.make_subgroup();
             self.task_group.spawn_cancellable("register clients", async move {
@@ -2052,23 +2019,24 @@ impl Gateway {
         let cfg = config
             .modules
             .values()
-            .find(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind)
-            .ok_or(AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Federation {federation_id} does not have an LNv2 module"
-            ))))?;
-        let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
+            .find(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
 
-        if ln_cfg.network != network {
-            crit!(
-                target: LOG_GATEWAY,
-                federation_id = %federation_id,
-                network = %network,
-                "Incorrect network for federation",
-            );
-            return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Unsupported network {}",
-                ln_cfg.network
-            ))));
+        // If the federation does not have LNv2, we don't need to verify the network
+        if let Some(cfg) = cfg {
+            let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
+
+            if ln_cfg.network != network {
+                crit!(
+                    target: LOG_GATEWAY,
+                    federation_id = %federation_id,
+                    network = %network,
+                    "Incorrect network for federation",
+                );
+                return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
+                    "Unsupported network {}",
+                    ln_cfg.network
+                ))));
+            }
         }
 
         Ok(())
@@ -2090,7 +2058,7 @@ impl Gateway {
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     pub async fn unannounce_from_all_federations(&self) {
-        if self.is_running_lnv1() {
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
             let mut dbtx = self.gateway_db.begin_transaction_nc().await;
             let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
 
@@ -2421,18 +2389,6 @@ impl Gateway {
             .into_value();
 
         Ok((registered_incoming_contract.contract, client))
-    }
-
-    /// Helper function for determining if the gateway supports LNv2.
-    fn is_running_lnv2(&self) -> bool {
-        self.lightning_module_mode == LightningModuleMode::LNv2
-            || self.lightning_module_mode == LightningModuleMode::All
-    }
-
-    /// Helper function for determining if the gateway supports LNv1.
-    fn is_running_lnv1(&self) -> bool {
-        self.lightning_module_mode == LightningModuleMode::LNv1
-            || self.lightning_module_mode == LightningModuleMode::All
     }
 }
 

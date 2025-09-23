@@ -25,7 +25,6 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
 use fedimint_gateway_server::Gateway;
-use fedimint_gateway_server::config::LightningModuleMode;
 use fedimint_gw_client::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -116,7 +115,7 @@ where
     let other_ln = FakeLightningTest::new();
 
     let fed = fixtures.new_fed_degraded().await;
-    let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
+    let gateway = fixtures.new_gateway().await;
     fed.connect_gateway(&gateway).await;
     let user_client = fed.new_client().await;
 
@@ -140,7 +139,7 @@ where
     let fixtures = fixtures();
     let fed1 = fixtures.new_fed_degraded().await;
     let fed2 = fixtures.new_fed_degraded().await;
-    let gateway = fixtures.new_gateway(LightningModuleMode::LNv1).await;
+    let gateway = fixtures.new_gateway().await;
 
     f(gateway, fed1, fed2, fixtures.bitcoin()).await?;
     Ok(())
@@ -989,7 +988,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
 
-    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
+    let gateway = fixtures.new_gateway().await;
 
     fed.connect_gateway(&gateway).await;
 
@@ -1033,7 +1032,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
 
-    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
+    let gateway = fixtures.new_gateway().await;
 
     fed.connect_gateway(&gateway).await;
 
@@ -1077,7 +1076,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
 
-    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
+    let gateway = fixtures.new_gateway().await;
 
     fed.connect_gateway(&gateway).await;
 
@@ -1133,7 +1132,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed1 = fixtures.new_fed_degraded().await;
     let fed2 = fixtures.new_fed_degraded().await;
-    let gateway = fixtures.new_gateway(LightningModuleMode::LNv2).await;
+    let gateway = fixtures.new_gateway().await;
     fed1.connect_gateway(&gateway).await;
     fed2.connect_gateway(&gateway).await;
     let client1 = gateway.select_client(fed1.id()).await?.into_value();
