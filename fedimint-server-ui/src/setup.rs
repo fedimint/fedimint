@@ -28,8 +28,8 @@ pub(crate) struct SetupInput {
     #[serde(default)]
     pub is_lead: bool,
     pub federation_name: String,
-    #[serde(default)]
-    pub disable_base_fees: bool,
+    #[serde(default)] // will not be send if disabled
+    pub enable_base_fees: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -83,6 +83,15 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                 .toggle-control:checked ~ .toggle-content {
                     display: block;
                 }
+
+                #base-fees-warning {
+                    display: block;
+                }
+
+                .form-check:has(#enable_base_fees:checked) + #base-fees-warning {
+                    /* hide the warning if the fees are enabled */
+                    display: none;
+                }
                 "#
             }
 
@@ -107,13 +116,14 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                         input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
 
                         div class="form-check mt-3" {
-                            input type="checkbox" class="form-check-input" id="disable_base_fees" name="disable_base_fees" value="true";
-                            label class="form-check-label" for="disable_base_fees" {
-                                "Disable base fees for this federation"
+                            input type="checkbox" class="form-check-input" id="enable_base_fees" name="enable_base_fees" checked value="true";
+
+                            label class="form-check-label" for="enable_base_fees" {
+                                "Enable base fees for this federation"
                             }
                         }
 
-                        div class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
+                        div id="base-fees-warning" class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
                             strong { "Warning: " }
                             "Base fees discourage spam and wasting storage space. The typical fee is only 1-3 sats per transaction, regardless of the value transferred. We recommend enabling the base fee and it cannot be changed later."
                         }
@@ -142,9 +152,9 @@ async fn setup_submit(
         None
     };
 
-    // Only use disable_base_fees if is_lead is true
+    // Only use enable_base_fees if is_lead is true
     let disable_base_fees = if input.is_lead {
-        Some(input.disable_base_fees)
+        Some(!input.enable_base_fees)
     } else {
         None
     };
