@@ -9,7 +9,7 @@ use std::{env, ffi};
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::Txid;
 use clap::Subcommand;
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+use fedimint_core::core::{LEGACY_HARDCODED_INSTANCE_ID_WALLET, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_DISABLE_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::registry::ModuleRegistry;
@@ -221,6 +221,16 @@ pub async fn latency_tests(
                     )
                     .await?;
                 ln_receives.push(start_time.elapsed());
+
+                if crate::util::supports_lnv2() {
+                    let invoice = lnv2_receive(&client, &gw_lnd.addr, 100_000).await?.0;
+
+                    let start_time = Instant::now();
+
+                    gw_ldk.pay_invoice(invoice).await?;
+
+                    ln_receives.push(start_time.elapsed());
+                }
             }
             let ln_receives_stats = stats_for(ln_receives);
             println!("### LATENCY LN RECV: {ln_receives_stats}");
@@ -1416,6 +1426,26 @@ async fn ln_invoice(
     let ln_invoice_response: LnInvoiceResponse = serde_json::from_value(ln_response_val)?;
 
     Ok(ln_invoice_response)
+}
+
+async fn lnv2_receive(
+    client: &Client,
+    gateway: &str,
+    amount: u64,
+) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
+    Ok(serde_json::from_value::<(Bolt11Invoice, OperationId)>(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "receive",
+            amount,
+            "--gateway",
+            gateway
+        )
+        .out_json()
+        .await?,
+    )?)
 }
 
 pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {

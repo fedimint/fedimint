@@ -565,8 +565,6 @@ async fn await_receive_lnv1(client: &Client, operation_id: OperationId) -> anyho
     assert!(lnv1_response.get("total_amount_msat").is_some());
     Ok(())
 }
-
-#[allow(dead_code)]
 async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     if util::FedimintCli::version_or_default().await < *VERSION_0_9_0_ALPHA {
         return Ok(());
