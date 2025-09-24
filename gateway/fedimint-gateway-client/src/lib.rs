@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use anyhow::Context;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
@@ -30,14 +33,9 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 pub struct GatewayRpcClient {
-    /// Base URL to gateway web server
-    /// This should include an applicable API version, e.g. http://localhost:8080/v1
-    base_url: Option<SafeUrl>,
-
+    base_url: SafeUrl,
     iroh_connector: Option<GatewayIrohConnector>,
-    /// A request client
     client: reqwest::Client,
-    /// Optional gateway password
     password: Option<String>,
 }
 
@@ -89,21 +87,18 @@ impl GatewayIrohConnector {
 }
 
 impl GatewayRpcClient {
-    pub async fn new(
-        api: Option<SafeUrl>,
-        iroh_pk: Option<iroh::PublicKey>,
-        password: Option<String>,
-    ) -> anyhow::Result<Self> {
-        let iroh_connector = if let Some(iroh_pk) = iroh_pk {
+    pub async fn new(api: SafeUrl, password: Option<String>) -> anyhow::Result<Self> {
+        let mut base_url = api.clone();
+        // Move to SafeUrl?
+        let iroh_connector = if api.scheme() == "iroh" {
+            let host = api.host_str().context("Url is missing host")?;
+            let iroh_pk = iroh::PublicKey::from_str(host).context("Failed to parse node id")?;
             Some(GatewayIrohConnector::new(iroh_pk).await?)
         } else {
+            base_url = base_url.join(V1_API_ENDPOINT)?;
             None
         };
-        let base_url = if let Some(api) = api {
-            Some(api.join(V1_API_ENDPOINT)?)
-        } else {
-            None
-        };
+
         Ok(Self {
             base_url,
             iroh_connector,
@@ -273,9 +268,20 @@ impl GatewayRpcClient {
         route: &str,
         payload: Option<P>,
     ) -> Result<T, GatewayRpcError> {
-        match &self.base_url {
-            Some(base_url) => {
-                let url = base_url.join(&route).expect("Invalid base url");
+        match &self.iroh_connector {
+            Some(iroh_connector) => {
+                let payload =
+                    payload.map(|p| serde_json::to_value(p).expect("Could not serialize"));
+                let response = iroh_connector
+                    .request(route, payload)
+                    .await
+                    .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+                let response = serde_json::from_value::<T>(response)
+                    .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+                Ok(response)
+            }
+            None => {
+                let url = self.base_url.join(&route).expect("Invalid base url");
                 let mut builder = self.client.request(method, url.clone().to_unsafe());
                 if let Some(password) = self.password.clone() {
                     builder = builder.bearer_auth(password);
@@ -292,18 +298,6 @@ impl GatewayRpcClient {
                     StatusCode::OK => Ok(response.json::<T>().await?),
                     status => Err(GatewayRpcError::BadStatus(status)),
                 }
-            }
-            None => {
-                let iroh_connector = self.iroh_connector.as_ref().expect("enforced by clap");
-                let payload =
-                    payload.map(|p| serde_json::to_value(p).expect("Could not serialize"));
-                let response = iroh_connector
-                    .request(route, payload)
-                    .await
-                    .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                let response = serde_json::from_value::<T>(response)
-                    .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                Ok(response)
             }
         }
     }
