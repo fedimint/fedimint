@@ -38,20 +38,15 @@ pub enum ConfigCommands {
 }
 
 impl ConfigCommands {
-    pub async fn handle(
-        self,
-        create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
-    ) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
         match self {
             Self::ClientConfig { federation_id } => {
-                let response = create_client()
-                    .get_config(ConfigPayload { federation_id })
-                    .await?;
+                let response = client.get_config(ConfigPayload { federation_id }).await?;
 
                 print_response(response);
             }
             Self::Display { federation_id } => {
-                let info = create_client().get_info().await?;
+                let info = client.get_info().await?;
                 let federations = info
                     .federations
                     .into_iter()
@@ -70,7 +65,7 @@ impl ConfigCommands {
                 tx_base,
                 tx_ppm,
             } => {
-                create_client()
+                client
                     .set_fees(SetFeesPayload {
                         federation_id,
                         lightning_base: ln_base,

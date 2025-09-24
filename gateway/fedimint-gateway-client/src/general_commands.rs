@@ -75,28 +75,17 @@ pub enum GeneralCommands {
 
 impl GeneralCommands {
     #[allow(clippy::too_many_lines)]
-    pub async fn handle(
-        self,
-        create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
-    ) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
         match self {
             Self::VersionHash => {
                 println!("{}", fedimint_build_code_version_env!());
             }
             Self::Info => {
-                // For backwards-compatibility, fallback to the original POST endpoint if the
-                // GET endpoint fails
-                // FIXME: deprecated >= 0.3.0
-                let client = create_client();
-                let response = match client.get_info().await {
-                    Ok(res) => res,
-                    Err(_) => client.get_info_legacy().await?,
-                };
-
+                let response = client.get_info().await?;
                 print_response(response);
             }
             Self::GetBalances => {
-                let response = create_client().get_balances().await?;
+                let response = client.get_balances().await?;
                 print_response(response);
             }
             Self::ConnectFed {
@@ -105,7 +94,7 @@ impl GeneralCommands {
                 use_tor,
                 recover,
             } => {
-                let response = create_client()
+                let response = client
                     .connect_federation(ConnectFedPayload {
                         invite_code,
                         #[cfg(feature = "tor")]
@@ -119,17 +108,17 @@ impl GeneralCommands {
                 print_response(response);
             }
             Self::LeaveFed { federation_id } => {
-                let response = create_client()
+                let response = client
                     .leave_federation(LeaveFedPayload { federation_id })
                     .await?;
                 print_response(response);
             }
             Self::Seed => {
-                let response = create_client().get_mnemonic().await?;
+                let response = client.get_mnemonic().await?;
                 print_response(response);
             }
             Self::Stop => {
-                create_client().stop().await?;
+                client.stop().await?;
             }
             Self::PaymentLog {
                 end_position,
@@ -137,7 +126,7 @@ impl GeneralCommands {
                 federation_id,
                 event_kinds,
             } => {
-                let payment_log = create_client()
+                let payment_log = client
                     .payment_log(PaymentLogPayload {
                         end_position,
                         pagination_size,
@@ -168,7 +157,7 @@ impl GeneralCommands {
                     .try_into()?;
                 let end_millis = end.unwrap_or(now_millis);
                 let start_millis = start.unwrap_or(one_day_ago_millis);
-                let payment_summary = create_client()
+                let payment_summary = client
                     .payment_summary(PaymentSummaryPayload {
                         start_millis,
                         end_millis,

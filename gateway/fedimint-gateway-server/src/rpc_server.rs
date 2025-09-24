@@ -11,6 +11,7 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use bitcoin::hashes::sha256;
 use fedimint_core::config::FederationId;
+use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact;
 use fedimint_gateway_common::{
@@ -19,16 +20,17 @@ use fedimint_gateway_common::{
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
     CloseChannelsWithPeerRequest, ConfigPayload, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, CreateOfferPayload, DepositAddressPayload,
-    DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    GetInvoiceRequest, InfoPayload, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT,
-    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
-    PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload,
-    RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
-    V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
+    DepositAddressRecheckPayload, FEDIMINT_GATEWAY_ALPN, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest, InfoPayload, IrohGatewayRequest,
+    IrohGatewayResponse, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT,
+    LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
+    OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload,
+    PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
+    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    WithdrawPayload,
 };
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -40,6 +42,7 @@ use fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentP
 use fedimint_lnv2_common::lnurl::VerifyResponse;
 use fedimint_logging::LOG_GATEWAY;
 use hex::ToHex;
+use iroh::endpoint::Incoming;
 use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -102,8 +105,90 @@ pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
         }
     });
 
+    info!("Building Iroh Endpoint...");
+    let iroh_endpoint = build_iroh_endpoint(
+        gateway.iroh_sk.clone(),
+        gateway.iroh_listen,
+        gateway.iroh_dns.clone(),
+        gateway.iroh_relays.clone(),
+        FEDIMINT_GATEWAY_ALPN,
+    )
+    .await?;
+    let gw_clone = gateway.clone();
+    let tg_clone = task_group.clone();
+    info!("Spawning accept loop...");
+    task_group.spawn("Gateway Iroh", |_| async move {
+        loop {
+            match iroh_endpoint.accept().await {
+                Some(incoming) => {
+                    info!("Accepted new connection. Spawning handler...");
+                    tg_clone.spawn_cancellable_silent(
+                        "handle endpoint accept",
+                        handle_incoming_iroh_request(incoming, gw_clone.clone()),
+                    );
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+    });
+
     info!(target: LOG_GATEWAY, listen = %gateway.listen, "Successfully started webserver");
     Ok(())
+}
+
+async fn handle_incoming_iroh_request(
+    incoming: Incoming,
+    gateway: Arc<Gateway>,
+) -> anyhow::Result<()> {
+    let connection = incoming.accept()?.await?;
+    let remote_node_id = &connection.remote_node_id()?;
+    info!(%remote_node_id, "Handler received connection");
+    while let Ok((mut send, mut recv)) = connection.accept_bi().await {
+        let request = recv.read_to_end(100_000).await?;
+        let request = serde_json::from_slice::<IrohGatewayRequest>(&request)?;
+
+        // TODO: Add non authenticated routes here
+
+        let (status_code, body) = match iroh_verify_password(&gateway, request.password) {
+            Ok(()) => {
+                // TODO: Put in new function
+                let body = match request.route.as_str() {
+                    GATEWAY_INFO_ENDPOINT => {
+                        let info = gateway.handle_get_info().await?;
+                        serde_json::to_value(info)?
+                    }
+                    _ => {
+                        return Err(anyhow!("Iroh handler received request with unknown route"));
+                    }
+                };
+
+                (StatusCode::OK, Some(body))
+            }
+            Err(_) => (StatusCode::UNAUTHORIZED, None),
+        };
+
+        let response = IrohGatewayResponse {
+            status: status_code.as_u16(),
+            body,
+        };
+        let response = serde_json::to_vec(&response)?;
+
+        send.write_all(&response).await?;
+        send.finish()?;
+    }
+    Ok(())
+}
+
+fn iroh_verify_password(gateway: &Arc<Gateway>, password: Option<String>) -> anyhow::Result<()> {
+    if let Some(password) = password {
+        if bcrypt::verify(password, &gateway.bcrypt_password_hash.to_string())? {
+            return Ok(());
+        }
+    }
+
+    Err(anyhow!("Invalid password"))
 }
 
 /// Extracts the Bearer token from the Authorization header of the request.

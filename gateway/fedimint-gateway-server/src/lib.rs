@@ -236,6 +236,14 @@ pub struct Gateway {
 
     /// The default transaction fees for new federations
     default_transaction_fees: PaymentFee,
+
+    iroh_sk: iroh::SecretKey,
+
+    iroh_listen: SocketAddr,
+
+    iroh_dns: Option<SafeUrl>,
+
+    iroh_relays: Vec<SafeUrl>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -267,6 +275,7 @@ impl Gateway {
         gateway_db: Database,
         gateway_state: GatewayState,
         chain_source: ChainSource,
+        iroh_listen: SocketAddr,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -281,6 +290,7 @@ impl Gateway {
                 num_route_hints,
                 default_routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 default_transaction_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                iroh_listen,
             },
             gateway_db,
             client_builder,
@@ -436,6 +446,10 @@ impl Gateway {
             chain_source,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
+            iroh_sk: iroh::SecretKey::generate(&mut OsRng),
+            iroh_dns: None,
+            iroh_relays: Vec::new(),
+            iroh_listen: gateway_parameters.iroh_listen,
         })
     }
 
