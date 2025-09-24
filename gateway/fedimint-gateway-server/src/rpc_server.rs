@@ -23,13 +23,14 @@ use fedimint_gateway_common::{
     DepositAddressRecheckPayload, FEDIMINT_GATEWAY_ALPN, GATEWAY_INFO_ENDPOINT,
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest, InfoPayload, IrohGatewayRequest,
-    LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
-    ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, OpenChannelRequest,
-    PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
-    PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
-    PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
-    SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
+    IrohGatewayResponse, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT,
+    LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
+    OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload,
+    PaymentLogPayload, PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload,
+    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    WithdrawPayload,
 };
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -148,20 +149,46 @@ async fn handle_incoming_iroh_request(
         let request = recv.read_to_end(100_000).await?;
         let request = serde_json::from_slice::<IrohGatewayRequest>(&request)?;
 
-        let response = match request.route.as_str() {
-            GATEWAY_INFO_ENDPOINT => {
-                let info = gateway.handle_get_info().await?;
-                serde_json::to_vec(&info)?
+        // TODO: Add non authenticated routes here
+
+        let (status_code, body) = match iroh_verify_password(&gateway, request.password) {
+            Ok(()) => {
+                // TODO: Put in new function
+                let body = match request.route.as_str() {
+                    GATEWAY_INFO_ENDPOINT => {
+                        let info = gateway.handle_get_info().await?;
+                        serde_json::to_value(info)?
+                    }
+                    _ => {
+                        return Err(anyhow!("Iroh handler received request with unknown route"));
+                    }
+                };
+
+                (StatusCode::OK, Some(body))
             }
-            _ => {
-                return Err(anyhow!("Iroh handler received request with unknown route"));
-            }
+            Err(_) => (StatusCode::UNAUTHORIZED, None),
         };
+
+        let response = IrohGatewayResponse {
+            status: status_code.as_u16(),
+            body,
+        };
+        let response = serde_json::to_vec(&response)?;
 
         send.write_all(&response).await?;
         send.finish()?;
     }
     Ok(())
+}
+
+fn iroh_verify_password(gateway: &Arc<Gateway>, password: Option<String>) -> anyhow::Result<()> {
+    if let Some(password) = password {
+        if bcrypt::verify(password, &gateway.bcrypt_password_hash.to_string())? {
+            return Ok(());
+        }
+    }
+
+    Err(anyhow!("Invalid password"))
 }
 
 /// Extracts the Bearer token from the Authorization header of the request.
