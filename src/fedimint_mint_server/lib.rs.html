@@ -353,7 +353,7 @@
 <a href=#353 id=353 data-nosnippet>353</a>        .<span class="kw">await
 <a href=#354 id=354 data-nosnippet>354</a>        </span>.filter_map(|history_item: ModuleHistoryItem&lt;<span class="kw">_</span>&gt;| <span class="kw">async move </span>{
 <a href=#355 id=355 data-nosnippet>355</a>            <span class="kw">match </span>history_item {
-<a href=#356 id=356 data-nosnippet>356</a>                ModuleHistoryItem::Output(mint_output) =&gt; <span class="prelude-val">Some</span>(
+<a href=#356 id=356 data-nosnippet>356</a>                ModuleHistoryItem::Output(mint_output, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(
 <a href=#357 id=357 data-nosnippet>357</a>                    mint_output
 <a href=#358 id=358 data-nosnippet>358</a>                        .ensure_v0_ref()
 <a href=#359 id=359 data-nosnippet>359</a>                        .expect(<span class="string">"This migration only runs while we only have v0 outputs"</span>)
