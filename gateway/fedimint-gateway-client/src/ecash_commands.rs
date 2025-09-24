@@ -65,18 +65,13 @@ pub enum EcashCommands {
 }
 
 impl EcashCommands {
-    pub async fn handle(
-        self,
-        create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
-    ) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
         match self {
             Self::Backup { federation_id } => {
-                create_client()
-                    .backup(BackupPayload { federation_id })
-                    .await?;
+                client.backup(BackupPayload { federation_id }).await?;
             }
             Self::Pegin { federation_id } => {
-                let response = create_client()
+                let response = client
                     .get_deposit_address(DepositAddressPayload { federation_id })
                     .await?;
 
@@ -86,7 +81,7 @@ impl EcashCommands {
                 address,
                 federation_id,
             } => {
-                let response = create_client()
+                let response = client
                     .recheck_address(DepositAddressRecheckPayload {
                         address,
                         federation_id,
@@ -99,7 +94,7 @@ impl EcashCommands {
                 amount,
                 address,
             } => {
-                let response = create_client()
+                let response = client
                     .withdraw(WithdrawPayload {
                         federation_id,
                         amount,
@@ -116,7 +111,7 @@ impl EcashCommands {
                 timeout,
                 include_invite,
             } => {
-                let response = create_client()
+                let response = client
                     .spend_ecash(SpendEcashPayload {
                         federation_id,
                         amount,
@@ -129,7 +124,7 @@ impl EcashCommands {
                 print_response(response);
             }
             Self::Receive { notes, wait } => {
-                let response = create_client()
+                let response = client
                     .receive_ecash(ReceiveEcashPayload { notes, wait })
                     .await?;
                 print_response(response);

@@ -107,6 +107,10 @@ pub struct GatewayOpts {
     /// The default transaction fees that are applied to new federations
     #[arg(long = "default-transaction-fees", env = envs::FM_DEFAULT_TRANSACTION_FEES_ENV, default_value_t = PaymentFee::TRANSACTION_FEE_DEFAULT)]
     default_transaction_fees: PaymentFee,
+
+    /// Gateway iroh listen address
+    #[arg(long = "iroh-listen", env = envs::FM_GATEWAY_IROH_LISTEN_ADDR_ENV)]
+    iroh_listen: SocketAddr,
 }
 
 impl GatewayOpts {
@@ -130,6 +134,7 @@ impl GatewayOpts {
             num_route_hints: self.num_route_hints,
             default_routing_fees: self.default_routing_fees,
             default_transaction_fees: self.default_transaction_fees,
+            iroh_listen: self.iroh_listen,
         })
     }
 }
@@ -149,4 +154,5 @@ pub struct GatewayParameters {
     pub num_route_hints: u32,
     pub default_routing_fees: PaymentFee,
     pub default_transaction_fees: PaymentFee,
+    pub iroh_listen: SocketAddr,
 }

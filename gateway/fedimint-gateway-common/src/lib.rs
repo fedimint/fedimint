@@ -25,6 +25,21 @@ use serde::{Deserialize, Serialize};
 
 mod envs;
 
+pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayRequest {
+    pub route: String,
+    pub params: Option<serde_json::Value>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayResponse {
+    pub status: u16,
+    pub body: Option<serde_json::Value>,
+}
+
 pub const V1_API_ENDPOINT: &str = "v1";
 
 pub const ADDRESS_ENDPOINT: &str = "/address";

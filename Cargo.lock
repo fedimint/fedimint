@@ -3196,6 +3196,7 @@ dependencies = [
  "fedimint-gateway-common",
  "fedimint-logging",
  "fedimint-mint-client",
+ "iroh 0.35.0",
  "lightning-invoice",
  "reqwest 0.12.22",
  "serde",
