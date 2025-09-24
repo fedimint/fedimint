@@ -13,16 +13,16 @@ use fedimint_gateway_common::{
     DepositAddressPayload, DepositAddressRecheckPayload, FEDIMINT_GATEWAY_ALPN, FederationInfo,
     GATEWAY_INFO_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances, GatewayFedConfig, GatewayInfo,
-    GetInvoiceRequest, GetInvoiceResponse, IrohGatewayRequest, LEAVE_FED_ENDPOINT,
-    LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload,
-    ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse, OPEN_CHANNEL_ENDPOINT,
-    OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT,
-    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload,
-    PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload,
-    PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse,
-    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    GetInvoiceRequest, GetInvoiceResponse, IrohGatewayRequest, IrohGatewayResponse,
+    LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
+    ListTransactionsPayload, ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
+    OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+    PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
+    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT,
+    ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
+    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
+    SpendEcashResponse, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
 use iroh::Endpoint;
 use iroh::endpoint::Connection;
@@ -39,20 +39,23 @@ pub struct GatewayRpcClient {
     password: Option<String>,
 }
 
+// TODO: Move to common
 #[derive(Debug, Clone)]
 struct GatewayIrohConnector {
     node_id: iroh::NodeId,
     endpoint: Endpoint,
+    password: Option<String>,
 }
 
 impl GatewayIrohConnector {
-    pub async fn new(iroh_pk: iroh::PublicKey) -> anyhow::Result<Self> {
+    pub async fn new(iroh_pk: iroh::PublicKey, password: Option<String>) -> anyhow::Result<Self> {
         let builder = Endpoint::builder().discovery_dht().discovery_n0();
         let endpoint = builder.bind().await?;
 
         Ok(Self {
             node_id: iroh_pk,
             endpoint,
+            password,
         })
     }
 
@@ -69,10 +72,11 @@ impl GatewayIrohConnector {
         &self,
         route: &str,
         payload: Option<serde_json::Value>,
-    ) -> anyhow::Result<serde_json::Value> {
+    ) -> anyhow::Result<IrohGatewayResponse> {
         let iroh_request = IrohGatewayRequest {
             route: route.to_string(),
             params: payload,
+            password: self.password.clone(),
         };
         let json = serde_json::to_vec(&iroh_request).expect("serialization cant fail");
         let connection = self.connect().await?;
@@ -80,9 +84,8 @@ impl GatewayIrohConnector {
         sink.write_all(&json).await?;
         sink.finish()?;
         let response = stream.read_to_end(1_000_000).await?;
-        let response = serde_json::from_slice::<serde_json::Value>(&response)?;
-
-        Ok(response)
+        let iroh_response = serde_json::from_slice::<IrohGatewayResponse>(&response)?;
+        Ok(iroh_response)
     }
 }
 
@@ -93,7 +96,7 @@ impl GatewayRpcClient {
         let iroh_connector = if api.scheme() == "iroh" {
             let host = api.host_str().context("Url is missing host")?;
             let iroh_pk = iroh::PublicKey::from_str(host).context("Failed to parse node id")?;
-            Some(GatewayIrohConnector::new(iroh_pk).await?)
+            Some(GatewayIrohConnector::new(iroh_pk, password.clone()).await?)
         } else {
             base_url = base_url.join(V1_API_ENDPOINT)?;
             None
@@ -276,9 +279,22 @@ impl GatewayRpcClient {
                     .request(route, payload)
                     .await
                     .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                let response = serde_json::from_value::<T>(response)
+                let status_code = StatusCode::from_u16(response.status)
                     .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                Ok(response)
+                match status_code {
+                    StatusCode::OK => {
+                        if let Some(body) = response.body {
+                            let response = serde_json::from_value::<T>(body)
+                                .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+                            Ok(response)
+                        } else {
+                            Err(GatewayRpcError::IrohError(
+                                "No body included in response".to_string(),
+                            ))
+                        }
+                    }
+                    status => Err(GatewayRpcError::BadStatus(status)),
+                }
             }
             None => {
                 let url = self.base_url.join(&route).expect("Invalid base url");
