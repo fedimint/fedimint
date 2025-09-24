@@ -1,11 +1,20 @@
+use std::collections::BTreeMap;
+
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, PeerId, impl_db_lookup, impl_db_record};
-use fedimint_lnv2_common::ContractId;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
+use fedimint_lnv2_common::{ContractId, LightningInputV0, LightningOutputV0};
+use fedimint_server_core::migration::{
+    ModuleHistoryItem, ServerModuleDbMigrationFnContext, ServerModuleDbMigrationFnContextExt,
+};
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 use tpe::DecryptionKeyShare;
+
+use crate::Lightning;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -217,3 +226,47 @@ impl_db_lookup!(
     key = IncomingContractIndexKey,
     query_prefix = IncomingContractIndexPrefix
 );
+
+pub async fn migrate_to_v1(
+    mut ctx: ServerModuleDbMigrationFnContext<'_, Lightning>,
+) -> Result<(), anyhow::Error> {
+    let mut contracts = BTreeMap::new();
+    let mut stream_index = 0;
+
+    let mut stream = ctx.get_typed_module_history_stream().await;
+
+    while let Some(item) = stream.next().await {
+        match item {
+            ModuleHistoryItem::Output(output, outpoint) => {
+                if let Some(LightningOutputV0::Incoming(contract)) = output.maybe_v0_ref() {
+                    contracts.insert(outpoint, (stream_index, contract.clone()));
+                    stream_index += 1;
+                }
+            }
+            ModuleHistoryItem::Input(input) => {
+                if let Some(LightningInputV0::Incoming(outpoint, _)) = input.maybe_v0_ref() {
+                    contracts.remove(outpoint);
+                }
+            }
+            ModuleHistoryItem::ConsensusItem(_) => {}
+        }
+    }
+
+    drop(stream);
+
+    for (outpoint, (index, contract)) in contracts {
+        ctx.dbtx()
+            .insert_new_entry(&IncomingContractStreamKey(index), &contract)
+            .await;
+
+        ctx.dbtx()
+            .insert_new_entry(&IncomingContractIndexKey(outpoint), &index)
+            .await;
+    }
+
+    ctx.dbtx()
+        .insert_new_entry(&IncomingContractStreamIndexKey, &stream_index)
+        .await;
+
+    Ok(())
+}
