@@ -210,14 +210,14 @@ impl Gatewayd {
             cmd!(
                 "gateway-cli",
                 "--rpcpassword=theresnosecondbest",
-                "-a",
+                "--address",
                 &self.addr
             )
         } else {
             cmd!(
                 crate::util::get_gateway_cli_path(),
                 "--rpcpassword=theresnosecondbest",
-                "-a",
+                "--address",
                 &self.addr
             )
         }

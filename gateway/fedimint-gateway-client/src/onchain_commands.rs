@@ -31,16 +31,10 @@ pub enum OnchainCommands {
 }
 
 impl OnchainCommands {
-    pub async fn handle(
-        self,
-        create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
-    ) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
         match self {
             Self::Address => {
-                let response = create_client()
-                    .get_ln_onchain_address()
-                    .await?
-                    .assume_checked();
+                let response = client.get_ln_onchain_address().await?.assume_checked();
                 println!("{response}");
             }
             Self::Send {
@@ -48,7 +42,7 @@ impl OnchainCommands {
                 amount,
                 fee_rate_sats_per_vbyte,
             } => {
-                let response = create_client()
+                let response = client
                     .send_onchain(SendOnchainRequest {
                         address,
                         amount,
