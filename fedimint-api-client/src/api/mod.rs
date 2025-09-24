@@ -1,6 +1,6 @@
 mod error;
 pub mod global_api;
-mod iroh;
+pub mod iroh;
 pub mod net;
 
 use core::{fmt, panic};
