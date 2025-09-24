@@ -204,8 +204,16 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
 
-    let api_handler = if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
-        Box::pin(start_iroh_api(
+    let api_handler = start_consensus_api(
+        &cfg.local,
+        consensus_api.clone(),
+        force_api_secrets.clone(),
+        api_bind,
+    )
+    .await;
+
+    if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone()
+        && let Err(e) = Box::pin(start_iroh_api(
             iroh_api_sk,
             api_bind,
             iroh_dns,
@@ -214,20 +222,13 @@ pub async fn run(
             task_group,
             iroh_api_limits,
         ))
-        .await?;
-
-        None
-    } else {
-        let handler = start_consensus_api(
-            &cfg.local,
-            consensus_api.clone(),
-            force_api_secrets.clone(),
-            api_bind,
-        )
-        .await;
-
-        Some(handler)
-    };
+        .await
+    {
+        // clean up ws api before propagating error
+        api_handler.stop().expect("Just started");
+        api_handler.stopped().await;
+        return Err(e);
+    }
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals...");
 
@@ -281,13 +282,11 @@ pub async fn run(
     .run()
     .await?;
 
-    if let Some(api_handler) = api_handler {
-        api_handler
-            .stop()
-            .expect("Consensus api should still be running");
+    api_handler
+        .stop()
+        .expect("Consensus api should still be running");
 
-        api_handler.stopped().await;
-    }
+    api_handler.stopped().await;
 
     Ok(())
 }
