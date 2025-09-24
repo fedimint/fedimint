@@ -61,7 +61,10 @@ use crate::db::{ServerInfo, ServerInfoKey};
 use crate::fedimint_core::net::peers::IP2PConnections;
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::announcement::start_api_announcement_service;
-use crate::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
+use crate::net::p2p::{
+    P2PConnectionTypeReceivers, ReconnectP2PConnections, p2p_connection_type_channels,
+    p2p_status_channels,
+};
 use crate::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 
 pub mod metrics;
@@ -96,58 +99,68 @@ pub async fn run(
     db_checkpoint_retention: u64,
     iroh_api_limits: ConnectionLimits,
 ) -> anyhow::Result<()> {
-    let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
-        Some(cfg) => {
-            let connector = if cfg.consensus.iroh_endpoints.is_empty() {
-                TlsTcpConnector::new(
-                    cfg.tls_config(),
-                    settings.p2p_bind,
-                    cfg.local.p2p_endpoints.clone(),
+    let (cfg, connections, p2p_status_receivers, p2p_connection_type_receivers) =
+        match get_config(&data_dir)? {
+            Some(cfg) => {
+                let connector = if cfg.consensus.iroh_endpoints.is_empty() {
+                    TlsTcpConnector::new(
+                        cfg.tls_config(),
+                        settings.p2p_bind,
+                        cfg.local.p2p_endpoints.clone(),
+                        cfg.local.identity,
+                    )
+                    .await
+                    .into_dyn()
+                } else {
+                    IrohConnector::new(
+                        cfg.private.iroh_p2p_sk.clone().unwrap(),
+                        settings.p2p_bind,
+                        settings.iroh_dns.clone(),
+                        settings.iroh_relays.clone(),
+                        cfg.consensus
+                            .iroh_endpoints
+                            .iter()
+                            .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
+                            .collect(),
+                    )
+                    .await?
+                    .into_dyn()
+                };
+
+                let (p2p_status_senders, p2p_status_receivers) =
+                    p2p_status_channels(connector.peers());
+                let (p2p_connection_type_senders, p2p_connection_type_receivers) =
+                    p2p_connection_type_channels(connector.peers());
+
+                let connections = ReconnectP2PConnections::new(
                     cfg.local.identity,
+                    connector,
+                    &task_group,
+                    p2p_status_senders,
+                    p2p_connection_type_senders,
                 )
-                .await
-                .into_dyn()
-            } else {
-                IrohConnector::new(
-                    cfg.private.iroh_p2p_sk.clone().unwrap(),
-                    settings.p2p_bind,
-                    settings.iroh_dns.clone(),
-                    settings.iroh_relays.clone(),
-                    cfg.consensus
-                        .iroh_endpoints
-                        .iter()
-                        .map(|(peer, endpoints)| (*peer, endpoints.p2p_pk))
-                        .collect(),
+                .into_dyn();
+
+                (
+                    cfg,
+                    connections,
+                    p2p_status_receivers,
+                    p2p_connection_type_receivers,
                 )
+            }
+            None => {
+                Box::pin(run_config_gen(
+                    data_dir.clone(),
+                    settings.clone(),
+                    db.clone(),
+                    &task_group,
+                    code_version_str.clone(),
+                    force_api_secrets.clone(),
+                    setup_ui_router,
+                ))
                 .await?
-                .into_dyn()
-            };
-
-            let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
-
-            let connections = ReconnectP2PConnections::new(
-                cfg.local.identity,
-                connector,
-                &task_group,
-                p2p_status_senders,
-            )
-            .into_dyn();
-
-            (cfg, connections, p2p_status_receivers)
-        }
-        None => {
-            Box::pin(run_config_gen(
-                data_dir.clone(),
-                settings.clone(),
-                db.clone(),
-                &task_group,
-                code_version_str.clone(),
-                force_api_secrets.clone(),
-                setup_ui_router,
-            ))
-            .await?
-        }
-    };
+            }
+        };
 
     let decoders = module_init_registry.decoders_strict(
         cfg.consensus
@@ -167,6 +180,7 @@ pub async fn run(
     Box::pin(consensus::run(
         connections,
         p2p_status_receivers,
+        p2p_connection_type_receivers,
         settings.api_bind,
         settings.iroh_dns,
         settings.iroh_relays,
@@ -231,6 +245,7 @@ pub async fn run_config_gen(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
     P2PStatusReceivers,
+    P2PConnectionTypeReceivers,
 )> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
 
@@ -313,12 +328,15 @@ pub async fn run_config_gen(
     };
 
     let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+    let (p2p_connection_type_senders, p2p_connection_type_receivers) =
+        p2p_connection_type_channels(connector.peers());
 
     let connections = ReconnectP2PConnections::new(
         cg_params.identity,
         connector,
         task_group,
         p2p_status_senders,
+        p2p_connection_type_senders,
     )
     .into_dyn();
 
@@ -348,5 +366,10 @@ pub async fn run_config_gen(
         api_secrets.get_active(),
     )?;
 
-    Ok((cfg, connections, p2p_status_receivers))
+    Ok((
+        cfg,
+        connections,
+        p2p_status_receivers,
+        p2p_connection_type_receivers,
+    ))
 }
