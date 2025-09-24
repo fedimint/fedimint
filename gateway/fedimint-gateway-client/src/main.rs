@@ -6,7 +6,7 @@ mod general_commands;
 mod lightning_commands;
 mod onchain_commands;
 
-use clap::{ArgGroup, CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
 use fedimint_core::util::SafeUrl;
@@ -19,20 +19,10 @@ use serde::Serialize;
 
 #[derive(Parser)]
 #[command(version)]
-#[command(group(
-    ArgGroup::new("endpoint")
-        .args(&["address", "iroh_pk"])
-        .required(true)
-        .multiple(false),
-))]
 struct Cli {
     /// The address of the gateway webserver
-    #[clap(long)]
-    address: Option<SafeUrl>,
-
-    /// The Iroh public key
-    #[clap(long)]
-    iroh_pk: Option<iroh::PublicKey>,
+    #[clap(long, default_value = "http://127.0.0.1:80")]
+    address: SafeUrl,
 
     #[command(subcommand)]
     command: Commands,
@@ -63,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
 
     let cli = Cli::parse();
-    let client = GatewayRpcClient::new(cli.address, cli.iroh_pk, cli.rpcpassword).await?;
+    let client = GatewayRpcClient::new(cli.address, cli.rpcpassword).await?;
 
     match cli.command {
         Commands::General(general_command) => general_command.handle(&client).await?,
