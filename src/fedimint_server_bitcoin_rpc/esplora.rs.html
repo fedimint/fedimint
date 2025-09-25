@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>bitcoin::{BlockHash, Network, Transaction};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::Feerate;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, SafeUrl};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, SafeUrl};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_logging::{LOG_BITCOIND_ESPLORA, LOG_SERVER};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>tracing::{debug, info};
@@ -123,13 +123,13 @@
 <a href=#123 id=123 data-nosnippet>123</a>    }
 <a href=#124 id=124 data-nosnippet>124</a>
 <a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
-<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">let _ </span>= <span class="self">self</span>.client.broadcast(<span class="kw-2">&amp;</span>transaction).<span class="kw">await</span>.map_err(|error| {
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">let _ </span>= <span class="self">self</span>.client.broadcast(<span class="kw-2">&amp;</span>transaction).<span class="kw">await</span>.map_err(|err| {
 <a href=#127 id=127 data-nosnippet>127</a>            <span class="comment">// `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
 <a href=#128 id=128 data-nosnippet>128</a>            // from detecting errors for transactions already submitted.
 <a href=#129 id=129 data-nosnippet>129</a>            // TODO: Suppress `esplora-client` already submitted errors when client is
 <a href=#130 id=130 data-nosnippet>130</a>            // updated
 <a href=#131 id=131 data-nosnippet>131</a>            // https://github.com/fedimint/fedimint/issues/3732
-<a href=#132 id=132 data-nosnippet>132</a>            </span><span class="macro">info!</span>(target: LOG_BITCOIND_ESPLORA, <span class="question-mark">?</span>error, <span class="string">"Error broadcasting transaction"</span>);
+<a href=#132 id=132 data-nosnippet>132</a>            </span><span class="macro">info!</span>(target: LOG_BITCOIND_ESPLORA, err = %err.fmt_compact(), <span class="string">"Error broadcasting transaction"</span>);
 <a href=#133 id=133 data-nosnippet>133</a>        });
 <a href=#134 id=134 data-nosnippet>134</a>    }
 <a href=#135 id=135 data-nosnippet>135</a>

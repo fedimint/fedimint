@@ -89,9 +89,9 @@
 <a href=#89 id=89 data-nosnippet>89</a>                <span class="kw">if </span>current_block_count &lt; expected_block_count {
 <a href=#90 id=90 data-nosnippet>90</a>                    <span class="macro">debug!</span>(
 <a href=#91 id=91 data-nosnippet>91</a>                        target: LOG_TEST,
-<a href=#92 id=92 data-nosnippet>92</a>                        <span class="question-mark">?</span>block_num,
-<a href=#93 id=93 data-nosnippet>93</a>                        <span class="question-mark">?</span>expected_block_count,
-<a href=#94 id=94 data-nosnippet>94</a>                        <span class="question-mark">?</span>current_block_count,
+<a href=#92 id=92 data-nosnippet>92</a>                        %block_num,
+<a href=#93 id=93 data-nosnippet>93</a>                        %expected_block_count,
+<a href=#94 id=94 data-nosnippet>94</a>                        %current_block_count,
 <a href=#95 id=95 data-nosnippet>95</a>                        <span class="string">"Waiting for blocks to be mined"
 <a href=#96 id=96 data-nosnippet>96</a>                    </span>);
 <a href=#97 id=97 data-nosnippet>97</a>                    sleep_in_test(<span class="string">"waiting for blocks to be mined"</span>, Duration::from_millis(<span class="number">200</span>))
@@ -100,8 +100,8 @@
 <a href=#100 id=100 data-nosnippet>100</a>                    <span class="macro">debug!</span>(
 <a href=#101 id=101 data-nosnippet>101</a>                        target: LOG_TEST,
 <a href=#102 id=102 data-nosnippet>102</a>                        <span class="question-mark">?</span>block_num,
-<a href=#103 id=103 data-nosnippet>103</a>                        <span class="question-mark">?</span>expected_block_count,
-<a href=#104 id=104 data-nosnippet>104</a>                        <span class="question-mark">?</span>current_block_count,
+<a href=#103 id=103 data-nosnippet>103</a>                        %expected_block_count,
+<a href=#104 id=104 data-nosnippet>104</a>                        %current_block_count,
 <a href=#105 id=105 data-nosnippet>105</a>                        <span class="string">"Mined blocks"
 <a href=#106 id=106 data-nosnippet>106</a>                    </span>);
 <a href=#107 id=107 data-nosnippet>107</a>                    <span class="kw">break</span>;

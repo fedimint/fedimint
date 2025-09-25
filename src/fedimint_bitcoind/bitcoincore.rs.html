@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::task::block_in_place;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, SafeUrl};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_logging::LOG_BITCOIND_CORE;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>tracing::{debug, warn};
@@ -74,7 +74,7 @@
 <a href=#74 id=74 data-nosnippet>74</a></span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>BitcoindClient {
 <a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
 <a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">let </span>info = block_in_place(|| <span class="self">self</span>.client.get_transaction(txid, <span class="prelude-val">Some</span>(<span class="bool-val">true</span>)))
-<a href=#77 id=77 data-nosnippet>77</a>            .map_err(|error| <span class="macro">warn!</span>(target: LOG_BITCOIND_CORE, <span class="question-mark">?</span>error, <span class="string">"Unable to get transaction"</span>));
+<a href=#77 id=77 data-nosnippet>77</a>            .map_err(|err| <span class="macro">warn!</span>(target: LOG_BITCOIND_CORE, err = %err.fmt_compact(), <span class="string">"Unable to get transaction"</span>));
 <a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span>height = <span class="kw">match </span>info.ok().and_then(|info| info.info.blockhash) {
 <a href=#79 id=79 data-nosnippet>79</a>            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
 <a href=#80 id=80 data-nosnippet>80</a>            <span class="prelude-val">Some</span>(hash) =&gt; <span class="prelude-val">Some</span>(block_in_place(|| <span class="self">self</span>.client.get_block_header_info(<span class="kw-2">&amp;</span>hash))<span class="question-mark">?</span>.height),

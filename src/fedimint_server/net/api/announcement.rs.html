@@ -8,7 +8,7 @@
 <a href=#8 id=8 data-nosnippet>8</a>    ApiAnnouncement, SignedApiAnnouncement, override_api_urls,
 <a href=#9 id=9 data-nosnippet>9</a>};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::task::{TaskGroup, sleep};
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, SafeUrl};
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>futures::stream::StreamExt;
@@ -69,10 +69,10 @@
 <a href=#69 id=69 data-nosnippet>69</a>
 <a href=#70 id=70 data-nosnippet>70</a>            <span class="comment">// Announce all peer API URLs we know, but at least our own
 <a href=#71 id=71 data-nosnippet>71</a>            </span><span class="kw">for </span>(peer, announcement) <span class="kw">in </span>announcements {
-<a href=#72 id=72 data-nosnippet>72</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = api_client
+<a href=#72 id=72 data-nosnippet>72</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = api_client
 <a href=#73 id=73 data-nosnippet>73</a>                    .submit_api_announcement(peer, announcement.clone())
 <a href=#74 id=74 data-nosnippet>74</a>                    .<span class="kw">await </span>{
-<a href=#75 id=75 data-nosnippet>75</a>                    <span class="macro">debug!</span>(target: LOG_NET_API, <span class="question-mark">?</span>peer, <span class="question-mark">?</span>e, <span class="string">"Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds"</span>);
+<a href=#75 id=75 data-nosnippet>75</a>                    <span class="macro">debug!</span>(target: LOG_NET_API, <span class="question-mark">?</span>peer, err = %err.fmt_compact(), <span class="string">"Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds"</span>);
 <a href=#76 id=76 data-nosnippet>76</a>                    success = <span class="bool-val">false</span>;
 <a href=#77 id=77 data-nosnippet>77</a>                }
 <a href=#78 id=78 data-nosnippet>78</a>            }

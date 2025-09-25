@@ -2,8 +2,8 @@
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::sync::Arc;
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::util::BoxStream;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::util::broadcaststream::BroadcastStream;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::util::broadcaststream::BroadcastStream;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::util::{BoxStream, FmtCompact};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>tracing::{debug, error, trace};
@@ -141,7 +141,7 @@
 <a href=#141 id=141 data-nosnippet>141</a>            BroadcastStream::new(<span class="self">self</span>.broadcast.subscribe())
 <a href=#142 id=142 data-nosnippet>142</a>                .take_while(|res| {
 <a href=#143 id=143 data-nosnippet>143</a>                    <span class="kw">let </span>cont = <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = res {
-<a href=#144 id=144 data-nosnippet>144</a>                        <span class="macro">error!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>err, <span class="string">"ModuleNotifier stream stopped on error"</span>);
+<a href=#144 id=144 data-nosnippet>144</a>                        <span class="macro">error!</span>(target: LOG_CLIENT, err = %err.fmt_compact(), <span class="string">"ModuleNotifier stream stopped on error"</span>);
 <a href=#145 id=145 data-nosnippet>145</a>                        <span class="bool-val">false
 <a href=#146 id=146 data-nosnippet>146</a>                    </span>} <span class="kw">else </span>{
 <a href=#147 id=147 data-nosnippet>147</a>                        <span class="bool-val">true

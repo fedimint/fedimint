@@ -585,8 +585,8 @@
 <a href=#585 id=585 data-nosnippet>585</a>                <span class="prelude-val">Ok</span>(()) =&gt; {
 <a href=#586 id=586 data-nosnippet>586</a>                    <span class="macro">debug!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>session_checkpoint_dir, <span class="question-mark">?</span>session_index, <span class="string">"Created db checkpoint"</span>);
 <a href=#587 id=587 data-nosnippet>587</a>                }
-<a href=#588 id=588 data-nosnippet>588</a>                <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#589 id=589 data-nosnippet>589</a>                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>session_checkpoint_dir, <span class="question-mark">?</span>session_index, <span class="question-mark">?</span>e, <span class="string">"Could not create db checkpoint"</span>);
+<a href=#588 id=588 data-nosnippet>588</a>                <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#589 id=589 data-nosnippet>589</a>                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>session_checkpoint_dir, <span class="question-mark">?</span>session_index, err = %err.fmt_compact_anyhow(), <span class="string">"Could not create db checkpoint"</span>);
 <a href=#590 id=590 data-nosnippet>590</a>                }
 <a href=#591 id=591 data-nosnippet>591</a>            }
 <a href=#592 id=592 data-nosnippet>592</a>        }
@@ -594,8 +594,8 @@
 <a href=#594 id=594 data-nosnippet>594</a>        {
 <a href=#595 id=595 data-nosnippet>595</a>            <span class="comment">// Check if any old checkpoint need to be cleaned up
 <a href=#596 id=596 data-nosnippet>596</a>            </span><span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"remove-database-checkpoint"</span>).level(Level::TRACE);
-<a href=#597 id=597 data-nosnippet>597</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.delete_old_database_checkpoint(session_index, <span class="kw-2">&amp;</span>checkpoint_dir) {
-<a href=#598 id=598 data-nosnippet>598</a>                <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>e, <span class="string">"Could not delete old checkpoints"</span>);
+<a href=#597 id=597 data-nosnippet>597</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.delete_old_database_checkpoint(session_index, <span class="kw-2">&amp;</span>checkpoint_dir) {
+<a href=#598 id=598 data-nosnippet>598</a>                <span class="macro">warn!</span>(target: LOG_CONSENSUS, err = %err.fmt_compact_anyhow(), <span class="string">"Could not delete old checkpoints"</span>);
 <a href=#599 id=599 data-nosnippet>599</a>            }
 <a href=#600 id=600 data-nosnippet>600</a>        }
 <a href=#601 id=601 data-nosnippet>601</a>    }

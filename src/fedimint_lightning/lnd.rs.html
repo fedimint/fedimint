@@ -351,7 +351,7 @@
 <a href=#351 id=351 data-nosnippet>351</a>                        <span class="kw">match </span>stream {
 <a href=#352 id=352 data-nosnippet>352</a>                            <span class="prelude-val">Ok</span>(stream) =&gt; stream.into_inner(),
 <a href=#353 id=353 data-nosnippet>353</a>                            <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#354 id=354 data-nosnippet>354</a>                                <span class="macro">crit!</span>(target: LOG_LIGHTNING, err = <span class="question-mark">?</span>e, <span class="string">"Failed to establish htlc stream"</span>);
+<a href=#354 id=354 data-nosnippet>354</a>                                <span class="macro">crit!</span>(target: LOG_LIGHTNING, err = %e.fmt_compact(), <span class="string">"Failed to establish htlc stream"</span>);
 <a href=#355 id=355 data-nosnippet>355</a>                                <span class="kw">return</span>;
 <a href=#356 id=356 data-nosnippet>356</a>                            }
 <a href=#357 id=357 data-nosnippet>357</a>                        }

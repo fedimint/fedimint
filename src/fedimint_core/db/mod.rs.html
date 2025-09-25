@@ -593,7 +593,7 @@
 <a href=#593 id=593 data-nosnippet>593</a>                        <span class="macro">warn!</span>(
 <a href=#594 id=594 data-nosnippet>594</a>                            target: LOG_DB,
 <a href=#595 id=595 data-nosnippet>595</a>                            curr_attempts,
-<a href=#596 id=596 data-nosnippet>596</a>                            <span class="question-mark">?</span>err,
+<a href=#596 id=596 data-nosnippet>596</a>                            err = %err.fmt_compact_anyhow(),
 <a href=#597 id=597 data-nosnippet>597</a>                            <span class="string">"Database commit failed in an autocommit block - terminating"
 <a href=#598 id=598 data-nosnippet>598</a>                        </span>);
 <a href=#599 id=599 data-nosnippet>599</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(AutocommitError::CommitFailed {
