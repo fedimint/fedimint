@@ -13,6 +13,23 @@ use thiserror::Error;
 
 use crate::envs::FM_DEBUG_GATEWAY_ENV;
 
+#[derive(Debug, thiserror::Error)]
+pub enum GatewayError {
+    #[error("Admin error: {0}")]
+    Admin(#[from] AdminGatewayError),
+    #[error("Public error: {0}")]
+    Public(#[from] PublicGatewayError),
+}
+
+impl IntoResponse for GatewayError {
+    fn into_response(self) -> Response {
+        match self {
+            GatewayError::Admin(admin) => admin.into_response(),
+            GatewayError::Public(public) => public.into_response(),
+        }
+    }
+}
+
 /// Errors that unauthenticated endpoints can encounter. For privacy reasons,
 /// the error messages are intended to be redacted before returning to the
 /// client.
@@ -28,6 +45,8 @@ pub enum PublicGatewayError {
     FederationNotConnected(#[from] FederationNotConnected),
     #[error("Failed to receive ecash: {failure_reason}")]
     ReceiveEcashError { failure_reason: String },
+    #[error("Unexpected Error: {}", OptStacktrace(.0))]
+    Unexpected(#[from] anyhow::Error),
 }
 
 impl IntoResponse for PublicGatewayError {
@@ -56,6 +75,7 @@ impl IntoResponse for PublicGatewayError {
                 "LNv2 operation failed, please contact gateway operator".to_string(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
+            PublicGatewayError::Unexpected(e) => (e.to_string(), StatusCode::BAD_REQUEST),
         };
 
         let error_message = if is_env_var_set(FM_DEBUG_GATEWAY_ENV) {
