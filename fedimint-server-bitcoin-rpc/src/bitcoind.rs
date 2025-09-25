@@ -7,7 +7,7 @@ use bitcoincore_rpc::{Auth, Client, RpcApi};
 use fedimint_core::Feerate;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_logging::{LOG_BITCOIND_CORE, LOG_SERVER};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::{debug, info};
@@ -98,7 +98,9 @@ impl IServerBitcoinRpc for BitcoindClient {
             //
             // https://github.com/bitcoin/bitcoin/blob/daa56f7f665183bcce3df146f143be37f33c123e/src/rpc/protocol.h#L48
             Err(JsonRpc(Rpc(e))) if e.code == -27 => (),
-            Err(e) => info!(target: LOG_BITCOIND_CORE, ?e, "Error broadcasting transaction"),
+            Err(e) => {
+                info!(target: LOG_BITCOIND_CORE, e = %e.fmt_compact(), "Error broadcasting transaction")
+            }
             Ok(_) => (),
         }
     }

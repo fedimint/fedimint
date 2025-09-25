@@ -335,8 +335,8 @@ impl LightningPayFunded {
                 .await
             {
                 Ok(preimage) => return Ok(preimage),
-                Err(error) => {
-                    match error.clone() {
+                Err(err) => {
+                    match err.clone() {
                         GatewayPayError::GatewayInternalError {
                             error_code,
                             error_message,
@@ -346,7 +346,7 @@ impl LightningPayFunded {
                                 && error_code == StatusCode::NOT_FOUND.as_u16()
                             {
                                 warn!(
-                                    ?error_message,
+                                    %error_message,
                                     ?payload,
                                     ?gateway,
                                     ?RETRY_DELAY,
@@ -357,12 +357,12 @@ impl LightningPayFunded {
                             }
                         }
                         GatewayPayError::OutgoingContractError => {
-                            return Err(error);
+                            return Err(err);
                         }
                     }
 
                     warn!(
-                        ?error,
+                        err = %err.fmt_compact(),
                         ?payload,
                         ?gateway,
                         ?GATEWAY_INTERNAL_ERROR_RETRY_INTERVAL,

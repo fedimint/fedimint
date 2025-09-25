@@ -89,9 +89,9 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                 if current_block_count < expected_block_count {
                     debug!(
                         target: LOG_TEST,
-                        ?block_num,
-                        ?expected_block_count,
-                        ?current_block_count,
+                        %block_num,
+                        %expected_block_count,
+                        %current_block_count,
                         "Waiting for blocks to be mined"
                     );
                     sleep_in_test("waiting for blocks to be mined", Duration::from_millis(200))
@@ -100,8 +100,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                     debug!(
                         target: LOG_TEST,
                         ?block_num,
-                        ?expected_block_count,
-                        ?current_block_count,
+                        %expected_block_count,
+                        %current_block_count,
                         "Mined blocks"
                     );
                     break;

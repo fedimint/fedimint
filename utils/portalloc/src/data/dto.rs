@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::net::{TcpListener, UdpSocket};
 
+use fedimint_core::util::FmtCompact as _;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
@@ -80,9 +81,9 @@ impl RootData {
                     TcpListener::bind(("127.0.0.1", port)),
                     UdpSocket::bind(("127.0.0.1", port)),
                 ) {
-                    (Err(error), _) | (_, Err(error)) => {
+                    (Err(err), _) | (_, Err(err)) => {
                         warn!(
-                            ?error,
+                            err = %err.fmt_compact(),
                             port, "Could not use a port. Will try a different range"
                         );
                         base_port = port + 1;

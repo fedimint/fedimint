@@ -593,7 +593,7 @@ impl Database {
                         warn!(
                             target: LOG_DB,
                             curr_attempts,
-                            ?err,
+                            err = %err.fmt_compact_anyhow(),
                             "Database commit failed in an autocommit block - terminating"
                         );
                         return Err(AutocommitError::CommitFailed {

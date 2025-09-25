@@ -408,7 +408,7 @@ pub async fn run(
     debug!(target: LOG_CORE, "Terminating main task");
 
     if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
-        error!(target: LOG_CORE, ?err, "Error while shutting down task group");
+        error!(target: LOG_CORE, err = %err.fmt_compact_anyhow(), "Error while shutting down task group");
     }
 
     debug!(target: LOG_CORE, "Shutdown complete");

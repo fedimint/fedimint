@@ -6,7 +6,7 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::block_in_place;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_BITCOIND_CORE;
 use tracing::{debug, warn};
@@ -74,7 +74,7 @@ impl BitcoindClient {
 impl IBitcoindRpc for BitcoindClient {
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
         let info = block_in_place(|| self.client.get_transaction(txid, Some(true)))
-            .map_err(|error| warn!(target: LOG_BITCOIND_CORE, ?error, "Unable to get transaction"));
+            .map_err(|err| warn!(target: LOG_BITCOIND_CORE, err = %err.fmt_compact(), "Unable to get transaction"));
         let height = match info.ok().and_then(|info| info.info.blockhash) {
             None => None,
             Some(hash) => Some(block_in_place(|| self.client.get_block_header_info(&hash))?.height),

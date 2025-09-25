@@ -19,6 +19,7 @@
 pub mod audit;
 pub mod registry;
 
+use std::error::Error;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -46,6 +47,7 @@ use crate::db::{
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::MaybeSend;
+use crate::util::FmtCompact;
 use crate::{Amount, apply, async_trait_maybe_send, maybe_add_send, maybe_add_send_sync};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -159,6 +161,14 @@ impl Debug for ApiAuth {
 pub struct ApiError {
     pub code: i32,
     pub message: String,
+}
+
+impl Error for ApiError {}
+
+impl fmt::Display for ApiError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{} {}", self.code, self.message))
+    }
 }
 
 pub type ApiResult<T> = Result<T, ApiError>;
@@ -398,8 +408,8 @@ impl ApiEndpoint<()> {
             tracing::debug!(target: LOG_NET_API, path = E::PATH, ?request, "received api request");
             let result = E::handle(state, context, request.params).await;
             match &result {
-                Err(error) => {
-                    tracing::warn!(target: LOG_NET_API, path = E::PATH, ?error, "api request error");
+                Err(err) => {
+                    tracing::warn!(target: LOG_NET_API, path = E::PATH, err = %err.fmt_compact(), "api request error");
                 }
                 _ => {
                     tracing::trace!(target: LOG_NET_API, path = E::PATH, "api request complete");

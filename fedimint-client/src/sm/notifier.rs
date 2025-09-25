@@ -1,6 +1,7 @@
 use fedimint_client_module::module::FinalClientIface;
 use fedimint_client_module::sm::{DynState, ModuleNotifier};
 use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::util::FmtCompact;
 use tracing::{debug, trace};
 
 /// State transition notifier owned by the modularized client used to inform
@@ -27,9 +28,9 @@ impl Notifier {
         let queue_len = self.broadcast.len();
         trace!(?state, %queue_len, "Sending notification about state transition");
         // FIXME: use more robust notification mechanism
-        if let Err(e) = self.broadcast.send(state) {
+        if let Err(err) = self.broadcast.send(state) {
             debug!(
-                ?e,
+                err = %err.fmt_compact(),
                 %queue_len,
                 receivers=self.broadcast.receiver_count(),
                 "Could not send state transition notification, no active receivers"

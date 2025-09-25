@@ -55,7 +55,7 @@ use fedimint_core::secp256k1::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{BoxStream, backoff_util, retry};
+use fedimint_core::util::{BoxStream, FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
@@ -1416,7 +1416,8 @@ impl LightningClientModule {
             match stream.next().await {
                 Some(LightningClientStateMachines::LightningPay(state)) => Some(state.state),
                 Some(event) => {
-                    error!(?event, "Operation is not a lightning payment");
+                    // nosemgrep: use-err-formatting
+                    error!(event = ?event, "Operation is not a lightning payment");
                     debug_assert!(false, "Operation is not a lightning payment: {event:?}");
                     None
                 }
@@ -1546,8 +1547,8 @@ impl LightningClientModule {
                 .await
             {
                 Ok(operation_id) => claims.push(operation_id),
-                Err(e) => {
-                    error!(?e, ?i, "Failed to scan tweaked key at index i");
+                Err(err) => {
+                    error!(err = %err.fmt_compact_anyhow(), %i, "Failed to scan tweaked key at index i");
                 }
             }
         }

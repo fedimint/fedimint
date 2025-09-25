@@ -8,7 +8,7 @@ use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, override_api_urls,
 };
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use futures::stream::StreamExt;
@@ -69,10 +69,10 @@ pub async fn start_api_announcement_service(
 
             // Announce all peer API URLs we know, but at least our own
             for (peer, announcement) in announcements {
-                if let Err(e) = api_client
+                if let Err(err) = api_client
                     .submit_api_announcement(peer, announcement.clone())
                     .await {
-                    debug!(target: LOG_NET_API, ?peer, ?e, "Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
+                    debug!(target: LOG_NET_API, ?peer, err = %err.fmt_compact(), "Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
                     success = false;
                 }
             }
