@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -70,8 +70,9 @@ where
 }
 
 pub struct Handlers {
-    get_handlers: BTreeMap<String, (GetHandler, bool)>,
-    post_handlers: BTreeMap<String, (PostHandler, bool)>,
+    get_handlers: BTreeMap<String, GetHandler>,
+    post_handlers: BTreeMap<String, PostHandler>,
+    authenticated_routes: BTreeSet<String>,
 }
 
 impl Handlers {
@@ -79,6 +80,7 @@ impl Handlers {
         Handlers {
             get_handlers: BTreeMap::new(),
             post_handlers: BTreeMap::new(),
+            authenticated_routes: BTreeSet::new(),
         }
     }
 
@@ -87,11 +89,14 @@ impl Handlers {
         F: Fn(Extension<Arc<Gateway>>) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
     {
+        if is_authenticated {
+            self.authenticated_routes.insert(route.to_string());
+        }
         self.get_handlers
-            .insert(route.to_string(), (make_get_handler(f), is_authenticated));
+            .insert(route.to_string(), make_get_handler(f));
     }
 
-    pub fn get_handler(&self, route: &str) -> Option<&(GetHandler, bool)> {
+    pub fn get_handler(&self, route: &str) -> Option<&GetHandler> {
         self.get_handlers.get(route)
     }
 
@@ -101,12 +106,20 @@ impl Handlers {
         F: Fn(Extension<Arc<Gateway>>, Json<P>) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = Result<Json<serde_json::Value>, GatewayError>> + Send + 'static,
     {
+        if is_authenticated {
+            self.authenticated_routes.insert(route.to_string());
+        }
+
         self.post_handlers
-            .insert(route.to_string(), (make_post_handler(f), is_authenticated));
+            .insert(route.to_string(), make_post_handler(f));
     }
 
-    pub fn get_handler_with_payload(&self, route: &str) -> Option<&(PostHandler, bool)> {
+    pub fn get_handler_with_payload(&self, route: &str) -> Option<&PostHandler> {
         self.post_handlers.get(route)
+    }
+
+    pub fn is_authenticated(&self, route: &str) -> bool {
+        self.authenticated_routes.contains(route)
     }
 }
 
@@ -185,39 +198,26 @@ async fn handle_request(
     gateway: Arc<Gateway>,
     handlers: Arc<Handlers>,
 ) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
+    if handlers.is_authenticated(&request.route) {
+        if let Err(_) = iroh_verify_password(gateway.clone(), request) {
+            return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
+        }
+    }
+
     let (status, body) = match &request.params {
         Some(params) => {
-            if let Some((handler, is_authenticated)) =
-                handlers.get_handler_with_payload(&request.route)
-            {
-                if *is_authenticated {
-                    match iroh_verify_password(gateway.clone(), request) {
-                        Ok(()) => (
-                            StatusCode::OK,
-                            handler(Extension(gateway), params.clone()).await?,
-                        ),
-                        Err(_) => (StatusCode::UNAUTHORIZED, Json(json!(()))),
-                    }
-                } else {
-                    (
-                        StatusCode::OK,
-                        handler(Extension(gateway), params.clone()).await?,
-                    )
-                }
+            if let Some(handler) = handlers.get_handler_with_payload(&request.route) {
+                (
+                    StatusCode::OK,
+                    handler(Extension(gateway), params.clone()).await?,
+                )
             } else {
                 return Err(anyhow!("Iroh handler received request with unknown route"));
             }
         }
         None => {
-            if let Some((handler, is_authenticated)) = handlers.get_handler(&request.route) {
-                if *is_authenticated {
-                    match iroh_verify_password(gateway.clone(), request) {
-                        Ok(()) => (StatusCode::OK, handler(Extension(gateway)).await?),
-                        Err(_) => (StatusCode::UNAUTHORIZED, Json(json!(()))),
-                    }
-                } else {
-                    (StatusCode::OK, handler(Extension(gateway)).await?)
-                }
+            if let Some(handler) = handlers.get_handler(&request.route) {
+                (StatusCode::OK, handler(Extension(gateway)).await?)
             } else {
                 return Err(anyhow!("Iroh handler received request with unknown route"));
             }
