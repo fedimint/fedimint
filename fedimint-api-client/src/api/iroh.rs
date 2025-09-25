@@ -84,7 +84,7 @@ impl IrohConnector {
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
         warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-        let mut s = Self::new_no_overrides(peers, iroh_dns).await?;
+        let mut s = Box::pin(Self::new_no_overrides(peers, iroh_dns)).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -118,43 +118,46 @@ impl IrohConnector {
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
         let endpoint_stable = {
-            let builder = Endpoint::builder();
+            let iroh_dns_servers = iroh_dns_servers.clone();
+            async {
+                let builder = Endpoint::builder();
 
-            // As a client, we don't need to register on any relays
-            let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
+                // As a client, we don't need to register on any relays
+                let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
 
-            for iroh_dns in iroh_dns_servers.clone() {
-                builder = builder.add_discovery(move |_| Some(PkarrResolver::new(iroh_dns)));
-            }
-
-            #[cfg(not(target_family = "wasm"))]
-            let mut builder = builder.discovery_dht();
-
-            // instead of `.discovery_n0`, which brings publisher we don't want
-            {
-                #[cfg(target_family = "wasm")]
-                {
-                    builder =
-                        builder.add_discovery(move |_| Some(Box::new(PkarrResolver::n0_dns())));
+                for iroh_dns in iroh_dns_servers {
+                    builder = builder.add_discovery(move |_| Some(PkarrResolver::new(iroh_dns)));
                 }
 
                 #[cfg(not(target_family = "wasm"))]
-                {
-                    builder =
-                        builder.add_discovery(move |_| Some(Arc::new(DnsDiscovery::n0_dns())));
-                }
-            }
+                let mut builder = builder.discovery_dht();
 
-            let endpoint = builder.discovery_n0().bind().await?;
-            debug!(
-                target: LOG_NET_IROH,
-                node_id = %endpoint.node_id(),
-                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-                "Iroh api client endpoint (stable)"
-            );
-            endpoint
+                // instead of `.discovery_n0`, which brings publisher we don't want
+                {
+                    #[cfg(target_family = "wasm")]
+                    {
+                        builder =
+                            builder.add_discovery(move |_| Some(Arc::new(PkarrResolver::n0_dns())));
+                    }
+
+                    #[cfg(not(target_family = "wasm"))]
+                    {
+                        builder =
+                            builder.add_discovery(move |_| Some(Arc::new(DnsDiscovery::n0_dns())));
+                    }
+                }
+
+                let endpoint = builder.discovery_n0().bind().await?;
+                debug!(
+                    target: LOG_NET_IROH,
+                    node_id = %endpoint.node_id(),
+                    node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                    "Iroh api client endpoint (stable)"
+                );
+                Ok::<_, anyhow::Error>(endpoint)
+            }
         };
-        let endpoint_next = {
+        let endpoint_next = async {
             let builder = iroh_next::Endpoint::builder().discovery_n0();
 
             // As a client, we don't need to register on any relays
@@ -175,8 +178,10 @@ impl IrohConnector {
                 node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
                 "Iroh api client endpoint (next)"
             );
-            endpoint
+            Ok(endpoint)
         };
+
+        let (endpoint_stable, endpoint_next) = tokio::try_join!(endpoint_stable, endpoint_next)?;
 
         Ok(Self {
             node_ids,
