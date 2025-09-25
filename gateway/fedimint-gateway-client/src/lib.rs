@@ -283,15 +283,9 @@ impl GatewayRpcClient {
                     .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
                 match status_code {
                     StatusCode::OK => {
-                        if let Some(body) = response.body {
-                            let response = serde_json::from_value::<T>(body)
-                                .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                            Ok(response)
-                        } else {
-                            Err(GatewayRpcError::IrohError(
-                                "No body included in response".to_string(),
-                            ))
-                        }
+                        let response = serde_json::from_value::<T>(response.body)
+                            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+                        Ok(response)
                     }
                     status => Err(GatewayRpcError::BadStatus(status)),
                 }
