@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["ServerBitcoinRpcStatus"],"trait":["DashboardApiModuleExt","IDashboardApi"],"type":["DynDashboardApi"]};
+window.SIDEBAR_ITEMS = {"enum":["ConnectionType"],"struct":["ServerBitcoinRpcStatus"],"trait":["DashboardApiModuleExt","IDashboardApi"],"type":["DynDashboardApi"]};
