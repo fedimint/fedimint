@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use axum::Json;
+use axum::body::Body;
 use axum::response::{IntoResponse, Response};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::crit;
@@ -12,6 +14,26 @@ use reqwest::StatusCode;
 use thiserror::Error;
 
 use crate::envs::FM_DEBUG_GATEWAY_ENV;
+
+#[derive(Debug, thiserror::Error)]
+pub enum GatewayError {
+    #[error("Admin error: {0}")]
+    Admin(#[from] AdminGatewayError),
+    #[error("Public error: {0}")]
+    Public(#[from] PublicGatewayError),
+    #[error("{0}")]
+    Lnurl(#[from] LnurlError),
+}
+
+impl IntoResponse for GatewayError {
+    fn into_response(self) -> Response {
+        match self {
+            GatewayError::Admin(admin) => admin.into_response(),
+            GatewayError::Public(public) => public.into_response(),
+            GatewayError::Lnurl(lnurl) => lnurl.into_response(),
+        }
+    }
+}
 
 /// Errors that unauthenticated endpoints can encounter. For privacy reasons,
 /// the error messages are intended to be redacted before returning to the
@@ -28,6 +50,8 @@ pub enum PublicGatewayError {
     FederationNotConnected(#[from] FederationNotConnected),
     #[error("Failed to receive ecash: {failure_reason}")]
     ReceiveEcashError { failure_reason: String },
+    #[error("Unexpected Error: {}", OptStacktrace(.0))]
+    Unexpected(#[from] anyhow::Error),
 }
 
 impl IntoResponse for PublicGatewayError {
@@ -56,6 +80,7 @@ impl IntoResponse for PublicGatewayError {
                 "LNv2 operation failed, please contact gateway operator".to_string(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             ),
+            PublicGatewayError::Unexpected(e) => (e.to_string(), StatusCode::BAD_REQUEST),
         };
 
         let error_message = if is_env_var_set(FM_DEBUG_GATEWAY_ENV) {
@@ -149,5 +174,38 @@ impl Display for FederationNotConnected {
             "No federation available for prefix {}",
             self.federation_id_prefix
         )
+    }
+}
+
+/// LNURL-compliant error response for verify endpoints
+#[derive(Debug, Error)]
+pub(crate) struct LnurlError {
+    code: StatusCode,
+    reason: anyhow::Error,
+}
+
+impl Display for LnurlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LNURL Error: {}", self.reason,)
+    }
+}
+
+impl LnurlError {
+    pub(crate) fn internal(reason: anyhow::Error) -> Self {
+        Self {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            reason,
+        }
+    }
+}
+
+impl IntoResponse for LnurlError {
+    fn into_response(self) -> Response<Body> {
+        let json = Json(serde_json::json!({
+            "status": "ERROR",
+            "reason": self.reason.to_string(),
+        }));
+
+        (self.code, json).into_response()
     }
 }

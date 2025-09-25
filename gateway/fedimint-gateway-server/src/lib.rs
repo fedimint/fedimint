@@ -20,6 +20,7 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
+mod iroh_server;
 pub mod rpc_server;
 mod types;
 
