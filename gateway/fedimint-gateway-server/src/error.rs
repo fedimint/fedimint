@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use axum::Json;
+use axum::body::Body;
 use axum::response::{IntoResponse, Response};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::crit;
@@ -19,6 +21,8 @@ pub enum GatewayError {
     Admin(#[from] AdminGatewayError),
     #[error("Public error: {0}")]
     Public(#[from] PublicGatewayError),
+    #[error("{0}")]
+    Lnurl(#[from] LnurlError),
 }
 
 impl IntoResponse for GatewayError {
@@ -26,6 +30,7 @@ impl IntoResponse for GatewayError {
         match self {
             GatewayError::Admin(admin) => admin.into_response(),
             GatewayError::Public(public) => public.into_response(),
+            GatewayError::Lnurl(lnurl) => lnurl.into_response(),
         }
     }
 }
@@ -169,5 +174,38 @@ impl Display for FederationNotConnected {
             "No federation available for prefix {}",
             self.federation_id_prefix
         )
+    }
+}
+
+/// LNURL-compliant error response for verify endpoints
+#[derive(Debug, Error)]
+pub(crate) struct LnurlError {
+    code: StatusCode,
+    reason: anyhow::Error,
+}
+
+impl Display for LnurlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LNURL Error: {}", self.reason,)
+    }
+}
+
+impl LnurlError {
+    pub(crate) fn internal(reason: anyhow::Error) -> Self {
+        Self {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            reason,
+        }
+    }
+}
+
+impl IntoResponse for LnurlError {
+    fn into_response(self) -> Response<Body> {
+        let json = Json(serde_json::json!({
+            "status": "ERROR",
+            "reason": self.reason.to_string(),
+        }));
+
+        (self.code, json).into_response()
     }
 }
