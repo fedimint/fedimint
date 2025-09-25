@@ -1,21 +1,27 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use axum::extract::{Path, Query};
 use axum::{Extension, Json};
+use bitcoin::hashes::sha256;
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
-use fedimint_gateway_common::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
+use fedimint_gateway_common::{
+    FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse, STOP_ENDPOINT,
+};
 use fedimint_logging::LOG_GATEWAY;
 use iroh::endpoint::Incoming;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tracing::info;
+use url::Url;
 
 use crate::Gateway;
 use crate::error::{GatewayError, PublicGatewayError};
+use crate::rpc_server::verify_bolt11_preimage_v2_get;
 
 type GetHandler = Box<
     dyn Fn(
@@ -77,10 +83,12 @@ pub struct Handlers {
 
 impl Handlers {
     pub fn new() -> Self {
+        let mut authenticated_routes = BTreeSet::new();
+        authenticated_routes.insert(STOP_ENDPOINT.to_string());
         Handlers {
             get_handlers: BTreeMap::new(),
             post_handlers: BTreeMap::new(),
-            authenticated_routes: BTreeSet::new(),
+            authenticated_routes,
         }
     }
 
@@ -152,6 +160,7 @@ pub async fn start_iroh_endpoint(
                             incoming,
                             gw_clone.clone(),
                             handlers_clone.clone(),
+                            tg_clone.clone(),
                         ),
                     );
                 }
@@ -171,6 +180,7 @@ async fn handle_incoming_iroh_request(
     incoming: Incoming,
     gateway: Arc<Gateway>,
     handlers: Arc<Handlers>,
+    task_group: TaskGroup,
 ) -> anyhow::Result<()> {
     let connection = incoming.accept()?.await?;
     let remote_node_id = &connection.remote_node_id()?;
@@ -179,7 +189,13 @@ async fn handle_incoming_iroh_request(
         let request = recv.read_to_end(100_000).await?;
         let request = serde_json::from_slice::<IrohGatewayRequest>(&request)?;
 
-        let (status, body) = handle_request(&request, gateway.clone(), handlers.clone()).await?;
+        let (status, body) = handle_request(
+            &request,
+            gateway.clone(),
+            handlers.clone(),
+            task_group.clone(),
+        )
+        .await?;
 
         let response = IrohGatewayResponse {
             status: status.as_u16(),
@@ -197,11 +213,38 @@ async fn handle_request(
     request: &IrohGatewayRequest,
     gateway: Arc<Gateway>,
     handlers: Arc<Handlers>,
+    task_group: TaskGroup,
 ) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
     if handlers.is_authenticated(&request.route) {
         if let Err(_) = iroh_verify_password(gateway.clone(), request) {
             return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
         }
+    }
+
+    if request.route == STOP_ENDPOINT {
+        let body = crate::rpc_server::stop(Extension(task_group), Extension(gateway)).await?;
+        return Ok((StatusCode::OK, body));
+    }
+
+    if request.route.starts_with("/verify") {
+        // Use dummy URL for easier parsing
+        let url = Url::parse(&format!("http://localhost{}", request.route))?;
+        // Extract segments: /verify/<payment_hash>
+        let mut segments = url.path_segments().unwrap();
+        let hash_str = segments.next();
+
+        // Parse payment hash
+        let payment_hash: sha256::Hash = hash_str.ok_or(anyhow!("No has present"))?.parse()?;
+
+        // Parse query params (?wait etc.)
+        let query_map: HashMap<String, String> = url.query_pairs().into_owned().collect();
+
+        // Call your handler directly
+        let body =
+            verify_bolt11_preimage_v2_get(Extension(gateway), Path(payment_hash), Query(query_map))
+                .await?;
+
+        return Ok((StatusCode::OK, body));
     }
 
     let (status, body) = match &request.params {

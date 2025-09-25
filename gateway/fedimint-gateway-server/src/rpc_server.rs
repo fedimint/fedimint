@@ -35,7 +35,6 @@ use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::gateway_api::{CreateBolt11InvoicePayload, SendPaymentPayload};
-use fedimint_lnv2_common::lnurl::VerifyResponse;
 use fedimint_logging::LOG_GATEWAY;
 use hex::ToHex;
 use serde::de::DeserializeOwned;
@@ -185,7 +184,7 @@ fn lnv2_routes(handlers: &mut Handlers) -> Router {
         false,
         router,
     );
-    // TODO: Handle verify over iroh separately
+    // Verify endpoint does not have the same signature, it is handled separately
     router.route("/verify/{payment_hash}", get(verify_bolt11_preimage_v2_get))
 }
 
@@ -352,7 +351,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handle
         is_authenticated,
         authenticated_routes,
     );
-    // TODO: Handle stop separately
+    // Stop does not have the same function signature, it is handled separately
     let authenticated_routes = authenticated_routes.route(STOP_ENDPOINT, get(stop));
     let authenticated_routes = register_post_handler(
         handlers,
@@ -401,7 +400,7 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handle
 
 /// Display high-level information about the Gateway
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
-pub(crate) async fn info(
+async fn info(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let info = gateway.handle_get_info().await?;
@@ -602,17 +601,17 @@ async fn create_bolt11_invoice_v2(
     Ok(Json(json!(invoice)))
 }
 
-async fn verify_bolt11_preimage_v2_get(
+pub(crate) async fn verify_bolt11_preimage_v2_get(
     Extension(gateway): Extension<Arc<Gateway>>,
     Path(payment_hash): Path<sha256::Hash>,
     Query(query): Query<HashMap<String, String>>,
-) -> Result<Json<VerifyResponse>, GatewayError> {
+) -> Result<Json<serde_json::Value>, GatewayError> {
     let response = gateway
         .verify_bolt11_preimage_v2(payment_hash, query.contains_key("wait"))
         .await
         .map_err(|e| LnurlError::internal(anyhow!(e)))?;
 
-    Ok(Json(response))
+    Ok(Json(json!(response)))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
@@ -642,7 +641,7 @@ async fn mnemonic(
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]
-async fn stop(
+pub(crate) async fn stop(
     Extension(task_group): Extension<TaskGroup>,
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
