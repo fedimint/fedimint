@@ -264,13 +264,16 @@ async fn federation_setup(
 
         section class="mb-4" {
             div class="alert alert-warning mb-4" {
-                "Make sure all information is correct and every guardian is ready before launching the federation. This process cannot be reversed once started."
+                "1. All guardians exchange setup codes" br;
+                "2. All guardians click 'I'm Ready'" br;
+                br;
+                "Warning: 'I'm Ready' is final. Verify all setup codes are correct first."
             }
 
             div class="text-center" {
                 form method="post" action=(START_DKG_ROUTE) {
                     button type="submit" class="btn btn-warning setup-btn" {
-                        "🚀 Launch Federation"
+                        "I'm Ready"
                     }
                 }
             }
