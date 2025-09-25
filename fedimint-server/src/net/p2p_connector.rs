@@ -16,6 +16,7 @@ use fedimint_core::iroh_prod::{FM_DNS_PKARR_RELAY_PROD, FM_IROH_RELAYS_PROD};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
+use fedimint_server_core::dashboard_ui::ConnectionType;
 use iroh::defaults::DEFAULT_STUN_PORT;
 use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::{Endpoint, NodeAddr, NodeId, RelayMode, RelayNode, RelayUrl, SecretKey};
@@ -46,6 +47,9 @@ pub trait IP2PConnector<M>: Send + Sync + 'static {
     async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>>;
 
     async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<M>)>;
+
+    /// Get the connection type for a specific peer
+    async fn connection_type(&self, peer: PeerId) -> ConnectionType;
 
     fn into_dyn(self) -> DynP2PConnector<M>
     where
@@ -210,6 +214,11 @@ where
             .new_framed(TlsStream::Server(tls));
 
         Ok((auth_peer, framed.into_dyn()))
+    }
+
+    async fn connection_type(&self, _peer: PeerId) -> ConnectionType {
+        // TLS connections are always direct
+        ConnectionType::Direct
     }
 }
 
@@ -446,5 +455,31 @@ where
             .0;
 
         Ok((*auth_peer, connection.into_dyn()))
+    }
+
+    async fn connection_type(&self, peer: PeerId) -> ConnectionType {
+        let node_id = *self.node_ids.get(&peer).expect("No node id found for peer");
+
+        // Try to get connection information from Iroh endpoint
+        let conn_type_watcher = if let Ok(watcher) = self.endpoint.conn_type(node_id) {
+            watcher
+        } else {
+            // If conn_type returns None, return Unknown
+            return ConnectionType::Unknown;
+        };
+
+        let conn_type = if let Ok(conn_type) = conn_type_watcher.get() {
+            conn_type
+        } else {
+            // If we can't get the connection type, return Unknown
+            return ConnectionType::Unknown;
+        };
+
+        match conn_type {
+            iroh::endpoint::ConnectionType::Relay(_) => ConnectionType::Relay,
+            iroh::endpoint::ConnectionType::Direct(_)
+            | iroh::endpoint::ConnectionType::Mixed(_, _) => ConnectionType::Direct, /* Mixed connections include direct, so consider as Direct */
+            iroh::endpoint::ConnectionType::None => ConnectionType::Unknown,
+        }
     }
 }

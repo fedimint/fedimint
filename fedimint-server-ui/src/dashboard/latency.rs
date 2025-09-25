@@ -2,11 +2,13 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use fedimint_core::PeerId;
+use fedimint_server_core::dashboard_ui::ConnectionType;
 use maud::{Markup, html};
 
 pub fn render(
     consensus_ord_latency: Option<Duration>,
     p2p_connection_status: &BTreeMap<PeerId, Option<Duration>>,
+    p2p_connection_type_status: &BTreeMap<PeerId, ConnectionType>,
 ) -> Markup {
     html! {
         div class="card h-100" id="consensus-latency" {
@@ -33,6 +35,7 @@ pub fn render(
                             tr {
                                 th { "ID" }
                                 th { "Status" }
+                                th { "Connection Type" }
                                 th { "Round Trip" }
                             }
                         }
@@ -48,6 +51,23 @@ pub fn render(
                                             None => {
                                                 span class="badge bg-danger" { "Disconnected" }
                                             }
+                                        }
+                                    }
+                                    td {
+                                        @if let Some(connection_type) = p2p_connection_type_status.get(peer_id) {
+                                            @match connection_type {
+                                                ConnectionType::Direct => {
+                                                    span class="badge bg-success" { "Direct" }
+                                                }
+                                                ConnectionType::Relay => {
+                                                    span class="badge bg-warning" { "Relay" }
+                                                }
+                                                ConnectionType::Unknown => {
+                                                    span class="badge bg-secondary" { "Unknown" }
+                                                }
+                                            }
+                                        } @else {
+                                            span class="text-muted" { "Unknown" }
                                         }
                                     }
                                     td {

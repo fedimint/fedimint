@@ -16,6 +16,7 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff};
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
+use fedimint_server_core::dashboard_ui::ConnectionType;
 use futures::FutureExt;
 use futures::future::select_all;
 use tokio::sync::watch;
@@ -28,12 +29,31 @@ use crate::net::p2p_connector::DynP2PConnector;
 pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<Option<Duration>>>;
 pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<Option<Duration>>>;
 
+pub type P2PConnectionTypeSenders = BTreeMap<PeerId, watch::Sender<ConnectionType>>;
+pub type P2PConnectionTypeReceivers = BTreeMap<PeerId, watch::Receiver<ConnectionType>>;
+
 pub fn p2p_status_channels(peers: Vec<PeerId>) -> (P2PStatusSenders, P2PStatusReceivers) {
     let mut senders = BTreeMap::new();
     let mut receivers = BTreeMap::new();
 
     for peer in peers {
         let (sender, receiver) = watch::channel(None);
+
+        senders.insert(peer, sender);
+        receivers.insert(peer, receiver);
+    }
+
+    (senders, receivers)
+}
+
+pub fn p2p_connection_type_channels(
+    peers: Vec<PeerId>,
+) -> (P2PConnectionTypeSenders, P2PConnectionTypeReceivers) {
+    let mut senders = BTreeMap::new();
+    let mut receivers = BTreeMap::new();
+
+    for peer in peers {
+        let (sender, receiver) = watch::channel(ConnectionType::Direct);
 
         senders.insert(peer, sender);
         receivers.insert(peer, receiver);
@@ -53,6 +73,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
         connector: DynP2PConnector<M>,
         task_group: &TaskGroup,
         status_senders: P2PStatusSenders,
+        connection_type_senders: P2PConnectionTypeSenders,
     ) -> Self {
         let mut connection_senders = BTreeMap::new();
         let mut connections = BTreeMap::new();
@@ -70,6 +91,10 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
                 status_senders
                     .get(&peer_id)
                     .expect("No p2p status sender for peer")
+                    .clone(),
+                connection_type_senders
+                    .get(&peer_id)
+                    .expect("No p2p connection type sender for peer")
                     .clone(),
                 task_group,
             );
@@ -176,10 +201,28 @@ impl<M: Send + 'static> P2PConnection<M> {
         connector: DynP2PConnector<M>,
         incoming_connections: Receiver<DynP2PConnection<M>>,
         status_sender: watch::Sender<Option<Duration>>,
+        connection_type_sender: watch::Sender<ConnectionType>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
         let (outgoing_sender, outgoing_receiver) = bounded(1024);
         let (incoming_sender, incoming_receiver) = bounded(1024);
+
+        let connector_clone = connector.clone();
+        let connection_type_sender_clone = connection_type_sender.clone();
+
+        // Spawn periodic connection type polling task
+        task_group.spawn_cancellable(
+            format!("connection-type-poller-{peer_id}"),
+            async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+                loop {
+                    interval.tick().await;
+                    let connection_type = connector_clone.connection_type(peer_id).await;
+                    let _ = connection_type_sender_clone.send_replace(connection_type);
+                }
+            }
+            .instrument(info_span!("connection-type-poller", ?peer_id)),
+        );
 
         task_group.spawn_cancellable(
             format!("io-state-machine-{peer_id}"),

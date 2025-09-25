@@ -17,6 +17,17 @@ use crate::{DynServerModule, ServerModule};
 
 pub type DynDashboardApi = Arc<dyn IDashboardApi + Send + Sync + 'static>;
 
+/// Type of the connection to a peer
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ConnectionType {
+    /// Direct connectivity
+    Direct,
+    /// Going through an Iroh relay
+    Relay,
+    /// Unknown connection type
+    Unknown,
+}
+
 /// Interface for guardian dashboard API in a running federation
 #[async_trait]
 pub trait IDashboardApi {
@@ -43,6 +54,9 @@ pub trait IDashboardApi {
 
     /// Returns a map of peer ID to estimated round trip time
     async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<Duration>>;
+
+    /// Returns a map of peer ID to connection type (Direct or Relay)
+    async fn p2p_connection_type_status(&self) -> BTreeMap<PeerId, ConnectionType>;
 
     /// Get the federation invite code to share with users
     async fn federation_invite_code(&self) -> String;
