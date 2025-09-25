@@ -360,7 +360,7 @@ impl RpcGlobalState {
 
     async fn preview_federation(&self, invite_code: String) -> anyhow::Result<serde_json::Value> {
         let invite = InviteCode::from_str(&invite_code)?;
-        let client_config = fedimint_api_client::api::net::Connector::default()
+        let (client_config, _) = fedimint_api_client::api::net::Connector::default()
             .download_from_invite_code(&invite)
             .await?;
         let json_config = client_config.to_json();

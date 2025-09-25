@@ -1092,7 +1092,7 @@ async fn test_connect_raw_client(
     use jsonrpsee_core::client::ClientT;
     use jsonrpsee_ws_client::WsClientBuilder;
 
-    let mut cfg = fedimint_api_client::api::net::Connector::default()
+    let (mut cfg, _) = fedimint_api_client::api::net::Connector::default()
         .download_from_invite_code(&invite_code)
         .await?;
 

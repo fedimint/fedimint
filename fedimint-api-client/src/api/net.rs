@@ -4,6 +4,7 @@ use std::str::FromStr;
 use fedimint_core::encoding::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
 
+/// TODO: rename, or even remove?
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub enum Connector {
     Tcp,

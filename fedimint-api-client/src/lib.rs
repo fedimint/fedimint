@@ -28,7 +28,7 @@ impl Connector {
     pub async fn download_from_invite_code(
         &self,
         invite: &InviteCode,
-    ) -> anyhow::Result<ClientConfig> {
+    ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
         debug!(
             target: LOG_CLIENT,
             %invite,
@@ -37,13 +37,14 @@ impl Connector {
         );
 
         let federation_id = invite.federation_id();
-        let api = DynGlobalApi::from_endpoints(invite.peers(), &invite.api_secret()).await?;
+        let api_from_invite =
+            DynGlobalApi::from_endpoints(invite.peers(), &invite.api_secret()).await?;
         let api_secret = invite.api_secret();
 
         fedimint_core::util::retry(
             "Downloading client config",
             backoff_util::aggressive_backoff(),
-            || self.try_download_client_config(&api, federation_id, api_secret.clone()),
+            || self.try_download_client_config(&api_from_invite, federation_id, api_secret.clone()),
         )
         .await
         .context("Failed to download client config")
@@ -52,10 +53,10 @@ impl Connector {
     /// Tries to download the [`ClientConfig`] only once.
     pub async fn try_download_client_config(
         &self,
-        api: &DynGlobalApi,
+        api_from_invite: &DynGlobalApi,
         federation_id: FederationId,
         api_secret: Option<String>,
-    ) -> anyhow::Result<ClientConfig> {
+    ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
         debug!(target: LOG_CLIENT, "Downloading client config from peer");
         // TODO: use new download approach based on guardian PKs
         let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
@@ -68,7 +69,7 @@ impl Connector {
             Ok(cfg.global.api_endpoints)
         });
 
-        let api_endpoints = api
+        let api_endpoints = api_from_invite
             .request_with_strategy(
                 query_strategy,
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
@@ -81,8 +82,8 @@ impl Connector {
 
         debug!(target: LOG_CLIENT, "Verifying client config with all peers");
 
-        let client_config = DynGlobalApi::from_endpoints(api_endpoints, &api_secret)
-            .await?
+        let api_full = DynGlobalApi::from_endpoints(api_endpoints, &api_secret).await?;
+        let client_config = api_full
             .request_current_consensus::<ClientConfig>(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
                 ApiRequestErased::default(),
@@ -93,6 +94,6 @@ impl Connector {
             bail!("Obtained client config has different federation id");
         }
 
-        Ok(client_config)
+        Ok((client_config, api_full))
     }
 }
