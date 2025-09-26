@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::util::{SafeUrl, backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
 use fedimint_gateway_common::{
     ChannelInfo, CreateOfferResponse, GatewayBalances, GetInvoiceResponse,
@@ -45,6 +45,8 @@ pub struct Gatewayd {
     pub log_path: PathBuf,
     pub gw_port: u16,
     pub ldk_port: u16,
+    pub iroh_api: Option<SafeUrl>, // None if iroh is not available
+    pub gateway_id: String,
 }
 
 impl Gatewayd {
@@ -107,6 +109,60 @@ impl Gatewayd {
             )
             .await?;
 
+        let (iroh_api, gateway_id) = if gatewayd_version >= *VERSION_0_9_0_ALPHA {
+            poll(
+                "waiting for gatewy to be ready to respond to rpc",
+                || async {
+                    let value = cmd!(
+                        "gateway-cli",
+                        "--rpcpassword=theresnosecondbest",
+                        "--address",
+                        addr,
+                        "info"
+                    )
+                    .out_json()
+                    .await
+                    .map_err(ControlFlow::Continue)?;
+                    let iroh_api = serde_json::from_value::<SafeUrl>(
+                        value
+                            .get("iroh_api")
+                            .expect("iroh_api does not exist")
+                            .clone(),
+                    )
+                    .expect("Could not parse iroh_api");
+                    let gateway_id = value["gateway_id"]
+                        .as_str()
+                        .expect("Could not parse gateway id")
+                        .to_owned();
+                    Ok((Some(iroh_api), gateway_id))
+                },
+            )
+            .await?
+        } else {
+            let gateway_id = poll(
+                "waiting for gateway to be ready to respond to rpc",
+                || async {
+                    let value = cmd!(
+                        "gateway-cli",
+                        "--rpcpassword=theresnosecondbest",
+                        "--address",
+                        addr,
+                        "info"
+                    )
+                    .out_json()
+                    .await
+                    .map_err(ControlFlow::Continue)?;
+                    let gateway_id = value["gateway_id"]
+                        .as_str()
+                        .expect("Could not parse gateway id")
+                        .to_owned();
+                    Ok(gateway_id)
+                },
+            )
+            .await?;
+            (None, gateway_id)
+        };
+
         let log_path = process_mgr
             .globals
             .FM_LOGS_DIR
@@ -121,12 +177,10 @@ impl Gatewayd {
             log_path,
             gw_port: port,
             ldk_port: lightning_node_port,
+            iroh_api,
+            gateway_id,
         };
-        poll(
-            "waiting for gateway to be ready to respond to rpc",
-            || async { gatewayd.gateway_id().await.map_err(ControlFlow::Continue) },
-        )
-        .await?;
+
         Ok(gatewayd)
     }
 
@@ -233,13 +287,16 @@ impl Gatewayd {
         .context("Getting gateway info via gateway-cli info")
     }
 
-    pub async fn gateway_id(&self) -> Result<String> {
-        let info = self.get_info().await?;
-        let gateway_id = info["gateway_id"]
-            .as_str()
-            .context("gateway_id must be a string")?
-            .to_owned();
-        Ok(gateway_id)
+    pub async fn get_info_iroh(&self) -> Result<serde_json::Value> {
+        cmd!(
+            "gateway-cli",
+            "--address",
+            self.iroh_api.as_ref().expect("iroh api not available"),
+            "--rpcpassword=theresnosecondbest",
+            "info"
+        )
+        .out_json()
+        .await
     }
 
     pub async fn lightning_pubkey(&self) -> Result<PublicKey> {
