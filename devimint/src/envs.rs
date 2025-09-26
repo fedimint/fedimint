@@ -148,3 +148,6 @@ pub const FM_RECURRING_API_BEARER_TOKEN_ENV: &str = "FM_RECURRING_API_BEARER_TOK
 
 // Env variable to override recurringd binary set:
 pub const FM_RECURRINGD_BASE_EXECUTABLE_ENV: &str = "FM_RECURRINGD_BASE_EXECUTABLE";
+
+// Env variable to override the iroh listen addr for the gateway
+pub const FM_GATEWAY_IROH_LISTEN_ADDR_ENV: &str = "FM_GATEWAY_IROH_LISTEN_ADDR";

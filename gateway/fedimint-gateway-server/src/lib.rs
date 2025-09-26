@@ -238,12 +238,17 @@ pub struct Gateway {
     /// The default transaction fees for new federations
     default_transaction_fees: PaymentFee,
 
+    /// The secret key for the Iroh `Endpoint`
     iroh_sk: iroh::SecretKey,
 
+    /// The socket that the gateway listens on for the Iroh `Endpoint`
     iroh_listen: SocketAddr,
 
+    /// Optional DNS server used for discovery of the Iroh `Endpoint`
     iroh_dns: Option<SafeUrl>,
 
+    /// List of additional relays that can be used to establish a connection to
+    /// the Iroh `Endpoint`
     iroh_relays: Vec<SafeUrl>,
 }
 

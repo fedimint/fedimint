@@ -40,9 +40,7 @@ group = { workspace = true }
 hex = { workspace = true, features = ["serde"] }
 hex-conservative = { workspace = true }
 imbl = { workspace = true }
-iroh = { workspace = true, features = [
-  "discovery-pkarr-dht",
-], default-features = false }
+iroh = { workspace = true, default-features = false }
 iroh-base = { workspace = true, features = ["key"] }
 iroh-relay = { workspace = true, default-features = false }
 itertools = { workspace = true }

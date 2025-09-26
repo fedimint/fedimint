@@ -15,6 +15,7 @@ use thiserror::Error;
 
 use crate::envs::FM_DEBUG_GATEWAY_ENV;
 
+/// Top level error enum for all errors that can occur in the Gateway.
 #[derive(Debug, thiserror::Error)]
 pub enum GatewayError {
     #[error("Admin error: {0}")]

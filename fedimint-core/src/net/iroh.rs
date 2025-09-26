@@ -74,7 +74,10 @@ pub async fn build_iroh_endpoint(
         );
         builder
     } else {
-        builder.discovery_dht()
+        #[cfg(not(target_family = "wasm"))]
+        {
+            builder.discovery_dht()
+        }
     };
 
     let builder = builder

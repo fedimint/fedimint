@@ -152,6 +152,9 @@ declare_vars! {
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
         FM_PORT_GW_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
+        FM_PORT_GW_LND_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
+        FM_PORT_GW_LDK_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
+        FM_PORT_GW_LDK2_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
         FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
 
@@ -179,8 +182,6 @@ declare_vars! {
 
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = "1"; env: "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
         FM_GATEWAY_NETWORK: String = "regtest"; env: "FM_GATEWAY_NETWORK";
-        FM_GATEWAY_IROH_PORT: u16 = port_alloc(1)?; env: "FM_GATEWAY_IROH_PORT";
-        FM_GATEWAY_IROH_LISTEN_ADDR: String = f!("127.0.0.1:{FM_GATEWAY_IROH_PORT}"); env: "FM_GATEWAY_IROH_LISTEN_ADDR";
 
         FM_FAUCET_BIND_ADDR: String = f!("0.0.0.0:{FM_PORT_FAUCET}"); env: "FM_FAUCET_BIND_ADDR";
 
