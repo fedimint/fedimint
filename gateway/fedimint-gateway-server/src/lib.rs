@@ -292,6 +292,8 @@ impl Gateway {
                 default_routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 default_transaction_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 iroh_listen,
+                iroh_dns: None,
+                iroh_relays: vec![],
             },
             gateway_db,
             client_builder,
@@ -448,8 +450,8 @@ impl Gateway {
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
             iroh_sk: Self::load_or_create_iroh_key(&gateway_db).await,
-            iroh_dns: None,
-            iroh_relays: Vec::new(),
+            iroh_dns: gateway_parameters.iroh_dns,
+            iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
         })
     }
