@@ -12,7 +12,7 @@ use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
-use fedimint_core::iroh_prod::{FM_DNS_PKARR_RELAY_PROD, FM_IROH_RELAYS_PROD};
+use fedimint_core::iroh_prod::{FM_IROH_DNS_FEDIMINT_PROD, FM_IROH_RELAYS_FEDIMINT_PROD};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
@@ -341,7 +341,7 @@ pub(crate) async fn build_iroh_endpoint(
 ) -> Result<Endpoint, anyhow::Error> {
     let iroh_dns_servers: Vec<_> = iroh_dns.clone().map_or_else(
         || {
-            FM_DNS_PKARR_RELAY_PROD
+            FM_IROH_DNS_FEDIMINT_PROD
                 .into_iter()
                 .map(|dns| dns.parse().expect("Can't fail"))
                 .collect()
@@ -351,7 +351,7 @@ pub(crate) async fn build_iroh_endpoint(
 
     let relay_mode = if iroh_relays.is_empty() {
         RelayMode::Custom(
-            FM_IROH_RELAYS_PROD
+            FM_IROH_RELAYS_FEDIMINT_PROD
                 .into_iter()
                 .map(|url| RelayNode {
                     url: RelayUrl::from(Url::parse(url).expect("Hardcoded, can't fail")),
