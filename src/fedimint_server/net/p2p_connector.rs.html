@@ -12,7 +12,7 @@
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::config::PeerUrl;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::iroh_prod::{FM_DNS_PKARR_RELAY_PROD, FM_IROH_RELAYS_PROD};
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::iroh_prod::{FM_IROH_DNS_FEDIMINT_PROD, FM_IROH_RELAYS_FEDIMINT_PROD};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::util::SafeUrl;
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_logging::LOG_NET_IROH;
@@ -341,7 +341,7 @@
 <a href=#341 id=341 data-nosnippet>341</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Endpoint, anyhow::Error&gt; {
 <a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">let </span>iroh_dns_servers: Vec&lt;<span class="kw">_</span>&gt; = iroh_dns.clone().map_or_else(
 <a href=#343 id=343 data-nosnippet>343</a>        || {
-<a href=#344 id=344 data-nosnippet>344</a>            FM_DNS_PKARR_RELAY_PROD
+<a href=#344 id=344 data-nosnippet>344</a>            FM_IROH_DNS_FEDIMINT_PROD
 <a href=#345 id=345 data-nosnippet>345</a>                .into_iter()
 <a href=#346 id=346 data-nosnippet>346</a>                .map(|dns| dns.parse().expect(<span class="string">"Can't fail"</span>))
 <a href=#347 id=347 data-nosnippet>347</a>                .collect()
@@ -351,7 +351,7 @@
 <a href=#351 id=351 data-nosnippet>351</a>
 <a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">let </span>relay_mode = <span class="kw">if </span>iroh_relays.is_empty() {
 <a href=#353 id=353 data-nosnippet>353</a>        RelayMode::Custom(
-<a href=#354 id=354 data-nosnippet>354</a>            FM_IROH_RELAYS_PROD
+<a href=#354 id=354 data-nosnippet>354</a>            FM_IROH_RELAYS_FEDIMINT_PROD
 <a href=#355 id=355 data-nosnippet>355</a>                .into_iter()
 <a href=#356 id=356 data-nosnippet>356</a>                .map(|url| RelayNode {
 <a href=#357 id=357 data-nosnippet>357</a>                    url: RelayUrl::from(Url::parse(url).expect(<span class="string">"Hardcoded, can't fail"</span>)),

@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>async_trait::async_trait;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::PeerId;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::envs::parse_kv_list_from_env;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::iroh_prod::FM_DNS_PKARR_RELAY_PROD;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::module::{
 <a href=#11 id=11 data-nosnippet>11</a>    ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
 <a href=#12 id=12 data-nosnippet>12</a>};
@@ -96,7 +96,7 @@
 <a href=#96 id=96 data-nosnippet>96</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
 <a href=#97 id=97 data-nosnippet>97</a>        <span class="kw">let </span>iroh_dns_servers: Vec&lt;<span class="kw">_</span>&gt; = iroh_dns.map_or_else(
 <a href=#98 id=98 data-nosnippet>98</a>            || {
-<a href=#99 id=99 data-nosnippet>99</a>                FM_DNS_PKARR_RELAY_PROD
+<a href=#99 id=99 data-nosnippet>99</a>                FM_IROH_DNS_FEDIMINT_PROD
 <a href=#100 id=100 data-nosnippet>100</a>                    .into_iter()
 <a href=#101 id=101 data-nosnippet>101</a>                    .map(|url| Url::parse(url).expect(<span class="string">"Hardcoded, can't fail"</span>))
 <a href=#102 id=102 data-nosnippet>102</a>                    .collect()
