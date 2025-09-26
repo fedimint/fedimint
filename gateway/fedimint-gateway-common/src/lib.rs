@@ -162,6 +162,7 @@ pub struct GatewayInfo {
     #[serde(default)]
     pub synced_to_chain: bool,
     pub api: SafeUrl,
+    pub iroh_api: SafeUrl,
     pub lightning_mode: LightningMode,
 }
 
