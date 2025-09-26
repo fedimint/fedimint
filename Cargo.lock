@@ -3314,6 +3314,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-testing",
  "futures",
+ "iroh 0.35.0",
  "lightning-invoice",
  "rand 0.8.5",
  "serde",
