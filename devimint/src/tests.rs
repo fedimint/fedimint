@@ -707,6 +707,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // # Client tests
     info!("Testing Client");
+
     // ## reissue e-cash
     info!("Testing reissuing e-cash");
     const CLIENT_START_AMOUNT: u64 = 5_000_000_000;
