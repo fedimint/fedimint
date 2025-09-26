@@ -93,6 +93,10 @@ pub trait GatewayDbtxNcExt {
         &mut self,
         prefix_names: Vec<String>,
     ) -> BTreeMap<String, Box<dyn erased_serde::Serialize + Send>>;
+
+    /// Returns `iroh::SecretKey` and saves it to the database if it does not
+    /// exist
+    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey;
 }
 
 impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
@@ -228,6 +232,16 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
 
         gateway_items
     }
+
+    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey {
+        if let Some(iroh_sk) = self.get_value(&IrohKey).await {
+            iroh_sk
+        } else {
+            let iroh_sk = iroh::SecretKey::generate(&mut OsRng);
+            self.insert_new_entry(&IrohKey, &iroh_sk).await;
+            iroh_sk
+        }
+    }
 }
 
 #[repr(u8)]
@@ -239,6 +253,7 @@ enum DbKeyPrefix {
     PreimageAuthentication = 0x08,
     RegisteredIncomingContract = 0x09,
     ClientDatabase = 0x10,
+    Iroh = 0x11,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -405,6 +420,15 @@ struct PreimageAuthenticationPrefix;
 impl_db_lookup!(
     key = PreimageAuthentication,
     query_prefix = PreimageAuthenticationPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+struct IrohKey;
+
+impl_db_record!(
+    key = IrohKey,
+    value = iroh::SecretKey,
+    db_prefix = DbKeyPrefix::Iroh
 );
 
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDbMigrationFn> {

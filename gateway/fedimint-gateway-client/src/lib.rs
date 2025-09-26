@@ -291,7 +291,7 @@ impl GatewayRpcClient {
                 }
             }
             None => {
-                let url = self.base_url.join(&route).expect("Invalid base url");
+                let url = self.base_url.join(route).expect("Invalid base url");
                 let mut builder = self.client.request(method, url.clone().to_unsafe());
                 if let Some(password) = self.password.clone() {
                     builder = builder.bearer_auth(password);

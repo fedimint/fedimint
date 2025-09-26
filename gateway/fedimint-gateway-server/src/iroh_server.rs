@@ -150,24 +150,17 @@ pub async fn start_iroh_endpoint(
     let handlers_clone = handlers.clone();
     info!("Spawning accept loop...");
     task_group.spawn("Gateway Iroh", |_| async move {
-        loop {
-            match iroh_endpoint.accept().await {
-                Some(incoming) => {
-                    info!("Accepted new connection. Spawning handler...");
-                    tg_clone.spawn_cancellable_silent(
-                        "handle endpoint accept",
-                        handle_incoming_iroh_request(
-                            incoming,
-                            gw_clone.clone(),
-                            handlers_clone.clone(),
-                            tg_clone.clone(),
-                        ),
-                    );
-                }
-                None => {
-                    break;
-                }
-            }
+        while let Some(incoming) = iroh_endpoint.accept().await {
+            info!("Accepted new connection. Spawning handler...");
+            tg_clone.spawn_cancellable_silent(
+                "handle endpoint accept",
+                handle_incoming_iroh_request(
+                    incoming,
+                    gw_clone.clone(),
+                    handlers_clone.clone(),
+                    tg_clone.clone(),
+                ),
+            );
         }
     });
 
@@ -215,10 +208,9 @@ async fn handle_request(
     handlers: Arc<Handlers>,
     task_group: TaskGroup,
 ) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
-    if handlers.is_authenticated(&request.route) {
-        if let Err(_) = iroh_verify_password(gateway.clone(), request) {
-            return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
-        }
+    if handlers.is_authenticated(&request.route) && iroh_verify_password(&gateway, request).is_err()
+    {
+        return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
     }
 
     if request.route == STOP_ENDPOINT {
@@ -270,11 +262,14 @@ async fn handle_request(
     Ok((status, body))
 }
 
-fn iroh_verify_password(gateway: Arc<Gateway>, request: &IrohGatewayRequest) -> anyhow::Result<()> {
-    if let Some(password) = request.password.as_ref() {
-        if bcrypt::verify(password, &gateway.bcrypt_password_hash.to_string())? {
-            return Ok(());
-        }
+fn iroh_verify_password(
+    gateway: &Arc<Gateway>,
+    request: &IrohGatewayRequest,
+) -> anyhow::Result<()> {
+    if let Some(password) = request.password.as_ref()
+        && bcrypt::verify(password, &gateway.bcrypt_password_hash.to_string())?
+    {
+        return Ok(());
     }
 
     Err(anyhow!("Invalid password"))
