@@ -4063,6 +4063,7 @@ dependencies = [
  "fedimint-logging",
  "futures",
  "group",
+ "serde",
  "tokio",
  "tracing",
 ]
