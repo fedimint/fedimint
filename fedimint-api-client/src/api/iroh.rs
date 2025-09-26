@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -15,9 +16,11 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::LOG_NET_IROH;
 use futures::Future;
 use futures::stream::{FuturesUnordered, StreamExt};
-use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
+#[cfg(not(target_family = "wasm"))]
+use iroh::discovery::dns::DnsDiscovery;
+use iroh::discovery::pkarr::PkarrResolver;
 use iroh::endpoint::Connection;
-use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, SecretKey};
+use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_next::Watcher as _;
 use serde_json::Value;
@@ -81,7 +84,7 @@ impl IrohConnector {
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
         warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-        let mut s = Self::new_no_overrides(peers, iroh_dns).await?;
+        let mut s = Box::pin(Self::new_no_overrides(peers, iroh_dns)).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -115,33 +118,59 @@ impl IrohConnector {
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
         let endpoint_stable = {
-            let mut builder = Endpoint::builder();
+            let iroh_dns_servers = iroh_dns_servers.clone();
+            async {
+                let builder = Endpoint::builder();
+
+                // As a client, we don't need to register on any relays
+                let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
+
+                for iroh_dns in iroh_dns_servers {
+                    builder = builder.add_discovery(move |_| Some(PkarrResolver::new(iroh_dns)));
+                }
+
+                #[cfg(not(target_family = "wasm"))]
+                let mut builder = builder.discovery_dht();
+
+                // instead of `.discovery_n0`, which brings publisher we don't want
+                {
+                    #[cfg(target_family = "wasm")]
+                    {
+                        builder =
+                            builder.add_discovery(move |_| Some(Arc::new(PkarrResolver::n0_dns())));
+                    }
+
+                    #[cfg(not(target_family = "wasm"))]
+                    {
+                        builder =
+                            builder.add_discovery(move |_| Some(Arc::new(DnsDiscovery::n0_dns())));
+                    }
+                }
+
+                let endpoint = builder.discovery_n0().bind().await?;
+                debug!(
+                    target: LOG_NET_IROH,
+                    node_id = %endpoint.node_id(),
+                    node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                    "Iroh api client endpoint (stable)"
+                );
+                Ok::<_, anyhow::Error>(endpoint)
+            }
+        };
+        let endpoint_next = async {
+            let builder = iroh_next::Endpoint::builder().discovery_n0();
+
+            // As a client, we don't need to register on any relays
+            let mut builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
 
             for iroh_dns in iroh_dns_servers {
-                builder = builder
-                    .add_discovery({
-                        let iroh_dns = iroh_dns.clone();
-                        move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
-                    })
-                    .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+                builder = builder.add_discovery(
+                    iroh_next::discovery::pkarr::PkarrResolver::builder(iroh_dns).build(),
+                );
             }
-
-            #[cfg(not(target_family = "wasm"))]
-            let builder = builder.discovery_dht().discovery_n0();
-
-            let endpoint = builder.discovery_n0().bind().await?;
-            debug!(
-                target: LOG_NET_IROH,
-                node_id = %endpoint.node_id(),
-                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-                "Iroh api client endpoint (stable)"
-            );
-            endpoint
-        };
-        let endpoint_next = {
-            let builder = iroh_next::Endpoint::builder().discovery_n0();
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
+
             let endpoint = builder.bind().await?;
             debug!(
                 target: LOG_NET_IROH,
@@ -149,8 +178,10 @@ impl IrohConnector {
                 node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
                 "Iroh api client endpoint (next)"
             );
-            endpoint
+            Ok(endpoint)
         };
+
+        let (endpoint_stable, endpoint_next) = tokio::try_join!(endpoint_stable, endpoint_next)?;
 
         Ok(Self {
             node_ids,

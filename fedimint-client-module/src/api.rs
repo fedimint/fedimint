@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::string::ToString;
 
-use fedimint_api_client::api::{DynModuleApi, IRawFederationApi, PeerResult};
+use fedimint_api_client::api::{DynClientConnector, DynModuleApi, IRawFederationApi, PeerResult};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::ApiRequestErased;
@@ -162,5 +162,9 @@ where
         .await;
 
         res
+    }
+
+    fn connector(&self) -> &DynClientConnector {
+        self.inner.connector()
     }
 }
