@@ -23,6 +23,7 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
+use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
@@ -49,7 +50,6 @@ use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
 use crate::net::p2p::{P2PConnectionTypeReceivers, P2PStatusReceivers};
-use crate::net::p2p_connector::build_iroh_endpoint;
 use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API

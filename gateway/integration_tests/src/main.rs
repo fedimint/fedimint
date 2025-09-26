@@ -14,7 +14,7 @@ use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::external::{Bitcoind, Esplora};
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, almost_equal, poll, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
+use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA};
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -460,6 +460,12 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                         .expect("fed has balance");
 
                 assert_eq!(second_fed_balance_msat, rejoined_federation_balance_msat);
+
+                if gatewayd_version >= *VERSION_0_9_0_ALPHA {
+                    // Try to get the info over iroh
+                    info!(target: LOG_TEST, "Getting info over iroh");
+                    gw.get_info_iroh().await?;
+                }
 
                 info!(target: LOG_TEST, "Gateway configuration test successful");
                 Ok(())

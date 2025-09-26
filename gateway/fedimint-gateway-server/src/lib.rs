@@ -20,6 +20,7 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
+mod iroh_server;
 pub mod rpc_server;
 mod types;
 
@@ -236,6 +237,14 @@ pub struct Gateway {
 
     /// The default transaction fees for new federations
     default_transaction_fees: PaymentFee,
+
+    iroh_sk: iroh::SecretKey,
+
+    iroh_listen: SocketAddr,
+
+    iroh_dns: Option<SafeUrl>,
+
+    iroh_relays: Vec<SafeUrl>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -267,6 +276,7 @@ impl Gateway {
         gateway_db: Database,
         gateway_state: GatewayState,
         chain_source: ChainSource,
+        iroh_listen: SocketAddr,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -281,6 +291,9 @@ impl Gateway {
                 num_route_hints,
                 default_routing_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 default_transaction_fees: PaymentFee::TRANSACTION_FEE_DEFAULT,
+                iroh_listen,
+                iroh_dns: None,
+                iroh_relays: vec![],
             },
             gateway_db,
             client_builder,
@@ -430,7 +443,7 @@ impl Gateway {
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
             gateway_id: Self::load_or_create_gateway_id(&gateway_db).await,
-            gateway_db,
+            gateway_db: gateway_db.clone(),
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
             task_group,
@@ -440,6 +453,10 @@ impl Gateway {
             chain_source,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
+            iroh_sk: Self::load_or_create_iroh_key(&gateway_db).await,
+            iroh_dns: gateway_parameters.iroh_dns,
+            iroh_relays: gateway_parameters.iroh_relays,
+            iroh_listen: gateway_parameters.iroh_listen,
         })
     }
 
@@ -449,6 +466,15 @@ impl Gateway {
         let keypair = dbtx.load_or_create_gateway_keypair().await;
         dbtx.commit_tx().await;
         keypair.public_key()
+    }
+
+    /// Returns `iroh::SecretKey` and saves it to the database if it does not
+    /// exist
+    async fn load_or_create_iroh_key(gateway_db: &Database) -> iroh::SecretKey {
+        let mut dbtx = gateway_db.begin_transaction().await;
+        let iroh_sk = dbtx.load_or_create_iroh_key().await;
+        dbtx.commit_tx().await;
+        iroh_sk
     }
 
     pub fn gateway_id(&self) -> PublicKey {
@@ -842,6 +868,8 @@ impl Gateway {
                 block_height: None,
                 synced_to_chain: false,
                 api: self.versioned_api.clone(),
+                iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
+                    .expect("could not parse iroh api"),
                 lightning_mode: self.lightning_mode.clone(),
             });
         };
@@ -878,6 +906,8 @@ impl Gateway {
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
             api: self.versioned_api.clone(),
+            iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
+                .expect("could not parse iroh api"),
             lightning_mode: self.lightning_mode.clone(),
         })
     }
