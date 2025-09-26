@@ -1,8 +1,11 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 
 use anyhow::Context;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
+use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
@@ -24,13 +27,16 @@ use fedimint_gateway_common::{
     SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
     SpendEcashResponse, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
-use iroh::Endpoint;
+use fedimint_logging::LOG_NET_IROH;
+use iroh::discovery::pkarr::PkarrResolver;
 use iroh::endpoint::Connection;
+use iroh::{Endpoint, NodeAddr, NodeId};
 use lightning_invoice::Bolt11Invoice;
-use reqwest::{Method, StatusCode};
+use reqwest::{Method, StatusCode, Url};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
+use tracing::trace;
 
 pub struct GatewayRpcClient {
     base_url: SafeUrl,
@@ -39,31 +45,88 @@ pub struct GatewayRpcClient {
     password: Option<String>,
 }
 
-// TODO: Move to common
 #[derive(Debug, Clone)]
 struct GatewayIrohConnector {
     node_id: iroh::NodeId,
     endpoint: Endpoint,
     password: Option<String>,
+    connection_overrides: BTreeMap<NodeId, NodeAddr>,
 }
 
 impl GatewayIrohConnector {
-    pub async fn new(iroh_pk: iroh::PublicKey, password: Option<String>) -> anyhow::Result<Self> {
-        let builder = Endpoint::builder().discovery_dht().discovery_n0();
+    pub async fn new(
+        iroh_pk: iroh::PublicKey,
+        password: Option<String>,
+        iroh_dns: Option<SafeUrl>,
+    ) -> anyhow::Result<Self> {
+        let mut builder = Endpoint::builder();
+
+        let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
+            || {
+                FM_IROH_DNS_FEDIMINT_PROD
+                    .into_iter()
+                    .map(|url| Url::parse(url).expect("Hardcoded, can't fail"))
+                    .collect()
+            },
+            |url| vec![url.to_unsafe()],
+        );
+
+        for iroh_dns in iroh_dns_servers {
+            builder = builder.add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+        }
+
+        // As a client, we don't need to register on any relays
+        let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
+
+        #[cfg(not(target_family = "wasm"))]
+        {
+            builder = builder.discovery_dht();
+        }
+
+        // instead of `.discovery_n0`, which brings publisher we don't want
+        {
+            #[cfg(target_family = "wasm")]
+            {
+                builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
+            }
+
+            #[cfg(not(target_family = "wasm"))]
+            {
+                builder = builder
+                    .add_discovery(move |_| Some(iroh::discovery::dns::DnsDiscovery::n0_dns()));
+            }
+        }
+
         let endpoint = builder.bind().await?;
 
         Ok(Self {
             node_id: iroh_pk,
             endpoint,
             password,
+            connection_overrides: BTreeMap::new(),
         })
     }
 
+    pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
+        self.connection_overrides.insert(node, addr);
+        self
+    }
+
     async fn connect(&self) -> anyhow::Result<Connection> {
-        let connection = self
-            .endpoint
-            .connect(self.node_id, FEDIMINT_GATEWAY_ALPN)
-            .await?;
+        let connection = match self.connection_overrides.get(&self.node_id) {
+            Some(node_addr) => {
+                trace!(target: LOG_NET_IROH, node_id = %self.node_id, "Using a connectivity override for connection");
+                self.endpoint
+                    .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
+                    .await?
+            }
+            None => {
+                self.endpoint
+                    .connect(self.node_id, FEDIMINT_GATEWAY_ALPN)
+                    .await?
+            }
+        };
+
         // TODO: Spawn connection monitoring?
         Ok(connection)
     }
@@ -90,13 +153,37 @@ impl GatewayIrohConnector {
 }
 
 impl GatewayRpcClient {
-    pub async fn new(api: SafeUrl, password: Option<String>) -> anyhow::Result<Self> {
+    pub async fn new(
+        api: SafeUrl,
+        password: Option<String>,
+        iroh_dns: Option<SafeUrl>,
+        connection_override: Option<SafeUrl>,
+    ) -> anyhow::Result<Self> {
         let mut base_url = api.clone();
-        // Move to SafeUrl?
         let iroh_connector = if api.scheme() == "iroh" {
             let host = api.host_str().context("Url is missing host")?;
             let iroh_pk = iroh::PublicKey::from_str(host).context("Failed to parse node id")?;
-            Some(GatewayIrohConnector::new(iroh_pk, password.clone()).await?)
+            let mut iroh_connector =
+                GatewayIrohConnector::new(iroh_pk, password.clone(), iroh_dns).await?;
+
+            if let Some(connection_override) = connection_override {
+                let node_addr = NodeAddr {
+                    node_id: iroh_pk,
+                    relay_url: None,
+                    direct_addresses: BTreeSet::from([SocketAddr::V4(SocketAddrV4::new(
+                        connection_override
+                            .host_str()
+                            .ok_or(anyhow::anyhow!("No connection override host"))?
+                            .parse::<Ipv4Addr>()?,
+                        connection_override.port().ok_or(anyhow::anyhow!(
+                            "No iroh port supplied for connection override"
+                        ))?,
+                    ))]),
+                };
+
+                iroh_connector = iroh_connector.with_connection_override(iroh_pk, node_addr);
+            }
+            Some(iroh_connector)
         } else {
             base_url = base_url.join(V1_API_ENDPOINT)?;
             None
