@@ -52,11 +52,11 @@ pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
     let task_group = gateway.task_group.clone();
     let mut handlers = Handlers::new();
 
-    let v1_routes = v1_routes(gateway.clone(), task_group.clone(), &mut handlers);
+    let routes = routes(gateway.clone(), task_group.clone(), &mut handlers);
     let api_v1 = Router::new()
-        .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
+        .nest(&format!("/{V1_API_ENDPOINT}"), routes.clone())
         // Backwards compatibility: Continue supporting gateway APIs without versioning
-        .merge(v1_routes);
+        .merge(routes);
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx();
@@ -116,6 +116,8 @@ async fn auth_middleware(
     Err(StatusCode::UNAUTHORIZED)
 }
 
+/// Registers a GET API handler for both the HTTP server and the Iroh
+/// `Endpoint`.
 fn register_get_handler<F, Fut>(
     handlers: &mut Handlers,
     route: &str,
@@ -131,6 +133,8 @@ where
     router.route(route, get(func))
 }
 
+/// Registers a POST API handler for both the HTTP server and the Iroh
+/// `Endpoint`.
 fn register_post_handler<P, F, Fut>(
     handlers: &mut Handlers,
     route: &str,
@@ -188,15 +192,12 @@ fn lnv2_routes(handlers: &mut Handlers) -> Router {
     router.route("/verify/{payment_hash}", get(verify_bolt11_preimage_v2_get))
 }
 
-/// Gateway Webserver Routes. The gateway supports three types of routes
+/// Gateway Webserver Routes. The gateway supports two types of routes
 /// - Always Authenticated: these routes always require a Bearer token. Used by
 ///   gateway administrators.
-/// - Authenticated after config: these routes are unauthenticated before
-///   configuring the gateway to allow the user to set a password. After setting
-///   the password, they become authenticated.
 /// - Un-authenticated: anyone can request these routes. Used by fedimint
 ///   clients.
-fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers) -> Router {
+fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers) -> Router {
     // Public routes on gateway webserver
     let mut public_routes = register_post_handler(
         handlers,

@@ -9,6 +9,7 @@ mod onchain_commands;
 use clap::{CommandFactory, Parser, Subcommand};
 use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
+use fedimint_core::envs::FM_IROH_DNS_ENV;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_client::GatewayRpcClient;
 use fedimint_logging::TracingSetup;
@@ -21,7 +22,7 @@ use serde::Serialize;
 #[command(version)]
 struct Cli {
     /// The address of the gateway webserver
-    #[clap(long, default_value = "http://127.0.0.1:80")]
+    #[clap(long, short, default_value = "http://127.0.0.1:80")]
     address: SafeUrl,
 
     #[command(subcommand)]
@@ -29,6 +30,14 @@ struct Cli {
 
     #[clap(long)]
     rpcpassword: Option<String>,
+
+    /// Optional URL of the Iroh DNS server
+    #[arg(long, env = FM_IROH_DNS_ENV)]
+    iroh_dns: Option<SafeUrl>,
+
+    /// Optional URL of the Iroh DNS server
+    #[arg(long)]
+    connection_override: Option<SafeUrl>,
 }
 
 #[derive(Subcommand)]
@@ -69,7 +78,14 @@ async fn main() {
 
 async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let client = GatewayRpcClient::new(cli.address, cli.rpcpassword).await?;
+    let client = GatewayRpcClient::new(
+        cli.address,
+        cli.rpcpassword,
+        cli.iroh_dns,
+        cli.connection_override,
+    )
+    .await?;
+    // TODO: Need to call with_connection_override
 
     match cli.command {
         Commands::General(general_command) => general_command.handle(&client).await?,
