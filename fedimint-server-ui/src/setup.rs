@@ -115,7 +115,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
 
                         div class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
                             strong { "Warning: " }
-                            "Base fees discourage spam and wasting storage space. Typical fee is only 1-3 sats per transaction irrespective of the value transferred. We recommend enabling the base fee and it cannot be changed later."
+                            "Base fees discourage spam and wasting storage space. The typical fee is only 1-3 sats per transaction, regardless of the value transferred. We recommend enabling the base fee and it cannot be changed later."
                         }
                     }
                 }
