@@ -29,7 +29,7 @@ pub(crate) struct SetupInput {
     pub is_lead: bool,
     pub federation_name: String,
     #[serde(default)]
-    pub disable_base_fees: bool,
+    pub enable_base_fees: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,9 +107,9 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                         input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
 
                         div class="form-check mt-3" {
-                            input type="checkbox" class="form-check-input" id="disable_base_fees" name="disable_base_fees" value="true";
-                            label class="form-check-label" for="disable_base_fees" {
-                                "Disable base fees for this federation"
+                            input type="checkbox" class="form-check-input" id="enable_base_fees" name="enable_base_fees" value="false";
+                            label class="form-check-label" for="enable_base_fees" {
+                                "Enable base fees for this federation"
                             }
                         }
 
@@ -142,9 +142,9 @@ async fn setup_submit(
         None
     };
 
-    // Only use disable_base_fees if is_lead is true
+    // Only use enable_base_fees if is_lead is true
     let disable_base_fees = if input.is_lead {
-        Some(input.disable_base_fees)
+        Some(!input.enable_base_fees)
     } else {
         None
     };
