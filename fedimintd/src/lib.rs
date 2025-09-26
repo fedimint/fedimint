@@ -6,7 +6,6 @@
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::large_futures)]
 
-pub mod envs;
 mod metrics;
 
 use std::env;
@@ -17,7 +16,6 @@ use std::time::Duration;
 use anyhow::Context as _;
 use bitcoin::Network;
 use clap::{ArgGroup, Parser};
-use envs::FM_BITCOIND_URL_PASSWORD_FILE_ENV;
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
@@ -52,17 +50,18 @@ use fedimint_wallet_server::WalletInit;
 use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
-use futures::FutureExt as _;
-use tracing::{debug, error, info};
-
-use crate::envs::{
+use fedimintd_envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
-    FM_BITCOIND_URL_ENV, FM_BITCOIND_USERNAME_ENV, FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV,
-    FM_DISABLE_META_MODULE_ENV, FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
+    FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
+    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
+    FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
     FM_PORT_ESPLORA_ENV,
 };
+use futures::FutureExt as _;
+use tracing::{debug, error, info};
+
 use crate::metrics::APP_START_TS;
 
 /// Time we will wait before forcefully shutting down tasks

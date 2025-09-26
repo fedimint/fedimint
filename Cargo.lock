@@ -2240,7 +2240,7 @@ dependencies = [
  "fedimint-unknown-server",
  "fedimint-wallet-client",
  "fedimint-wallet-server",
- "fedimintd",
+ "fedimintd-envs",
  "fs-lock",
  "futures",
  "hex",
@@ -4417,12 +4417,17 @@ dependencies = [
  "fedimint-unknown-common",
  "fedimint-unknown-server",
  "fedimint-wallet-server",
+ "fedimintd-envs",
  "futures",
  "serde_json",
  "tikv-jemallocator",
  "tokio",
  "tracing",
 ]
+
+[[package]]
+name = "fedimintd-envs"
+version = "0.9.0-alpha"
 
 [[package]]
 name = "ff"

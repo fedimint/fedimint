@@ -104,7 +104,7 @@ use fedimint_core::envs::{
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_portalloc::port_alloc;
 use fedimint_server::net::api::ApiSecrets;
-use fedimintd::envs::FM_FORCE_API_SECRETS_ENV;
+use fedimintd_envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
 use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
 
