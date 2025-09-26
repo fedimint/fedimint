@@ -23,6 +23,7 @@ use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_client::FinalSendOperationState;
 use fedimint_logging::LOG_DEVIMINT;
+use fedimint_server::core::dashboard_ui::ConnectionType;
 use fedimint_testing_core::node_type::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
@@ -1014,6 +1015,49 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         announcement.api_url,
         NEW_API_URL.parse().expect("valid URL")
     );
+
+    // Test P2P connection type endpoint
+    test_p2p_connection_type(&client).await?;
+
+    Ok(())
+}
+
+/// Sanity test verifying the `p2p_connection_type`.
+///
+/// Kind of crude, if it ever gets in the way, we can just delete.
+async fn test_p2p_connection_type(client: &Client) -> Result<()> {
+    info!("Testing P2P connection type endpoint");
+
+    let connection_types = cmd!(
+        client,
+        "dev",
+        "api",
+        // Must query single peer, as the exact response is different for every peer
+        "--peer-id",
+        "1",
+        "p2p_connection_type"
+    )
+    .out_json()
+    .await?;
+
+    let peers: BTreeMap<PeerId, ConnectionType> =
+        serde_json::from_value(connection_types["value"].clone())
+            .expect("Failed to parse P2P connection types");
+
+    assert_eq!(
+        peers.len(),
+        3,
+        "Expected 4 peers in federation, so 3 peers for each peer"
+    );
+
+    // Verify all connections are direct (since we're running locally in devimint)
+    for (peer_id, connection_type) in &peers {
+        assert_eq!(
+            *connection_type,
+            ConnectionType::Direct,
+            "Expected direct connection for peer {peer_id}, got {connection_type:?}"
+        );
+    }
 
     Ok(())
 }
