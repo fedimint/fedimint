@@ -82,6 +82,9 @@
             (final: prev: {
               cargo-deluxe = cargo-deluxe.packages.${system}.default;
               cargo-udeps = nixpkgs-unstable.legacyPackages.${system}.cargo-udeps;
+              vss-server = import ./nix/pkgs/vss.nix {
+                inherit (final) lib stdenv fetchFromGitHub gradle openjdk makeWrapper;
+              };
             })
           ];
         };
@@ -481,6 +484,8 @@
             fedimint-pkgs
             devimint
             ;
+          
+          inherit (pkgs) vss-server;
 
           wasmBundle = craneMultiBuild.wasm32-unknown.release.wasmBundle;
         };

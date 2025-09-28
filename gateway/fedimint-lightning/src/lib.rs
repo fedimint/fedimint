@@ -27,6 +27,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info, warn};
 
+pub mod persister;
+
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
 pub type RouteHtlcStream<'a> = BoxStream<'a, InterceptPaymentRequest>;

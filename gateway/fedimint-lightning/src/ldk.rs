@@ -28,7 +28,11 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::{RwLock, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, info, warn};
-
+use blake3;
+use std::collections::HashMap;
+use fedimint_core::secp256k1::PublicKey;
+use crate::persister::EncryptedVssStore;
+use anyhow::anyhow;
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, RouteHtlcStream};
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
@@ -85,6 +89,10 @@ impl GatewayLdkClient {
         alias: String,
         mnemonic: Mnemonic,
         runtime: Arc<tokio::runtime::Runtime>,
+        vss_url: Option<SafeUrl>,
+        vss_auth_headers: HashMap<String, String>,
+        vss_fallback_enabled: bool,
+        gateway_id: PublicKey,
     ) -> anyhow::Result<Self> {
         let mut bytes = [0u8; 32];
         let alias = if alias.is_empty() {
@@ -107,7 +115,7 @@ impl GatewayLdkClient {
             ..Default::default()
         });
 
-        node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
+        node_builder.set_entropy_bip39_mnemonic(mnemonic.clone(), None);
 
         match chain_source.clone() {
             ChainSource::Bitcoind {
@@ -131,16 +139,32 @@ impl GatewayLdkClient {
                 node_builder.set_chain_source_esplora(get_esplora_url(server_url)?, None);
             }
         };
-        let Some(data_dir_str) = data_dir.to_str() else {
-            return Err(anyhow::anyhow!("Invalid data dir path"));
-        };
-        node_builder.set_storage_dir_path(data_dir_str.to_string());
+        let data_dir_str = data_dir.to_str().ok_or_else(|| anyhow!("Invalid data dir path"))?.to_string();
 
-        info!(chain_source = %chain_source, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
-        let node = Arc::new(node_builder.build()?);
-        node.start_with_runtime(runtime).map_err(|err| {
-            crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");
-            LightningRpcError::FailedToConnect
+        let fallback_dir = data_dir.join("vss_fallback");
+        std::fs::create_dir_all(&fallback_dir)?;
+
+        let node = if let Some(url) = vss_url {
+            let seed = mnemonic.to_seed("");
+            let encryption_key = blake3::hash(&seed).as_bytes()[0..32].try_into().map_err(|_| anyhow!("Failed to derive encryption key"))?;
+            let store_id = format!("fedimint_gateway_ldk_{gateway_id}");
+            let vss_store = EncryptedVssStore::new(
+                url.to_string(),
+                store_id,
+                vss_auth_headers,
+                encryption_key,
+                fallback_dir,
+                vss_fallback_enabled,
+            );
+            Arc::new(node_builder.build_with_store(Arc::new(vss_store))?)
+        } else {
+            node_builder.set_storage_dir_path(data_dir_str);
+            Arc::new(node_builder.build()?)
+        };
+
+        node.start_with_runtime(runtime.clone()).map_err(|err| {
+            crit!(target: LOG_LIGHTNING, err = %err, "Failed to start LDK Node");
+            anyhow::anyhow!(LightningRpcError::FailedToConnect)
         })?;
 
         let (htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(1024);

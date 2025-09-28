@@ -7,7 +7,7 @@ use bitcoin::Network;
 use clap::{ArgGroup, Parser};
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{LightningMode, V1_API_ENDPOINT};
-
+use std::collections::HashMap;
 use super::envs;
 use crate::envs::{
     FM_BITCOIND_PASSWORD_ENV, FM_BITCOIND_URL_ENV, FM_BITCOIND_USERNAME_ENV, FM_ESPLORA_URL_ENV,
@@ -103,6 +103,15 @@ pub struct GatewayOpts {
     /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
     pub esplora_url: Option<SafeUrl>,
+
+    #[arg(long = "vss-url", env = "FM_VSS_URL")]
+    vss_url: Option<SafeUrl>,
+
+    #[arg(long = "vss-auth-headers", env = "FM_VSS_AUTH_HEADERS")]
+    vss_auth_headers: Option<String>,
+
+    #[arg(long = "vss-fallback-enabled", env = "FM_VSS_FALLBACK_ENABLED", default_value_t = true)]
+    pub vss_fallback_enabled: bool,
 }
 
 impl GatewayOpts {
@@ -115,6 +124,11 @@ impl GatewayOpts {
                 api_addr = self.api_addr,
             )
         })?;
+        let vss_auth_headers = if let Some(headers_json) = &self.vss_auth_headers {
+            serde_json::from_str(headers_json)?
+        } else {
+            HashMap::new()
+        };
 
         let bcrypt_password_hash = bcrypt::HashParts::from_str(&self.bcrypt_password_hash)?;
 
@@ -125,6 +139,9 @@ impl GatewayOpts {
             network: self.network,
             num_route_hints: self.num_route_hints,
             lightning_module_mode: self.lightning_module_mode,
+            vss_url: self.vss_url.clone(),
+            vss_auth_headers,
+            vss_fallback_enabled: self.vss_fallback_enabled,
         })
     }
 }
@@ -143,6 +160,9 @@ pub struct GatewayParameters {
     pub network: Network,
     pub num_route_hints: u32,
     pub lightning_module_mode: LightningModuleMode,
+    pub vss_url: Option<SafeUrl>,
+    pub vss_auth_headers: HashMap<String, String>,
+    pub vss_fallback_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

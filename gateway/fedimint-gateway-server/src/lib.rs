@@ -114,7 +114,7 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
-
+use std::collections::HashMap;
 use crate::config::LightningModuleMode;
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
@@ -231,6 +231,13 @@ pub struct Gateway {
 
     // The source of the Bitcoin blockchain data
     chain_source: ChainSource,
+
+    /// Optional URL of the VSS server
+    vss_url: Option<SafeUrl>,
+
+    vss_auth_headers: HashMap<String, String>,
+
+    vss_fallback_enabled: bool,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -263,6 +270,9 @@ impl Gateway {
         gateway_state: GatewayState,
         lightning_module_mode: LightningModuleMode,
         chain_source: ChainSource,
+        vss_url: Option<SafeUrl>,
+        vss_auth_headers: HashMap<String, String>,
+        vss_fallback_enabled: bool,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -276,6 +286,9 @@ impl Gateway {
                 network,
                 num_route_hints,
                 lightning_module_mode,
+                vss_url,
+                vss_auth_headers,
+                vss_fallback_enabled,
             },
             gateway_db,
             client_builder,
@@ -436,6 +449,9 @@ impl Gateway {
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
             lightning_module_mode: gateway_parameters.lightning_module_mode,
+            vss_url: gateway_parameters.vss_url,
+            vss_auth_headers: gateway_parameters.vss_auth_headers,
+            vss_fallback_enabled: gateway_parameters.vss_fallback_enabled,
             task_group,
             bcrypt_password_hash: Arc::new(gateway_parameters.bcrypt_password_hash),
             num_route_hints,
@@ -2126,6 +2142,10 @@ impl Gateway {
                     alias,
                     self.mnemonic.clone(),
                     runtime,
+                    self.vss_url.clone(),
+                    self.vss_auth_headers.clone(),
+                    self.vss_fallback_enabled,
+                    self.gateway_id,
                 )
                 .expect("Failed to create LDK client"),
             ),

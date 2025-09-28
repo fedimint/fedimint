@@ -18,6 +18,10 @@ async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-bip39 = { workspace = true }
 fedimint-core = { workspace = true }
+aes-gcm = { workspace = true }
+blake3 = { workspace = true }
+vss-client = { workspace = true }
+getrandom = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
