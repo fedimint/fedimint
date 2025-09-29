@@ -65,8 +65,12 @@ pub async fn build_iroh_endpoint(
             .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
     }
 
+    #[cfg(not(target_family = "wasm"))]
+    {
+        builder = builder.discovery_dht();
+    }
+
     builder = builder
-        .discovery_dht()
         .discovery_n0()
         .relay_mode(relay_mode)
         .secret_key(secret_key)
