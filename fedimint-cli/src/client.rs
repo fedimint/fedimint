@@ -532,7 +532,7 @@ pub async fn handle_command(
                 // the amount we are withdrawing
                 BitcoinAmountOrAll::All => {
                     let balance =
-                        bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
+                        bitcoin::Amount::from_sat(client.get_balance_err().await?.msats / 1000);
                     let fees = wallet_module.get_withdraw_fees(&address, balance).await?;
                     let amount = balance.checked_sub(fees.amount());
                     if amount.is_none() {

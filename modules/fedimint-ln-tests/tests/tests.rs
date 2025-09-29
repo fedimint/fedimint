@@ -201,7 +201,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
-    let prev_balance = client2.get_balance().await;
+    let prev_balance = client2.get_balance_err().await?;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
@@ -220,7 +220,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected internal payment!"),
     }
 
-    let same_balance = client2.get_balance().await;
+    let same_balance = client2.get_balance_err().await?;
     assert_eq!(prev_balance, same_balance);
 
     Ok(())
@@ -262,7 +262,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let prev_balance = client.get_balance().await;
+    let prev_balance = client.get_balance_err().await?;
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
@@ -286,7 +286,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let same_balance = client.get_balance().await;
+    let same_balance = client.get_balance_err().await?;
     assert_eq!(prev_balance, same_balance);
 
     drop(gw);
@@ -459,7 +459,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance().await, sats(250));
+    assert_eq!(new_client.get_balance_err().await?, sats(250));
 
     // TEST internal payment when there is a registered gateway
     let gw = gateway(&fixtures, &fed).await;
@@ -518,7 +518,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance().await, sats(250));
+    assert_eq!(new_client.get_balance_err().await?, sats(250));
 
     Ok(())
 }
@@ -595,7 +595,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
         assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
         assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
     }
-    assert_eq!(new_client.get_balance().await, sats(250));
+    assert_eq!(new_client.get_balance_err().await?, sats(250));
 
     Ok(())
 }
