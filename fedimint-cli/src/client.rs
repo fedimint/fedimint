@@ -531,8 +531,9 @@ pub async fn handle_command(
                 // If the amount is "all", then we need to subtract the fees from
                 // the amount we are withdrawing
                 BitcoinAmountOrAll::All => {
-                    let balance =
-                        bitcoin::Amount::from_sat(client.get_balance().await.msats / 1000);
+                    let balance = bitcoin::Amount::from_sat(
+                        client.get_balance().await.unwrap_or_default().msats / 1000,
+                    );
                     let fees = wallet_module.get_withdraw_fees(&address, balance).await?;
                     let amount = balance.checked_sub(fees.amount());
                     if amount.is_none() {
