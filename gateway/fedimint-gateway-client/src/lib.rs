@@ -39,7 +39,6 @@ pub struct GatewayRpcClient {
     password: Option<String>,
 }
 
-// TODO: Move to common
 #[derive(Debug, Clone)]
 struct GatewayIrohConnector {
     node_id: iroh::NodeId,
@@ -92,7 +91,6 @@ impl GatewayIrohConnector {
 impl GatewayRpcClient {
     pub async fn new(api: SafeUrl, password: Option<String>) -> anyhow::Result<Self> {
         let mut base_url = api.clone();
-        // Move to SafeUrl?
         let iroh_connector = if api.scheme() == "iroh" {
             let host = api.host_str().context("Url is missing host")?;
             let iroh_pk = iroh::PublicKey::from_str(host).context("Failed to parse node id")?;
