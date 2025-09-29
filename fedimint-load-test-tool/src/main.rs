@@ -12,7 +12,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::vec;
 
-use anyhow::{Context, bail};
+use anyhow::{Context, anyhow, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use common::{
     gateway_pay_invoice, get_note_summary, ldk_create_invoice, ldk_pay_invoice,
@@ -562,7 +562,11 @@ async fn get_required_notes(
     minimum_amount_required: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
-    let current_balance = coordinator.get_balance().await;
+    let current_balance = coordinator
+        .get_balance()
+        .await
+        .ok_or_else(|| anyhow!("Primary module not available"))?;
+
     if current_balance < minimum_amount_required {
         let diff = minimum_amount_required.saturating_sub(current_balance);
         info!(
@@ -663,7 +667,7 @@ async fn do_load_test_user_task(
         let amount = oob_note.total_amount();
         reissue_notes(&client, oob_note, &event_sender)
             .await
-            .map_err(|e| anyhow::anyhow!("while reissuing initial {amount}: {e}"))?;
+            .map_err(|e| anyhow!("while reissuing initial {amount}: {e}"))?;
     }
     let mut generated_invoices_per_user_iterator = (0..generated_invoices_per_user).peekable();
     while let Some(_) = generated_invoices_per_user_iterator.next() {
@@ -805,7 +809,7 @@ async fn do_ln_circular_test_user_task(
         let amount = oob_note.total_amount();
         reissue_notes(&client, oob_note, &event_sender)
             .await
-            .map_err(|e| anyhow::anyhow!("while reissuing initial {amount}: {e}"))?;
+            .map_err(|e| anyhow!("while reissuing initial {amount}: {e}"))?;
     }
     let initial_time = fedimint_core::time::now();
     let still_ontime = || async {
