@@ -48,3 +48,9 @@ pub const FM_GATEWAY_OVERRIDE_LN_MODULE_CHECK_ENV: &str = "FM_GATEWAY_OVERRIDE_L
 
 /// Environment variable to select database backend (rocksdb or cursed-redb)
 pub const FM_DB_BACKEND_ENV: &str = "FM_DB_BACKEND";
+
+/// Environment variable for customizing the default routing fees
+pub const FM_DEFAULT_ROUTING_FEES_ENV: &str = "FM_DEFAULT_ROUTING_FEES";
+
+/// Environment variable for customizing the default transaction fees
+pub const FM_DEFAULT_TRANSACTION_FEES_ENV: &str = "FM_DEFAULT_TRANSACTION_FEES";
