@@ -227,6 +227,59 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_select_available_gateway() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    ln_module.update_gateway_cache().await?;
+
+    let result = ln_module.select_available_gateway(None, None).await;
+    assert!(result.is_err());
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("No gateways available")
+    );
+
+    let gw1 = gateway(&fixtures, &fed).await;
+    ln_module.update_gateway_cache().await?;
+
+    let selected = ln_module.select_available_gateway(None, None).await?;
+    assert_eq!(selected.gateway_id, gw1.gateway_id());
+
+    let gw_info = ln_module.select_gateway(&gw1.gateway_id()).await.unwrap();
+    let selected = ln_module
+        .select_available_gateway(Some(gw_info.clone()), None)
+        .await?;
+    assert_eq!(selected.gateway_id, gw1.gateway_id());
+
+    let gw2 = gateway(&fixtures, &fed).await;
+    ln_module.update_gateway_cache().await?;
+
+    let desc = Description::new("test-invoice".to_string())?;
+    let (_, invoice, _) = ln_module
+        .create_bolt11_invoice(
+            sats(100),
+            Bolt11InvoiceDescription::Direct(desc),
+            None,
+            (),
+            None,
+        )
+        .await?;
+
+    let selected = ln_module
+        .select_available_gateway(None, Some(invoice))
+        .await?;
+
+    assert!(selected.gateway_id == gw1.gateway_id() || selected.gateway_id == gw2.gateway_id());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;

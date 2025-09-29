@@ -80,6 +80,7 @@ use fedimint_ln_common::{
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
+use itertools::Itertools;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
@@ -529,8 +530,8 @@ impl ClientModule for LightningClientModule {
                     yield serde_json::to_value(outgoing_payment)?;
                 }
                 "select_available_gateway" => {
-                    let maybe_gateway: Option<LightningGateway> = serde_json::from_value(payload)?;
-                    let gateway = self.select_available_gateway(maybe_gateway).await?;
+                    let req: SelectAvailableGatewayRequest = serde_json::from_value(payload)?;
+                    let gateway = self.select_available_gateway(req.maybe_gateway,req.maybe_invoice).await?;
                     yield serde_json::to_value(gateway)?;
                 }
                 "subscribe_ln_pay" => {
@@ -637,6 +638,12 @@ struct SubscribeInternalPayRequest {
 #[derive(Deserialize)]
 struct SubscribeLnReceiveRequest {
     operation_id: OperationId,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SelectAvailableGatewayRequest {
+    maybe_gateway: Option<LightningGateway>,
+    maybe_invoice: Option<Bolt11Invoice>,
 }
 
 #[derive(Deserialize)]
@@ -1086,6 +1093,7 @@ impl LightningClientModule {
     pub async fn select_available_gateway(
         &self,
         maybe_gateway: Option<LightningGateway>,
+        maybe_invoice: Option<Bolt11Invoice>,
     ) -> anyhow::Result<LightningGateway> {
         if let Some(gw) = maybe_gateway {
             let gw_id = gw.gateway_id;
@@ -1137,8 +1145,20 @@ impl LightningClientModule {
             return Err(anyhow::anyhow!("No Lightning Gateway was reachable"));
         }
 
-        let mut sorted_gateways = sorted_gateways;
-        sorted_gateways.sort_by_key(|(ann, status)| (status.clone(), ann.info.fees.base_msat));
+        let amount_msat = maybe_invoice.and_then(|inv| inv.amount_milli_satoshis());
+        let sorted_gateways = sorted_gateways
+            .into_iter()
+            .sorted_by_key(|(ann, status)| {
+                let total_fee_msat: u64 =
+                    amount_msat.map_or(u64::from(ann.info.fees.base_msat), |amt| {
+                        u64::from(ann.info.fees.base_msat)
+                            + ((u128::from(amt)
+                                * u128::from(ann.info.fees.proportional_millionths))
+                                / 1_000_000) as u64
+                    });
+                (status.clone(), total_fee_msat)
+            })
+            .collect::<Vec<_>>();
 
         Ok(sorted_gateways[0].0.info.clone())
     }
