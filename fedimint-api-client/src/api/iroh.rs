@@ -114,7 +114,7 @@ impl IrohConnector {
             })
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
-        let endpoint_stable = {
+        let endpoint_stable = Box::pin(async {
             let mut builder = Endpoint::builder();
 
             for iroh_dns in iroh_dns_servers {
@@ -136,9 +136,9 @@ impl IrohConnector {
                 node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
                 "Iroh api client endpoint (stable)"
             );
-            endpoint
-        };
-        let endpoint_next = {
+            Ok::<_, anyhow::Error>(endpoint)
+        });
+        let endpoint_next = Box::pin(async {
             let builder = iroh_next::Endpoint::builder().discovery_n0();
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
@@ -149,8 +149,10 @@ impl IrohConnector {
                 node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
                 "Iroh api client endpoint (next)"
             );
-            endpoint
-        };
+            Ok(endpoint)
+        });
+
+        let (endpoint_stable, endpoint_next) = tokio::try_join!(endpoint_stable, endpoint_next)?;
 
         Ok(Self {
             node_ids,
