@@ -28,6 +28,7 @@ impl Connector {
     pub async fn download_from_invite_code(
         &self,
         invite: &InviteCode,
+        iroh_enable_dht: bool,
     ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
         debug!(
             target: LOG_CLIENT,
@@ -38,13 +39,21 @@ impl Connector {
 
         let federation_id = invite.federation_id();
         let api_from_invite =
-            DynGlobalApi::from_endpoints(invite.peers(), &invite.api_secret()).await?;
+            DynGlobalApi::from_endpoints(invite.peers(), &invite.api_secret(), iroh_enable_dht)
+                .await?;
         let api_secret = invite.api_secret();
 
         fedimint_core::util::retry(
             "Downloading client config",
             backoff_util::aggressive_backoff(),
-            || self.try_download_client_config(&api_from_invite, federation_id, api_secret.clone()),
+            || {
+                self.try_download_client_config(
+                    &api_from_invite,
+                    federation_id,
+                    api_secret.clone(),
+                    iroh_enable_dht,
+                )
+            },
         )
         .await
         .context("Failed to download client config")
@@ -56,6 +65,7 @@ impl Connector {
         api_from_invite: &DynGlobalApi,
         federation_id: FederationId,
         api_secret: Option<String>,
+        iroh_enable_dht: bool,
     ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
         debug!(target: LOG_CLIENT, "Downloading client config from peer");
         // TODO: use new download approach based on guardian PKs
@@ -82,7 +92,8 @@ impl Connector {
 
         debug!(target: LOG_CLIENT, "Verifying client config with all peers");
 
-        let api_full = DynGlobalApi::from_endpoints(api_endpoints, &api_secret).await?;
+        let api_full =
+            DynGlobalApi::from_endpoints(api_endpoints, &api_secret, iroh_enable_dht).await?;
         let client_config = api_full
             .request_current_consensus::<ClientConfig>(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),

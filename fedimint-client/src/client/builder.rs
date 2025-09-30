@@ -121,6 +121,7 @@ pub struct ClientBuilder {
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
     reuse_connector: Option<DynClientConnector>,
+    iroh_enable_dht: bool,
 }
 
 impl ClientBuilder {
@@ -140,6 +141,7 @@ impl ClientBuilder {
             log_event_added_transient_tx,
             request_hook: Arc::new(|api| api),
             reuse_connector: None,
+            iroh_enable_dht: true,
         }
     }
 
@@ -157,6 +159,7 @@ impl ClientBuilder {
             log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
             request_hook: client.request_hook.clone(),
             reuse_connector: Some(client.api.connector().clone()),
+            iroh_enable_dht: client.iroh_enable_dht,
         }
     }
 
@@ -259,6 +262,13 @@ impl ClientBuilder {
 
     pub fn with_meta_service(&mut self, meta_service: Arc<MetaService>) {
         self.meta_service = meta_service;
+    }
+
+    /// Override if the DHT should be enabled when using Iroh to connect to
+    /// the federation
+    pub fn with_iroh_enable_dht(mut self, iroh_enable_dht: bool) -> Self {
+        self.iroh_enable_dht = iroh_enable_dht;
+        self
     }
 
     /// Migrate client module databases
@@ -380,7 +390,7 @@ impl ClientBuilder {
     pub async fn preview(mut self, invite_code: &InviteCode) -> anyhow::Result<ClientPreview> {
         let (config, api) = self
             .connector
-            .download_from_invite_code(invite_code)
+            .download_from_invite_code(invite_code, self.iroh_enable_dht)
             .await?;
 
         if let Some(guardian_pub_keys) = config.global.broadcast_public_keys.clone() {
@@ -524,6 +534,7 @@ impl ClientBuilder {
                         })
                         .context("Admin creds should match a peer")?,
                     &api_secret,
+                    self.iroh_enable_dht,
                 )
                 .await?;
                 ReconnectFederationApi::new_admin(connector, admin_creds.peer_id)
@@ -538,7 +549,7 @@ impl ClientBuilder {
                 {
                     connector
                 } else {
-                    make_connector(peer_urls, &api_secret).await?
+                    make_connector(peer_urls, &api_secret, self.iroh_enable_dht).await?
                 };
                 ReconnectFederationApi::new(connector, None)
                     .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
@@ -838,6 +849,7 @@ impl ClientBuilder {
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
             connector,
+            iroh_enable_dht: self.iroh_enable_dht,
         });
         client_inner
             .task_group
@@ -1212,6 +1224,7 @@ impl ClientPreview {
                 .iter()
                 .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
             &self.api_secret,
+            self.inner.iroh_enable_dht,
         )
         .await?;
 

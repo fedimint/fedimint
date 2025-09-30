@@ -337,6 +337,8 @@ impl Federation {
             let admin_client = DynGlobalApi::from_setup_endpoint(
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
+                // We shouldn't need dht in devimint, so just disable it
+                false,
             )
             .await?;
             endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
@@ -378,7 +380,7 @@ impl Federation {
                 .context("Awaiting invite code file")?;
 
                 Connector::default()
-                    .download_from_invite_code(&InviteCode::from_str(&invite_code)?)
+                    .download_from_invite_code(&InviteCode::from_str(&invite_code)?, false)
                     .await?;
             }
 

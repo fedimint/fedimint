@@ -11,6 +11,9 @@ pub const FM_PASSWORD_ENV: &str = "FM_PASSWORD";
 // Env variable to use Tor connector, instead of default Tcp/ClearNet.
 pub const FM_USE_TOR_ENV: &str = "FM_USE_TOR";
 
+// Env variable to use Tor connector, instead of default Tcp/ClearNet.
+pub const FM_IROH_ENABLE_DHT_ENV: &str = "FM_IROH_ENABLE_DHT";
+
 // Api authentication secret
 pub const FM_API_SECRET_ENV: &str = "FM_API_SECRET";
 

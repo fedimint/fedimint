@@ -78,10 +78,11 @@ impl IrohConnector {
     pub async fn new(
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
+        iroh_enable_dht: bool,
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
         warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-        let mut s = Self::new_no_overrides(peers, iroh_dns).await?;
+        let mut s = Self::new_no_overrides(peers, iroh_dns, iroh_enable_dht).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -93,6 +94,7 @@ impl IrohConnector {
     pub async fn new_no_overrides(
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
+        iroh_enable_dht: bool,
     ) -> anyhow::Result<Self> {
         let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
             || {
@@ -127,7 +129,7 @@ impl IrohConnector {
                 let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
 
                 #[cfg(not(target_family = "wasm"))]
-                {
+                if iroh_enable_dht {
                     builder = builder.discovery_dht();
                 }
 
@@ -166,10 +168,12 @@ impl IrohConnector {
             }
 
             // As a client, we don't need to register on any relays
-            let builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
+            let mut builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
 
             #[cfg(not(target_family = "wasm"))]
-            let mut builder = builder.discovery_dht();
+            if iroh_enable_dht {
+                builder = builder.discovery_dht();
+            }
 
             // instead of `.discovery_n0`, which brings publisher we don't want
             {
@@ -226,7 +230,7 @@ impl IClientConnector for IrohConnector {
             .ok_or(PeerError::InvalidPeerId { peer_id })?;
 
         let mut futures = FuturesUnordered::<
-            Pin<Box<dyn Future<Output = PeerResult<DynClientConnection>> + Send>>,
+            Pin<Box<dyn Future<Output = (PeerResult<DynClientConnection>, &'static str)> + Send>>,
         >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
         let endpoint_stable = self.endpoint_stable.clone();
@@ -234,7 +238,7 @@ impl IClientConnector for IrohConnector {
 
         futures.push(Box::pin({
             let connection_override = connection_override.clone();
-            async move {
+            async move {(
                 match connection_override {
                     Some(node_addr) => {
                         trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
@@ -246,16 +250,16 @@ impl IClientConnector for IrohConnector {
                         if conn.is_ok() {
                             Self::spawn_connection_monitoring_stable(&endpoint_stable, node_id);
                         }
-
                         conn
+
                     }
                     None => endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
                 }.map_err(PeerError::Connection)
                 .map(super::IClientConnection::into_dyn)
-            }
-        }));
+            , "stable")
+        }}));
 
-        futures.push(Box::pin(async move {
+        futures.push(Box::pin(async move {(
             match connection_override {
                 Some(node_addr) => {
                     trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
@@ -278,21 +282,23 @@ impl IClientConnector for IrohConnector {
                 }
                 .map_err(Into::into)
                 .map_err(PeerError::Connection)
-                .map(super::IClientConnection::into_dyn)
-        }));
+                .map(super::IClientConnection::into_dyn),
+                "next"
+        )}));
 
         // Remember last error, so we have something to return if
         // neither connection works.
         let mut prev_err = None;
 
         // Loop until first success, or running out of connections.
-        while let Some(result) = futures.next().await {
+        while let Some((result, iroh_stack)) = futures.next().await {
             match result {
                 Ok(connection) => return Ok(connection),
                 Err(err) => {
                     warn!(
                         target: LOG_NET_IROH,
                         err = %err.fmt_compact(),
+                        %iroh_stack,
                         "Join error in iroh connection task"
                     );
                     prev_err = Some(err);

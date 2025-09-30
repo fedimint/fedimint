@@ -50,7 +50,8 @@ pub async fn start_api_announcement_service(
     let db = db.clone();
     // FIXME: (@leonardo) how should we handle the connector here ?
     let api_client =
-        DynGlobalApi::from_endpoints(get_api_urls(&db, &cfg.consensus).await, &api_secret).await?;
+        DynGlobalApi::from_endpoints(get_api_urls(&db, &cfg.consensus).await, &api_secret, true)
+            .await?;
 
     let our_peer_id = cfg.local.identity;
     tg.spawn_cancellable("submit-api-url-announcement", async move {

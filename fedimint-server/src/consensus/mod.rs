@@ -103,6 +103,7 @@ pub async fn run(
             .iter()
             .map(|(&peer_id, url)| (peer_id, url.url.clone())),
         &None,
+        true,
     )
     .await?;
 
@@ -268,8 +269,12 @@ pub async fn run(
     // Using the `Connector::default()` for now!
     ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::from_endpoints(api_urls, &force_api_secrets.get_active())
-            .await?,
+        federation_api: DynGlobalApi::from_endpoints(
+            api_urls,
+            &force_api_secrets.get_active(),
+            true,
+        )
+        .await?,
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,
