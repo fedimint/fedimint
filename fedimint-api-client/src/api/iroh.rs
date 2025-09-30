@@ -124,12 +124,29 @@ impl IrohConnector {
                 }
 
                 // As a client, we don't need to register on any relays
-                let builder = builder.relay_mode(iroh::RelayMode::Disabled);
+                let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
 
                 #[cfg(not(target_family = "wasm"))]
-                let builder = builder.discovery_dht();
+                {
+                    builder = builder.discovery_dht();
+                }
 
-                let endpoint = builder.discovery_n0().bind().await?;
+                // instead of `.discovery_n0`, which brings publisher we don't want
+                {
+                    #[cfg(target_family = "wasm")]
+                    {
+                        builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
+                    }
+
+                    #[cfg(not(target_family = "wasm"))]
+                    {
+                        builder = builder.add_discovery(move |_| {
+                            Some(iroh::discovery::dns::DnsDiscovery::n0_dns())
+                        });
+                    }
+                }
+
+                let endpoint = builder.bind().await?;
                 debug!(
                     target: LOG_NET_IROH,
                     node_id = %endpoint.node_id(),
@@ -152,9 +169,25 @@ impl IrohConnector {
             let builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
 
             #[cfg(not(target_family = "wasm"))]
-            let builder = builder.discovery_dht();
+            let mut builder = builder.discovery_dht();
 
-            let endpoint = builder.discovery_n0().bind().await?;
+            // instead of `.discovery_n0`, which brings publisher we don't want
+            {
+                // Resolve using HTTPS requests to our DNS server's /pkarr path in browsers
+                #[cfg(target_family = "wasm")]
+                {
+                    builder =
+                        builder.add_discovery(iroh_next::discovery::pkarr::PkarrResolver::n0_dns());
+                }
+                // Resolve using DNS queries outside browsers.
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    builder =
+                        builder.add_discovery(iroh_next::discovery::dns::DnsDiscovery::n0_dns());
+                }
+            }
+
+            let endpoint = builder.bind().await?;
             debug!(
                 target: LOG_NET_IROH,
                 node_id = %endpoint.node_id(),
