@@ -15,9 +15,9 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::LOG_NET_IROH;
 use futures::Future;
 use futures::stream::{FuturesUnordered, StreamExt};
-use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
+use iroh::discovery::pkarr::PkarrResolver;
 use iroh::endpoint::Connection;
-use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, SecretKey};
+use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_next::Watcher as _;
 use serde_json::Value;
@@ -114,35 +114,47 @@ impl IrohConnector {
             })
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
-        let endpoint_stable = Box::pin(async {
-            let mut builder = Endpoint::builder();
+        let endpoint_stable = Box::pin({
+            let iroh_dns_servers = iroh_dns_servers.clone();
+            async {
+                let mut builder = Endpoint::builder();
 
-            for iroh_dns in iroh_dns_servers {
-                builder = builder
-                    .add_discovery({
-                        let iroh_dns = iroh_dns.clone();
-                        move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
-                    })
-                    .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+                for iroh_dns in iroh_dns_servers {
+                    builder = builder.add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+                }
+
+                // As a client, we don't need to register on any relays
+                let builder = builder.relay_mode(iroh::RelayMode::Disabled);
+
+                #[cfg(not(target_family = "wasm"))]
+                let builder = builder.discovery_dht();
+
+                let endpoint = builder.discovery_n0().bind().await?;
+                debug!(
+                    target: LOG_NET_IROH,
+                    node_id = %endpoint.node_id(),
+                    node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                    "Iroh api client endpoint (stable)"
+                );
+                Ok::<_, anyhow::Error>(endpoint)
             }
-
-            #[cfg(not(target_family = "wasm"))]
-            let builder = builder.discovery_dht().discovery_n0();
-
-            let endpoint = builder.discovery_n0().bind().await?;
-            debug!(
-                target: LOG_NET_IROH,
-                node_id = %endpoint.node_id(),
-                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-                "Iroh api client endpoint (stable)"
-            );
-            Ok::<_, anyhow::Error>(endpoint)
         });
         let endpoint_next = Box::pin(async {
-            let builder = iroh_next::Endpoint::builder().discovery_n0();
+            let mut builder = iroh_next::Endpoint::builder();
+
+            for iroh_dns in iroh_dns_servers {
+                builder = builder.add_discovery(
+                    iroh_next::discovery::pkarr::PkarrResolver::builder(iroh_dns).build(),
+                );
+            }
+
+            // As a client, we don't need to register on any relays
+            let builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
+
             #[cfg(not(target_family = "wasm"))]
             let builder = builder.discovery_dht();
-            let endpoint = builder.bind().await?;
+
+            let endpoint = builder.discovery_n0().bind().await?;
             debug!(
                 target: LOG_NET_IROH,
                 node_id = %endpoint.node_id(),
