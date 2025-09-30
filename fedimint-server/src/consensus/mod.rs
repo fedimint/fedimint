@@ -104,6 +104,7 @@ pub async fn run(
             .map(|(&peer_id, url)| (peer_id, url.url.clone())),
         &None,
         true,
+        true,
     )
     .await?;
 
@@ -272,6 +273,7 @@ pub async fn run(
         federation_api: DynGlobalApi::from_endpoints(
             api_urls,
             &force_api_secrets.get_active(),
+            true,
             true,
         )
         .await?,

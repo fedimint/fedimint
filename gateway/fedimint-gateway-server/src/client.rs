@@ -86,7 +86,8 @@ impl GatewayClientBuilder {
         let mut client_builder = Client::builder(db)
             .await
             .map_err(AdminGatewayError::ClientCreationError)?
-            .with_iroh_enable_dht(true);
+            .with_iroh_enable_dht(true)
+            .with_iroh_enable_next(true);
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module_kind(self.primary_module_kind.clone());
         client_builder.with_connector(connector);
