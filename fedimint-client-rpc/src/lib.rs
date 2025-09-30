@@ -362,7 +362,7 @@ impl RpcGlobalState {
         let invite = InviteCode::from_str(&invite_code)?;
         let (client_config, _) = fedimint_api_client::api::net::Connector::default()
             .download_from_invite_code(
-                &invite, /* TODO: how should rpc clients control this? */ false,
+                &invite, /* TODO: how should rpc clients control this? */ false, false,
             )
             .await?;
         let json_config = client_config.to_json();

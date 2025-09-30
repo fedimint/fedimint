@@ -122,6 +122,7 @@ pub struct ClientBuilder {
     request_hook: ApiRequestHook,
     reuse_connector: Option<DynClientConnector>,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
 }
 
 impl ClientBuilder {
@@ -142,6 +143,7 @@ impl ClientBuilder {
             request_hook: Arc::new(|api| api),
             reuse_connector: None,
             iroh_enable_dht: true,
+            iroh_enable_next: true,
         }
     }
 
@@ -160,6 +162,7 @@ impl ClientBuilder {
             request_hook: client.request_hook.clone(),
             reuse_connector: Some(client.api.connector().clone()),
             iroh_enable_dht: client.iroh_enable_dht,
+            iroh_enable_next: client.iroh_enable_next,
         }
     }
 
@@ -268,6 +271,13 @@ impl ClientBuilder {
     /// the federation
     pub fn with_iroh_enable_dht(mut self, iroh_enable_dht: bool) -> Self {
         self.iroh_enable_dht = iroh_enable_dht;
+        self
+    }
+
+    /// Override if the parallel unstable/next Iroh stack should be enabled when
+    /// using Iroh to connect to the federation
+    pub fn with_iroh_enable_next(mut self, iroh_enable_next: bool) -> Self {
+        self.iroh_enable_next = iroh_enable_next;
         self
     }
 
@@ -390,7 +400,7 @@ impl ClientBuilder {
     pub async fn preview(mut self, invite_code: &InviteCode) -> anyhow::Result<ClientPreview> {
         let (config, api) = self
             .connector
-            .download_from_invite_code(invite_code, self.iroh_enable_dht)
+            .download_from_invite_code(invite_code, self.iroh_enable_dht, self.iroh_enable_next)
             .await?;
 
         if let Some(guardian_pub_keys) = config.global.broadcast_public_keys.clone() {
@@ -535,6 +545,7 @@ impl ClientBuilder {
                         .context("Admin creds should match a peer")?,
                     &api_secret,
                     self.iroh_enable_dht,
+                    self.iroh_enable_next,
                 )
                 .await?;
                 ReconnectFederationApi::new_admin(connector, admin_creds.peer_id)
@@ -549,7 +560,13 @@ impl ClientBuilder {
                 {
                     connector
                 } else {
-                    make_connector(peer_urls, &api_secret, self.iroh_enable_dht).await?
+                    make_connector(
+                        peer_urls,
+                        &api_secret,
+                        self.iroh_enable_dht,
+                        self.iroh_enable_next,
+                    )
+                    .await?
                 };
                 ReconnectFederationApi::new(connector, None)
                     .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
@@ -850,6 +867,7 @@ impl ClientBuilder {
             meta_service: self.meta_service,
             connector,
             iroh_enable_dht: self.iroh_enable_dht,
+            iroh_enable_next: self.iroh_enable_next,
         });
         client_inner
             .task_group
@@ -1225,6 +1243,7 @@ impl ClientPreview {
                 .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
             &self.api_secret,
             self.inner.iroh_enable_dht,
+            self.inner.iroh_enable_next,
         )
         .await?;
 

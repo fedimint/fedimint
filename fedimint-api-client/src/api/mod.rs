@@ -431,8 +431,10 @@ impl DynGlobalApi {
         url: SafeUrl,
         api_secret: &Option<String>,
         iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<DynGlobalApi> {
-        let connector = make_admin_connector(peer, url, api_secret, iroh_enable_dht).await?;
+        let connector =
+            make_admin_connector(peer, url, api_secret, iroh_enable_dht, iroh_enable_next).await?;
         Ok(
             GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, Some(peer)))
                 .into(),
@@ -449,19 +451,29 @@ impl DynGlobalApi {
         url: SafeUrl,
         api_secret: &Option<String>,
         iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
 
-        Self::new_admin(PeerId::from(1024), url, api_secret, iroh_enable_dht).await
+        Self::new_admin(
+            PeerId::from(1024),
+            url,
+            api_secret,
+            iroh_enable_dht,
+            iroh_enable_next,
+        )
+        .await
     }
 
     pub async fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
         iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
-        let connector = make_connector(peers, api_secret, iroh_enable_dht).await?;
+        let connector =
+            make_connector(peers, api_secret, iroh_enable_dht, iroh_enable_next).await?;
         Ok(GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, None)).into())
     }
 }
@@ -1258,14 +1270,22 @@ pub async fn make_admin_connector(
     url: SafeUrl,
     api_secret: &Option<String>,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
 ) -> anyhow::Result<DynClientConnector> {
-    make_connector(once((admin_peer_id, url)), api_secret, iroh_enable_dht).await
+    make_connector(
+        once((admin_peer_id, url)),
+        api_secret,
+        iroh_enable_dht,
+        iroh_enable_next,
+    )
+    .await
 }
 
 pub async fn make_connector(
     peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
     api_secret: &Option<String>,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
 ) -> anyhow::Result<DynClientConnector> {
     let peers = peers.into_iter().collect::<BTreeMap<PeerId, SafeUrl>>();
 
@@ -1283,7 +1303,7 @@ pub async fn make_connector(
             let iroh_dns = std::env::var(FM_IROH_DNS_ENV)
                 .ok()
                 .and_then(|dns| dns.parse().ok());
-            iroh::IrohConnector::new(peers, iroh_dns, iroh_enable_dht)
+            iroh::IrohConnector::new(peers, iroh_dns, iroh_enable_dht, iroh_enable_next)
                 .await?
                 .into_dyn()
         }

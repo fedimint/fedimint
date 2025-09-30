@@ -30,7 +30,7 @@ use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError,
 pub struct IrohConnector {
     node_ids: BTreeMap<PeerId, NodeId>,
     endpoint_stable: Endpoint,
-    endpoint_next: iroh_next::Endpoint,
+    endpoint_next: Option<iroh_next::Endpoint>,
 
     /// List of overrides to use when attempting to connect to given
     /// `NodeId`
@@ -79,10 +79,12 @@ impl IrohConnector {
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
         warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-        let mut s = Self::new_no_overrides(peers, iroh_dns, iroh_enable_dht).await?;
+        let mut s =
+            Self::new_no_overrides(peers, iroh_dns, iroh_enable_dht, iroh_enable_next).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -95,6 +97,7 @@ impl IrohConnector {
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
             || {
@@ -201,7 +204,12 @@ impl IrohConnector {
             Ok(endpoint)
         });
 
-        let (endpoint_stable, endpoint_next) = tokio::try_join!(endpoint_stable, endpoint_next)?;
+        let (endpoint_stable, endpoint_next) = if iroh_enable_next {
+            let (s, n) = tokio::try_join!(endpoint_stable, endpoint_next)?;
+            (s, Some(n))
+        } else {
+            (endpoint_stable.await?, None)
+        };
 
         Ok(Self {
             node_ids,
@@ -259,32 +267,34 @@ impl IClientConnector for IrohConnector {
             , "stable")
         }}));
 
-        futures.push(Box::pin(async move {(
-            match connection_override {
-                Some(node_addr) => {
-                    trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                    let node_addr = node_addr_stable_to_next(&node_addr);
-                    let conn = endpoint_next
-                        .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                        .await;
+        if let Some(endpoint_next) = endpoint_next {
+            futures.push(Box::pin(async move {(
+                match connection_override {
+                    Some(node_addr) => {
+                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                        let node_addr = node_addr_stable_to_next(&node_addr);
+                        let conn = endpoint_next
+                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                            .await;
 
-                    #[cfg(not(target_family = "wasm"))]
-                    if conn.is_ok() {
-                        Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
+                        #[cfg(not(target_family = "wasm"))]
+                        if conn.is_ok() {
+                            Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
+                        }
+
+                        conn
                     }
-
-                    conn
-                }
-                None => endpoint_next.connect(
-                        iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
-                        FEDIMINT_API_ALPN
-                    ).await,
-                }
-                .map_err(Into::into)
-                .map_err(PeerError::Connection)
-                .map(super::IClientConnection::into_dyn),
-                "next"
-        )}));
+                    None => endpoint_next.connect(
+                            iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
+                            FEDIMINT_API_ALPN
+                        ).await,
+                    }
+                    .map_err(Into::into)
+                    .map_err(PeerError::Connection)
+                    .map(super::IClientConnection::into_dyn),
+                    "next"
+            )}));
+        }
 
         // Remember last error, so we have something to return if
         // neither connection works.

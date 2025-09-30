@@ -148,6 +148,7 @@ pub struct Client {
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
     iroh_enable_dht: bool,
+    iroh_enable_next: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
