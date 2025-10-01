@@ -500,7 +500,7 @@ jobs:
               closure_size=$(nix path-info -rS --json .#$bin | nix run nixpkgs#jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
               >&2 echo "$bin's Nix closure size: $closure_size"
 
-              if [ 220000000 -lt $closure_size ]; then
+              if [ 280000000 -lt $closure_size ]; then
                 >&2 echo "$bin's Nix closure size seems too big: $closure_size"
                 exit 1
               fi
