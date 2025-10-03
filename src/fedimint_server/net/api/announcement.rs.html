@@ -49,107 +49,112 @@
 <a href=#49 id=49 data-nosnippet>49</a>
 <a href=#50 id=50 data-nosnippet>50</a>    <span class="kw">let </span>db = db.clone();
 <a href=#51 id=51 data-nosnippet>51</a>    <span class="comment">// FIXME: (@leonardo) how should we handle the connector here ?
-<a href=#52 id=52 data-nosnippet>52</a>    </span><span class="kw">let </span>api_client =
-<a href=#53 id=53 data-nosnippet>53</a>        DynGlobalApi::from_endpoints(get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>, <span class="kw-2">&amp;</span>api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a>    <span class="kw">let </span>our_peer_id = cfg.local.identity;
-<a href=#56 id=56 data-nosnippet>56</a>    tg.spawn_cancellable(<span class="string">"submit-api-url-announcement"</span>, <span class="kw">async move </span>{
-<a href=#57 id=57 data-nosnippet>57</a>        <span class="comment">// Give other servers some time to start up in case they were just restarted
-<a href=#58 id=58 data-nosnippet>58</a>        // together
-<a href=#59 id=59 data-nosnippet>59</a>        </span>sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).<span class="kw">await</span>;
-<a href=#60 id=60 data-nosnippet>60</a>        <span class="kw">loop </span>{
-<a href=#61 id=61 data-nosnippet>61</a>            <span class="kw">let </span><span class="kw-2">mut </span>success = <span class="bool-val">true</span>;
-<a href=#62 id=62 data-nosnippet>62</a>            <span class="kw">let </span>announcements = db.begin_transaction_nc()
-<a href=#63 id=63 data-nosnippet>63</a>                .<span class="kw">await
-<a href=#64 id=64 data-nosnippet>64</a>                </span>.find_by_prefix(<span class="kw-2">&amp;</span>ApiAnnouncementPrefix)
-<a href=#65 id=65 data-nosnippet>65</a>                .<span class="kw">await
-<a href=#66 id=66 data-nosnippet>66</a>                </span>.map(|(peer_key, peer_announcement)| (peer_key.<span class="number">0</span>, peer_announcement))
-<a href=#67 id=67 data-nosnippet>67</a>                .collect::&lt;Vec&lt;(PeerId, SignedApiAnnouncement)&gt;&gt;()
-<a href=#68 id=68 data-nosnippet>68</a>                .<span class="kw">await</span>;
-<a href=#69 id=69 data-nosnippet>69</a>
-<a href=#70 id=70 data-nosnippet>70</a>            <span class="comment">// Announce all peer API URLs we know, but at least our own
-<a href=#71 id=71 data-nosnippet>71</a>            </span><span class="kw">for </span>(peer, announcement) <span class="kw">in </span>announcements {
-<a href=#72 id=72 data-nosnippet>72</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = api_client
-<a href=#73 id=73 data-nosnippet>73</a>                    .submit_api_announcement(peer, announcement.clone())
-<a href=#74 id=74 data-nosnippet>74</a>                    .<span class="kw">await </span>{
-<a href=#75 id=75 data-nosnippet>75</a>                    <span class="macro">debug!</span>(target: LOG_NET_API, <span class="question-mark">?</span>peer, err = %err.fmt_compact(), <span class="string">"Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds"</span>);
-<a href=#76 id=76 data-nosnippet>76</a>                    success = <span class="bool-val">false</span>;
-<a href=#77 id=77 data-nosnippet>77</a>                }
-<a href=#78 id=78 data-nosnippet>78</a>            }
-<a href=#79 id=79 data-nosnippet>79</a>
-<a href=#80 id=80 data-nosnippet>80</a>            <span class="comment">// While we announce all peer API urls, we only want to immediately trigger in case
-<a href=#81 id=81 data-nosnippet>81</a>            </span><span class="kw">let </span>our_announcement_key = ApiAnnouncementKey(our_peer_id);
-<a href=#82 id=82 data-nosnippet>82</a>            <span class="kw">let </span>our_announcement = db
-<a href=#83 id=83 data-nosnippet>83</a>                .begin_transaction_nc()
-<a href=#84 id=84 data-nosnippet>84</a>                .<span class="kw">await
-<a href=#85 id=85 data-nosnippet>85</a>                </span>.get_value(<span class="kw-2">&amp;</span>our_announcement_key)
-<a href=#86 id=86 data-nosnippet>86</a>                .<span class="kw">await
-<a href=#87 id=87 data-nosnippet>87</a>                </span>.expect(<span class="string">"Our announcement is always present"</span>);
-<a href=#88 id=88 data-nosnippet>88</a>            <span class="kw">let </span>new_announcement = db.wait_key_check(
-<a href=#89 id=89 data-nosnippet>89</a>                <span class="kw-2">&amp;</span>our_announcement_key,
-<a href=#90 id=90 data-nosnippet>90</a>                |new_announcement| {
-<a href=#91 id=91 data-nosnippet>91</a>                    new_announcement.and_then(
-<a href=#92 id=92 data-nosnippet>92</a>                        |new_announcement| (new_announcement.api_announcement.nonce != our_announcement.api_announcement.nonce).then_some(())
-<a href=#93 id=93 data-nosnippet>93</a>                    )
-<a href=#94 id=94 data-nosnippet>94</a>                });
-<a href=#95 id=95 data-nosnippet>95</a>
-<a href=#96 id=96 data-nosnippet>96</a>            <span class="kw">let </span>auto_announcement_delay = <span class="kw">if </span>success {
-<a href=#97 id=97 data-nosnippet>97</a>                Duration::from_secs(SUCCESS_RETRY_SECONDS)
-<a href=#98 id=98 data-nosnippet>98</a>            } <span class="kw">else </span>{
-<a href=#99 id=99 data-nosnippet>99</a>                Duration::from_secs(FAILURE_RETRY_SECONDS)
-<a href=#100 id=100 data-nosnippet>100</a>            };
-<a href=#101 id=101 data-nosnippet>101</a>
-<a href=#102 id=102 data-nosnippet>102</a>            <span class="macro">select!</span> {
-<a href=#103 id=103 data-nosnippet>103</a>                <span class="kw">_ </span>= new_announcement =&gt; {},
-<a href=#104 id=104 data-nosnippet>104</a>                () = sleep(auto_announcement_delay) =&gt; {},
-<a href=#105 id=105 data-nosnippet>105</a>            }
-<a href=#106 id=106 data-nosnippet>106</a>        }
-<a href=#107 id=107 data-nosnippet>107</a>    });
-<a href=#108 id=108 data-nosnippet>108</a>
-<a href=#109 id=109 data-nosnippet>109</a>    <span class="prelude-val">Ok</span>(())
-<a href=#110 id=110 data-nosnippet>110</a>}
-<a href=#111 id=111 data-nosnippet>111</a>
-<a href=#112 id=112 data-nosnippet>112</a><span class="doccomment">/// Checks if we already have a signed API endpoint announcement for our own
-<a href=#113 id=113 data-nosnippet>113</a>/// identity in the database and creates one if not.
-<a href=#114 id=114 data-nosnippet>114</a></span><span class="kw">async fn </span>insert_signed_api_announcement_if_not_present(db: <span class="kw-2">&amp;</span>Database, cfg: <span class="kw-2">&amp;</span>ServerConfig) {
-<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">if </span>dbtx
-<a href=#117 id=117 data-nosnippet>117</a>        .get_value(<span class="kw-2">&amp;</span>ApiAnnouncementKey(cfg.local.identity))
-<a href=#118 id=118 data-nosnippet>118</a>        .<span class="kw">await
-<a href=#119 id=119 data-nosnippet>119</a>        </span>.is_some()
-<a href=#120 id=120 data-nosnippet>120</a>    {
-<a href=#121 id=121 data-nosnippet>121</a>        <span class="kw">return</span>;
-<a href=#122 id=122 data-nosnippet>122</a>    }
-<a href=#123 id=123 data-nosnippet>123</a>
-<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">let </span>api_announcement = ApiAnnouncement::new(
-<a href=#125 id=125 data-nosnippet>125</a>        cfg.consensus.api_endpoints()[<span class="kw-2">&amp;</span>cfg.local.identity]
-<a href=#126 id=126 data-nosnippet>126</a>            .url
-<a href=#127 id=127 data-nosnippet>127</a>            .clone(),
-<a href=#128 id=128 data-nosnippet>128</a>        <span class="number">0</span>,
-<a href=#129 id=129 data-nosnippet>129</a>    );
-<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
-<a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">let </span>signed_announcement =
-<a href=#132 id=132 data-nosnippet>132</a>        api_announcement.sign(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;</span>cfg.private.broadcast_secret_key.keypair(<span class="kw-2">&amp;</span>ctx));
-<a href=#133 id=133 data-nosnippet>133</a>
-<a href=#134 id=134 data-nosnippet>134</a>    dbtx.insert_entry(
-<a href=#135 id=135 data-nosnippet>135</a>        <span class="kw-2">&amp;</span>ApiAnnouncementKey(cfg.local.identity),
-<a href=#136 id=136 data-nosnippet>136</a>        <span class="kw-2">&amp;</span>signed_announcement,
-<a href=#137 id=137 data-nosnippet>137</a>    )
-<a href=#138 id=138 data-nosnippet>138</a>    .<span class="kw">await</span>;
-<a href=#139 id=139 data-nosnippet>139</a>    dbtx.commit_tx().<span class="kw">await</span>;
-<a href=#140 id=140 data-nosnippet>140</a>}
-<a href=#141 id=141 data-nosnippet>141</a>
-<a href=#142 id=142 data-nosnippet>142</a><span class="doccomment">/// Returns a list of all peers and their respective API URLs taking into
-<a href=#143 id=143 data-nosnippet>143</a>/// account announcements overwriting the URLs contained in the original
-<a href=#144 id=144 data-nosnippet>144</a>/// configuration.
-<a href=#145 id=145 data-nosnippet>145</a></span><span class="kw">pub async fn </span>get_api_urls(db: <span class="kw-2">&amp;</span>Database, cfg: <span class="kw-2">&amp;</span>ServerConfigConsensus) -&gt; BTreeMap&lt;PeerId, SafeUrl&gt; {
-<a href=#146 id=146 data-nosnippet>146</a>    override_api_urls(
-<a href=#147 id=147 data-nosnippet>147</a>        db,
-<a href=#148 id=148 data-nosnippet>148</a>        cfg.api_endpoints()
-<a href=#149 id=149 data-nosnippet>149</a>            .iter()
-<a href=#150 id=150 data-nosnippet>150</a>            .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
-<a href=#151 id=151 data-nosnippet>151</a>        <span class="kw-2">&amp;</span>ApiAnnouncementPrefix,
-<a href=#152 id=152 data-nosnippet>152</a>        |key| key.<span class="number">0</span>,
-<a href=#153 id=153 data-nosnippet>153</a>    )
-<a href=#154 id=154 data-nosnippet>154</a>    .<span class="kw">await
-<a href=#155 id=155 data-nosnippet>155</a></span>}</code></pre></div></section></main></body></html>
+<a href=#52 id=52 data-nosnippet>52</a>    </span><span class="kw">let </span>api_client = DynGlobalApi::from_endpoints(
+<a href=#53 id=53 data-nosnippet>53</a>        get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>,
+<a href=#54 id=54 data-nosnippet>54</a>        <span class="kw-2">&amp;</span>api_secret,
+<a href=#55 id=55 data-nosnippet>55</a>        <span class="bool-val">true</span>,
+<a href=#56 id=56 data-nosnippet>56</a>        <span class="bool-val">true</span>,
+<a href=#57 id=57 data-nosnippet>57</a>    )
+<a href=#58 id=58 data-nosnippet>58</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="kw">let </span>our_peer_id = cfg.local.identity;
+<a href=#61 id=61 data-nosnippet>61</a>    tg.spawn_cancellable(<span class="string">"submit-api-url-announcement"</span>, <span class="kw">async move </span>{
+<a href=#62 id=62 data-nosnippet>62</a>        <span class="comment">// Give other servers some time to start up in case they were just restarted
+<a href=#63 id=63 data-nosnippet>63</a>        // together
+<a href=#64 id=64 data-nosnippet>64</a>        </span>sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).<span class="kw">await</span>;
+<a href=#65 id=65 data-nosnippet>65</a>        <span class="kw">loop </span>{
+<a href=#66 id=66 data-nosnippet>66</a>            <span class="kw">let </span><span class="kw-2">mut </span>success = <span class="bool-val">true</span>;
+<a href=#67 id=67 data-nosnippet>67</a>            <span class="kw">let </span>announcements = db.begin_transaction_nc()
+<a href=#68 id=68 data-nosnippet>68</a>                .<span class="kw">await
+<a href=#69 id=69 data-nosnippet>69</a>                </span>.find_by_prefix(<span class="kw-2">&amp;</span>ApiAnnouncementPrefix)
+<a href=#70 id=70 data-nosnippet>70</a>                .<span class="kw">await
+<a href=#71 id=71 data-nosnippet>71</a>                </span>.map(|(peer_key, peer_announcement)| (peer_key.<span class="number">0</span>, peer_announcement))
+<a href=#72 id=72 data-nosnippet>72</a>                .collect::&lt;Vec&lt;(PeerId, SignedApiAnnouncement)&gt;&gt;()
+<a href=#73 id=73 data-nosnippet>73</a>                .<span class="kw">await</span>;
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a>            <span class="comment">// Announce all peer API URLs we know, but at least our own
+<a href=#76 id=76 data-nosnippet>76</a>            </span><span class="kw">for </span>(peer, announcement) <span class="kw">in </span>announcements {
+<a href=#77 id=77 data-nosnippet>77</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = api_client
+<a href=#78 id=78 data-nosnippet>78</a>                    .submit_api_announcement(peer, announcement.clone())
+<a href=#79 id=79 data-nosnippet>79</a>                    .<span class="kw">await </span>{
+<a href=#80 id=80 data-nosnippet>80</a>                    <span class="macro">debug!</span>(target: LOG_NET_API, <span class="question-mark">?</span>peer, err = %err.fmt_compact(), <span class="string">"Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds"</span>);
+<a href=#81 id=81 data-nosnippet>81</a>                    success = <span class="bool-val">false</span>;
+<a href=#82 id=82 data-nosnippet>82</a>                }
+<a href=#83 id=83 data-nosnippet>83</a>            }
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="comment">// While we announce all peer API urls, we only want to immediately trigger in case
+<a href=#86 id=86 data-nosnippet>86</a>            </span><span class="kw">let </span>our_announcement_key = ApiAnnouncementKey(our_peer_id);
+<a href=#87 id=87 data-nosnippet>87</a>            <span class="kw">let </span>our_announcement = db
+<a href=#88 id=88 data-nosnippet>88</a>                .begin_transaction_nc()
+<a href=#89 id=89 data-nosnippet>89</a>                .<span class="kw">await
+<a href=#90 id=90 data-nosnippet>90</a>                </span>.get_value(<span class="kw-2">&amp;</span>our_announcement_key)
+<a href=#91 id=91 data-nosnippet>91</a>                .<span class="kw">await
+<a href=#92 id=92 data-nosnippet>92</a>                </span>.expect(<span class="string">"Our announcement is always present"</span>);
+<a href=#93 id=93 data-nosnippet>93</a>            <span class="kw">let </span>new_announcement = db.wait_key_check(
+<a href=#94 id=94 data-nosnippet>94</a>                <span class="kw-2">&amp;</span>our_announcement_key,
+<a href=#95 id=95 data-nosnippet>95</a>                |new_announcement| {
+<a href=#96 id=96 data-nosnippet>96</a>                    new_announcement.and_then(
+<a href=#97 id=97 data-nosnippet>97</a>                        |new_announcement| (new_announcement.api_announcement.nonce != our_announcement.api_announcement.nonce).then_some(())
+<a href=#98 id=98 data-nosnippet>98</a>                    )
+<a href=#99 id=99 data-nosnippet>99</a>                });
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a>            <span class="kw">let </span>auto_announcement_delay = <span class="kw">if </span>success {
+<a href=#102 id=102 data-nosnippet>102</a>                Duration::from_secs(SUCCESS_RETRY_SECONDS)
+<a href=#103 id=103 data-nosnippet>103</a>            } <span class="kw">else </span>{
+<a href=#104 id=104 data-nosnippet>104</a>                Duration::from_secs(FAILURE_RETRY_SECONDS)
+<a href=#105 id=105 data-nosnippet>105</a>            };
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a>            <span class="macro">select!</span> {
+<a href=#108 id=108 data-nosnippet>108</a>                <span class="kw">_ </span>= new_announcement =&gt; {},
+<a href=#109 id=109 data-nosnippet>109</a>                () = sleep(auto_announcement_delay) =&gt; {},
+<a href=#110 id=110 data-nosnippet>110</a>            }
+<a href=#111 id=111 data-nosnippet>111</a>        }
+<a href=#112 id=112 data-nosnippet>112</a>    });
+<a href=#113 id=113 data-nosnippet>113</a>
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="prelude-val">Ok</span>(())
+<a href=#115 id=115 data-nosnippet>115</a>}
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a><span class="doccomment">/// Checks if we already have a signed API endpoint announcement for our own
+<a href=#118 id=118 data-nosnippet>118</a>/// identity in the database and creates one if not.
+<a href=#119 id=119 data-nosnippet>119</a></span><span class="kw">async fn </span>insert_signed_api_announcement_if_not_present(db: <span class="kw-2">&amp;</span>Database, cfg: <span class="kw-2">&amp;</span>ServerConfig) {
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="kw">if </span>dbtx
+<a href=#122 id=122 data-nosnippet>122</a>        .get_value(<span class="kw-2">&amp;</span>ApiAnnouncementKey(cfg.local.identity))
+<a href=#123 id=123 data-nosnippet>123</a>        .<span class="kw">await
+<a href=#124 id=124 data-nosnippet>124</a>        </span>.is_some()
+<a href=#125 id=125 data-nosnippet>125</a>    {
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">return</span>;
+<a href=#127 id=127 data-nosnippet>127</a>    }
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">let </span>api_announcement = ApiAnnouncement::new(
+<a href=#130 id=130 data-nosnippet>130</a>        cfg.consensus.api_endpoints()[<span class="kw-2">&amp;</span>cfg.local.identity]
+<a href=#131 id=131 data-nosnippet>131</a>            .url
+<a href=#132 id=132 data-nosnippet>132</a>            .clone(),
+<a href=#133 id=133 data-nosnippet>133</a>        <span class="number">0</span>,
+<a href=#134 id=134 data-nosnippet>134</a>    );
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">let </span>signed_announcement =
+<a href=#137 id=137 data-nosnippet>137</a>        api_announcement.sign(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;</span>cfg.private.broadcast_secret_key.keypair(<span class="kw-2">&amp;</span>ctx));
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a>    dbtx.insert_entry(
+<a href=#140 id=140 data-nosnippet>140</a>        <span class="kw-2">&amp;</span>ApiAnnouncementKey(cfg.local.identity),
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="kw-2">&amp;</span>signed_announcement,
+<a href=#142 id=142 data-nosnippet>142</a>    )
+<a href=#143 id=143 data-nosnippet>143</a>    .<span class="kw">await</span>;
+<a href=#144 id=144 data-nosnippet>144</a>    dbtx.commit_tx().<span class="kw">await</span>;
+<a href=#145 id=145 data-nosnippet>145</a>}
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a><span class="doccomment">/// Returns a list of all peers and their respective API URLs taking into
+<a href=#148 id=148 data-nosnippet>148</a>/// account announcements overwriting the URLs contained in the original
+<a href=#149 id=149 data-nosnippet>149</a>/// configuration.
+<a href=#150 id=150 data-nosnippet>150</a></span><span class="kw">pub async fn </span>get_api_urls(db: <span class="kw-2">&amp;</span>Database, cfg: <span class="kw-2">&amp;</span>ServerConfigConsensus) -&gt; BTreeMap&lt;PeerId, SafeUrl&gt; {
+<a href=#151 id=151 data-nosnippet>151</a>    override_api_urls(
+<a href=#152 id=152 data-nosnippet>152</a>        db,
+<a href=#153 id=153 data-nosnippet>153</a>        cfg.api_endpoints()
+<a href=#154 id=154 data-nosnippet>154</a>            .iter()
+<a href=#155 id=155 data-nosnippet>155</a>            .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
+<a href=#156 id=156 data-nosnippet>156</a>        <span class="kw-2">&amp;</span>ApiAnnouncementPrefix,
+<a href=#157 id=157 data-nosnippet>157</a>        |key| key.<span class="number">0</span>,
+<a href=#158 id=158 data-nosnippet>158</a>    )
+<a href=#159 id=159 data-nosnippet>159</a>    .<span class="kw">await
+<a href=#160 id=160 data-nosnippet>160</a></span>}</code></pre></div></section></main></body></html>

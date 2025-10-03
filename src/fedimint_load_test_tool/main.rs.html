@@ -1068,7 +1068,7 @@
 <a href=#1068 id=1068 data-nosnippet>1068</a>            <span class="kw">let </span>f: BoxFuture&lt;<span class="kw">_</span>&gt; = Box::pin(<span class="kw">async move </span>{
 <a href=#1069 id=1069 data-nosnippet>1069</a>                <span class="kw">let </span>m = fedimint_core::time::now();
 <a href=#1070 id=1070 data-nosnippet>1070</a>                <span class="kw">let _ </span>= fedimint_api_client::api::net::Connector::default()
-<a href=#1071 id=1071 data-nosnippet>1071</a>                    .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+<a href=#1071 id=1071 data-nosnippet>1071</a>                    .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code, <span class="bool-val">false</span>, <span class="bool-val">false</span>)
 <a href=#1072 id=1072 data-nosnippet>1072</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1073 id=1073 data-nosnippet>1073</a>                event_sender.send(MetricEvent {
 <a href=#1074 id=1074 data-nosnippet>1074</a>                    name: <span class="string">"download_client_config"</span>.into(),
@@ -1092,8 +1092,8 @@
 <a href=#1092 id=1092 data-nosnippet>1092</a>    <span class="kw">use </span>jsonrpsee_core::client::ClientT;
 <a href=#1093 id=1093 data-nosnippet>1093</a>    <span class="kw">use </span>jsonrpsee_ws_client::WsClientBuilder;
 <a href=#1094 id=1094 data-nosnippet>1094</a>
-<a href=#1095 id=1095 data-nosnippet>1095</a>    <span class="kw">let </span><span class="kw-2">mut </span>cfg = fedimint_api_client::api::net::Connector::default()
-<a href=#1096 id=1096 data-nosnippet>1096</a>        .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+<a href=#1095 id=1095 data-nosnippet>1095</a>    <span class="kw">let </span>(<span class="kw-2">mut </span>cfg, <span class="kw">_</span>) = fedimint_api_client::api::net::Connector::default()
+<a href=#1096 id=1096 data-nosnippet>1096</a>        .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code, <span class="bool-val">false</span>, <span class="bool-val">false</span>)
 <a href=#1097 id=1097 data-nosnippet>1097</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1098 id=1098 data-nosnippet>1098</a>
 <a href=#1099 id=1099 data-nosnippet>1099</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(limit_endpoints) = limit_endpoints {
