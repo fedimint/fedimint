@@ -125,7 +125,7 @@ impl FederationTest {
         }
         let client_secret = Client::load_or_generate_client_secret(&db).await.unwrap();
         client_builder
-            .preview_with_existing_config(client_config, None)
+            .preview_with_existing_config(client_config, None, None)
             .await
             .expect("Preview failed")
             .join(

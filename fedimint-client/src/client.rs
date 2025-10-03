@@ -810,7 +810,7 @@ impl Client {
 
     /// Query the federation for API version support and then calculate
     /// the best API version to use (supported by most guardians).
-    pub async fn refresh_peers_api_versions(
+    pub async fn fetch_common_api_versions_from_all_peers(
         num_peers: NumPeers,
         api: DynGlobalApi,
         db: Database,
@@ -899,6 +899,167 @@ impl Client {
                 num_responses_sender.send_replace(num_responses);
             }
         }
+    }
+
+    /// Fetch API versions from peers, retrying until we get threshold number of
+    /// successful responses. Returns the successful responses collected
+    /// from at least `num_peers.threshold()` peers.
+    pub async fn fetch_peers_api_versions_from_threshold_of_peers(
+        num_peers: NumPeers,
+        api: DynGlobalApi,
+    ) -> BTreeMap<PeerId, SupportedApiVersionsSummary> {
+        // Keep trying, initially somewhat aggressively, but after a while retry very
+        // slowly, because chances for response are getting lower and lower.
+        let mut backoff =
+            custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
+
+        // Make a single request to a peer after a delay
+        //
+        // The delay is here to unify the type of a future both for initial request and
+        // possible retries.
+        async fn make_request(
+            delay: Duration,
+            peer_id: PeerId,
+            api: &DynGlobalApi,
+        ) -> (
+            PeerId,
+            Result<SupportedApiVersionsSummary, fedimint_api_client::api::PeerError>,
+        ) {
+            runtime::sleep(delay).await;
+            (
+                peer_id,
+                api.request_single_peer::<SupportedApiVersionsSummary>(
+                    VERSION_ENDPOINT.to_owned(),
+                    ApiRequestErased::default(),
+                    peer_id,
+                )
+                .await,
+            )
+        }
+
+        // NOTE: `FuturesUnordered` is a footgun, but since we only poll it for result
+        // and collect responses, it should be OK.
+        let mut requests = FuturesUnordered::new();
+
+        for peer_id in num_peers.peer_ids() {
+            requests.push(make_request(Duration::ZERO, peer_id, &api));
+        }
+
+        let mut successful_responses = BTreeMap::new();
+
+        while successful_responses.len() < num_peers.threshold()
+            && let Some((peer_id, response)) = requests.next().await
+        {
+            let retry = match response {
+                Err(err) => {
+                    debug!(
+                        target: LOG_CLIENT,
+                        %peer_id,
+                        err = %err.fmt_compact(),
+                        "Failed to fetch API versions from peer"
+                    );
+                    true
+                }
+                Ok(response) => {
+                    successful_responses.insert(peer_id, response);
+                    false
+                }
+            };
+
+            if retry {
+                requests.push(make_request(
+                    backoff.next().expect("Keeps retrying"),
+                    peer_id,
+                    &api,
+                ));
+            }
+        }
+
+        successful_responses
+    }
+
+    /// Fetch API versions from peers and discover common API versions to use.
+    pub async fn fetch_common_api_versions(
+        config: &ClientConfig,
+        api: &DynGlobalApi,
+    ) -> anyhow::Result<BTreeMap<PeerId, SupportedApiVersionsSummary>> {
+        debug!(
+            target: LOG_CLIENT,
+            "Fetching common api versions"
+        );
+
+        let num_peers = NumPeers::from(config.global.api_endpoints.len());
+
+        let peer_api_version_sets =
+            Self::fetch_peers_api_versions_from_threshold_of_peers(num_peers, api.clone()).await;
+
+        Ok(peer_api_version_sets)
+    }
+
+    /// Write API version set to database cache.
+    /// Used when we have a pre-calculated API version set that should be stored
+    /// for later use.
+    pub async fn write_api_version_cache(
+        dbtx: &mut DatabaseTransaction<'_>,
+        api_version_set: ApiVersionSet,
+    ) {
+        debug!(
+            target: LOG_CLIENT,
+            value = ?api_version_set,
+            "Writing API version set to cache"
+        );
+
+        dbtx.insert_entry(
+            &CachedApiVersionSetKey,
+            &CachedApiVersionSet(api_version_set),
+        )
+        .await;
+    }
+
+    /// Store prefetched peer API version responses and calculate/store common
+    /// API version set. This processes the individual peer responses by
+    /// storing them in the database and calculating the common API version
+    /// set for caching.
+    pub async fn store_prefetched_api_versions(
+        db: &Database,
+        config: &ClientConfig,
+        client_module_init: &ClientModuleInitRegistry,
+        peer_api_versions: &BTreeMap<PeerId, SupportedApiVersionsSummary>,
+    ) {
+        debug!(
+            target: LOG_CLIENT,
+            "Storing {} prefetched peer API version responses and calculating common version set",
+            peer_api_versions.len()
+        );
+
+        let mut dbtx = db.begin_transaction().await;
+        // Calculate common API version set from individual responses
+        let client_supported_versions =
+            Self::supported_api_versions_summary_static(config, client_module_init);
+        match fedimint_client_module::api_version_discovery::discover_common_api_versions_set(
+            &client_supported_versions,
+            peer_api_versions,
+        ) {
+            Ok(common_api_versions) => {
+                // Write the calculated common API version set to database cache
+                Self::write_api_version_cache(&mut dbtx.to_ref_nc(), common_api_versions).await;
+                debug!(target: LOG_CLIENT, "Calculated and stored common API version set");
+            }
+            Err(err) => {
+                debug!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Failed to calculate common API versions from prefetched data");
+            }
+        }
+
+        // Store individual peer responses to database
+        for (peer_id, peer_api_versions) in peer_api_versions {
+            dbtx.insert_entry(
+                &PeerLastApiVersionsSummaryKey(*peer_id),
+                &PeerLastApiVersionsSummary(peer_api_versions.clone()),
+            )
+            .await;
+        }
+        dbtx.commit_tx().await;
+        debug!(target: LOG_CLIENT, "Stored individual peer API version responses");
     }
 
     /// [`SupportedApiVersionsSummary`] that the client and its modules support
@@ -1028,7 +1189,7 @@ impl Client {
         let num_peers = NumPeers::from(config.global.api_endpoints.len());
 
         task_group.spawn_cancellable("refresh peers api versions", {
-            Client::refresh_peers_api_versions(
+            Client::fetch_common_api_versions_from_all_peers(
                 num_peers,
                 api.clone(),
                 db.clone(),
