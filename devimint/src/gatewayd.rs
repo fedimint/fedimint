@@ -21,12 +21,14 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
+use iroh_base::NodeId;
 use semver::Version;
 use tracing::{debug, info};
 
 use crate::cmd;
 use crate::envs::{
-    FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV, FM_PORT_LDK_ENV,
+    FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_IROH_LISTEN_ADDR_ENV,
+    FM_GATEWAY_LISTEN_ADDR_ENV, FM_PORT_LDK_ENV,
 };
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
@@ -45,24 +47,32 @@ pub struct Gatewayd {
     pub log_path: PathBuf,
     pub gw_port: u16,
     pub ldk_port: u16,
-    pub iroh_api: Option<SafeUrl>, // None if iroh is not available
+    pub iroh_port: u16,
+    pub node_id: Option<iroh_base::NodeId>,
     pub gateway_id: String,
 }
 
 impl Gatewayd {
     pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
         let ln_type = ln.ln_type();
-        let (gw_name, port, lightning_node_port) = match &ln {
+        let (gw_name, port, lightning_node_port, iroh_port) = match &ln {
             LightningNode::Lnd(_) => (
                 "gatewayd-lnd".to_string(),
                 process_mgr.globals.FM_PORT_GW_LND,
                 process_mgr.globals.FM_PORT_LND_LISTEN,
+                process_mgr.globals.FM_PORT_GW_LND_IROH,
             ),
             LightningNode::Ldk {
                 name,
                 gw_port,
                 ldk_port,
-            } => (name.to_owned(), gw_port.to_owned(), ldk_port.to_owned()),
+                iroh_port,
+            } => (
+                name.to_owned(),
+                gw_port.to_owned(),
+                ldk_port.to_owned(),
+                iroh_port.to_owned(),
+            ),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
@@ -79,6 +89,10 @@ impl Gatewayd {
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
             (FM_PORT_LDK_ENV.to_owned(), lightning_node_port.to_string()),
+            (
+                FM_GATEWAY_IROH_LISTEN_ADDR_ENV.to_owned(),
+                format!("127.0.0.1:{iroh_port}"),
+            ),
         ]);
         if !supports_lnv2() {
             info!(target: LOG_DEVIMINT, "LNv2 is not supported, running gatewayd in LNv1 mode");
@@ -109,7 +123,7 @@ impl Gatewayd {
             )
             .await?;
 
-        let (iroh_api, gateway_id) = if gatewayd_version >= *VERSION_0_9_0_ALPHA {
+        let (node_id, gateway_id) = if gatewayd_version >= *VERSION_0_9_0_ALPHA {
             poll(
                 "waiting for gatewy to be ready to respond to rpc",
                 || async {
@@ -130,11 +144,13 @@ impl Gatewayd {
                             .clone(),
                     )
                     .expect("Could not parse iroh_api");
+                    let node_id = NodeId::from_str(iroh_api.host_str().expect("No host available"))
+                        .expect("Could not get NodeId");
                     let gateway_id = value["gateway_id"]
                         .as_str()
                         .expect("Could not parse gateway id")
                         .to_owned();
-                    Ok((Some(iroh_api), gateway_id))
+                    Ok((Some(node_id), gateway_id))
                 },
             )
             .await?
@@ -177,7 +193,8 @@ impl Gatewayd {
             log_path,
             gw_port: port,
             ldk_port: lightning_node_port,
-            iroh_api,
+            iroh_port,
+            node_id,
             gateway_id,
         };
 
@@ -214,6 +231,7 @@ impl Gatewayd {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
+                iroh_port: _,
             } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
@@ -289,11 +307,13 @@ impl Gatewayd {
 
     pub async fn get_info_iroh(&self) -> Result<serde_json::Value> {
         cmd!(
-            "gateway-cli",
-            "--address",
-            self.iroh_api.as_ref().expect("iroh api not available"),
+            crate::util::get_gateway_cli_path(),
             "--rpcpassword=theresnosecondbest",
-            "info"
+            "--address",
+            format!("iroh://{}", self.node_id.expect("node id is not present")),
+            "--connection-override",
+            format!("http://127.0.0.1:{}", self.iroh_port),
+            "info",
         )
         .out_json()
         .await
