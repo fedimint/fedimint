@@ -362,6 +362,7 @@ impl ClientBuilder {
         api_secret: Option<String>,
         init_mode: InitMode,
         preview_prefetch_api_version_set: Option<JitTryAnyhow<ApiVersionSet>>,
+        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&self.db_no_decoders).await {
             bail!("Client database already initialized")
@@ -405,6 +406,7 @@ impl ClientBuilder {
             api_secret,
             stopped,
             preview_prefetch_api_version_set,
+            preview_prefetch_api_announcements,
         )
         .await
     }
@@ -415,14 +417,32 @@ impl ClientBuilder {
             .download_from_invite_code(invite_code, self.iroh_enable_dht, self.iroh_enable_next)
             .await?;
 
-        if let Some(guardian_pub_keys) = config.global.broadcast_public_keys.clone() {
-            // Fetching api announcements using invite urls before joining, then write them
-            // to database This ensures the client can communicated with the
-            // Federation even if all the peers moved.
-            refresh_api_announcement_sync(&api, self.db_no_decoders(), &guardian_pub_keys).await?;
-        }
+        let prefetch_api_announcements =
+            config
+                .global
+                .broadcast_public_keys
+                .clone()
+                .map(|guardian_pub_keys| {
+                    JitTry::new_try({
+                        let db = self.db_no_decoders().clone();
+                        let api = api.clone();
+                        || async move {
+                            // Fetching api announcements using invite urls before joining, then
+                            // write them to database This ensures the
+                            // client can communicated with the
+                            // Federation even if all the peers moved.
+                            refresh_api_announcement_sync(&api, &db, &guardian_pub_keys).await
+                        }
+                    })
+                });
 
-        Self::preview_with_existing_config(self, config, invite_code.api_secret(), Some(api)).await
+        self.preview_inner(
+            config,
+            invite_code.api_secret(),
+            Some(api),
+            prefetch_api_announcements,
+        )
+        .await
     }
 
     /// Use [`Self::preview`] instead
@@ -430,12 +450,23 @@ impl ClientBuilder {
     /// If `reuse_api` is set, it will allow the preview to prefetch some data
     /// to speed up the final join.
     pub async fn preview_with_existing_config(
-        mut self,
+        self,
         config: ClientConfig,
         api_secret: Option<String>,
         reuse_api: Option<DynGlobalApi>,
     ) -> anyhow::Result<ClientPreview> {
-        let preview_prefetch_api_version_set = if let Some(api) = reuse_api {
+        self.preview_inner(config, api_secret, reuse_api, None)
+            .await
+    }
+
+    async fn preview_inner(
+        mut self,
+        config: ClientConfig,
+        api_secret: Option<String>,
+        reuse_api: Option<DynGlobalApi>,
+        prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+    ) -> anyhow::Result<ClientPreview> {
+        let prefetch_api_version_set = if let Some(api) = reuse_api {
             self.reuse_connector = Some(api.connector().clone());
 
             Some(JitTry::new_try({
@@ -462,7 +493,8 @@ impl ClientBuilder {
             inner: self,
             config,
             api_secret,
-            preview_prefetch_api_version_set,
+            prefetch_api_version_set,
+            prefetch_api_announcements,
         })
     }
 
@@ -515,6 +547,7 @@ impl ClientBuilder {
                 log_event_added_transient_tx,
                 request_hook,
                 None,
+                None,
             )
             .await?;
         if !stopped {
@@ -531,6 +564,7 @@ impl ClientBuilder {
         api_secret: Option<String>,
         stopped: bool,
         preview_prefetch_api_version_set: Option<JitTryAnyhow<ApiVersionSet>>,
+        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
@@ -542,6 +576,7 @@ impl ClientBuilder {
                 log_event_added_transient_tx,
                 request_hook,
                 preview_prefetch_api_version_set,
+                preview_prefetch_api_announcements,
             )
             .await?;
         if !stopped {
@@ -553,6 +588,7 @@ impl ClientBuilder {
 
     // TODO: remove config argument
     /// Build a [`Client`] but do not start the executor
+    #[allow(clippy::too_many_arguments)]
     async fn build_stopped(
         self,
         pre_root_secret: DerivableSecret,
@@ -561,6 +597,7 @@ impl ClientBuilder {
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
         request_hook: ApiRequestHook,
         preview_prefetch_api_version_set: Option<JitTryAnyhow<ApiVersionSet>>,
+        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
     ) -> anyhow::Result<ClientHandle> {
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
@@ -645,6 +682,13 @@ impl ClientBuilder {
             if let Err(err) = preview_prefetch_api_version_set.get_try().await {
                 debug!(target: LOG_CLIENT, err = %err.fmt_compact(), "Prefetching api version negotiation failed");
             }
+        }
+
+        if let Some(p) = preview_prefetch_api_announcements {
+            // Unlike the api version set, we want to fail if we were unable to figure out
+            // current addresses of peers in the federation, as it will potentially never
+            // fix itself.
+            p.get_try().await?;
         }
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
@@ -1147,7 +1191,8 @@ pub struct ClientPreview {
     inner: ClientBuilder,
     config: ClientConfig,
     api_secret: Option<String>,
-    preview_prefetch_api_version_set: Option<JitTryAnyhow<ApiVersionSet>>,
+    prefetch_api_version_set: Option<JitTryAnyhow<ApiVersionSet>>,
+    prefetch_api_announcements: Option<JitTryAnyhow<()>>,
 }
 
 impl ClientPreview {
@@ -1242,7 +1287,8 @@ impl ClientPreview {
                 self.config,
                 self.api_secret,
                 InitMode::Fresh,
-                self.preview_prefetch_api_version_set,
+                self.prefetch_api_version_set,
+                self.prefetch_api_announcements,
             )
             .await?;
 
@@ -1276,7 +1322,8 @@ impl ClientPreview {
                 InitMode::Recover {
                     snapshot: backup.clone(),
                 },
-                self.preview_prefetch_api_version_set,
+                self.prefetch_api_version_set,
+                self.prefetch_api_announcements,
             )
             .await?;
 
