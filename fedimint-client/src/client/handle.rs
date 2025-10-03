@@ -110,7 +110,9 @@ impl ClientHandle {
         };
         self.shutdown().await;
 
-        builder.build(root_secret, config, api_secret, false).await
+        builder
+            .build(root_secret, config, api_secret, false, None)
+            .await
     }
 }
 
