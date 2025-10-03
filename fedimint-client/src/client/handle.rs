@@ -112,7 +112,7 @@ impl ClientHandle {
         self.shutdown().await;
 
         builder
-            .build(db, root_secret, config, api_secret, false, None)
+            .build(db, root_secret, config, api_secret, false, None, None)
             .await
     }
 }
