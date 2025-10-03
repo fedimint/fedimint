@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::envs::parse_kv_list_from_env;
@@ -22,6 +22,7 @@ use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_next::Watcher as _;
 use serde_json::Value;
+use tokio::sync::OnceCell;
 use tracing::{debug, trace, warn};
 use url::Url;
 
@@ -41,11 +42,14 @@ pub struct IrohConnector {
     pub connection_overrides: BTreeMap<NodeId, NodeAddr>,
 
     /// Connection pool for stable endpoint connections
-    connections_stable: Arc<tokio::sync::Mutex<HashMap<NodeId, Connection>>>,
+    connections_stable: Arc<tokio::sync::Mutex<HashMap<NodeId, Arc<OnceCell<Connection>>>>>,
 
     /// Connection pool for next endpoint connections  
-    next_connections:
-        Arc<tokio::sync::Mutex<HashMap<iroh_next::NodeId, iroh_next::endpoint::Connection>>>,
+    next_connections: Arc<
+        tokio::sync::Mutex<
+            HashMap<iroh_next::NodeId, Arc<OnceCell<iroh_next::endpoint::Connection>>>,
+        >,
+    >,
 }
 
 impl IrohConnector {
@@ -239,38 +243,48 @@ impl IrohConnector {
         node_id: NodeId,
         node_addr: Option<NodeAddr>,
     ) -> PeerResult<Connection> {
-        // Check if we have an existing connection
-        if let Some(conn) = self.connections_stable.lock().await.get(&node_id) {
-            if conn.close_reason().is_none() {
-                trace!(target: LOG_NET_IROH, %node_id, "Using existing stable connection");
-                return Ok(conn.clone());
-            }
+        let mut pool_lock = self.connections_stable.lock().await;
+
+        let entry_arc = pool_lock
+            .entry(node_id)
+            .or_insert_with(|| Arc::new(OnceCell::new()))
+            .clone();
+
+        // Drop the pool lock so other connections can work in parallel
+        drop(pool_lock);
+
+        let conn = entry_arc
+            .get_or_try_init(|| async {
+                trace!(target: LOG_NET_IROH, %node_id, "Creating new stable connection");
+                let conn = match node_addr.clone() {
+                    Some(node_addr) => {
+                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                        let conn = self.endpoint_stable
+                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                            .await;
+
+                        #[cfg(not(target_family = "wasm"))]
+                        if conn.is_ok() {
+                            Self::spawn_connection_monitoring_stable(&self.endpoint_stable, node_id);
+                        }
+                        conn
+                    }
+                    None => self.endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
+                }.map_err(PeerError::Connection)?;
+
+                Ok(conn)
+            })
+            .await?;
+
+        // Check if connection is still valid
+        if conn.close_reason().is_none() {
+            trace!(target: LOG_NET_IROH, %node_id, "Using stable connection");
+            Ok(conn.clone())
+        } else {
+            // Connection closed, remove from pool and retry
+            self.connections_stable.lock().await.remove(&node_id);
+            Err(PeerError::Connection(anyhow!("Connection closed")))
         }
-
-        trace!(target: LOG_NET_IROH, %node_id, "Creating new stable connection");
-        let conn = match node_addr {
-            Some(node_addr) => {
-                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                let conn = self.endpoint_stable
-                    .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                    .await;
-
-                #[cfg(not(target_family = "wasm"))]
-                if conn.is_ok() {
-                    Self::spawn_connection_monitoring_stable(&self.endpoint_stable, node_id);
-                }
-                conn
-            }
-            None => self.endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
-        }.map_err(PeerError::Connection)?;
-
-        // Add to connection pool
-        self.connections_stable
-            .lock()
-            .await
-            .insert(node_id, conn.clone());
-
-        Ok(conn)
     }
 
     async fn get_or_create_connection_next(
@@ -281,45 +295,56 @@ impl IrohConnector {
     ) -> PeerResult<iroh_next::endpoint::Connection> {
         let next_node_id = iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail");
 
-        // Check if we have an existing connection
-        if let Some(conn) = self.next_connections.lock().await.get(&next_node_id) {
-            if conn.close_reason().is_none() {
-                trace!(target: LOG_NET_IROH, %node_id, "Using existing next connection");
-                return Ok(conn.clone());
-            }
-        }
+        let mut pool_lock = self.next_connections.lock().await;
 
-        trace!(target: LOG_NET_IROH, %node_id, "Creating new next connection");
-        let conn = match node_addr {
-            Some(node_addr) => {
-                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                let node_addr = node_addr_stable_to_next(&node_addr);
-                let conn = endpoint_next
-                    .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                    .await;
+        let entry_arc = pool_lock
+            .entry(next_node_id)
+            .or_insert_with(|| Arc::new(OnceCell::new()))
+            .clone();
 
-                #[cfg(not(target_family = "wasm"))]
-                if conn.is_ok() {
-                    Self::spawn_connection_monitoring_next(endpoint_next, &node_addr);
+        // Drop the pool lock so other connections can work in parallel
+        drop(pool_lock);
+
+        let endpoint_next = endpoint_next.clone();
+        let conn = entry_arc
+            .get_or_try_init(|| async move {
+                trace!(target: LOG_NET_IROH, %node_id, "Creating new next connection");
+                let conn = match node_addr.clone() {
+                    Some(node_addr) => {
+                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                        let node_addr = node_addr_stable_to_next(&node_addr);
+                        let conn = endpoint_next
+                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                            .await;
+
+                        #[cfg(not(target_family = "wasm"))]
+                        if conn.is_ok() {
+                            Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
+                        }
+
+                        conn
+                    }
+                    None => endpoint_next.connect(
+                        next_node_id,
+                        FEDIMINT_API_ALPN
+                    ).await,
                 }
+                .map_err(Into::into)
+                .map_err(PeerError::Connection)?;
 
-                conn
-            }
-            None => endpoint_next.connect(
-                next_node_id,
-                FEDIMINT_API_ALPN
-            ).await,
+                Ok(conn)
+            })
+            .await?;
+
+        // Check if connection is still valid
+        if conn.close_reason().is_none() {
+            trace!(target: LOG_NET_IROH, %node_id, "Using next connection");
+            Ok(conn.clone())
+        } else {
+            // Connection closed, remove from pool and retry
+            self.next_connections.lock().await.remove(&next_node_id);
+            Err(PeerError::Connection(anyhow!("Connection closed")))
         }
-        .map_err(Into::into)
-        .map_err(PeerError::Connection)?;
-
-        // Add to connection pool
-        self.next_connections
-            .lock()
-            .await
-            .insert(next_node_id, conn.clone());
-
-        Ok(conn)
     }
 }
 
