@@ -941,6 +941,7 @@ impl Client {
                         &api,
                         &db,
                         task_group,
+                        false,
                     )
                     .await
                     {
@@ -954,12 +955,19 @@ impl Client {
             return Ok(v.0);
         }
 
-        debug!(
+        info!(
             target: LOG_CLIENT,
-            "No existing cached common api versions found, waiting for initial discovery"
+            "Fetching initial API versions "
         );
-        Self::refresh_common_api_version_static(config, module_init, api, db, task_group.clone())
-            .await
+        Self::refresh_common_api_version_static(
+            config,
+            module_init,
+            api,
+            db,
+            task_group.clone(),
+            true,
+        )
+        .await
     }
 
     async fn refresh_common_api_version_static(
@@ -968,6 +976,7 @@ impl Client {
         api: &DynGlobalApi,
         db: &Database,
         task_group: TaskGroup,
+        block_until_ok: bool,
     ) -> anyhow::Result<ApiVersionSet> {
         debug!(
             target: LOG_CLIENT,
@@ -986,26 +995,38 @@ impl Client {
             )
         });
 
-        // Wait at most 15 seconds before calculating a set of common api versions to
-        // use. Note that all peers individual responses from previous attempts
-        // are still being used, and requests, or even retries for response of
-        // peers are not actually cancelled, as they are happening on a separate
-        // task. This is all just to bound the time user can be waiting
-        // for the join operation to finish, at the risk of picking wrong version in
-        // very rare circumstances.
-        let _: Result<_, Elapsed> = runtime::timeout(
-            Duration::from_secs(15),
-            num_responses_receiver.wait_for(|num| num_peers.threshold() <= *num),
-        )
-        .await;
+        let common_api_versions = loop {
+            // Wait to collect enough answers before calculating a set of common api
+            // versions to use. Note that all peers individual responses from
+            // previous attempts are still being used, and requests, or even
+            // retries for response of peers are not actually cancelled, as they
+            // are happening on a separate task. This is all just to bound the
+            // time user can be waiting for the join operation to finish, at the
+            // risk of picking wrong version in very rare circumstances.
+            let _: Result<_, Elapsed> = runtime::timeout(
+                Duration::from_secs(30),
+                num_responses_receiver.wait_for(|num| num_peers.threshold() <= *num),
+            )
+            .await;
 
-        let peer_api_version_sets = Self::load_peers_last_api_versions(db, num_peers).await;
+            let peer_api_version_sets = Self::load_peers_last_api_versions(db, num_peers).await;
 
-        let common_api_versions =
-            fedimint_client_module::api_version_discovery::discover_common_api_versions_set(
+            match fedimint_client_module::api_version_discovery::discover_common_api_versions_set(
                 &Self::supported_api_versions_summary_static(config, client_module_init),
                 &peer_api_version_sets,
-            )?;
+            ) {
+                Ok(o) => break o,
+                Err(err) if block_until_ok => {
+                    warn!(
+                        target: LOG_CLIENT,
+                        err = %err.fmt_compact_anyhow(),
+                        "Failed to discover API version to use. Retrying..."
+                    );
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
+        };
 
         debug!(
             target: LOG_CLIENT,

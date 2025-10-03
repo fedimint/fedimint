@@ -604,7 +604,7 @@ impl ClientBuilder {
         )
         .await
         .inspect_err(|err| {
-            warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Failed to discover initial API version to use.");
+            warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Failed to discover API version to use.");
         })
         .unwrap_or(ApiVersionSet {
             core: ApiVersion::new(0, 0),
