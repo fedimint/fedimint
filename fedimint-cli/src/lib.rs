@@ -29,7 +29,7 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use client::ModuleSelector;
 #[cfg(feature = "tor")]
 use envs::FM_USE_TOR_ENV;
-use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, SALT_FILE};
+use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
@@ -66,7 +66,7 @@ use tracing::{debug, info, warn};
 use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
-use crate::envs::{FM_CLIENT_DIR_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
+use crate::envs::{FM_CLIENT_DIR_ENV, FM_IROH_ENABLE_NEXT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
 
 /// Type of output the cli produces
 #[derive(Serialize)]
@@ -239,6 +239,14 @@ struct Opts {
     #[arg(long, env = FM_USE_TOR_ENV)]
     use_tor: bool,
 
+    // Enable using DHT name resolution in Iroh
+    #[arg(long, env = FM_IROH_ENABLE_DHT_ENV)]
+    iroh_enable_dht: Option<bool>,
+
+    // Enable using (in parallel) unstable/next Iroh stack
+    #[arg(long, env = FM_IROH_ENABLE_NEXT_ENV)]
+    iroh_enable_next: Option<bool>,
+
     /// Database backend to use.
     #[arg(long, env = FM_DB_BACKEND_ENV, value_enum, default_value = "rocksdb")]
     db_backend: DatabaseBackend,
@@ -267,6 +275,13 @@ impl Opts {
 
         Ok(dir)
     }
+    fn iroh_enable_dht(&self) -> bool {
+        self.iroh_enable_dht.unwrap_or(true)
+    }
+
+    fn iroh_enable_next(&self) -> bool {
+        self.iroh_enable_next.unwrap_or(true)
+    }
 
     async fn admin_client(
         &self,
@@ -283,6 +298,8 @@ impl Opts {
                 .context("Our peer URL not found in config")
                 .map_err_cli()?,
             api_secret,
+            self.iroh_enable_dht(),
+            self.iroh_enable_next(),
         )
         .await
         .map_err(|e| CliError {
@@ -697,7 +714,11 @@ impl FedimintCli {
 
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
         let db = cli.load_database().await?;
-        let mut client_builder = Client::builder(db).await.map_err_cli()?;
+        let mut client_builder = Client::builder(db)
+            .await
+            .map_err_cli()?
+            .with_iroh_enable_dht(cli.iroh_enable_dht())
+            .with_iroh_enable_next(cli.iroh_enable_next());
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
@@ -1361,7 +1382,13 @@ impl FedimintCli {
         cli: Opts,
         args: SetupAdminArgs,
     ) -> anyhow::Result<Value> {
-        let client = DynGlobalApi::from_setup_endpoint(args.endpoint.clone(), &None).await?;
+        let client = DynGlobalApi::from_setup_endpoint(
+            args.endpoint.clone(),
+            &None,
+            cli.iroh_enable_dht(),
+            cli.iroh_enable_next(),
+        )
+        .await?;
 
         match &args.subcommand {
             SetupAdminCmd::Status => {

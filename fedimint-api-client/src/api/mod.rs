@@ -3,7 +3,7 @@ pub mod global_api;
 mod iroh;
 pub mod net;
 
-use core::panic;
+use core::{fmt, panic};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::iter::once;
@@ -121,6 +121,8 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         method: &str,
         params: &ApiRequestErased,
     ) -> PeerResult<Value>;
+
+    fn connector(&self) -> &DynClientConnector;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -428,35 +430,51 @@ impl DynGlobalApi {
         peer: PeerId,
         url: SafeUrl,
         api_secret: &Option<String>,
+        iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<DynGlobalApi> {
-        Ok(GlobalFederationApiWithCache::new(
-            ReconnectFederationApi::from_endpoints(once((peer, url)), api_secret, Some(peer))
-                .await?,
+        let connector =
+            make_admin_connector(peer, url, api_secret, iroh_enable_dht, iroh_enable_next).await?;
+        Ok(
+            GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, Some(peer)))
+                .into(),
         )
-        .into())
     }
 
+    pub fn new(connector: DynClientConnector) -> anyhow::Result<Self> {
+        Ok(GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, None)).into())
+    }
     // FIXME: (@leonardo) Should we have the option to do DKG and config related
     // actions through Tor ? Should we add the `Connector` choice to
     // ConfigParams then ?
     pub async fn from_setup_endpoint(
         url: SafeUrl,
         api_secret: &Option<String>,
+        iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
 
-        Self::new_admin(PeerId::from(1024), url, api_secret).await
+        Self::new_admin(
+            PeerId::from(1024),
+            url,
+            api_secret,
+            iroh_enable_dht,
+            iroh_enable_next,
+        )
+        .await
     }
 
     pub async fn from_endpoints(
         peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
+        iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
-        Ok(GlobalFederationApiWithCache::new(
-            ReconnectFederationApi::from_endpoints(peers, api_secret, None).await?,
-        )
-        .into())
+        let connector =
+            make_connector(peers, api_secret, iroh_enable_dht, iroh_enable_next).await?;
+        Ok(GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, None)).into())
     }
 }
 
@@ -976,7 +994,7 @@ pub type DynClientConnector = Arc<dyn IClientConnector>;
 /// Allows to connect to peers. Connections are request based and should be
 /// authenticated and encrypted for production deployments.
 #[async_trait]
-pub trait IClientConnector: Send + Sync + 'static {
+pub trait IClientConnector: Send + Sync + 'static + fmt::Debug {
     fn peers(&self) -> BTreeSet<PeerId>;
 
     async fn connect(&self, peer: PeerId) -> PeerResult<DynClientConnection>;
@@ -986,6 +1004,10 @@ pub trait IClientConnector: Send + Sync + 'static {
         Self: Sized,
     {
         Arc::new(self)
+    }
+
+    fn is_admin(&self) -> bool {
+        self.peers().len() == 1
     }
 }
 
@@ -1007,6 +1029,7 @@ pub trait IClientConnection: Debug + Send + Sync + 'static {
 
 #[derive(Clone, Debug)]
 pub struct ReconnectFederationApi {
+    connector: DynClientConnector,
     peers: BTreeSet<PeerId>,
     admin_id: Option<PeerId>,
     module_id: Option<ModuleInstanceId>,
@@ -1014,50 +1037,18 @@ pub struct ReconnectFederationApi {
 }
 
 impl ReconnectFederationApi {
-    fn new(connector: &DynClientConnector, admin_id: Option<PeerId>) -> Self {
+    pub fn new(connector: DynClientConnector, admin_peer_id: Option<PeerId>) -> Self {
         Self {
             peers: connector.peers(),
-            admin_id,
+            admin_id: admin_peer_id,
             module_id: None,
-            connections: ReconnectClientConnections::new(connector),
+            connections: ReconnectClientConnections::new(&connector),
+            connector,
         }
     }
 
-    pub async fn new_admin(
-        peer: PeerId,
-        url: SafeUrl,
-        api_secret: &Option<String>,
-    ) -> anyhow::Result<Self> {
-        Self::from_endpoints(once((peer, url)), api_secret, Some(peer)).await
-    }
-
-    pub async fn from_endpoints(
-        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-        api_secret: &Option<String>,
-        admin_id: Option<PeerId>,
-    ) -> anyhow::Result<Self> {
-        let peers = peers.into_iter().collect::<BTreeMap<PeerId, SafeUrl>>();
-
-        let scheme = peers
-            .values()
-            .next()
-            .expect("Federation api has been initialized with no peers")
-            .scheme();
-
-        let connector = match scheme {
-            "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone())?.into_dyn(),
-            #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-            "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
-            "iroh" => {
-                let iroh_dns = std::env::var(FM_IROH_DNS_ENV)
-                    .ok()
-                    .and_then(|dns| dns.parse().ok());
-                iroh::IrohConnector::new(peers, iroh_dns).await?.into_dyn()
-            }
-            scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
-        };
-
-        Ok(ReconnectFederationApi::new(&connector, admin_id))
+    pub fn new_admin(connector: DynClientConnector, peer: PeerId) -> Self {
+        Self::new(connector, Some(peer))
     }
 }
 
@@ -1075,6 +1066,7 @@ impl IRawFederationApi for ReconnectFederationApi {
 
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         ReconnectFederationApi {
+            connector: self.connector.clone(),
             peers: self.peers.clone(),
             admin_id: self.admin_id,
             module_id: Some(id),
@@ -1106,6 +1098,9 @@ impl IRawFederationApi for ReconnectFederationApi {
         self.connections
             .request(peer_id, method, params.clone())
             .await
+    }
+    fn connector(&self) -> &DynClientConnector {
+        &self.connector
     }
 }
 
@@ -1268,6 +1263,52 @@ pub enum LegacyP2PConnectionStatus {
 pub struct StatusResponse {
     pub server: ServerStatusLegacy,
     pub federation: Option<LegacyFederationStatus>,
+}
+
+pub async fn make_admin_connector(
+    admin_peer_id: PeerId,
+    url: SafeUrl,
+    api_secret: &Option<String>,
+    iroh_enable_dht: bool,
+    iroh_enable_next: bool,
+) -> anyhow::Result<DynClientConnector> {
+    make_connector(
+        once((admin_peer_id, url)),
+        api_secret,
+        iroh_enable_dht,
+        iroh_enable_next,
+    )
+    .await
+}
+
+pub async fn make_connector(
+    peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
+    api_secret: &Option<String>,
+    iroh_enable_dht: bool,
+    iroh_enable_next: bool,
+) -> anyhow::Result<DynClientConnector> {
+    let peers = peers.into_iter().collect::<BTreeMap<PeerId, SafeUrl>>();
+
+    let scheme = peers
+        .values()
+        .next()
+        .expect("Federation api has been initialized with no peers")
+        .scheme();
+
+    Ok(match scheme {
+        "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone())?.into_dyn(),
+        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
+        "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
+        "iroh" => {
+            let iroh_dns = std::env::var(FM_IROH_DNS_ENV)
+                .ok()
+                .and_then(|dns| dns.parse().ok());
+            iroh::IrohConnector::new(peers, iroh_dns, iroh_enable_dht, iroh_enable_next)
+                .await?
+                .into_dyn()
+        }
+        scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
+    })
 }
 
 #[cfg(test)]

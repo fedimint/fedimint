@@ -15,9 +15,9 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_logging::LOG_NET_IROH;
 use futures::Future;
 use futures::stream::{FuturesUnordered, StreamExt};
-use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
+use iroh::discovery::pkarr::PkarrResolver;
 use iroh::endpoint::Connection;
-use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, SecretKey};
+use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_next::Watcher as _;
 use serde_json::Value;
@@ -30,7 +30,7 @@ use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError,
 pub struct IrohConnector {
     node_ids: BTreeMap<PeerId, NodeId>,
     endpoint_stable: Endpoint,
-    endpoint_next: iroh_next::Endpoint,
+    endpoint_next: Option<iroh_next::Endpoint>,
 
     /// List of overrides to use when attempting to connect to given
     /// `NodeId`
@@ -78,10 +78,13 @@ impl IrohConnector {
     pub async fn new(
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
+        iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
         warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-        let mut s = Self::new_no_overrides(peers, iroh_dns).await?;
+        let mut s =
+            Self::new_no_overrides(peers, iroh_dns, iroh_enable_dht, iroh_enable_next).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -93,6 +96,8 @@ impl IrohConnector {
     pub async fn new_no_overrides(
         peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
+        iroh_enable_dht: bool,
+        iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
             || {
@@ -114,34 +119,81 @@ impl IrohConnector {
             })
             .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
-        let endpoint_stable = {
-            let mut builder = Endpoint::builder();
+        let endpoint_stable = Box::pin({
+            let iroh_dns_servers = iroh_dns_servers.clone();
+            async {
+                let mut builder = Endpoint::builder();
+
+                for iroh_dns in iroh_dns_servers {
+                    builder = builder.add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+                }
+
+                // As a client, we don't need to register on any relays
+                let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
+
+                #[cfg(not(target_family = "wasm"))]
+                if iroh_enable_dht {
+                    builder = builder.discovery_dht();
+                }
+
+                // instead of `.discovery_n0`, which brings publisher we don't want
+                {
+                    #[cfg(target_family = "wasm")]
+                    {
+                        builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
+                    }
+
+                    #[cfg(not(target_family = "wasm"))]
+                    {
+                        builder = builder.add_discovery(move |_| {
+                            Some(iroh::discovery::dns::DnsDiscovery::n0_dns())
+                        });
+                    }
+                }
+
+                let endpoint = builder.bind().await?;
+                debug!(
+                    target: LOG_NET_IROH,
+                    node_id = %endpoint.node_id(),
+                    node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
+                    "Iroh api client endpoint (stable)"
+                );
+                Ok::<_, anyhow::Error>(endpoint)
+            }
+        });
+        let endpoint_next = Box::pin(async {
+            let mut builder = iroh_next::Endpoint::builder();
 
             for iroh_dns in iroh_dns_servers {
-                builder = builder
-                    .add_discovery({
-                        let iroh_dns = iroh_dns.clone();
-                        move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
-                    })
-                    .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+                builder = builder.add_discovery(
+                    iroh_next::discovery::pkarr::PkarrResolver::builder(iroh_dns).build(),
+                );
             }
 
-            #[cfg(not(target_family = "wasm"))]
-            let builder = builder.discovery_dht().discovery_n0();
+            // As a client, we don't need to register on any relays
+            let mut builder = builder.relay_mode(iroh_next::RelayMode::Disabled);
 
-            let endpoint = builder.discovery_n0().bind().await?;
-            debug!(
-                target: LOG_NET_IROH,
-                node_id = %endpoint.node_id(),
-                node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
-                "Iroh api client endpoint (stable)"
-            );
-            endpoint
-        };
-        let endpoint_next = {
-            let builder = iroh_next::Endpoint::builder().discovery_n0();
             #[cfg(not(target_family = "wasm"))]
-            let builder = builder.discovery_dht();
+            if iroh_enable_dht {
+                builder = builder.discovery_dht();
+            }
+
+            // instead of `.discovery_n0`, which brings publisher we don't want
+            {
+                // Resolve using HTTPS requests to our DNS server's /pkarr path in browsers
+                #[cfg(target_family = "wasm")]
+                {
+                    builder =
+                        builder.add_discovery(iroh_next::discovery::pkarr::PkarrResolver::n0_dns());
+                }
+                // Resolve using DNS queries outside browsers.
+                #[cfg(not(target_family = "wasm"))]
+                {
+                    builder =
+                        builder.add_discovery(iroh_next::discovery::dns::DnsDiscovery::n0_dns());
+                }
+            }
+
             let endpoint = builder.bind().await?;
             debug!(
                 target: LOG_NET_IROH,
@@ -149,7 +201,14 @@ impl IrohConnector {
                 node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
                 "Iroh api client endpoint (next)"
             );
-            endpoint
+            Ok(endpoint)
+        });
+
+        let (endpoint_stable, endpoint_next) = if iroh_enable_next {
+            let (s, n) = tokio::try_join!(endpoint_stable, endpoint_next)?;
+            (s, Some(n))
+        } else {
+            (endpoint_stable.await?, None)
         };
 
         Ok(Self {
@@ -179,7 +238,7 @@ impl IClientConnector for IrohConnector {
             .ok_or(PeerError::InvalidPeerId { peer_id })?;
 
         let mut futures = FuturesUnordered::<
-            Pin<Box<dyn Future<Output = PeerResult<DynClientConnection>> + Send>>,
+            Pin<Box<dyn Future<Output = (PeerResult<DynClientConnection>, &'static str)> + Send>>,
         >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
         let endpoint_stable = self.endpoint_stable.clone();
@@ -187,7 +246,7 @@ impl IClientConnector for IrohConnector {
 
         futures.push(Box::pin({
             let connection_override = connection_override.clone();
-            async move {
+            async move {(
                 match connection_override {
                     Some(node_addr) => {
                         trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
@@ -199,53 +258,57 @@ impl IClientConnector for IrohConnector {
                         if conn.is_ok() {
                             Self::spawn_connection_monitoring_stable(&endpoint_stable, node_id);
                         }
-
                         conn
+
                     }
                     None => endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
                 }.map_err(PeerError::Connection)
                 .map(super::IClientConnection::into_dyn)
-            }
-        }));
+            , "stable")
+        }}));
 
-        futures.push(Box::pin(async move {
-            match connection_override {
-                Some(node_addr) => {
-                    trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                    let node_addr = node_addr_stable_to_next(&node_addr);
-                    let conn = endpoint_next
-                        .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                        .await;
+        if let Some(endpoint_next) = endpoint_next {
+            futures.push(Box::pin(async move {(
+                match connection_override {
+                    Some(node_addr) => {
+                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                        let node_addr = node_addr_stable_to_next(&node_addr);
+                        let conn = endpoint_next
+                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                            .await;
 
-                    #[cfg(not(target_family = "wasm"))]
-                    if conn.is_ok() {
-                        Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
+                        #[cfg(not(target_family = "wasm"))]
+                        if conn.is_ok() {
+                            Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
+                        }
+
+                        conn
                     }
-
-                    conn
-                }
-                None => endpoint_next.connect(
-                        iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
-                        FEDIMINT_API_ALPN
-                    ).await,
-                }
-                .map_err(Into::into)
-                .map_err(PeerError::Connection)
-                .map(super::IClientConnection::into_dyn)
-        }));
+                    None => endpoint_next.connect(
+                            iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail"),
+                            FEDIMINT_API_ALPN
+                        ).await,
+                    }
+                    .map_err(Into::into)
+                    .map_err(PeerError::Connection)
+                    .map(super::IClientConnection::into_dyn),
+                    "next"
+            )}));
+        }
 
         // Remember last error, so we have something to return if
         // neither connection works.
         let mut prev_err = None;
 
         // Loop until first success, or running out of connections.
-        while let Some(result) = futures.next().await {
+        while let Some((result, iroh_stack)) = futures.next().await {
             match result {
                 Ok(connection) => return Ok(connection),
                 Err(err) => {
                     warn!(
                         target: LOG_NET_IROH,
                         err = %err.fmt_compact(),
+                        %iroh_stack,
                         "Join error in iroh connection task"
                     );
                     prev_err = Some(err);

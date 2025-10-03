@@ -8,7 +8,7 @@ use fedimint_core::{PeerId, apply, async_trait_maybe_send, maybe_add_send_sync};
 use serde_json::Value;
 
 use super::super::{DynModuleApi, IRawFederationApi};
-use crate::api::PeerResult;
+use crate::api::{DynClientConnector, PeerResult};
 
 /// "Api Request Hook"
 ///
@@ -84,5 +84,9 @@ impl IRawFederationApi for RawFederationApiWithRequestHook {
         params: &ApiRequestErased,
     ) -> PeerResult<Value> {
         self.inner.request_raw(peer_id, method, params).await
+    }
+
+    fn connector(&self) -> &DynClientConnector {
+        self.inner.connector()
     }
 }

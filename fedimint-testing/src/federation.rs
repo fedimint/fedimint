@@ -89,6 +89,10 @@ impl FederationTest {
             peer_id,
             config.consensus.api_endpoints()[&peer_id].url.clone(),
             &None,
+            // No need to enable DHT during testing
+            false,
+            // No need to enable next stack during testing
+            false,
         )
         .await
     }
@@ -338,6 +342,9 @@ impl FederationTestBuilder {
                 peer_id,
                 config.consensus.api_endpoints()[&peer_id].url.clone(),
                 &None,
+                // No need for dht when testing
+                false,
+                false,
             )
             .await
             .unwrap();

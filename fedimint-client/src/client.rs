@@ -147,6 +147,8 @@ pub struct Client {
     log_event_added_rx: watch::Receiver<()>,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
+    iroh_enable_dht: bool,
+    iroh_enable_next: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1612,6 +1614,10 @@ impl Client {
     /// Register to receiver all new transient (unpersisted) events
     pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
         self.log_event_added_transient_tx.subscribe()
+    }
+
+    pub fn iroh_enable_dht(&self) -> bool {
+        self.iroh_enable_dht
     }
 }
 

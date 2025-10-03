@@ -1068,7 +1068,7 @@ fn test_download_config(
             let f: BoxFuture<_> = Box::pin(async move {
                 let m = fedimint_core::time::now();
                 let _ = fedimint_api_client::api::net::Connector::default()
-                    .download_from_invite_code(&invite_code)
+                    .download_from_invite_code(&invite_code, false, false)
                     .await?;
                 event_sender.send(MetricEvent {
                     name: "download_client_config".into(),
@@ -1092,8 +1092,8 @@ async fn test_connect_raw_client(
     use jsonrpsee_core::client::ClientT;
     use jsonrpsee_ws_client::WsClientBuilder;
 
-    let mut cfg = fedimint_api_client::api::net::Connector::default()
-        .download_from_invite_code(&invite_code)
+    let (mut cfg, _) = fedimint_api_client::api::net::Connector::default()
+        .download_from_invite_code(&invite_code, false, false)
         .await?;
 
     if let Some(limit_endpoints) = limit_endpoints {

@@ -702,6 +702,8 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),
             )],
             &None,
+            false,
+            false,
         )
         .await?
         .with_module(module_instance_id),
