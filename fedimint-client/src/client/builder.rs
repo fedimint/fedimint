@@ -35,6 +35,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{ApiRequestErased, ApiVersion};
 use fedimint_core::task::TaskGroup;
+use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeers, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
@@ -356,6 +357,7 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
         init_mode: InitMode,
+        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&self.db_no_decoders).await {
             bail!("Client database already initialized")
@@ -393,30 +395,43 @@ impl ClientBuilder {
         }
 
         let stopped = self.stopped;
-        self.build(pre_root_secret, config, api_secret, stopped)
-            .await
+        self.build(
+            pre_root_secret,
+            config,
+            api_secret,
+            stopped,
+            preview_prefetch_api_announcements,
+        )
+        .await
     }
 
-    pub async fn preview(mut self, invite_code: &InviteCode) -> anyhow::Result<ClientPreview> {
+    pub async fn preview(self, invite_code: &InviteCode) -> anyhow::Result<ClientPreview> {
         let (config, api) = self
             .connector
             .download_from_invite_code(invite_code, self.iroh_enable_dht, self.iroh_enable_next)
             .await?;
 
-        if let Some(guardian_pub_keys) = config.global.broadcast_public_keys.clone() {
-            // Fetching api announcements using invite urls before joining, then write them
-            // to database This ensures the client can communicated with the
-            // Federation even if all the peers moved.
-            refresh_api_announcement_sync(&api, self.db_no_decoders(), &guardian_pub_keys).await?;
-        }
+        let prefetch_api_announcements =
+            config
+                .global
+                .broadcast_public_keys
+                .clone()
+                .map(|guardian_pub_keys| {
+                    JitTry::new_try({
+                        let db = self.db_no_decoders().clone();
+                        let api = api.clone();
+                        || async move {
+                            // Fetching api announcements using invite urls before joining, then
+                            // write them to database This ensures the
+                            // client can communicated with the
+                            // Federation even if all the peers moved.
+                            refresh_api_announcement_sync(&api, &db, &guardian_pub_keys).await
+                        }
+                    })
+                });
 
-        self.reuse_connector = Some(api.connector().clone());
-
-        Ok(ClientPreview {
-            inner: self,
-            config,
-            api_secret: invite_code.api_secret(),
-        })
+        self.preview_inner(config, invite_code.api_secret(), prefetch_api_announcements)
+            .await
     }
 
     /// Use [`Self::preview`] instead
@@ -425,10 +440,20 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<ClientPreview> {
+        self.preview_inner(config, api_secret, None).await
+    }
+
+    async fn preview_inner(
+        self,
+        config: ClientConfig,
+        api_secret: Option<String>,
+        prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+    ) -> anyhow::Result<ClientPreview> {
         Ok(ClientPreview {
             inner: self,
             config,
             api_secret,
+            prefetch_api_announcements,
         })
     }
 
@@ -480,6 +505,7 @@ impl ClientBuilder {
                 api_secret,
                 log_event_added_transient_tx,
                 request_hook,
+                None,
             )
             .await?;
         if !stopped {
@@ -495,6 +521,7 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
         stopped: bool,
+        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
@@ -505,6 +532,7 @@ impl ClientBuilder {
                 api_secret,
                 log_event_added_transient_tx,
                 request_hook,
+                preview_prefetch_api_announcements,
             )
             .await?;
         if !stopped {
@@ -516,6 +544,7 @@ impl ClientBuilder {
 
     // TODO: remove config argument
     /// Build a [`Client`] but do not start the executor
+    #[allow(clippy::too_many_arguments)]
     async fn build_stopped(
         self,
         pre_root_secret: DerivableSecret,
@@ -523,6 +552,7 @@ impl ClientBuilder {
         api_secret: Option<String>,
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
         request_hook: ApiRequestHook,
+        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
     ) -> anyhow::Result<ClientHandle> {
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
@@ -594,6 +624,13 @@ impl ClientBuilder {
         });
 
         let notifier = Notifier::new();
+
+        if let Some(p) = preview_prefetch_api_announcements {
+            // Unlike the api version set, we want to fail if we were unable to figure out
+            // current addresses of peers in the federation, as it will potentially never
+            // fix itself.
+            p.get_try().await?;
+        }
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
             &config,
@@ -1095,6 +1132,7 @@ pub struct ClientPreview {
     inner: ClientBuilder,
     config: ClientConfig,
     api_secret: Option<String>,
+    prefetch_api_announcements: Option<JitTryAnyhow<()>>,
 }
 
 impl ClientPreview {
@@ -1189,6 +1227,7 @@ impl ClientPreview {
                 self.config,
                 self.api_secret,
                 InitMode::Fresh,
+                self.prefetch_api_announcements,
             )
             .await?;
 
@@ -1222,6 +1261,7 @@ impl ClientPreview {
                 InitMode::Recover {
                     snapshot: backup.clone(),
                 },
+                self.prefetch_api_announcements,
             )
             .await?;
 
