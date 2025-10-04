@@ -127,7 +127,7 @@ impl FederationTest {
             .await
             .unwrap();
         client_builder
-            .preview_with_existing_config(client_config, None)
+            .preview_with_existing_config(client_config, None, None)
             .await
             .expect("Preview failed")
             .join(RootSecret::StandardDoubleDerive(
