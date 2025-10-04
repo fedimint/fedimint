@@ -78,15 +78,21 @@ impl Gatewayd {
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
             (FM_PORT_LDK_ENV.to_owned(), lightning_node_port.to_string()),
         ]);
-        if !supports_lnv2() {
-            info!(target: LOG_DEVIMINT, "LNv2 is not supported, running gatewayd in LNv1 mode");
+
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_9_0_ALPHA {
+            let mode = if supports_lnv2() {
+                "All"
+            } else {
+                info!(target: LOG_DEVIMINT, "LNv2 is not supported, running gatewayd in LNv1 mode");
+                "LNv1"
+            };
             gateway_env.insert(
                 "FM_GATEWAY_LIGHTNING_MODULE_MODE".to_owned(),
-                "LNv1".to_string(),
+                mode.to_string(),
             );
         }
 
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         if ln_type == LightningNodeType::Ldk {
             gateway_env.insert("FM_LDK_ALIAS".to_owned(), gw_name.clone());
 
@@ -184,7 +190,8 @@ impl Gatewayd {
         // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path) };
 
-        if supports_lnv2() {
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_9_0_ALPHA && supports_lnv2() {
             info!(target: LOG_DEVIMINT, "LNv2 is now supported, running in All mode");
             // TODO: Audit that the environment access only happens in single-threaded code.
             unsafe { std::env::set_var("FM_GATEWAY_LIGHTNING_MODULE_MODE", "All") };
@@ -194,7 +201,6 @@ impl Gatewayd {
         let new_gw = Self::new(process_mgr, new_ln.clone()).await?;
         self.process = new_gw.process;
         self.set_lightning_node(new_ln);
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         info!(
             target: LOG_DEVIMINT,

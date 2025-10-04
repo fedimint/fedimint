@@ -26,12 +26,6 @@ pub const FM_NUMBER_OF_ROUTE_HINTS_ENV: &str = "FM_NUMBER_OF_ROUTE_HINTS";
 /// recovering from an existing mnemonic.
 pub const FM_GATEWAY_MNEMONIC_ENV: &str = "FM_GATEWAY_MNEMONIC";
 
-/// Environment variable that specifies the "module mode" the gateway should run
-/// in. Options are "LNv1", "LNv2", or "All". It is not recommended to run "All"
-/// in production so that clients are not able to use the same gateway to create
-/// LNv1 and LNv2 invoices.
-pub const FM_GATEWAY_LIGHTNING_MODULE_MODE_ENV: &str = "FM_GATEWAY_LIGHTNING_MODULE_MODE";
-
 /// Environment variable that instructs the gateway to run in "debug mode",
 /// which allows errors to return to clients without redacting private
 /// information.
