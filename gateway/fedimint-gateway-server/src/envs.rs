@@ -57,3 +57,7 @@ pub const FM_DEFAULT_ROUTING_FEES_ENV: &str = "FM_DEFAULT_ROUTING_FEES";
 
 /// Environment variable for customizing the default transaction fees
 pub const FM_DEFAULT_TRANSACTION_FEES_ENV: &str = "FM_DEFAULT_TRANSACTION_FEES";
+
+/// Environment variable that specifies the address the gateway's Iroh endpoint
+/// should listen on.
+pub const FM_GATEWAY_IROH_LISTEN_ADDR_ENV: &str = "FM_GATEWAY_IROH_LISTEN_ADDR";

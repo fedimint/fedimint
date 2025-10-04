@@ -2915,7 +2915,9 @@ dependencies = [
  "hex",
  "hex-conservative 0.3.0",
  "imbl",
+ "iroh 0.35.0",
  "iroh-base 0.35.0",
+ "iroh-relay 0.35.0",
  "itertools 0.14.0",
  "js-sys",
  "jsonrpsee-core",
@@ -2943,6 +2945,7 @@ dependencies = [
  "tracing",
  "url",
  "wasm-bindgen-futures",
+ "z32",
 ]
 
 [[package]]
@@ -3193,12 +3196,14 @@ dependencies = [
  "fedimint-gateway-common",
  "fedimint-logging",
  "fedimint-mint-client",
+ "iroh 0.35.0",
  "lightning-invoice",
  "reqwest 0.12.22",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3269,6 +3274,9 @@ dependencies = [
  "futures",
  "futures-util",
  "hex",
+ "iroh 0.35.0",
+ "iroh-base 0.35.0",
+ "iroh-relay 0.35.0",
  "itertools 0.14.0",
  "lightning-invoice",
  "lockable",
@@ -3307,6 +3315,7 @@ dependencies = [
  "fedimint-logging",
  "fedimint-testing",
  "futures",
+ "iroh 0.35.0",
  "lightning-invoice",
  "rand 0.8.5",
  "serde",
