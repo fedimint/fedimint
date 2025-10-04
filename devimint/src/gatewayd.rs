@@ -6,12 +6,17 @@ use std::time::SystemTime;
 
 use anyhow::{Context, Result, anyhow};
 use bitcoin::hashes::sha256;
+use bitcoin::secp256k1::SECP256K1;
 use chrono::{DateTime, Utc};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::util::{SafeUrl, backoff_util, retry};
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
+use fedimint_gateway_common::envs::{
+    FM_GATEWAY_ID_OVERRIDE_ENV, FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV,
+};
 use fedimint_gateway_common::{
     ChannelInfo, CreateOfferResponse, GatewayBalances, GetInvoiceResponse,
     ListTransactionsResponse, MnemonicResponse, PaymentDetails, PaymentStatus,
@@ -21,7 +26,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
-use iroh_base::NodeId;
+use rand::rngs::OsRng;
 use semver::Version;
 use tracing::{debug, info};
 
@@ -48,7 +53,7 @@ pub struct Gatewayd {
     pub gw_port: u16,
     pub ldk_port: u16,
     pub iroh_port: u16,
-    pub node_id: Option<iroh_base::NodeId>,
+    pub node_id: iroh_base::NodeId,
     pub gateway_id: String,
 }
 
@@ -77,6 +82,8 @@ impl Gatewayd {
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
         let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
+        let iroh_sk = iroh_base::SecretKey::generate(&mut OsRng);
+        let gateway_sk = bitcoin::secp256k1::generate_keypair(&mut OsRng).0;
 
         let mut gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
@@ -92,6 +99,14 @@ impl Gatewayd {
             (
                 FM_GATEWAY_IROH_LISTEN_ADDR_ENV.to_owned(),
                 format!("127.0.0.1:{iroh_port}"),
+            ),
+            (
+                FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV.to_owned(),
+                iroh_sk.to_string(),
+            ),
+            (
+                FM_GATEWAY_ID_OVERRIDE_ENV.to_owned(),
+                gateway_sk.consensus_encode_to_hex(),
             ),
         ]);
         if !supports_lnv2() {
@@ -123,62 +138,6 @@ impl Gatewayd {
             )
             .await?;
 
-        let (node_id, gateway_id) = if gatewayd_version >= *VERSION_0_9_0_ALPHA {
-            poll(
-                "waiting for gatewy to be ready to respond to rpc",
-                || async {
-                    let value = cmd!(
-                        "gateway-cli",
-                        "--rpcpassword=theresnosecondbest",
-                        "--address",
-                        addr,
-                        "info"
-                    )
-                    .out_json()
-                    .await
-                    .map_err(ControlFlow::Continue)?;
-                    let iroh_api = serde_json::from_value::<SafeUrl>(
-                        value
-                            .get("iroh_api")
-                            .expect("iroh_api does not exist")
-                            .clone(),
-                    )
-                    .expect("Could not parse iroh_api");
-                    let node_id = NodeId::from_str(iroh_api.host_str().expect("No host available"))
-                        .expect("Could not get NodeId");
-                    let gateway_id = value["gateway_id"]
-                        .as_str()
-                        .expect("Could not parse gateway id")
-                        .to_owned();
-                    Ok((Some(node_id), gateway_id))
-                },
-            )
-            .await?
-        } else {
-            let gateway_id = poll(
-                "waiting for gateway to be ready to respond to rpc",
-                || async {
-                    let value = cmd!(
-                        "gateway-cli",
-                        "--rpcpassword=theresnosecondbest",
-                        "--address",
-                        addr,
-                        "info"
-                    )
-                    .out_json()
-                    .await
-                    .map_err(ControlFlow::Continue)?;
-                    let gateway_id = value["gateway_id"]
-                        .as_str()
-                        .expect("Could not parse gateway id")
-                        .to_owned();
-                    Ok(gateway_id)
-                },
-            )
-            .await?;
-            (None, gateway_id)
-        };
-
         let log_path = process_mgr
             .globals
             .FM_LOGS_DIR
@@ -194,9 +153,12 @@ impl Gatewayd {
             gw_port: port,
             ldk_port: lightning_node_port,
             iroh_port,
-            node_id,
-            gateway_id,
+            node_id: iroh_sk.public(),
+            gateway_id: gateway_sk.public_key(SECP256K1).to_string(),
         };
+
+        // Wait for gatewayd to be available
+        gatewayd.get_info().await?;
 
         Ok(gatewayd)
     }
@@ -310,7 +272,7 @@ impl Gatewayd {
             crate::util::get_gateway_cli_path(),
             "--rpcpassword=theresnosecondbest",
             "--address",
-            format!("iroh://{}", self.node_id.expect("node id is not present")),
+            format!("iroh://{}", self.node_id),
             "--connection-override",
             format!("http://127.0.0.1:{}", self.iroh_port),
             "info",

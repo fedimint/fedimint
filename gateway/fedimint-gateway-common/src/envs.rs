@@ -16,3 +16,9 @@ pub const FM_PORT_LDK: &str = "FM_PORT_LDK";
 
 /// The alias for the LDK Node
 pub const FM_LDK_ALIAS_ENV: &str = "FM_LDK_ALIAS";
+
+/// Environment variable for overriding the iroh secret key
+pub const FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV: &str = "FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE";
+
+/// Environment variable for overriding the gateway id
+pub const FM_GATEWAY_ID_OVERRIDE_ENV: &str = "FM_GATEWAY_ID_OVERRIDE";
