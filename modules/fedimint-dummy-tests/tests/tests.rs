@@ -28,14 +28,14 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
     let (_, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1_dummy_module.receive_money_hack(outpoint).await?;
-    assert_eq!(client1.get_balance().await, sats(1000));
+    assert_eq!(client1.get_balance_err().await?, sats(1000));
 
     let outpoint = client1_dummy_module
         .send_money(client2_dummy_module.account(), sats(250))
         .await?;
     client2_dummy_module.receive_money_hack(outpoint).await?;
-    assert_eq!(client1.get_balance().await, sats(750));
-    assert_eq!(client2.get_balance().await, sats(250));
+    assert_eq!(client1.get_balance_err().await?, sats(750));
+    assert_eq!(client2.get_balance_err().await?, sats(250));
     Ok(())
 }
 

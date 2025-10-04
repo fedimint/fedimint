@@ -23,7 +23,18 @@ pub fn sats(amount: u64) -> Amount {
 /// Represents an amount of BTC. The base denomination is millisatoshis, which
 /// is why the `Amount` type from rust-bitcoin isn't used instead.
 #[derive(
-    Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize, Encodable, Decodable,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Deserialize,
+    Serialize,
+    Encodable,
+    Decodable,
+    Default,
 )]
 #[serde(transparent)]
 pub struct Amount {
