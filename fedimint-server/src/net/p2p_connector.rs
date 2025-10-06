@@ -11,7 +11,10 @@ use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::config::PeerUrl;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_IROH_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+use fedimint_core::envs::{
+    FM_IROH_CONNECT_OVERRIDES_ENV, FM_IROH_ENABLE_DHT_ENV, is_env_var_disabled,
+    parse_kv_list_from_env,
+};
 use fedimint_core::iroh_prod::{FM_IROH_DNS_FEDIMINT_PROD, FM_IROH_RELAYS_FEDIMINT_PROD};
 use fedimint_core::net::STANDARD_FEDIMINT_P2P_PORT;
 use fedimint_core::util::SafeUrl;
@@ -386,8 +389,18 @@ pub(crate) async fn build_iroh_endpoint(
             .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
     }
 
-    builder = builder
-        .discovery_dht()
+    // See <https://github.com/fedimint/fedimint/issues/7811>
+    let builder = if is_env_var_disabled(FM_IROH_ENABLE_DHT_ENV) {
+        info!(
+            target: LOG_NET_IROH,
+            "Iroh DHT is disabled"
+        );
+        builder
+    } else {
+        builder.discovery_dht()
+    };
+
+    let builder = builder
         .discovery_n0()
         .relay_mode(relay_mode)
         .secret_key(secret_key)
