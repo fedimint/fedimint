@@ -16,12 +16,28 @@ jobs:
           nix flake update advisory-db || nix flake lock --update-input advisory-db
           nix build -L .#ci.cargoAudit
 
+  check-packages-features:
+    name: "Check package features"
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+      - uses: cachix/cachix-action@v16
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+      - name: Check package features
+        run: |
+          nix develop -c just check-packages-features
+
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
     runs-on: [self-hosted, linux, x64]
-    needs: [ audit ]
+    needs: [ audit, check-packages-features ]
 
     steps:
     - name: Discord notifications on failure
