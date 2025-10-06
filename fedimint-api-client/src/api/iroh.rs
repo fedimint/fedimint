@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::envs::parse_kv_list_from_env;
@@ -247,6 +247,15 @@ impl IrohConnector {
 
         let entry_arc = pool_lock
             .entry(node_id)
+            .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and remove it
+                if let Some(existing_conn) = entry_arc.get() {
+                    if existing_conn.close_reason().is_some() {
+                        trace!(target: LOG_NET_IROH, %node_id, "Existing stable connection is disconnected, removing from pool");
+                        *entry_arc = Arc::new(OnceCell::new());
+                    }
+                }
+            })
             .or_insert_with(|| Arc::new(OnceCell::new()))
             .clone();
 
@@ -276,15 +285,8 @@ impl IrohConnector {
             })
             .await?;
 
-        // Check if connection is still valid
-        if conn.close_reason().is_none() {
-            trace!(target: LOG_NET_IROH, %node_id, "Using stable connection");
-            Ok(conn.clone())
-        } else {
-            // Connection closed, remove from pool and retry
-            self.connections_stable.lock().await.remove(&node_id);
-            Err(PeerError::Connection(anyhow!("Connection closed")))
-        }
+        trace!(target: LOG_NET_IROH, %node_id, "Using stable connection");
+        Ok(conn.clone())
     }
 
     async fn get_or_create_connection_next(
@@ -299,6 +301,15 @@ impl IrohConnector {
 
         let entry_arc = pool_lock
             .entry(next_node_id)
+            .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and remove it
+                if let Some(existing_conn) = entry_arc.get() {
+                    if existing_conn.close_reason().is_some() {
+                        trace!(target: LOG_NET_IROH, %node_id, "Existing next connection is disconnected, removing from pool");
+                        *entry_arc = Arc::new(OnceCell::new());
+                    }
+                }
+            })
             .or_insert_with(|| Arc::new(OnceCell::new()))
             .clone();
 
@@ -336,15 +347,8 @@ impl IrohConnector {
             })
             .await?;
 
-        // Check if connection is still valid
-        if conn.close_reason().is_none() {
-            trace!(target: LOG_NET_IROH, %node_id, "Using next connection");
-            Ok(conn.clone())
-        } else {
-            // Connection closed, remove from pool and retry
-            self.next_connections.lock().await.remove(&next_node_id);
-            Err(PeerError::Connection(anyhow!("Connection closed")))
-        }
+        trace!(target: LOG_NET_IROH, %node_id, "Using next connection");
+        Ok(conn.clone())
     }
 }
 
