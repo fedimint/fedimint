@@ -696,6 +696,15 @@ impl WebsocketConnector {
 
         let entry_arc = pool_lock
             .entry(peer_id)
+            .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and remove it
+                if let Some(existing_conn) = entry_arc.get() {
+                    if !existing_conn.is_connected() {
+                        trace!(target: LOG_NET_WS, %peer_id, "Existing connection is disconnected, removing from pool");
+                        *entry_arc = Arc::new(OnceCell::new());
+                    }
+                }
+            })
             .or_insert_with(|| Arc::new(OnceCell::new()))
             .clone();
 
@@ -779,15 +788,8 @@ impl WebsocketConnector {
             })
             .await?;
 
-        // Check if connection is still valid
-        if conn.is_connected() {
-            trace!(target: LOG_NET_WS, %peer_id, "Using existing websocket connection");
-            Ok(conn.clone())
-        } else {
-            // Connection closed, remove from pool and retry
-            self.connections.lock().await.remove(&peer_id);
-            Err(PeerError::Connection(anyhow!("Connection closed")))
-        }
+        trace!(target: LOG_NET_WS, %peer_id, "Using websocket connection");
+        Ok(conn.clone())
     }
 }
 
