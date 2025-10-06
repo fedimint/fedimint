@@ -56,24 +56,12 @@ jobs:
           # read versions from manually triggered workflows
           # default needed for cron or manual workflow without params
           VERSIONS="${{ github.event.inputs.versions }}"
-          VERSIONS=${VERSIONS:="v0.6.3 current, v0.7.2 current, v0.8.1 current"}
-
-          # if empty, defaults to all test kinds within script
-          export TEST_KINDS="${{ github.event.inputs.test_kinds }}"
+          VERSIONS=${VERSIONS:="v0.6.0 v0.9.0-beta.0, v0.6.1 v0.9.0-beta.0, v0.6.2 v0.9.0-beta.0, v0.6.3 v0.9.0-beta.0, v0.7.0 v0.9.0-beta.0, v0.7.1 v0.9.0-beta.0, v0.7.2 v0.9.0-beta.0, v0.8.0 v0.9.0-beta.0, v0.8.1 v0.9.0-beta.0, v0.8.2-rc.0 v0.9.0-beta.0, v0.6.0 v0.6.1 v0.6.2 v0.6.3 v0.7.0 v0.7.1 v0.7.2 v0.8.0 v0.8.1 v0.8.2-rc.0 v0.9.0-beta.0"}
 
           export FM_TEST_CI_ALL_JOBS
           export FM_TEST_UPGRADE_TIMEOUT
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # the GH runners become flaky with manual runs during the release
-            # process, so we reduce parallelism for manual release testing
-            FM_TEST_CI_ALL_JOBS="5"
-            # some upgrade paths can take a long time, so we increase the timeout
-            FM_TEST_UPGRADE_TIMEOUT="3600"
-          else
-            unset FM_TEST_CI_ALL_JOBS
-            unset FM_TEST_UPGRADE_TIMEOUT
-          fi
+          FM_TEST_CI_ALL_JOBS="5"
+          FM_TEST_UPGRADE_TIMEOUT="3600"
 
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
@@ -82,30 +70,6 @@ jobs:
           env \
             TMPDIR=/tmp \
             CARGO_PROFILE=ci \
-            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix develop -c \
-            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
-              run \
-                --metric 5pReH96mSsqIeh513jJQGg \
-                --metadata "commit=${LAST_COMMIT_SHA}" \
-                -- \
             env -u RUSTC_WRAPPER \
             scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/upgrade-test.sh "$VERSIONS"
-
-  notifications:
-    if: always() && github.repository == 'fedimint/fedimint'
-    name: "Notifications"
-    timeout-minutes: 1
-    runs-on: [self-hosted, linux, x64]
-    needs: [ tests ]
-
-    steps:
-    - name: Discord notifications on failure
-      # https://stackoverflow.com/a/74562058/134409
-      if: ${{ always() && contains(needs.*.result, 'failure') }}
-      # https://github.com/marketplace/actions/actions-status-discord
-      uses: sarisia/actions-status-discord@v1
-      with:
-        webhook: ${{ secrets.DISCORD_WEBHOOK }}
-        # current job is a success, but that's not what we're interested in
-        status: failure
