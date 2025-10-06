@@ -698,12 +698,11 @@ impl WebsocketConnector {
             .entry(peer_id)
             .and_modify(|entry_arc| {
                 // Check if existing connection is disconnected and remove it
-                if let Some(existing_conn) = entry_arc.get() {
-                    if !existing_conn.is_connected() {
+                if let Some(existing_conn) = entry_arc.get()
+                    && !existing_conn.is_connected() {
                         trace!(target: LOG_NET_WS, %peer_id, "Existing connection is disconnected, removing from pool");
                         *entry_arc = Arc::new(OnceCell::new());
                     }
-                }
             })
             .or_insert_with(|| Arc::new(OnceCell::new()))
             .clone();
