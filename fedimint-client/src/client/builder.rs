@@ -35,7 +35,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{ApiRequestErased, ApiVersion};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
+use fedimint_core::task::jit::Jit;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeers, fedimint_build_code_version_env, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
@@ -49,7 +49,8 @@ use tracing::{debug, trace, warn};
 use super::handle::ClientHandle;
 use super::{Client, client_decoders};
 use crate::api_announcements::{
-    get_api_urls, refresh_api_announcement_sync, run_api_announcement_sync,
+    PeersSignedApiAnnouncements, fetch_api_announcements_from_all_peers, get_api_urls,
+    process_api_announcements, run_api_announcement_sync,
 };
 use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
@@ -362,7 +363,9 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
         init_mode: InitMode,
-        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        preview_prefetch_api_announcements: Option<
+            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
+        >,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&self.db_no_decoders).await {
             bail!("Client database already initialized")
@@ -422,19 +425,19 @@ impl ClientBuilder {
                 .broadcast_public_keys
                 .clone()
                 .map(|guardian_pub_keys| {
-                    JitTry::new_try({
-                        let db = self.db_no_decoders().clone();
+                    Jit::new({
                         let api = api.clone();
                         || async move {
                             // Fetching api announcements using invite urls before joining, then
                             // write them to database This ensures the
                             // client can communicated with the
-                            // Federation even if all the peers moved.
-                            refresh_api_announcement_sync(&api, &db, &guardian_pub_keys).await
+                            // Federation even if all the peers moved
+                            fetch_api_announcements_from_all_peers(&api, &guardian_pub_keys).await
                         }
                     })
                 });
 
+        // refresh_api_announcement_sync(&api, &db, &guardian_pub_keys).await
         self.preview_inner(config, invite_code.api_secret(), prefetch_api_announcements)
             .await
     }
@@ -452,7 +455,7 @@ impl ClientBuilder {
         self,
         config: ClientConfig,
         api_secret: Option<String>,
-        prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        prefetch_api_announcements: Option<Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>>,
     ) -> anyhow::Result<ClientPreview> {
         Ok(ClientPreview {
             inner: self,
@@ -526,7 +529,9 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
         stopped: bool,
-        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        preview_prefetch_api_announcements: Option<
+            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
+        >,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
@@ -557,7 +562,9 @@ impl ClientBuilder {
         api_secret: Option<String>,
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
         request_hook: ApiRequestHook,
-        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        preview_prefetch_api_announcements: Option<
+            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
+        >,
     ) -> anyhow::Result<ClientHandle> {
         debug!(
             target: LOG_CLIENT,
@@ -639,7 +646,18 @@ impl ClientBuilder {
             // Unlike the api version set, we want to fail if we were unable to figure out
             // current addresses of peers in the federation, as it will potentially never
             // fix itself.
-            p.get_try().await?;
+            let announcements = p.get().await;
+
+            process_api_announcements(
+                &db,
+                config
+                    .global
+                    .broadcast_public_keys
+                    .as_ref()
+                    .expect("If announcements were fetched, the pubkeys must be there"),
+                announcements,
+            )
+            .await?
         }
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
@@ -1142,7 +1160,7 @@ pub struct ClientPreview {
     inner: ClientBuilder,
     config: ClientConfig,
     api_secret: Option<String>,
-    prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+    prefetch_api_announcements: Option<Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>>,
 }
 
 impl ClientPreview {
