@@ -117,22 +117,23 @@ impl FederationTest {
         admin_creds: Option<AdminCreds>,
     ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Setting new client with config");
-        let mut client_builder = Client::builder(db).await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await.expect("Failed to build client");
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module_kind(self.primary_module_kind.clone());
         if let Some(admin_creds) = admin_creds {
             client_builder.set_admin_creds(admin_creds);
         }
-        let client_secret = Client::load_or_generate_client_secret(client_builder.db_no_decoders())
-            .await
-            .unwrap();
+        let client_secret = Client::load_or_generate_client_secret(&db).await.unwrap();
         client_builder
             .preview_with_existing_config(client_config, None)
             .await
             .expect("Preview failed")
-            .join(RootSecret::StandardDoubleDerive(
-                PlainRootSecretStrategy::to_root_secret(&client_secret),
-            ))
+            .join(
+                db,
+                RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(
+                    &client_secret,
+                )),
+            )
             .await
             .map(Arc::new)
             .expect("Failed to build client")
