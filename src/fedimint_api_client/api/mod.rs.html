@@ -1251,122 +1251,124 @@
 <a href=#1251 id=1251 data-nosnippet>1251</a>                        <span class="prelude-val">Err</span>(e) =&gt; {
 <a href=#1252 id=1252 data-nosnippet>1252</a>                            <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Failed to connect to peer api {e}"</span>);
 <a href=#1253 id=1253 data-nosnippet>1253</a>
-<a href=#1254 id=1254 data-nosnippet>1254</a>                            fedimint_core::task::sleep(
-<a href=#1255 id=1255 data-nosnippet>1255</a>                                backoff.next().expect(<span class="string">"No limit to the number of retries"</span>),
-<a href=#1256 id=1256 data-nosnippet>1256</a>                            )
-<a href=#1257 id=1257 data-nosnippet>1257</a>                            .<span class="kw">await</span>;
-<a href=#1258 id=1258 data-nosnippet>1258</a>                        }
-<a href=#1259 id=1259 data-nosnippet>1259</a>                    }
-<a href=#1260 id=1260 data-nosnippet>1260</a>                }
-<a href=#1261 id=1261 data-nosnippet>1261</a>
-<a href=#1262 id=1262 data-nosnippet>1262</a>                <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Shutting down peer api connection task"</span>);
-<a href=#1263 id=1263 data-nosnippet>1263</a>            }
-<a href=#1264 id=1264 data-nosnippet>1264</a>            .instrument(<span class="macro">trace_span!</span>(<span class="string">"peer-api-connection"</span>, <span class="question-mark">?</span>peer)),
-<a href=#1265 id=1265 data-nosnippet>1265</a>        );
-<a href=#1266 id=1266 data-nosnippet>1266</a>
-<a href=#1267 id=1267 data-nosnippet>1267</a>        ClientConnection { sender }
-<a href=#1268 id=1268 data-nosnippet>1268</a>    }
-<a href=#1269 id=1269 data-nosnippet>1269</a>
-<a href=#1270 id=1270 data-nosnippet>1270</a>    <span class="kw">async fn </span>connection(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;DynClientConnection&gt; {
-<a href=#1271 id=1271 data-nosnippet>1271</a>        <span class="kw">let </span>(sender, receiver) = oneshot::channel();
-<a href=#1272 id=1272 data-nosnippet>1272</a>
-<a href=#1273 id=1273 data-nosnippet>1273</a>        <span class="self">self</span>.sender
-<a href=#1274 id=1274 data-nosnippet>1274</a>            .send(sender)
-<a href=#1275 id=1275 data-nosnippet>1275</a>            .<span class="kw">await
-<a href=#1276 id=1276 data-nosnippet>1276</a>            </span>.inspect_err(|err| {
-<a href=#1277 id=1277 data-nosnippet>1277</a>                <span class="macro">warn!</span>(
-<a href=#1278 id=1278 data-nosnippet>1278</a>                    target: LOG_CLIENT_NET_API,
-<a href=#1279 id=1279 data-nosnippet>1279</a>                    err = %err.fmt_compact(),
-<a href=#1280 id=1280 data-nosnippet>1280</a>                    <span class="string">"Api connection request channel closed unexpectedly"
-<a href=#1281 id=1281 data-nosnippet>1281</a>                </span>);
-<a href=#1282 id=1282 data-nosnippet>1282</a>            })
-<a href=#1283 id=1283 data-nosnippet>1283</a>            .ok()<span class="question-mark">?</span>;
-<a href=#1284 id=1284 data-nosnippet>1284</a>
-<a href=#1285 id=1285 data-nosnippet>1285</a>        receiver.<span class="kw">await</span>.ok()
-<a href=#1286 id=1286 data-nosnippet>1286</a>    }
-<a href=#1287 id=1287 data-nosnippet>1287</a>}
-<a href=#1288 id=1288 data-nosnippet>1288</a>
-<a href=#1289 id=1289 data-nosnippet>1289</a><span class="doccomment">/// The status of a server, including how it views its peers
-<a href=#1290 id=1290 data-nosnippet>1290</a></span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-<a href=#1291 id=1291 data-nosnippet>1291</a></span><span class="kw">pub struct </span>LegacyFederationStatus {
-<a href=#1292 id=1292 data-nosnippet>1292</a>    <span class="kw">pub </span>session_count: u64,
-<a href=#1293 id=1293 data-nosnippet>1293</a>    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, LegacyPeerStatus&gt;,
-<a href=#1294 id=1294 data-nosnippet>1294</a>    <span class="kw">pub </span>peers_online: u64,
-<a href=#1295 id=1295 data-nosnippet>1295</a>    <span class="kw">pub </span>peers_offline: u64,
-<a href=#1296 id=1296 data-nosnippet>1296</a>    <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
-<a href=#1297 id=1297 data-nosnippet>1297</a>    /// should generate an alert if this is not the case.
-<a href=#1298 id=1298 data-nosnippet>1298</a>    </span><span class="kw">pub </span>peers_flagged: u64,
-<a href=#1299 id=1299 data-nosnippet>1299</a>    <span class="kw">pub </span>scheduled_shutdown: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#1300 id=1300 data-nosnippet>1300</a>}
-<a href=#1301 id=1301 data-nosnippet>1301</a>
-<a href=#1302 id=1302 data-nosnippet>1302</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-<a href=#1303 id=1303 data-nosnippet>1303</a></span><span class="kw">pub struct </span>LegacyPeerStatus {
-<a href=#1304 id=1304 data-nosnippet>1304</a>    <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#1305 id=1305 data-nosnippet>1305</a>    <span class="kw">pub </span>connection_status: LegacyP2PConnectionStatus,
-<a href=#1306 id=1306 data-nosnippet>1306</a>    <span class="doccomment">/// Indicates that this peer needs attention from the operator since
-<a href=#1307 id=1307 data-nosnippet>1307</a>    /// it has not contributed to the consensus in a long time
-<a href=#1308 id=1308 data-nosnippet>1308</a>    </span><span class="kw">pub </span>flagged: bool,
-<a href=#1309 id=1309 data-nosnippet>1309</a>}
-<a href=#1310 id=1310 data-nosnippet>1310</a>
-<a href=#1311 id=1311 data-nosnippet>1311</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-<a href=#1312 id=1312 data-nosnippet>1312</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
-<a href=#1313 id=1313 data-nosnippet>1313</a></span><span class="kw">pub enum </span>LegacyP2PConnectionStatus {
-<a href=#1314 id=1314 data-nosnippet>1314</a>    <span class="attr">#[default]
-<a href=#1315 id=1315 data-nosnippet>1315</a>    </span>Disconnected,
-<a href=#1316 id=1316 data-nosnippet>1316</a>    Connected,
-<a href=#1317 id=1317 data-nosnippet>1317</a>}
-<a href=#1318 id=1318 data-nosnippet>1318</a>
-<a href=#1319 id=1319 data-nosnippet>1319</a><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-<a href=#1320 id=1320 data-nosnippet>1320</a></span><span class="kw">pub struct </span>StatusResponse {
-<a href=#1321 id=1321 data-nosnippet>1321</a>    <span class="kw">pub </span>server: ServerStatusLegacy,
-<a href=#1322 id=1322 data-nosnippet>1322</a>    <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;LegacyFederationStatus&gt;,
-<a href=#1323 id=1323 data-nosnippet>1323</a>}
-<a href=#1324 id=1324 data-nosnippet>1324</a>
-<a href=#1325 id=1325 data-nosnippet>1325</a><span class="kw">pub async fn </span>make_admin_connector(
-<a href=#1326 id=1326 data-nosnippet>1326</a>    admin_peer_id: PeerId,
-<a href=#1327 id=1327 data-nosnippet>1327</a>    url: SafeUrl,
-<a href=#1328 id=1328 data-nosnippet>1328</a>    api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#1329 id=1329 data-nosnippet>1329</a>    iroh_enable_dht: bool,
-<a href=#1330 id=1330 data-nosnippet>1330</a>    iroh_enable_next: bool,
-<a href=#1331 id=1331 data-nosnippet>1331</a>) -&gt; anyhow::Result&lt;DynClientConnector&gt; {
-<a href=#1332 id=1332 data-nosnippet>1332</a>    make_connector(
-<a href=#1333 id=1333 data-nosnippet>1333</a>        once((admin_peer_id, url)),
-<a href=#1334 id=1334 data-nosnippet>1334</a>        api_secret,
-<a href=#1335 id=1335 data-nosnippet>1335</a>        iroh_enable_dht,
-<a href=#1336 id=1336 data-nosnippet>1336</a>        iroh_enable_next,
-<a href=#1337 id=1337 data-nosnippet>1337</a>    )
-<a href=#1338 id=1338 data-nosnippet>1338</a>    .<span class="kw">await
-<a href=#1339 id=1339 data-nosnippet>1339</a></span>}
-<a href=#1340 id=1340 data-nosnippet>1340</a>
-<a href=#1341 id=1341 data-nosnippet>1341</a><span class="kw">pub async fn </span>make_connector(
-<a href=#1342 id=1342 data-nosnippet>1342</a>    peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
-<a href=#1343 id=1343 data-nosnippet>1343</a>    api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#1344 id=1344 data-nosnippet>1344</a>    iroh_enable_dht: bool,
-<a href=#1345 id=1345 data-nosnippet>1345</a>    iroh_enable_next: bool,
-<a href=#1346 id=1346 data-nosnippet>1346</a>) -&gt; anyhow::Result&lt;DynClientConnector&gt; {
-<a href=#1347 id=1347 data-nosnippet>1347</a>    <span class="kw">let </span>peers = peers.into_iter().collect::&lt;BTreeMap&lt;PeerId, SafeUrl&gt;&gt;();
-<a href=#1348 id=1348 data-nosnippet>1348</a>
-<a href=#1349 id=1349 data-nosnippet>1349</a>    <span class="kw">let </span>scheme = peers
-<a href=#1350 id=1350 data-nosnippet>1350</a>        .values()
-<a href=#1351 id=1351 data-nosnippet>1351</a>        .next()
-<a href=#1352 id=1352 data-nosnippet>1352</a>        .expect(<span class="string">"Federation api has been initialized with no peers"</span>)
-<a href=#1353 id=1353 data-nosnippet>1353</a>        .scheme();
-<a href=#1354 id=1354 data-nosnippet>1354</a>
-<a href=#1355 id=1355 data-nosnippet>1355</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>scheme {
-<a href=#1356 id=1356 data-nosnippet>1356</a>        <span class="string">"ws" </span>| <span class="string">"wss" </span>=&gt; WebsocketConnector::new(peers, api_secret.clone())<span class="question-mark">?</span>.into_dyn(),
-<a href=#1357 id=1357 data-nosnippet>1357</a>        <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
-<a href=#1358 id=1358 data-nosnippet>1358</a>        </span><span class="string">"tor" </span>=&gt; TorConnector::new(peers, api_secret.clone()).into_dyn(),
-<a href=#1359 id=1359 data-nosnippet>1359</a>        <span class="string">"iroh" </span>=&gt; {
-<a href=#1360 id=1360 data-nosnippet>1360</a>            <span class="kw">let </span>iroh_dns = std::env::var(FM_IROH_DNS_ENV)
-<a href=#1361 id=1361 data-nosnippet>1361</a>                .ok()
-<a href=#1362 id=1362 data-nosnippet>1362</a>                .and_then(|dns| dns.parse().ok());
-<a href=#1363 id=1363 data-nosnippet>1363</a>            iroh::IrohConnector::new(peers, iroh_dns, iroh_enable_dht, iroh_enable_next)
-<a href=#1364 id=1364 data-nosnippet>1364</a>                .<span class="kw">await</span><span class="question-mark">?
-<a href=#1365 id=1365 data-nosnippet>1365</a>                </span>.into_dyn()
-<a href=#1366 id=1366 data-nosnippet>1366</a>        }
-<a href=#1367 id=1367 data-nosnippet>1367</a>        scheme =&gt; <span class="macro">anyhow::bail!</span>(<span class="string">"Unsupported connector scheme: {scheme}"</span>),
-<a href=#1368 id=1368 data-nosnippet>1368</a>    })
-<a href=#1369 id=1369 data-nosnippet>1369</a>}
-<a href=#1370 id=1370 data-nosnippet>1370</a>
-<a href=#1371 id=1371 data-nosnippet>1371</a><span class="attr">#[cfg(test)]
-<a href=#1372 id=1372 data-nosnippet>1372</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#1254 id=1254 data-nosnippet>1254</a>                            drop(senders);
+<a href=#1255 id=1255 data-nosnippet>1255</a>
+<a href=#1256 id=1256 data-nosnippet>1256</a>                            fedimint_core::task::sleep(
+<a href=#1257 id=1257 data-nosnippet>1257</a>                                backoff.next().expect(<span class="string">"No limit to the number of retries"</span>),
+<a href=#1258 id=1258 data-nosnippet>1258</a>                            )
+<a href=#1259 id=1259 data-nosnippet>1259</a>                            .<span class="kw">await</span>;
+<a href=#1260 id=1260 data-nosnippet>1260</a>                        }
+<a href=#1261 id=1261 data-nosnippet>1261</a>                    }
+<a href=#1262 id=1262 data-nosnippet>1262</a>                }
+<a href=#1263 id=1263 data-nosnippet>1263</a>
+<a href=#1264 id=1264 data-nosnippet>1264</a>                <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Shutting down peer api connection task"</span>);
+<a href=#1265 id=1265 data-nosnippet>1265</a>            }
+<a href=#1266 id=1266 data-nosnippet>1266</a>            .instrument(<span class="macro">trace_span!</span>(<span class="string">"peer-api-connection"</span>, <span class="question-mark">?</span>peer)),
+<a href=#1267 id=1267 data-nosnippet>1267</a>        );
+<a href=#1268 id=1268 data-nosnippet>1268</a>
+<a href=#1269 id=1269 data-nosnippet>1269</a>        ClientConnection { sender }
+<a href=#1270 id=1270 data-nosnippet>1270</a>    }
+<a href=#1271 id=1271 data-nosnippet>1271</a>
+<a href=#1272 id=1272 data-nosnippet>1272</a>    <span class="kw">async fn </span>connection(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;DynClientConnection&gt; {
+<a href=#1273 id=1273 data-nosnippet>1273</a>        <span class="kw">let </span>(sender, receiver) = oneshot::channel();
+<a href=#1274 id=1274 data-nosnippet>1274</a>
+<a href=#1275 id=1275 data-nosnippet>1275</a>        <span class="self">self</span>.sender
+<a href=#1276 id=1276 data-nosnippet>1276</a>            .send(sender)
+<a href=#1277 id=1277 data-nosnippet>1277</a>            .<span class="kw">await
+<a href=#1278 id=1278 data-nosnippet>1278</a>            </span>.inspect_err(|err| {
+<a href=#1279 id=1279 data-nosnippet>1279</a>                <span class="macro">warn!</span>(
+<a href=#1280 id=1280 data-nosnippet>1280</a>                    target: LOG_CLIENT_NET_API,
+<a href=#1281 id=1281 data-nosnippet>1281</a>                    err = %err.fmt_compact(),
+<a href=#1282 id=1282 data-nosnippet>1282</a>                    <span class="string">"Api connection request channel closed unexpectedly"
+<a href=#1283 id=1283 data-nosnippet>1283</a>                </span>);
+<a href=#1284 id=1284 data-nosnippet>1284</a>            })
+<a href=#1285 id=1285 data-nosnippet>1285</a>            .ok()<span class="question-mark">?</span>;
+<a href=#1286 id=1286 data-nosnippet>1286</a>
+<a href=#1287 id=1287 data-nosnippet>1287</a>        receiver.<span class="kw">await</span>.ok()
+<a href=#1288 id=1288 data-nosnippet>1288</a>    }
+<a href=#1289 id=1289 data-nosnippet>1289</a>}
+<a href=#1290 id=1290 data-nosnippet>1290</a>
+<a href=#1291 id=1291 data-nosnippet>1291</a><span class="doccomment">/// The status of a server, including how it views its peers
+<a href=#1292 id=1292 data-nosnippet>1292</a></span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+<a href=#1293 id=1293 data-nosnippet>1293</a></span><span class="kw">pub struct </span>LegacyFederationStatus {
+<a href=#1294 id=1294 data-nosnippet>1294</a>    <span class="kw">pub </span>session_count: u64,
+<a href=#1295 id=1295 data-nosnippet>1295</a>    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, LegacyPeerStatus&gt;,
+<a href=#1296 id=1296 data-nosnippet>1296</a>    <span class="kw">pub </span>peers_online: u64,
+<a href=#1297 id=1297 data-nosnippet>1297</a>    <span class="kw">pub </span>peers_offline: u64,
+<a href=#1298 id=1298 data-nosnippet>1298</a>    <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
+<a href=#1299 id=1299 data-nosnippet>1299</a>    /// should generate an alert if this is not the case.
+<a href=#1300 id=1300 data-nosnippet>1300</a>    </span><span class="kw">pub </span>peers_flagged: u64,
+<a href=#1301 id=1301 data-nosnippet>1301</a>    <span class="kw">pub </span>scheduled_shutdown: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1302 id=1302 data-nosnippet>1302</a>}
+<a href=#1303 id=1303 data-nosnippet>1303</a>
+<a href=#1304 id=1304 data-nosnippet>1304</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#1305 id=1305 data-nosnippet>1305</a></span><span class="kw">pub struct </span>LegacyPeerStatus {
+<a href=#1306 id=1306 data-nosnippet>1306</a>    <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1307 id=1307 data-nosnippet>1307</a>    <span class="kw">pub </span>connection_status: LegacyP2PConnectionStatus,
+<a href=#1308 id=1308 data-nosnippet>1308</a>    <span class="doccomment">/// Indicates that this peer needs attention from the operator since
+<a href=#1309 id=1309 data-nosnippet>1309</a>    /// it has not contributed to the consensus in a long time
+<a href=#1310 id=1310 data-nosnippet>1310</a>    </span><span class="kw">pub </span>flagged: bool,
+<a href=#1311 id=1311 data-nosnippet>1311</a>}
+<a href=#1312 id=1312 data-nosnippet>1312</a>
+<a href=#1313 id=1313 data-nosnippet>1313</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#1314 id=1314 data-nosnippet>1314</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
+<a href=#1315 id=1315 data-nosnippet>1315</a></span><span class="kw">pub enum </span>LegacyP2PConnectionStatus {
+<a href=#1316 id=1316 data-nosnippet>1316</a>    <span class="attr">#[default]
+<a href=#1317 id=1317 data-nosnippet>1317</a>    </span>Disconnected,
+<a href=#1318 id=1318 data-nosnippet>1318</a>    Connected,
+<a href=#1319 id=1319 data-nosnippet>1319</a>}
+<a href=#1320 id=1320 data-nosnippet>1320</a>
+<a href=#1321 id=1321 data-nosnippet>1321</a><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+<a href=#1322 id=1322 data-nosnippet>1322</a></span><span class="kw">pub struct </span>StatusResponse {
+<a href=#1323 id=1323 data-nosnippet>1323</a>    <span class="kw">pub </span>server: ServerStatusLegacy,
+<a href=#1324 id=1324 data-nosnippet>1324</a>    <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;LegacyFederationStatus&gt;,
+<a href=#1325 id=1325 data-nosnippet>1325</a>}
+<a href=#1326 id=1326 data-nosnippet>1326</a>
+<a href=#1327 id=1327 data-nosnippet>1327</a><span class="kw">pub async fn </span>make_admin_connector(
+<a href=#1328 id=1328 data-nosnippet>1328</a>    admin_peer_id: PeerId,
+<a href=#1329 id=1329 data-nosnippet>1329</a>    url: SafeUrl,
+<a href=#1330 id=1330 data-nosnippet>1330</a>    api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#1331 id=1331 data-nosnippet>1331</a>    iroh_enable_dht: bool,
+<a href=#1332 id=1332 data-nosnippet>1332</a>    iroh_enable_next: bool,
+<a href=#1333 id=1333 data-nosnippet>1333</a>) -&gt; anyhow::Result&lt;DynClientConnector&gt; {
+<a href=#1334 id=1334 data-nosnippet>1334</a>    make_connector(
+<a href=#1335 id=1335 data-nosnippet>1335</a>        once((admin_peer_id, url)),
+<a href=#1336 id=1336 data-nosnippet>1336</a>        api_secret,
+<a href=#1337 id=1337 data-nosnippet>1337</a>        iroh_enable_dht,
+<a href=#1338 id=1338 data-nosnippet>1338</a>        iroh_enable_next,
+<a href=#1339 id=1339 data-nosnippet>1339</a>    )
+<a href=#1340 id=1340 data-nosnippet>1340</a>    .<span class="kw">await
+<a href=#1341 id=1341 data-nosnippet>1341</a></span>}
+<a href=#1342 id=1342 data-nosnippet>1342</a>
+<a href=#1343 id=1343 data-nosnippet>1343</a><span class="kw">pub async fn </span>make_connector(
+<a href=#1344 id=1344 data-nosnippet>1344</a>    peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
+<a href=#1345 id=1345 data-nosnippet>1345</a>    api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#1346 id=1346 data-nosnippet>1346</a>    iroh_enable_dht: bool,
+<a href=#1347 id=1347 data-nosnippet>1347</a>    iroh_enable_next: bool,
+<a href=#1348 id=1348 data-nosnippet>1348</a>) -&gt; anyhow::Result&lt;DynClientConnector&gt; {
+<a href=#1349 id=1349 data-nosnippet>1349</a>    <span class="kw">let </span>peers = peers.into_iter().collect::&lt;BTreeMap&lt;PeerId, SafeUrl&gt;&gt;();
+<a href=#1350 id=1350 data-nosnippet>1350</a>
+<a href=#1351 id=1351 data-nosnippet>1351</a>    <span class="kw">let </span>scheme = peers
+<a href=#1352 id=1352 data-nosnippet>1352</a>        .values()
+<a href=#1353 id=1353 data-nosnippet>1353</a>        .next()
+<a href=#1354 id=1354 data-nosnippet>1354</a>        .expect(<span class="string">"Federation api has been initialized with no peers"</span>)
+<a href=#1355 id=1355 data-nosnippet>1355</a>        .scheme();
+<a href=#1356 id=1356 data-nosnippet>1356</a>
+<a href=#1357 id=1357 data-nosnippet>1357</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>scheme {
+<a href=#1358 id=1358 data-nosnippet>1358</a>        <span class="string">"ws" </span>| <span class="string">"wss" </span>=&gt; WebsocketConnector::new(peers, api_secret.clone())<span class="question-mark">?</span>.into_dyn(),
+<a href=#1359 id=1359 data-nosnippet>1359</a>        <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+<a href=#1360 id=1360 data-nosnippet>1360</a>        </span><span class="string">"tor" </span>=&gt; TorConnector::new(peers, api_secret.clone()).into_dyn(),
+<a href=#1361 id=1361 data-nosnippet>1361</a>        <span class="string">"iroh" </span>=&gt; {
+<a href=#1362 id=1362 data-nosnippet>1362</a>            <span class="kw">let </span>iroh_dns = std::env::var(FM_IROH_DNS_ENV)
+<a href=#1363 id=1363 data-nosnippet>1363</a>                .ok()
+<a href=#1364 id=1364 data-nosnippet>1364</a>                .and_then(|dns| dns.parse().ok());
+<a href=#1365 id=1365 data-nosnippet>1365</a>            iroh::IrohConnector::new(peers, iroh_dns, iroh_enable_dht, iroh_enable_next)
+<a href=#1366 id=1366 data-nosnippet>1366</a>                .<span class="kw">await</span><span class="question-mark">?
+<a href=#1367 id=1367 data-nosnippet>1367</a>                </span>.into_dyn()
+<a href=#1368 id=1368 data-nosnippet>1368</a>        }
+<a href=#1369 id=1369 data-nosnippet>1369</a>        scheme =&gt; <span class="macro">anyhow::bail!</span>(<span class="string">"Unsupported connector scheme: {scheme}"</span>),
+<a href=#1370 id=1370 data-nosnippet>1370</a>    })
+<a href=#1371 id=1371 data-nosnippet>1371</a>}
+<a href=#1372 id=1372 data-nosnippet>1372</a>
+<a href=#1373 id=1373 data-nosnippet>1373</a><span class="attr">#[cfg(test)]
+<a href=#1374 id=1374 data-nosnippet>1374</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
