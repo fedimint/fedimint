@@ -9,7 +9,7 @@ pub async fn install_crypto_provider() {
 
     INSTALL_CRYPTO
         .get_or_init(|| async {
-            if tokio_rustls::rustls::crypto::ring::default_provider()
+            if tokio_rustls::rustls::crypto::aws_lc_rs::default_provider()
                 .install_default()
                 .is_err()
             {
