@@ -712,9 +712,8 @@ impl FedimintCli {
         }
     }
 
-    async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
-        let db = cli.load_database().await?;
-        let mut client_builder = Client::builder(db)
+    async fn make_client_builder(&self, cli: &Opts) -> CliResult<(ClientBuilder, Database)> {
+        let mut client_builder = Client::builder()
             .await
             .map_err_cli()?
             .with_iroh_enable_dht(cli.iroh_enable_dht())
@@ -724,7 +723,8 @@ impl FedimintCli {
 
         client_builder.with_connector(cli.connector());
 
-        Ok(client_builder)
+        let db = cli.load_database().await?;
+        Ok((client_builder, db))
     }
 
     async fn client_join(
@@ -732,19 +732,20 @@ impl FedimintCli {
         cli: &Opts,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
-        let client_builder = self.make_client_builder(cli).await?;
+        let (client_builder, db) = self.make_client_builder(cli).await?;
 
-        let mnemonic = load_or_generate_mnemonic(client_builder.db_no_decoders()).await?;
+        let mnemonic = load_or_generate_mnemonic(&db).await?;
 
         let client = client_builder
             .preview(&invite_code)
             .await
             .map_err_cli()?
-            .join(RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<
-                12,
-            >::to_root_secret(
-                &mnemonic
-            )))
+            .join(
+                db,
+                RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
+                    &mnemonic,
+                )),
+            )
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -756,7 +757,7 @@ impl FedimintCli {
     }
 
     async fn client_open(&self, cli: &Opts) -> CliResult<ClientHandleArc> {
-        let mut client_builder = self.make_client_builder(cli).await?;
+        let (mut client_builder, db) = self.make_client_builder(cli).await?;
 
         if let Some(our_id) = cli.our_id {
             client_builder.set_admin_creds(AdminCreds {
@@ -766,18 +767,19 @@ impl FedimintCli {
         }
 
         let mnemonic = Mnemonic::from_entropy(
-            &Client::load_decodable_client_secret::<Vec<u8>>(client_builder.db_no_decoders())
+            &Client::load_decodable_client_secret::<Vec<u8>>(&db)
                 .await
                 .map_err_cli()?,
         )
         .map_err_cli()?;
 
         let client = client_builder
-            .open(RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<
-                12,
-            >::to_root_secret(
-                &mnemonic
-            )))
+            .open(
+                db,
+                RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
+                    &mnemonic,
+                )),
+            )
             .await
             .map(Arc::new)
             .map_err_cli()?;
@@ -793,8 +795,8 @@ impl FedimintCli {
         mnemonic: Mnemonic,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
-        let builder = self.make_client_builder(cli).await?;
-        match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db_no_decoders())
+        let (builder, db) = self.make_client_builder(cli).await?;
+        match Client::load_decodable_client_secret_opt::<Vec<u8>>(&db)
             .await
             .map_err_cli()?
         {
@@ -804,12 +806,9 @@ impl FedimintCli {
                 }
             }
             None => {
-                Client::store_encodable_client_secret(
-                    builder.db_no_decoders(),
-                    mnemonic.to_entropy(),
-                )
-                .await
-                .map_err_cli()?;
+                Client::store_encodable_client_secret(&db, mnemonic.to_entropy())
+                    .await
+                    .map_err_cli()?;
             }
         }
 
@@ -820,7 +819,7 @@ impl FedimintCli {
             .preview(&invite_code)
             .await
             .map_err_cli()?
-            .recover(root_secret, None)
+            .recover(db, root_secret, None)
             .await
             .map(Arc::new)
             .map_err_cli()?;

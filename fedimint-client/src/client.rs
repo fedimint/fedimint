@@ -166,16 +166,8 @@ pub struct GetOperationIdRequest {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
-    pub async fn builder(db: Database) -> anyhow::Result<ClientBuilder> {
-        let mut dbtx = db.begin_transaction().await;
-        apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
-            .await?;
-        if is_running_in_test_env() {
-            verify_client_db_integrity_dbtx(&mut dbtx.to_ref_nc()).await;
-        }
-        dbtx.commit_tx_result().await?;
-
-        Ok(ClientBuilder::new(db))
+    pub async fn builder() -> anyhow::Result<ClientBuilder> {
+        Ok(ClientBuilder::new())
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -1656,6 +1648,19 @@ impl Client {
 
     pub fn iroh_enable_dht(&self) -> bool {
         self.iroh_enable_dht
+    }
+
+    pub(crate) async fn run_core_migrations(
+        db_no_decoders: &Database,
+    ) -> Result<(), anyhow::Error> {
+        let mut dbtx = db_no_decoders.begin_transaction().await;
+        apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
+            .await?;
+        if is_running_in_test_env() {
+            verify_client_db_integrity_dbtx(&mut dbtx.to_ref_nc()).await;
+        }
+        dbtx.commit_tx_result().await?;
+        Ok(())
     }
 }
 

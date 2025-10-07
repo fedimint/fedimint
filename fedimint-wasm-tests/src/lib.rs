@@ -28,27 +28,30 @@ async fn load_or_generate_mnemonic(db: &Database) -> anyhow::Result<[u8; 64]> {
     )
 }
 
-async fn make_client_builder() -> Result<fedimint_client::ClientBuilder> {
+async fn make_client_builder() -> Result<(fedimint_client::ClientBuilder, Database)> {
     let mem_database = MemDatabase::default();
-    let mut builder = fedimint_client::Client::builder(mem_database.into()).await?;
+    let mut builder = fedimint_client::Client::builder().await?;
     builder.with_module(LightningClientInit::default());
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());
     builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
-    Ok(builder)
+    Ok((builder, mem_database.into()))
 }
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
-    let mut builder = make_client_builder().await?;
-    let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
+    let (mut builder, db) = make_client_builder().await?;
+    let client_secret = load_or_generate_mnemonic(&db).await?;
     builder.stopped();
     let client = builder
         .preview(invite_code)
         .await?
-        .join(RootSecret::StandardDoubleDerive(
-            PlainRootSecretStrategy::to_root_secret(&client_secret),
-        ))
+        .join(
+            db,
+            RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(
+                &client_secret,
+            )),
+        )
         .await
         .map(Arc::new)?;
     if let Ok(ln_client) = client.get_first_module::<LightningClientModule>() {

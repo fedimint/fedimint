@@ -152,7 +152,7 @@ pub async fn build_client(
     } else {
         fedimint_core::db::mem_impl::MemDatabase::new().into()
     };
-    let mut client_builder = Client::builder(db)
+    let mut client_builder = Client::builder()
         .await?
         .with_iroh_enable_dht(false)
         .with_iroh_enable_dht(false);
@@ -160,18 +160,17 @@ pub async fn build_client(
     client_builder.with_module(LightningClientInit::default());
     client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
-    let client_secret =
-        Client::load_or_generate_client_secret(client_builder.db_no_decoders()).await?;
+    let client_secret = Client::load_or_generate_client_secret(&db).await?;
     let root_secret =
         RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(&client_secret));
 
-    let client = if Client::is_initialized(client_builder.db_no_decoders()).await {
-        client_builder.open(root_secret).await
+    let client = if Client::is_initialized(&db).await {
+        client_builder.open(db, root_secret).await
     } else if let Some(invite_code) = &invite_code {
         client_builder
             .preview(invite_code)
             .await?
-            .join(root_secret)
+            .join(db, root_secret)
             .await
     } else {
         bail!("Database not initialize and invite code not provided");
