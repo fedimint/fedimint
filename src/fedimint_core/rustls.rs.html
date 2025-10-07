@@ -9,7 +9,7 @@
 <a href=#9 id=9 data-nosnippet>9</a>
 <a href=#10 id=10 data-nosnippet>10</a>    INSTALL_CRYPTO
 <a href=#11 id=11 data-nosnippet>11</a>        .get_or_init(|| <span class="kw">async </span>{
-<a href=#12 id=12 data-nosnippet>12</a>            <span class="kw">if </span>tokio_rustls::rustls::crypto::ring::default_provider()
+<a href=#12 id=12 data-nosnippet>12</a>            <span class="kw">if </span>tokio_rustls::rustls::crypto::aws_lc_rs::default_provider()
 <a href=#13 id=13 data-nosnippet>13</a>                .install_default()
 <a href=#14 id=14 data-nosnippet>14</a>                .is_err()
 <a href=#15 id=15 data-nosnippet>15</a>            {
