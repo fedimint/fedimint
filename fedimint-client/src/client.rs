@@ -53,6 +53,7 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
+use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::{
     BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
 };
@@ -792,6 +793,11 @@ impl Client {
         db: Database,
         num_responses_sender: watch::Sender<usize>,
     ) {
+        // Keep trying, initially somewhat aggressively, but after a while retry very
+        // slowly, because chances for response are getting lower and lower.
+        let mut backoff =
+            custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
+
         // Make a single request to a peer after a delay
         //
         // The delay is here to unify the type of a future both for initial request and
@@ -827,20 +833,23 @@ impl Client {
         let mut num_responses = 0;
 
         while let Some((peer_id, response)) = requests.next().await {
-            match response {
+            let retry = match response {
                 Err(err) => {
-                    if db
+                    let has_previous_response = db
                         .begin_transaction_nc()
                         .await
                         .get_value(&PeerLastApiVersionsSummaryKey(peer_id))
                         .await
-                        .is_some()
-                    {
-                        debug!(target: LOG_CLIENT, %peer_id, err = %err.fmt_compact(), "Failed to refresh API versions of a peer, but we have a previous response");
-                    } else {
-                        debug!(target: LOG_CLIENT, %peer_id, err = %err.fmt_compact(), "Failed to refresh API versions of a peer, will retry");
-                        requests.push(make_request(Duration::from_secs(15), peer_id, &api));
-                    }
+                        .is_some();
+                    debug!(
+                        target: LOG_CLIENT,
+                        %peer_id,
+                        err = %err.fmt_compact(),
+                        %has_previous_response,
+                        "Failed to refresh API versions of a peer"
+                    );
+
+                    !has_previous_response
                 }
                 Ok(o) => {
                     // Save the response to the database right away, just to
@@ -852,10 +861,19 @@ impl Client {
                     )
                     .await;
                     dbtx.commit_tx().await;
-                    num_responses += 1;
-                    // ignore errors: we don't care if anyone is still listening
-                    num_responses_sender.send_replace(num_responses);
+                    false
                 }
+            };
+
+            if retry {
+                requests.push(make_request(
+                    backoff.next().expect("Keeps retrying"),
+                    peer_id,
+                    &api,
+                ));
+            } else {
+                num_responses += 1;
+                num_responses_sender.send_replace(num_responses);
             }
         }
     }
