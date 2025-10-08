@@ -1005,7 +1005,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             Ok(announcement)
         } else {
             Err(ControlFlow::Continue(anyhow!(
-                "Haven't received updated announcement yet"
+                "Haven't received updated announcement yet; nonce: {}",
+                announcement.nonce
             )))
         }
     })
