@@ -47,7 +47,7 @@ use itertools::Itertools;
 use rand::seq::SliceRandom;
 use serde_json::Value;
 use tokio::sync::OnceCell;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use super::super::{DynModuleApi, IGlobalFederationApi, IRawFederationApi, StatusResponse};
 use crate::api::{
@@ -127,7 +127,11 @@ where
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionOutcome> {
-        debug!(target: LOG_CLIENT_NET_API, block_index, "Awaiting block's outcome from Federation");
+        if block_index % 100 == 0 {
+            debug!(target: LOG_CLIENT_NET_API, block_index, "Awaiting block's outcome from Federation");
+        } else {
+            trace!(target: LOG_CLIENT_NET_API, block_index, "Awaiting block's outcome from Federation");
+        }
         self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
             AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
@@ -149,7 +153,11 @@ where
         broadcast_public_keys: &BTreeMap<PeerId, secp256k1::PublicKey>,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionStatus> {
-        debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v2");
+        if block_index % 100 == 0 {
+            debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v2");
+        } else {
+            trace!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v2");
+        }
         let params = ApiRequestErased::new(block_index);
         let mut last_error = None;
         // fetch serially
@@ -192,7 +200,11 @@ where
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionStatus> {
-        debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v1");
+        if block_index % 100 == 0 {
+            debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v1");
+        } else {
+            trace!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v1");
+        }
         self.request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
             SESSION_STATUS_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
