@@ -62,7 +62,6 @@ impl GatewayClientBuilder {
     /// used to create clients for connected federations.
     async fn create_client_builder(
         &self,
-        db: Database,
         federation_config: &FederationConfig,
         gateway: Arc<Gateway>,
     ) -> AdminResult<ClientBuilder> {
@@ -83,7 +82,7 @@ impl GatewayClientBuilder {
             gateway: gateway.clone(),
         });
 
-        let mut client_builder = Client::builder(db)
+        let mut client_builder = Client::builder()
             .await
             .map_err(AdminGatewayError::ClientCreationError)?
             .with_iroh_enable_dht(true)
@@ -106,16 +105,14 @@ impl GatewayClientBuilder {
     ) -> AdminResult<()> {
         let federation_id = config.invite_code.federation_id();
         let db = gateway.gateway_db.get_client_database(&federation_id);
-        let client_builder = self
-            .create_client_builder(db, &config, gateway.clone())
-            .await?;
+        let client_builder = self.create_client_builder(&config, gateway.clone()).await?;
         let root_secret = RootSecret::StandardDoubleDerive(
             Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic),
         );
         let client = client_builder
             .preview(&config.invite_code)
             .await?
-            .recover(root_secret, None)
+            .recover(db, root_secret, None)
             .await
             .map(Arc::new)
             .map_err(AdminGatewayError::ClientCreationError)?;
@@ -166,15 +163,15 @@ impl GatewayClientBuilder {
 
         Self::verify_client_config(&db, federation_id).await?;
 
-        let client_builder = self.create_client_builder(db, &config, gateway).await?;
+        let client_builder = self.create_client_builder(&config, gateway).await?;
 
-        if Client::is_initialized(client_builder.db_no_decoders()).await {
-            client_builder.open(root_secret).await
+        if Client::is_initialized(&db).await {
+            client_builder.open(db, root_secret).await
         } else {
             client_builder
                 .preview(&invite_code)
                 .await?
-                .join(root_secret)
+                .join(db, root_secret)
                 .await
         }
         .map(Arc::new)
