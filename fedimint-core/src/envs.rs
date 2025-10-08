@@ -30,6 +30,12 @@ pub fn is_env_var_set(var: &str) -> bool {
     std::env::var_os(var).is_some_and(|v| v != "0" && v != "false")
 }
 
+/// Check if env variable is unset or equal `0` or `false` which are common
+/// ways to disable a setting if it on by default.
+pub fn is_env_var_disabled(var: &str) -> bool {
+    std::env::var_os(var).is_none_or(|v| v == "0" && v == "false")
+}
+
 /// Use to detect if running in a test environment, either `cargo test` or
 /// `devimint`.
 pub fn is_running_in_test_env() -> bool {
@@ -84,6 +90,9 @@ pub const FM_IROH_DNS_ENV: &str = "FM_IROH_DNS";
 
 /// Env var to override iroh relays server
 pub const FM_IROH_RELAY_ENV: &str = "FM_IROH_RELAY";
+
+/// Env var to disable Iroh's use of DHT
+pub const FM_IROH_ENABLE_DHT_ENV: &str = "FM_IROH_ENABLE_DHT";
 
 /// Env var to override tcp api connectivity
 ///
