@@ -49,9 +49,25 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    TracingSetup::default().init()?;
+async fn main() {
+    if let Err(err) = TracingSetup::default().init() {
+        eprintln!("Failed to initialize logging: {err}");
+        std::process::exit(1);
+    }
 
+    if let Err(err) = run().await {
+        eprintln!("Error: {err}");
+        let mut source = err.source();
+        eprintln!("Caused by");
+        while let Some(err) = source {
+            eprintln!("    {err}");
+            source = err.source();
+        }
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let versioned_api = cli.address.join(V1_API_ENDPOINT)?;
     let create_client = || GatewayRpcClient::new(versioned_api.clone(), cli.rpcpassword.clone());
