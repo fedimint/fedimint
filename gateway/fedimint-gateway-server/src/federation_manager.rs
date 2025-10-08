@@ -65,7 +65,7 @@ impl FederationManager {
         let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
 
         self.unannounce_from_federation(federation_id, gateway_keypair)
-            .await?;
+            .await;
 
         self.remove_client(federation_id).await?;
 
@@ -128,21 +128,17 @@ impl FederationManager {
         &self,
         federation_id: FederationId,
         gateway_keypair: Keypair,
-    ) -> AdminResult<()> {
-        let client = self
+    ) {
+        if let Ok(client) = self
             .clients
             .get(&federation_id)
             .ok_or(FederationNotConnected {
                 federation_id_prefix: federation_id.to_prefix(),
-            })?;
-
-        client
-            .value()
-            .get_first_module::<GatewayClientModule>()?
-            .remove_from_federation(gateway_keypair)
-            .await;
-
-        Ok(())
+            })
+            && let Ok(ln) = client.value().get_first_module::<GatewayClientModule>()
+        {
+            ln.remove_from_federation(gateway_keypair).await;
+        }
     }
 
     /// Iterates through all of the federations the gateway is registered with
