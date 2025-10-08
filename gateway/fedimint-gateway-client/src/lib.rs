@@ -5,6 +5,7 @@ use std::str::FromStr;
 use anyhow::Context;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
+use fedimint_core::envs::{FM_IROH_ENABLE_DHT_ENV, is_env_var_set};
 use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
@@ -36,7 +37,7 @@ use reqwest::{Method, StatusCode, Url};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
-use tracing::trace;
+use tracing::{info, trace};
 
 pub struct GatewayRpcClient {
     base_url: SafeUrl,
@@ -78,9 +79,17 @@ impl GatewayIrohConnector {
         // As a client, we don't need to register on any relays
         let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
 
-        #[cfg(not(target_family = "wasm"))]
-        {
-            builder = builder.discovery_dht();
+        // See <https://github.com/fedimint/fedimint/issues/7811>
+        if is_env_var_set(FM_IROH_ENABLE_DHT_ENV) {
+            #[cfg(not(target_family = "wasm"))]
+            {
+                builder = builder.discovery_dht();
+            }
+        } else {
+            info!(
+                target: LOG_NET_IROH,
+                "Iroh DHT is disabled"
+            );
         }
 
         // instead of `.discovery_n0`, which brings publisher we don't want

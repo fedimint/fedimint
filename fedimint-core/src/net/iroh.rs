@@ -9,7 +9,7 @@ use iroh_relay::RelayQuicConfig;
 use tracing::info;
 use url::Url;
 
-use crate::envs::{FM_IROH_ENABLE_DHT_ENV, is_env_var_disabled};
+use crate::envs::{FM_IROH_ENABLE_DHT_ENV, is_env_var_set};
 use crate::iroh_prod::{FM_IROH_DNS_FEDIMINT_PROD, FM_IROH_RELAYS_FEDIMINT_PROD};
 
 pub async fn build_iroh_endpoint(
@@ -67,18 +67,17 @@ pub async fn build_iroh_endpoint(
     }
 
     // See <https://github.com/fedimint/fedimint/issues/7811>
-    let builder = if is_env_var_disabled(FM_IROH_ENABLE_DHT_ENV) {
+    if is_env_var_set(FM_IROH_ENABLE_DHT_ENV) {
+        #[cfg(not(target_family = "wasm"))]
+        {
+            builder = builder.discovery_dht();
+        }
+    } else {
         info!(
             target: LOG_NET_IROH,
             "Iroh DHT is disabled"
         );
-        builder
-    } else {
-        #[cfg(not(target_family = "wasm"))]
-        {
-            builder.discovery_dht()
-        }
-    };
+    }
 
     let builder = builder
         .discovery_n0()
