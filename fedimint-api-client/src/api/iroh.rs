@@ -3,7 +3,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::envs::parse_kv_list_from_env;
@@ -45,7 +45,7 @@ pub struct IrohConnector {
     connections_stable: Arc<tokio::sync::Mutex<HashMap<NodeId, Arc<OnceCell<Connection>>>>>,
 
     /// Connection pool for next endpoint connections  
-    next_connections: Arc<
+    connections_next: Arc<
         tokio::sync::Mutex<
             HashMap<iroh_next::NodeId, Arc<OnceCell<iroh_next::endpoint::Connection>>>,
         >,
@@ -229,7 +229,7 @@ impl IrohConnector {
             endpoint_next,
             connection_overrides: BTreeMap::new(),
             connections_stable: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-            next_connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            connections_next: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         })
     }
 
@@ -247,6 +247,14 @@ impl IrohConnector {
 
         let entry_arc = pool_lock
             .entry(node_id)
+            .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and remove it
+                if let Some(existing_conn) = entry_arc.get()
+                    && existing_conn.close_reason().is_some() {
+                        trace!(target: LOG_NET_IROH, %node_id, "Existing stable connection is disconnected, removing from pool");
+                        *entry_arc = Arc::new(OnceCell::new());
+                    }
+            })
             .or_insert_with(|| Arc::new(OnceCell::new()))
             .clone();
 
@@ -276,15 +284,8 @@ impl IrohConnector {
             })
             .await?;
 
-        // Check if connection is still valid
-        if conn.close_reason().is_none() {
-            trace!(target: LOG_NET_IROH, %node_id, "Using stable connection");
-            Ok(conn.clone())
-        } else {
-            // Connection closed, remove from pool and retry
-            self.connections_stable.lock().await.remove(&node_id);
-            Err(PeerError::Connection(anyhow!("Connection closed")))
-        }
+        trace!(target: LOG_NET_IROH, %node_id, "Using stable connection");
+        Ok(conn.clone())
     }
 
     async fn get_or_create_connection_next(
@@ -295,10 +296,18 @@ impl IrohConnector {
     ) -> PeerResult<iroh_next::endpoint::Connection> {
         let next_node_id = iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail");
 
-        let mut pool_lock = self.next_connections.lock().await;
+        let mut pool_lock = self.connections_next.lock().await;
 
         let entry_arc = pool_lock
             .entry(next_node_id)
+            .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and remove it
+                if let Some(existing_conn) = entry_arc.get()
+                    && existing_conn.close_reason().is_some() {
+                        trace!(target: LOG_NET_IROH, %node_id, "Existing next connection is disconnected, removing from pool");
+                        *entry_arc = Arc::new(OnceCell::new());
+                    }
+            })
             .or_insert_with(|| Arc::new(OnceCell::new()))
             .clone();
 
@@ -336,15 +345,8 @@ impl IrohConnector {
             })
             .await?;
 
-        // Check if connection is still valid
-        if conn.close_reason().is_none() {
-            trace!(target: LOG_NET_IROH, %node_id, "Using next connection");
-            Ok(conn.clone())
-        } else {
-            // Connection closed, remove from pool and retry
-            self.next_connections.lock().await.remove(&next_node_id);
-            Err(PeerError::Connection(anyhow!("Connection closed")))
-        }
+        trace!(target: LOG_NET_IROH, %node_id, "Using next connection");
+        Ok(conn.clone())
     }
 }
 
