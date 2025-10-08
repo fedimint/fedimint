@@ -152,7 +152,7 @@
 <a href=#152 id=152 data-nosnippet>152</a>    } <span class="kw">else </span>{
 <a href=#153 id=153 data-nosnippet>153</a>        fedimint_core::db::mem_impl::MemDatabase::new().into()
 <a href=#154 id=154 data-nosnippet>154</a>    };
-<a href=#155 id=155 data-nosnippet>155</a>    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db)
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder()
 <a href=#156 id=156 data-nosnippet>156</a>        .<span class="kw">await</span><span class="question-mark">?
 <a href=#157 id=157 data-nosnippet>157</a>        </span>.with_iroh_enable_dht(<span class="bool-val">false</span>)
 <a href=#158 id=158 data-nosnippet>158</a>        .with_iroh_enable_dht(<span class="bool-val">false</span>);
@@ -160,272 +160,271 @@
 <a href=#160 id=160 data-nosnippet>160</a>    client_builder.with_module(LightningClientInit::default());
 <a href=#161 id=161 data-nosnippet>161</a>    client_builder.with_module(WalletClientInit::default());
 <a href=#162 id=162 data-nosnippet>162</a>    client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span>client_secret =
-<a href=#164 id=164 data-nosnippet>164</a>        Client::load_or_generate_client_secret(client_builder.db_no_decoders()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#165 id=165 data-nosnippet>165</a>    <span class="kw">let </span>root_secret =
-<a href=#166 id=166 data-nosnippet>166</a>        RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret));
-<a href=#167 id=167 data-nosnippet>167</a>
-<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">let </span>client = <span class="kw">if </span>Client::is_initialized(client_builder.db_no_decoders()).<span class="kw">await </span>{
-<a href=#169 id=169 data-nosnippet>169</a>        client_builder.open(root_secret).<span class="kw">await
-<a href=#170 id=170 data-nosnippet>170</a>    </span>} <span class="kw">else if let </span><span class="prelude-val">Some</span>(invite_code) = <span class="kw-2">&amp;</span>invite_code {
-<a href=#171 id=171 data-nosnippet>171</a>        client_builder
-<a href=#172 id=172 data-nosnippet>172</a>            .preview(invite_code)
-<a href=#173 id=173 data-nosnippet>173</a>            .<span class="kw">await</span><span class="question-mark">?
-<a href=#174 id=174 data-nosnippet>174</a>            </span>.join(root_secret)
-<a href=#175 id=175 data-nosnippet>175</a>            .<span class="kw">await
-<a href=#176 id=176 data-nosnippet>176</a>    </span>} <span class="kw">else </span>{
-<a href=#177 id=177 data-nosnippet>177</a>        <span class="macro">bail!</span>(<span class="string">"Database not initialize and invite code not provided"</span>);
-<a href=#178 id=178 data-nosnippet>178</a>    }<span class="question-mark">?</span>;
-<a href=#179 id=179 data-nosnippet>179</a>    <span class="prelude-val">Ok</span>((Arc::new(client), invite_code))
-<a href=#180 id=180 data-nosnippet>180</a>}
-<a href=#181 id=181 data-nosnippet>181</a>
-<a href=#182 id=182 data-nosnippet>182</a><span class="kw">pub async fn </span>lnd_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
-<a href=#183 id=183 data-nosnippet>183</a>    <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">"addinvoice"</span>, <span class="string">"--amt_msat"</span>, amount.msats)
-<a href=#184 id=184 data-nosnippet>184</a>        .out_json()
-<a href=#185 id=185 data-nosnippet>185</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">let </span>invoice = result[<span class="string">"payment_request"</span>]
-<a href=#187 id=187 data-nosnippet>187</a>        .as_str()
-<a href=#188 id=188 data-nosnippet>188</a>        .map(Bolt11Invoice::from_str)
-<a href=#189 id=189 data-nosnippet>189</a>        .transpose()<span class="question-mark">?
-<a href=#190 id=190 data-nosnippet>190</a>        </span>.context(<span class="string">"Missing payment_request field"</span>)<span class="question-mark">?</span>;
-<a href=#191 id=191 data-nosnippet>191</a>    <span class="kw">let </span>r_hash = result[<span class="string">"r_hash"</span>]
-<a href=#192 id=192 data-nosnippet>192</a>        .as_str()
-<a href=#193 id=193 data-nosnippet>193</a>        .context(<span class="string">"Missing r_hash field"</span>)<span class="question-mark">?
-<a href=#194 id=194 data-nosnippet>194</a>        </span>.to_owned();
-<a href=#195 id=195 data-nosnippet>195</a>    <span class="prelude-val">Ok</span>((invoice, r_hash))
-<a href=#196 id=196 data-nosnippet>196</a>}
-<a href=#197 id=197 data-nosnippet>197</a>
-<a href=#198 id=198 data-nosnippet>198</a><span class="kw">pub async fn </span>lnd_pay_invoice(invoice: Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">let </span>status = <span class="macro">cmd!</span>(
-<a href=#200 id=200 data-nosnippet>200</a>        LnCli,
-<a href=#201 id=201 data-nosnippet>201</a>        <span class="string">"payinvoice"</span>,
-<a href=#202 id=202 data-nosnippet>202</a>        <span class="string">"--force"</span>,
-<a href=#203 id=203 data-nosnippet>203</a>        <span class="string">"--allow_self_payment"</span>,
-<a href=#204 id=204 data-nosnippet>204</a>        <span class="string">"--json"</span>,
-<a href=#205 id=205 data-nosnippet>205</a>        invoice.to_string()
-<a href=#206 id=206 data-nosnippet>206</a>    )
-<a href=#207 id=207 data-nosnippet>207</a>    .out_json()
-<a href=#208 id=208 data-nosnippet>208</a>    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"status"</span>]
-<a href=#209 id=209 data-nosnippet>209</a>        .as_str()
-<a href=#210 id=210 data-nosnippet>210</a>        .context(<span class="string">"Missing status field"</span>)<span class="question-mark">?
-<a href=#211 id=211 data-nosnippet>211</a>        </span>.to_owned();
-<a href=#212 id=212 data-nosnippet>212</a>    <span class="macro">anyhow::ensure!</span>(status == <span class="string">"SUCCEEDED"</span>);
-<a href=#213 id=213 data-nosnippet>213</a>    <span class="prelude-val">Ok</span>(())
-<a href=#214 id=214 data-nosnippet>214</a>}
-<a href=#215 id=215 data-nosnippet>215</a>
-<a href=#216 id=216 data-nosnippet>216</a><span class="kw">pub async fn </span>lnd_wait_invoice_payment(r_hash: String) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">60 </span>{
-<a href=#218 id=218 data-nosnippet>218</a>        <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">"lookupinvoice"</span>, <span class="kw-2">&amp;</span>r_hash).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw">let </span>state = result[<span class="string">"state"</span>].as_str().context(<span class="string">"Missing state field"</span>)<span class="question-mark">?</span>;
-<a href=#220 id=220 data-nosnippet>220</a>        <span class="kw">if </span>state == <span class="string">"SETTLED" </span>{
-<a href=#221 id=221 data-nosnippet>221</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#222 id=222 data-nosnippet>222</a>        }
-<a href=#223 id=223 data-nosnippet>223</a>
-<a href=#224 id=224 data-nosnippet>224</a>        fedimint_core::task::sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
-<a href=#225 id=225 data-nosnippet>225</a>    }
-<a href=#226 id=226 data-nosnippet>226</a>    <span class="macro">anyhow::bail!</span>(<span class="string">"Timeout waiting for invoice to settle: {r_hash}"</span>)
-<a href=#227 id=227 data-nosnippet>227</a>}
-<a href=#228 id=228 data-nosnippet>228</a>
-<a href=#229 id=229 data-nosnippet>229</a><span class="kw">pub async fn </span>gateway_pay_invoice(
-<a href=#230 id=230 data-nosnippet>230</a>    prefix: <span class="kw-2">&amp;</span>str,
-<a href=#231 id=231 data-nosnippet>231</a>    gateway_name: <span class="kw-2">&amp;</span>str,
-<a href=#232 id=232 data-nosnippet>232</a>    client: <span class="kw-2">&amp;</span>ClientHandleArc,
-<a href=#233 id=233 data-nosnippet>233</a>    invoice: Bolt11Invoice,
-<a href=#234 id=234 data-nosnippet>234</a>    event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
-<a href=#235 id=235 data-nosnippet>235</a>    ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
-<a href=#236 id=236 data-nosnippet>236</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">let </span>m = fedimint_core::time::now();
-<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
-<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">let </span>OutgoingLightningPayment {
-<a href=#240 id=240 data-nosnippet>240</a>        payment_type,
-<a href=#241 id=241 data-nosnippet>241</a>        contract_id: <span class="kw">_</span>,
-<a href=#242 id=242 data-nosnippet>242</a>        fee: <span class="kw">_</span>,
-<a href=#243 id=243 data-nosnippet>243</a>    } = lightning_module
-<a href=#244 id=244 data-nosnippet>244</a>        .pay_bolt11_invoice(ln_gateway, invoice, ())
-<a href=#245 id=245 data-nosnippet>245</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">let </span>operation_id = <span class="kw">match </span>payment_type {
-<a href=#247 id=247 data-nosnippet>247</a>        fedimint_ln_client::PayType::Internal(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">"Internal payment not expected"</span>),
-<a href=#248 id=248 data-nosnippet>248</a>        fedimint_ln_client::PayType::Lightning(operation_id) =&gt; operation_id,
-<a href=#249 id=249 data-nosnippet>249</a>    };
-<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
-<a href=#251 id=251 data-nosnippet>251</a>        .subscribe_ln_pay(operation_id)
-<a href=#252 id=252 data-nosnippet>252</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#253 id=253 data-nosnippet>253</a>        </span>.into_stream();
-<a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-<a href=#255 id=255 data-nosnippet>255</a>        <span class="macro">info!</span>(<span class="string">"{prefix} LnPayState update: {update:?}"</span>);
-<a href=#256 id=256 data-nosnippet>256</a>        <span class="kw">match </span>update {
-<a href=#257 id=257 data-nosnippet>257</a>            LnPayState::Success { preimage: <span class="kw">_ </span>} =&gt; {
-<a href=#258 id=258 data-nosnippet>258</a>                <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
-<a href=#259 id=259 data-nosnippet>259</a>                <span class="macro">info!</span>(<span class="string">"{prefix} Invoice paid in {elapsed:?}"</span>);
-<a href=#260 id=260 data-nosnippet>260</a>                event_sender.send(MetricEvent {
-<a href=#261 id=261 data-nosnippet>261</a>                    name: <span class="string">"gateway_pay_invoice_success"</span>.into(),
-<a href=#262 id=262 data-nosnippet>262</a>                    duration: elapsed,
-<a href=#263 id=263 data-nosnippet>263</a>                })<span class="question-mark">?</span>;
-<a href=#264 id=264 data-nosnippet>264</a>                event_sender.send(MetricEvent {
-<a href=#265 id=265 data-nosnippet>265</a>                    name: <span class="macro">format!</span>(<span class="string">"gateway_{gateway_name}_pay_invoice_success"</span>),
-<a href=#266 id=266 data-nosnippet>266</a>                    duration: elapsed,
-<a href=#267 id=267 data-nosnippet>267</a>                })<span class="question-mark">?</span>;
-<a href=#268 id=268 data-nosnippet>268</a>                <span class="kw">break</span>;
-<a href=#269 id=269 data-nosnippet>269</a>            }
-<a href=#270 id=270 data-nosnippet>270</a>            LnPayState::Created
-<a href=#271 id=271 data-nosnippet>271</a>            | LnPayState::Funded { block_height: <span class="kw">_ </span>}
-<a href=#272 id=272 data-nosnippet>272</a>            | LnPayState::AwaitingChange =&gt; {}
-<a href=#273 id=273 data-nosnippet>273</a>            LnPayState::Canceled =&gt; {
-<a href=#274 id=274 data-nosnippet>274</a>                <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
-<a href=#275 id=275 data-nosnippet>275</a>                <span class="macro">warn!</span>(<span class="string">"{prefix} Invoice canceled in {elapsed:?}"</span>);
-<a href=#276 id=276 data-nosnippet>276</a>                event_sender.send(MetricEvent {
-<a href=#277 id=277 data-nosnippet>277</a>                    name: <span class="string">"gateway_pay_invoice_canceled"</span>.into(),
-<a href=#278 id=278 data-nosnippet>278</a>                    duration: elapsed,
-<a href=#279 id=279 data-nosnippet>279</a>                })<span class="question-mark">?</span>;
-<a href=#280 id=280 data-nosnippet>280</a>                <span class="kw">break</span>;
-<a href=#281 id=281 data-nosnippet>281</a>            }
-<a href=#282 id=282 data-nosnippet>282</a>            LnPayState::Refunded { gateway_error } =&gt; {
-<a href=#283 id=283 data-nosnippet>283</a>                <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
-<a href=#284 id=284 data-nosnippet>284</a>                <span class="macro">warn!</span>(<span class="string">"{prefix} Invoice refunded due to {gateway_error} in {elapsed:?}"</span>);
-<a href=#285 id=285 data-nosnippet>285</a>                event_sender.send(MetricEvent {
-<a href=#286 id=286 data-nosnippet>286</a>                    name: <span class="string">"gateway_pay_invoice_refunded"</span>.into(),
-<a href=#287 id=287 data-nosnippet>287</a>                    duration: elapsed,
-<a href=#288 id=288 data-nosnippet>288</a>                })<span class="question-mark">?</span>;
-<a href=#289 id=289 data-nosnippet>289</a>                <span class="kw">break</span>;
-<a href=#290 id=290 data-nosnippet>290</a>            }
-<a href=#291 id=291 data-nosnippet>291</a>            LnPayState::WaitingForRefund { error_reason } =&gt; {
-<a href=#292 id=292 data-nosnippet>292</a>                <span class="macro">warn!</span>(<span class="string">"{prefix} Waiting for refund: {error_reason:?}"</span>);
-<a href=#293 id=293 data-nosnippet>293</a>            }
-<a href=#294 id=294 data-nosnippet>294</a>            LnPayState::UnexpectedError { error_message } =&gt; {
-<a href=#295 id=295 data-nosnippet>295</a>                <span class="macro">bail!</span>(<span class="string">"Failed to pay invoice: {error_message:?}"</span>)
-<a href=#296 id=296 data-nosnippet>296</a>            }
-<a href=#297 id=297 data-nosnippet>297</a>        }
-<a href=#298 id=298 data-nosnippet>298</a>    }
-<a href=#299 id=299 data-nosnippet>299</a>    <span class="prelude-val">Ok</span>(())
-<a href=#300 id=300 data-nosnippet>300</a>}
-<a href=#301 id=301 data-nosnippet>301</a>
-<a href=#302 id=302 data-nosnippet>302</a><span class="kw">pub async fn </span>ldk_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
-<a href=#303 id=303 data-nosnippet>303</a>    <span class="kw">let </span>invoice_string = <span class="macro">cmd!</span>(GatewayLdkCli, <span class="string">"lightning"</span>, <span class="string">"create-invoice"</span>, amount.msats)
-<a href=#304 id=304 data-nosnippet>304</a>        .out_string()
-<a href=#305 id=305 data-nosnippet>305</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#306 id=306 data-nosnippet>306</a>    <span class="prelude-val">Ok</span>(Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>invoice_string)<span class="question-mark">?</span>)
-<a href=#307 id=307 data-nosnippet>307</a>}
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a><span class="kw">pub async fn </span>ldk_pay_invoice(invoice: Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#310 id=310 data-nosnippet>310</a>    <span class="macro">cmd!</span>(
-<a href=#311 id=311 data-nosnippet>311</a>        GatewayLdkCli,
-<a href=#312 id=312 data-nosnippet>312</a>        <span class="string">"lightning"</span>,
-<a href=#313 id=313 data-nosnippet>313</a>        <span class="string">"pay-invoice"</span>,
-<a href=#314 id=314 data-nosnippet>314</a>        invoice.to_string()
-<a href=#315 id=315 data-nosnippet>315</a>    )
-<a href=#316 id=316 data-nosnippet>316</a>    .run()
-<a href=#317 id=317 data-nosnippet>317</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#318 id=318 data-nosnippet>318</a>    <span class="prelude-val">Ok</span>(())
-<a href=#319 id=319 data-nosnippet>319</a>}
-<a href=#320 id=320 data-nosnippet>320</a>
-<a href=#321 id=321 data-nosnippet>321</a><span class="kw">pub async fn </span>ldk_wait_invoice_payment(invoice: <span class="kw-2">&amp;</span>Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#322 id=322 data-nosnippet>322</a>    <span class="kw">let </span>gatewayd_version = devimint::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_7_0_ALPHA {
-<a href=#324 id=324 data-nosnippet>324</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-<a href=#325 id=325 data-nosnippet>325</a>    }
-<a href=#326 id=326 data-nosnippet>326</a>
-<a href=#327 id=327 data-nosnippet>327</a>    <span class="kw">let </span>status = <span class="macro">cmd!</span>(
-<a href=#328 id=328 data-nosnippet>328</a>        GatewayLdkCli,
-<a href=#329 id=329 data-nosnippet>329</a>        <span class="string">"lightning"</span>,
-<a href=#330 id=330 data-nosnippet>330</a>        <span class="string">"get-invoice"</span>,
-<a href=#331 id=331 data-nosnippet>331</a>        <span class="string">"--payment-hash"</span>,
-<a href=#332 id=332 data-nosnippet>332</a>        invoice.payment_hash()
-<a href=#333 id=333 data-nosnippet>333</a>    )
-<a href=#334 id=334 data-nosnippet>334</a>    .out_json()
-<a href=#335 id=335 data-nosnippet>335</a>    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"status"</span>]
-<a href=#336 id=336 data-nosnippet>336</a>        .as_str()
-<a href=#337 id=337 data-nosnippet>337</a>        .context(<span class="string">"Missing status field"</span>)<span class="question-mark">?
-<a href=#338 id=338 data-nosnippet>338</a>        </span>.to_owned();
-<a href=#339 id=339 data-nosnippet>339</a>    <span class="kw">if </span>status == <span class="string">"Succeeded" </span>{
-<a href=#340 id=340 data-nosnippet>340</a>        <span class="prelude-val">Ok</span>(())
-<a href=#341 id=341 data-nosnippet>341</a>    } <span class="kw">else </span>{
-<a href=#342 id=342 data-nosnippet>342</a>        <span class="macro">bail!</span>(<span class="string">"Got status {status} for invoice {invoice}"</span>)
-<a href=#343 id=343 data-nosnippet>343</a>    }
-<a href=#344 id=344 data-nosnippet>344</a>}
-<a href=#345 id=345 data-nosnippet>345</a>
-<a href=#346 id=346 data-nosnippet>346</a><span class="kw">pub fn </span>parse_gateway_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
-<a href=#347 id=347 data-nosnippet>347</a>    secp256k1::PublicKey::from_str(s)
-<a href=#348 id=348 data-nosnippet>348</a>}
-<a href=#349 id=349 data-nosnippet>349</a>
-<a href=#350 id=350 data-nosnippet>350</a><span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;TieredCounts&gt; {
-<a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
-<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">let </span>summary = mint_client
-<a href=#353 id=353 data-nosnippet>353</a>        .get_note_counts_by_denomination(
-<a href=#354 id=354 data-nosnippet>354</a>            <span class="kw-2">&amp;mut </span>client
-<a href=#355 id=355 data-nosnippet>355</a>                .db()
-<a href=#356 id=356 data-nosnippet>356</a>                .begin_transaction_nc()
-<a href=#357 id=357 data-nosnippet>357</a>                .<span class="kw">await
-<a href=#358 id=358 data-nosnippet>358</a>                </span>.to_ref_with_prefix_module_id(<span class="number">1</span>)
-<a href=#359 id=359 data-nosnippet>359</a>                .<span class="number">0</span>,
-<a href=#360 id=360 data-nosnippet>360</a>        )
-<a href=#361 id=361 data-nosnippet>361</a>        .<span class="kw">await</span>;
-<a href=#362 id=362 data-nosnippet>362</a>    <span class="prelude-val">Ok</span>(summary)
-<a href=#363 id=363 data-nosnippet>363</a>}
-<a href=#364 id=364 data-nosnippet>364</a>
-<a href=#365 id=365 data-nosnippet>365</a><span class="kw">pub async fn </span>remint_denomination(
-<a href=#366 id=366 data-nosnippet>366</a>    client: <span class="kw-2">&amp;</span>ClientHandleArc,
-<a href=#367 id=367 data-nosnippet>367</a>    denomination: Amount,
-<a href=#368 id=368 data-nosnippet>368</a>    quantity: u16,
-<a href=#369 id=369 data-nosnippet>369</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#370 id=370 data-nosnippet>370</a>    retry(
-<a href=#371 id=371 data-nosnippet>371</a>        <span class="macro">format!</span>(<span class="string">"remint_{denomination}_{quantity}"</span>),
-<a href=#372 id=372 data-nosnippet>372</a>        aggressive_backoff(),
-<a href=#373 id=373 data-nosnippet>373</a>        || {
-<a href=#374 id=374 data-nosnippet>374</a>            <span class="kw">let </span>client = client.clone();
-<a href=#375 id=375 data-nosnippet>375</a>            <span class="kw">async move </span>{ try_remint_denomination(<span class="kw-2">&amp;</span>client, denomination, quantity).<span class="kw">await </span>}
-<a href=#376 id=376 data-nosnippet>376</a>        },
-<a href=#377 id=377 data-nosnippet>377</a>    )
-<a href=#378 id=378 data-nosnippet>378</a>    .<span class="kw">await
-<a href=#379 id=379 data-nosnippet>379</a></span>}
-<a href=#380 id=380 data-nosnippet>380</a>
-<a href=#381 id=381 data-nosnippet>381</a><span class="kw">pub async fn </span>try_remint_denomination(
-<a href=#382 id=382 data-nosnippet>382</a>    client: <span class="kw-2">&amp;</span>ClientHandleArc,
-<a href=#383 id=383 data-nosnippet>383</a>    denomination: Amount,
-<a href=#384 id=384 data-nosnippet>384</a>    quantity: u16,
-<a href=#385 id=385 data-nosnippet>385</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
-<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).<span class="number">0</span>;
-<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::new();
-<a href=#390 id=390 data-nosnippet>390</a>    <span class="kw">let </span>operation_id = OperationId::new_random();
-<a href=#391 id=391 data-nosnippet>391</a>    <span class="kw">for _ in </span><span class="number">0</span>..quantity {
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span>outputs = mint_client
-<a href=#393 id=393 data-nosnippet>393</a>            .create_output(
-<a href=#394 id=394 data-nosnippet>394</a>                <span class="kw-2">&amp;mut </span>module_transaction.to_ref_nc(),
-<a href=#395 id=395 data-nosnippet>395</a>                operation_id,
-<a href=#396 id=396 data-nosnippet>396</a>                <span class="number">1</span>,
-<a href=#397 id=397 data-nosnippet>397</a>                denomination,
-<a href=#398 id=398 data-nosnippet>398</a>            )
-<a href=#399 id=399 data-nosnippet>399</a>            .<span class="kw">await
-<a href=#400 id=400 data-nosnippet>400</a>            </span>.into_dyn(mint_client.id);
-<a href=#401 id=401 data-nosnippet>401</a>
-<a href=#402 id=402 data-nosnippet>402</a>        tx = tx.with_outputs(outputs);
-<a href=#403 id=403 data-nosnippet>403</a>    }
-<a href=#404 id=404 data-nosnippet>404</a>    drop(module_transaction);
-<a href=#405 id=405 data-nosnippet>405</a>    <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>| ();
-<a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">let </span>txid = client
-<a href=#407 id=407 data-nosnippet>407</a>        .finalize_and_submit_transaction(
-<a href=#408 id=408 data-nosnippet>408</a>            operation_id,
-<a href=#409 id=409 data-nosnippet>409</a>            MintCommonInit::KIND.as_str(),
-<a href=#410 id=410 data-nosnippet>410</a>            operation_meta_gen,
-<a href=#411 id=411 data-nosnippet>411</a>            tx,
-<a href=#412 id=412 data-nosnippet>412</a>        )
-<a href=#413 id=413 data-nosnippet>413</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#414 id=414 data-nosnippet>414</a>        </span>.txid();
-<a href=#415 id=415 data-nosnippet>415</a>    <span class="kw">let </span>tx_subscription = client.transaction_updates(operation_id).<span class="kw">await</span>;
-<a href=#416 id=416 data-nosnippet>416</a>    tx_subscription
-<a href=#417 id=417 data-nosnippet>417</a>        .await_tx_accepted(txid)
-<a href=#418 id=418 data-nosnippet>418</a>        .<span class="kw">await
-<a href=#419 id=419 data-nosnippet>419</a>        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"{e}"</span>))<span class="question-mark">?</span>;
-<a href=#420 id=420 data-nosnippet>420</a>    dbtx.commit_tx().<span class="kw">await</span>;
-<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..quantity {
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">let </span>out_point = OutPoint {
-<a href=#423 id=423 data-nosnippet>423</a>            txid,
-<a href=#424 id=424 data-nosnippet>424</a>            out_idx: u64::from(i),
-<a href=#425 id=425 data-nosnippet>425</a>        };
-<a href=#426 id=426 data-nosnippet>426</a>        mint_client
-<a href=#427 id=427 data-nosnippet>427</a>            .await_output_finalized(operation_id, out_point)
-<a href=#428 id=428 data-nosnippet>428</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#429 id=429 data-nosnippet>429</a>    }
-<a href=#430 id=430 data-nosnippet>430</a>    <span class="prelude-val">Ok</span>(())
-<a href=#431 id=431 data-nosnippet>431</a>}</code></pre></div></section></main></body></html>
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span>client_secret = Client::load_or_generate_client_secret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">let </span>root_secret =
+<a href=#165 id=165 data-nosnippet>165</a>        RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret));
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">let </span>client = <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span>db).<span class="kw">await </span>{
+<a href=#168 id=168 data-nosnippet>168</a>        client_builder.open(db, root_secret).<span class="kw">await
+<a href=#169 id=169 data-nosnippet>169</a>    </span>} <span class="kw">else if let </span><span class="prelude-val">Some</span>(invite_code) = <span class="kw-2">&amp;</span>invite_code {
+<a href=#170 id=170 data-nosnippet>170</a>        client_builder
+<a href=#171 id=171 data-nosnippet>171</a>            .preview(invite_code)
+<a href=#172 id=172 data-nosnippet>172</a>            .<span class="kw">await</span><span class="question-mark">?
+<a href=#173 id=173 data-nosnippet>173</a>            </span>.join(db, root_secret)
+<a href=#174 id=174 data-nosnippet>174</a>            .<span class="kw">await
+<a href=#175 id=175 data-nosnippet>175</a>    </span>} <span class="kw">else </span>{
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="macro">bail!</span>(<span class="string">"Database not initialize and invite code not provided"</span>);
+<a href=#177 id=177 data-nosnippet>177</a>    }<span class="question-mark">?</span>;
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="prelude-val">Ok</span>((Arc::new(client), invite_code))
+<a href=#179 id=179 data-nosnippet>179</a>}
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a><span class="kw">pub async fn </span>lnd_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">"addinvoice"</span>, <span class="string">"--amt_msat"</span>, amount.msats)
+<a href=#183 id=183 data-nosnippet>183</a>        .out_json()
+<a href=#184 id=184 data-nosnippet>184</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="kw">let </span>invoice = result[<span class="string">"payment_request"</span>]
+<a href=#186 id=186 data-nosnippet>186</a>        .as_str()
+<a href=#187 id=187 data-nosnippet>187</a>        .map(Bolt11Invoice::from_str)
+<a href=#188 id=188 data-nosnippet>188</a>        .transpose()<span class="question-mark">?
+<a href=#189 id=189 data-nosnippet>189</a>        </span>.context(<span class="string">"Missing payment_request field"</span>)<span class="question-mark">?</span>;
+<a href=#190 id=190 data-nosnippet>190</a>    <span class="kw">let </span>r_hash = result[<span class="string">"r_hash"</span>]
+<a href=#191 id=191 data-nosnippet>191</a>        .as_str()
+<a href=#192 id=192 data-nosnippet>192</a>        .context(<span class="string">"Missing r_hash field"</span>)<span class="question-mark">?
+<a href=#193 id=193 data-nosnippet>193</a>        </span>.to_owned();
+<a href=#194 id=194 data-nosnippet>194</a>    <span class="prelude-val">Ok</span>((invoice, r_hash))
+<a href=#195 id=195 data-nosnippet>195</a>}
+<a href=#196 id=196 data-nosnippet>196</a>
+<a href=#197 id=197 data-nosnippet>197</a><span class="kw">pub async fn </span>lnd_pay_invoice(invoice: Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#198 id=198 data-nosnippet>198</a>    <span class="kw">let </span>status = <span class="macro">cmd!</span>(
+<a href=#199 id=199 data-nosnippet>199</a>        LnCli,
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="string">"payinvoice"</span>,
+<a href=#201 id=201 data-nosnippet>201</a>        <span class="string">"--force"</span>,
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="string">"--allow_self_payment"</span>,
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="string">"--json"</span>,
+<a href=#204 id=204 data-nosnippet>204</a>        invoice.to_string()
+<a href=#205 id=205 data-nosnippet>205</a>    )
+<a href=#206 id=206 data-nosnippet>206</a>    .out_json()
+<a href=#207 id=207 data-nosnippet>207</a>    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"status"</span>]
+<a href=#208 id=208 data-nosnippet>208</a>        .as_str()
+<a href=#209 id=209 data-nosnippet>209</a>        .context(<span class="string">"Missing status field"</span>)<span class="question-mark">?
+<a href=#210 id=210 data-nosnippet>210</a>        </span>.to_owned();
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="macro">anyhow::ensure!</span>(status == <span class="string">"SUCCEEDED"</span>);
+<a href=#212 id=212 data-nosnippet>212</a>    <span class="prelude-val">Ok</span>(())
+<a href=#213 id=213 data-nosnippet>213</a>}
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a><span class="kw">pub async fn </span>lnd_wait_invoice_payment(r_hash: String) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#216 id=216 data-nosnippet>216</a>    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">60 </span>{
+<a href=#217 id=217 data-nosnippet>217</a>        <span class="kw">let </span>result = <span class="macro">cmd!</span>(LnCli, <span class="string">"lookupinvoice"</span>, <span class="kw-2">&amp;</span>r_hash).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#218 id=218 data-nosnippet>218</a>        <span class="kw">let </span>state = result[<span class="string">"state"</span>].as_str().context(<span class="string">"Missing state field"</span>)<span class="question-mark">?</span>;
+<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw">if </span>state == <span class="string">"SETTLED" </span>{
+<a href=#220 id=220 data-nosnippet>220</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#221 id=221 data-nosnippet>221</a>        }
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a>        fedimint_core::task::sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
+<a href=#224 id=224 data-nosnippet>224</a>    }
+<a href=#225 id=225 data-nosnippet>225</a>    <span class="macro">anyhow::bail!</span>(<span class="string">"Timeout waiting for invoice to settle: {r_hash}"</span>)
+<a href=#226 id=226 data-nosnippet>226</a>}
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a><span class="kw">pub async fn </span>gateway_pay_invoice(
+<a href=#229 id=229 data-nosnippet>229</a>    prefix: <span class="kw-2">&amp;</span>str,
+<a href=#230 id=230 data-nosnippet>230</a>    gateway_name: <span class="kw-2">&amp;</span>str,
+<a href=#231 id=231 data-nosnippet>231</a>    client: <span class="kw-2">&amp;</span>ClientHandleArc,
+<a href=#232 id=232 data-nosnippet>232</a>    invoice: Bolt11Invoice,
+<a href=#233 id=233 data-nosnippet>233</a>    event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
+<a href=#234 id=234 data-nosnippet>234</a>    ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
+<a href=#235 id=235 data-nosnippet>235</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">let </span>m = fedimint_core::time::now();
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">let </span>OutgoingLightningPayment {
+<a href=#239 id=239 data-nosnippet>239</a>        payment_type,
+<a href=#240 id=240 data-nosnippet>240</a>        contract_id: <span class="kw">_</span>,
+<a href=#241 id=241 data-nosnippet>241</a>        fee: <span class="kw">_</span>,
+<a href=#242 id=242 data-nosnippet>242</a>    } = lightning_module
+<a href=#243 id=243 data-nosnippet>243</a>        .pay_bolt11_invoice(ln_gateway, invoice, ())
+<a href=#244 id=244 data-nosnippet>244</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="kw">let </span>operation_id = <span class="kw">match </span>payment_type {
+<a href=#246 id=246 data-nosnippet>246</a>        fedimint_ln_client::PayType::Internal(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">"Internal payment not expected"</span>),
+<a href=#247 id=247 data-nosnippet>247</a>        fedimint_ln_client::PayType::Lightning(operation_id) =&gt; operation_id,
+<a href=#248 id=248 data-nosnippet>248</a>    };
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
+<a href=#250 id=250 data-nosnippet>250</a>        .subscribe_ln_pay(operation_id)
+<a href=#251 id=251 data-nosnippet>251</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#252 id=252 data-nosnippet>252</a>        </span>.into_stream();
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="macro">info!</span>(<span class="string">"{prefix} LnPayState update: {update:?}"</span>);
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="kw">match </span>update {
+<a href=#256 id=256 data-nosnippet>256</a>            LnPayState::Success { preimage: <span class="kw">_ </span>} =&gt; {
+<a href=#257 id=257 data-nosnippet>257</a>                <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
+<a href=#258 id=258 data-nosnippet>258</a>                <span class="macro">info!</span>(<span class="string">"{prefix} Invoice paid in {elapsed:?}"</span>);
+<a href=#259 id=259 data-nosnippet>259</a>                event_sender.send(MetricEvent {
+<a href=#260 id=260 data-nosnippet>260</a>                    name: <span class="string">"gateway_pay_invoice_success"</span>.into(),
+<a href=#261 id=261 data-nosnippet>261</a>                    duration: elapsed,
+<a href=#262 id=262 data-nosnippet>262</a>                })<span class="question-mark">?</span>;
+<a href=#263 id=263 data-nosnippet>263</a>                event_sender.send(MetricEvent {
+<a href=#264 id=264 data-nosnippet>264</a>                    name: <span class="macro">format!</span>(<span class="string">"gateway_{gateway_name}_pay_invoice_success"</span>),
+<a href=#265 id=265 data-nosnippet>265</a>                    duration: elapsed,
+<a href=#266 id=266 data-nosnippet>266</a>                })<span class="question-mark">?</span>;
+<a href=#267 id=267 data-nosnippet>267</a>                <span class="kw">break</span>;
+<a href=#268 id=268 data-nosnippet>268</a>            }
+<a href=#269 id=269 data-nosnippet>269</a>            LnPayState::Created
+<a href=#270 id=270 data-nosnippet>270</a>            | LnPayState::Funded { block_height: <span class="kw">_ </span>}
+<a href=#271 id=271 data-nosnippet>271</a>            | LnPayState::AwaitingChange =&gt; {}
+<a href=#272 id=272 data-nosnippet>272</a>            LnPayState::Canceled =&gt; {
+<a href=#273 id=273 data-nosnippet>273</a>                <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
+<a href=#274 id=274 data-nosnippet>274</a>                <span class="macro">warn!</span>(<span class="string">"{prefix} Invoice canceled in {elapsed:?}"</span>);
+<a href=#275 id=275 data-nosnippet>275</a>                event_sender.send(MetricEvent {
+<a href=#276 id=276 data-nosnippet>276</a>                    name: <span class="string">"gateway_pay_invoice_canceled"</span>.into(),
+<a href=#277 id=277 data-nosnippet>277</a>                    duration: elapsed,
+<a href=#278 id=278 data-nosnippet>278</a>                })<span class="question-mark">?</span>;
+<a href=#279 id=279 data-nosnippet>279</a>                <span class="kw">break</span>;
+<a href=#280 id=280 data-nosnippet>280</a>            }
+<a href=#281 id=281 data-nosnippet>281</a>            LnPayState::Refunded { gateway_error } =&gt; {
+<a href=#282 id=282 data-nosnippet>282</a>                <span class="kw">let </span>elapsed: Duration = m.elapsed()<span class="question-mark">?</span>;
+<a href=#283 id=283 data-nosnippet>283</a>                <span class="macro">warn!</span>(<span class="string">"{prefix} Invoice refunded due to {gateway_error} in {elapsed:?}"</span>);
+<a href=#284 id=284 data-nosnippet>284</a>                event_sender.send(MetricEvent {
+<a href=#285 id=285 data-nosnippet>285</a>                    name: <span class="string">"gateway_pay_invoice_refunded"</span>.into(),
+<a href=#286 id=286 data-nosnippet>286</a>                    duration: elapsed,
+<a href=#287 id=287 data-nosnippet>287</a>                })<span class="question-mark">?</span>;
+<a href=#288 id=288 data-nosnippet>288</a>                <span class="kw">break</span>;
+<a href=#289 id=289 data-nosnippet>289</a>            }
+<a href=#290 id=290 data-nosnippet>290</a>            LnPayState::WaitingForRefund { error_reason } =&gt; {
+<a href=#291 id=291 data-nosnippet>291</a>                <span class="macro">warn!</span>(<span class="string">"{prefix} Waiting for refund: {error_reason:?}"</span>);
+<a href=#292 id=292 data-nosnippet>292</a>            }
+<a href=#293 id=293 data-nosnippet>293</a>            LnPayState::UnexpectedError { error_message } =&gt; {
+<a href=#294 id=294 data-nosnippet>294</a>                <span class="macro">bail!</span>(<span class="string">"Failed to pay invoice: {error_message:?}"</span>)
+<a href=#295 id=295 data-nosnippet>295</a>            }
+<a href=#296 id=296 data-nosnippet>296</a>        }
+<a href=#297 id=297 data-nosnippet>297</a>    }
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="prelude-val">Ok</span>(())
+<a href=#299 id=299 data-nosnippet>299</a>}
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a><span class="kw">pub async fn </span>ldk_create_invoice(amount: Amount) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="kw">let </span>invoice_string = <span class="macro">cmd!</span>(GatewayLdkCli, <span class="string">"lightning"</span>, <span class="string">"create-invoice"</span>, amount.msats)
+<a href=#303 id=303 data-nosnippet>303</a>        .out_string()
+<a href=#304 id=304 data-nosnippet>304</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#305 id=305 data-nosnippet>305</a>    <span class="prelude-val">Ok</span>(Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>invoice_string)<span class="question-mark">?</span>)
+<a href=#306 id=306 data-nosnippet>306</a>}
+<a href=#307 id=307 data-nosnippet>307</a>
+<a href=#308 id=308 data-nosnippet>308</a><span class="kw">pub async fn </span>ldk_pay_invoice(invoice: Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#309 id=309 data-nosnippet>309</a>    <span class="macro">cmd!</span>(
+<a href=#310 id=310 data-nosnippet>310</a>        GatewayLdkCli,
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="string">"lightning"</span>,
+<a href=#312 id=312 data-nosnippet>312</a>        <span class="string">"pay-invoice"</span>,
+<a href=#313 id=313 data-nosnippet>313</a>        invoice.to_string()
+<a href=#314 id=314 data-nosnippet>314</a>    )
+<a href=#315 id=315 data-nosnippet>315</a>    .run()
+<a href=#316 id=316 data-nosnippet>316</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#317 id=317 data-nosnippet>317</a>    <span class="prelude-val">Ok</span>(())
+<a href=#318 id=318 data-nosnippet>318</a>}
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a><span class="kw">pub async fn </span>ldk_wait_invoice_payment(invoice: <span class="kw-2">&amp;</span>Bolt11Invoice) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">let </span>gatewayd_version = devimint::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+<a href=#322 id=322 data-nosnippet>322</a>    <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_7_0_ALPHA {
+<a href=#323 id=323 data-nosnippet>323</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#324 id=324 data-nosnippet>324</a>    }
+<a href=#325 id=325 data-nosnippet>325</a>
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">let </span>status = <span class="macro">cmd!</span>(
+<a href=#327 id=327 data-nosnippet>327</a>        GatewayLdkCli,
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="string">"lightning"</span>,
+<a href=#329 id=329 data-nosnippet>329</a>        <span class="string">"get-invoice"</span>,
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="string">"--payment-hash"</span>,
+<a href=#331 id=331 data-nosnippet>331</a>        invoice.payment_hash()
+<a href=#332 id=332 data-nosnippet>332</a>    )
+<a href=#333 id=333 data-nosnippet>333</a>    .out_json()
+<a href=#334 id=334 data-nosnippet>334</a>    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"status"</span>]
+<a href=#335 id=335 data-nosnippet>335</a>        .as_str()
+<a href=#336 id=336 data-nosnippet>336</a>        .context(<span class="string">"Missing status field"</span>)<span class="question-mark">?
+<a href=#337 id=337 data-nosnippet>337</a>        </span>.to_owned();
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">if </span>status == <span class="string">"Succeeded" </span>{
+<a href=#339 id=339 data-nosnippet>339</a>        <span class="prelude-val">Ok</span>(())
+<a href=#340 id=340 data-nosnippet>340</a>    } <span class="kw">else </span>{
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="macro">bail!</span>(<span class="string">"Got status {status} for invoice {invoice}"</span>)
+<a href=#342 id=342 data-nosnippet>342</a>    }
+<a href=#343 id=343 data-nosnippet>343</a>}
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a><span class="kw">pub fn </span>parse_gateway_id(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
+<a href=#346 id=346 data-nosnippet>346</a>    secp256k1::PublicKey::from_str(s)
+<a href=#347 id=347 data-nosnippet>347</a>}
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a><span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;TieredCounts&gt; {
+<a href=#350 id=350 data-nosnippet>350</a>    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">let </span>summary = mint_client
+<a href=#352 id=352 data-nosnippet>352</a>        .get_note_counts_by_denomination(
+<a href=#353 id=353 data-nosnippet>353</a>            <span class="kw-2">&amp;mut </span>client
+<a href=#354 id=354 data-nosnippet>354</a>                .db()
+<a href=#355 id=355 data-nosnippet>355</a>                .begin_transaction_nc()
+<a href=#356 id=356 data-nosnippet>356</a>                .<span class="kw">await
+<a href=#357 id=357 data-nosnippet>357</a>                </span>.to_ref_with_prefix_module_id(<span class="number">1</span>)
+<a href=#358 id=358 data-nosnippet>358</a>                .<span class="number">0</span>,
+<a href=#359 id=359 data-nosnippet>359</a>        )
+<a href=#360 id=360 data-nosnippet>360</a>        .<span class="kw">await</span>;
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="prelude-val">Ok</span>(summary)
+<a href=#362 id=362 data-nosnippet>362</a>}
+<a href=#363 id=363 data-nosnippet>363</a>
+<a href=#364 id=364 data-nosnippet>364</a><span class="kw">pub async fn </span>remint_denomination(
+<a href=#365 id=365 data-nosnippet>365</a>    client: <span class="kw-2">&amp;</span>ClientHandleArc,
+<a href=#366 id=366 data-nosnippet>366</a>    denomination: Amount,
+<a href=#367 id=367 data-nosnippet>367</a>    quantity: u16,
+<a href=#368 id=368 data-nosnippet>368</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#369 id=369 data-nosnippet>369</a>    retry(
+<a href=#370 id=370 data-nosnippet>370</a>        <span class="macro">format!</span>(<span class="string">"remint_{denomination}_{quantity}"</span>),
+<a href=#371 id=371 data-nosnippet>371</a>        aggressive_backoff(),
+<a href=#372 id=372 data-nosnippet>372</a>        || {
+<a href=#373 id=373 data-nosnippet>373</a>            <span class="kw">let </span>client = client.clone();
+<a href=#374 id=374 data-nosnippet>374</a>            <span class="kw">async move </span>{ try_remint_denomination(<span class="kw-2">&amp;</span>client, denomination, quantity).<span class="kw">await </span>}
+<a href=#375 id=375 data-nosnippet>375</a>        },
+<a href=#376 id=376 data-nosnippet>376</a>    )
+<a href=#377 id=377 data-nosnippet>377</a>    .<span class="kw">await
+<a href=#378 id=378 data-nosnippet>378</a></span>}
+<a href=#379 id=379 data-nosnippet>379</a>
+<a href=#380 id=380 data-nosnippet>380</a><span class="kw">pub async fn </span>try_remint_denomination(
+<a href=#381 id=381 data-nosnippet>381</a>    client: <span class="kw-2">&amp;</span>ClientHandleArc,
+<a href=#382 id=382 data-nosnippet>382</a>    denomination: Amount,
+<a href=#383 id=383 data-nosnippet>383</a>    quantity: u16,
+<a href=#384 id=384 data-nosnippet>384</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#385 id=385 data-nosnippet>385</a>    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = client.db().begin_transaction().<span class="kw">await</span>;
+<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">let </span><span class="kw-2">mut </span>module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).<span class="number">0</span>;
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::new();
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">let </span>operation_id = OperationId::new_random();
+<a href=#390 id=390 data-nosnippet>390</a>    <span class="kw">for _ in </span><span class="number">0</span>..quantity {
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">let </span>outputs = mint_client
+<a href=#392 id=392 data-nosnippet>392</a>            .create_output(
+<a href=#393 id=393 data-nosnippet>393</a>                <span class="kw-2">&amp;mut </span>module_transaction.to_ref_nc(),
+<a href=#394 id=394 data-nosnippet>394</a>                operation_id,
+<a href=#395 id=395 data-nosnippet>395</a>                <span class="number">1</span>,
+<a href=#396 id=396 data-nosnippet>396</a>                denomination,
+<a href=#397 id=397 data-nosnippet>397</a>            )
+<a href=#398 id=398 data-nosnippet>398</a>            .<span class="kw">await
+<a href=#399 id=399 data-nosnippet>399</a>            </span>.into_dyn(mint_client.id);
+<a href=#400 id=400 data-nosnippet>400</a>
+<a href=#401 id=401 data-nosnippet>401</a>        tx = tx.with_outputs(outputs);
+<a href=#402 id=402 data-nosnippet>402</a>    }
+<a href=#403 id=403 data-nosnippet>403</a>    drop(module_transaction);
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">let </span>operation_meta_gen = |<span class="kw">_</span>| ();
+<a href=#405 id=405 data-nosnippet>405</a>    <span class="kw">let </span>txid = client
+<a href=#406 id=406 data-nosnippet>406</a>        .finalize_and_submit_transaction(
+<a href=#407 id=407 data-nosnippet>407</a>            operation_id,
+<a href=#408 id=408 data-nosnippet>408</a>            MintCommonInit::KIND.as_str(),
+<a href=#409 id=409 data-nosnippet>409</a>            operation_meta_gen,
+<a href=#410 id=410 data-nosnippet>410</a>            tx,
+<a href=#411 id=411 data-nosnippet>411</a>        )
+<a href=#412 id=412 data-nosnippet>412</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#413 id=413 data-nosnippet>413</a>        </span>.txid();
+<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">let </span>tx_subscription = client.transaction_updates(operation_id).<span class="kw">await</span>;
+<a href=#415 id=415 data-nosnippet>415</a>    tx_subscription
+<a href=#416 id=416 data-nosnippet>416</a>        .await_tx_accepted(txid)
+<a href=#417 id=417 data-nosnippet>417</a>        .<span class="kw">await
+<a href=#418 id=418 data-nosnippet>418</a>        </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"{e}"</span>))<span class="question-mark">?</span>;
+<a href=#419 id=419 data-nosnippet>419</a>    dbtx.commit_tx().<span class="kw">await</span>;
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..quantity {
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>out_point = OutPoint {
+<a href=#422 id=422 data-nosnippet>422</a>            txid,
+<a href=#423 id=423 data-nosnippet>423</a>            out_idx: u64::from(i),
+<a href=#424 id=424 data-nosnippet>424</a>        };
+<a href=#425 id=425 data-nosnippet>425</a>        mint_client
+<a href=#426 id=426 data-nosnippet>426</a>            .await_output_finalized(operation_id, out_point)
+<a href=#427 id=427 data-nosnippet>427</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#428 id=428 data-nosnippet>428</a>    }
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="prelude-val">Ok</span>(())
+<a href=#430 id=430 data-nosnippet>430</a>}</code></pre></div></section></main></body></html>

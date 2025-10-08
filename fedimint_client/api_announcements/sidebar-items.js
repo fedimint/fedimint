@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["fetch_api_announcements_from_all_peers","get_api_urls","refresh_api_announcement_sync","run_api_announcement_sync","store_api_announcements"],"struct":["ApiAnnouncementKey","ApiAnnouncementPrefix"]};
+window.SIDEBAR_ITEMS = {"fn":["fetch_api_announcements_from_all_peers","get_api_urls","process_api_announcements","refresh_api_announcement_sync","run_api_announcement_sync","store_api_announcements"],"struct":["ApiAnnouncementKey","ApiAnnouncementPrefix"],"type":["PeersSignedApiAnnouncements"]};
