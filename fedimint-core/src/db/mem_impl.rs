@@ -4,7 +4,6 @@ use std::path::Path;
 
 use anyhow::Result;
 use futures::{StreamExt, stream};
-use hex::ToHex;
 use imbl::OrdMap;
 use macro_rules_attribute::apply;
 
@@ -72,17 +71,6 @@ pub struct DummyError;
 impl MemDatabase {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub async fn dump_db(&self) {
-        #[allow(clippy::significant_drop_in_scrutinee)]
-        for (key, value) in self.data.read().expect("Poisoned rwlock").iter() {
-            println!(
-                "{}: {}",
-                key.encode_hex::<String>(),
-                value.encode_hex::<String>()
-            );
-        }
     }
 }
 
