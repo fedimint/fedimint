@@ -125,7 +125,6 @@ pub struct ClientBuilder {
     reuse_connector: Option<DynClientConnector>,
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
-    task_group: TaskGroup,
 }
 
 impl ClientBuilder {
@@ -139,7 +138,6 @@ impl ClientBuilder {
         let (log_event_added_transient_tx, _log_event_added_transient_rx) =
             broadcast::channel(1024);
         ClientBuilder {
-            task_group: TaskGroup::new(),
             module_inits: ModuleInitRegistry::new(),
             primary_module_instance: None,
             primary_module_kind: None,
@@ -157,8 +155,6 @@ impl ClientBuilder {
 
     pub(crate) fn from_existing(client: &Client) -> Self {
         ClientBuilder {
-            // Note: we don't want to keep running old clients tasks, etc.
-            task_group: TaskGroup::new(),
             module_inits: client.module_inits.clone(),
             primary_module_instance: Some(client.primary_module_instance),
             primary_module_kind: None,
@@ -670,6 +666,8 @@ impl ClientBuilder {
             }
         };
 
+        let task_group = TaskGroup::new();
+
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
         self.migrate_module_dbs(&db).await?;
@@ -719,7 +717,7 @@ impl ClientBuilder {
             &self.module_inits,
             &api,
             &db,
-            &self.task_group,
+            &task_group,
         )
         .await
         .inspect_err(|err| {
@@ -734,7 +732,7 @@ impl ClientBuilder {
         debug!(target: LOG_CLIENT, ?common_api_versions, "Completed api version negotiation");
 
         // Asynchronously refetch client config and compare with existing
-        Self::load_and_refresh_client_config_static(&config, &api, &db, &self.task_group);
+        Self::load_and_refresh_client_config_static(&config, &api, &db, &task_group);
 
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
@@ -787,7 +785,7 @@ impl ClientBuilder {
                         let admin_auth = self.admin_creds.as_ref().map(|creds| creds.auth.clone());
                         let final_client = final_client.clone();
                         let (progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
-                        let task_group = self.task_group.clone();
+                        let task_group = task_group.clone();
                         let module_init = module_init.clone();
                         (
                             Box::pin(async move {
@@ -904,7 +902,7 @@ impl ClientBuilder {
                                 notifier.clone(),
                                 api.clone(),
                                 self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
-                                self.task_group.clone(),
+                                task_group.clone(),
                             )
                             .await?;
 
@@ -948,7 +946,7 @@ impl ClientBuilder {
             executor_builder.build(
                 db.clone(),
                 notifier,
-                self.task_group.clone(),
+                task_group.clone(),
                 log_ordering_wakeup_tx.clone(),
             )
         };
@@ -980,7 +978,7 @@ impl ClientBuilder {
             api,
             secp_ctx: Secp256k1::new(),
             root_secret,
-            task_group: self.task_group,
+            task_group,
             operation_log: OperationLog::new(db.clone()),
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
