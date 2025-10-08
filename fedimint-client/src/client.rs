@@ -58,8 +58,8 @@ use fedimint_core::util::{
     BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
 };
 use fedimint_core::{
-    Amount, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send,
-    fedimint_build_code_version_env, maybe_add_send, maybe_add_send_sync, runtime,
+    Amount, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
+    maybe_add_send_sync, runtime,
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
@@ -274,8 +274,7 @@ impl Client {
     pub fn start_executor(self: &Arc<Self>) {
         debug!(
             target: LOG_CLIENT,
-            "Starting fedimint client executor (version: {})",
-            fedimint_build_code_version_env!()
+            "Starting fedimint client executor",
         );
         self.executor.start_executor(self.context_gen());
     }
