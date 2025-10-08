@@ -35,7 +35,7 @@ pub enum DatabaseOperation {
 
 #[derive(Default)]
 pub struct MemDatabase {
-    data: tokio::sync::RwLock<OrdMap<Vec<u8>, Vec<u8>>>,
+    data: std::sync::RwLock<OrdMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl fmt::Debug for MemDatabase {
@@ -76,7 +76,7 @@ impl MemDatabase {
 
     pub async fn dump_db(&self) {
         #[allow(clippy::significant_drop_in_scrutinee)]
-        for (key, value) in self.data.read().await.iter() {
+        for (key, value) in self.data.read().expect("Poisoned rwlock").iter() {
             println!(
                 "{}: {}",
                 key.encode_hex::<String>(),
@@ -90,7 +90,7 @@ impl MemDatabase {
 impl IRawDatabase for MemDatabase {
     type Transaction<'a> = MemTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
-        let db_copy = self.data.read().await.clone();
+        let db_copy = self.data.read().expect("Poisoned rwlock").clone();
         let mut memtx = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
@@ -218,7 +218,7 @@ impl IDatabaseTransactionOps for MemTransaction<'_> {
 impl IRawDatabaseTransaction for MemTransaction<'_> {
     #[allow(clippy::significant_drop_tightening)]
     async fn commit_tx(self) -> Result<()> {
-        let mut data = self.db.data.write().await;
+        let mut data = self.db.data.write().expect("Poisoned rwlock");
         let mut data_copy = data.clone();
         for op in self.operations {
             match op {
