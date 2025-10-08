@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context as _, anyhow, bail, ensure};
 use bitcoin::key::Secp256k1;
@@ -49,8 +50,8 @@ use tracing::{debug, trace, warn};
 use super::handle::ClientHandle;
 use super::{Client, client_decoders};
 use crate::api_announcements::{
-    PeersSignedApiAnnouncements, fetch_api_announcements_from_all_peers, get_api_urls,
-    process_api_announcements, run_api_announcement_sync,
+    PeersSignedApiAnnouncements, fetch_api_announcements_from_at_least_num_of_peers, get_api_urls,
+    run_api_announcement_refresh_task, store_api_announcements_updates_from_peers,
 };
 use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
@@ -362,9 +363,7 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
         init_mode: InitMode,
-        preview_prefetch_api_announcements: Option<
-            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
-        >,
+        preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
@@ -433,17 +432,23 @@ impl ClientBuilder {
                 .map(|guardian_pub_keys| {
                     Jit::new({
                         let api = api.clone();
-                        || async move {
-                            // Fetching api announcements using invite urls before joining, then
-                            // write them to database This ensures the
-                            // client can communicated with the
-                            // Federation even if all the peers moved
-                            fetch_api_announcements_from_all_peers(&api, &guardian_pub_keys).await
+                        move || async move {
+                            // Fetching api announcements using invite urls before joining.
+                            // This ensures the client can communicated with
+                            // the Federation even if all the peers moved write them to database.
+                            fetch_api_announcements_from_at_least_num_of_peers(
+                                1,
+                                &api,
+                                &guardian_pub_keys,
+                                // If we can, we would love to get more than just one response,
+                                // but we need to wrap it up fast for good UX.
+                                Duration::from_millis(20),
+                            )
+                            .await
                         }
                     })
                 });
 
-        // refresh_api_announcement_sync(&api, &db, &guardian_pub_keys).await
         self.preview_inner(
             config,
             invite_code.api_secret(),
@@ -472,7 +477,7 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
         reuse_api: Option<DynGlobalApi>,
-        prefetch_api_announcements: Option<Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>>,
+        prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     ) -> anyhow::Result<ClientPreview> {
         let preview_prefetch_api_version_set = if let Some(api) = reuse_api {
             self.reuse_connector = Some(api.connector().clone());
@@ -566,9 +571,7 @@ impl ClientBuilder {
         config: ClientConfig,
         api_secret: Option<String>,
         stopped: bool,
-        preview_prefetch_api_announcements: Option<
-            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
-        >,
+        preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
@@ -605,9 +608,7 @@ impl ClientBuilder {
         api_secret: Option<String>,
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
         request_hook: ApiRequestHook,
-        preview_prefetch_api_announcements: Option<
-            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
-        >,
+        preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
             JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
@@ -688,21 +689,12 @@ impl ClientBuilder {
         let notifier = Notifier::new();
 
         if let Some(p) = preview_prefetch_api_announcements {
-            // Unlike the api version set, we want to fail if we were unable to figure out
+            // We want to fail if we were unable to figure out
             // current addresses of peers in the federation, as it will potentially never
-            // fix itself.
+            // fix itself, so it's better to fail the join explicitly.
             let announcements = p.get().await;
 
-            process_api_announcements(
-                &db,
-                config
-                    .global
-                    .broadcast_public_keys
-                    .as_ref()
-                    .expect("If announcements were fetched, the pubkeys must be there"),
-                announcements,
-            )
-            .await?
+            store_api_announcements_updates_from_peers(&db, announcements).await?
         }
 
         if let Some(preview_prefetch_api_version_set) = preview_prefetch_api_version_set {
@@ -1010,7 +1002,7 @@ impl ClientBuilder {
 
         client_inner.task_group.spawn_cancellable(
             "update-api-announcements",
-            run_api_announcement_sync(client_inner.clone()),
+            run_api_announcement_refresh_task(client_inner.clone()),
         );
 
         client_inner.task_group.spawn_cancellable(
@@ -1222,7 +1214,7 @@ pub struct ClientPreview {
     inner: ClientBuilder,
     config: ClientConfig,
     api_secret: Option<String>,
-    prefetch_api_announcements: Option<Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>>,
+    prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     preview_prefetch_api_version_set:
         Option<JitTryAnyhow<BTreeMap<PeerId, SupportedApiVersionsSummary>>>,
 }
