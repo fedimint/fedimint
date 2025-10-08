@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Commands"],"fn":["main","print_response"],"mod":["config_commands","ecash_commands","general_commands","lightning_commands","onchain_commands"],"struct":["Cli"]};
+window.SIDEBAR_ITEMS = {"enum":["Commands"],"fn":["main","print_response","run"],"mod":["config_commands","ecash_commands","general_commands","lightning_commands","onchain_commands"],"struct":["Cli"]};
