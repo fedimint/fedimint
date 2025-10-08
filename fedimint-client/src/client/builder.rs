@@ -37,14 +37,14 @@ use fedimint_core::module::{ApiRequestErased, ApiVersion};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::util::FmtCompactAnyhow as _;
-use fedimint_core::{NumPeers, maybe_add_send};
+use fedimint_core::{NumPeers, fedimint_build_code_version_env, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, EventLogEntry, run_event_log_ordering_task,
 };
 use fedimint_logging::LOG_CLIENT;
 use tokio::sync::{broadcast, watch};
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use super::handle::ClientHandle;
 use super::{Client, client_decoders};
@@ -128,6 +128,11 @@ pub struct ClientBuilder {
 
 impl ClientBuilder {
     pub(crate) fn new(db: Database) -> Self {
+        trace!(
+            target: LOG_CLIENT,
+            version = %fedimint_build_code_version_env!(),
+            "Initializing fedimint client",
+        );
         let meta_service = MetaService::new(LegacyMetaSource::default());
         let (log_event_added_transient_tx, _log_event_added_transient_rx) =
             broadcast::channel(1024);
@@ -554,6 +559,11 @@ impl ClientBuilder {
         request_hook: ApiRequestHook,
         preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
     ) -> anyhow::Result<ClientHandle> {
+        debug!(
+            target: LOG_CLIENT,
+            version = %fedimint_build_code_version_env!(),
+            "Building fedimint client",
+        );
         let (log_event_added_tx, log_event_added_rx) = watch::channel(());
         let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
 
