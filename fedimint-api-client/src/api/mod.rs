@@ -1251,6 +1251,8 @@ impl ClientConnection {
                         Err(e) => {
                             trace!(target: LOG_CLIENT_NET_API, "Failed to connect to peer api {e}");
 
+                            drop(senders);
+
                             fedimint_core::task::sleep(
                                 backoff.next().expect("No limit to the number of retries"),
                             )
