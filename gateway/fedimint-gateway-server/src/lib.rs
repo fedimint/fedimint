@@ -1230,7 +1230,14 @@ impl Gateway {
         let federation_info = FederationInfo {
             federation_id,
             federation_name: federation_manager.federation_name(&client).await,
-            balance_msat: client.get_balance().await.unwrap_or_default(),
+            balance_msat: client.get_balance().await.unwrap_or_else(|| {
+                warn!(
+                    target: LOG_GATEWAY,
+                    %federation_id,
+                    "Balance not immediately available after joining/recovering."
+                );
+                Amount::default()
+            }),
             config: federation_config.clone(),
         };
 
