@@ -156,8 +156,8 @@ impl RpcGlobalState {
         handles.remove(&request_id)
     }
 
-    async fn client_builder(db: Database) -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
-        let mut builder = fedimint_client::Client::builder(db).await?;
+    async fn client_builder() -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
+        let mut builder = fedimint_client::Client::builder().await?;
         builder.with_module(MintClientInit);
         builder.with_module(LightningClientInit::default());
         builder.with_module(WalletClientInit(None));
@@ -197,7 +197,7 @@ impl RpcGlobalState {
         // Derive federation-specific secret from wallet mnemonic
         let federation_secret = self.derive_federation_secret(&mnemonic, &federation_id);
 
-        let builder = Self::client_builder(client_db).await?;
+        let builder = Self::client_builder().await?;
         let preview = builder.preview(&invite_code).await?;
 
         // Check if backup exists
@@ -210,13 +210,20 @@ impl RpcGlobalState {
         let client = if force_recover || backup.is_some() {
             Arc::new(
                 preview
-                    .recover(RootSecret::StandardDoubleDerive(federation_secret), backup)
+                    .recover(
+                        client_db,
+                        RootSecret::StandardDoubleDerive(federation_secret),
+                        backup,
+                    )
                     .await?,
             )
         } else {
             Arc::new(
                 preview
-                    .join(RootSecret::StandardDoubleDerive(federation_secret))
+                    .join(
+                        client_db,
+                        RootSecret::StandardDoubleDerive(federation_secret),
+                    )
                     .await?,
             )
         };
@@ -248,10 +255,13 @@ impl RpcGlobalState {
         // Derive federation-specific secret from wallet mnemonic
         let federation_secret = self.derive_federation_secret(&mnemonic, &federation_id);
 
-        let builder = Self::client_builder(client_db).await?;
+        let builder = Self::client_builder().await?;
         let client = Arc::new(
             builder
-                .open(RootSecret::StandardDoubleDerive(federation_secret))
+                .open(
+                    client_db,
+                    RootSecret::StandardDoubleDerive(federation_secret),
+                )
                 .await?,
         );
 

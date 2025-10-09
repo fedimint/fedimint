@@ -67,6 +67,14 @@ pub(crate) async fn refresh_api_announcement_sync(
 ) -> anyhow::Result<()> {
     let results = fetch_api_announcements_from_all_peers(api, guardian_pub_keys).await;
 
+    process_api_announcements(db, guardian_pub_keys, &results).await
+}
+
+pub(crate) async fn process_api_announcements(
+    db: &Database,
+    guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
+    results: &[anyhow::Result<BTreeMap<PeerId, SignedApiAnnouncement>>],
+) -> Result<(), anyhow::Error> {
     let mut some_success = false;
 
     for (peer_id, result) in guardian_pub_keys.keys().zip(results) {
@@ -88,10 +96,12 @@ pub(crate) async fn refresh_api_announcement_sync(
     }
 }
 
-async fn fetch_api_announcements_from_all_peers(
+pub(crate) type PeersSignedApiAnnouncements = BTreeMap<PeerId, SignedApiAnnouncement>;
+
+pub(crate) async fn fetch_api_announcements_from_all_peers(
     api: &DynGlobalApi,
     guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
-) -> Vec<Result<BTreeMap<PeerId, SignedApiAnnouncement>, anyhow::Error>> {
+) -> Vec<anyhow::Result<PeersSignedApiAnnouncements>> {
     join_all(api.all_peers().iter().map(|peer_id| async {
         let peer_id = *peer_id;
         let announcements = api.api_announcements(peer_id).await.with_context(move || {
@@ -116,7 +126,7 @@ async fn fetch_api_announcements_from_all_peers(
 
 pub(crate) async fn store_api_announcements(
     db: &Database,
-    announcements: BTreeMap<PeerId, SignedApiAnnouncement>,
+    announcements: &BTreeMap<PeerId, SignedApiAnnouncement>,
 ) {
     db
         .autocommit(

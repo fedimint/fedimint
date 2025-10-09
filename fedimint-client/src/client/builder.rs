@@ -32,10 +32,10 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, ApiVersion};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
+use fedimint_core::task::jit::Jit;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{NumPeers, fedimint_build_code_version_env, maybe_add_send};
 use fedimint_derive_secret::DerivableSecret;
@@ -49,7 +49,8 @@ use tracing::{debug, trace, warn};
 use super::handle::ClientHandle;
 use super::{Client, client_decoders};
 use crate::api_announcements::{
-    get_api_urls, refresh_api_announcement_sync, run_api_announcement_sync,
+    PeersSignedApiAnnouncements, fetch_api_announcements_from_all_peers, get_api_urls,
+    process_api_announcements, run_api_announcement_sync,
 };
 use crate::backup::{ClientBackup, Metadata};
 use crate::db::{
@@ -115,7 +116,6 @@ pub struct ClientBuilder {
     primary_module_instance: Option<ModuleInstanceId>,
     primary_module_kind: Option<ModuleKind>,
     admin_creds: Option<AdminCreds>,
-    db_no_decoders: Database,
     meta_service: Arc<crate::meta::MetaService>,
     connector: Connector,
     stopped: bool,
@@ -127,7 +127,7 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    pub(crate) fn new(db: Database) -> Self {
+    pub(crate) fn new() -> Self {
         trace!(
             target: LOG_CLIENT,
             version = %fedimint_build_code_version_env!(),
@@ -142,7 +142,6 @@ impl ClientBuilder {
             primary_module_kind: None,
             connector: Connector::default(),
             admin_creds: None,
-            db_no_decoders: db,
             stopped: false,
             meta_service,
             log_event_added_transient_tx,
@@ -159,7 +158,6 @@ impl ClientBuilder {
             primary_module_instance: Some(client.primary_module_instance),
             primary_module_kind: None,
             admin_creds: None,
-            db_no_decoders: client.db.with_decoders(ModuleRegistry::default()),
             stopped: false,
             // non unique
             meta_service: client.meta_service.clone(),
@@ -297,7 +295,7 @@ impl ClientBuilder {
         // Only apply the client database migrations if the database has been
         // initialized.
         // This only works as long as you don't change the client config
-        if let Ok(client_config) = self.load_existing_config().await {
+        if let Ok(client_config) = self.load_existing_config(db).await {
             for (module_id, module_cfg) in client_config.modules {
                 let kind = module_cfg.kind.clone();
                 let Some(init) = self.module_inits.get(&kind) else {
@@ -331,12 +329,8 @@ impl ClientBuilder {
         Ok(())
     }
 
-    pub fn db_no_decoders(&self) -> &Database {
-        &self.db_no_decoders
-    }
-
-    pub async fn load_existing_config(&self) -> anyhow::Result<ClientConfig> {
-        let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
+    pub async fn load_existing_config(&self, db: &Database) -> anyhow::Result<ClientConfig> {
+        let Some(config) = Client::get_config_from_db(db).await else {
             bail!("Client database not initialized")
         };
 
@@ -358,21 +352,26 @@ impl ClientBuilder {
 
     async fn init(
         self,
+        db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
         init_mode: InitMode,
-        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        preview_prefetch_api_announcements: Option<
+            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
+        >,
     ) -> anyhow::Result<ClientHandle> {
-        if Client::is_initialized(&self.db_no_decoders).await {
+        if Client::is_initialized(&db_no_decoders).await {
             bail!("Client database already initialized")
         }
+
+        Client::run_core_migrations(&db_no_decoders).await?;
 
         // Note: It's important all client initialization is performed as one big
         // transaction to avoid half-initialized client state.
         {
             debug!(target: LOG_CLIENT, "Initializing client database");
-            let mut dbtx = self.db_no_decoders.begin_transaction().await;
+            let mut dbtx = db_no_decoders.begin_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(&crate::db::ClientConfigKey, &config)
                 .await;
@@ -401,6 +400,7 @@ impl ClientBuilder {
 
         let stopped = self.stopped;
         self.build(
+            db_no_decoders,
             pre_root_secret,
             config,
             api_secret,
@@ -422,19 +422,19 @@ impl ClientBuilder {
                 .broadcast_public_keys
                 .clone()
                 .map(|guardian_pub_keys| {
-                    JitTry::new_try({
-                        let db = self.db_no_decoders().clone();
+                    Jit::new({
                         let api = api.clone();
                         || async move {
                             // Fetching api announcements using invite urls before joining, then
                             // write them to database This ensures the
                             // client can communicated with the
-                            // Federation even if all the peers moved.
-                            refresh_api_announcement_sync(&api, &db, &guardian_pub_keys).await
+                            // Federation even if all the peers moved
+                            fetch_api_announcements_from_all_peers(&api, &guardian_pub_keys).await
                         }
                     })
                 });
 
+        // refresh_api_announcement_sync(&api, &db, &guardian_pub_keys).await
         self.preview_inner(config, invite_code.api_secret(), prefetch_api_announcements)
             .await
     }
@@ -452,7 +452,7 @@ impl ClientBuilder {
         self,
         config: ClientConfig,
         api_secret: Option<String>,
-        prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        prefetch_api_announcements: Option<Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>>,
     ) -> anyhow::Result<ClientPreview> {
         Ok(ClientPreview {
             inner: self,
@@ -462,18 +462,23 @@ impl ClientBuilder {
         })
     }
 
-    pub async fn open(self, pre_root_secret: RootSecret) -> anyhow::Result<ClientHandle> {
-        // Check for pending config and migrate if present
-        Self::migrate_pending_config_if_present(&self.db_no_decoders).await;
+    pub async fn open(
+        self,
+        db_no_decoders: Database,
+        pre_root_secret: RootSecret,
+    ) -> anyhow::Result<ClientHandle> {
+        Client::run_core_migrations(&db_no_decoders).await?;
 
-        let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
+        // Check for pending config and migrate if present
+        Self::migrate_pending_config_if_present(&db_no_decoders).await;
+
+        let Some(config) = Client::get_config_from_db(&db_no_decoders).await else {
             bail!("Client database not initialized")
         };
 
         let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
 
-        match self
-            .db_no_decoders()
+        match db_no_decoders
             .begin_transaction_nc()
             .await
             .get_value(&ClientPreRootSecretHashKey)
@@ -488,7 +493,7 @@ impl ClientBuilder {
             _ => {
                 debug!(target: LOG_CLIENT, "Backfilling secret hash");
                 // Note: no need for dbtx autocommit, we are the only writer ATM
-                let mut dbtx = self.db_no_decoders.begin_transaction().await;
+                let mut dbtx = db_no_decoders.begin_transaction().await;
                 dbtx.insert_entry(
                     &ClientPreRootSecretHashKey,
                     &pre_root_secret.derive_pre_root_secret_hash(),
@@ -498,13 +503,14 @@ impl ClientBuilder {
             }
         }
 
-        let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
+        let api_secret = Client::get_api_secret_from_db(&db_no_decoders).await;
         let stopped = self.stopped;
         let request_hook = self.request_hook.clone();
 
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let client = self
             .build_stopped(
+                db_no_decoders,
                 pre_root_secret,
                 &config,
                 api_secret,
@@ -522,16 +528,20 @@ impl ClientBuilder {
     /// Build a [`Client`] and start the executor
     pub(crate) async fn build(
         self,
+        db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
         stopped: bool,
-        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        preview_prefetch_api_announcements: Option<
+            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
+        >,
     ) -> anyhow::Result<ClientHandle> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
         let client = self
             .build_stopped(
+                db_no_decoders,
                 pre_root_secret,
                 &config,
                 api_secret,
@@ -552,12 +562,15 @@ impl ClientBuilder {
     #[allow(clippy::too_many_arguments)]
     async fn build_stopped(
         self,
+        db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
         config: &ClientConfig,
         api_secret: Option<String>,
         log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
         request_hook: ApiRequestHook,
-        preview_prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+        preview_prefetch_api_announcements: Option<
+            Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>,
+        >,
     ) -> anyhow::Result<ClientHandle> {
         debug!(
             target: LOG_CLIENT,
@@ -570,7 +583,7 @@ impl ClientBuilder {
         let decoders = self.decoders(config);
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
-        let db = self.db_no_decoders.with_decoders(decoders.clone());
+        let db = db_no_decoders.with_decoders(decoders.clone());
         let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
         let api = match self.admin_creds.as_ref() {
@@ -639,7 +652,18 @@ impl ClientBuilder {
             // Unlike the api version set, we want to fail if we were unable to figure out
             // current addresses of peers in the federation, as it will potentially never
             // fix itself.
-            p.get_try().await?;
+            let announcements = p.get().await;
+
+            process_api_announcements(
+                &db,
+                config
+                    .global
+                    .broadcast_public_keys
+                    .as_ref()
+                    .expect("If announcements were fetched, the pubkeys must be there"),
+                announcements,
+            )
+            .await?
         }
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
@@ -1142,7 +1166,7 @@ pub struct ClientPreview {
     inner: ClientBuilder,
     config: ClientConfig,
     api_secret: Option<String>,
-    prefetch_api_announcements: Option<JitTryAnyhow<()>>,
+    prefetch_api_announcements: Option<Jit<Vec<anyhow::Result<PeersSignedApiAnnouncements>>>>,
 }
 
 impl ClientPreview {
@@ -1205,7 +1229,7 @@ impl ClientPreview {
     /// // let db = RocksDb::open(db_path).expect("error opening DB");
     /// # let db: Database = unimplemented!();
     ///
-    /// let preview = Client::builder(db).await
+    /// let preview = Client::builder().await
     ///     // Mount the modules the client should support:
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)
@@ -1221,18 +1245,23 @@ impl ClientPreview {
     /// );
     ///
     /// let client = preview
-    ///     .join(RootSecret::StandardDoubleDerive(root_secret))
+    ///     .join(db, RootSecret::StandardDoubleDerive(root_secret))
     ///     .await
     ///     .expect("Error joining federation");
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn join(self, pre_root_secret: RootSecret) -> anyhow::Result<ClientHandle> {
+    pub async fn join(
+        self,
+        db_no_decoders: Database,
+        pre_root_secret: RootSecret,
+    ) -> anyhow::Result<ClientHandle> {
         let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
 
         let client = self
             .inner
             .init(
+                db_no_decoders,
                 pre_root_secret,
                 self.config,
                 self.api_secret,
@@ -1257,6 +1286,7 @@ impl ClientPreview {
     /// used in a given Federation is safe.
     pub async fn recover(
         self,
+        db_no_decoders: Database,
         pre_root_secret: RootSecret,
         backup: Option<ClientBackup>,
     ) -> anyhow::Result<ClientHandle> {
@@ -1265,6 +1295,7 @@ impl ClientPreview {
         let client = self
             .inner
             .init(
+                db_no_decoders,
                 pre_root_secret,
                 self.config,
                 self.api_secret,
