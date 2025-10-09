@@ -425,9 +425,11 @@ impl Client {
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
         let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
-
-        let (added_input_bundle, change_outputs) = self
+        let primary_module = self
             .primary_module()
+            .ok_or(anyhow!("No primary module available"))?;
+
+        let (added_input_bundle, change_outputs) = primary_module
             .create_final_inputs_and_outputs(
                 self.primary_module_instance,
                 dbtx,
@@ -641,6 +643,7 @@ impl Client {
         out_point: OutPoint,
     ) -> anyhow::Result<()> {
         self.primary_module()
+            .ok_or(anyhow!("Primary module not available"))?
             .await_primary_module_output(operation_id, out_point)
             .await
     }
@@ -737,32 +740,57 @@ impl Client {
     }
 
     /// Get the primary module
-    pub fn primary_module(&self) -> &DynClientModule {
-        self.modules
-            .get(self.primary_module_instance)
-            .expect("primary module must be present")
+    pub fn primary_module(&self) -> Option<&DynClientModule> {
+        self.modules.get(self.primary_module_instance)
     }
 
     /// Balance available to the client for spending
-    pub async fn get_balance(&self) -> Amount {
-        self.primary_module()
-            .get_balance(
-                self.primary_module_instance,
-                &mut self.db().begin_transaction_nc().await,
-            )
+    ///
+    /// Returns `None` if the primary module is not available
+    pub async fn get_balance(&self) -> Option<Amount> {
+        Some(
+            self.primary_module()?
+                .get_balance(
+                    self.primary_module_instance,
+                    &mut self.db().begin_transaction_nc().await,
+                )
+                .await,
+        )
+    }
+
+    // Ideally this would not be in the API, but there's a lot of places where this
+    // makes it easier.
+    #[doc(hidden)]
+    /// Like [`Self::get_balance`] but returns an error if primary module is not
+    /// available
+    pub async fn get_balance_err(&self) -> anyhow::Result<Amount> {
+        self.get_balance()
             .await
+            .ok_or_else(|| anyhow!("Primary module not available"))
     }
 
     /// Returns a stream that yields the current client balance every time it
     /// changes.
     pub async fn subscribe_balance_changes(&self) -> BoxStream<'static, Amount> {
-        let mut balance_changes = self.primary_module().subscribe_balance_changes().await;
-        let initial_balance = self.get_balance().await;
+        let primary_module_things = if let Some(primary_module) = self.primary_module() {
+            let balance_changes = primary_module.subscribe_balance_changes().await;
+            let initial_balance = self.get_balance().await.expect("Primary is present");
+
+            Some((primary_module.clone(), balance_changes, initial_balance))
+        } else {
+            None
+        };
         let db = self.db().clone();
-        let primary_module = self.primary_module().clone();
         let primary_module_instance = self.primary_module_instance;
 
         Box::pin(async_stream::stream! {
+            let Some((primary_module, mut balance_changes, initial_balance)) = primary_module_things else {
+                // If there is no primary module, there will not be one until client is
+                // restarted
+                pending().await
+            };
+
+
             yield initial_balance;
             let mut prev_balance = initial_balance;
             while let Some(()) = balance_changes.next().await {
@@ -1445,7 +1473,7 @@ impl Client {
         Box::pin(try_stream! {
             match method.as_str() {
                 "get_balance" => {
-                    let balance = self.get_balance().await;
+                    let balance = self.get_balance().await.unwrap_or_default();
                     yield serde_json::to_value(balance)?;
                 }
                 "subscribe_balance_changes" => {

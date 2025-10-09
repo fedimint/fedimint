@@ -12,7 +12,7 @@ use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
 use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::GatewayClientModuleV2;
 use fedimint_logging::LOG_GATEWAY;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::AdminResult;
 use crate::error::{AdminGatewayError, FederationNotConnected};
@@ -206,7 +206,9 @@ impl FederationManager {
             .expect("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.")
             .borrow()
             .with(|client| async move {
-                let balance_msat = client.get_balance().await;
+                let balance_msat = client.get_balance().await
+                    // If primary module is not available, we're not really connected yet
+                    .ok_or_else(|| FederationNotConnected { federation_id_prefix: federation_id.to_prefix() })?;
 
                 let config = dbtx.load_federation_config(federation_id).await.ok_or(FederationNotConnected {
                     federation_id_prefix: federation_id.to_prefix(),
@@ -234,7 +236,11 @@ impl FederationManager {
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {
-            let balance_msat = client.borrow().with(|client| client.get_balance()).await;
+            let Some(balance_msat) = client.borrow().with(|client| client.get_balance()).await
+            else {
+                warn!(target: LOG_GATEWAY, "Skipped Federation due to lack of primary module");
+                continue;
+            };
 
             let config = dbtx.load_federation_config(*federation_id).await;
             if let Some(config) = config {

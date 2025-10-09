@@ -960,8 +960,17 @@ impl Gateway {
             // If the amount is "all", then we need to subtract the fees from
             // the amount we are withdrawing
             BitcoinAmountOrAll::All => {
-                let balance =
-                    bitcoin::Amount::from_sat(client.value().get_balance().await.msats / 1000);
+                let balance = bitcoin::Amount::from_sat(
+                    client
+                        .value()
+                        .get_balance()
+                        .await
+                        .ok_or_else(|| {
+                            AdminGatewayError::Unexpected(anyhow!("Primary module not available"))
+                        })?
+                        .msats
+                        / 1000,
+                );
                 let fees = wallet_module.get_withdraw_fees(&address, balance).await?;
                 let withdraw_amount = balance.checked_sub(fees.amount());
                 if withdraw_amount.is_none() {
@@ -1221,7 +1230,14 @@ impl Gateway {
         let federation_info = FederationInfo {
             federation_id,
             federation_name: federation_manager.federation_name(&client).await,
-            balance_msat: client.get_balance().await,
+            balance_msat: client.get_balance().await.unwrap_or_else(|| {
+                warn!(
+                    target: LOG_GATEWAY,
+                    %federation_id,
+                    "Balance not immediately available after joining/recovering."
+                );
+                Amount::default()
+            }),
             config: federation_config.clone(),
         };
 

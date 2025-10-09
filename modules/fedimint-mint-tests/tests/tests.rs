@@ -136,8 +136,8 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     assert_eq!(sub1.ok().await?, SpendOOBState::Success);
     info!("### REISSUE: DONE");
 
-    assert!(client1.get_balance().await >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
-    assert!(client2.get_balance().await >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));
+    assert!(client1.get_balance_err().await? >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
+    assert!(client2.get_balance_err().await? >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));
     Ok(())
 }
 
@@ -247,7 +247,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
 
     assert_eq!(
-        client1.get_balance().await,
+        client1.get_balance_err().await?,
         sats(1000).saturating_sub(total_amount_spent)
     );
 
@@ -284,7 +284,9 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
         task.await.expect("reissue task failed");
     }
 
-    assert!(client2.get_balance().await >= total_amount_spent.saturating_sub(EXPECTED_MAXIMUM_FEE));
+    assert!(
+        client2.get_balance_err().await? >= total_amount_spent.saturating_sub(EXPECTED_MAXIMUM_FEE)
+    );
 
     Ok(())
 }
@@ -363,7 +365,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
-        let balance = client.get_balance().await;
+        let balance = client.get_balance_err().await?;
         let expected_min_balance = sats(1000).saturating_sub(EXPECTED_MAXIMUM_FEE);
         if expected_min_balance <= balance {
             return Ok(());
@@ -440,7 +442,7 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
-        let balance = client.get_balance().await;
+        let balance = client.get_balance_err().await?;
         let expected_min_balance = sats(1000)
             .saturating_sub(EXPECTED_MAXIMUM_FEE)
             .saturating_sub(single_note.0);
