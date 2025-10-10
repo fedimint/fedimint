@@ -29,10 +29,11 @@ use fedimint_core::endpoint_constants::{
     BACKUP_STATISTICS_ENDPOINT, CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
     CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT,
     FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
-    P2P_CONNECTION_STATUS_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    P2P_CONNECTION_STATUS_ENDPOINT, P2P_CONNECTION_TYPE_ENDPOINT, RECOVER_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -765,6 +766,16 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<Duration>> {
                 Ok(fedimint.p2p_status_receivers
+                    .iter()
+                    .map(|(peer, receiver)| (*peer, *receiver.borrow()))
+                    .collect())
+            }
+        },
+        api_endpoint! {
+            P2P_CONNECTION_TYPE_ENDPOINT,
+            ApiVersion::new(0, 7),
+            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, ConnectionType> {
+                Ok(fedimint.p2p_connection_type_receivers
                     .iter()
                     .map(|(peer, receiver)| (*peer, *receiver.borrow()))
                     .collect())
