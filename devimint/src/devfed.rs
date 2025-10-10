@@ -207,6 +207,7 @@ impl DevJitFed {
                         name: "gatewayd-ldk-0".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                         ldk_port: process_mgr.globals.FM_PORT_LDK,
+                        iroh_port: process_mgr.globals.FM_PORT_GW_LDK_IROH,
                     },
                 )
                 .await?;
@@ -227,6 +228,7 @@ impl DevJitFed {
                         name: "gatewayd-ldk-1".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK2,
                         ldk_port: process_mgr.globals.FM_PORT_LDK2,
+                        iroh_port: process_mgr.globals.FM_PORT_GW_LDK2_IROH,
                     },
                 )
                 .await?;
