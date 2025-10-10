@@ -229,7 +229,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     if gatewayd_version >= *VERSION_0_9_0_ALPHA && gateway_cli_version >= *VERSION_0_9_0_ALPHA {
         info!("Testing LNv1 client can pay LNv2 invoice...");
-        let lnd_gw_id = gw_lnd.gateway_id().await?;
+        let lnd_gw_id = gw_lnd.gateway_id.clone();
         let (invoice, receive_op) = receive(&client, &gw_lnd.addr, 1_000_000).await?;
         test_send_lnv1(&client, &lnd_gw_id, &invoice.to_string()).await?;
         lnv1_swap += 1;
