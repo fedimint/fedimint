@@ -45,6 +45,7 @@ pub struct Gatewayd {
     pub log_path: PathBuf,
     pub gw_port: u16,
     pub ldk_port: u16,
+    pub gateway_id: String,
 }
 
 impl Gatewayd {
@@ -113,6 +114,38 @@ impl Gatewayd {
             )
             .await?;
 
+        let gateway_id = poll(
+            "waiting for gateway to be ready to respond to rpc",
+            || async {
+                // Once the gateway id is available via RPC, the gateway is ready
+                let command = if ln.ln_type() == LightningNodeType::Ldk
+                    && gatewayd_version < *VERSION_0_7_0_ALPHA
+                {
+                    vec!["gateway-cli".to_string()]
+                } else {
+                    crate::util::get_gateway_cli_path()
+                };
+                let info = cmd!(
+                    command,
+                    "--rpcpassword",
+                    "theresnosecondbest",
+                    "-a",
+                    addr,
+                    "info"
+                )
+                .out_json()
+                .await
+                .map_err(ControlFlow::Continue)?;
+                let gateway_id = info["gateway_id"]
+                    .as_str()
+                    .context("gateway_id must be a string")
+                    .map_err(ControlFlow::Break)?
+                    .to_owned();
+                Ok(gateway_id)
+            },
+        )
+        .await?;
+
         let log_path = process_mgr
             .globals
             .FM_LOGS_DIR
@@ -127,12 +160,9 @@ impl Gatewayd {
             log_path,
             gw_port: port,
             ldk_port: lightning_node_port,
+            gateway_id,
         };
-        poll(
-            "waiting for gateway to be ready to respond to rpc",
-            || async { gatewayd.gateway_id().await.map_err(ControlFlow::Continue) },
-        )
-        .await?;
+
         Ok(gatewayd)
     }
 
@@ -237,15 +267,6 @@ impl Gatewayd {
         )
         .await
         .context("Getting gateway info via gateway-cli info")
-    }
-
-    pub async fn gateway_id(&self) -> Result<String> {
-        let info = self.get_info().await?;
-        let gateway_id = info["gateway_id"]
-            .as_str()
-            .context("gateway_id must be a string")?
-            .to_owned();
-        Ok(gateway_id)
     }
 
     pub async fn lightning_pubkey(&self) -> Result<PublicKey> {
