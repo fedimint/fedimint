@@ -9,13 +9,14 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::api_announcement::{SignedApiAnnouncement, override_api_urls};
-use fedimint_core::runtime::sleep;
+use fedimint_core::runtime::{self, sleep};
 use fedimint_core::secp256k1::SECP256K1;
+use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
-use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::{NumPeersExt as _, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
-use futures::future::join_all;
-use tracing::{debug, warn};
+use futures::stream::{FuturesUnordered, StreamExt as _};
+use tracing::debug;
 
 use crate::Client;
 use crate::db::DbKeyPrefix;
@@ -39,14 +40,25 @@ impl_db_lookup!(
 
 /// Fetches API URL announcements from guardians, validates them and updates the
 /// DB if any new more upt to date ones are found.
-pub(crate) async fn run_api_announcement_sync(client_inner: Arc<Client>) {
+pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>) {
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
     loop {
-        if let Err(err) =
-            refresh_api_announcement_sync(&client_inner.api, client_inner.db(), &guardian_pub_keys)
-                .await
-        {
+        if let Err(err) = {
+            let api: &DynGlobalApi = &client_inner.api;
+            let results = fetch_api_announcements_from_at_least_num_of_peers(
+                1,
+                api,
+                &guardian_pub_keys,
+                if is_running_in_test_env() {
+                    Duration::from_millis(1)
+                } else {
+                    Duration::from_secs(30)
+                },
+            )
+            .await;
+            store_api_announcements_updates_from_peers(client_inner.db(), &results).await
+        } {
             debug!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Refreshing api announcements failed");
         }
 
@@ -60,71 +72,122 @@ pub(crate) async fn run_api_announcement_sync(client_inner: Arc<Client>) {
     }
 }
 
-pub(crate) async fn refresh_api_announcement_sync(
-    api: &DynGlobalApi,
+pub(crate) async fn store_api_announcements_updates_from_peers(
     db: &Database,
-    guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
-) -> anyhow::Result<()> {
-    let results = fetch_api_announcements_from_all_peers(api, guardian_pub_keys).await;
-
-    process_api_announcements(db, guardian_pub_keys, &results).await
-}
-
-pub(crate) async fn process_api_announcements(
-    db: &Database,
-    guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
-    results: &[anyhow::Result<BTreeMap<PeerId, SignedApiAnnouncement>>],
+    updates: &[BTreeMap<PeerId, SignedApiAnnouncement>],
 ) -> Result<(), anyhow::Error> {
-    let mut some_success = false;
-
-    for (peer_id, result) in guardian_pub_keys.keys().zip(results) {
-        match result {
-            Ok(announcements) => {
-                store_api_announcements(db, announcements).await;
-                some_success |= true
-            }
-            Err(err) => {
-                warn!(target: LOG_CLIENT, %peer_id, err = %err.fmt_compact_anyhow(), "Failed to process API announcements");
-            }
-        }
+    for announcements in updates {
+        store_api_announcement_updates(db, announcements).await;
     }
 
-    if some_success {
-        Ok(())
-    } else {
-        bail!("Unable to get any api announcements");
-    }
+    Ok(())
 }
 
 pub(crate) type PeersSignedApiAnnouncements = BTreeMap<PeerId, SignedApiAnnouncement>;
 
-pub(crate) async fn fetch_api_announcements_from_all_peers(
+/// Fetch responses from at least `num_responses_required` of peers.
+///
+/// Will wait a little bit extra in hopes of collecting more than strictly
+/// needed responses.
+pub(crate) async fn fetch_api_announcements_from_at_least_num_of_peers(
+    num_responses_required: usize,
     api: &DynGlobalApi,
     guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
-) -> Vec<anyhow::Result<PeersSignedApiAnnouncements>> {
-    join_all(api.all_peers().iter().map(|peer_id| async {
-        let peer_id = *peer_id;
-        let announcements = api.api_announcements(peer_id).await.with_context(move || {
-            format!("Fetching API announcements from peer {peer_id} failed")
-        })?;
+    extra_response_wait: Duration,
+) -> Vec<PeersSignedApiAnnouncements> {
+    let num_peers = guardian_pub_keys.to_num_peers();
+    // Keep trying, initially somewhat aggressively, but after a while retry very
+    // slowly, because chances for response are getting lower and lower.
+    let mut backoff = custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
 
-        // If any of the announcements is invalid something is fishy with that
-        // guardian and we ignore all its responses
-        for (peer_id, announcement) in &announcements {
-            let Some(guardian_pub_key) = guardian_pub_keys.get(peer_id) else {
-                bail!("Guardian public key not found for peer {}", peer_id);
-            };
+    // Make a single request to a peer after a delay
+    async fn make_request(
+        delay: Duration,
+        peer_id: PeerId,
+        api: &DynGlobalApi,
+        guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
+    ) -> (PeerId, anyhow::Result<PeersSignedApiAnnouncements>) {
+        runtime::sleep(delay).await;
 
-            if !announcement.verify(SECP256K1, guardian_pub_key) {
-                bail!("Failed to verify announcement for peer {}", peer_id);
+        let result = async {
+            let announcements = api.api_announcements(peer_id).await.with_context(move || {
+                format!("Fetching API announcements from peer {peer_id} failed")
+            })?;
+
+            // If any of the announcements is invalid something is fishy with that
+            // guardian and we ignore all its responses
+            for (peer_id, announcement) in &announcements {
+                let Some(guardian_pub_key) = guardian_pub_keys.get(peer_id) else {
+                    bail!("Guardian public key not found for peer {}", peer_id);
+                };
+
+                if !announcement.verify(SECP256K1, guardian_pub_key) {
+                    bail!("Failed to verify announcement for peer {}", peer_id);
+                }
+            }
+            Ok(announcements)
+        }
+        .await;
+
+        (peer_id, result)
+    }
+
+    let mut requests = FuturesUnordered::new();
+
+    for peer_id in num_peers.peer_ids() {
+        requests.push(make_request(
+            Duration::ZERO,
+            peer_id,
+            api,
+            guardian_pub_keys,
+        ));
+    }
+
+    let mut responses = Vec::new();
+
+    loop {
+        let next_response = if responses.len() < num_responses_required {
+            // If we don't have enough responses yet, we wait
+            requests.next().await
+        } else {
+            // if we do have responses we need, we wait opportunistically just for a small
+            // duration if any other responses are ready anyway, just to not
+            // throw them away
+            fedimint_core::runtime::timeout(extra_response_wait, requests.next())
+                .await
+                .ok()
+                .flatten()
+        };
+
+        let Some((peer_id, response)) = next_response else {
+            break;
+        };
+
+        match response {
+            Err(err) => {
+                debug!(
+                    target: LOG_CLIENT,
+                    %peer_id,
+                    err = %err.fmt_compact_anyhow(),
+                    "Failed to fetch API announcements from peer"
+                );
+                requests.push(make_request(
+                    backoff.next().expect("Keeps retrying"),
+                    peer_id,
+                    api,
+                    guardian_pub_keys,
+                ));
+            }
+            Ok(announcements) => {
+                responses.push(announcements);
             }
         }
-        Ok(announcements)
-    }))
-    .await
+    }
+
+    responses
 }
 
-pub(crate) async fn store_api_announcements(
+pub(crate) async fn store_api_announcement_updates(
     db: &Database,
     announcements: &BTreeMap<PeerId, SignedApiAnnouncement>,
 ) {
