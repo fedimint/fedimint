@@ -2,8 +2,8 @@ id: fedimintd
 title: "Fedimint"
 version: 0.8.1.1
 release-notes: |
-  https://github.com/fedimint/fedimint/releases/tag/v0.8.1
-  This release includes support for sideloading fedimintd.
+  Initial StartOS release.
+  - Read more about the release [here](https://github.com/fedimint/fedimint/releases/tag/v0.8.1)
 license: MIT
 wrapper-repo: "https://github.com/fedimint/fedimint/tree/master/fedimint-startos"
 upstream-repo: "https://github.com/fedimint/fedimint"
@@ -69,7 +69,7 @@ interfaces:
       - tcp
 dependencies:
   bitcoind:
-    version: ">=0.21.0.0 <30.0.0"
+    version: ">=0.21.0.0 <31.0.0"
     requirement:
       type: "opt-in"
       how: "Install Bitcoin Core from the Start9 marketplace and select it in Fedimint's config"
@@ -101,3 +101,12 @@ backup:
     mounts:
       BACKUP: "/mnt/backup"
       fedimintd: "/fedimintd"
+migrations:
+  from:
+    "*":
+      type: script
+      args: ["from"]
+  to:
+    "*":
+      type: script
+      args: ["to"]

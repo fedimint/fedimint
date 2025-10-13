@@ -28,7 +28,7 @@ clean-manifest:
 	@echo; echo "Comments successfully removed from manifest.yaml file."; echo
 
 scripts/embassy.js: $(TS_FILES)
-	deno bundle scripts/embassy.ts scripts/embassy.js
+	deno run --allow-read --allow-write --allow-env --allow-net scripts/bundle.ts
 
 arm:
 	@rm -f docker-images/x86_64.tar
