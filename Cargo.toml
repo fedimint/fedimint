@@ -15,6 +15,7 @@ members = [
     "fedimint-client",
     "fedimint-client-module",
     "fedimint-client-rpc",
+    "fedimint-client-uniffi",
     "fedimint-client-wasm",
     "fedimint-connectors",
     "fedimint-core",
