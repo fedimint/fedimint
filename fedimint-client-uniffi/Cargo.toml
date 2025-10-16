@@ -1,0 +1,35 @@
+[package]
+authors = { workspace = true }
+description = "fedimint client for uniffi"
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-client-uniffi"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lib]
+crate-type = ["staticlib", "cdylib", "lib"]
+name = "fedimint_client_uniffi"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+fedimint-client-rpc = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-cursed-redb = { workspace = true }
+fedimint-db-locked = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+uniffi = { version = "0.29", features = ["cli"] }
+
+[build-dependencies]
+uniffi = { version = "0.29", features = ["build"] }
+fedimint-build = { workspace = true }
+
