@@ -141,7 +141,7 @@ pub async fn latency_tests(
     let initial_balance_sats = 100_000_000;
     fed.pegin_client(initial_balance_sats, &client).await?;
 
-    let lnd_gw_id = gw_lnd.gateway_id().await?;
+    let lnd_gw_id = gw_lnd.gateway_id.clone();
 
     match r#type {
         LatencyTest::Reissue => {
@@ -589,7 +589,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
 
     let client = fed.new_joined_client("cli-tests-client").await?;
-    let lnd_gw_id = gw_lnd.gateway_id().await?;
+    let lnd_gw_id = gw_lnd.gateway_id.clone();
 
     cmd!(
         client,
@@ -1267,7 +1267,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let (lnd_value, ldk_value) = try_join!(gw_lnd.get_info(), gw_ldk.get_info())?;
 
     // Drop references to gateways so the test can kill them
-    let lnd_gateway_id = gw_lnd.gateway_id().await?;
+    let lnd_gateway_id = gw_lnd.gateway_id.clone();
     let gw_ldk_name = gw_ldk.gw_name.clone();
     let gw_ldk_port = gw_ldk.gw_port;
     let gw_lightning_port = gw_ldk.ldk_port;
@@ -1377,7 +1377,7 @@ pub async fn do_try_create_and_pay_invoice(
         client,
         Amount::from_msats(1000),
         "incoming-over-lnd-gw".to_string(),
-        gw_lnd.gateway_id().await?,
+        gw_lnd.gateway_id.clone(),
     )
     .await?
     .invoice;
