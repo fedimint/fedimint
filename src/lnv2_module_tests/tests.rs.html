@@ -229,7 +229,7 @@
 <a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
 <a href=#230 id=230 data-nosnippet>230</a>    <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_9_0_ALPHA &amp;&amp; gateway_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_9_0_ALPHA {
 <a href=#231 id=231 data-nosnippet>231</a>        <span class="macro">info!</span>(<span class="string">"Testing LNv1 client can pay LNv2 invoice..."</span>);
-<a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">let </span>lnd_gw_id = gw_lnd.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">let </span>lnd_gw_id = gw_lnd.gateway_id.clone();
 <a href=#233 id=233 data-nosnippet>233</a>        <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_lnd.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#234 id=234 data-nosnippet>234</a>        test_send_lnv1(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>lnd_gw_id, <span class="kw-2">&amp;</span>invoice.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#235 id=235 data-nosnippet>235</a>        lnv1_swap += <span class="number">1</span>;
