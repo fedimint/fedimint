@@ -343,14 +343,14 @@ jobs:
           echo "container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
-        if: (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
+        if: (github.ref == 'refs/heads/master' || github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/')) && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
         uses: docker/login-action@v3
         with:
           username: fedimint
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Publish
-        if: github.ref == 'refs/heads/master' && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
+        if: (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/releases/')) && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
         run: |
           nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${LAST_COMMIT_SHA}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
@@ -359,13 +359,21 @@ jobs:
         run: |
           nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:master-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
+      - name: Publish release branch tag
+        if: startsWith(github.ref, 'refs/heads/releases/') && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
+        run: |
+          # Extract the version from branch name (e.g., releases/v0.8 -> releases-v0.8)
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          VERSION_TAG="${BRANCH_NAME//\//-}"  # Replace / with - to get releases-v0.8
+          nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${VERSION_TAG}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+
       - name: Publish tagged release
         if: github.ref_type == 'tag' && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
         run: |
           nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${GITHUB_REF_NAME}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   manifest:
-    if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
+    if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/'))
     name: "Create Multi-arch Manifests"
     needs: containers
     runs-on: [self-hosted, linux, x64]
@@ -413,6 +421,26 @@ jobs:
               docker manifest annotate "$image:${GITHUB_REF_NAME}" "$image:${GITHUB_REF_NAME}-x86_64-linux" --arch amd64
               docker manifest annotate "$image:${GITHUB_REF_NAME}" "$image:${GITHUB_REF_NAME}-aarch64-linux" --arch arm64
               docker manifest push "$image:${GITHUB_REF_NAME}"
+            elif [[ "$GITHUB_REF" =~ ^refs/heads/releases/ ]]; then
+              # Extract the version from branch name (e.g., releases/v0.8 -> releases-v0.8)
+              BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+              VERSION_TAG="${BRANCH_NAME//\//-}"  # Replace / with - to get releases-v0.8
+
+              echo "Creating manifest for $image:${VERSION_TAG}"
+              docker manifest create "$image:${VERSION_TAG}" \
+                "$image:${VERSION_TAG}-x86_64-linux" \
+                "$image:${VERSION_TAG}-aarch64-linux"
+              docker manifest annotate "$image:${VERSION_TAG}" "$image:${VERSION_TAG}-x86_64-linux" --arch amd64
+              docker manifest annotate "$image:${VERSION_TAG}" "$image:${VERSION_TAG}-aarch64-linux" --arch arm64
+              docker manifest push "$image:${VERSION_TAG}"
+
+              echo "Creating manifest for $image:${LAST_COMMIT_SHA}"
+              docker manifest create "$image:${LAST_COMMIT_SHA}" \
+                "$image:${LAST_COMMIT_SHA}-x86_64-linux" \
+                "$image:${LAST_COMMIT_SHA}-aarch64-linux"
+              docker manifest annotate "$image:${LAST_COMMIT_SHA}" "$image:${LAST_COMMIT_SHA}-x86_64-linux" --arch amd64
+              docker manifest annotate "$image:${LAST_COMMIT_SHA}" "$image:${LAST_COMMIT_SHA}-aarch64-linux" --arch arm64
+              docker manifest push "$image:${LAST_COMMIT_SHA}"
             fi
           done
 
