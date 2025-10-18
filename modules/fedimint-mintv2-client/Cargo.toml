@@ -23,6 +23,10 @@ cli = ["dep:clap"]
 name = "fedimint_mintv2_client"
 path = "src/lib.rs"
 
+[[bench]]
+name = "recovery"
+harness = false
+
 [dependencies]
 anyhow = { workspace = true }
 aquamarine = { workspace = true }
@@ -43,6 +47,7 @@ fedimint-mintv2-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
+rand = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
 serde-big-array = { workspace = true }
@@ -58,4 +63,5 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+divan = "0.1.21"
 test-log = { workspace = true }

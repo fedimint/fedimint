@@ -93,7 +93,7 @@ impl InputStateMachine {
             .map(|spendable_note| ClientInput::<MintInput> {
                 input: MintInput::new_v0(spendable_note.note()),
                 keys: vec![spendable_note.keypair],
-                amounts: Amounts::new_bitcoin(spendable_note.amount),
+                amounts: Amounts::new_bitcoin(spendable_note.amount()),
             })
             .collect();
 

@@ -1,6 +1,8 @@
+use std::collections::BTreeSet;
+
 use anyhow::ensure;
+use fedimint_client::ClientHandleArc;
 use fedimint_core::config::EmptyGenParams;
-use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::Amount;
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -42,15 +44,8 @@ async fn send_and_receive() -> anyhow::Result<()> {
         .await_primary_bitcoin_module_outputs(op, vec![outpoint])
         .await?;
 
-    for _ in 0..8 {
-        let denominations = client_send
-            .get_first_module::<MintClientModule>()?
-            .get_count_by_denomination()
-            .await;
-
-        for (amount, count) in denominations.iter() {
-            tracing::info!("Denominations: {amount} - {count}");
-        }
+    for i in 0..10 {
+        tracing::info!("Sending ecash payment {i} of 10");
 
         let ecash = client_send
             .get_first_module::<MintClientModule>()?
@@ -58,8 +53,6 @@ async fn send_and_receive() -> anyhow::Result<()> {
             .await?;
 
         let ecash = ecash.encode_base32();
-
-        tracing::info!("{ecash}");
 
         let ecash = ECash::decode_base32(&ecash).unwrap();
 
@@ -69,18 +62,35 @@ async fn send_and_receive() -> anyhow::Result<()> {
             .await?;
 
         assert_eq!(amount.msats / 1_000, 1_000);
+
+        test_recover_ecash(&client_send).await?;
+        test_recover_ecash(&client_receive).await?;
     }
 
-    retry(
-        "Waiting for the full balance to become available".to_string(),
-        backoff_util::background_backoff(),
-        || async {
-            ensure!(client_receive.get_balance_for_btc().await? >= Amount::from_sats(7900));
+    ensure!(client_receive.get_balance_for_btc().await? >= Amount::from_sats(9900));
 
-            Ok(())
-        },
-    )
-    .await?;
+    Ok(())
+}
+
+async fn test_recover_ecash(client: &ClientHandleArc) -> anyhow::Result<()> {
+    let requests = client
+        .get_first_module::<MintClientModule>()?
+        .recover_ecash()
+        .await?;
+
+    let tweaks = requests
+        .iter()
+        .map(|request| request.tweak)
+        .collect::<BTreeSet<[u8; 12]>>();
+
+    ensure!(tweaks.len() == requests.len());
+
+    let recovered_balance = requests
+        .iter()
+        .map(|request| request.denomination.amount())
+        .sum::<Amount>();
+
+    ensure!(recovered_balance == client.get_balance_for_btc().await?);
 
     Ok(())
 }

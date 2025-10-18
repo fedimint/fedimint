@@ -1,23 +1,21 @@
 use std::collections::BTreeMap;
 
 use anyhow::ensure;
-use fedimint_api_client::api::{FederationApiExt, ServerError};
-use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_client_module::module::ClientContext;
+use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::ApiRequestErased;
-use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, TransactionId};
+use fedimint_core::{PeerId, TransactionId};
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_mintv2_common::endpoint_constants::SIGNATURE_SHARES_ENDPOINT;
+use fedimint_mintv2_common::Denomination;
 use tbs::{aggregate_signature_shares, AggregatePublicKey, BlindedSignatureShare, PublicKeyShare};
 
+use crate::api::MintV2ModuleApi;
 use crate::client_db::SpendableNoteKey;
 use crate::event::NoteCreated;
-use crate::{MintClientContext, MintClientModule, NoteIssuanceRequest};
+use crate::{issuance, MintClientContext, MintClientModule, NoteIssuanceRequest};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStateMachine {
@@ -28,8 +26,7 @@ pub struct MintOutputStateMachine {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct OutputSMCommon {
     pub operation_id: OperationId,
-    pub txid: Option<TransactionId>,
-    pub outpoints: Vec<OutPoint>,
+    pub range: Option<OutPointRange>,
     pub issuance_requests: Vec<NoteIssuanceRequest>,
 }
 
@@ -64,8 +61,7 @@ impl State for MintOutputStateMachine {
             OutputSMState::Pending => vec![StateTransition::new(
                 Self::await_signature_shares(
                     global_context.clone(),
-                    self.common.txid,
-                    self.common.outpoints.clone(),
+                    self.common.range.map(|range| range.txid()),
                     self.common.issuance_requests.clone(),
                     context.tbs_pks.clone(),
                     context.root_secret.clone(),
@@ -96,38 +92,18 @@ impl MintOutputStateMachine {
     async fn await_signature_shares(
         global_context: DynGlobalClientContext,
         txid: Option<TransactionId>,
-        outpoints: Vec<OutPoint>,
         issuance_requests: Vec<NoteIssuanceRequest>,
-        tbs_pks: BTreeMap<Amount, BTreeMap<PeerId, PublicKeyShare>>,
+        tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
         root_secret: DerivableSecret,
     ) -> Result<BTreeMap<PeerId, Vec<BlindedSignatureShare>>, String> {
         if let Some(txid) = txid {
             global_context.await_tx_accepted(txid).await?;
         }
 
-        let shares = global_context
+        global_context
             .module_api()
-            .request_with_strategy_retry(
-                // This query collects a threshold of 2f + 1 valid blind signature shares
-                FilterMapThreshold::new(
-                    move |peer, signature_shares| {
-                        verify_blind_shares(
-                            peer,
-                            signature_shares,
-                            &issuance_requests,
-                            &tbs_pks,
-                            &root_secret,
-                        )
-                        .map_err(ServerError::InvalidResponse)
-                    },
-                    global_context.api().all_peers().to_num_peers(),
-                ),
-                SIGNATURE_SHARES_ENDPOINT.to_owned(),
-                ApiRequestErased::new(outpoints),
-            )
-            .await;
-
-        Ok(shares)
+            .fetch_signature_shares(issuance_requests, tbs_pks, root_secret)
+            .await
     }
 
     async fn transition_outcome_ready(
@@ -135,7 +111,7 @@ impl MintOutputStateMachine {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         signature_shares: Result<BTreeMap<PeerId, Vec<BlindedSignatureShare>>, String>,
         old_state: MintOutputStateMachine,
-        tbs_pks: BTreeMap<Amount, AggregatePublicKey>,
+        tbs_pks: BTreeMap<Denomination, AggregatePublicKey>,
         root_secret: DerivableSecret,
     ) -> MintOutputStateMachine {
         let Ok(signature_shares) = signature_shares else {
@@ -157,8 +133,8 @@ impl MintOutputStateMachine {
 
             if !spendable_note.note().verify(
                 *tbs_pks
-                    .get(&request.amount)
-                    .expect("No aggregated pk found for amount"),
+                    .get(&request.denomination)
+                    .expect("No aggregated pk found for denomination"),
             ) {
                 return MintOutputStateMachine {
                     common: old_state.common,
@@ -191,7 +167,7 @@ pub fn verify_blind_shares(
     peer: PeerId,
     signature_shares: Vec<BlindedSignatureShare>,
     issuance_requests: &[NoteIssuanceRequest],
-    tbs_pks: &BTreeMap<Amount, BTreeMap<PeerId, PublicKeyShare>>,
+    tbs_pks: &BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
     root_secret: &DerivableSecret,
 ) -> anyhow::Result<Vec<BlindedSignatureShare>> {
     ensure!(
@@ -201,13 +177,17 @@ pub fn verify_blind_shares(
 
     for (request, share) in issuance_requests.iter().zip(signature_shares.iter()) {
         let amount_key = tbs_pks
-            .get(&request.amount)
-            .expect("No pk shares found for amount {amount}")
+            .get(&request.denomination)
+            .expect("No pk shares found for denomination")
             .get(&peer)
             .expect("No pk share found for peer {peer}");
 
         ensure!(
-            tbs::verify_signature_share(request.blinded_message(root_secret), *share, *amount_key),
+            tbs::verify_signature_share(
+                issuance::blinded_message(request.tweak, root_secret),
+                *share,
+                *amount_key
+            ),
             "Invalid blind signature"
         );
     }

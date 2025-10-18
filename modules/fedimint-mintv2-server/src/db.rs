@@ -1,9 +1,10 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint};
+use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_mintv2_common::{Denomination, RecoveryItem};
 use serde::Serialize;
 use strum_macros::EnumIter;
-use tbs::BlindedSignatureShare;
+use tbs::{BlindedMessage, BlindedSignatureShare};
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -11,6 +12,7 @@ pub enum DbKeyPrefix {
     NoteNonce = 0x10,
     BlindedSignatureShare = 0x13,
     MintAuditItem = 0x14,
+    RecoveryItem = 0x15,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -33,7 +35,7 @@ impl_db_record!(
 impl_db_lookup!(key = NonceKey, query_prefix = NonceKeyPrefix);
 
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
-pub struct BlindedSignatureShareKey(pub OutPoint);
+pub struct BlindedSignatureShareKey(pub BlindedMessage);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct BlindedSignatureSharePrefix;
@@ -49,7 +51,7 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
-pub struct IssuanceCounterKey(pub Amount);
+pub struct IssuanceCounterKey(pub Denomination);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct IssuanceCounterPrefix;
@@ -63,3 +65,16 @@ impl_db_lookup!(
     key = IssuanceCounterKey,
     query_prefix = IssuanceCounterPrefix
 );
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+pub struct RecoveryItemKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RecoveryItemPrefix;
+
+impl_db_record!(
+    key = RecoveryItemKey,
+    value = RecoveryItem,
+    db_prefix = DbKeyPrefix::RecoveryItem,
+);
+impl_db_lookup!(key = RecoveryItemKey, query_prefix = RecoveryItemPrefix);

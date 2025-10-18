@@ -31,16 +31,18 @@ use fedimint_mintv2_common::config::{
     consensus_denominations, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
     MintGenParams,
 };
-use fedimint_mintv2_common::endpoint_constants::SIGNATURE_SHARES_ENDPOINT;
+use fedimint_mintv2_common::endpoint_constants::{
+    RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
+    SIGNATURE_SHARES_ENDPOINT,
+};
 use fedimint_mintv2_common::{
-    MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,
-    MintOutputError, MintOutputOutcome, MODULE_CONSENSUS_VERSION,
+    Denomination, MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes,
+    MintOutput, MintOutputError, MintOutputOutcome, RecoveryItem, MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server_core::config::{eval_poly_g2, PeerHandleOps};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
-use itertools::Itertools;
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use strum::IntoEnumIterator;
@@ -53,7 +55,7 @@ use threshold_crypto::{G2Projective, Scalar};
 
 use crate::db::{
     BlindedSignatureShareKey, BlindedSignatureSharePrefix, DbKeyPrefix, IssuanceCounterKey,
-    IssuanceCounterPrefix, NonceKey, NonceKeyPrefix,
+    IssuanceCounterPrefix, NonceKey, NonceKeyPrefix, RecoveryItemKey, RecoveryItemPrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -96,6 +98,7 @@ impl ModuleInit for MintInit {
                         "Issuance Counter"
                     );
                 }
+                DbKeyPrefix::RecoveryItem => {}
             }
         }
 
@@ -138,19 +141,24 @@ impl ServerModuleInit for MintInit {
             .expect("Failed to parse mintv2 config gen params");
 
         let tbs_agg_pks = consensus_denominations()
-            .map(|amount| (amount, dealer_agg_pk(amount)))
-            .collect::<BTreeMap<Amount, AggregatePublicKey>>();
+            .map(|denomination| (denomination, dealer_agg_pk(denomination.amount())))
+            .collect::<BTreeMap<Denomination, AggregatePublicKey>>();
 
         let tbs_pks = consensus_denominations()
-            .map(|amount| {
+            .map(|denomination| {
                 let pks = peers
                     .iter()
-                    .map(|peer| (*peer, dealer_pk(amount, peers.to_num_peers(), *peer)))
+                    .map(|peer| {
+                        (
+                            *peer,
+                            dealer_pk(denomination.amount(), peers.to_num_peers(), *peer),
+                        )
+                    })
                     .collect();
 
-                (amount, pks)
+                (denomination, pks)
             })
-            .collect::<BTreeMap<Amount, BTreeMap<PeerId, PublicKeyShare>>>();
+            .collect::<BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>>();
 
         peers
             .iter()
@@ -163,7 +171,12 @@ impl ServerModuleInit for MintInit {
                     },
                     private: MintConfigPrivate {
                         tbs_sks: consensus_denominations()
-                            .map(|amount| (amount, dealer_sk(amount, peers.to_num_peers(), *peer)))
+                            .map(|denomination| {
+                                (
+                                    denomination,
+                                    dealer_sk(denomination.amount(), peers.to_num_peers(), *peer),
+                                )
+                            })
                             .collect(),
                     },
                 };
@@ -187,12 +200,12 @@ impl ServerModuleInit for MintInit {
         let mut tbs_agg_pks = BTreeMap::new();
         let mut tbs_pks = BTreeMap::new();
 
-        for amount in consensus_denominations() {
+        for denomination in consensus_denominations() {
             let (poly, sk) = peers.run_dkg_g2().await?;
 
-            tbs_sks.insert(amount, tbs::SecretKeyShare(sk));
+            tbs_sks.insert(denomination, tbs::SecretKeyShare(sk));
 
-            tbs_agg_pks.insert(amount, AggregatePublicKey(poly[0].to_affine()));
+            tbs_agg_pks.insert(denomination, AggregatePublicKey(poly[0].to_affine()));
 
             let pks = peers
                 .num_peers()
@@ -200,7 +213,7 @@ impl ServerModuleInit for MintInit {
                 .map(|peer| (peer, PublicKeyShare(eval_poly_g2(&poly, &peer))))
                 .collect();
 
-            tbs_pks.insert(amount, pks);
+            tbs_pks.insert(denomination, pks);
         }
 
         let cfg = MintConfig {
@@ -218,20 +231,11 @@ impl ServerModuleInit for MintInit {
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {
         let config = config.to_typed::<MintConfig>()?;
 
-        ensure!(
-            config
-                .private
-                .tbs_sks
-                .keys()
-                .contains(&Amount::from_msats(1)),
-            "No msat 1 denomination"
-        );
-
-        for amount in consensus_denominations() {
-            let pk = derive_pk_share(&config.private.tbs_sks[&amount]);
+        for denomination in consensus_denominations() {
+            let pk = derive_pk_share(&config.private.tbs_sks[&denomination]);
 
             ensure!(
-                pk == config.consensus.tbs_pks[&amount][identity],
+                pk == config.consensus.tbs_pks[&denomination][identity],
                 "Mint private key doesn't match pubkey share"
             );
         }
@@ -328,7 +332,7 @@ impl ServerModule for Mint {
             .cfg
             .consensus
             .tbs_agg_pks
-            .get(&input.note.amount)
+            .get(&input.note.denomination)
             .ok_or(MintInputError::InvalidAmountTier)?;
 
         if !input.note.verify(*pk) {
@@ -344,19 +348,30 @@ impl ServerModule for Mint {
         }
 
         let new_count = dbtx
-            .remove_entry(&IssuanceCounterKey(input.note.amount))
+            .remove_entry(&IssuanceCounterKey(input.note.denomination))
             .await
             .unwrap_or(0)
             .checked_sub(1)
             .expect("Failed to decrement issuance counter");
 
-        dbtx.insert_new_entry(&IssuanceCounterKey(input.note.amount), &new_count)
+        dbtx.insert_new_entry(&IssuanceCounterKey(input.note.denomination), &new_count)
             .await;
 
+        let next_index = get_recovery_count(dbtx).await;
+
+        dbtx.insert_new_entry(
+            &RecoveryItemKey(next_index),
+            &RecoveryItem::Input {
+                nonce_hash: input.note.nonce.consensus_hash(),
+            },
+        )
+        .await;
+
+        let amount = input.note.amount();
         Ok(InputMeta {
             amount: TransactionItemAmounts {
-                amounts: Amounts::new_bitcoin(input.note.amount),
-                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(input.note.amount)),
+                amounts: Amounts::new_bitcoin(amount),
+                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
             },
             pub_key: input.note.nonce,
         })
@@ -366,7 +381,7 @@ impl ServerModule for Mint {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a MintOutput,
-        outpoint: OutPoint,
+        _outpoint: OutPoint,
     ) -> Result<TransactionItemAmounts, MintOutputError> {
         let output = output.ensure_v0_ref()?;
 
@@ -374,26 +389,39 @@ impl ServerModule for Mint {
             .cfg
             .private
             .tbs_sks
-            .get(&output.amount)
+            .get(&output.denomination)
             .map(|key| tbs::sign_message(output.nonce, *key))
             .ok_or(MintOutputError::InvalidAmountTier)?;
 
-        dbtx.insert_new_entry(&BlindedSignatureShareKey(outpoint), &signature)
+        dbtx.insert_new_entry(&BlindedSignatureShareKey(output.nonce), &signature)
             .await;
 
         let new_count = dbtx
-            .remove_entry(&IssuanceCounterKey(output.amount))
+            .remove_entry(&IssuanceCounterKey(output.denomination))
             .await
             .unwrap_or(0)
             .checked_add(1)
             .expect("Failed to increment issuance counter");
 
-        dbtx.insert_new_entry(&IssuanceCounterKey(output.amount), &new_count)
+        dbtx.insert_new_entry(&IssuanceCounterKey(output.denomination), &new_count)
             .await;
 
+        let next_index = get_recovery_count(dbtx).await;
+
+        dbtx.insert_new_entry(
+            &RecoveryItemKey(next_index),
+            &RecoveryItem::Output {
+                denomination: output.denomination,
+                nonce_hash: output.nonce.consensus_hash(),
+                tweak: output.tweak,
+            },
+        )
+        .await;
+
+        let amount = output.amount();
         Ok(TransactionItemAmounts {
-            amounts: Amounts::new_bitcoin(output.amount),
-            fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(output.amount)),
+            amounts: Amounts::new_bitcoin(amount),
+            fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.fee(amount)),
         })
     }
 
@@ -413,28 +441,70 @@ impl ServerModule for Mint {
     ) {
         audit
             .add_items(dbtx, module_instance_id, &IssuanceCounterPrefix, |k, v| {
-                -((k.0.msats * v) as i64)
+                -((k.0.amount().msats * v) as i64)
             })
             .await;
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
-        vec![api_endpoint! {
-            SIGNATURE_SHARES_ENDPOINT,
-            ApiVersion::new(0, 1),
-            async |_module: &Mint, context, outpoints: Vec<OutPoint>| -> Vec<BlindedSignatureShare> {
-                let mut shares = Vec::new();
+        vec![
+            api_endpoint! {
+                SIGNATURE_SHARES_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, messages: Vec<tbs::BlindedMessage>| -> Vec<BlindedSignatureShare> {
+                    let mut shares = Vec::new();
 
-                for outpoint in outpoints {
-                    let share = context.dbtx().get_value(&BlindedSignatureShareKey(outpoint))
-                        .await
-                        .ok_or(ApiError::bad_request("No blinded signature share found".to_string()))?;
+                    for message in messages {
+                        let share = context.dbtx().get_value(&BlindedSignatureShareKey(message))
+                            .await
+                            .ok_or(ApiError::bad_request("No blinded signature share found".to_string()))?;
 
-                    shares.push(share);
+                        shares.push(share);
+                    }
+
+                    Ok(shares)
                 }
-
-                Ok(shares)
-            }
-        }]
+            },
+            api_endpoint! {
+                RECOVERY_SLICE_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, range: (u64, u64)| -> Vec<RecoveryItem> {
+                    Ok(get_recovery_slice(&mut context.dbtx(), range).await)
+                }
+            },
+            api_endpoint! {
+                RECOVERY_SLICE_HASH_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, range: (u64, u64)| -> bitcoin::hashes::sha256::Hash {
+                   Ok(get_recovery_slice(&mut context.dbtx(), range).await.consensus_hash())
+                }
+            },
+            api_endpoint! {
+                RECOVERY_COUNT_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, _params: ()| -> u64 {
+                    Ok(get_recovery_count(&mut context.dbtx()).await)
+                }
+            },
+        ]
     }
+}
+
+async fn get_recovery_count(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    dbtx.find_by_prefix_sorted_descending(&RecoveryItemPrefix)
+        .await
+        .next()
+        .await
+        .map_or(0, |entry| entry.0 .0 + 1)
+}
+
+async fn get_recovery_slice(
+    dbtx: &mut DatabaseTransaction<'_>,
+    range: (u64, u64),
+) -> Vec<RecoveryItem> {
+    dbtx.find_by_range(RecoveryItemKey(range.0)..RecoveryItemKey(range.1))
+        .await
+        .map(|entry| entry.1)
+        .collect()
+        .await
 }

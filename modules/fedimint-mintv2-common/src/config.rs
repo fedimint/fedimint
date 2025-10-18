@@ -8,7 +8,7 @@ use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, PublicKeyShare};
 
-use crate::MintCommonInit;
+use crate::{Denomination, MintCommonInit};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MintGenParams {
@@ -21,12 +21,12 @@ pub struct MintGenParamsConsensus {
     pub fee_consensus: FeeConsensus,
 }
 
-pub fn consensus_denominations() -> impl DoubleEndedIterator<Item = Amount> {
-    (0..42).map(|power| Amount::from_msats(1 << power))
+pub fn consensus_denominations() -> impl DoubleEndedIterator<Item = Denomination> {
+    (0..42).map(Denomination)
 }
 
-pub fn client_denominations() -> impl DoubleEndedIterator<Item = Amount> {
-    (10..42).map(|power| Amount::from_msats(1 << power))
+pub fn client_denominations() -> impl DoubleEndedIterator<Item = Denomination> {
+    (10..42).map(Denomination)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -37,20 +37,20 @@ pub struct MintConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct MintConfigConsensus {
-    pub tbs_agg_pks: BTreeMap<Amount, AggregatePublicKey>,
-    pub tbs_pks: BTreeMap<Amount, BTreeMap<PeerId, PublicKeyShare>>,
+    pub tbs_agg_pks: BTreeMap<Denomination, AggregatePublicKey>,
+    pub tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
     pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfigPrivate {
-    pub tbs_sks: BTreeMap<Amount, tbs::SecretKeyShare>,
+    pub tbs_sks: BTreeMap<Denomination, tbs::SecretKeyShare>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
 pub struct MintClientConfig {
-    pub tbs_agg_pks: BTreeMap<Amount, AggregatePublicKey>,
-    pub tbs_pks: BTreeMap<Amount, BTreeMap<PeerId, PublicKeyShare>>,
+    pub tbs_agg_pks: BTreeMap<Denomination, AggregatePublicKey>,
+    pub tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
     pub fee_consensus: FeeConsensus,
 }
 

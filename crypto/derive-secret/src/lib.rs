@@ -74,10 +74,10 @@ impl DerivableSecret {
         }
     }
 
-    pub fn tweak(&self, tweak: [u8; 16]) -> DerivableSecret {
+    pub fn tweak(&self, tweak: &[u8]) -> DerivableSecret {
         DerivableSecret {
             level: self.level,
-            kdf: Hkdf::from_prk(self.kdf.derive_hmac(&tweak)),
+            kdf: Hkdf::from_prk(self.kdf.derive_hmac(tweak)),
         }
     }
 

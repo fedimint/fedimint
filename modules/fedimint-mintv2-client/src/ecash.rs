@@ -34,7 +34,7 @@ impl ECash {
         self.0
             .iter()
             .filter_map(|field| match field {
-                ECashField::Note(note) => Some(note.amount),
+                ECashField::Note(note) => Some(note.amount()),
                 _ => None,
             })
             .sum()
