@@ -13,7 +13,6 @@ mod send_sm;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
@@ -212,15 +211,26 @@ pub enum FinalReceiveOperationState {
 
 pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LightningClientInit {
     pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    pub custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
+}
+
+impl std::fmt::Debug for LightningClientInit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LightningClientInit")
+            .field("gateway_conn", &self.gateway_conn)
+            .field("custom_meta_fn", &"<function>")
+            .finish()
+    }
 }
 
 impl Default for LightningClientInit {
     fn default() -> Self {
         LightningClientInit {
             gateway_conn: Arc::new(RealGatewayConnection),
+            custom_meta_fn: Arc::new(|| Value::Null),
         }
     }
 }
@@ -255,6 +265,7 @@ impl ClientModuleInit for LightningClientInit {
             args.module_api().clone(),
             args.module_root_secret(),
             self.gateway_conn.clone(),
+            self.custom_meta_fn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
         ))
@@ -283,7 +294,7 @@ impl Context for LightningClientContext {
     const KIND: Option<ModuleKind> = Some(KIND);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LightningClientModule {
     federation_id: FederationId,
     cfg: LightningClientConfig,
@@ -347,18 +358,11 @@ impl LightningClientModule {
         module_api: DynModuleApi,
         module_root_secret: &DerivableSecret,
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+        custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
         admin_auth: Option<ApiAuth>,
         task_group: &TaskGroup,
     ) -> Self {
-        Self::spawn_gateway_map_update_task(
-            federation_id,
-            client_ctx.clone(),
-            module_api.clone(),
-            gateway_conn.clone(),
-            task_group,
-        );
-
-        Self {
+        let module = Self {
             federation_id,
             cfg,
             notifier,
@@ -372,45 +376,37 @@ impl LightningClientModule {
                 .to_secp_key(SECP256K1),
             gateway_conn,
             admin_auth,
-        }
+        };
+
+        module.spawn_receive_lnurl_task(custom_meta_fn, task_group);
+
+        module.spawn_gateway_map_update_task(task_group);
+
+        module
     }
 
-    fn spawn_gateway_map_update_task(
-        federation_id: FederationId,
-        client_ctx: ClientContext<Self>,
-        module_api: DynModuleApi,
-        gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
-        task_group: &TaskGroup,
-    ) {
-        task_group.spawn_cancellable("gateway_map_update_task", async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(24 * 60 * 60));
+    fn spawn_gateway_map_update_task(&self, task_group: &TaskGroup) {
+        let module = self.clone();
 
-            loop {
-                Self::update_gateway_map(&federation_id, &client_ctx, &module_api, &gateway_conn)
-                    .await;
-                interval.tick().await;
-            }
+        task_group.spawn_cancellable("gateway_map_update_task", async move {
+            module.update_gateway_map().await;
         });
     }
 
-    async fn update_gateway_map(
-        federation_id: &FederationId,
-        client_ctx: &ClientContext<Self>,
-        module_api: &DynModuleApi,
-        gateway_conn: &Arc<dyn GatewayConnection + Send + Sync>,
-    ) {
+    async fn update_gateway_map(&self) {
         // Update the mapping from lightning node public keys to gateway api
         // endpoints maintained in the module database. When paying an invoice this
         // enables the client to select the gateway that has created the invoice,
         // if possible, such that the payment does not go over lightning, reducing
         // fees and latency.
 
-        if let Ok(gateways) = module_api.gateways().await {
-            let mut dbtx = client_ctx.module_db().begin_transaction().await;
+        if let Ok(gateways) = self.module_api.gateways().await {
+            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
             for gateway in gateways {
-                if let Ok(Some(routing_info)) = gateway_conn
-                    .routing_info(gateway.clone(), federation_id)
+                if let Ok(Some(routing_info)) = self
+                    .gateway_conn
+                    .routing_info(gateway.clone(), &self.federation_id)
                     .await
                 {
                     dbtx.insert_entry(&GatewayKey(routing_info.lightning_public_key), &gateway)
@@ -1025,10 +1021,21 @@ impl LightningClientModule {
         Ok(lnurl)
     }
 
-    /// Receive an lnurl. You can optionally specify the batch size, meaning the
-    /// maximum number of contracts we fetch from the federation at once,
-    /// otherwise we default to 128.
-    pub async fn receive_lnurl(&self, batch_size: Option<usize>, custom_meta: Value) -> usize {
+    fn spawn_receive_lnurl_task(
+        &self,
+        custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
+        task_group: &TaskGroup,
+    ) {
+        let module = self.clone();
+
+        task_group.spawn_cancellable("receive_lnurl_task", async move {
+            loop {
+                module.receive_lnurl(custom_meta_fn()).await;
+            }
+        });
+    }
+
+    async fn receive_lnurl(&self, custom_meta: Value) {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
         let stream_index = dbtx
@@ -1038,10 +1045,8 @@ impl LightningClientModule {
 
         let (contracts, next_index) = self
             .module_api
-            .await_incoming_contracts(stream_index, batch_size.unwrap_or(128))
+            .await_incoming_contracts(stream_index, 128)
             .await;
-
-        let mut received_contracts = 0;
 
         for contract in &contracts {
             if let Some(operation_id) = self
@@ -1058,8 +1063,6 @@ impl LightningClientModule {
                 self.await_final_receive_operation_state(operation_id)
                     .await
                     .ok();
-
-                received_contracts += 1;
             }
         }
 
@@ -1067,8 +1070,6 @@ impl LightningClientModule {
             .await;
 
         dbtx.commit_tx().await;
-
-        received_contracts
     }
 }
 

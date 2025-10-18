@@ -3630,6 +3630,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
+ "chrono",
  "clap",
  "devimint",
  "fedimint-client",
