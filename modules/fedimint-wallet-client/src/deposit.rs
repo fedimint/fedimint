@@ -6,7 +6,7 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::ModuleConsensusVersion;
+use fedimint_core::module::{Amounts, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
@@ -289,7 +289,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
     )
     .expect("TODO: handle API returning faulty proofs");
 
-    let amount = pegin_proof.tx_output().value.into();
+    let amount = Amounts::new_bitcoin(pegin_proof.tx_output().value.into());
 
     let wallet_input = if consensus_version >= ModuleConsensusVersion::new(2, 2) {
         WalletInput::new_v1(&pegin_proof)
@@ -300,7 +300,7 @@ pub(crate) async fn transition_btc_tx_confirmed(
     let client_input = ClientInput::<WalletInput> {
         input: wallet_input,
         keys: vec![awaiting_confirmation_state.tweak_key],
-        amount,
+        amounts: amount,
     };
 
     let change_range = global_context

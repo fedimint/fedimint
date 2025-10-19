@@ -7,6 +7,7 @@ use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::FmtCompact as _;
@@ -504,7 +505,7 @@ async fn try_refund_outgoing_contract(
 
     let refund_client_input = ClientInput::<LightningInput> {
         input: refund_input,
-        amount: contract_data.contract_account.amount,
+        amounts: Amounts::new_bitcoin(contract_data.contract_account.amount),
         keys: vec![refund_key],
     };
 

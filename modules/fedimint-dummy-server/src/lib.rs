@@ -16,8 +16,8 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    Amounts, ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_dummy_common::config::{
@@ -36,7 +36,7 @@ use strum::IntoEnumIterator;
 
 use crate::db::{
     DbKeyPrefix, DummyFundsKeyV1, DummyFundsPrefixV1, DummyOutcomeKey, DummyOutcomePrefix,
-    migrate_to_v1,
+    migrate_to_v1, migrate_to_v2,
 };
 
 pub mod db;
@@ -187,6 +187,10 @@ impl ServerModuleInit for DummyInit {
             DatabaseVersion(0),
             Box::new(|ctx| migrate_to_v1(ctx).boxed()),
         );
+        migrations.insert(
+            DatabaseVersion(1),
+            Box::new(|ctx| migrate_to_v2(ctx).boxed()),
+        );
         migrations
     }
 }
@@ -231,6 +235,9 @@ impl ServerModule for Dummy {
         input: &'b DummyInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, DummyInputError> {
+        let DummyInput::V0(input) = input else {
+            return Err(DummyInputError::InvalidVersion);
+        };
         let current_funds = dbtx
             .get_value(&DummyFundsKeyV1(input.account))
             .await
@@ -258,9 +265,9 @@ impl ServerModule for Dummy {
             .await;
 
         Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: input.amount,
-                fee: self.cfg.consensus.tx_fee,
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(input.amount),
+                fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
             },
             // IMPORTANT: include the pubkey to validate the user signed this tx
             pub_key: input.account,
@@ -272,7 +279,10 @@ impl ServerModule for Dummy {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a DummyOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, DummyOutputError> {
+    ) -> Result<TransactionItemAmounts, DummyOutputError> {
+        let DummyOutput::V0(output) = output else {
+            return Err(DummyOutputError::InvalidVersion);
+        };
         // Add output funds to the user's account
         let current_funds = dbtx.get_value(&DummyFundsKeyV1(output.account)).await;
         let updated_funds = current_funds.unwrap_or(Amount::ZERO) + output.amount;
@@ -280,13 +290,13 @@ impl ServerModule for Dummy {
             .await;
 
         // Update the output outcome the user can query
-        let outcome = DummyOutputOutcome(updated_funds, output.account);
+        let outcome = DummyOutputOutcome(updated_funds, output.unit, output.account);
         dbtx.insert_entry(&DummyOutcomeKey(out_point), &outcome)
             .await;
 
-        Ok(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.consensus.tx_fee,
+        Ok(TransactionItemAmounts {
+            amounts: Amounts::new_bitcoin(output.amount),
+            fees: Amounts::new_bitcoin(self.cfg.consensus.tx_fee),
         })
     }
 

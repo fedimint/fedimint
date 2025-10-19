@@ -21,8 +21,8 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
     api_endpoint,
 };
 use fedimint_core::{
@@ -509,7 +509,10 @@ impl ServerModule for Mint {
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
 
         Ok(InputMeta {
-            amount: TransactionItemAmount { amount, fee },
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(amount),
+                fees: Amounts::new_bitcoin(fee),
+            },
             pub_key: *input.note.spend_key(),
         })
     }
@@ -519,7 +522,7 @@ impl ServerModule for Mint {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a MintOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, MintOutputError> {
+    ) -> Result<TransactionItemAmounts, MintOutputError> {
         let output = output.ensure_v0_ref()?;
 
         let amount_key = self
@@ -555,7 +558,10 @@ impl ServerModule for Mint {
 
         calculate_mint_issued_ecash_metrics(dbtx, amount, fee);
 
-        Ok(TransactionItemAmount { amount, fee })
+        Ok(TransactionItemAmounts {
+            amounts: Amounts::new_bitcoin(amount),
+            fees: Amounts::new_bitcoin(fee),
+        })
     }
 
     async fn output_status(

@@ -10,7 +10,7 @@ use fedimint_client::transaction::{
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
-use fedimint_core::module::CommonModuleInit as _;
+use fedimint_core::module::{Amounts, CommonModuleInit as _};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -94,7 +94,9 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let extra_meta = "internal payment with no gateway registered".to_string();
     let desc = Description::new("with-markers".to_string())?;
@@ -156,7 +158,9 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -201,7 +205,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
-    let prev_balance = client2.get_balance_err().await?;
+    let prev_balance = client2.get_balance_for_btc().await?;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
@@ -220,7 +224,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected internal payment!"),
     }
 
-    let same_balance = client2.get_balance_err().await?;
+    let same_balance = client2.get_balance_for_btc().await?;
     assert_eq!(prev_balance, same_balance);
 
     Ok(())
@@ -289,7 +293,9 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 
     // Print money for client
     let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
-    client.await_primary_module_output(op, outpoint).await?;
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
@@ -315,7 +321,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let prev_balance = client.get_balance_err().await?;
+    let prev_balance = client.get_balance_for_btc().await?;
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
@@ -339,7 +345,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let same_balance = client.get_balance_err().await?;
+    let same_balance = client.get_balance_for_btc().await?;
     assert_eq!(prev_balance, same_balance);
 
     drop(gw);
@@ -356,7 +362,9 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -459,7 +467,9 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -512,7 +522,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance_err().await?, sats(250));
+    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
 
     // TEST internal payment when there is a registered gateway
     let gw = gateway(&fixtures, &fed).await;
@@ -571,7 +581,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance_err().await?, sats(250));
+    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
 
     Ok(())
 }
@@ -587,7 +597,9 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
+    client2
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
 
     // generate a new keypair
     let keypair = Keypair::new_global(&mut OsRng);
@@ -648,7 +660,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
         assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
         assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
     }
-    assert_eq!(new_client.get_balance_err().await?, sats(250));
+    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
 
     Ok(())
 }
@@ -700,7 +712,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     let transaction_builder_1 = TransactionBuilder::new().with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_1,
-            amount: Amount::ZERO,
+            amounts: Amounts::ZERO,
         }])
         .into_dyn(ln_module.id),
     );
@@ -716,7 +728,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
     let transaction_builder_2 = TransactionBuilder::new().with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_2,
-            amount: Amount::ZERO,
+            amounts: Amounts::ZERO,
         }])
         .into_dyn(ln_module.id),
     );

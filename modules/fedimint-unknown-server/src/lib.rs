@@ -15,7 +15,7 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+    ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 };
 use fedimint_core::{InPoint, OutPoint, PeerId};
 use fedimint_server_core::config::PeerHandleOps;
@@ -192,7 +192,7 @@ impl ServerModule for Unknown {
         _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a UnknownOutput,
         _out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, UnknownOutputError> {
+    ) -> Result<TransactionItemAmounts, UnknownOutputError> {
         unreachable!();
     }
 

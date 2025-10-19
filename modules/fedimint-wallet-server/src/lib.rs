@@ -51,9 +51,9 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_rbf_withdrawal_enabled, is_running_in_test_env};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
+    Amounts, ApiEndpoint, ApiError, ApiRequestErased, ApiVersion, CORE_CONSENSUS_VERSION,
     CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmount, api_endpoint,
+    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 };
 use fedimint_core::task::TaskGroup;
 #[cfg(not(target_family = "wasm"))]
@@ -719,7 +719,10 @@ impl ServerModule for Wallet {
         calculate_pegin_metrics(dbtx, amount, fee);
 
         Ok(InputMeta {
-            amount: TransactionItemAmount { amount, fee },
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(amount),
+                fees: Amounts::new_bitcoin(fee),
+            },
             pub_key,
         })
     }
@@ -729,7 +732,7 @@ impl ServerModule for Wallet {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a WalletOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, WalletOutputError> {
+    ) -> Result<TransactionItemAmounts, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
 
         // In 0.4.0 we began preventing RBF withdrawals. Once we reach EoL support
@@ -811,7 +814,10 @@ impl ServerModule for Wallet {
         let amount: fedimint_core::Amount = output.amount().into();
         let fee = self.cfg.consensus.fee_consensus.peg_out_abs;
         calculate_pegout_metrics(dbtx, amount, fee);
-        Ok(TransactionItemAmount { amount, fee })
+        Ok(TransactionItemAmounts {
+            amounts: Amounts::new_bitcoin(amount),
+            fees: Amounts::new_bitcoin(fee),
+        })
     }
 
     async fn output_status(

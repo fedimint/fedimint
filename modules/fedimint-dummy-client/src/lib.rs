@@ -10,12 +10,18 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, anyhow, format_err};
 use common::broken_fed_key_pair;
-use db::{DbKeyPrefix, DummyClientFundsKeyV1, DummyClientNameKey, migrate_to_v1};
+use db::{
+    DbKeyPrefix, DummyClientFundsKey, DummyClientFundsKeyV1, DummyClientFundsKeyV2PrefixAll,
+    DummyClientNameKey, migrate_to_v1,
+};
 use fedimint_api_client::api::{FederationApiExt, SerdeOutputOutcome, deserialize_outcome};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
-use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
+use fedimint_client_module::module::{
+    ClientContext, ClientModule, IClientModule, OutPointRange, PrimaryModulePriority,
+    PrimaryModuleSupport,
+};
 use fedimint_client_module::sm::{Context, ModuleNotifier};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
@@ -28,7 +34,8 @@ use fedimint_core::db::{
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::{
-    ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiRequestErased, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
+    MultiApiVersion,
 };
 use fedimint_core::secp256k1::{Keypair, PublicKey, Secp256k1};
 use fedimint_core::util::{BoxStream, NextOrPending};
@@ -36,8 +43,8 @@ use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 pub use fedimint_dummy_common as common;
 use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
-    DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome, KIND,
-    fed_key_pair,
+    DummyCommonInit, DummyInput, DummyInputV1, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
+    DummyOutputV1, KIND, fed_key_pair,
 };
 use futures::{StreamExt, pin_mut};
 use states::DummyStateMachine;
@@ -83,28 +90,31 @@ impl ClientModule for DummyClientModule {
 
     fn input_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<Amount> {
-        Some(self.cfg.tx_fee)
+    ) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(self.cfg.tx_fee))
     }
 
     fn output_fee(
         &self,
-        _amount: Amount,
+        _amount: &Amounts,
         _output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<Amount> {
-        Some(self.cfg.tx_fee)
+    ) -> Option<Amounts> {
+        Some(Amounts::new_bitcoin(self.cfg.tx_fee))
     }
 
-    fn supports_being_primary(&self) -> bool {
-        true
+    fn supports_being_primary(&self) -> PrimaryModuleSupport {
+        PrimaryModuleSupport::Any {
+            priority: PrimaryModulePriority::LOW,
+        }
     }
 
     async fn create_final_inputs_and_outputs(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
     ) -> anyhow::Result<(
@@ -118,28 +128,31 @@ impl ClientModule for DummyClientModule {
                 let missing_input_amount = output_amount.saturating_sub(input_amount);
 
                 // Check and subtract from our funds
-                let our_funds = get_funds(dbtx).await;
+                let our_funds = get_funds(dbtx, unit).await;
 
                 if our_funds < missing_input_amount {
                     return Err(format_err!("Insufficient funds"));
                 }
 
                 let updated = our_funds.saturating_sub(missing_input_amount);
-
-                dbtx.insert_entry(&DummyClientFundsKeyV1, &updated).await;
+                dbtx.insert_entry(&DummyClientFundsKey { unit }, &updated)
+                    .await;
 
                 let input = ClientInput {
-                    input: DummyInput {
+                    input: DummyInputV1 {
                         amount: missing_input_amount,
+                        unit,
                         account: self.key.public_key(),
-                    },
-                    amount: missing_input_amount,
+                    }
+                    .into(),
+                    amounts: Amounts::new_custom(unit, missing_input_amount),
                     keys: vec![self.key],
                 };
                 let input_sm = ClientInputSM {
                     state_machines: Arc::new(move |out_point_range| {
                         vec![DummyStateMachine::Input(
                             missing_input_amount,
+                            unit,
                             out_point_range.txid(),
                             operation_id,
                         )]
@@ -158,17 +171,20 @@ impl ClientModule for DummyClientModule {
             Ordering::Greater => {
                 let missing_output_amount = input_amount.saturating_sub(output_amount);
                 let output = ClientOutput {
-                    output: DummyOutput {
+                    output: DummyOutputV1 {
                         amount: missing_output_amount,
+                        unit,
                         account: self.key.public_key(),
-                    },
-                    amount: missing_output_amount,
+                    }
+                    .into(),
+                    amounts: Amounts::new_custom(unit, missing_output_amount),
                 };
 
                 let output_sm = ClientOutputSM {
                     state_machines: Arc::new(move |out_point_range| {
                         vec![DummyStateMachine::Output(
                             missing_output_amount,
+                            unit,
                             out_point_range.txid(),
                             operation_id,
                         )]
@@ -194,7 +210,7 @@ impl ClientModule for DummyClientModule {
             .await
             .filter_map(|state| async move {
                 match state {
-                    DummyStateMachine::OutputDone(_, txid, _) => {
+                    DummyStateMachine::OutputDone(_, _, txid, _) => {
                         if txid != out_point.txid {
                             return None;
                         }
@@ -212,8 +228,12 @@ impl ClientModule for DummyClientModule {
         stream.next_or_pending().await
     }
 
-    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>) -> Amount {
-        get_funds(dbtc).await
+    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+        get_funds(dbtc, unit).await
+    }
+
+    async fn get_balances(&self, dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+        get_funds_all(dbtx).await
     }
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
@@ -222,7 +242,7 @@ impl ClientModule for DummyClientModule {
                 .subscribe_all_operations()
                 .filter_map(|state| async move {
                     match state {
-                        DummyStateMachine::OutputDone(_, _, _)
+                        DummyStateMachine::OutputDone(_, _, _, _)
                         | DummyStateMachine::Input { .. }
                         | DummyStateMachine::Refund(_) => Some(()),
                         _ => None,
@@ -233,21 +253,24 @@ impl ClientModule for DummyClientModule {
 }
 
 impl DummyClientModule {
-    pub async fn print_using_account(
+    pub async fn print_money_units(
         &self,
         amount: Amount,
+        unit: AmountUnit,
         account_kp: Keypair,
     ) -> anyhow::Result<(OperationId, OutPoint)> {
         let op_id = OperationId(rand::random());
 
         // TODO: Building a tx could be easier
         // Create input using the fed's account
-        let input = ClientInput {
-            input: DummyInput {
+        let input = ClientInput::<DummyInput> {
+            input: DummyInputV1 {
                 amount,
+                unit,
                 account: account_kp.public_key(),
-            },
-            amount,
+            }
+            .into(),
+            amounts: Amounts::new_custom(unit, amount),
             keys: vec![account_kp],
         };
 
@@ -283,26 +306,37 @@ impl DummyClientModule {
 
     /// Request the federation prints money for us
     pub async fn print_money(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(amount, fed_key_pair()).await
+        self.print_money_units(amount, AmountUnit::BITCOIN, fed_key_pair())
+            .await
     }
 
     /// Use a broken printer to print a liability instead of money
     /// If the federation is honest, should always fail
     pub async fn print_liability(&self, amount: Amount) -> anyhow::Result<(OperationId, OutPoint)> {
-        self.print_using_account(amount, broken_fed_key_pair())
+        self.print_money_units(amount, AmountUnit::BITCOIN, broken_fed_key_pair())
             .await
     }
 
     /// Send money to another user
-    pub async fn send_money(&self, account: PublicKey, amount: Amount) -> anyhow::Result<OutPoint> {
+    pub async fn send_money(
+        &self,
+        account: PublicKey,
+        amount: Amount,
+        unit: AmountUnit,
+    ) -> anyhow::Result<OutPoint> {
         self.db.ensure_isolated().expect("must be isolated");
 
         let op_id = OperationId(rand::random());
 
         // Create output using another account
-        let output = ClientOutput {
-            output: DummyOutput { amount, account },
-            amount,
+        let output = ClientOutput::<DummyOutput> {
+            output: DummyOutputV1 {
+                amount,
+                unit,
+                account,
+            }
+            .into(),
+            amounts: Amounts::new_custom(unit, amount),
         };
 
         // Build and send tx to the fed
@@ -349,16 +383,18 @@ impl DummyClientModule {
 
         let outcome = deserialize_outcome::<DummyOutputOutcome>(&outcome, &self.decoder())?;
 
-        if outcome.1 != self.key.public_key() {
+        if outcome.2 != self.key.public_key() {
             return Err(format_err!("Wrong account id"));
         }
 
-        // HACK: This is a terrible hack. The balance is set
+        // HACK: This is a terrible hack. The balance for the unit is set
         // straight to the amount from the output, assuming that no funds were available
-        // before the receive. The actual state machine is supposed to update the
-        // balance, but `receive_money` is typically paired with `send_money`
-        // which creates a state machine only on the sender's client.
-        dbtx.insert_entry(&DummyClientFundsKeyV1, &outcome.0).await;
+        // before. The actual state machine is supposed to update the balance,
+        // but `receive_money` is typically paired with `send_money` which
+        // creates a state machine only on the sender's client.
+        dbtx.insert_entry(&DummyClientFundsKey { unit: outcome.1 }, &outcome.0)
+            .await;
+
         dbtx.commit_tx().await;
 
         Ok(())
@@ -368,11 +404,38 @@ impl DummyClientModule {
     pub fn account(&self) -> PublicKey {
         self.key.public_key()
     }
+
+    /// Get balance for a specific amount unit
+    pub async fn get_balance(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        Ok(get_funds(&mut dbtx, unit).await)
+    }
 }
 
-async fn get_funds(dbtx: &mut DatabaseTransaction<'_>) -> Amount {
-    let funds = dbtx.get_value(&DummyClientFundsKeyV1).await;
+async fn get_funds(dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    let funds = dbtx.get_value(&DummyClientFundsKey { unit }).await;
     funds.unwrap_or(Amount::ZERO)
+}
+
+async fn get_funds_all(dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
+    use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+
+    let funds_entries = dbtx
+        .find_by_prefix(&DummyClientFundsKeyV2PrefixAll)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut result = Amounts::ZERO;
+    for (key, amount) in funds_entries {
+        if amount > Amount::ZERO {
+            result = result
+                .checked_add_unit(amount, key.unit)
+                .expect("We can't overfolow here");
+        }
+    }
+
+    result
 }
 
 #[derive(Debug, Clone)]
@@ -450,6 +513,11 @@ impl ClientModuleInit for DummyClientInit {
             })
         });
 
+        migrations.insert(DatabaseVersion(2), |_, active_states, inactive_states| {
+            Box::pin(async {
+                migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
+            })
+        });
         migrations
     }
 }

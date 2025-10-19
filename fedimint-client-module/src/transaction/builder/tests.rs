@@ -3,9 +3,9 @@ use std::fmt::Write as _;
 use std::sync::{Arc, Mutex};
 
 use bitcoin::key::Secp256k1;
-use fedimint_core::Amount;
 use fedimint_core::core::{Input, IntoDynInstance, ModuleKind, Output};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::Amounts;
 
 use super::{
     ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
@@ -118,7 +118,7 @@ fn tx_builder_empty_bundles() {
                 vec![ClientInput {
                     input: NoopInput,
                     keys: vec![],
-                    amount: Amount::from_msats(1),
+                    amounts: Amounts::new_bitcoin_msats(1),
                 }],
                 vec![yes_call_input_sm.clone()],
             )
@@ -135,7 +135,7 @@ fn tx_builder_empty_bundles() {
                 vec![ClientInput {
                     input: NoopInput,
                     keys: vec![],
-                    amount: Amount::from_msats(1),
+                    amounts: Amounts::new_bitcoin_msats(1),
                 }],
                 vec![yes_call_input_sm],
             )
@@ -151,7 +151,7 @@ fn tx_builder_empty_bundles() {
             ClientOutputBundle::<NoopOutput>::new(
                 vec![ClientOutput {
                     output: NoopOutput,
-                    amount: Amount::from_msats(1),
+                    amounts: Amounts::new_bitcoin_msats(1),
                 }],
                 vec![yes_call_output_sm.clone()],
             )
@@ -167,7 +167,7 @@ fn tx_builder_empty_bundles() {
             ClientOutputBundle::<NoopOutput>::new(
                 vec![ClientOutput {
                     output: NoopOutput,
-                    amount: Amount::from_msats(1),
+                    amounts: Amounts::new_bitcoin_msats(1),
                 }],
                 vec![yes_call_output_sm],
             )

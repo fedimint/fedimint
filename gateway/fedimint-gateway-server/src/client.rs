@@ -9,7 +9,6 @@ use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientBuilder, RootSecret};
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_derive_secret::DerivableSecret;
@@ -26,7 +25,6 @@ use crate::{AdminResult, Gateway};
 pub struct GatewayClientBuilder {
     work_dir: PathBuf,
     registry: ClientModuleInitRegistry,
-    primary_module_kind: ModuleKind,
     db_backend: DatabaseBackend,
 }
 
@@ -34,13 +32,11 @@ impl GatewayClientBuilder {
     pub fn new(
         work_dir: PathBuf,
         registry: ClientModuleInitRegistry,
-        primary_module_kind: ModuleKind,
         db_backend: DatabaseBackend,
     ) -> Self {
         Self {
             work_dir,
             registry,
-            primary_module_kind,
             db_backend,
         }
     }
@@ -88,7 +84,6 @@ impl GatewayClientBuilder {
             .with_iroh_enable_dht(true)
             .with_iroh_enable_next(true);
         client_builder.with_module_inits(registry);
-        client_builder.with_primary_module_kind(self.primary_module_kind.clone());
         client_builder.with_connector(connector);
         Ok(client_builder)
     }

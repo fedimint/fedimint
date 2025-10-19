@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail, ensure};
+use anyhow::{Context as _, bail, ensure};
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt as _;
 use fedimint_api_client::api::global_api::with_request_hook::{
@@ -19,7 +19,9 @@ use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::ClientModuleInit;
 use fedimint_client_module::module::recovery::RecoveryProgress;
-use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
+use fedimint_client_module::module::{
+    ClientModuleRegistry, FinalClientIface, PrimaryModulePriority, PrimaryModuleSupport,
+};
 use fedimint_client_module::secret::{DeriveableSecretClientExt as _, get_default_client_secret};
 use fedimint_client_module::transaction::{
     TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext, tx_submission_sm_decoder,
@@ -54,6 +56,7 @@ use crate::api_announcements::{
     run_api_announcement_refresh_task, store_api_announcements_updates_from_peers,
 };
 use crate::backup::{ClientBackup, Metadata};
+use crate::client::PrimaryModuleCandidates;
 use crate::db::{
     self, ApiSecretKey, ClientInitStateKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
@@ -114,8 +117,6 @@ impl RootSecret {
 /// Used to configure, assemble and build [`Client`]
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
-    primary_module_instance: Option<ModuleInstanceId>,
-    primary_module_kind: Option<ModuleKind>,
     admin_creds: Option<AdminCreds>,
     meta_service: Arc<crate::meta::MetaService>,
     connector: Connector,
@@ -139,8 +140,6 @@ impl ClientBuilder {
             broadcast::channel(1024);
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
-            primary_module_instance: None,
-            primary_module_kind: None,
             connector: Connector::default(),
             admin_creds: None,
             stopped: false,
@@ -156,8 +155,6 @@ impl ClientBuilder {
     pub(crate) fn from_existing(client: &Client) -> Self {
         ClientBuilder {
             module_inits: client.module_inits.clone(),
-            primary_module_instance: Some(client.primary_module_instance),
-            primary_module_kind: None,
             admin_creds: None,
             stopped: false,
             // non unique
@@ -172,25 +169,11 @@ impl ClientBuilder {
     }
 
     /// Replace module generator registry entirely
-    ///
-    /// There has to be at least one module supporting being primary among the
-    /// registered modules. The client won't start without the federation and
-    /// the client having at least one overlapping primary module. In case there
-    /// are multiple, the one to use can be selected with
-    /// [`ClientBuilder::with_primary_module_kind`] or
-    /// [`ClientBuilder::with_primary_module_instance_id`].
     pub fn with_module_inits(&mut self, module_inits: ClientModuleInitRegistry) {
         self.module_inits = module_inits;
     }
 
     /// Make module generator available when reading the config
-    ///
-    /// There has to be at least one module supporting being primary among the
-    /// registered modules. The client won't start without the federation and
-    /// the client having at least one overlapping primary module. In case there
-    /// are multiple, the one to use can be selected with
-    /// [`ClientBuilder::with_primary_module_kind`] or
-    /// [`ClientBuilder::with_primary_module_instance_id`].
     pub fn with_module<M: ClientModuleInit>(&mut self, module_init: M) {
         self.module_inits.attach(module_init);
     }
@@ -210,62 +193,6 @@ impl ClientBuilder {
     pub fn with_api_request_hook(mut self, hook: ApiRequestHook) -> Self {
         self.request_hook = hook;
         self
-    }
-
-    /// Uses this module with the given instance id as the primary module. See
-    /// [`fedimint_client_module::ClientModule::supports_being_primary`] for
-    /// more information.
-    ///
-    /// ## Panics
-    /// If there was a primary module specified previously
-    #[deprecated(
-        since = "0.6.0",
-        note = "Use `with_primary_module_kind` instead, as the instance id can't be known upfront. If you *really* need the old behavior you can use `with_primary_module_instance_id`."
-    )]
-    pub fn with_primary_module(&mut self, primary_module_instance: ModuleInstanceId) {
-        self.with_primary_module_instance_id(primary_module_instance);
-    }
-
-    /// **You are likely looking for
-    /// [`ClientBuilder::with_primary_module_kind`]. This function is rarely
-    /// useful and often dangerous, handle with care.**
-    ///
-    /// Uses this module with the given instance id as the primary module. See
-    /// [`fedimint_client_module::ClientModule::supports_being_primary`] for
-    /// more information. Since the module instance id of modules of a
-    /// specific kind may differ between different federations it is
-    /// generally not recommended to specify it, but rather to specify the
-    /// module kind that should be used as primary. See
-    /// [`ClientBuilder::with_primary_module_kind`].
-    ///
-    /// ## Panics
-    /// If there was a primary module specified previously
-    pub fn with_primary_module_instance_id(&mut self, primary_module_instance: ModuleInstanceId) {
-        let was_replaced = self
-            .primary_module_instance
-            .replace(primary_module_instance)
-            .is_some();
-        assert!(
-            !was_replaced,
-            "Only one primary module can be given to the builder."
-        );
-    }
-
-    /// Uses this module kind as the primary module if present in the config.
-    /// See [`fedimint_client_module::ClientModule::supports_being_primary`] for
-    /// more information.
-    ///
-    /// ## Panics
-    /// If there was a primary module kind specified previously
-    pub fn with_primary_module_kind(&mut self, primary_module_kind: ModuleKind) {
-        let was_replaced = self
-            .primary_module_kind
-            .replace(primary_module_kind)
-            .is_some();
-        assert!(
-            !was_replaced,
-            "Only one primary module kind can be given to the builder."
-        );
     }
 
     pub fn with_meta_service(&mut self, meta_service: Arc<MetaService>) {
@@ -674,16 +601,6 @@ impl ClientBuilder {
 
         let init_state = Self::load_init_state(&db).await;
 
-        let mut primary_module_instance = self.primary_module_instance.or_else(|| {
-            let primary_module_kind = self.primary_module_kind?;
-            config
-                .modules
-                .iter()
-                .find_map(|(module_instance_id, module_config)| {
-                    (module_config.kind() == &primary_module_kind).then_some(*module_instance_id)
-                })
-        });
-
         let notifier = Notifier::new();
 
         if let Some(p) = preview_prefetch_api_announcements {
@@ -906,16 +823,6 @@ impl ClientBuilder {
                             )
                             .await?;
 
-                        if primary_module_instance.is_none() && module.supports_being_primary() {
-                            primary_module_instance = Some(module_instance_id);
-                        } else if primary_module_instance == Some(module_instance_id)
-                            && !module.supports_being_primary()
-                        {
-                            bail!(
-                                "Module instance {module_instance_id} of kind {kind} does not support being a primary module"
-                            );
-                        }
-
                         modules.register_module(module_instance_id, kind, module);
                     }
                 }
@@ -928,6 +835,33 @@ impl ClientBuilder {
             dbtx.insert_entry(&ClientInitStateKey, &init_state.into_complete())
                 .await;
             dbtx.commit_tx().await;
+        }
+
+        let mut primary_modules: BTreeMap<PrimaryModulePriority, PrimaryModuleCandidates> =
+            BTreeMap::new();
+
+        for (module_id, _kind, module) in modules.iter_modules() {
+            match module.supports_being_primary() {
+                PrimaryModuleSupport::Any { priority } => {
+                    primary_modules
+                        .entry(priority)
+                        .or_default()
+                        .wildcard
+                        .push(module_id);
+                }
+                PrimaryModuleSupport::Selected { priority, units } => {
+                    for unit in units {
+                        primary_modules
+                            .entry(priority)
+                            .or_default()
+                            .specific
+                            .entry(unit)
+                            .or_default()
+                            .push(module_id);
+                    }
+                }
+                PrimaryModuleSupport::None => {}
+            }
         }
 
         let executor = {
@@ -966,8 +900,7 @@ impl ClientBuilder {
             db: db.clone(),
             federation_id: fed_id,
             federation_config_meta: config.global.meta,
-            primary_module_instance: primary_module_instance
-                .ok_or(anyhow!("No primary module set or found"))?,
+            primary_modules,
             modules,
             module_inits: self.module_inits.clone(),
             log_ordering_wakeup_tx,

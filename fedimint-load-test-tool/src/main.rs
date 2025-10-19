@@ -562,10 +562,7 @@ async fn get_required_notes(
     minimum_amount_required: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
-    let current_balance = coordinator
-        .get_balance()
-        .await
-        .ok_or_else(|| anyhow!("Primary module not available"))?;
+    let current_balance = coordinator.get_balance_for_btc().await?;
 
     if current_balance < minimum_amount_required {
         let diff = minimum_amount_required.saturating_sub(current_balance);

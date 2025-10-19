@@ -719,7 +719,6 @@ impl FedimintCli {
             .with_iroh_enable_dht(cli.iroh_enable_dht())
             .with_iroh_enable_next(cli.iroh_enable_next());
         client_builder.with_module_inits(self.module_inits.clone());
-        client_builder.with_primary_module_kind(fedimint_mint_client::KIND);
 
         client_builder.with_connector(cli.connector());
 

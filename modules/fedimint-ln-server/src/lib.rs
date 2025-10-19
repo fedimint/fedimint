@@ -20,9 +20,9 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmount, api_endpoint,
+    Amounts, ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION,
+    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::task::sleep;
@@ -598,9 +598,9 @@ impl ServerModule for Lightning {
         }
 
         Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount: input.amount,
-                fee: self.cfg.consensus.fee_consensus.contract_input,
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(input.amount),
+                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.contract_input),
             },
             pub_key,
         })
@@ -611,7 +611,7 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'b>,
         output: &'a LightningOutput,
         out_point: OutPoint,
-    ) -> Result<TransactionItemAmount, LightningOutputError> {
+    ) -> Result<TransactionItemAmounts, LightningOutputError> {
         let output = output.ensure_v0_ref()?;
 
         match output {
@@ -698,9 +698,9 @@ impl ServerModule for Lightning {
                     dbtx.remove_entry(&OfferKey(offer.hash)).await;
                 }
 
-                Ok(TransactionItemAmount {
-                    amount: contract.amount,
-                    fee: self.cfg.consensus.fee_consensus.contract_output,
+                Ok(TransactionItemAmounts {
+                    amounts: Amounts::new_bitcoin(contract.amount),
+                    fees: Amounts::new_bitcoin(self.cfg.consensus.fee_consensus.contract_output),
                 })
             }
             LightningOutputV0::Offer(offer) => {
@@ -743,7 +743,7 @@ impl ServerModule for Lightning {
                     LN_INCOMING_OFFER.inc();
                 });
 
-                Ok(TransactionItemAmount::ZERO)
+                Ok(TransactionItemAmounts::ZERO)
             }
             LightningOutputV0::CancelOutgoing {
                 contract,
@@ -800,7 +800,7 @@ impl ServerModule for Lightning {
                     LN_CANCEL_OUTGOING_CONTRACTS.inc();
                 });
 
-                Ok(TransactionItemAmount::ZERO)
+                Ok(TransactionItemAmounts::ZERO)
             }
         }
     }
@@ -1236,7 +1236,7 @@ mod tests {
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
-    use fedimint_core::module::{InputMeta, TransactionItemAmount};
+    use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts};
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
@@ -1480,9 +1480,9 @@ mod tests {
             .await
             .expect("should process valid incoming contract");
         let expected_input_meta = InputMeta {
-            amount: TransactionItemAmount {
-                amount,
-                fee: Amount { msats: 0 },
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(amount),
+                fees: Amounts::ZERO,
             },
             pub_key: preimage
                 .to_public_key()
@@ -1551,9 +1551,9 @@ mod tests {
             .expect("should process valid outgoing contract");
 
         let expected_input_meta = InputMeta {
-            amount: TransactionItemAmount {
-                amount,
-                fee: Amount { msats: 0 },
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(amount),
+                fees: Amounts::ZERO,
             },
             pub_key: gateway_key,
         };

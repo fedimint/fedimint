@@ -371,12 +371,8 @@ impl Gateway {
         registry.attach(MintClientInit);
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
 
-        let client_builder = GatewayClientBuilder::new(
-            opts.data_dir.clone(),
-            registry,
-            fedimint_mint_client::KIND,
-            opts.db_backend,
-        );
+        let client_builder =
+            GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend);
 
         info!(
             target: LOG_GATEWAY,
@@ -963,10 +959,13 @@ impl Gateway {
                 let balance = bitcoin::Amount::from_sat(
                     client
                         .value()
-                        .get_balance()
+                        .get_balance_for_btc()
                         .await
-                        .ok_or_else(|| {
-                            AdminGatewayError::Unexpected(anyhow!("Primary module not available"))
+                        .map_err(|err| {
+                            AdminGatewayError::Unexpected(anyhow!(
+                                "Balance not available: {}",
+                                err.fmt_compact_anyhow()
+                            ))
                         })?
                         .msats
                         / 1000,
@@ -1230,9 +1229,10 @@ impl Gateway {
         let federation_info = FederationInfo {
             federation_id,
             federation_name: federation_manager.federation_name(&client).await,
-            balance_msat: client.get_balance().await.unwrap_or_else(|| {
+            balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
                 warn!(
                     target: LOG_GATEWAY,
+                    err = %err.fmt_compact_anyhow(),
                     %federation_id,
                     "Balance not immediately available after joining/recovering."
                 );
