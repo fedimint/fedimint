@@ -20,9 +20,9 @@
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::module::audit::Audit;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::module::{
-<a href=#23 id=23 data-nosnippet>23</a>    ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-<a href=#24 id=24 data-nosnippet>24</a>    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-<a href=#25 id=25 data-nosnippet>25</a>    TransactionItemAmount, api_endpoint,
+<a href=#23 id=23 data-nosnippet>23</a>    Amounts, ApiEndpoint, ApiEndpointContext, ApiVersion, CORE_CONSENSUS_VERSION,
+<a href=#24 id=24 data-nosnippet>24</a>    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+<a href=#25 id=25 data-nosnippet>25</a>    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 <a href=#26 id=26 data-nosnippet>26</a>};
 <a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_core::task::sleep;
@@ -598,9 +598,9 @@
 <a href=#598 id=598 data-nosnippet>598</a>        }
 <a href=#599 id=599 data-nosnippet>599</a>
 <a href=#600 id=600 data-nosnippet>600</a>        <span class="prelude-val">Ok</span>(InputMeta {
-<a href=#601 id=601 data-nosnippet>601</a>            amount: TransactionItemAmount {
-<a href=#602 id=602 data-nosnippet>602</a>                amount: input.amount,
-<a href=#603 id=603 data-nosnippet>603</a>                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_input,
+<a href=#601 id=601 data-nosnippet>601</a>            amount: TransactionItemAmounts {
+<a href=#602 id=602 data-nosnippet>602</a>                amounts: Amounts::new_bitcoin(input.amount),
+<a href=#603 id=603 data-nosnippet>603</a>                fees: Amounts::new_bitcoin(<span class="self">self</span>.cfg.consensus.fee_consensus.contract_input),
 <a href=#604 id=604 data-nosnippet>604</a>            },
 <a href=#605 id=605 data-nosnippet>605</a>            pub_key,
 <a href=#606 id=606 data-nosnippet>606</a>        })
@@ -611,7 +611,7 @@
 <a href=#611 id=611 data-nosnippet>611</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
 <a href=#612 id=612 data-nosnippet>612</a>        output: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>LightningOutput,
 <a href=#613 id=613 data-nosnippet>613</a>        out_point: OutPoint,
-<a href=#614 id=614 data-nosnippet>614</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, LightningOutputError&gt; {
+<a href=#614 id=614 data-nosnippet>614</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmounts, LightningOutputError&gt; {
 <a href=#615 id=615 data-nosnippet>615</a>        <span class="kw">let </span>output = output.ensure_v0_ref()<span class="question-mark">?</span>;
 <a href=#616 id=616 data-nosnippet>616</a>
 <a href=#617 id=617 data-nosnippet>617</a>        <span class="kw">match </span>output {
@@ -698,9 +698,9 @@
 <a href=#698 id=698 data-nosnippet>698</a>                    dbtx.remove_entry(<span class="kw-2">&amp;</span>OfferKey(offer.hash)).<span class="kw">await</span>;
 <a href=#699 id=699 data-nosnippet>699</a>                }
 <a href=#700 id=700 data-nosnippet>700</a>
-<a href=#701 id=701 data-nosnippet>701</a>                <span class="prelude-val">Ok</span>(TransactionItemAmount {
-<a href=#702 id=702 data-nosnippet>702</a>                    amount: contract.amount,
-<a href=#703 id=703 data-nosnippet>703</a>                    fee: <span class="self">self</span>.cfg.consensus.fee_consensus.contract_output,
+<a href=#701 id=701 data-nosnippet>701</a>                <span class="prelude-val">Ok</span>(TransactionItemAmounts {
+<a href=#702 id=702 data-nosnippet>702</a>                    amounts: Amounts::new_bitcoin(contract.amount),
+<a href=#703 id=703 data-nosnippet>703</a>                    fees: Amounts::new_bitcoin(<span class="self">self</span>.cfg.consensus.fee_consensus.contract_output),
 <a href=#704 id=704 data-nosnippet>704</a>                })
 <a href=#705 id=705 data-nosnippet>705</a>            }
 <a href=#706 id=706 data-nosnippet>706</a>            LightningOutputV0::Offer(offer) =&gt; {
@@ -743,7 +743,7 @@
 <a href=#743 id=743 data-nosnippet>743</a>                    LN_INCOMING_OFFER.inc();
 <a href=#744 id=744 data-nosnippet>744</a>                });
 <a href=#745 id=745 data-nosnippet>745</a>
-<a href=#746 id=746 data-nosnippet>746</a>                <span class="prelude-val">Ok</span>(TransactionItemAmount::ZERO)
+<a href=#746 id=746 data-nosnippet>746</a>                <span class="prelude-val">Ok</span>(TransactionItemAmounts::ZERO)
 <a href=#747 id=747 data-nosnippet>747</a>            }
 <a href=#748 id=748 data-nosnippet>748</a>            LightningOutputV0::CancelOutgoing {
 <a href=#749 id=749 data-nosnippet>749</a>                contract,
@@ -800,7 +800,7 @@
 <a href=#800 id=800 data-nosnippet>800</a>                    LN_CANCEL_OUTGOING_CONTRACTS.inc();
 <a href=#801 id=801 data-nosnippet>801</a>                });
 <a href=#802 id=802 data-nosnippet>802</a>
-<a href=#803 id=803 data-nosnippet>803</a>                <span class="prelude-val">Ok</span>(TransactionItemAmount::ZERO)
+<a href=#803 id=803 data-nosnippet>803</a>                <span class="prelude-val">Ok</span>(TransactionItemAmounts::ZERO)
 <a href=#804 id=804 data-nosnippet>804</a>            }
 <a href=#805 id=805 data-nosnippet>805</a>        }
 <a href=#806 id=806 data-nosnippet>806</a>    }
@@ -1236,7 +1236,7 @@
 <a href=#1236 id=1236 data-nosnippet>1236</a>    <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <a href=#1237 id=1237 data-nosnippet>1237</a>    <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <a href=#1238 id=1238 data-nosnippet>1238</a>    <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
-<a href=#1239 id=1239 data-nosnippet>1239</a>    <span class="kw">use </span>fedimint_core::module::{InputMeta, TransactionItemAmount};
+<a href=#1239 id=1239 data-nosnippet>1239</a>    <span class="kw">use </span>fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts};
 <a href=#1240 id=1240 data-nosnippet>1240</a>    <span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, generate_keypair};
 <a href=#1241 id=1241 data-nosnippet>1241</a>    <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <a href=#1242 id=1242 data-nosnippet>1242</a>    <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -1480,9 +1480,9 @@
 <a href=#1480 id=1480 data-nosnippet>1480</a>            .<span class="kw">await
 <a href=#1481 id=1481 data-nosnippet>1481</a>            </span>.expect(<span class="string">"should process valid incoming contract"</span>);
 <a href=#1482 id=1482 data-nosnippet>1482</a>        <span class="kw">let </span>expected_input_meta = InputMeta {
-<a href=#1483 id=1483 data-nosnippet>1483</a>            amount: TransactionItemAmount {
-<a href=#1484 id=1484 data-nosnippet>1484</a>                amount,
-<a href=#1485 id=1485 data-nosnippet>1485</a>                fee: Amount { msats: <span class="number">0 </span>},
+<a href=#1483 id=1483 data-nosnippet>1483</a>            amount: TransactionItemAmounts {
+<a href=#1484 id=1484 data-nosnippet>1484</a>                amounts: Amounts::new_bitcoin(amount),
+<a href=#1485 id=1485 data-nosnippet>1485</a>                fees: Amounts::ZERO,
 <a href=#1486 id=1486 data-nosnippet>1486</a>            },
 <a href=#1487 id=1487 data-nosnippet>1487</a>            pub_key: preimage
 <a href=#1488 id=1488 data-nosnippet>1488</a>                .to_public_key()
@@ -1551,9 +1551,9 @@
 <a href=#1551 id=1551 data-nosnippet>1551</a>            </span>.expect(<span class="string">"should process valid outgoing contract"</span>);
 <a href=#1552 id=1552 data-nosnippet>1552</a>
 <a href=#1553 id=1553 data-nosnippet>1553</a>        <span class="kw">let </span>expected_input_meta = InputMeta {
-<a href=#1554 id=1554 data-nosnippet>1554</a>            amount: TransactionItemAmount {
-<a href=#1555 id=1555 data-nosnippet>1555</a>                amount,
-<a href=#1556 id=1556 data-nosnippet>1556</a>                fee: Amount { msats: <span class="number">0 </span>},
+<a href=#1554 id=1554 data-nosnippet>1554</a>            amount: TransactionItemAmounts {
+<a href=#1555 id=1555 data-nosnippet>1555</a>                amounts: Amounts::new_bitcoin(amount),
+<a href=#1556 id=1556 data-nosnippet>1556</a>                fees: Amounts::ZERO,
 <a href=#1557 id=1557 data-nosnippet>1557</a>            },
 <a href=#1558 id=1558 data-nosnippet>1558</a>            pub_key: gateway_key,
 <a href=#1559 id=1559 data-nosnippet>1559</a>        };

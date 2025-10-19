@@ -26,7 +26,7 @@
 <a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::module::{
 <a href=#28 id=28 data-nosnippet>28</a>    ApiEndpoint, ApiEndpointContext, ApiRequestErased, CommonModuleInit, InputMeta, ModuleCommon,
-<a href=#29 id=29 data-nosnippet>29</a>    ModuleInit, TransactionItemAmount,
+<a href=#29 id=29 data-nosnippet>29</a>    ModuleInit, TransactionItemAmounts,
 <a href=#30 id=30 data-nosnippet>30</a>};
 <a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::{InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">pub use </span>init::<span class="kw-2">*</span>;
@@ -122,7 +122,7 @@
 <a href=#122 id=122 data-nosnippet>122</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
 <a href=#123 id=123 data-nosnippet>123</a>        output: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
 <a href=#124 id=124 data-nosnippet>124</a>        out_point: OutPoint,
-<a href=#125 id=125 data-nosnippet>125</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputError&gt;;
+<a href=#125 id=125 data-nosnippet>125</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmounts, &lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::OutputError&gt;;
 <a href=#126 id=126 data-nosnippet>126</a>
 <a href=#127 id=127 data-nosnippet>127</a>    <span class="doccomment">/// **Deprecated**: Modules should not be using it. Instead, they should
 <a href=#128 id=128 data-nosnippet>128</a>    /// implement their own custom endpoints with semantics, versioning,
@@ -254,7 +254,7 @@
 <a href=#254 id=254 data-nosnippet>254</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
 <a href=#255 id=255 data-nosnippet>255</a>        output: <span class="kw-2">&amp;</span>DynOutput,
 <a href=#256 id=256 data-nosnippet>256</a>        out_point: OutPoint,
-<a href=#257 id=257 data-nosnippet>257</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, DynOutputError&gt;;
+<a href=#257 id=257 data-nosnippet>257</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmounts, DynOutputError&gt;;
 <a href=#258 id=258 data-nosnippet>258</a>
 <a href=#259 id=259 data-nosnippet>259</a>    <span class="doccomment">/// See [`ServerModule::verify_input_submission`]
 <a href=#260 id=260 data-nosnippet>260</a>    </span><span class="attr">#[doc(hidden)]
@@ -408,7 +408,7 @@
 <a href=#408 id=408 data-nosnippet>408</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'a</span>&gt;,
 <a href=#409 id=409 data-nosnippet>409</a>        output: <span class="kw-2">&amp;</span>DynOutput,
 <a href=#410 id=410 data-nosnippet>410</a>        out_point: OutPoint,
-<a href=#411 id=411 data-nosnippet>411</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, DynOutputError&gt; {
+<a href=#411 id=411 data-nosnippet>411</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmounts, DynOutputError&gt; {
 <a href=#412 id=412 data-nosnippet>412</a>        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::process_output(
 <a href=#413 id=413 data-nosnippet>413</a>            <span class="self">self</span>,
 <a href=#414 id=414 data-nosnippet>414</a>            dbtx,

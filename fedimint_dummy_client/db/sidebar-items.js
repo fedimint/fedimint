@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"fn":["get_v1_migrated_state","migrate_to_v1"],"struct":["DbKeyPrefixIter","DummyClientFundsKeyV0","DummyClientFundsKeyV1","DummyClientNameKey","Unreachable"]};
+window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix"],"fn":["get_v1_migrated_state","get_v2_migrated_state","migrate_to_v1"],"struct":["DbKeyPrefixIter","DummyClientFundsKey","DummyClientFundsKeyV0","DummyClientFundsKeyV1","DummyClientFundsKeyV2PrefixAll","DummyClientNameKey","Unreachable"]};

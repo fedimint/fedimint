@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_funds"],"mod":["api","db","states"],"struct":["DummyClientContext","DummyClientInit","DummyClientModule"]};
+window.SIDEBAR_ITEMS = {"fn":["get_funds","get_funds_all"],"mod":["api","db","states"],"struct":["DummyClientContext","DummyClientInit","DummyClientModule"]};

@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::module::audit::Audit;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::module::{
 <a href=#17 id=17 data-nosnippet>17</a>    ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-<a href=#18 id=18 data-nosnippet>18</a>    ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+<a href=#18 id=18 data-nosnippet>18</a>    ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 <a href=#19 id=19 data-nosnippet>19</a>};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::{InPoint, OutPoint, PeerId};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_server_core::config::PeerHandleOps;
@@ -192,7 +192,7 @@
 <a href=#192 id=192 data-nosnippet>192</a>        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
 <a href=#193 id=193 data-nosnippet>193</a>        _output: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>UnknownOutput,
 <a href=#194 id=194 data-nosnippet>194</a>        _out_point: OutPoint,
-<a href=#195 id=195 data-nosnippet>195</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, UnknownOutputError&gt; {
+<a href=#195 id=195 data-nosnippet>195</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmounts, UnknownOutputError&gt; {
 <a href=#196 id=196 data-nosnippet>196</a>        <span class="macro">unreachable!</span>();
 <a href=#197 id=197 data-nosnippet>197</a>    }
 <a href=#198 id=198 data-nosnippet>198</a>

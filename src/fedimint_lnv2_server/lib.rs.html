@@ -21,9 +21,9 @@
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::encoding::Encodable;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::module::audit::Audit;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_core::module::{
-<a href=#24 id=24 data-nosnippet>24</a>    ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-<a href=#25 id=25 data-nosnippet>25</a>    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
-<a href=#26 id=26 data-nosnippet>26</a>    api_endpoint,
+<a href=#24 id=24 data-nosnippet>24</a>    Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+<a href=#25 id=25 data-nosnippet>25</a>    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
+<a href=#26 id=26 data-nosnippet>26</a>    TransactionItemAmounts, api_endpoint,
 <a href=#27 id=27 data-nosnippet>27</a>};
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_core::task::timeout;
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::time::duration_since_epoch;
@@ -530,9 +530,9 @@
 <a href=#530 id=530 data-nosnippet>530</a>        };
 <a href=#531 id=531 data-nosnippet>531</a>
 <a href=#532 id=532 data-nosnippet>532</a>        <span class="prelude-val">Ok</span>(InputMeta {
-<a href=#533 id=533 data-nosnippet>533</a>            amount: TransactionItemAmount {
-<a href=#534 id=534 data-nosnippet>534</a>                amount,
-<a href=#535 id=535 data-nosnippet>535</a>                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount),
+<a href=#533 id=533 data-nosnippet>533</a>            amount: TransactionItemAmounts {
+<a href=#534 id=534 data-nosnippet>534</a>                amounts: Amounts::new_bitcoin(amount),
+<a href=#535 id=535 data-nosnippet>535</a>                fees: Amounts::new_bitcoin(<span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount)),
 <a href=#536 id=536 data-nosnippet>536</a>            },
 <a href=#537 id=537 data-nosnippet>537</a>            pub_key,
 <a href=#538 id=538 data-nosnippet>538</a>        })
@@ -543,7 +543,7 @@
 <a href=#543 id=543 data-nosnippet>543</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
 <a href=#544 id=544 data-nosnippet>544</a>        output: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>LightningOutput,
 <a href=#545 id=545 data-nosnippet>545</a>        outpoint: OutPoint,
-<a href=#546 id=546 data-nosnippet>546</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, LightningOutputError&gt; {
+<a href=#546 id=546 data-nosnippet>546</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmounts, LightningOutputError&gt; {
 <a href=#547 id=547 data-nosnippet>547</a>        <span class="kw">let </span>amount = <span class="kw">match </span>output.ensure_v0_ref()<span class="question-mark">? </span>{
 <a href=#548 id=548 data-nosnippet>548</a>            LightningOutputV0::Outgoing(contract) =&gt; {
 <a href=#549 id=549 data-nosnippet>549</a>                dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OutgoingContractKey(outpoint), contract)
@@ -592,9 +592,9 @@
 <a href=#592 id=592 data-nosnippet>592</a>            }
 <a href=#593 id=593 data-nosnippet>593</a>        };
 <a href=#594 id=594 data-nosnippet>594</a>
-<a href=#595 id=595 data-nosnippet>595</a>        <span class="prelude-val">Ok</span>(TransactionItemAmount {
-<a href=#596 id=596 data-nosnippet>596</a>            amount,
-<a href=#597 id=597 data-nosnippet>597</a>            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount),
+<a href=#595 id=595 data-nosnippet>595</a>        <span class="prelude-val">Ok</span>(TransactionItemAmounts {
+<a href=#596 id=596 data-nosnippet>596</a>            amounts: Amounts::new_bitcoin(amount),
+<a href=#597 id=597 data-nosnippet>597</a>            fees: Amounts::new_bitcoin(<span class="self">self</span>.cfg.consensus.fee_consensus.fee(amount)),
 <a href=#598 id=598 data-nosnippet>598</a>        })
 <a href=#599 id=599 data-nosnippet>599</a>    }
 <a href=#600 id=600 data-nosnippet>600</a>

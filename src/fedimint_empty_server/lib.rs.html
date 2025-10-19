@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::module::audit::Audit;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::module::{
 <a href=#17 id=17 data-nosnippet>17</a>    ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-<a href=#18 id=18 data-nosnippet>18</a>    ModuleInit, SupportedModuleApiVersions, TransactionItemAmount,
+<a href=#18 id=18 data-nosnippet>18</a>    ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
 <a href=#19 id=19 data-nosnippet>19</a>};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::{InPoint, OutPoint, PeerId, push_db_pair_items};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_empty_common::config::{
@@ -211,7 +211,7 @@
 <a href=#211 id=211 data-nosnippet>211</a>        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
 <a href=#212 id=212 data-nosnippet>212</a>        _output: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>EmptyOutput,
 <a href=#213 id=213 data-nosnippet>213</a>        _out_point: OutPoint,
-<a href=#214 id=214 data-nosnippet>214</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, EmptyOutputError&gt; {
+<a href=#214 id=214 data-nosnippet>214</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmounts, EmptyOutputError&gt; {
 <a href=#215 id=215 data-nosnippet>215</a>        <span class="prelude-val">Err</span>(EmptyOutputError::NotSupported)
 <a href=#216 id=216 data-nosnippet>216</a>    }
 <a href=#217 id=217 data-nosnippet>217</a>

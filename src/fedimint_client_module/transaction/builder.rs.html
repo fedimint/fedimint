@@ -4,11 +4,11 @@
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>bitcoin::key::Keypair;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoin::secp256k1;
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::Amount;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::core::{
-<a href=#9 id=9 data-nosnippet>9</a>    DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
-<a href=#10 id=10 data-nosnippet>10</a>};
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::core::{
+<a href=#8 id=8 data-nosnippet>8</a>    DynInput, DynOutput, IInput, IOutput, IntoDynInstance, ModuleInstanceId,
+<a href=#9 id=9 data-nosnippet>9</a>};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::module::Amounts;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSignature};
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
@@ -29,7 +29,7 @@
 <a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub struct </span>ClientInput&lt;I = DynInput&gt; {
 <a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">pub </span>input: I,
 <a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">pub </span>keys: Vec&lt;Keypair&gt;,
-<a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">pub </span>amount: Amount,
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="kw">pub </span>amounts: Amounts,
 <a href=#33 id=33 data-nosnippet>33</a>}
 <a href=#34 id=34 data-nosnippet>34</a>
 <a href=#35 id=35 data-nosnippet>35</a><span class="attr">#[derive(Clone)]
@@ -132,7 +132,7 @@
 <a href=#132 id=132 data-nosnippet>132</a>                .map(|input| InstancelessDynClientInput {
 <a href=#133 id=133 data-nosnippet>133</a>                    input: Box::new(input.input),
 <a href=#134 id=134 data-nosnippet>134</a>                    keys: input.keys,
-<a href=#135 id=135 data-nosnippet>135</a>                    amount: input.amount,
+<a href=#135 id=135 data-nosnippet>135</a>                    amounts: input.amounts,
 <a href=#136 id=136 data-nosnippet>136</a>                })
 <a href=#137 id=137 data-nosnippet>137</a>                .collect(),
 <a href=#138 id=138 data-nosnippet>138</a>            sm_gens: <span class="self">self
@@ -163,7 +163,7 @@
 <a href=#163 id=163 data-nosnippet>163</a>        ClientInput {
 <a href=#164 id=164 data-nosnippet>164</a>            input: <span class="self">self</span>.input.into_dyn(module_instance_id),
 <a href=#165 id=165 data-nosnippet>165</a>            keys: <span class="self">self</span>.keys,
-<a href=#166 id=166 data-nosnippet>166</a>            amount: <span class="self">self</span>.amount,
+<a href=#166 id=166 data-nosnippet>166</a>            amounts: <span class="self">self</span>.amounts,
 <a href=#167 id=167 data-nosnippet>167</a>        }
 <a href=#168 id=168 data-nosnippet>168</a>    }
 <a href=#169 id=169 data-nosnippet>169</a>}
@@ -216,7 +216,7 @@
 <a href=#216 id=216 data-nosnippet>216</a>                .map(|input| ClientInput {
 <a href=#217 id=217 data-nosnippet>217</a>                    input: DynInput::from_parts(module_instance_id, input.input),
 <a href=#218 id=218 data-nosnippet>218</a>                    keys: input.keys,
-<a href=#219 id=219 data-nosnippet>219</a>                    amount: input.amount,
+<a href=#219 id=219 data-nosnippet>219</a>                    amounts: input.amounts,
 <a href=#220 id=220 data-nosnippet>220</a>                })
 <a href=#221 id=221 data-nosnippet>221</a>                .collect::&lt;Vec&lt;ClientInput&gt;&gt;(),
 <a href=#222 id=222 data-nosnippet>222</a>
@@ -243,7 +243,7 @@
 <a href=#243 id=243 data-nosnippet>243</a><span class="attr">#[derive(Clone, Debug)]
 <a href=#244 id=244 data-nosnippet>244</a></span><span class="kw">pub struct </span>ClientOutput&lt;O = DynOutput&gt; {
 <a href=#245 id=245 data-nosnippet>245</a>    <span class="kw">pub </span>output: O,
-<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">pub </span>amount: Amount,
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">pub </span>amounts: Amounts,
 <a href=#247 id=247 data-nosnippet>247</a>}
 <a href=#248 id=248 data-nosnippet>248</a>
 <a href=#249 id=249 data-nosnippet>249</a><span class="attr">#[derive(Clone)]
@@ -304,7 +304,7 @@
 <a href=#304 id=304 data-nosnippet>304</a>                .into_iter()
 <a href=#305 id=305 data-nosnippet>305</a>                .map(|output| InstancelessDynClientOutput {
 <a href=#306 id=306 data-nosnippet>306</a>                    output: Box::new(output.output),
-<a href=#307 id=307 data-nosnippet>307</a>                    amount: output.amount,
+<a href=#307 id=307 data-nosnippet>307</a>                    amounts: output.amounts,
 <a href=#308 id=308 data-nosnippet>308</a>                })
 <a href=#309 id=309 data-nosnippet>309</a>                .collect(),
 <a href=#310 id=310 data-nosnippet>310</a>            sm_gens: <span class="self">self
@@ -359,7 +359,7 @@
 <a href=#359 id=359 data-nosnippet>359</a>                .into_iter()
 <a href=#360 id=360 data-nosnippet>360</a>                .map(|output| ClientOutput {
 <a href=#361 id=361 data-nosnippet>361</a>                    output: DynOutput::from_parts(module_instance_id, output.output),
-<a href=#362 id=362 data-nosnippet>362</a>                    amount: output.amount,
+<a href=#362 id=362 data-nosnippet>362</a>                    amounts: output.amounts,
 <a href=#363 id=363 data-nosnippet>363</a>                })
 <a href=#364 id=364 data-nosnippet>364</a>                .collect::&lt;Vec&lt;ClientOutput&gt;&gt;(),
 <a href=#365 id=365 data-nosnippet>365</a>
@@ -386,7 +386,7 @@
 <a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; ClientOutput {
 <a href=#387 id=387 data-nosnippet>387</a>        ClientOutput {
 <a href=#388 id=388 data-nosnippet>388</a>            output: <span class="self">self</span>.output.into_dyn(module_instance_id),
-<a href=#389 id=389 data-nosnippet>389</a>            amount: <span class="self">self</span>.amount,
+<a href=#389 id=389 data-nosnippet>389</a>            amounts: <span class="self">self</span>.amounts,
 <a href=#390 id=390 data-nosnippet>390</a>        }
 <a href=#391 id=391 data-nosnippet>391</a>    }
 <a href=#392 id=392 data-nosnippet>392</a>}
