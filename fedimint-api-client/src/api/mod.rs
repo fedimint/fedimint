@@ -10,6 +10,7 @@ use std::result;
 use std::sync::Arc;
 
 use anyhow::{Context, anyhow};
+use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError};
 pub use fedimint_connectors::ServerResult;
@@ -17,7 +18,9 @@ pub use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
     ConnectionPool, ConnectorRegistry, DynGuaridianConnection, IGuardianConnection,
 };
-use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, SetupStatus};
+use fedimint_core::admin_client::{
+    GuardianConfigBackup, PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus,
+};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
@@ -35,7 +38,8 @@ use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
-    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
+    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, task,
+    util,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
@@ -44,6 +48,7 @@ use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::watch;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -401,7 +406,7 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 
 impl DynGlobalApi {
     pub fn new(
-        connectors: ConnectorRegistry,
+        connectors: &ConnectorRegistry,
         peers: BTreeMap<PeerId, SafeUrl>,
         api_secret: Option<&str>,
     ) -> anyhow::Result<Self> {
@@ -411,7 +416,7 @@ impl DynGlobalApi {
         .into())
     }
     pub fn new_admin(
-        connectors: ConnectorRegistry,
+        connectors: &ConnectorRegistry,
         peer: PeerId,
         url: SafeUrl,
         api_secret: Option<&str>,
@@ -425,7 +430,7 @@ impl DynGlobalApi {
         .into())
     }
 
-    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> anyhow::Result<Self> {
+    pub fn new_admin_setup(connectors: &ConnectorRegistry, url: SafeUrl) -> anyhow::Result<Self> {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         Self::new_admin(
@@ -581,55 +586,77 @@ where
 /// It has an `connectors` handle to actually making outgoing connections
 /// to given URLs, and knows which peers there are and what URLs to connect to
 /// to reach them.
-// TODO: As it is currently it mixes a bit the role of connecting to "peers" with
-// general purpose outgoing connection. Not a big deal, but might need refactor
-// in the future.
 #[derive(Clone, Debug)]
 pub struct FederationApi {
-    /// Map of known URLs to use to connect to peers
-    peers: BTreeMap<PeerId, SafeUrl>,
     /// List of peer ids, redundant to avoid collecting all the time
     peers_keys: BTreeSet<PeerId>,
     /// Our own [`PeerId`] to use when making admin apis
     admin_id: Option<PeerId>,
     /// Set when this API is used to communicate with a module
     module_id: Option<ModuleInstanceId>,
-    /// Api secret of the federation
-    api_secret: Option<String>,
-    /// Connection pool
-    connection_pool: ConnectionPool<dyn IGuardianConnection>,
+    /// Per-peer connections with watch channels for fast-fail behavior
+    connections: PeerConnections,
 }
 
 impl FederationApi {
     pub fn new(
-        connectors: ConnectorRegistry,
+        connectors: &ConnectorRegistry,
         peers: BTreeMap<PeerId, SafeUrl>,
         admin_peer_id: Option<PeerId>,
         api_secret: Option<&str>,
     ) -> Self {
         Self {
             peers_keys: peers.keys().copied().collect(),
-            peers,
             admin_id: admin_peer_id,
             module_id: None,
-            api_secret: api_secret.map(ToOwned::to_owned),
-            connection_pool: ConnectionPool::new(connectors),
+            connections: PeerConnections::new(connectors, peers, api_secret),
         }
     }
+}
 
-    async fn get_or_create_connection(
-        &self,
-        url: &SafeUrl,
+/// State of a peer connection for fast-fail behavior.
+#[derive(Clone, Debug)]
+enum PeerConnectionState {
+    /// Successfully connected, requests can proceed.
+    Connected(DynGuaridianConnection),
+    /// Connection attempt failed or was disconnected, requests should fail
+    Disconnected,
+}
+
+/// Manages connections to federation peers using watch channels.
+///
+/// Each peer has a background task that maintains the connection and updates
+/// a watch channel. When a request comes in and the peer is disconnected,
+/// it fails immediately instead of waiting for reconnection.
+#[derive(Clone, Debug)]
+struct PeerConnections {
+    connections: BTreeMap<PeerId, watch::Receiver<Option<PeerConnectionState>>>,
+}
+
+impl PeerConnections {
+    fn new(
+        connectors: &ConnectorRegistry,
+        peers: BTreeMap<PeerId, SafeUrl>,
         api_secret: Option<&str>,
-    ) -> ServerResult<DynGuaridianConnection> {
-        self.connection_pool
-            .get_or_create_connection(url, api_secret, |url, api_secret, connectors| async move {
-                let conn = connectors
-                    .connect_guardian(&url, api_secret.as_deref())
-                    .await?;
-                Ok(conn)
-            })
-            .await
+    ) -> Self {
+        let mut connections = BTreeMap::new();
+
+        for (peer, url) in peers {
+            let connectors = connectors.clone();
+            let api_secret = api_secret.map(ToOwned::to_owned);
+            let (sender, receiver) = watch::channel(None);
+
+            task::spawn("peer-api-connection", async move {
+                tokio::select! {
+                    () = peer_connection_task(peer, url, connectors, api_secret, sender.clone()) => {}
+                    () = sender.closed() => {} // Graceful shutdown
+                };
+            });
+
+            connections.insert(peer, receiver);
+        }
+
+        PeerConnections { connections }
     }
 
     async fn request(
@@ -639,20 +666,70 @@ impl FederationApi {
         request: ApiRequestErased,
     ) -> ServerResult<Value> {
         trace!(target: LOG_CLIENT_NET_API, %peer, %method, "Api request");
-        let url = self
-            .peers
+
+        let mut receiver = self
+            .connections
             .get(&peer)
-            .ok_or_else(|| ServerError::InvalidPeerId { peer_id: peer })?;
-        let conn = self
-            .get_or_create_connection(url, self.api_secret.as_deref())
+            .ok_or(ServerError::InvalidPeerId { peer_id: peer })?
+            .clone();
+
+        if receiver.borrow().is_none() {
+            receiver
+                .changed() // Wait for the first connection attempt to complete
+                .await
+                .expect("peer connection task is running");
+        }
+
+        let state = receiver
+            .borrow()
+            .clone()
+            .expect("connection task never sets the watch channel value to none");
+
+        match state {
+            PeerConnectionState::Connected(connection) => connection.request(method, request).await,
+            PeerConnectionState::Disconnected => {
+                Err(ServerError::Connection(anyhow!("Peer is disconnected")))
+            }
+        }
+    }
+}
+
+#[instrument(target = LOG_CLIENT_NET_API, skip_all, fields(peer = %peer))]
+async fn peer_connection_task(
+    peer: PeerId,
+    url: SafeUrl,
+    connectors: ConnectorRegistry,
+    api_secret: Option<String>,
+    sender: watch::Sender<Option<PeerConnectionState>>,
+) {
+    let mut backoff = api_networking_backoff();
+
+    loop {
+        match connectors
+            .connect_guardian(&url, api_secret.as_deref())
             .await
-            .context("Failed to connect to peer")
-            .map_err(ServerError::Connection)?;
-        let res = conn.request(method.clone(), request).await;
+        {
+            Ok(connection) => {
+                trace!(target: LOG_CLIENT_NET_API, "Connected to peer api");
 
-        trace!(target: LOG_CLIENT_NET_API, ?method, res_ok = res.is_ok(), "Api response");
+                sender.send_replace(Some(PeerConnectionState::Connected(connection.clone())));
 
-        res
+                connection.await_disconnection().await;
+
+                sender.send_replace(Some(PeerConnectionState::Disconnected));
+
+                trace!(target: LOG_CLIENT_NET_API, "Disconnected from peer api");
+
+                backoff = api_networking_backoff();
+            }
+            Err(e) => {
+                trace!(target: LOG_CLIENT_NET_API, err = %e.fmt_compact(), "Failed to connect to peer api");
+
+                sender.send_replace(Some(PeerConnectionState::Disconnected));
+
+                task::sleep(backoff.next().expect("backoff is infinite")).await;
+            }
+        }
     }
 }
 
@@ -670,12 +747,10 @@ impl IRawFederationApi for FederationApi {
 
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         FederationApi {
-            api_secret: self.api_secret.clone(),
-            peers: self.peers.clone(),
             peers_keys: self.peers_keys.clone(),
             admin_id: self.admin_id,
             module_id: Some(id),
-            connection_pool: self.connection_pool.clone(),
+            connections: self.connections.clone(),
         }
         .into()
     }
@@ -700,7 +775,9 @@ impl IRawFederationApi for FederationApi {
             None => ApiMethod::Core(method.to_string()),
         };
 
-        self.request(peer_id, method, params.clone()).await
+        self.connections
+            .request(peer_id, method, params.clone())
+            .await
     }
 }
 

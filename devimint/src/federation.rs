@@ -335,7 +335,7 @@ impl Federation {
                 .await?,
             );
             let admin_client = DynGlobalApi::new_admin_setup(
-                connectors.clone(),
+                &connectors,
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 // TODO: will need it somewhere
                 // &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),

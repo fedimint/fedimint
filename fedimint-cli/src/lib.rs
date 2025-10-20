@@ -300,11 +300,12 @@ impl Opts {
         api_secret: Option<&str>,
     ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
+        let connectors = self.make_endpoints().await.map_err(|e| CliError {
+            error: e.to_string(),
+        })?;
 
         DynGlobalApi::new_admin(
-            self.make_endpoints().await.map_err(|e| CliError {
-                error: e.to_string(),
-            })?,
+            &connectors,
             our_id,
             peer_urls
                 .get(&our_id)
@@ -1456,8 +1457,8 @@ impl FedimintCli {
         cli: Opts,
         args: SetupAdminArgs,
     ) -> anyhow::Result<Value> {
-        let client =
-            DynGlobalApi::new_admin_setup(cli.make_endpoints().await?, args.endpoint.clone())?;
+        let connectors = cli.make_endpoints().await?;
+        let client = DynGlobalApi::new_admin_setup(&connectors, args.endpoint.clone())?;
 
         match &args.subcommand {
             SetupAdminCmd::Status => {

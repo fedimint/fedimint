@@ -557,7 +557,7 @@ impl ClientBuilder {
         let peer_urls = get_api_urls(&db, &config).await;
         let api = match self.admin_creds.as_ref() {
             Some(admin_creds) => FederationApi::new(
-                connectors.clone(),
+                &connectors,
                 peer_urls,
                 Some(admin_creds.peer_id),
                 Some(&admin_creds.auth.0),
@@ -566,7 +566,7 @@ impl ClientBuilder {
             .with_request_hook(&request_hook)
             .with_cache()
             .into(),
-            None => FederationApi::new(connectors.clone(), peer_urls, None, api_secret.as_deref())
+            None => FederationApi::new(&connectors, peer_urls, None, api_secret.as_deref())
                 .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
                 .with_request_hook(&request_hook)
                 .with_cache()
@@ -1309,7 +1309,7 @@ impl ClientPreview {
     ) -> anyhow::Result<Option<ClientBackup>> {
         let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
         let api = DynGlobalApi::new(
-            self.connectors.clone(),
+            &self.connectors,
             // TODO: change join logic to use FederationId v2
             self.config
                 .global
