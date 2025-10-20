@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use fedimint_logging::LOG_NET_API;
+use fedimint_util_error::FmtCompactAnyhow as _;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use registry::ModuleRegistry;
@@ -447,9 +448,9 @@ impl<'a> ApiEndpointContext<'a> {
         self.dbtx.commit_tx_result().await.map_err(|err| {
             tracing::warn!(
                 target: fedimint_logging::LOG_NET_API,
-                path,
-                "API server error when writing to database: {:?}",
-                err
+                err = %err.fmt_compact_anyhow(),
+                %path,
+                "API server error when writing to database",
             );
             ApiError {
                 code: 500,
