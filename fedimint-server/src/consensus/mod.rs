@@ -100,7 +100,7 @@ pub async fn run(
 
     // TODO: make it work with all transports and federation secrets
     let global_api = DynGlobalApi::new(
-        connectors.clone(),
+        &connectors,
         cfg.consensus
             .api_endpoints()
             .iter()
@@ -293,7 +293,7 @@ pub async fn run(
     ConsensusEngine {
         db,
         federation_api: DynGlobalApi::new(
-            connectors,
+            &connectors,
             api_urls,
             force_api_secrets.get_active().as_deref(),
         )?,

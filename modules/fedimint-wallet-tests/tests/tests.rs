@@ -710,7 +710,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         PeerId::from(0),
         // FIXME: use proper mock
         DynGlobalApi::new(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+            &ConnectorRegistry::build_from_testing_env()?.bind().await?,
             [(
                 PeerId::from(0),
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),
