@@ -48,11 +48,6 @@ enum LnurlOpts {
         #[arg(long)]
         gateway: Option<SafeUrl>,
     },
-    /// Receive an lnurl.
-    Receive {
-        #[arg(long)]
-        batch_size: Option<usize>,
-    },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -113,21 +108,10 @@ pub(crate) async fn handle_cli_command(
                 recurringd,
                 gateway,
             } => json(lightning.generate_lnurl(recurringd, gateway).await?),
-            LnurlOpts::Receive { batch_size } => {
-                json(lightning.receive_lnurl(batch_size, Value::Null).await)
-            }
         },
         Opts::Gateways(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
-            GatewaysOpts::Map => json(
-                LightningClientModule::update_gateway_map(
-                    &lightning.federation_id,
-                    &lightning.client_ctx,
-                    &lightning.module_api,
-                    &lightning.gateway_conn,
-                )
-                .await,
-            ),
+            GatewaysOpts::Map => json(lightning.update_gateway_map().await),
             GatewaysOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
             GatewaysOpts::List { peer } => match peer {
                 Some(peer) => json(lightning.module_api.gateways_from_peer(peer).await?),

@@ -19,6 +19,7 @@ path = "tests/tests.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
+chrono = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-client = { workspace = true }
