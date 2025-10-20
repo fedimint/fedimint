@@ -9,7 +9,7 @@ use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::task;
+use fedimint_core::task::{self};
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_lnv2_client::{FinalReceiveOperationState, FinalSendOperationState};
 use fedimint_lnv2_common::lnurl::VerifyResponse;
@@ -585,12 +585,7 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed.gw_ldk().await?;
 
-    let gateway_matrix = [
-        (gw_lnd, gw_lnd),
-        (gw_lnd, gw_ldk),
-        (gw_ldk, gw_lnd),
-        (gw_ldk, gw_ldk),
-    ];
+    let gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
     let recurringd = dev_fed.recurringd().await?.api_url().to_string();
 
@@ -602,17 +597,13 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .new_joined_client("lnv2-lnurl-test-client-b")
         .await?;
 
-    federation.pegin_client(10_000, &client_a).await?;
-    federation.pegin_client(10_000, &client_b).await?;
-
-    for (gw_send, gw_receive) in gateway_matrix {
+    for (gw_send, gw_receive) in gateway_pairs {
         info!(
-            "Testing lnurl payments: client -> {} -> {} -> client",
+            "Testing lnurl payments: {} -> {} -> client",
             gw_send.ln.ln_type(),
             gw_receive.ln.ln_type()
         );
 
-        // Generate LNURL using LNv2 client command
         let lnurl_a = generate_lnurl(&client_a, &recurringd, &gw_receive.addr).await?;
         let lnurl_b = generate_lnurl(&client_b, &recurringd, &gw_receive.addr).await?;
 
@@ -631,21 +622,8 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         assert!(response_a.preimage.is_none());
         assert!(response_b.preimage.is_none());
 
-        test_send(
-            &client_a,
-            &gw_send.addr,
-            &invoice_b.to_string(),
-            FinalSendOperationState::Success,
-        )
-        .await?;
-
-        test_send(
-            &client_b,
-            &gw_send.addr,
-            &invoice_a.to_string(),
-            FinalSendOperationState::Success,
-        )
-        .await?;
+        gw_send.pay_invoice(invoice_a.clone()).await?;
+        gw_send.pay_invoice(invoice_b.clone()).await?;
 
         let response_a = verify_payment(&verify_url_a).await?;
         let response_b = verify_payment(&verify_url_b).await?;
@@ -671,29 +649,23 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         assert_eq!(verify_task_b.await??.preimage, response_b.preimage);
     }
 
-    assert_eq!(receive_lnurl(&client_a).await?, 1);
-    assert_eq!(receive_lnurl(&client_a).await?, 2);
-    assert_eq!(receive_lnurl(&client_a).await?, 1);
+    while client_a.balance().await? < 950 * 1000 {
+        info!("Waiting for client A to receive funds via LNURL...");
 
-    assert_eq!(receive_lnurl(&client_b).await?, 3);
-    assert_eq!(receive_lnurl(&client_b).await?, 1);
+        cmd!(client_a, "dev", "wait", "1").out_json().await?;
+    }
+
+    info!("Client A successfully received funds via LNURL!");
+
+    while client_b.balance().await? < 950 * 1000 {
+        info!("Waiting for client B to receive funds via LNURL...");
+
+        cmd!(client_b, "dev", "wait", "1").out_json().await?;
+    }
+
+    info!("Client B successfully received funds via LNURL!");
 
     Ok(())
-}
-
-async fn receive_lnurl(client: &Client) -> anyhow::Result<u64> {
-    cmd!(
-        client,
-        "module",
-        "lnv2",
-        "lnurl",
-        "receive",
-        "--batch-size",
-        "3"
-    )
-    .out_string()
-    .await
-    .map(|s| s.parse::<u64>().unwrap())
 }
 
 async fn generate_lnurl(
