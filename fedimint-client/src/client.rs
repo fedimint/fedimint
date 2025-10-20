@@ -850,6 +850,39 @@ impl Client {
         })
     }
 
+    /// Make a single API version request to a peer after a delay.
+    ///
+    /// The delay is here to unify the type of a future both for initial request
+    /// and possible retries.
+    async fn make_api_version_request(
+        delay: Duration,
+        peer_id: PeerId,
+        api: &DynGlobalApi,
+    ) -> (
+        PeerId,
+        Result<SupportedApiVersionsSummary, fedimint_api_client::api::PeerError>,
+    ) {
+        runtime::sleep(delay).await;
+        (
+            peer_id,
+            api.request_single_peer::<SupportedApiVersionsSummary>(
+                VERSION_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+                peer_id,
+            )
+            .await,
+        )
+    }
+
+    /// Create a backoff strategy for API version requests.
+    ///
+    /// Keep trying, initially somewhat aggressively, but after a while retry
+    /// very slowly, because chances for response are getting lower and
+    /// lower.
+    fn create_api_version_backoff() -> impl Iterator<Item = Duration> {
+        custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None)
+    }
+
     /// Query the federation for API version support and then calculate
     /// the best API version to use (supported by most guardians).
     pub async fn fetch_common_api_versions_from_all_peers(
@@ -858,41 +891,18 @@ impl Client {
         db: Database,
         num_responses_sender: watch::Sender<usize>,
     ) {
-        // Keep trying, initially somewhat aggressively, but after a while retry very
-        // slowly, because chances for response are getting lower and lower.
-        let mut backoff =
-            custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
-
-        // Make a single request to a peer after a delay
-        //
-        // The delay is here to unify the type of a future both for initial request and
-        // possible retries.
-        async fn make_request(
-            delay: Duration,
-            peer_id: PeerId,
-            api: &DynGlobalApi,
-        ) -> (
-            PeerId,
-            Result<SupportedApiVersionsSummary, fedimint_api_client::api::PeerError>,
-        ) {
-            runtime::sleep(delay).await;
-            (
-                peer_id,
-                api.request_single_peer::<SupportedApiVersionsSummary>(
-                    VERSION_ENDPOINT.to_owned(),
-                    ApiRequestErased::default(),
-                    peer_id,
-                )
-                .await,
-            )
-        }
+        let mut backoff = Self::create_api_version_backoff();
 
         // NOTE: `FuturesUnordered` is a footgun, but since we only poll it for result
         // and make a single async db write operation, it should be OK.
         let mut requests = FuturesUnordered::new();
 
         for peer_id in num_peers.peer_ids() {
-            requests.push(make_request(Duration::ZERO, peer_id, &api));
+            requests.push(Self::make_api_version_request(
+                Duration::ZERO,
+                peer_id,
+                &api,
+            ));
         }
 
         let mut num_responses = 0;
@@ -931,7 +941,7 @@ impl Client {
             };
 
             if retry {
-                requests.push(make_request(
+                requests.push(Self::make_api_version_request(
                     backoff.next().expect("Keeps retrying"),
                     peer_id,
                     &api,
@@ -950,41 +960,18 @@ impl Client {
         num_peers: NumPeers,
         api: DynGlobalApi,
     ) -> BTreeMap<PeerId, SupportedApiVersionsSummary> {
-        // Keep trying, initially somewhat aggressively, but after a while retry very
-        // slowly, because chances for response are getting lower and lower.
-        let mut backoff =
-            custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
-
-        // Make a single request to a peer after a delay
-        //
-        // The delay is here to unify the type of a future both for initial request and
-        // possible retries.
-        async fn make_request(
-            delay: Duration,
-            peer_id: PeerId,
-            api: &DynGlobalApi,
-        ) -> (
-            PeerId,
-            Result<SupportedApiVersionsSummary, fedimint_api_client::api::PeerError>,
-        ) {
-            runtime::sleep(delay).await;
-            (
-                peer_id,
-                api.request_single_peer::<SupportedApiVersionsSummary>(
-                    VERSION_ENDPOINT.to_owned(),
-                    ApiRequestErased::default(),
-                    peer_id,
-                )
-                .await,
-            )
-        }
+        let mut backoff = Self::create_api_version_backoff();
 
         // NOTE: `FuturesUnordered` is a footgun, but since we only poll it for result
         // and collect responses, it should be OK.
         let mut requests = FuturesUnordered::new();
 
         for peer_id in num_peers.peer_ids() {
-            requests.push(make_request(Duration::ZERO, peer_id, &api));
+            requests.push(Self::make_api_version_request(
+                Duration::ZERO,
+                peer_id,
+                &api,
+            ));
         }
 
         let mut successful_responses = BTreeMap::new();
@@ -1009,7 +996,7 @@ impl Client {
             };
 
             if retry {
-                requests.push(make_request(
+                requests.push(Self::make_api_version_request(
                     backoff.next().expect("Keeps retrying"),
                     peer_id,
                     &api,
