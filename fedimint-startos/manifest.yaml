@@ -1,9 +1,8 @@
 id: fedimintd
 title: "Fedimint"
-version: 0.8.1.1
+version: 0.9.0
 release-notes: |
-  Initial StartOS release.
-  - Read more about the release [here](https://github.com/fedimint/fedimint/releases/tag/v0.8.1)
+  Read more about the release [here](https://github.com/fedimint/fedimint/releases/tag/v0.9.0)
 license: MIT
 wrapper-repo: "https://github.com/fedimint/fedimint/tree/master/fedimint-startos"
 upstream-repo: "https://github.com/fedimint/fedimint"
