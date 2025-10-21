@@ -8,7 +8,7 @@ use async_stream::try_stream;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::ClientModule;
 use fedimint_client::secret::RootSecretStrategy;
-use fedimint_client::{ClientHandleArc, RootSecret};
+use fedimint_client::{ClientHandleArc, ClientPreview, RootSecret};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -119,6 +119,7 @@ pub struct RpcGlobalState {
     clients: Mutex<HashMap<String, ClientHandleArc>>,
     rpc_handles: std::sync::Mutex<HashMap<u64, AbortHandle>>,
     unified_database: Database,
+    preview_cache: std::sync::Mutex<Option<ClientPreview>>,
 }
 
 pub struct HandledRpc<'a> {
@@ -131,6 +132,7 @@ impl RpcGlobalState {
             clients: Mutex::new(HashMap::new()),
             rpc_handles: std::sync::Mutex::new(HashMap::new()),
             unified_database,
+            preview_cache: std::sync::Mutex::new(None),
         }
     }
 
@@ -197,8 +199,15 @@ impl RpcGlobalState {
         // Derive federation-specific secret from wallet mnemonic
         let federation_secret = self.derive_federation_secret(&mnemonic, &federation_id);
 
-        let builder = Self::client_builder().await?;
-        let preview = builder.preview(&invite_code).await?;
+        // Try to consume cached preview, otherwise create new one
+        let cached_preview = self.preview_cache.lock().unwrap().take();
+        let preview = match cached_preview {
+            Some(preview) if preview.config().calculate_federation_id() == federation_id => preview,
+            _ => {
+                let builder = Self::client_builder().await?;
+                builder.preview(&invite_code).await?
+            }
+        };
 
         // Check if backup exists
         let backup = preview
@@ -370,13 +379,14 @@ impl RpcGlobalState {
 
     async fn preview_federation(&self, invite_code: String) -> anyhow::Result<serde_json::Value> {
         let invite = InviteCode::from_str(&invite_code)?;
-        let (client_config, _) = fedimint_api_client::api::net::Connector::default()
-            .download_from_invite_code(
-                &invite, /* TODO: how should rpc clients control this? */ false, false,
-            )
-            .await?;
-        let json_config = client_config.to_json();
-        let federation_id = client_config.calculate_federation_id();
+        let federation_id = invite.federation_id();
+
+        let builder = Self::client_builder().await?;
+        let preview = builder.preview(&invite).await?;
+
+        let json_config = preview.config().to_json();
+        // Store in cache
+        *self.preview_cache.lock().unwrap() = Some(preview);
 
         Ok(json!({
             "config": json_config,
