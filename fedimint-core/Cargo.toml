@@ -72,7 +72,7 @@ tokio-test = { workspace = true }
 workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-aws-lc-sys = { version = "0.30", features = ["bindgen"] }
+ring = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
