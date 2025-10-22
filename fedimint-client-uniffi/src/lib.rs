@@ -22,6 +22,11 @@ pub enum FedimintError {
     General { msg: String },
 }
 
+#[uniffi::export(callback_interface)]
+pub trait RpcCallback: Send + Sync {
+    fn on_response(&self, response_json: String);
+}
+
 #[derive(uniffi::Object)]
 pub struct RpcHandler {
     state: Arc<RpcGlobalState>,
@@ -32,57 +37,51 @@ pub struct RpcHandler {
 impl RpcHandler {
     #[uniffi::constructor]
     pub fn new(db_path: String) -> Result<Arc<Self>, FedimintError> {
-        let db = create_database(&db_path)
-            .map_err(|e| FedimintError::DatabaseError { msg: e.to_string() })?;
-        let state = Arc::new(RpcGlobalState::new(db));
-        
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|e| FedimintError::RuntimeError { msg: e.to_string() })?;
+        
+        let db = create_database(&db_path, &runtime)
+            .map_err(|e| FedimintError::DatabaseError { msg: e.to_string() })?;
+        let state = Arc::new(RpcGlobalState::new(db));
         
         Ok(Arc::new(Self { state, runtime }))
     }
 
-    pub async fn rpc(&self, request_json: String) -> Result<String, FedimintError> {
+    pub fn rpc(&self, request_json: String, callback: Box<dyn RpcCallback>) -> Result<(), FedimintError> {
         let request: RpcRequest = serde_json::from_str(&request_json)
             .map_err(|e| FedimintError::InvalidRequest { msg: e.to_string() })?;
         
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        
         let handled = self.state.clone().handle_rpc(
             request,
-            PromiseWrapper(std::sync::Mutex::new(Some(tx)))
+            CallbackWrapper(callback)
         );
         
         if let Some(task) = handled.task {
             self.runtime.spawn(task);
         }
         
-        rx.await
-            .map_err(|_| FedimintError::General { msg: "Request cancelled or handler dropped".to_string() })
+        Ok(())
     }
 }
 
-struct PromiseWrapper(std::sync::Mutex<Option<tokio::sync::oneshot::Sender<String>>>);
+struct CallbackWrapper(Box<dyn RpcCallback>);
 
-impl RpcResponseHandler for PromiseWrapper {
+impl RpcResponseHandler for CallbackWrapper {
     fn handle_response(&self, response: RpcResponse) {
         let json = serde_json::to_string(&response)
             .expect("Failed to serialize RPC response");
-        if let Some(tx) = self.0.lock().unwrap().take() {
-            let _ = tx.send(json);
-        }
+        self.0.on_response(json);
     }
 }
 
-fn create_database(path: &str) -> anyhow::Result<Database> {
+fn create_database(path: &str, runtime: &tokio::runtime::Runtime) -> anyhow::Result<Database> {
     use fedimint_cursed_redb::MemAndRedb;
     
     std::fs::create_dir_all(path)?;
     
     let db_path = std::path::Path::new(path).join(DB_FILE_NAME);
     
-    let locked_db = tokio::runtime::Runtime::new()?
-        .block_on(async { MemAndRedb::new(db_path).await })?;
+        let locked_db = runtime.block_on(async { MemAndRedb::new(db_path).await })?;
     
     Ok(Database::new(locked_db, Default::default()))
 }

@@ -2949,6 +2949,7 @@ name = "fedimint-client-uniffi"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "fedimint-build",
  "fedimint-client-rpc",
  "fedimint-core",
  "fedimint-cursed-redb",
