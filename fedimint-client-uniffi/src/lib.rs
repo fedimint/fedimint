@@ -26,6 +26,11 @@ pub enum FedimintError {
     General { msg: String },
 }
 
+#[uniffi::export(callback_interface)]
+pub trait RpcCallback: Send + Sync {
+    fn on_response(&self, response_json: String);
+}
+
 #[derive(uniffi::Object)]
 pub struct RpcHandler {
     state: Arc<RpcGlobalState>,
@@ -55,35 +60,33 @@ impl RpcHandler {
         Ok(Arc::new(Self { state, runtime }))
     }
 
-    pub async fn rpc(&self, request_json: String) -> Result<String, FedimintError> {
+    pub fn rpc(
+        &self,
+        request_json: String,
+        callback: Box<dyn RpcCallback>,
+    ) -> Result<(), FedimintError> {
         let request: RpcRequest = serde_json::from_str(&request_json)
             .map_err(|e| FedimintError::InvalidRequest { msg: e.to_string() })?;
-
-        let (tx, rx) = tokio::sync::oneshot::channel();
 
         let handled = self
             .state
             .clone()
-            .handle_rpc(request, PromiseWrapper(std::sync::Mutex::new(Some(tx))));
+            .handle_rpc(request, CallbackWrapper(callback));
 
         if let Some(task) = handled.task {
             self.runtime.spawn(task);
         }
 
-        rx.await.map_err(|_| FedimintError::General {
-            msg: "Request cancelled or handler dropped".to_string(),
-        })
+        Ok(())
     }
 }
 
-struct PromiseWrapper(std::sync::Mutex<Option<tokio::sync::oneshot::Sender<String>>>);
+struct CallbackWrapper(Box<dyn RpcCallback>);
 
-impl RpcResponseHandler for PromiseWrapper {
+impl RpcResponseHandler for CallbackWrapper {
     fn handle_response(&self, response: RpcResponse) {
         let json = serde_json::to_string(&response).expect("Failed to serialize RPC response");
-        if let Some(tx) = self.0.lock().unwrap().take() {
-            let _ = tx.send(json);
-        }
+        self.0.on_response(json);
     }
 }
 
