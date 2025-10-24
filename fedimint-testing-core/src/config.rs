@@ -16,6 +16,7 @@ pub static API_AUTH: LazyLock<ApiAuth> = LazyLock::new(|| ApiAuth("pass".to_stri
 pub fn local_config_gen_params(
     peers: &[PeerId],
     base_port: u16,
+    enable_mint_fees: bool,
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
     // Generate TLS cert and private key
     let tls_keys: HashMap<
@@ -51,7 +52,7 @@ pub fn local_config_gen_params(
                     cert: tls_keys[peer].0.as_ref().to_vec(),
                 },
                 federation_name: None,
-                disable_base_fees: None,
+                disable_base_fees: Some(!enable_mint_fees),
             };
             (*peer, params)
         })
@@ -68,7 +69,7 @@ pub fn local_config_gen_params(
                 iroh_p2p_sk: None,
                 peers: connections.clone(),
                 meta: BTreeMap::new(),
-                disable_base_fees: false,
+                disable_base_fees: !enable_mint_fees,
             };
             Ok((*peer, params))
         })

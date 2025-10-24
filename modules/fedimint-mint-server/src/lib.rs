@@ -189,13 +189,13 @@ impl ServerModuleInit for MintInit {
                                 (key_peer, keys)
                             })
                             .collect(),
-                        fee_consensus: params.consensus.fee_consensus().unwrap_or(
-                            if disable_base_fees {
-                                FeeConsensus::zero()
-                            } else {
+                        fee_consensus: if disable_base_fees {
+                            FeeConsensus::zero()
+                        } else {
+                            params.consensus.fee_consensus().unwrap_or_else(|| {
                                 FeeConsensus::new(0).expect("Relative fee is within range")
-                            },
-                        ),
+                            })
+                        },
                         max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
                     },
                     private: MintConfigPrivate {
