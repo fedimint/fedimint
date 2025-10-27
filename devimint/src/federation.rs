@@ -308,7 +308,7 @@ impl Federation {
 
         let peers: Vec<_> = num_peers.peer_ids().collect();
         let params: HashMap<PeerId, ConfigGenParams> =
-            local_config_gen_params(&peers, process_mgr.globals.FM_FEDERATION_BASE_PORT)?;
+            local_config_gen_params(&peers, process_mgr.globals.FM_FEDERATION_BASE_PORT, true)?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();

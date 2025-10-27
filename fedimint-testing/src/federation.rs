@@ -187,6 +187,7 @@ pub struct FederationTestBuilder {
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
     bitcoin_rpc_connection: DynServerBitcoinRpc,
+    enable_mint_fees: bool,
 }
 
 impl FederationTestBuilder {
@@ -210,6 +211,7 @@ impl FederationTestBuilder {
             server_init,
             client_init,
             bitcoin_rpc_connection,
+            enable_mint_fees: true,
         }
     }
 
@@ -238,6 +240,11 @@ impl FederationTestBuilder {
         self
     }
 
+    pub fn disable_mint_fees(mut self) -> FederationTestBuilder {
+        self.enable_mint_fees = false;
+        self
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn build(self) -> FederationTest {
         install_crypto_provider().await;
@@ -247,8 +254,8 @@ impl FederationTestBuilder {
             "too many peers offline ({num_offline}) to reach consensus"
         );
         let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
-        let params =
-            local_config_gen_params(&peers, self.base_port).expect("Generates local config");
+        let params = local_config_gen_params(&peers, self.base_port, self.enable_mint_fees)
+            .expect("Generates local config");
 
         let configs = ServerConfig::trusted_dealer_gen(
             self.modules,
