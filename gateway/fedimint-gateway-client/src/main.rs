@@ -25,9 +25,11 @@ struct Cli {
     #[clap(long, short, default_value = "http://127.0.0.1:80")]
     address: SafeUrl,
 
+    /// The command to execute
     #[command(subcommand)]
     command: Commands,
 
+    /// Password for authenticated requests to the gateway
     #[clap(long)]
     rpcpassword: Option<String>,
 
@@ -35,7 +37,7 @@ struct Cli {
     #[arg(long, env = FM_IROH_DNS_ENV)]
     iroh_dns: Option<SafeUrl>,
 
-    /// Optional URL of the Iroh DNS server
+    /// Optional override URL for directly connecting to an Iroh endpoint
     #[arg(long)]
     connection_override: Option<SafeUrl>,
 }

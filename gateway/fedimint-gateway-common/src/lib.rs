@@ -29,8 +29,13 @@ pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IrohGatewayRequest {
+    /// REST API route for specifying which action to take
     pub route: String,
+
+    /// Parameters for the request
     pub params: Option<serde_json::Value>,
+
+    /// Password for authenticated requests to the gateway
     pub password: Option<String>,
 }
 

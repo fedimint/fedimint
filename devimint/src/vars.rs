@@ -152,9 +152,9 @@ declare_vars! {
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
         FM_PORT_GW_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
-        FM_PORT_GW_LND_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
-        FM_PORT_GW_LDK_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
-        FM_PORT_GW_LDK2_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
+        FM_PORT_GW_LND_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND_IROH";
+        FM_PORT_GW_LDK_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK_IROH";
+        FM_PORT_GW_LDK2_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2_IROH";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
         FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
 

@@ -171,7 +171,9 @@ impl GatewayRpcClient {
         let mut base_url = api.clone();
         let iroh_connector = if api.scheme() == "iroh" {
             let host = api.host_str().context("Url is missing host")?;
-            let iroh_pk = iroh::PublicKey::from_str(host).context("Failed to parse node id")?;
+            let iroh_pk = iroh::PublicKey::from_str(host).context(format!(
+                "Could not parse Iroh Public key: Invalid public key: {host}"
+            ))?;
             let mut iroh_connector =
                 GatewayIrohConnector::new(iroh_pk, password.clone(), iroh_dns).await?;
 
