@@ -683,18 +683,27 @@ async fn get_transaction(
 /// Leaves the specified federation by issuing a `leave-fed` POST request to the
 /// gateway.
 async fn leave_federation(gw: &Gatewayd, fed_id: String, expected_scid: u64) -> anyhow::Result<()> {
-    let leave_fed = cmd!(gw, "leave-fed", "--federation-id", fed_id.clone())
-        .out_json()
-        .await
-        .expect("Leaving the federation failed");
+    poll("gateway leave federation", || async {
+        let leave_fed = cmd!(gw, "leave-fed", "--federation-id", fed_id.clone())
+            .out_json()
+            .await
+            .map_err(ControlFlow::Continue)?;
 
-    let federation_id: FederationId = serde_json::from_value(leave_fed["federation_id"].clone())?;
-    assert_eq!(federation_id.to_string(), fed_id);
+        let federation_id: FederationId =
+            serde_json::from_value(leave_fed["federation_id"].clone())
+                .expect("Could not parse federation id");
+        assert_eq!(federation_id.to_string(), fed_id);
 
-    let scid = serde_json::from_value::<u64>(leave_fed["config"]["federation_index"].clone())?;
+        let scid = serde_json::from_value::<u64>(leave_fed["config"]["federation_index"].clone())
+            .expect("Could not parse scid");
 
-    assert_eq!(scid, expected_scid);
+        assert_eq!(scid, expected_scid);
 
-    info!(target: LOG_TEST, federation_id = %fed_id, "Verified gateway left federation");
+        info!(target: LOG_TEST, federation_id = %fed_id, "Verified gateway left federation");
+
+        Ok(())
+    })
+    .await?;
+
     Ok(())
 }
