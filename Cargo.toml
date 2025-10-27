@@ -45,6 +45,7 @@ members = [
   "gateway/fedimint-gateway-common",
   "gateway/fedimint-gateway-server",
   "gateway/fedimint-gateway-server-db",
+  "gateway/fedimint-gateway-ui",
   "gateway/fedimint-lightning",
   "gateway/integration_tests",
   "lnurlp",
@@ -181,6 +182,7 @@ fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.10.0-alpha" }
 fedimint-gateway-common = { package = "fedimint-gateway-common", path = "./gateway/fedimint-gateway-common", version = "=0.10.0-alpha" }
 fedimint-gateway-server = { package = "fedimint-gateway-server", path = "./gateway/fedimint-gateway-server", version = "=0.10.0-alpha" }
 fedimint-gateway-server-db = { package = "fedimint-gateway-server-db", path = "./gateway/fedimint-gateway-server-db", version = "=0.10.0-alpha" }
+fedimint-gateway-ui = { package = "fedimint-gateway-ui", path = "./gateway/fedimint-gateway-ui", version = "=0.10.0-alpha" }
 fedimint-gw-client = { path = "./modules/fedimint-gw-client", version = "=0.10.0-alpha" }
 fedimint-gwv2-client = { path = "./modules/fedimint-gwv2-client", version = "=0.10.0-alpha" }
 fedimint-lightning = { package = "fedimint-lightning", path = "./gateway/fedimint-lightning", version = "=0.10.0-alpha" }

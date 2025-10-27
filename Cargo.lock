@@ -3253,6 +3253,7 @@ dependencies = [
  "fedimint-eventlog",
  "fedimint-gateway-common",
  "fedimint-gateway-server-db",
+ "fedimint-gateway-ui",
  "fedimint-gw-client",
  "fedimint-gwv2-client",
  "fedimint-lightning",
@@ -3323,6 +3324,14 @@ dependencies = [
  "strum_macros 0.27.1",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "fedimint-gateway-ui"
+version = "0.10.0-alpha"
+dependencies = [
+ "async-trait",
+ "fedimint-gateway-common",
 ]
 
 [[package]]
