@@ -1,0 +1,139 @@
+/* common styles */
+
+body {
+  background-color: #f8f9fa;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.header-title {
+  color: #0d6efd;
+  margin-bottom: 2rem;
+}
+
+.card {
+  border: none;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.card-body {
+  padding: 1.25rem;
+}
+
+.card-header {
+  background-color: #fff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+  padding: 1rem 1.25rem;
+}
+
+/* Form elements */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.field-description {
+  font-size: 0.875rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+}
+
+.button-container {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+/* Alert and status messages */
+.error-message {
+  color: #dc3545;
+  margin-top: 1rem;
+  font-weight: 500;
+}
+
+.alert-info {
+  background-color: #e8f4f8;
+  border-color: #bee5eb;
+}
+
+/* Button styling */
+.setup-btn {
+  width: auto;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 0.5rem 1.5rem;
+  margin: 0 auto;
+}
+
+/* Responsive adjustments */
+@media (min-width: 992px) {
+  .narrow-container {
+    max-width: 500px;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+}
+
+/* Dashboard-specific styles */
+
+/* Card header styling */
+.card-header.dashboard-header {
+  font-size: 1.25rem;
+  font-weight: 600;
+  background-color: #f8f9fa;
+  padding: 1rem 1.25rem;
+}
+
+/* Modal enhancements */
+.modal-header {
+  border-bottom: 1px solid #dee2e6;
+  background-color: #f8f9fa;
+}
+
+.modal-title {
+  font-weight: 600;
+}
+
+.modal-footer {
+  border-top: 1px solid #dee2e6;
+}
+
+/* Invite code text display */
+.user-select-all {
+  user-select: all;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+/* For larger screens */
+@media (min-width: 1400px) {
+  .container {
+    max-width: 70% !important;
+  }
+}
+
+/* QR Code Modal */
+#inviteCodeModal .modal-dialog {
+  max-width: 360px;
+}
+
+/* Copy button styling */
+#copyInviteCodeBtn {
+  padding: 0.5rem 1.5rem;
+  font-size: 1rem;
+}
+
+
+/* Too small buttons look weird */
+.btn-min-width {
+  min-width: 100px;
+}

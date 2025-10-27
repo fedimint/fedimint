@@ -3331,7 +3331,13 @@ name = "fedimint-gateway-ui"
 version = "0.10.0-alpha"
 dependencies = [
  "async-trait",
+ "axum 0.8.4",
+ "axum-extra",
+ "fedimint-core",
  "fedimint-gateway-common",
+ "maud",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

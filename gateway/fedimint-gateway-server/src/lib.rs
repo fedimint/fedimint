@@ -2169,6 +2169,10 @@ impl IAdminGateway for Gateway {
             lightning_mode: self.lightning_mode.clone(),
         })
     }
+
+    async fn get_password_hash(&self) -> String {
+        self.bcrypt_password_hash.to_string()
+    }
 }
 
 // LNv2 Gateway implementation
