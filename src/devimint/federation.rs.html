@@ -308,7 +308,7 @@
 <a href=#308 id=308 data-nosnippet>308</a>
 <a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">let </span>peers: Vec&lt;<span class="kw">_</span>&gt; = num_peers.peer_ids().collect();
 <a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">let </span>params: HashMap&lt;PeerId, ConfigGenParams&gt; =
-<a href=#311 id=311 data-nosnippet>311</a>            local_config_gen_params(<span class="kw-2">&amp;</span>peers, process_mgr.globals.FM_FEDERATION_BASE_PORT)<span class="question-mark">?</span>;
+<a href=#311 id=311 data-nosnippet>311</a>            local_config_gen_params(<span class="kw-2">&amp;</span>peers, process_mgr.globals.FM_FEDERATION_BASE_PORT, <span class="bool-val">true</span>)<span class="question-mark">?</span>;
 <a href=#312 id=312 data-nosnippet>312</a>
 <a href=#313 id=313 data-nosnippet>313</a>        <span class="kw">let </span><span class="kw-2">mut </span>admin_clients: BTreeMap&lt;PeerId, DynGlobalApi&gt; = BTreeMap::new();
 <a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span><span class="kw-2">mut </span>endpoints: BTreeMap&lt;PeerId, <span class="kw">_</span>&gt; = BTreeMap::new();
