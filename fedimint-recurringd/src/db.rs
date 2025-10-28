@@ -1,19 +1,21 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use fedimint_client::{ClientHandleArc, ClientModule};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record};
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey, RecurringPaymentProtocol};
-use fedimint_ln_client::tweak_user_key;
+use fedimint_ln_client::{
+    LightningClientModule, LightningOperationMeta, LightningOperationMetaVariant,
+};
 use futures::stream::StreamExt;
-use lightning_invoice::{Bolt11InvoiceDescription, Description};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::Rng;
 
 use crate::{
@@ -28,7 +30,7 @@ impl FederationDbPrefix {
         FederationDbPrefix(thread_rng().r#gen())
     }
 
-    fn prepend(&self, byte: u8) -> Vec<u8> {
+    pub(crate) fn prepend(&self, byte: u8) -> Vec<u8> {
         let mut full_prefix = Vec::with_capacity(17);
         full_prefix.push(byte);
         full_prefix.extend(&self.0);
@@ -84,16 +86,20 @@ pub async fn try_add_federation_database(
     })
 }
 
-pub async fn load_federation_client_databases(db: &Database) -> HashMap<FederationId, Database> {
+pub async fn load_federation_client_databases(
+    db: &Database,
+) -> HashMap<FederationId, (FederationDbPrefix, Database)> {
     load_federation_clients(db)
         .await
         .into_iter()
-        .map(|(federation_id, db_prefix)| (federation_id, open_client_db(db, db_prefix)))
+        .map(|(federation_id, db_prefix)| {
+            (federation_id, (db_prefix, open_client_db(db, db_prefix)))
+        })
         .collect()
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-enum DbKeyPrefix {
+pub(crate) enum DbKeyPrefix {
     ClientList = 0x00,
     ClientDB = 0x01,
     PaymentCodes = 0x02,
@@ -228,18 +234,18 @@ impl RecurringInvoiceServer {
     async fn db_migration_v1(&self, mut dbtx: DatabaseTransaction<'_>) {
         const BACKFILL_AMOUNT: Amount = Amount::from_msats(111111);
 
-        let mut payment_codes = dbtx
+        let mut payment_codes: HashMap<PaymentCodeId, PaymentCodeEntry> = dbtx
             .find_by_prefix(&PaymentCodePrefix)
             .await
             .map(|(k, v)| (k.payment_code_id, v))
-            .collect::<HashMap<PaymentCodeId, PaymentCodeEntry>>()
+            .collect()
             .await;
 
-        let payment_code_indices = dbtx
+        let payment_code_indices: HashMap<PaymentCodeId, u64> = dbtx
             .find_by_prefix(&PaymentCodeNextInvoiceIndexKeyPrefix)
             .await
             .map(|(payment_code_key, invoice_idx)| (payment_code_key.payment_code_id, invoice_idx))
-            .collect::<HashMap<PaymentCodeId, u64>>()
+            .collect()
             .await;
 
         for (payment_code_id, current_invoice_index) in payment_code_indices {
@@ -247,11 +253,11 @@ impl RecurringInvoiceServer {
                 .remove(&payment_code_id)
                 .expect("If there's an index, there's a payment code entry");
 
-            let payment_code_invoice_indices = dbtx
+            let payment_code_invoice_indices: HashSet<_> = dbtx
                 .find_by_prefix(&PaymentCodeInvoicePrefix { payment_code_id })
                 .await
                 .map(|(invoice_key, _)| invoice_key.index)
-                .collect::<HashSet<_>>()
+                .collect()
                 .await;
 
             let client = self
@@ -272,13 +278,15 @@ impl RecurringInvoiceServer {
                 } else {
                     // Generate fake invoice to backfill "holes" in invoice indices
                     let (_, invoice, _) = ln_client_module
-                        .create_bolt11_invoice_for_user(
+                        .create_bolt11_invoice_for_user_tweaked_dbtx(
+                            &mut dbtx,
                             BACKFILL_AMOUNT,
                             Bolt11InvoiceDescription::Direct(
                                 Description::new("Backfill".to_string()).unwrap(),
                             ),
                             Some(3600),
-                            tweak_user_key(SECP256K1, payment_code_entry.root_key.0, missing_index),
+                            payment_code_entry.root_key.0,
+                            missing_index,
                             (),
                             None,
                         )
@@ -297,5 +305,31 @@ impl RecurringInvoiceServer {
                 .await;
             }
         }
+    }
+
+    async fn check_if_invoice_exists(
+        federation_client: &ClientHandleArc,
+        operation_id: OperationId,
+    ) -> Option<Bolt11Invoice> {
+        let operation = federation_client
+            .operation_log()
+            .get_operation(operation_id)
+            .await?;
+
+        assert_eq!(
+            operation.operation_module_kind(),
+            LightningClientModule::kind().as_str()
+        );
+
+        let LightningOperationMetaVariant::Receive { invoice, .. } =
+            operation.meta::<LightningOperationMeta>().variant
+        else {
+            panic!(
+                "Unexpected operation meta variant: {:?}",
+                operation.meta::<LightningOperationMeta>().variant
+            );
+        };
+
+        Some(invoice)
     }
 }
