@@ -12,7 +12,7 @@ use bitcoin::key::Secp256k1;
 use bitcoin::key::rand::thread_rng;
 use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
-use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
 };
@@ -142,7 +142,7 @@ pub struct Client {
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1::All>,
     meta_service: Arc<MetaService>,
-    connector: Connector,
+    connector: ConnectorType,
 
     task_group: TaskGroup,
 

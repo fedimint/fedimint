@@ -10,7 +10,7 @@ use std::{env, fs, iter};
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::net::ConnectorType;
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
@@ -380,7 +380,7 @@ impl Federation {
                 .await
                 .context("Awaiting invite code file")?;
 
-                Connector::default()
+                ConnectorType::default()
                     .download_from_invite_code(&InviteCode::from_str(&invite_code)?, false, false)
                     .await?;
             }

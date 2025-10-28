@@ -10,7 +10,7 @@ use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCac
 use fedimint_api_client::api::global_api::with_request_hook::{
     ApiRequestHook, RawFederationApiWithRequestHookExt as _,
 };
-use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{
     ApiVersionSet, DynClientConnector, DynGlobalApi, FederationApiExt as _, ReconnectFederationApi,
     make_admin_connector, make_connector,
@@ -119,7 +119,7 @@ pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     admin_creds: Option<AdminCreds>,
     meta_service: Arc<crate::meta::MetaService>,
-    connector: Connector,
+    connector: ConnectorType,
     stopped: bool,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
@@ -140,7 +140,7 @@ impl ClientBuilder {
             broadcast::channel(1024);
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
-            connector: Connector::default(),
+            connector: ConnectorType::default(),
             admin_creds: None,
             stopped: false,
             meta_service,
@@ -269,13 +269,13 @@ impl ClientBuilder {
         self.admin_creds = Some(creds);
     }
 
-    pub fn with_connector(&mut self, connector: Connector) {
+    pub fn with_connector(&mut self, connector: ConnectorType) {
         self.connector = connector;
     }
 
     #[cfg(feature = "tor")]
     pub fn with_tor_connector(&mut self) {
-        self.with_connector(Connector::tor());
+        self.with_connector(ConnectorType::tor());
     }
 
     #[allow(clippy::too_many_arguments)]

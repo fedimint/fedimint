@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use bitcoin::hashes::{Hash, sha256};
-use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::net::ConnectorType;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, GeneralDbMigrationFn,
@@ -285,7 +285,7 @@ pub struct FederationConfigV1 {
     pub timelock_delta: u64,
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
-    pub connector: Connector,
+    pub connector: ConnectorType,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -478,7 +478,7 @@ async fn migrate_to_v2(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
                 federation_index: old_federation_config.federation_index,
                 timelock_delta: old_federation_config.timelock_delta,
                 fees: old_federation_config.fees,
-                connector: Connector::default(),
+                connector: ConnectorType::default(),
             };
             let new_federation_key = FederationConfigKeyV1 {
                 id: old_federation_id,
@@ -524,7 +524,7 @@ async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
                 federation_index: old_federation_config.federation_index,
                 lightning_fee: old_federation_config.fees.into(),
                 transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-                connector: Connector::default(),
+                connector: ConnectorType::default(),
             };
             let new_key = FederationConfigKey { id: fed_id.id };
             dbtx.insert_new_entry(&new_key, &new_fed_config).await;

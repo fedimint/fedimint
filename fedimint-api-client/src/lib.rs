@@ -6,7 +6,7 @@
 #![allow(clippy::return_self_not_must_use)]
 
 use anyhow::{Context as _, bail};
-use api::net::Connector;
+use api::net::ConnectorType;
 use api::{DynGlobalApi, FederationApiExt as _, PeerError};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
@@ -21,9 +21,9 @@ pub mod api;
 /// Client query system
 pub mod query;
 
-impl Connector {
+impl ConnectorType {
     /// Tries to download the [`ClientConfig`] from the federation with an
-    /// specified [`Connector`] variant, attempts to retry ten times before
+    /// specified [`ConnectorType`] variant, attempts to retry ten times before
     /// giving up.
     pub async fn download_from_invite_code(
         &self,

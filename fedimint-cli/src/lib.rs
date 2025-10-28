@@ -31,7 +31,7 @@ use client::ModuleSelector;
 use envs::FM_USE_TOR_ENV;
 use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
@@ -337,15 +337,15 @@ impl Opts {
     }
 
     #[allow(clippy::unused_self)]
-    fn connector(&self) -> Connector {
+    fn connector(&self) -> ConnectorType {
         #[cfg(feature = "tor")]
         if self.use_tor {
-            Connector::tor()
+            ConnectorType::tor()
         } else {
-            Connector::default()
+            ConnectorType::default()
         }
         #[cfg(not(feature = "tor"))]
-        Connector::default()
+        ConnectorType::default()
     }
 }
 

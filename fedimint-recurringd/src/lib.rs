@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::net::ConnectorType;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -136,7 +136,7 @@ impl RecurringInvoiceServer {
             .await
             .map_err(RecurringPaymentError::JoiningFederationFailed)?;
 
-        client_builder.with_connector(Connector::default());
+        client_builder.with_connector(ConnectorType::default());
         client_builder.with_module(LightningClientInit::default());
         client_builder.with_module(MintClientInit);
 
