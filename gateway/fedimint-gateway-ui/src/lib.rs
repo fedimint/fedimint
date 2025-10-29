@@ -12,6 +12,7 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_core::hex::ToHex;
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
+use fedimint_gateway_common::GatewayInfo;
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
@@ -21,28 +22,26 @@ use crate::auth::UserAuth;
 pub const ROOT_ROUTE: &str = "/";
 pub const LOGIN_ROUTE: &str = "/ui/login";
 
-//pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync +
-// 'static>;
-pub type DynGatewayApi = Arc<dyn IAdminGateway + Send + Sync + 'static>;
+pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
 #[async_trait]
 pub trait IAdminGateway {
-    //type Error;
+    type Error;
 
-    //async fn handle_get_info(&self) -> Result<GatewayInfo, Self::Error>;
+    async fn handle_get_info(&self) -> Result<GatewayInfo, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 }
 
 #[derive(Clone)]
-pub struct UiState {
-    pub api: DynGatewayApi,
+pub struct UiState<T> {
+    pub api: T,
     pub(crate) auth_cookie_name: String,
     pub(crate) auth_cookie_value: String,
 }
 
-impl UiState {
-    pub fn new(api: DynGatewayApi) -> Self {
+impl<T> UiState<T> {
+    pub fn new(api: T) -> Self {
         Self {
             api,
             auth_cookie_name: thread_rng().r#gen::<[u8; 4]>().encode_hex(),
@@ -74,7 +73,7 @@ pub(crate) struct LoginInput {
     password: String,
 }
 
-async fn login_form(State(_state): State<UiState>) -> impl IntoResponse {
+async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
     login_form_response()
 }
 
@@ -123,8 +122,8 @@ pub(crate) fn login_layout(title: &str, content: Markup) -> Markup {
 }
 
 // Dashboard login submit handler
-async fn login_submit(
-    State(state): State<UiState>,
+async fn login_submit<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
@@ -153,7 +152,10 @@ async fn login_submit(
 }
 
 // Main dashboard view
-async fn dashboard_view(State(_state): State<UiState>, _auth: UserAuth) -> impl IntoResponse {
+async fn dashboard_view<E>(
+    State(_state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> impl IntoResponse {
     let content = html! {
         // Guardian Configuration Backup section
         div class="row gy-4 mt-4" {
@@ -215,7 +217,7 @@ pub fn dashboard_layout(content: Markup) -> Markup {
 
 //pub fn router<E: Clone + Send + Sync + 'static>(api: DynGatewayApi<E>) ->
 // Router {
-pub fn router(api: DynGatewayApi) -> Router {
+pub fn router<E: 'static>(api: DynGatewayApi<E>) -> Router {
     let app = Router::new()
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))

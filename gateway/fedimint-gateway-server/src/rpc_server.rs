@@ -28,6 +28,7 @@ use fedimint_gateway_common::{
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
     SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
 };
+use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
