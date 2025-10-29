@@ -5,9 +5,9 @@ use fedimint_core::hex;
 use fedimint_core::session_outcome::{AcceptedItem, SessionStatusV2};
 use fedimint_core::transaction::TransactionSignature;
 use fedimint_server_core::dashboard_ui::DynDashboardApi;
+use fedimint_ui_common::UiState;
 use maud::{Markup, html};
 
-use crate::UiState;
 use crate::auth::UserAuth;
 use crate::dashboard::dashboard_layout;
 

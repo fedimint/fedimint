@@ -5,14 +5,14 @@ use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::module::ApiAuth;
 use fedimint_server_core::setup_ui::DynSetupApi;
+use fedimint_ui_common::UiState;
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
 use crate::assets::WithStaticRoutesExt as _;
 use crate::auth::UserAuth;
 use crate::{
-    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, common_head, login_form_response,
-    login_submit_response,
+    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, common_head, login_form_response, login_submit_response,
 };
 
 // Setup route constants

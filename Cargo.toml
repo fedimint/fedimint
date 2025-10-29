@@ -36,6 +36,7 @@ members = [
   "fedimint-server-ui",
   "fedimint-testing",
   "fedimint-testing-core",
+  "fedimint-ui-common",
   "fedimint-util-error",
   "fedimint-wasm-tests",
   "fedimintd",
@@ -208,6 +209,7 @@ fedimint-server-core = { path = "./fedimint-server-core", version = "=0.10.0-alp
 fedimint-server-ui = { path = "./fedimint-server-ui", version = "=0.10.0-alpha" }
 fedimint-testing = { path = "./fedimint-testing", version = "=0.10.0-alpha" }
 fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.10.0-alpha" }
+fedimint-ui-common = { path = "./fedimint-ui-common", version = "=0.10.0-alpha" }
 fedimint-unknown-common = { path = "./modules/fedimint-unknown-common", version = "=0.10.0-alpha" }
 fedimint-unknown-server = { path = "./modules/fedimint-unknown-server", version = "=0.10.0-alpha" }
 fedimint-util-error = { path = "./fedimint-util-error", version = "=0.10.0-alpha" }

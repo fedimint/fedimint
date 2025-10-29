@@ -5,10 +5,7 @@ pub mod setup;
 
 use axum::response::{Html, IntoResponse, Redirect};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use fedimint_core::hex::ToHex;
 use fedimint_core::module::ApiAuth;
-use fedimint_core::secp256k1::rand::{Rng, thread_rng};
-use fedimint_server_core::dashboard_ui::DynDashboardApi;
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
@@ -42,26 +39,6 @@ pub fn common_head(title: &str) -> Markup {
 #[derive(Debug, Deserialize)]
 pub(crate) struct LoginInput {
     pub password: String,
-}
-
-/// Generic state for both setup and dashboard UIs
-///
-/// Most of code is written for dashboard, so `T` defaults to `DynDashboardApi`
-#[derive(Clone)]
-pub struct UiState<T = DynDashboardApi> {
-    pub(crate) api: T,
-    pub(crate) auth_cookie_name: String,
-    pub(crate) auth_cookie_value: String,
-}
-
-impl<T> UiState<T> {
-    pub fn new(api: T) -> Self {
-        Self {
-            api,
-            auth_cookie_name: thread_rng().r#gen::<[u8; 4]>().encode_hex(),
-            auth_cookie_value: thread_rng().r#gen::<[u8; 32]>().encode_hex(),
-        }
-    }
 }
 
 pub(crate) fn login_layout(title: &str, content: Markup) -> Markup {

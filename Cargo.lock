@@ -3336,6 +3336,7 @@ dependencies = [
  "bcrypt",
  "fedimint-core",
  "fedimint-gateway-common",
+ "fedimint-ui-common",
  "maud",
  "serde",
  "serde_json",
@@ -4128,6 +4129,7 @@ dependencies = [
  "fedimint-lnv2-server",
  "fedimint-meta-server",
  "fedimint-server-core",
+ "fedimint-ui-common",
  "fedimint-wallet-server",
  "maud",
  "serde",
@@ -4261,6 +4263,13 @@ dependencies = [
  "rand_chacha 0.3.1",
  "serde",
  "serde-big-array",
+]
+
+[[package]]
+name = "fedimint-ui-common"
+version = "0.10.0-alpha"
+dependencies = [
+ "fedimint-core",
 ]
 
 [[package]]

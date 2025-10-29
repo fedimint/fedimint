@@ -10,9 +10,8 @@ use axum::routing::get;
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use fedimint_core::hex::ToHex;
-use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use fedimint_gateway_common::GatewayInfo;
+use fedimint_ui_common::UiState;
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
@@ -31,23 +30,6 @@ pub trait IAdminGateway {
     async fn handle_get_info(&self) -> Result<GatewayInfo, Self::Error>;
 
     fn get_password_hash(&self) -> String;
-}
-
-#[derive(Clone)]
-pub struct UiState<T> {
-    pub api: T,
-    pub(crate) auth_cookie_name: String,
-    pub(crate) auth_cookie_value: String,
-}
-
-impl<T> UiState<T> {
-    pub fn new(api: T) -> Self {
-        Self {
-            api,
-            auth_cookie_name: thread_rng().r#gen::<[u8; 4]>().encode_hex(),
-            auth_cookie_value: thread_rng().r#gen::<[u8; 32]>().encode_hex(),
-        }
-    }
 }
 
 pub fn common_head(title: &str) -> Markup {
@@ -215,8 +197,6 @@ pub fn dashboard_layout(content: Markup) -> Markup {
     }
 }
 
-//pub fn router<E: Clone + Send + Sync + 'static>(api: DynGatewayApi<E>) ->
-// Router {
 pub fn router<E: 'static>(api: DynGatewayApi<E>) -> Router {
     let app = Router::new()
         .route(ROOT_ROUTE, get(dashboard_view))

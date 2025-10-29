@@ -15,6 +15,7 @@ use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use consensus_explorer::consensus_explorer_view;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
+use fedimint_ui_common::UiState;
 use maud::{DOCTYPE, Markup, html};
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
@@ -23,7 +24,7 @@ use crate::auth::UserAuth;
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
     DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE,
-    UiState, common_head, login_form_response, login_submit_response,
+    common_head, login_form_response, login_submit_response,
 };
 
 pub fn dashboard_layout(content: Markup, fedimintd_version: Option<&str>) -> Markup {
