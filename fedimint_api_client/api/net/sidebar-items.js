@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Connector"]};
+window.SIDEBAR_ITEMS = {"enum":["ConnectorType"]};

@@ -31,7 +31,7 @@
 <a href=#31 id=31 data-nosnippet>31</a></span><span class="kw">use </span>envs::FM_USE_TOR_ENV;
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 <a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>fedimint_api_client::api::net::Connector;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>fedimint_api_client::api::net::ConnectorType;
 <a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 <a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 <a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
@@ -337,15 +337,15 @@
 <a href=#337 id=337 data-nosnippet>337</a>    }
 <a href=#338 id=338 data-nosnippet>338</a>
 <a href=#339 id=339 data-nosnippet>339</a>    <span class="attr">#[allow(clippy::unused_self)]
-<a href=#340 id=340 data-nosnippet>340</a>    </span><span class="kw">fn </span>connector(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Connector {
+<a href=#340 id=340 data-nosnippet>340</a>    </span><span class="kw">fn </span>connector(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConnectorType {
 <a href=#341 id=341 data-nosnippet>341</a>        <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
 <a href=#342 id=342 data-nosnippet>342</a>        </span><span class="kw">if </span><span class="self">self</span>.use_tor {
-<a href=#343 id=343 data-nosnippet>343</a>            Connector::tor()
+<a href=#343 id=343 data-nosnippet>343</a>            ConnectorType::tor()
 <a href=#344 id=344 data-nosnippet>344</a>        } <span class="kw">else </span>{
-<a href=#345 id=345 data-nosnippet>345</a>            Connector::default()
+<a href=#345 id=345 data-nosnippet>345</a>            ConnectorType::default()
 <a href=#346 id=346 data-nosnippet>346</a>        }
 <a href=#347 id=347 data-nosnippet>347</a>        <span class="attr">#[cfg(not(feature = <span class="string">"tor"</span>))]
-<a href=#348 id=348 data-nosnippet>348</a>        </span>Connector::default()
+<a href=#348 id=348 data-nosnippet>348</a>        </span>ConnectorType::default()
 <a href=#349 id=349 data-nosnippet>349</a>    }
 <a href=#350 id=350 data-nosnippet>350</a>}
 <a href=#351 id=351 data-nosnippet>351</a>

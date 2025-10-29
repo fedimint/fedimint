@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>, anyhow, bail};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_api_client::api::net::Connector;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_api_client::api::net::ConnectorType;
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_client_module::module::ClientModule;
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
@@ -380,7 +380,7 @@
 <a href=#380 id=380 data-nosnippet>380</a>                .<span class="kw">await
 <a href=#381 id=381 data-nosnippet>381</a>                </span>.context(<span class="string">"Awaiting invite code file"</span>)<span class="question-mark">?</span>;
 <a href=#382 id=382 data-nosnippet>382</a>
-<a href=#383 id=383 data-nosnippet>383</a>                Connector::default()
+<a href=#383 id=383 data-nosnippet>383</a>                ConnectorType::default()
 <a href=#384 id=384 data-nosnippet>384</a>                    .download_from_invite_code(<span class="kw-2">&amp;</span>InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)<span class="question-mark">?</span>, <span class="bool-val">false</span>, <span class="bool-val">false</span>)
 <a href=#385 id=385 data-nosnippet>385</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#386 id=386 data-nosnippet>386</a>            }

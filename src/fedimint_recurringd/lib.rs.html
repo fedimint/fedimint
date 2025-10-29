@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::time::Duration;
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>anyhow::anyhow;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_api_client::api::net::Connector;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_api_client::api::net::ConnectorType;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::config::FederationId;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::core::OperationId;
@@ -136,7 +136,7 @@
 <a href=#136 id=136 data-nosnippet>136</a>            .<span class="kw">await
 <a href=#137 id=137 data-nosnippet>137</a>            </span>.map_err(RecurringPaymentError::JoiningFederationFailed)<span class="question-mark">?</span>;
 <a href=#138 id=138 data-nosnippet>138</a>
-<a href=#139 id=139 data-nosnippet>139</a>        client_builder.with_connector(Connector::default());
+<a href=#139 id=139 data-nosnippet>139</a>        client_builder.with_connector(ConnectorType::default());
 <a href=#140 id=140 data-nosnippet>140</a>        client_builder.with_module(LightningClientInit::default());
 <a href=#141 id=141 data-nosnippet>141</a>        client_builder.with_module(MintClientInit);
 <a href=#142 id=142 data-nosnippet>142</a>
