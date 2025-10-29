@@ -43,7 +43,7 @@ use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
-use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::net::ConnectorType;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_bitcoind::bitcoincore::BitcoindClient;
 use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
@@ -1166,16 +1166,16 @@ impl Gateway {
 
         #[cfg(feature = "tor")]
         let connector = match &payload.use_tor {
-            Some(true) => Connector::tor(),
-            Some(false) => Connector::default(),
+            Some(true) => ConnectorType::tor(),
+            Some(false) => ConnectorType::default(),
             None => {
                 debug!(target: LOG_GATEWAY, "Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
-                Connector::default()
+                ConnectorType::default()
             }
         };
 
         #[cfg(not(feature = "tor"))]
-        let connector = Connector::default();
+        let connector = ConnectorType::default();
 
         let federation_id = invite_code.federation_id();
 

@@ -16,7 +16,7 @@ use strum::IntoEnumIterator;
 use tracing::info;
 
 use super::{
-    BTreeMap, Connector, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
+    BTreeMap, ConnectorType, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
     FederationConfigKeyPrefix, FederationConfigKeyV0, FederationConfigV0, FederationId,
     GatewayConfigurationKeyV0, GatewayConfigurationV0, GatewayDbExt, GatewayPublicKey,
     IDatabaseTransactionOpsCoreTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
@@ -181,7 +181,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             federation_index: 0,
             lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-            connector: Connector::Tcp,
+            connector: ConnectorType::Tcp,
         },
     )
     .await;
@@ -200,7 +200,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             federation_index: 1,
             lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-            connector: Connector::Tcp,
+            connector: ConnectorType::Tcp,
         },
     )
     .await;
