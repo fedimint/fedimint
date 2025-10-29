@@ -3333,11 +3333,13 @@ dependencies = [
  "async-trait",
  "axum 0.8.4",
  "axum-extra",
+ "bcrypt",
  "fedimint-core",
  "fedimint-gateway-common",
  "maud",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

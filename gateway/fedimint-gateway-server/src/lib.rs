@@ -2108,7 +2108,7 @@ impl Gateway {
 
 #[async_trait]
 impl IAdminGateway for Gateway {
-    type Error = AdminGatewayError;
+    //type Error = AdminGatewayError;
 
     /// Returns information about the Gateway back to the client when requested
     /// via the webserver.
@@ -2170,7 +2170,7 @@ impl IAdminGateway for Gateway {
         })
     }
 
-    async fn get_password_hash(&self) -> String {
+    fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
     }
 }
