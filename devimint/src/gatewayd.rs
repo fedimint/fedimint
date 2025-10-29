@@ -22,7 +22,7 @@ use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
 use semver::Version;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::cmd;
 use crate::envs::{
@@ -32,7 +32,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
+use crate::version_constants::VERSION_0_9_0_ALPHA;
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -110,7 +110,7 @@ impl Gatewayd {
         let process = process_mgr
             .spawn_daemon(
                 &gw_name,
-                Gatewayd::start_gatewayd(&ln_type, &gatewayd_version).envs(gateway_env),
+                cmd!(crate::util::Gatewayd, ln_type).envs(gateway_env),
             )
             .await?;
 
@@ -118,15 +118,8 @@ impl Gatewayd {
             "waiting for gateway to be ready to respond to rpc",
             || async {
                 // Once the gateway id is available via RPC, the gateway is ready
-                let command = if ln.ln_type() == LightningNodeType::Ldk
-                    && gatewayd_version < *VERSION_0_7_0_ALPHA
-                {
-                    vec!["gateway-cli".to_string()]
-                } else {
-                    crate::util::get_gateway_cli_path()
-                };
                 let info = cmd!(
-                    command,
+                    crate::util::get_gateway_cli_path(),
                     "--rpcpassword",
                     "theresnosecondbest",
                     "-a",
@@ -164,20 +157,6 @@ impl Gatewayd {
         };
 
         Ok(gatewayd)
-    }
-
-    fn is_forced_current(&self) -> bool {
-        self.ln.ln_type() == LightningNodeType::Ldk && self.gatewayd_version < *VERSION_0_7_0_ALPHA
-    }
-
-    fn start_gatewayd(ln_type: &LightningNodeType, gatewayd_version: &Version) -> Command {
-        // If an LDK gateway is trying to spawn prior to v0.6, just use most recent
-        // version
-        if *ln_type == LightningNodeType::Ldk && *gatewayd_version < *VERSION_0_7_0_ALPHA {
-            cmd!("gatewayd", ln_type)
-        } else {
-            cmd!(crate::util::Gatewayd, ln_type)
-        }
     }
 
     pub async fn terminate(self) -> Result<()> {
@@ -242,21 +221,12 @@ impl Gatewayd {
     }
 
     pub fn cmd(&self) -> Command {
-        if self.is_forced_current() {
-            cmd!(
-                "gateway-cli",
-                "--rpcpassword=theresnosecondbest",
-                "-a",
-                &self.addr
-            )
-        } else {
-            cmd!(
-                crate::util::get_gateway_cli_path(),
-                "--rpcpassword=theresnosecondbest",
-                "-a",
-                &self.addr
-            )
-        }
+        cmd!(
+            crate::util::get_gateway_cli_path(),
+            "--rpcpassword=theresnosecondbest",
+            "-a",
+            &self.addr
+        )
     }
 
     pub async fn get_info(&self) -> Result<serde_json::Value> {
@@ -498,7 +468,7 @@ impl Gatewayd {
 
     pub async fn list_channels(&self) -> Result<Vec<ChannelInfo>> {
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        let channels = if gateway_cli_version >= *VERSION_0_9_0_ALPHA || self.is_forced_current() {
+        let channels = if gateway_cli_version >= *VERSION_0_9_0_ALPHA {
             cmd!(self, "lightning", "list-channels").out_json().await?
         } else {
             cmd!(self, "lightning", "list-active-channels")
@@ -643,16 +613,6 @@ impl Gatewayd {
     }
 
     pub async fn wait_bolt11_invoice(&self, payment_hash: Vec<u8>) -> Result<()> {
-        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        if gatewayd_version < *VERSION_0_7_0_ALPHA {
-            if let LightningNode::Lnd(lnd) = &self.ln {
-                return lnd.wait_bolt11_invoice(payment_hash).await;
-            }
-
-            debug!("Skipping bolt11 invoice check because it is not supported until v0.7");
-            return Ok(());
-        }
-
         let payment_hash =
             sha256::Hash::from_slice(&payment_hash).expect("Could not parse payment hash");
         let invoice_val = cmd!(

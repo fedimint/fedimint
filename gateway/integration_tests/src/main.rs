@@ -14,7 +14,7 @@ use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::external::{Bitcoind, Esplora};
 use devimint::federation::Federation;
 use devimint::util::{ProcessManager, almost_equal, poll, poll_with_timeout};
-use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_8_0_ALPHA};
+use devimint::version_constants::VERSION_0_8_0_ALPHA;
 use devimint::{Gatewayd, LightningNode, cli, cmd, util};
 use fedimint_core::config::FederationId;
 use fedimint_core::time::now;
@@ -534,45 +534,41 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 gw_send.pay_invoice(invoice).await?;
             }
 
-            if devimint::util::Gatewayd::version_or_default().await >= *VERSION_0_7_0_ALPHA {
-                let start = now() - Duration::from_secs(5 * 60);
-                let end = now() + Duration::from_secs(5 * 60);
-                info!(target: LOG_TEST, "Verifying list of transactions");
-                let lnd_transactions = gw_lnd.list_transactions(start, end).await?;
-                // One inbound and one outbound transaction
-                assert_eq!(lnd_transactions.len(), 2);
+            let start = now() - Duration::from_secs(5 * 60);
+            let end = now() + Duration::from_secs(5 * 60);
+            info!(target: LOG_TEST, "Verifying list of transactions");
+            let lnd_transactions = gw_lnd.list_transactions(start, end).await?;
+            // One inbound and one outbound transaction
+            assert_eq!(lnd_transactions.len(), 2);
 
-                let ldk_transactions = gw_ldk.list_transactions(start, end).await?;
-                assert_eq!(ldk_transactions.len(), 2);
+            let ldk_transactions = gw_ldk.list_transactions(start, end).await?;
+            assert_eq!(ldk_transactions.len(), 2);
 
-                // Verify that transactions are filtered by time
-                let start = now() - Duration::from_secs(10 * 60);
-                let end = now() - Duration::from_secs(5 * 60);
-                let lnd_transactions = gw_lnd.list_transactions(start, end).await?;
-                assert_eq!(lnd_transactions.len(), 0);
-            }
+            // Verify that transactions are filtered by time
+            let start = now() - Duration::from_secs(10 * 60);
+            let end = now() - Duration::from_secs(5 * 60);
+            let lnd_transactions = gw_lnd.list_transactions(start, end).await?;
+            assert_eq!(lnd_transactions.len(), 0);
 
-            if devimint::util::Gatewayd::version_or_default().await >= *VERSION_0_7_0_ALPHA {
-                info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
-                // TODO: investigate why the first BOLT12 payment attempt is expiring consistently
-                poll_with_timeout("First BOLT12 payment", Duration::from_secs(30), || async {
-                    let offer_with_amount = gw_ldk_second.create_offer(Some(Amount::from_msats(10_000_000))).await.map_err(ControlFlow::Continue)?;
-                    gw_ldk.pay_offer(offer_with_amount, None).await.map_err(ControlFlow::Continue)?;
-                    assert!(get_transaction(gw_ldk_second, PaymentKind::Bolt12Offer, Amount::from_msats(10_000_000), PaymentStatus::Succeeded).await.is_some());
-                    Ok(())
-                }).await?;
+            info!(target: LOG_TEST, "Testing paying Bolt12 Offers...");
+            // TODO: investigate why the first BOLT12 payment attempt is expiring consistently
+            poll_with_timeout("First BOLT12 payment", Duration::from_secs(30), || async {
+                let offer_with_amount = gw_ldk_second.create_offer(Some(Amount::from_msats(10_000_000))).await.map_err(ControlFlow::Continue)?;
+                gw_ldk.pay_offer(offer_with_amount, None).await.map_err(ControlFlow::Continue)?;
+                assert!(get_transaction(gw_ldk_second, PaymentKind::Bolt12Offer, Amount::from_msats(10_000_000), PaymentStatus::Succeeded).await.is_some());
+                Ok(())
+            }).await?;
 
-                let offer_without_amount = gw_ldk.create_offer(None).await?;
-                gw_ldk_second.pay_offer(offer_without_amount.clone(), Some(Amount::from_msats(5_000_000))).await?;
-                assert!(get_transaction(gw_ldk, PaymentKind::Bolt12Offer, Amount::from_msats(5_000_000), PaymentStatus::Succeeded).await.is_some());
+            let offer_without_amount = gw_ldk.create_offer(None).await?;
+            gw_ldk_second.pay_offer(offer_without_amount.clone(), Some(Amount::from_msats(5_000_000))).await?;
+            assert!(get_transaction(gw_ldk, PaymentKind::Bolt12Offer, Amount::from_msats(5_000_000), PaymentStatus::Succeeded).await.is_some());
 
-                // Cannot pay an offer without an amount without specifying an amount
-                gw_ldk_second.pay_offer(offer_without_amount.clone(), None).await.expect_err("Cannot pay amountless offer without specifying an amount");
+            // Cannot pay an offer without an amount without specifying an amount
+            gw_ldk_second.pay_offer(offer_without_amount.clone(), None).await.expect_err("Cannot pay amountless offer without specifying an amount");
 
-                // Verify we can pay the offer again
-                gw_ldk_second.pay_offer(offer_without_amount, Some(Amount::from_msats(3_000_000))).await?;
-                assert!(get_transaction(gw_ldk, PaymentKind::Bolt12Offer, Amount::from_msats(3_000_000), PaymentStatus::Succeeded).await.is_some());
-            }
+            // Verify we can pay the offer again
+            gw_ldk_second.pay_offer(offer_without_amount, Some(Amount::from_msats(3_000_000))).await?;
+            assert!(get_transaction(gw_ldk, PaymentKind::Bolt12Offer, Amount::from_msats(3_000_000), PaymentStatus::Succeeded).await.is_some());
 
             info!(target: LOG_TEST, "Pegging-out gateways...");
             federation

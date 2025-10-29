@@ -6,7 +6,6 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use devimint::cmd;
 use devimint::util::{FedimintCli, GatewayLdkCli, LnCli};
-use devimint::version_constants::VERSION_0_7_0_ALPHA;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientHandleArc, RootSecret};
@@ -317,11 +316,6 @@ pub async fn ldk_pay_invoice(invoice: Bolt11Invoice) -> anyhow::Result<()> {
 }
 
 pub async fn ldk_wait_invoice_payment(invoice: &Bolt11Invoice) -> anyhow::Result<()> {
-    let gatewayd_version = devimint::util::Gatewayd::version_or_default().await;
-    if gatewayd_version < *VERSION_0_7_0_ALPHA {
-        return Ok(());
-    }
-
     let status = cmd!(
         GatewayLdkCli,
         "lightning",
