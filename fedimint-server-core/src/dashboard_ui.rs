@@ -8,12 +8,12 @@ use fedimint_core::bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::module::audit::AuditSummary;
+use fedimint_core::net::auth::GuardianAuthToken;
 use fedimint_core::session_outcome::SessionStatusV2;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, PeerId};
 use serde::{Deserialize, Serialize};
 
-use crate::net::GuardianAuthToken;
 use crate::{DynServerModule, ServerModule};
 
 pub type DynDashboardApi = Arc<dyn IDashboardApi + Send + Sync + 'static>;

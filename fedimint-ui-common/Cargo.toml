@@ -14,6 +14,7 @@ path = "src/lib.rs"
 
 [dependencies]
 axum = { workspace = true, features = ["macros"] }
+axum-extra = { workspace = true, features = ["cookie"] }
 fedimint-core = { workspace = true }
 maud = { workspace = true }
 serde = { workspace = true }

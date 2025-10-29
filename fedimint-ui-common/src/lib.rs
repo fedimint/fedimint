@@ -1,9 +1,14 @@
 pub mod assets;
+pub mod auth;
 
+use axum::response::{Html, IntoResponse};
 use fedimint_core::hex::ToHex;
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
+
+pub const ROOT_ROUTE: &str = "/";
+pub const LOGIN_ROUTE: &str = "/login";
 
 /// Generic state for both setup and dashboard UIs
 #[derive(Clone)]
@@ -67,6 +72,47 @@ pub fn login_layout(title: &str, content: Markup) -> Markup {
                             }
                         }
                     }
+                }
+                script src="/assets/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
+            }
+        }
+    }
+}
+
+pub fn login_form_response(title: &str) -> impl IntoResponse {
+    let content = html! {
+        form method="post" action=(LOGIN_ROUTE) {
+            div class="form-group mb-4" {
+                input type="password" class="form-control" id="password" name="password" placeholder="Your password" required;
+            }
+            div class="button-container" {
+                button type="submit" class="btn btn-primary setup-btn" { "Log In" }
+            }
+        }
+    };
+
+    Html(login_layout(title, content).into_string()).into_response()
+}
+
+pub fn dashboard_layout(content: Markup, title: &str, version: Option<&str>) -> Markup {
+    html! {
+        (DOCTYPE)
+        html {
+            head {
+                (common_head(title))
+            }
+            body {
+                div class="container" {
+                    header class="text-center mb-4" {
+                        h1 class="header-title mb-1" { (title) }
+                        @if let Some(version) = version {
+                            div {
+                                small class="text-muted" { "v" (version) }
+                            }
+                        }
+                    }
+
+                    (content)
                 }
                 script src="/assets/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
             }

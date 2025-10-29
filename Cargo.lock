@@ -4268,6 +4268,7 @@ name = "fedimint-ui-common"
 version = "0.10.0-alpha"
 dependencies = [
  "axum 0.8.4",
+ "axum-extra",
  "fedimint-core",
  "maud",
  "serde",

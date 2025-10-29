@@ -2,11 +2,9 @@ use axum::extract::{Form, State};
 use axum::response::{IntoResponse, Redirect};
 use fedimint_core::util::SafeUrl;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
-use fedimint_ui_common::UiState;
+use fedimint_ui_common::auth::UserAuth;
+use fedimint_ui_common::{ROOT_ROUTE, UiState};
 use maud::{Markup, html};
-
-use crate::ROOT_ROUTE;
-use crate::auth::UserAuth;
 
 // LNv2 route constants
 pub const LNV2_ADD_ROUTE: &str = "/lnv2/add";

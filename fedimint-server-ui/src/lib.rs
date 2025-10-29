@@ -1,4 +1,3 @@
-pub(crate) mod auth;
 pub mod dashboard;
 pub mod setup;
 
@@ -11,26 +10,9 @@ use maud::html;
 pub(crate) const LOG_UI: &str = "fm::ui";
 
 // Common route constants
-pub const ROOT_ROUTE: &str = "/";
-pub const LOGIN_ROUTE: &str = "/login";
 pub const EXPLORER_IDX_ROUTE: &str = "/explorer";
 pub const EXPLORER_ROUTE: &str = "/explorer/{session_idx}";
 pub const DOWNLOAD_BACKUP_ROUTE: &str = "/download-backup";
-
-pub(crate) fn login_form_response() -> impl IntoResponse {
-    let content = html! {
-        form method="post" action="/login" {
-            div class="form-group mb-4" {
-                input type="password" class="form-control" id="password" name="password" placeholder="Your password" required;
-            }
-            div class="button-container" {
-                button type="submit" class="btn btn-primary setup-btn" { "Log In" }
-            }
-        }
-    };
-
-    Html(login_layout("Fedimint Guardian Login", content).into_string()).into_response()
-}
 
 pub(crate) fn login_submit_response(
     auth: ApiAuth,

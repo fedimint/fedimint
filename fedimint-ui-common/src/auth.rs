@@ -2,10 +2,9 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::response::Redirect;
 use axum_extra::extract::CookieJar;
-use fedimint_server_core::net::GuardianAuthToken;
-use fedimint_ui_common::UiState;
+use fedimint_core::net::auth::GuardianAuthToken;
 
-use crate::LOGIN_ROUTE;
+use crate::{LOGIN_ROUTE, UiState};
 
 /// Extractor that validates user authentication
 pub struct UserAuth {

@@ -1,5 +1,3 @@
-pub(crate) mod auth;
-
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -11,13 +9,12 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_gateway_common::GatewayInfo;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
-use fedimint_ui_common::{LoginInput, UiState, common_head, login_layout};
-use maud::{DOCTYPE, Markup, html};
-
-use crate::auth::UserAuth;
-
-pub const ROOT_ROUTE: &str = "/";
-pub const LOGIN_ROUTE: &str = "/ui/login";
+use fedimint_ui_common::auth::UserAuth;
+use fedimint_ui_common::{
+    LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, dashboard_layout, login_form_response,
+    login_layout,
+};
+use maud::html;
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
@@ -31,22 +28,7 @@ pub trait IAdminGateway {
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
-    login_form_response()
-}
-
-pub(crate) fn login_form_response() -> impl IntoResponse {
-    let content = html! {
-        form method="post" action="/ui/login" {
-            div class="form-group mb-4" {
-                input type="password" class="form-control" id="password" name="password" placeholder="Your password" required;
-            }
-            div class="button-container" {
-                button type="submit" class="btn btn-primary setup-btn" { "Log In" }
-            }
-        }
-    };
-
-    Html(login_layout("Fedimint Gateway Login", content).into_string()).into_response()
+    login_form_response("Fedimint Gateway Login")
 }
 
 // Dashboard login submit handler
@@ -72,7 +54,7 @@ async fn login_submit<E>(
     let content = html! {
         div class="alert alert-danger" { "The password is invalid" }
         div class="button-container" {
-            a href="/ui/login" class="btn btn-primary setup-btn" { "Return to Login" }
+            a href=(LOGIN_ROUTE) class="btn btn-primary setup-btn" { "Return to Login" }
         }
     };
 
@@ -119,28 +101,7 @@ async fn dashboard_view<E>(
         }
     };
 
-    Html(dashboard_layout(content).into_string()).into_response()
-}
-
-pub fn dashboard_layout(content: Markup) -> Markup {
-    html! {
-        (DOCTYPE)
-        html {
-            head {
-                (common_head("Dashboard"))
-            }
-            body {
-                div class="container" {
-                    header class="text-center mb-4" {
-                        h1 class="header-title mb-1" { "Fedimint Gateway UI" }
-                    }
-
-                    (content)
-                }
-                script src="/assets/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
-            }
-        }
-    }
+    Html(dashboard_layout(content, "Fedimint Gateway UI", None).into_string()).into_response()
 }
 
 pub fn router<E: 'static>(api: DynGatewayApi<E>) -> Router {

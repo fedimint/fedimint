@@ -15,47 +15,20 @@ use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use consensus_explorer::consensus_explorer_view;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
-use fedimint_ui_common::UiState;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
-use maud::{DOCTYPE, Markup, html};
+use fedimint_ui_common::auth::UserAuth;
+use fedimint_ui_common::{LOGIN_ROUTE, ROOT_ROUTE, UiState, dashboard_layout, login_form_response};
+use maud::html;
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
-use crate::auth::UserAuth;
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
-    DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE,
-    common_head, login_form_response, login_submit_response,
+    DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LoginInput, login_submit_response,
 };
-
-pub fn dashboard_layout(content: Markup, fedimintd_version: Option<&str>) -> Markup {
-    html! {
-        (DOCTYPE)
-        html {
-            head {
-                (common_head("Dashboard"))
-            }
-            body {
-                div class="container" {
-                    header class="text-center mb-4" {
-                        h1 class="header-title mb-1" { "Fedimint Guardian UI" }
-                        @if let Some(version) = fedimintd_version {
-                            div {
-                                small class="text-muted" { "v" (version) }
-                            }
-                        }
-                    }
-
-                    (content)
-                }
-                script src="/assets/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous" {}
-            }
-        }
-    }
-}
 
 // Dashboard login form handler
 async fn login_form(State(_state): State<UiState<DynDashboardApi>>) -> impl IntoResponse {
-    login_form_response()
+    login_form_response("Fedimint Guardian Login")
 }
 
 // Dashboard login submit handler
@@ -201,7 +174,8 @@ async fn dashboard_view(
         }
     };
 
-    Html(dashboard_layout(content, Some(&fedimintd_version)).into_string()).into_response()
+    Html(dashboard_layout(content, "Fedimint Guardian UI", Some(&fedimintd_version)).into_string())
+        .into_response()
 }
 
 pub fn router(api: DynDashboardApi) -> Router {

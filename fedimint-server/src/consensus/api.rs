@@ -44,6 +44,7 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
+use fedimint_core::net::auth::{GuardianAuthToken, check_auth};
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{
     SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
@@ -57,7 +58,6 @@ use fedimint_core::{OutPoint, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::dashboard_ui::{ConnectionType, IDashboardApi, ServerBitcoinRpcStatus};
-use fedimint_server_core::net::{GuardianAuthToken, check_auth};
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use tokio::sync::watch::{self, Receiver, Sender};

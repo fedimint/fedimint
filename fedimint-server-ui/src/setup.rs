@@ -6,12 +6,12 @@ use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::module::ApiAuth;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
-use fedimint_ui_common::{LoginInput, UiState};
+use fedimint_ui_common::auth::UserAuth;
+use fedimint_ui_common::{LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState, login_form_response};
 use maud::{DOCTYPE, Markup, html};
 use serde::Deserialize;
 
-use crate::auth::UserAuth;
-use crate::{LOGIN_ROUTE, ROOT_ROUTE, common_head, login_form_response, login_submit_response};
+use crate::{common_head, login_submit_response};
 
 // Setup route constants
 pub const FEDERATION_SETUP_ROUTE: &str = "/federation_setup";
@@ -187,7 +187,7 @@ async fn login_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
         return Redirect::to(ROOT_ROUTE).into_response();
     }
 
-    login_form_response().into_response()
+    login_form_response("Fedimint Guardian Login").into_response()
 }
 
 // POST handler for the /login route (authenticate and set session cookie)

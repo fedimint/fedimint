@@ -8,13 +8,13 @@ use fedimint_core::module::serde_json::{self, Value};
 use fedimint_meta_server::Meta;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::UiState;
+use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, warn};
 
 use crate::LOG_UI;
-use crate::auth::UserAuth;
 
 // Meta route constants
 pub const META_SUBMIT_ROUTE: &str = "/meta/submit";
