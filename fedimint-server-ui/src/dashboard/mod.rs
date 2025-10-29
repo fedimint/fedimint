@@ -16,10 +16,10 @@ use axum_extra::extract::cookie::CookieJar;
 use consensus_explorer::consensus_explorer_view;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::UiState;
+use fedimint_ui_common::assets::WithStaticRoutesExt;
 use maud::{DOCTYPE, Markup, html};
 use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
-use crate::assets::WithStaticRoutesExt as _;
 use crate::auth::UserAuth;
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{

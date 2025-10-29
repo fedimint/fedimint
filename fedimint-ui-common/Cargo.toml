@@ -13,7 +13,10 @@ name = "fedimint_ui_common"
 path = "src/lib.rs"
 
 [dependencies]
+axum = { workspace = true, features = ["macros"] }
 fedimint-core = { workspace = true }
+maud = { workspace = true }
+serde = { workspace = true }
 
 [lints]
 workspace = true

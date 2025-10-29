@@ -21,8 +21,6 @@ fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ui-common = { workspace = true }
 maud = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 
 [lints]

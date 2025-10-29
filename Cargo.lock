@@ -3338,8 +3338,6 @@ dependencies = [
  "fedimint-gateway-common",
  "fedimint-ui-common",
  "maud",
- "serde",
- "serde_json",
  "tracing",
 ]
 
@@ -4269,7 +4267,10 @@ dependencies = [
 name = "fedimint-ui-common"
 version = "0.10.0-alpha"
 dependencies = [
+ "axum 0.8.4",
  "fedimint-core",
+ "maud",
+ "serde",
 ]
 
 [[package]]

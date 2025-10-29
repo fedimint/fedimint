@@ -31,7 +31,7 @@ pub(crate) fn get_static_js(body: &'static str) -> Response {
     get_static_asset("application/javascript", body.as_bytes())
 }
 
-pub(crate) trait WithStaticRoutesExt {
+pub trait WithStaticRoutesExt {
     fn with_static_routes(self) -> Self;
 }
 
