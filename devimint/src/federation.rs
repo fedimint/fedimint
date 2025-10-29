@@ -9,8 +9,8 @@ use std::{env, fs, iter};
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoincore_rpc::bitcoin::Network;
-use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::net::ConnectorType;
+use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
@@ -66,6 +66,8 @@ pub struct Federation {
 
     /// Built in [`Client`], already joined
     client: JitTryAnyhow<Client>,
+    #[allow(dead_code)] // Will need it later, maybe
+    connectors: ConnectorRegistry,
 }
 
 impl Drop for Federation {
@@ -310,7 +312,9 @@ impl Federation {
             local_config_gen_params(&peers, process_mgr.globals.FM_FEDERATION_BASE_PORT, true)?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
-        let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
+        let mut api_endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
+
+        let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
         for peer_id in num_peers.peer_ids() {
             let peer_env_vars = vars::Fedimintd::init(
                 &process_mgr.globals,
@@ -333,15 +337,13 @@ impl Federation {
                 )
                 .await?,
             );
-            let admin_client = DynGlobalApi::from_setup_endpoint(
+            let admin_client = DynGlobalApi::new_admin_setup(
+                connectors.clone(),
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
-                &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
-                // We shouldn't need dht in devimint, so just disable it
-                false,
-                false,
-            )
-            .await?;
-            endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
+                // TODO: will need it somewhere
+                // &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
+            )?;
+            api_endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(peer_id, admin_client);
             peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);
         }
@@ -352,7 +354,7 @@ impl Federation {
             let (original_fedimint_cli_path, original_fm_mint_client) =
                 crate::util::use_matching_fedimint_cli_for_dkg().await?;
 
-            run_cli_dkg_v2(params, endpoints).await?;
+            run_cli_dkg_v2(params, api_endpoints).await?;
 
             // we're done with dkg, so we can reset the fedimint-cli version
             crate::util::use_fedimint_cli(original_fedimint_cli_path, original_fm_mint_client);
@@ -374,7 +376,7 @@ impl Federation {
                 .context("Awaiting invite code file")?;
 
                 ConnectorType::default()
-                    .download_from_invite_code(&InviteCode::from_str(&invite_code)?, false, false)
+                    .download_from_invite_code(&connectors, &InviteCode::from_str(&invite_code)?)
                     .await?;
             }
 
@@ -422,6 +424,7 @@ impl Federation {
             vars: peer_to_env_vars_map,
             bitcoind,
             client,
+            connectors,
         })
     }
 

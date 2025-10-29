@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_core::config::FederationId;
@@ -47,13 +48,18 @@ mod db;
 #[derive(Clone)]
 pub struct RecurringInvoiceServer {
     db: Database,
+    connectors: ConnectorRegistry,
     clients: Arc<RwLock<HashMap<FederationId, ClientHandleArc>>>,
     invoice_generated: Arc<Notify>,
     base_url: SafeUrl,
 }
 
 impl RecurringInvoiceServer {
-    pub async fn new(db: impl IRawDatabase + 'static, base_url: SafeUrl) -> anyhow::Result<Self> {
+    pub async fn new(
+        connectors: ConnectorRegistry,
+        db: impl IRawDatabase + 'static,
+        base_url: SafeUrl,
+    ) -> anyhow::Result<Self> {
         let db = Database::new(db, Default::default());
 
         let mut clients = HashMap::<_, ClientHandleArc>::new();
@@ -64,6 +70,7 @@ impl RecurringInvoiceServer {
             client_builder.with_module(MintClientInit);
             let client = client_builder
                 .open(
+                    connectors.clone(),
                     db,
                     fedimint_client::RootSecret::StandardDoubleDerive(Self::default_secret()),
                 )
@@ -76,6 +83,7 @@ impl RecurringInvoiceServer {
             clients: Arc::new(RwLock::new(clients)),
             invoice_generated: Arc::new(Default::default()),
             base_url,
+            connectors,
         };
 
         slf.run_db_migrations().await;
@@ -113,7 +121,7 @@ impl RecurringInvoiceServer {
         let client_db_prefix = FederationDbPrefix::random();
         let client_db = open_client_db(&self.db, client_db_prefix);
 
-        match Self::join_federation_static(client_db, invite_code).await {
+        match Self::join_federation_static(self.connectors.clone(), client_db, invite_code).await {
             Ok(client) => {
                 try_add_federation_database(&self.db, federation_id, client_db_prefix)
                     .await
@@ -129,6 +137,7 @@ impl RecurringInvoiceServer {
     }
 
     async fn join_federation_static(
+        connectors: ConnectorRegistry,
         client_db: Database,
         invite_code: &InviteCode,
     ) -> Result<ClientHandleArc, RecurringPaymentError> {
@@ -141,7 +150,7 @@ impl RecurringInvoiceServer {
         client_builder.with_module(MintClientInit);
 
         let client = client_builder
-            .preview(invite_code)
+            .preview(connectors, invite_code)
             .await?
             .join(
                 client_db,

@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow, bail};
 use devimint::cmd;
 use devimint::util::{FedimintCli, GatewayLdkCli, LnCli};
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientHandleArc, RootSecret};
@@ -161,12 +162,13 @@ pub async fn build_client(
     let client_secret = Client::load_or_generate_client_secret(&db).await?;
     let root_secret =
         RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(&client_secret));
+    let connectors = ConnectorRegistry::build_from_client_env()?.bind().await?;
 
     let client = if Client::is_initialized(&db).await {
-        client_builder.open(db, root_secret).await
+        client_builder.open(connectors, db, root_secret).await
     } else if let Some(invite_code) = &invite_code {
         client_builder
-            .preview(invite_code)
+            .preview(connectors, invite_code)
             .await?
             .join(db, root_secret)
             .await

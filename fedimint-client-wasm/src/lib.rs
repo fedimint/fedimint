@@ -27,12 +27,16 @@ struct RpcHandler {
 #[wasm_bindgen]
 impl RpcHandler {
     #[wasm_bindgen(constructor)]
-    pub fn new(sync_handle: FileSystemSyncAccessHandle) -> Self {
+    pub async fn new(sync_handle: FileSystemSyncAccessHandle) -> Self {
         // Create the database directly
         let cursed_db = MemAndRedb::new(sync_handle).unwrap();
         let database = Database::new(cursed_db, Default::default());
+        let connectors = fedimint_api_client::api::ConnectorRegistry::build_from_client_defaults()
+            .bind()
+            .await
+            .unwrap();
 
-        let state = Arc::new(RpcGlobalState::new(database));
+        let state = Arc::new(RpcGlobalState::new(connectors, database));
 
         Self { state }
     }

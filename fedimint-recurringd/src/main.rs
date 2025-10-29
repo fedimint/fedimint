@@ -9,6 +9,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, put};
 use axum_auth::AuthBearer;
 use clap::Parser;
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -62,8 +63,12 @@ async fn main() -> anyhow::Result<()> {
     let cli_opts = CliOpts::parse();
 
     let db = RocksDb::open(cli_opts.data_dir).await?;
-    let recurring_invoice_server =
-        RecurringInvoiceServer::new(db, cli_opts.api_address.clone()).await?;
+    let recurring_invoice_server = RecurringInvoiceServer::new(
+        ConnectorRegistry::build_from_server_env()?.bind().await?,
+        db,
+        cli_opts.api_address.clone(),
+    )
+    .await?;
 
     let cors = CorsLayer::new()
         .allow_origin(cors::Any)

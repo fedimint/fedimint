@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
+use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi, FederationApiExt};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientHandleArc, RootSecret};
 use fedimint_client_module::AdminCreds;
@@ -43,6 +43,7 @@ pub struct FederationTest {
     _task: TaskGroup,
     num_peers: u16,
     num_offline: u16,
+    connectors: ConnectorRegistry,
 }
 
 impl FederationTest {
@@ -85,15 +86,11 @@ impl FederationTest {
         let config = self.configs.get(&peer_id).expect("peer to have config");
 
         DynGlobalApi::new_admin(
+            ConnectorRegistry::build_from_testing_env()?.bind().await?,
             peer_id,
             config.consensus.api_endpoints()[&peer_id].url.clone(),
-            &None,
-            // No need to enable DHT during testing
-            false,
-            // No need to enable next stack during testing
-            false,
+            None,
         )
-        .await
     }
 
     /// Create a new admin client connected to this fed
@@ -123,7 +120,7 @@ impl FederationTest {
         }
         let client_secret = Client::load_or_generate_client_secret(&db).await.unwrap();
         client_builder
-            .preview_with_existing_config(client_config, None, None)
+            .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await
             .expect("Preview failed")
             .join(
@@ -310,6 +307,11 @@ impl FederationTestBuilder {
 
             task_group.spawn("fedimintd", move |_| async move {
                 Box::pin(consensus::run(
+                    ConnectorRegistry::build_from_testing_env()
+                        .unwrap()
+                        .bind()
+                        .await
+                        .unwrap(),
                     connections,
                     p2p_status_receivers,
                     p2p_connection_type_receivers,
@@ -342,17 +344,17 @@ impl FederationTestBuilder {
                 continue;
             }
 
-            // FIXME: (@leonardo) Currently there is no support for Tor while testing,
-            // defaulting to Tcp variant.
+            let connectors = ConnectorRegistry::build_from_testing_env()
+                .unwrap()
+                .bind()
+                .await
+                .unwrap();
             let api = DynGlobalApi::new_admin(
+                connectors,
                 peer_id,
                 config.consensus.api_endpoints()[&peer_id].url.clone(),
-                &None,
-                // No need for dht when testing
-                false,
-                false,
+                None,
             )
-            .await
             .unwrap();
 
             while let Err(e) = api
@@ -374,6 +376,11 @@ impl FederationTestBuilder {
             _task: task_group,
             num_peers: self.num_peers,
             num_offline: self.num_offline,
+            connectors: ConnectorRegistry::build_from_testing_env()
+                .expect("Failed to initialize endpoints for testing (env)")
+                .bind()
+                .await
+                .expect("Failed to initialize endpoints for testing"),
         }
     }
 }

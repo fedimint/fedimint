@@ -372,7 +372,7 @@ impl Gateway {
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
 
         let client_builder =
-            GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend);
+            GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
 
         info!(
             target: LOG_GATEWAY,

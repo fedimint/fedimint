@@ -14,7 +14,7 @@ use std::time::Duration;
 use anyhow::bail;
 use async_channel::Sender;
 use db::{ServerDbMigrationContext, get_global_database_migrations};
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 use fedimint_core::NumPeers;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -57,6 +57,7 @@ const TRANSACTION_BUFFER: usize = 1000;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
+    connectors: ConnectorRegistry,
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
     p2p_connection_type_receivers: P2PConnectionTypeReceivers,
@@ -97,16 +98,15 @@ pub async fn run(
     let mut modules = BTreeMap::new();
 
     // TODO: make it work with all transports and federation secrets
-    let global_api = DynGlobalApi::from_endpoints(
+    let global_api = DynGlobalApi::new(
+        connectors.clone(),
         cfg.consensus
             .api_endpoints()
             .iter()
-            .map(|(&peer_id, url)| (peer_id, url.url.clone())),
-        &None,
-        true,
-        true,
-    )
-    .await?;
+            .map(|(&peer_id, url)| (peer_id, url.url.clone()))
+            .collect(),
+        None,
+    )?;
 
     let server_bitcoin_rpc_monitor = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
@@ -270,13 +270,11 @@ pub async fn run(
     // Using the `Connector::default()` for now!
     ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::from_endpoints(
+        federation_api: DynGlobalApi::new(
+            connectors,
             api_urls,
-            &force_api_secrets.get_active(),
-            true,
-            true,
-        )
-        .await?,
+            force_api_secrets.get_active().as_deref(),
+        )?,
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,

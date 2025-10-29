@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use fedimint_core::PeerId;
 use fedimint_core::fmt_utils::AbbreviateJson;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_logging::LOG_CLIENT_NET_API;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
@@ -24,6 +24,10 @@ pub enum PeerError {
     /// The request was addressed to an invalid `peer_id`
     #[error("Invalid peer id: {peer_id}")]
     InvalidPeerId { peer_id: PeerId },
+
+    /// The request was addressed to an invalid `url`
+    #[error("Invalid peer url: {url}")]
+    InvalidPeerUrl { url: SafeUrl, source: anyhow::Error },
 
     /// The endpoint specification for the peer is invalid (e.g. wrong url)
     #[error("Invalid endpoint")]
@@ -78,6 +82,7 @@ impl PeerError {
         match self {
             PeerError::ResponseDeserialization(_)
             | PeerError::InvalidPeerId { .. }
+            | PeerError::InvalidPeerUrl { .. }
             | PeerError::InvalidResponse(_)
             | PeerError::InvalidRpcId(_)
             | PeerError::InvalidRequest(_)

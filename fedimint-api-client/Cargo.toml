@@ -15,6 +15,7 @@ development = ["tokio-test"]
 tor = [
   "dep:strum",
   "dep:curve25519-dalek",
+  "dep:tor-rtcompat",
   "arti-client/tokio",
   "arti-client/rustls",
   "arti-client/onion-service-client",
@@ -72,6 +73,7 @@ tokio-rustls = { version = "0.26.0", default-features = false, features = [
   "tls12",
   "ring",
 ] }
+tor-rtcompat = { workspace = true, optional = true }
 webpki-roots = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]

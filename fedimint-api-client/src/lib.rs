@@ -17,6 +17,8 @@ use fedimint_logging::LOG_CLIENT;
 use query::FilterMap;
 use tracing::debug;
 
+use crate::api::ConnectorRegistry;
+
 pub mod api;
 /// Client query system
 pub mod query;
@@ -27,9 +29,8 @@ impl ConnectorType {
     /// giving up.
     pub async fn download_from_invite_code(
         &self,
+        endpoints: &ConnectorRegistry,
         invite: &InviteCode,
-        iroh_enable_dht: bool,
-        iroh_enable_next: bool,
     ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
         debug!(
             target: LOG_CLIENT,
@@ -39,13 +40,11 @@ impl ConnectorType {
         );
 
         let federation_id = invite.federation_id();
-        let api_from_invite = DynGlobalApi::from_endpoints(
+        let api_from_invite = DynGlobalApi::new(
+            endpoints.clone(),
             invite.peers(),
-            &invite.api_secret(),
-            iroh_enable_dht,
-            iroh_enable_next,
-        )
-        .await?;
+            invite.api_secret().as_deref(),
+        )?;
         let api_secret = invite.api_secret();
 
         fedimint_core::util::retry(
@@ -53,11 +52,10 @@ impl ConnectorType {
             backoff_util::aggressive_backoff(),
             || {
                 self.try_download_client_config(
+                    endpoints,
                     &api_from_invite,
                     federation_id,
                     api_secret.clone(),
-                    iroh_enable_dht,
-                    iroh_enable_next,
                 )
             },
         )
@@ -68,11 +66,10 @@ impl ConnectorType {
     /// Tries to download the [`ClientConfig`] only once.
     pub async fn try_download_client_config(
         &self,
+        endpoints: &ConnectorRegistry,
         api_from_invite: &DynGlobalApi,
         federation_id: FederationId,
         api_secret: Option<String>,
-        iroh_enable_dht: bool,
-        iroh_enable_next: bool,
     ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
         debug!(target: LOG_CLIENT, "Downloading client config from peer");
         // TODO: use new download approach based on guardian PKs
@@ -95,17 +92,14 @@ impl ConnectorType {
             .await?;
 
         // now we can build an api for all guardians and download the client config
-        let api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
+        let api_endpoints = api_endpoints
+            .into_iter()
+            .map(|(peer, url)| (peer, url.url))
+            .collect();
 
         debug!(target: LOG_CLIENT, "Verifying client config with all peers");
 
-        let api_full = DynGlobalApi::from_endpoints(
-            api_endpoints,
-            &api_secret,
-            iroh_enable_dht,
-            iroh_enable_next,
-        )
-        .await?;
+        let api_full = DynGlobalApi::new(endpoints.clone(), api_endpoints, api_secret.as_deref())?;
         let client_config = api_full
             .request_current_consensus::<ClientConfig>(
                 CLIENT_CONFIG_ENDPOINT.to_owned(),

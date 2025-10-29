@@ -267,13 +267,13 @@ pub fn parse_p2p(url: &SafeUrl) -> anyhow::Result<String> {
 #[derive(Debug, Clone)]
 pub struct IrohConnector {
     /// Map of all peers' connection information we want to be connected to
-    pub node_ids: BTreeMap<PeerId, NodeId>,
+    node_ids: BTreeMap<PeerId, NodeId>,
     /// The Iroh endpoint
-    pub endpoint: Endpoint,
+    endpoint: Endpoint,
     /// List of overrides to use when attempting to connect to given `NodeId`
     ///
     /// This is useful for testing, or forcing non-default network connectivity.
-    pub connection_overrides: BTreeMap<NodeId, NodeAddr>,
+    connection_overrides: BTreeMap<NodeId, NodeAddr>,
 }
 
 const FEDIMINT_P2P_ALPN: &[u8] = b"FEDIMINT_P2P_ALPN";

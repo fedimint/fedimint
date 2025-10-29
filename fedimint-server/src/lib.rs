@@ -32,6 +32,7 @@ use config::ServerConfig;
 use config::io::{PLAINTEXT_PASSWORD, read_server_config};
 pub use connection_limits::ConnectionLimits;
 use fedimint_aead::random_salt;
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
@@ -177,7 +178,12 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
 
+    let connectors = ConnectorRegistry::build_from_server_defaults()
+        .bind()
+        .await?;
+
     Box::pin(consensus::run(
+        connectors,
         connections,
         p2p_status_receivers,
         p2p_connection_type_receivers,

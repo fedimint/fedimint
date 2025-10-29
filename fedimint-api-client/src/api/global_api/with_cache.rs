@@ -51,7 +51,7 @@ use tracing::{debug, trace};
 
 use super::super::{DynModuleApi, IGlobalFederationApi, IRawFederationApi, StatusResponse};
 use crate::api::{
-    DynClientConnector, FederationApiExt, FederationError, FederationResult, PeerResult,
+    FederationApiExt, FederationError, FederationResult, PeerResult,
     VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
 };
 use crate::query::FilterMapThreshold;
@@ -240,10 +240,6 @@ where
         params: &ApiRequestErased,
     ) -> PeerResult<Value> {
         self.inner.request_raw(peer_id, method, params).await
-    }
-
-    fn connector(&self) -> &DynClientConnector {
-        self.inner.connector()
     }
 }
 
