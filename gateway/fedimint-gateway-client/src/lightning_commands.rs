@@ -111,17 +111,14 @@ fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 
 impl LightningCommands {
     #![allow(clippy::too_many_lines)]
-    pub async fn handle(
-        self,
-        create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
-    ) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
         match self {
             Self::CreateInvoice {
                 amount_msats,
                 expiry_secs,
                 description,
             } => {
-                let response = create_client()
+                let response = client
                     .create_invoice_for_self(CreateInvoiceForOperatorPayload {
                         amount_msats,
                         expiry_secs,
@@ -131,7 +128,7 @@ impl LightningCommands {
                 println!("{response}");
             }
             Self::PayInvoice { invoice } => {
-                let response = create_client()
+                let response = client
                     .pay_invoice(PayInvoiceForOperatorPayload { invoice })
                     .await?;
                 println!("{response}");
@@ -142,7 +139,7 @@ impl LightningCommands {
                 channel_size_sats,
                 push_amount_sats,
             } => {
-                let funding_txid = create_client()
+                let funding_txid = client
                     .open_channel(OpenChannelRequest {
                         pubkey,
                         host,
@@ -153,17 +150,17 @@ impl LightningCommands {
                 println!("{funding_txid}");
             }
             Self::CloseChannelsWithPeer { pubkey, force } => {
-                let response = create_client()
+                let response = client
                     .close_channels_with_peer(CloseChannelsWithPeerRequest { pubkey, force })
                     .await?;
                 print_response(response);
             }
             Self::ListChannels => {
-                let response = create_client().list_channels().await?;
+                let response = client.list_channels().await?;
                 print_response(response);
             }
             Self::GetInvoice { payment_hash } => {
-                let response = create_client()
+                let response = client
                     .get_invoice(GetInvoiceRequest { payment_hash })
                     .await?;
                 print_response(response);
@@ -174,7 +171,7 @@ impl LightningCommands {
             } => {
                 let start_secs = start_time.timestamp().try_into()?;
                 let end_secs = end_time.timestamp().try_into()?;
-                let response = create_client()
+                let response = client
                     .list_transactions(ListTransactionsPayload {
                         start_secs,
                         end_secs,
@@ -188,7 +185,7 @@ impl LightningCommands {
                 expiry_secs,
                 quantity,
             } => {
-                let response = create_client()
+                let response = client
                     .create_offer(CreateOfferPayload {
                         amount: amount_msat.map(Amount::from_msats),
                         description,
@@ -204,7 +201,7 @@ impl LightningCommands {
                 quantity,
                 payer_note,
             } => {
-                let response = create_client()
+                let response = client
                     .pay_offer(PayOfferPayload {
                         offer,
                         amount: amount_msat.map(Amount::from_msats),

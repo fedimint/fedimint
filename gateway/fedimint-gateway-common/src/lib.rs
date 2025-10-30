@@ -23,7 +23,27 @@ use fedimint_wallet_client::PegOutFees;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 
-mod envs;
+pub mod envs;
+
+pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayRequest {
+    /// REST API route for specifying which action to take
+    pub route: String,
+
+    /// Parameters for the request
+    pub params: Option<serde_json::Value>,
+
+    /// Password for authenticated requests to the gateway
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayResponse {
+    pub status: u16,
+    pub body: serde_json::Value,
+}
 
 pub const V1_API_ENDPOINT: &str = "v1";
 
@@ -35,7 +55,6 @@ pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
 pub const CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt11_invoice_for_operator";
 pub const CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt12_offer_for_operator";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
-pub const GATEWAY_INFO_POST_ENDPOINT: &str = "/info";
 pub const GET_BALANCES_ENDPOINT: &str = "/balances";
 pub const GET_INVOICE_ENDPOINT: &str = "/get_invoice";
 pub const GET_LN_ONCHAIN_ADDRESS_ENDPOINT: &str = "/get_ln_onchain_address";
@@ -148,6 +167,7 @@ pub struct GatewayInfo {
     #[serde(default)]
     pub synced_to_chain: bool,
     pub api: SafeUrl,
+    pub iroh_api: SafeUrl,
     pub lightning_mode: LightningMode,
 }
 

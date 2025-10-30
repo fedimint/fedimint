@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::str::FromStr;
 
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::net::ConnectorType;
@@ -13,6 +14,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1};
 use fedimint_gateway_common::FederationConfig;
+use fedimint_gateway_common::envs::FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV;
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -93,6 +95,10 @@ pub trait GatewayDbtxNcExt {
         &mut self,
         prefix_names: Vec<String>,
     ) -> BTreeMap<String, Box<dyn erased_serde::Serialize + Send>>;
+
+    /// Returns `iroh::SecretKey` and saves it to the database if it does not
+    /// exist
+    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey;
 }
 
 impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
@@ -147,6 +153,7 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             let context = Secp256k1::new();
             let (secret_key, _public_key) = context.generate_keypair(&mut OsRng);
             let key_pair = Keypair::from_secret_key(&context, &secret_key);
+
             self.insert_new_entry(&GatewayPublicKey, &key_pair).await;
             key_pair
         }
@@ -228,6 +235,21 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
 
         gateway_items
     }
+
+    async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey {
+        if let Some(iroh_sk) = self.get_value(&IrohKey).await {
+            iroh_sk
+        } else {
+            let iroh_sk = if let Ok(var) = std::env::var(FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV) {
+                iroh::SecretKey::from_str(&var).expect("Invalid overridden iroh secret key")
+            } else {
+                iroh::SecretKey::generate(&mut OsRng)
+            };
+
+            self.insert_new_entry(&IrohKey, &iroh_sk).await;
+            iroh_sk
+        }
+    }
 }
 
 #[repr(u8)]
@@ -239,6 +261,7 @@ enum DbKeyPrefix {
     PreimageAuthentication = 0x08,
     RegisteredIncomingContract = 0x09,
     ClientDatabase = 0x10,
+    Iroh = 0x11,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -405,6 +428,15 @@ struct PreimageAuthenticationPrefix;
 impl_db_lookup!(
     key = PreimageAuthentication,
     query_prefix = PreimageAuthenticationPrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+struct IrohKey;
+
+impl_db_record!(
+    key = IrohKey,
+    value = iroh::SecretKey,
+    db_prefix = DbKeyPrefix::Iroh
 );
 
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDbMigrationFn> {

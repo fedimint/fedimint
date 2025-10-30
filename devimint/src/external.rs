@@ -774,6 +774,7 @@ pub enum LightningNode {
         name: String,
         gw_port: u16,
         ldk_port: u16,
+        iroh_port: u16,
     },
 }
 
@@ -785,6 +786,7 @@ impl LightningNode {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
+                iroh_port: _,
             } => LightningNodeType::Ldk,
         }
     }

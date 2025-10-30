@@ -12,6 +12,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
+use fedimint_gateway_common::envs::FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV;
 use fedimint_gateway_common::{
     ChannelInfo, CreateOfferResponse, GatewayBalances, GetInvoiceResponse,
     ListTransactionsResponse, MnemonicResponse, PaymentDetails, PaymentStatus,
@@ -21,12 +22,14 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
+use rand::rngs::OsRng;
 use semver::Version;
 use tracing::info;
 
 use crate::cmd;
 use crate::envs::{
-    FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV, FM_PORT_LDK_ENV,
+    FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_IROH_LISTEN_ADDR_ENV,
+    FM_GATEWAY_LISTEN_ADDR_ENV, FM_PORT_LDK_ENV,
 };
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
@@ -46,26 +49,36 @@ pub struct Gatewayd {
     pub gw_port: u16,
     pub ldk_port: u16,
     pub gateway_id: String,
+    pub iroh_port: u16,
+    pub node_id: iroh_base::NodeId,
 }
 
 impl Gatewayd {
     pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
         let ln_type = ln.ln_type();
-        let (gw_name, port, lightning_node_port) = match &ln {
+        let (gw_name, port, lightning_node_port, iroh_port) = match &ln {
             LightningNode::Lnd(_) => (
                 "gatewayd-lnd".to_string(),
                 process_mgr.globals.FM_PORT_GW_LND,
                 process_mgr.globals.FM_PORT_LND_LISTEN,
+                process_mgr.globals.FM_PORT_GW_LND_IROH,
             ),
             LightningNode::Ldk {
                 name,
                 gw_port,
                 ldk_port,
-            } => (name.to_owned(), gw_port.to_owned(), ldk_port.to_owned()),
+                iroh_port,
+            } => (
+                name.to_owned(),
+                gw_port.to_owned(),
+                ldk_port.to_owned(),
+                iroh_port.to_owned(),
+            ),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
         let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
+        let iroh_sk = iroh_base::SecretKey::generate(&mut OsRng);
 
         let mut gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
@@ -78,6 +91,14 @@ impl Gatewayd {
             ),
             (FM_GATEWAY_API_ADDR_ENV.to_owned(), addr.clone()),
             (FM_PORT_LDK_ENV.to_owned(), lightning_node_port.to_string()),
+            (
+                FM_GATEWAY_IROH_LISTEN_ADDR_ENV.to_owned(),
+                format!("127.0.0.1:{iroh_port}"),
+            ),
+            (
+                FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV.to_owned(),
+                iroh_sk.to_string(),
+            ),
         ]);
 
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
@@ -154,6 +175,8 @@ impl Gatewayd {
             gw_port: port,
             ldk_port: lightning_node_port,
             gateway_id,
+            iroh_port,
+            node_id: iroh_sk.public(),
         };
 
         Ok(gatewayd)
@@ -175,6 +198,7 @@ impl Gatewayd {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
+                iroh_port: _,
             } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
@@ -229,6 +253,15 @@ impl Gatewayd {
         )
     }
 
+    pub async fn gateway_id(&self) -> Result<String> {
+        let info = self.get_info().await?;
+        let gateway_id = info["gateway_id"]
+            .as_str()
+            .context("gateway_id must be a string")?
+            .to_owned();
+        Ok(gateway_id)
+    }
+
     pub async fn get_info(&self) -> Result<serde_json::Value> {
         retry(
             "Getting gateway info via gateway-cli info",
@@ -237,6 +270,20 @@ impl Gatewayd {
         )
         .await
         .context("Getting gateway info via gateway-cli info")
+    }
+
+    pub async fn get_info_iroh(&self) -> Result<serde_json::Value> {
+        cmd!(
+            crate::util::get_gateway_cli_path(),
+            "--rpcpassword=theresnosecondbest",
+            "--address",
+            format!("iroh://{}", self.node_id),
+            "--connection-override",
+            format!("http://127.0.0.1:{}", self.iroh_port),
+            "info",
+        )
+        .out_json()
+        .await
     }
 
     pub async fn lightning_pubkey(&self) -> Result<PublicKey> {

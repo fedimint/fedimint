@@ -25,6 +25,7 @@ fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 futures = { workspace = true }
+iroh = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
