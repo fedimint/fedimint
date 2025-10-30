@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["handle_incoming_iroh_request","handle_request","iroh_verify_password","make_get_handler","make_post_handler","start_iroh_endpoint"],"struct":["Handlers"],"type":["GetHandler","PostHandler"]};

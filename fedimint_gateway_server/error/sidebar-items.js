@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["AdminGatewayError","LNv1Error","LNv2Error","PublicGatewayError"],"struct":["FederationNotConnected"]};
+window.SIDEBAR_ITEMS = {"enum":["AdminGatewayError","GatewayError","LNv1Error","LNv2Error","PublicGatewayError"],"struct":["FederationNotConnected","LnurlError"]};
