@@ -1,3 +1,7 @@
+mod federation;
+mod general;
+mod lightning;
+
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -8,7 +12,7 @@ use axum::routing::get;
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use fedimint_gateway_common::{GatewayInfo, LightningMode};
+use fedimint_gateway_common::GatewayInfo;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
@@ -70,6 +74,7 @@ async fn dashboard_view<E>(
 where
     E: std::fmt::Display,
 {
+    let gatewayd_version = state.api.gatewayd_version();
     let gateway_info = match state.api.handle_get_info().await {
         Ok(info) => info,
         Err(err) => {
@@ -79,129 +84,27 @@ where
                     (err.to_string())
                 }
             };
-            return Html(dashboard_layout(content, "Fedimint Gateway UI", None).into_string())
-                .into_response();
+            return Html(
+                dashboard_layout(content, "Fedimint Gateway UI", Some(&gatewayd_version))
+                    .into_string(),
+            )
+            .into_response();
         }
     };
-    let gatewayd_version = state.api.gatewayd_version();
 
     let content = html! {
-
-        // Top row
         div class="row gy-4" {
-
-            // General Info
             div class="col-md-6" {
-                div class="card h-100" {
-                    div class="card-header dashboard-header" { "Gateway Information" }
-                    div class="card-body" {
-                        div id="status" class="alert alert-info" {
-                            "Status: " strong { (gateway_info.gateway_state.clone()) }
-                        }
-
-                        table class="table table-sm mb-0" {
-                            tbody {
-                                tr {
-                                    th { "Gateway ID" }
-                                    td { (gateway_info.gateway_id.to_string()) }
-                                }
-                                tr {
-                                    th { "Network" }
-                                    td { (gateway_info.network.to_string()) }
-                                }
-                                tr {
-                                    th { "Synced to Chain" }
-                                    td { (gateway_info.synced_to_chain) }
-                                }
-                                @if let Some(block_height) = gateway_info.block_height {
-                                    tr {
-                                        th { "Block Height" }
-                                        td { (block_height) }
-                                    }
-                                }
-                                tr {
-                                    th { "API Endpoint" }
-                                    td { (gateway_info.api.to_string()) }
-                                }
-                            }
-                        }
-                    }
-                }
+                (general::render(&gateway_info))
             }
 
             div class="col-md-6" {
-                div class="card h-100" {
-                    div class="card-header dashboard-header" { "Lightning" }
-                    div class="card-body" {
-                        @match gateway_info.lightning_mode {
-                            LightningMode::Lnd { lnd_rpc_addr, lnd_tls_cert, lnd_macaroon } => {
-                                div id="node-type" class="alert alert-info" {
-                                    "Node Type: " strong { ("External LND") }
-                                }
-                                table class="table table-sm mb-0" {
-                                    tbody {
-                                        tr {
-                                            th { "RPC Address" }
-                                            td { (lnd_rpc_addr) }
-                                        }
-                                        tr {
-                                            th { "TLS Cert" }
-                                            td { (lnd_tls_cert) }
-                                        }
-                                        tr {
-                                            th { "Macaroon" }
-                                            td { (lnd_macaroon) }
-                                        }
-                                        @if let Some(alias) = gateway_info.lightning_alias {
-                                            tr {
-                                                th { "Lightning Alias" }
-                                                td { (alias) }
-                                            }
-                                        }
-                                        @if let Some(pubkey) = gateway_info.lightning_pub_key {
-                                            tr {
-                                                th { "Lightning Public Key" }
-                                                td { (pubkey) }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            LightningMode::Ldk { lightning_port, alias: _alias } => {
-                                div id="node-type" class="alert alert-info" {
-                                    "Node Type: " strong { ("Internal LDK") }
-                                }
-                                table class="table table-sm mb-0" {
-                                    tbody {
-                                        tr {
-                                            th { "Port" }
-                                            td { (lightning_port) }
-                                        }
-                                        @if let Some(alias) = gateway_info.lightning_alias {
-                                            tr {
-                                                th { "Alias" }
-                                                td { (alias) }
-                                            }
-                                        }
-                                        @if let Some(pubkey) = gateway_info.lightning_pub_key {
-                                            tr {
-                                                th { "Public Key" }
-                                                td { (pubkey) }
-                                            }
-                                            @if let Some(host) = gateway_info.api.host_str() {
-                                                tr {
-                                                    th { "Connection String" }
-                                                    td { (format!("{pubkey}@{host}:{lightning_port}")) }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                (lightning::render(&gateway_info))
             }
+        }
+
+        @for fed in gateway_info.federations {
+            (federation::render(&fed))
         }
     };
 
