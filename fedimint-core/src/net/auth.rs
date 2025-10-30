@@ -15,7 +15,7 @@ impl GuardianAuthToken {
     /// The caller must ensure that authentication has already been verified
     /// through other means before calling this function.
     pub fn new_unchecked() -> Self {
-        GuardianAuthToken { _marker: () }
+        Self { _marker: () }
     }
 }
 
