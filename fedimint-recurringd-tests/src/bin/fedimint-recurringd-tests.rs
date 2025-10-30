@@ -2,7 +2,6 @@ use std::ops::ControlFlow;
 
 use devimint::tests::log_binary_versions;
 use devimint::util::{almost_equal, poll};
-use devimint::version_constants::VERSION_0_7_0_ALPHA;
 use devimint::{DevFed, cmd};
 use lightning_invoice::Bolt11Invoice;
 use tracing::info;
@@ -42,13 +41,6 @@ async fn main() -> anyhow::Result<()> {
                     .send()
                     .await?;
                 assert!(response_with_wrong_auth.status().is_client_error());
-            }
-
-            let fedimint_cli_version = devimint::util::FedimintCli::version_or_default().await;
-
-            if fedimint_cli_version < *VERSION_0_7_0_ALPHA {
-                info!("Skipping recurringd test because fedimint-cli is lower than v0.7.0");
-                return Ok(());
             }
 
             // Give the LND Gateway a balance, it's the only GW serving LNv1 and recurringd

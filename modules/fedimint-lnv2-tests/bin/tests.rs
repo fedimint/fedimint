@@ -5,7 +5,7 @@ use bitcoin::hashes::sha256;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::util::almost_equal;
-use devimint::version_constants::{VERSION_0_7_0_ALPHA, VERSION_0_9_0_ALPHA};
+use devimint::version_constants::VERSION_0_9_0_ALPHA;
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
@@ -329,39 +329,35 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 100).await?;
     }
 
-    let gatewayd_version = util::Gatewayd::version_or_default().await;
+    info!("Testing payment summary...");
 
-    if gatewayd_version >= *VERSION_0_7_0_ALPHA {
-        info!("Testing payment summary...");
+    let lnd_payment_summary = gw_lnd.payment_summary().await?;
 
-        let lnd_payment_summary = gw_lnd.payment_summary().await?;
+    assert_eq!(
+        lnd_payment_summary.outgoing.total_success,
+        4 + lnv1_swap + lnv2_swap
+    );
+    assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
+    // LNv1 does not count swaps as incoming payments
+    assert_eq!(lnd_payment_summary.incoming.total_success, 3 + lnv1_swap);
+    assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
 
-        assert_eq!(
-            lnd_payment_summary.outgoing.total_success,
-            4 + lnv1_swap + lnv2_swap
-        );
-        assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
-        // LNv1 does not count swaps as incoming payments
-        assert_eq!(lnd_payment_summary.incoming.total_success, 3 + lnv1_swap);
-        assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
+    assert!(lnd_payment_summary.outgoing.median_latency.is_some());
+    assert!(lnd_payment_summary.outgoing.average_latency.is_some());
+    assert!(lnd_payment_summary.incoming.median_latency.is_some());
+    assert!(lnd_payment_summary.incoming.average_latency.is_some());
 
-        assert!(lnd_payment_summary.outgoing.median_latency.is_some());
-        assert!(lnd_payment_summary.outgoing.average_latency.is_some());
-        assert!(lnd_payment_summary.incoming.median_latency.is_some());
-        assert!(lnd_payment_summary.incoming.average_latency.is_some());
+    let ldk_payment_summary = gw_ldk.payment_summary().await?;
 
-        let ldk_payment_summary = gw_ldk.payment_summary().await?;
+    assert_eq!(ldk_payment_summary.outgoing.total_success, 4);
+    assert_eq!(ldk_payment_summary.outgoing.total_failure, 2);
+    assert_eq!(ldk_payment_summary.incoming.total_success, 4);
+    assert_eq!(ldk_payment_summary.incoming.total_failure, 0);
 
-        assert_eq!(ldk_payment_summary.outgoing.total_success, 4);
-        assert_eq!(ldk_payment_summary.outgoing.total_failure, 2);
-        assert_eq!(ldk_payment_summary.incoming.total_success, 4);
-        assert_eq!(ldk_payment_summary.incoming.total_failure, 0);
-
-        assert!(ldk_payment_summary.outgoing.median_latency.is_some());
-        assert!(ldk_payment_summary.outgoing.average_latency.is_some());
-        assert!(ldk_payment_summary.incoming.median_latency.is_some());
-        assert!(ldk_payment_summary.incoming.average_latency.is_some());
-    }
+    assert!(ldk_payment_summary.outgoing.median_latency.is_some());
+    assert!(ldk_payment_summary.outgoing.average_latency.is_some());
+    assert!(ldk_payment_summary.incoming.median_latency.is_some());
+    assert!(ldk_payment_summary.incoming.average_latency.is_some());
 
     Ok(())
 }

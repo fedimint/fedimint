@@ -43,7 +43,6 @@ use super::util::{Command, ProcessHandle, ProcessManager, cmd};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
-use crate::version_constants::VERSION_0_7_0_ALPHA;
 use crate::{poll_almost_equal, poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
@@ -353,13 +352,7 @@ impl Federation {
             let (original_fedimint_cli_path, original_fm_mint_client) =
                 crate::util::use_matching_fedimint_cli_for_dkg().await?;
 
-            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-
-            if fedimint_cli_version >= *VERSION_0_7_0_ALPHA {
-                run_cli_dkg_v2(params, endpoints).await?;
-            } else {
-                run_cli_dkg(params, endpoints).await?;
-            }
+            run_cli_dkg_v2(params, endpoints).await?;
 
             // we're done with dkg, so we can reset the fedimint-cli version
             crate::util::use_fedimint_cli(original_fedimint_cli_path, original_fm_mint_client);
