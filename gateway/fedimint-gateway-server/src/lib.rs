@@ -2229,6 +2229,11 @@ impl IAdminGateway for Gateway {
     fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
     }
+
+    fn gatewayd_version(&self) -> String {
+        let gatewayd_version = env!("CARGO_PKG_VERSION");
+        gatewayd_version.to_string()
+    }
 }
 
 // LNv2 Gateway implementation
