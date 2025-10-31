@@ -25,6 +25,7 @@ use fedimint_core::module::{
     InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
     TransactionItemAmounts, api_endpoint,
 };
+use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::timeout;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
@@ -51,7 +52,6 @@ use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::net::check_auth;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use group::Curve;

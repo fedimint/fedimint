@@ -28,6 +28,7 @@ use fedimint_gateway_common::{
     SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
     SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
 };
+use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
@@ -53,10 +54,12 @@ pub async fn run_webserver(gateway: Arc<Gateway>) -> anyhow::Result<()> {
     let mut handlers = Handlers::new();
 
     let routes = routes(gateway.clone(), task_group.clone(), &mut handlers);
+    let ui_routes = fedimint_gateway_ui::router(gateway.clone());
     let api_v1 = Router::new()
         .nest(&format!("/{V1_API_ENDPOINT}"), routes.clone())
         // Backwards compatibility: Continue supporting gateway APIs without versioning
-        .merge(routes);
+        .merge(routes)
+        .merge(ui_routes);
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx();

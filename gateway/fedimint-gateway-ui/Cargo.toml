@@ -1,0 +1,27 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-gateway-ui is a server-side rendered admin web UI for gatewayd."
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-gateway-ui"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lib]
+name = "fedimint_gateway_ui"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
+axum-extra = { workspace = true, features = ["cookie"] }
+bcrypt = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-gateway-common = { workspace = true }
+fedimint-ui-common = { workspace = true }
+maud = { workspace = true }
+tracing = { workspace = true, features = ["log"] }
+
+[lints]
+workspace = true

@@ -2,7 +2,7 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::response::Redirect;
 use axum_extra::extract::CookieJar;
-use fedimint_server_core::net::GuardianAuthToken;
+use fedimint_core::net::auth::GuardianAuthToken;
 
 use crate::{LOGIN_ROUTE, UiState};
 
