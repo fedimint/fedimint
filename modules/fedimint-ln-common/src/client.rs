@@ -70,49 +70,45 @@ impl GatewayRpcClient {
         route: &str,
         payload: Option<P>,
     ) -> Result<T, GatewayRpcError> {
-        match &self.iroh_connector {
-            Some(iroh_connector) => {
-                let payload =
-                    payload.map(|p| serde_json::to_value(p).expect("Could not serialize"));
-                let response = iroh_connector
-                    .request(route, payload)
-                    .await
-                    .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                let status_code = StatusCode::from_u16(response.status)
-                    .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                match status_code {
-                    StatusCode::OK => {
-                        let response = serde_json::from_value::<T>(response.body)
-                            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-                        Ok(response)
-                    }
-                    status => Err(GatewayRpcError::BadStatus(status)),
+        if let Some(iroh_connector) = &self.iroh_connector {
+            let payload = payload.map(|p| serde_json::to_value(p).expect("Could not serialize"));
+            let response = iroh_connector
+                .request(route, payload)
+                .await
+                .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+            let status_code = StatusCode::from_u16(response.status)
+                .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+            match status_code {
+                StatusCode::OK => {
+                    let response = serde_json::from_value::<T>(response.body)
+                        .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+                    Ok(response)
                 }
+                status => Err(GatewayRpcError::BadStatus(status)),
             }
-            None => {
-                let url = self.base_url.join(route).expect("Invalid base url");
-                let mut builder = self.client.request(method, url.clone().to_unsafe());
-                if let Some(password) = self.password.clone() {
-                    builder = builder.bearer_auth(password);
-                }
-                if let Some(payload) = payload {
-                    builder = builder
-                        .json(&payload)
-                        .header(reqwest::header::CONTENT_TYPE, "application/json");
-                }
+        } else {
+            let url = self.base_url.join(route).expect("Invalid base url");
+            let mut builder = self.client.request(method, url.clone().to_unsafe());
+            if let Some(password) = self.password.clone() {
+                builder = builder.bearer_auth(password);
+            }
+            if let Some(payload) = payload {
+                builder = builder
+                    .json(&payload)
+                    .header(reqwest::header::CONTENT_TYPE, "application/json");
+            }
 
-                let response = builder
-                    .send()
+            let response = builder
+                .send()
+                .await
+                .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?;
+
+            match response.status() {
+                StatusCode::OK => Ok(response
+                    .json::<T>()
                     .await
-                    .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?;
-
-                match response.status() {
-                    StatusCode::OK => Ok(response
-                        .json::<T>()
-                        .await
-                        .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?),
-                    status => Err(GatewayRpcError::BadStatus(status)),
-                }
+                    .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?),
+                status => Err(GatewayRpcError::BadStatus(status)),
             }
         }
     }

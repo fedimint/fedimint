@@ -104,6 +104,7 @@ impl GatewayIrohConnector {
         })
     }
 
+    #[must_use]
     pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
         self.connection_overrides.insert(node, addr);
         self
