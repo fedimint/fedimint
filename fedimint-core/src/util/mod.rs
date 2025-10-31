@@ -163,6 +163,10 @@ impl SafeUrl {
     pub fn set_fragment(&mut self, arg: Option<&str>) {
         self.0.set_fragment(arg);
     }
+
+    pub fn is_iroh(&self) -> bool {
+        self.scheme() == "iroh"
+    }
 }
 
 static SHOW_SECRETS: LazyLock<bool> = LazyLock::new(|| {

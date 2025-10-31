@@ -48,7 +48,7 @@ impl GatewayRpcClient {
         connection_override: Option<SafeUrl>,
     ) -> anyhow::Result<Self> {
         let mut base_url = api.clone();
-        let iroh_connector = if api.scheme() == "iroh" {
+        let iroh_connector = if api.is_iroh() {
             let host = api.host_str().context("Url is missing host")?;
             let iroh_pk = iroh::PublicKey::from_str(host).context(format!(
                 "Could not parse Iroh Public key: Invalid public key: {host}"
