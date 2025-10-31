@@ -34,6 +34,10 @@ pub fn render(gateway_info: &GatewayInfo) -> Markup {
                             th { "API Endpoint" }
                             td { (gateway_info.api.to_string()) }
                         }
+                        tr {
+                            th { "Iroh API" }
+                            td { (gateway_info.iroh_api.to_string()) }
+                        }
                     }
                 }
             }
