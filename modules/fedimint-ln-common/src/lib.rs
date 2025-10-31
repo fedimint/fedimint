@@ -18,6 +18,7 @@ pub mod config;
 pub mod contracts;
 pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
+pub mod iroh;
 
 use std::collections::BTreeMap;
 use std::io::{Error, Read, Write};

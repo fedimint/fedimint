@@ -1,12 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
 
 use anyhow::Context;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
-use fedimint_core::envs::{FM_IROH_ENABLE_DHT_ENV, is_env_var_set};
-use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
@@ -14,151 +12,32 @@ use fedimint_gateway_common::{
     CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConfigPayload,
     ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
-    DepositAddressPayload, DepositAddressRecheckPayload, FEDIMINT_GATEWAY_ALPN, FederationInfo,
-    GATEWAY_INFO_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances, GatewayFedConfig, GatewayInfo,
-    GetInvoiceRequest, GetInvoiceResponse, IrohGatewayRequest, IrohGatewayResponse,
-    LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
-    ListTransactionsPayload, ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse,
-    OPEN_CHANNEL_ENDPOINT, OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
-    PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT,
-    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
-    PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT,
-    ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
-    SpendEcashResponse, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GATEWAY_INFO_ENDPOINT,
+    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances,
+    GatewayFedConfig, GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LEAVE_FED_ENDPOINT,
+    LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload,
+    ListTransactionsResponse, MNEMONIC_ENDPOINT, MnemonicResponse, OPEN_CHANNEL_ENDPOINT,
+    OpenChannelRequest, PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT,
+    PAYMENT_LOG_ENDPOINT, PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload,
+    PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload,
+    PaymentSummaryResponse, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, ReceiveEcashResponse,
+    SEND_ONCHAIN_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    WITHDRAW_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
-use fedimint_logging::LOG_NET_IROH;
-use iroh::discovery::pkarr::PkarrResolver;
-use iroh::endpoint::Connection;
-use iroh::{Endpoint, NodeAddr, NodeId};
+use fedimint_ln_common::iroh::GatewayIrohConnector;
+use iroh::NodeAddr;
 use lightning_invoice::Bolt11Invoice;
-use reqwest::{Method, StatusCode, Url};
+use reqwest::{Method, StatusCode};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
-use tracing::{info, trace};
 
 pub struct GatewayRpcClient {
     base_url: SafeUrl,
     iroh_connector: Option<GatewayIrohConnector>,
     client: reqwest::Client,
     password: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct GatewayIrohConnector {
-    node_id: iroh::NodeId,
-    endpoint: Endpoint,
-    password: Option<String>,
-    connection_overrides: BTreeMap<NodeId, NodeAddr>,
-}
-
-impl GatewayIrohConnector {
-    pub async fn new(
-        iroh_pk: iroh::PublicKey,
-        password: Option<String>,
-        iroh_dns: Option<SafeUrl>,
-    ) -> anyhow::Result<Self> {
-        let mut builder = Endpoint::builder();
-
-        let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
-            || {
-                FM_IROH_DNS_FEDIMINT_PROD
-                    .into_iter()
-                    .map(|url| Url::parse(url).expect("Hardcoded, can't fail"))
-                    .collect()
-            },
-            |url| vec![url.to_unsafe()],
-        );
-
-        for iroh_dns in iroh_dns_servers {
-            builder = builder.add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
-        }
-
-        // As a client, we don't need to register on any relays
-        let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
-
-        // See <https://github.com/fedimint/fedimint/issues/7811>
-        if is_env_var_set(FM_IROH_ENABLE_DHT_ENV) {
-            #[cfg(not(target_family = "wasm"))]
-            {
-                builder = builder.discovery_dht();
-            }
-        } else {
-            info!(
-                target: LOG_NET_IROH,
-                "Iroh DHT is disabled"
-            );
-        }
-
-        // instead of `.discovery_n0`, which brings publisher we don't want
-        {
-            #[cfg(target_family = "wasm")]
-            {
-                builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
-            }
-
-            #[cfg(not(target_family = "wasm"))]
-            {
-                builder = builder
-                    .add_discovery(move |_| Some(iroh::discovery::dns::DnsDiscovery::n0_dns()));
-            }
-        }
-
-        let endpoint = builder.bind().await?;
-
-        Ok(Self {
-            node_id: iroh_pk,
-            endpoint,
-            password,
-            connection_overrides: BTreeMap::new(),
-        })
-    }
-
-    pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
-        self.connection_overrides.insert(node, addr);
-        self
-    }
-
-    async fn connect(&self) -> anyhow::Result<Connection> {
-        let connection = match self.connection_overrides.get(&self.node_id) {
-            Some(node_addr) => {
-                trace!(target: LOG_NET_IROH, node_id = %self.node_id, "Using a connectivity override for connection");
-                self.endpoint
-                    .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
-                    .await?
-            }
-            None => {
-                self.endpoint
-                    .connect(self.node_id, FEDIMINT_GATEWAY_ALPN)
-                    .await?
-            }
-        };
-
-        // TODO: Spawn connection monitoring?
-        Ok(connection)
-    }
-
-    pub async fn request(
-        &self,
-        route: &str,
-        payload: Option<serde_json::Value>,
-    ) -> anyhow::Result<IrohGatewayResponse> {
-        let iroh_request = IrohGatewayRequest {
-            route: route.to_string(),
-            params: payload,
-            password: self.password.clone(),
-        };
-        let json = serde_json::to_vec(&iroh_request).expect("serialization cant fail");
-        let connection = self.connect().await?;
-        let (mut sink, mut stream) = connection.open_bi().await?;
-        sink.write_all(&json).await?;
-        sink.finish()?;
-        let response = stream.read_to_end(1_000_000).await?;
-        let iroh_response = serde_json::from_slice::<IrohGatewayResponse>(&response)?;
-        Ok(iroh_response)
-    }
 }
 
 impl GatewayRpcClient {

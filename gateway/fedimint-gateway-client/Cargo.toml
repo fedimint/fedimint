@@ -34,6 +34,7 @@ clap_complete = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }
+fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
 iroh = { workspace = true }
