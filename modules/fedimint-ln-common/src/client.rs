@@ -101,10 +101,16 @@ impl GatewayRpcClient {
                         .header(reqwest::header::CONTENT_TYPE, "application/json");
                 }
 
-                let response = builder.send().await?;
+                let response = builder
+                    .send()
+                    .await
+                    .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?;
 
                 match response.status() {
-                    StatusCode::OK => Ok(response.json::<T>().await?),
+                    StatusCode::OK => Ok(response
+                        .json::<T>()
+                        .await
+                        .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?),
                     status => Err(GatewayRpcError::BadStatus(status)),
                 }
             }
@@ -126,12 +132,12 @@ impl GatewayRpcClient {
 
 pub type GatewayRpcResult<T> = Result<T, GatewayRpcError>;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum GatewayRpcError {
     #[error("Bad status returned {0}")]
     BadStatus(StatusCode),
-    #[error(transparent)]
-    RequestError(#[from] reqwest::Error),
+    #[error("Error connecting to the gateway {0}")]
+    RequestError(String),
     #[error("Iroh error: {0}")]
     IrohError(String),
 }
