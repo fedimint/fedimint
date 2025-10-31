@@ -44,11 +44,11 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    GatewayConnection, GatewayConnectionError, PaymentFee, RealGatewayConnection, RoutingInfo,
+    GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, KIND, LightningCommonInit, LightningInvoice, LightningModuleTypes,
-    LightningOutput, LightningOutputV0, lnurl, tweak,
+    Bolt11InvoiceDescription, GatewayRpcError, KIND, LightningCommonInit, LightningInvoice,
+    LightningModuleTypes, LightningOutput, LightningOutputV0, lnurl, tweak,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -464,7 +464,7 @@ impl LightningClientModule {
     async fn routing_info(
         &self,
         gateway: &SafeUrl,
-    ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
+    ) -> Result<Option<RoutingInfo>, GatewayRpcError> {
         self.gateway_conn
             .routing_info(gateway.clone(), &self.federation_id)
             .await
@@ -1100,7 +1100,7 @@ pub enum SendPaymentError {
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(GatewayConnectionError),
+    GatewayConnectionError(GatewayRpcError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee of exceeds the limit")]
@@ -1125,7 +1125,7 @@ pub enum ReceiveError {
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(GatewayConnectionError),
+    GatewayConnectionError(GatewayRpcError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee exceeds the limit")]

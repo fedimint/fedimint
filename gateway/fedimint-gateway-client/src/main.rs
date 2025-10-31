@@ -11,7 +11,7 @@ use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
 use fedimint_core::envs::FM_IROH_DNS_ENV;
 use fedimint_core::util::SafeUrl;
-use fedimint_gateway_client::GatewayRpcClient;
+use fedimint_ln_common::client::GatewayRpcClient;
 use fedimint_logging::TracingSetup;
 use general_commands::GeneralCommands;
 use lightning_commands::LightningCommands;

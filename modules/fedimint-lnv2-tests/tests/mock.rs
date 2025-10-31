@@ -10,10 +10,8 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use fedimint_ln_common::bitcoin;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
-use fedimint_lnv2_common::gateway_api::{
-    GatewayConnection, GatewayConnectionError, PaymentFee, RoutingInfo,
-};
-use fedimint_lnv2_common::{Bolt11InvoiceDescription, LightningInvoice};
+use fedimint_lnv2_common::gateway_api::{GatewayConnection, PaymentFee, RoutingInfo};
+use fedimint_lnv2_common::{Bolt11InvoiceDescription, GatewayRpcError, LightningInvoice};
 use lightning_invoice::{
     Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentSecret,
 };
@@ -89,7 +87,7 @@ impl GatewayConnection for MockGatewayConnection {
         &self,
         _gateway_api: SafeUrl,
         _federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
+    ) -> Result<Option<RoutingInfo>, GatewayRpcError> {
         Ok(Some(RoutingInfo {
             lightning_public_key: self.keypair.public_key(),
             module_public_key: self.keypair.public_key(),
@@ -109,7 +107,7 @@ impl GatewayConnection for MockGatewayConnection {
         invoice_amount: Amount,
         _description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -> Result<Bolt11Invoice, GatewayConnectionError> {
+    ) -> Result<Bolt11Invoice, GatewayRpcError> {
         let payment_hash = match contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => panic!("PaymentImage is not a payment hash"),
@@ -135,11 +133,11 @@ impl GatewayConnection for MockGatewayConnection {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         _auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayConnectionError> {
+    ) -> Result<Result<[u8; 32], Signature>, GatewayRpcError> {
         match invoice {
             LightningInvoice::Bolt11(invoice) => {
                 if *invoice.payment_secret() == PaymentSecret(GATEWAY_CRASH_PAYMENT_SECRET) {
-                    return Err(GatewayConnectionError::Unreachable(String::new()));
+                    return Err(GatewayRpcError::RequestError(String::new()));
                 }
 
                 if *invoice.payment_secret() == PaymentSecret(UNPAYABLE_PAYMENT_SECRET) {

@@ -7,9 +7,9 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
+use fedimint_ln_common::client::{GatewayRpcClient, GatewayRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::contracts::{IncomingContract, OutgoingContract};
 use crate::endpoint_constants::{
@@ -23,7 +23,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayConnectionError>;
+    ) -> Result<Option<RoutingInfo>, GatewayRpcError>;
 
     async fn bolt11_invoice(
         &self,
@@ -33,7 +33,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
-    ) -> Result<Bolt11Invoice, GatewayConnectionError>;
+    ) -> Result<Bolt11Invoice, GatewayRpcError>;
 
     async fn send_payment(
         &self,
@@ -43,15 +43,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayConnectionError>;
-}
-
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
-pub enum GatewayConnectionError {
-    #[error("The gateway is unreachable: {0}")]
-    Unreachable(String),
-    #[error("The gateway returned an error for this request: {0}")]
-    Request(String),
+    ) -> Result<Result<[u8; 32], Signature>, GatewayRpcError>;
 }
 
 #[derive(Debug)]
@@ -63,18 +55,11 @@ impl GatewayConnection for RealGatewayConnection {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
-        let endpoint = gateway_api.join(ROUTING_INFO_ENDPOINT).unwrap();
-
-        reqwest::Client::new()
-            .post(endpoint.as_str())
-            .json(federation_id)
-            .send()
+    ) -> Result<Option<RoutingInfo>, GatewayRpcError> {
+        let client = GatewayRpcClient::new(gateway_api, None, None, None)
             .await
-            .map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))?
-            .json::<Option<RoutingInfo>>()
-            .await
-            .map_err(|e| GatewayConnectionError::Request(e.to_string()))
+            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+        client.call_post(ROUTING_INFO_ENDPOINT, federation_id).await
     }
 
     async fn bolt11_invoice(
@@ -85,24 +70,22 @@ impl GatewayConnection for RealGatewayConnection {
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
-    ) -> Result<Bolt11Invoice, GatewayConnectionError> {
-        let endpoint = gateway_api.join(CREATE_BOLT11_INVOICE_ENDPOINT).unwrap();
-
-        reqwest::Client::new()
-            .post(endpoint.as_str())
-            .json(&CreateBolt11InvoicePayload {
-                federation_id,
-                contract,
-                amount,
-                description,
-                expiry_secs,
-            })
-            .send()
+    ) -> Result<Bolt11Invoice, GatewayRpcError> {
+        let client = GatewayRpcClient::new(gateway_api, None, None, None)
             .await
-            .map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))?
-            .json::<Bolt11Invoice>()
+            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+        client
+            .call_post(
+                CREATE_BOLT11_INVOICE_ENDPOINT,
+                CreateBolt11InvoicePayload {
+                    federation_id,
+                    contract,
+                    amount,
+                    description,
+                    expiry_secs,
+                },
+            )
             .await
-            .map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 
     async fn send_payment(
@@ -113,24 +96,22 @@ impl GatewayConnection for RealGatewayConnection {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayConnectionError> {
-        let endpoint = gateway_api.join(SEND_PAYMENT_ENDPOINT).unwrap();
-
-        reqwest::Client::new()
-            .post(endpoint.as_str())
-            .json(&SendPaymentPayload {
-                federation_id,
-                outpoint,
-                contract,
-                invoice,
-                auth,
-            })
-            .send()
+    ) -> Result<Result<[u8; 32], Signature>, GatewayRpcError> {
+        let client = GatewayRpcClient::new(gateway_api, None, None, None)
             .await
-            .map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))?
-            .json::<Result<[u8; 32], Signature>>()
+            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+        client
+            .call_post(
+                SEND_PAYMENT_ENDPOINT,
+                SendPaymentPayload {
+                    federation_id,
+                    outpoint,
+                    contract,
+                    invoice,
+                    auth,
+                },
+            )
             .await
-            .map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 }
 

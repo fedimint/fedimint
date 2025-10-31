@@ -8,9 +8,8 @@ use axum::{Extension, Json};
 use bitcoin::hashes::sha256;
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
-use fedimint_gateway_common::{
-    FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse, STOP_ENDPOINT,
-};
+use fedimint_gateway_common::STOP_ENDPOINT;
+use fedimint_ln_common::iroh::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
 use fedimint_logging::LOG_GATEWAY;
 use iroh::endpoint::Incoming;
 use reqwest::StatusCode;
