@@ -27,6 +27,7 @@ fedimint-logging = { workspace = true }
 iroh = { workspace = true }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde-big-array = { workspace = true }
 serde_json = { workspace = true }

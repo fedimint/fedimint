@@ -5,10 +5,14 @@ use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::time::now;
 use fedimint_eventlog::{EventKind, EventLogId};
-use fedimint_gateway_client::GatewayRpcClient;
+use fedimint_gateway_client::{
+    connect_federation, get_balances, get_info, get_mnemonic, leave_federation, payment_log,
+    payment_summary, stop,
+};
 use fedimint_gateway_common::{
     ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
 };
+use fedimint_ln_common::client::GatewayRpcClient;
 
 use crate::print_response;
 
@@ -81,11 +85,11 @@ impl GeneralCommands {
                 println!("{}", fedimint_build_code_version_env!());
             }
             Self::Info => {
-                let response = client.get_info().await?;
+                let response = get_info(client).await?;
                 print_response(response);
             }
             Self::GetBalances => {
-                let response = client.get_balances().await?;
+                let response = get_balances(client).await?;
                 print_response(response);
             }
             Self::ConnectFed {
@@ -94,31 +98,31 @@ impl GeneralCommands {
                 use_tor,
                 recover,
             } => {
-                let response = client
-                    .connect_federation(ConnectFedPayload {
+                let response = connect_federation(
+                    client,
+                    ConnectFedPayload {
                         invite_code,
                         #[cfg(feature = "tor")]
                         use_tor,
                         #[cfg(not(feature = "tor"))]
                         use_tor: None,
                         recover,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
 
                 print_response(response);
             }
             Self::LeaveFed { federation_id } => {
-                let response = client
-                    .leave_federation(LeaveFedPayload { federation_id })
-                    .await?;
+                let response = leave_federation(client, LeaveFedPayload { federation_id }).await?;
                 print_response(response);
             }
             Self::Seed => {
-                let response = client.get_mnemonic().await?;
+                let response = get_mnemonic(client).await?;
                 print_response(response);
             }
             Self::Stop => {
-                client.stop().await?;
+                stop(client).await?;
             }
             Self::PaymentLog {
                 end_position,
@@ -126,14 +130,16 @@ impl GeneralCommands {
                 federation_id,
                 event_kinds,
             } => {
-                let payment_log = client
-                    .payment_log(PaymentLogPayload {
+                let payment_log = payment_log(
+                    client,
+                    PaymentLogPayload {
                         end_position,
                         pagination_size,
                         federation_id,
                         event_kinds,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 print_response(payment_log);
             }
             Self::CreatePasswordHash { password, cost } => print_response(
@@ -157,12 +163,14 @@ impl GeneralCommands {
                     .try_into()?;
                 let end_millis = end.unwrap_or(now_millis);
                 let start_millis = start.unwrap_or(one_day_ago_millis);
-                let payment_summary = client
-                    .payment_summary(PaymentSummaryPayload {
+                let payment_summary = payment_summary(
+                    client,
+                    PaymentSummaryPayload {
                         start_millis,
                         end_millis,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 print_response(payment_summary);
             }
         }
