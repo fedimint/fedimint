@@ -453,6 +453,21 @@ pub enum MintOperationMetaVariant {
         requested_amount: Amount,
         oob_notes: OOBNotes,
     },
+    /// Operation created on wallet recovery reissuing all recovered ecash
+    /// notes.
+    ///
+    /// When recovering ecash from the user's seed we can't tell if they have
+    /// spent it out of band/shared some notes with others (this isn't part of
+    /// the public mint log). This leads to a problem when a user recovers their
+    /// wallet, the recipioent of OOB ecash claims their notes (that were also
+    /// recovered by the sender) and now the recovered user/sender has invalid
+    /// ecash in their wallet. The only way to reliably prevent this is to
+    /// reissue these notes.
+    Recovery {
+        /// Out points of all the primary movdule outputs (typically new ecash
+        /// notes) issued when reissuing recovered ecash.
+        out_point_ranges: Vec<OutPointRange>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -1559,6 +1574,7 @@ impl MintClientModule {
                 (txid, out_points)
             }
             MintOperationMetaVariant::SpendOOB { .. } => bail!("Operation is not a reissuance"),
+            MintOperationMetaVariant::Recovery { .. } => unimplemented!(),
         };
 
         let client_ctx = self.client_ctx.clone();
