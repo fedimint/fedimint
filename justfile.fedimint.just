@@ -76,6 +76,7 @@ check-wasm *EXTRA_ARGS:
     nix develop .#crossWasm -c \
       cargo check --target wasm32-unknown-unknown \
         --package fedimint-client \
+        --package fedimint-client-wasm \
         --package fedimint-wasm-tests \
         {{EXTRA_ARGS}}
 
