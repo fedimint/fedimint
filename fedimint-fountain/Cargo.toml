@@ -1,0 +1,23 @@
+[package]
+authors = { workspace = true }
+description = "Fountain encoder/decoder for splitting and recombining byte payloads"
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-fountain"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lib]
+name = "fedimint_fountain"
+path = "./src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+bitcoin_hashes = { workspace = true }
+fedimint-core = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+
+[lints]
+workspace = true
