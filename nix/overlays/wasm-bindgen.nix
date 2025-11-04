@@ -15,7 +15,6 @@ final: prev: {
     ]
     ++ final.lib.optionals final.stdenv.isDarwin [
       final.curl
-      final.darwin.apple_sdk.frameworks.Security
     ];
 
     nativeCheckInputs = [ final.nodejs ];
