@@ -96,7 +96,7 @@ impl ClientHandle {
     /// Notably it will re-use the original [`fedimint_core::db::Database`]
     /// handle, and not attempt to open it again.
     pub async fn restart(self) -> anyhow::Result<ClientHandle> {
-        let (builder, config, api_secret, root_secret, db) = {
+        let (builder, config, api_secret, root_secret, db, endpoints) = {
             let client = self
                 .inner
                 .as_ref()
@@ -106,13 +106,23 @@ impl ClientHandle {
             let api_secret = client.api_secret.clone();
             let root_secret = client.root_secret.clone();
             let db = client.db().clone();
+            let endpoints = client.endpoints().clone();
 
-            (builder, config, api_secret, root_secret, db)
+            (builder, config, api_secret, root_secret, db, endpoints)
         };
         self.shutdown().await;
 
         builder
-            .build(db, root_secret, config, api_secret, false, None, None)
+            .build(
+                endpoints,
+                db,
+                root_secret,
+                config,
+                api_secret,
+                false,
+                None,
+                None,
+            )
             .await
     }
 }

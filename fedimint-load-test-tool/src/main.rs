@@ -20,6 +20,7 @@ use common::{
 };
 use devimint::cmd;
 use devimint::util::GatewayLndCli;
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::Amount;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
@@ -307,8 +308,10 @@ async fn main() -> anyhow::Result<()> {
             timeout_secs,
             limit_endpoints,
         } => {
+            let connectors = ConnectorRegistry::build_from_client_env()?.bind().await?;
             let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
             test_connect_raw_client(
+                &connectors,
                 invite_code,
                 opts.users,
                 Duration::from_secs(duration_secs),
@@ -319,8 +322,9 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
         Command::TestDownload { invite_code } => {
+            let connectors = ConnectorRegistry::build_from_client_env()?.bind().await?;
             let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
-            test_download_config(&invite_code, opts.users, &event_sender.clone())
+            test_download_config(&connectors, &invite_code, opts.users, &event_sender.clone())
         }
         Command::LoadTest(args) => {
             let invite_code = invite_code_or_fallback(args.invite_code).await;
@@ -1058,18 +1062,20 @@ async fn client_create_invoice(
 }
 
 fn test_download_config(
+    endpoints: &ConnectorRegistry,
     invite_code: &InviteCode,
     users: u16,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> Vec<BoxFuture<'static, anyhow::Result<()>>> {
     (0..users)
-        .map(|_| {
+        .map(move |_| {
             let invite_code = invite_code.clone();
             let event_sender = event_sender.clone();
+            let endpoints = endpoints.clone();
             let f: BoxFuture<_> = Box::pin(async move {
                 let m = fedimint_core::time::now();
                 let _ = fedimint_api_client::api::net::ConnectorType::default()
-                    .download_from_invite_code(&invite_code, false, false)
+                    .download_from_invite_code(&endpoints, &invite_code)
                     .await?;
                 event_sender.send(MetricEvent {
                     name: "download_client_config".into(),
@@ -1083,6 +1089,7 @@ fn test_download_config(
 }
 
 async fn test_connect_raw_client(
+    endpoints: &ConnectorRegistry,
     invite_code: InviteCode,
     users: u16,
     duration: Duration,
@@ -1094,7 +1101,7 @@ async fn test_connect_raw_client(
     use jsonrpsee_ws_client::WsClientBuilder;
 
     let (mut cfg, _) = fedimint_api_client::api::net::ConnectorType::default()
-        .download_from_invite_code(&invite_code, false, false)
+        .download_from_invite_code(endpoints, &invite_code)
         .await?;
 
     if let Some(limit_endpoints) = limit_endpoints {

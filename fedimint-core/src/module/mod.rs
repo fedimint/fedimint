@@ -321,6 +321,8 @@ pub struct IrohApiRequest {
 
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
 
+// TODO: either nuke or turn all `api_secret: Option<String>` into `api_secret:
+// Option<ApiAuth>`
 /// Authentication uses the hashed user password in PHC format
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApiAuth(pub String);

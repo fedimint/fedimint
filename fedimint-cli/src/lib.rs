@@ -32,7 +32,9 @@ use envs::FM_USE_TOR_ENV;
 use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::ConnectorType;
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
+use fedimint_api_client::api::{
+    ConnectorRegistry, DynGlobalApi, FederationApiExt, FederationError,
+};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::module::init::ClientModuleInit;
@@ -286,11 +288,14 @@ impl Opts {
     async fn admin_client(
         &self,
         peer_urls: &BTreeMap<PeerId, SafeUrl>,
-        api_secret: &Option<String>,
+        api_secret: Option<&str>,
     ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
 
         DynGlobalApi::new_admin(
+            self.make_endpoints().await.map_err(|e| CliError {
+                error: e.to_string(),
+            })?,
             our_id,
             peer_urls
                 .get(&our_id)
@@ -298,13 +303,17 @@ impl Opts {
                 .context("Our peer URL not found in config")
                 .map_err_cli()?,
             api_secret,
-            self.iroh_enable_dht(),
-            self.iroh_enable_next(),
         )
-        .await
-        .map_err(|e| CliError {
-            error: e.to_string(),
-        })
+        .map_err_cli()
+    }
+
+    async fn make_endpoints(&self) -> Result<ConnectorRegistry, anyhow::Error> {
+        ConnectorRegistry::build_from_client_defaults()
+            .iroh_next(self.iroh_enable_next())
+            .iroh_pkarr_dht(self.iroh_enable_dht())
+            .ws_force_tor(self.use_tor)
+            .bind()
+            .await
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
@@ -736,7 +745,7 @@ impl FedimintCli {
         let mnemonic = load_or_generate_mnemonic(&db).await?;
 
         let client = client_builder
-            .preview(&invite_code)
+            .preview(cli.make_endpoints().await.map_err_cli()?, &invite_code)
             .await
             .map_err_cli()?
             .join(
@@ -774,6 +783,7 @@ impl FedimintCli {
 
         let client = client_builder
             .open(
+                cli.make_endpoints().await.map_err_cli()?,
                 db,
                 RootSecret::StandardDoubleDerive(Bip39RootSecretStrategy::<12>::to_root_secret(
                     &mnemonic,
@@ -815,7 +825,7 @@ impl FedimintCli {
             Bip39RootSecretStrategy::<12>::to_root_secret(&mnemonic),
         );
         let client = builder
-            .preview(&invite_code)
+            .preview(cli.make_endpoints().await.map_err_cli()?, &invite_code)
             .await
             .map_err_cli()?
             .recover(db, root_secret, None)
@@ -887,7 +897,10 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let audit = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .admin_client(
+                        &client.get_peer_urls().await,
+                        client.api_secret().as_deref(),
+                    )
                     .await?
                     .audit(cli.auth()?)
                     .await?;
@@ -899,7 +912,10 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let status = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .admin_client(
+                        &client.get_peer_urls().await,
+                        client.api_secret().as_deref(),
+                    )
                     .await?
                     .status()
                     .await?;
@@ -911,7 +927,10 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let guardian_config_backup = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .admin_client(
+                        &client.get_peer_urls().await,
+                        client.api_secret().as_deref(),
+                    )
                     .await?
                     .guardian_config_backup(cli.auth()?)
                     .await?;
@@ -945,7 +964,7 @@ impl FedimintCli {
                         &override_url
                             .and_then(|url| Some(vec![(cli.our_id?, url)].into_iter().collect()))
                             .unwrap_or(client.get_peer_urls().await),
-                        client.api_secret(),
+                        client.api_secret().as_deref(),
                     )
                     .await?
                     .sign_api_announcement(api_url, cli.auth()?)
@@ -958,10 +977,13 @@ impl FedimintCli {
             Command::Admin(AdminCmd::Shutdown { session_idx }) => {
                 let client = self.client_open(&cli).await?;
 
-                cli.admin_client(&client.get_peer_urls().await, client.api_secret())
-                    .await?
-                    .shutdown(Some(session_idx), cli.auth()?)
-                    .await?;
+                cli.admin_client(
+                    &client.get_peer_urls().await,
+                    client.api_secret().as_deref(),
+                )
+                .await?
+                .shutdown(Some(session_idx), cli.auth()?)
+                .await?;
 
                 Ok(CliOutput::Raw(json!(null)))
             }
@@ -969,7 +991,10 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let backup_statistics = cli
-                    .admin_client(&client.get_peer_urls().await, client.api_secret())
+                    .admin_client(
+                        &client.get_peer_urls().await,
+                        client.api_secret().as_deref(),
+                    )
                     .await?
                     .backup_statistics(cli.auth()?)
                     .await?;
@@ -981,10 +1006,13 @@ impl FedimintCli {
             Command::Admin(AdminCmd::ChangePassword { new_password }) => {
                 let client = self.client_open(&cli).await?;
 
-                cli.admin_client(&client.get_peer_urls().await, client.api_secret())
-                    .await?
-                    .change_password(cli.auth()?, &new_password)
-                    .await?;
+                cli.admin_client(
+                    &client.get_peer_urls().await,
+                    client.api_secret().as_deref(),
+                )
+                .await?
+                .change_password(cli.auth()?, &new_password)
+                .await?;
 
                 warn!(target: LOG_CLIENT, "Password changed, please restart fedimintd manually");
 
@@ -1380,13 +1408,8 @@ impl FedimintCli {
         cli: Opts,
         args: SetupAdminArgs,
     ) -> anyhow::Result<Value> {
-        let client = DynGlobalApi::from_setup_endpoint(
-            args.endpoint.clone(),
-            &None,
-            cli.iroh_enable_dht(),
-            cli.iroh_enable_next(),
-        )
-        .await?;
+        let client =
+            DynGlobalApi::new_admin_setup(cli.make_endpoints().await?, args.endpoint.clone())?;
 
         match &args.subcommand {
             SetupAdminCmd::Status => {

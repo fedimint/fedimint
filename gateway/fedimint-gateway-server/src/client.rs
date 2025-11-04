@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ClientConfigKey;
 use fedimint_client::module_init::ClientModuleInitRegistry;
@@ -26,19 +27,21 @@ pub struct GatewayClientBuilder {
     work_dir: PathBuf,
     registry: ClientModuleInitRegistry,
     db_backend: DatabaseBackend,
+    connectors: ConnectorRegistry,
 }
 
 impl GatewayClientBuilder {
-    pub fn new(
+    pub async fn new(
         work_dir: PathBuf,
         registry: ClientModuleInitRegistry,
         db_backend: DatabaseBackend,
-    ) -> Self {
-        Self {
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            connectors: ConnectorRegistry::build_from_server_env()?.bind().await?,
             work_dir,
             registry,
             db_backend,
-        }
+        })
     }
 
     pub fn data_dir(&self) -> PathBuf {
@@ -105,7 +108,7 @@ impl GatewayClientBuilder {
             Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic),
         );
         let client = client_builder
-            .preview(&config.invite_code)
+            .preview(self.connectors.clone(), &config.invite_code)
             .await?
             .recover(db, root_secret, None)
             .await
@@ -161,10 +164,12 @@ impl GatewayClientBuilder {
         let client_builder = self.create_client_builder(&config, gateway).await?;
 
         if Client::is_initialized(&db).await {
-            client_builder.open(db, root_secret).await
+            client_builder
+                .open(self.connectors.clone(), db, root_secret)
+                .await
         } else {
             client_builder
-                .preview(&invite_code)
+                .preview(self.connectors.clone(), &invite_code)
                 .await?
                 .join(db, root_secret)
                 .await

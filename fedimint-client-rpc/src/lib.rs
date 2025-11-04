@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_stream::try_stream;
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::ClientModule;
 use fedimint_client::secret::RootSecretStrategy;
@@ -116,6 +117,8 @@ pub trait RpcResponseHandler: MaybeSend + MaybeSync {
 }
 
 pub struct RpcGlobalState {
+    /// Endpoints used for all global-state functionality
+    connectors: ConnectorRegistry,
     clients: Mutex<HashMap<String, ClientHandleArc>>,
     rpc_handles: std::sync::Mutex<HashMap<u64, AbortHandle>>,
     unified_database: Database,
@@ -127,8 +130,9 @@ pub struct HandledRpc<'a> {
 }
 
 impl RpcGlobalState {
-    pub fn new(unified_database: Database) -> Self {
+    pub fn new(connectors: ConnectorRegistry, unified_database: Database) -> Self {
         Self {
+            connectors,
             clients: Mutex::new(HashMap::new()),
             rpc_handles: std::sync::Mutex::new(HashMap::new()),
             unified_database,
@@ -180,6 +184,7 @@ impl RpcGlobalState {
     /// Handle joining federation using unified database
     async fn handle_join_federation(
         &self,
+
         invite_code: String,
         client_name: String,
         force_recover: bool,
@@ -204,7 +209,9 @@ impl RpcGlobalState {
             Some(preview) if preview.config().calculate_federation_id() == federation_id => preview,
             _ => {
                 let builder = Self::client_builder().await?;
-                builder.preview(&invite_code).await?
+                builder
+                    .preview(self.connectors.clone(), &invite_code)
+                    .await?
             }
         };
 
@@ -267,6 +274,7 @@ impl RpcGlobalState {
         let client = Arc::new(
             builder
                 .open(
+                    self.connectors.clone(),
                     client_db,
                     RootSecret::StandardDoubleDerive(federation_secret),
                 )
@@ -381,7 +389,7 @@ impl RpcGlobalState {
         let federation_id = invite.federation_id();
 
         let builder = Self::client_builder().await?;
-        let preview = builder.preview(&invite).await?;
+        let preview = builder.preview(self.connectors.clone(), &invite).await?;
 
         let json_config = preview.config().to_json();
         // Store in cache

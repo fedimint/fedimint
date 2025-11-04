@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, bail, ensure};
+use anyhow::{bail, ensure};
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt as _;
 use fedimint_api_client::api::global_api::with_request_hook::{
@@ -12,8 +12,7 @@ use fedimint_api_client::api::global_api::with_request_hook::{
 };
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynClientConnector, DynGlobalApi, FederationApiExt as _, ReconnectFederationApi,
-    make_admin_connector, make_connector,
+    ApiVersionSet, ConnectorRegistry, DynGlobalApi, FederationApi, FederationApiExt as _,
 };
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
@@ -123,7 +122,6 @@ pub struct ClientBuilder {
     stopped: bool,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
-    reuse_connector: Option<DynClientConnector>,
     iroh_enable_dht: bool,
     iroh_enable_next: bool,
 }
@@ -138,6 +136,7 @@ impl ClientBuilder {
         let meta_service = MetaService::new(LegacyMetaSource::default());
         let (log_event_added_transient_tx, _log_event_added_transient_rx) =
             broadcast::channel(1024);
+
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
             connector: ConnectorType::default(),
@@ -146,7 +145,6 @@ impl ClientBuilder {
             meta_service,
             log_event_added_transient_tx,
             request_hook: Arc::new(|api| api),
-            reuse_connector: None,
             iroh_enable_dht: true,
             iroh_enable_next: true,
         }
@@ -162,7 +160,6 @@ impl ClientBuilder {
             connector: client.connector,
             log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
             request_hook: client.request_hook.clone(),
-            reuse_connector: Some(client.api.connector().clone()),
             iroh_enable_dht: client.iroh_enable_dht,
             iroh_enable_next: client.iroh_enable_next,
         }
@@ -181,7 +178,6 @@ impl ClientBuilder {
     pub fn stopped(&mut self) {
         self.stopped = true;
     }
-
     /// Build the [`Client`] with a custom wrapper around its api request logic
     ///
     /// This is intended to be used by downstream applications, e.g. to:
@@ -281,6 +277,7 @@ impl ClientBuilder {
     #[allow(clippy::too_many_arguments)]
     async fn init(
         self,
+        connectors: ConnectorRegistry,
         db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
         config: ClientConfig,
@@ -330,6 +327,7 @@ impl ClientBuilder {
 
         let stopped = self.stopped;
         self.build(
+            connectors,
             db_no_decoders,
             pre_root_secret,
             config,
@@ -341,10 +339,14 @@ impl ClientBuilder {
         .await
     }
 
-    pub async fn preview(self, invite_code: &InviteCode) -> anyhow::Result<ClientPreview> {
+    pub async fn preview(
+        self,
+        connectors: ConnectorRegistry,
+        invite_code: &InviteCode,
+    ) -> anyhow::Result<ClientPreview> {
         let (config, api) = self
             .connector
-            .download_from_invite_code(invite_code, self.iroh_enable_dht, self.iroh_enable_next)
+            .download_from_invite_code(&connectors, invite_code)
             .await?;
 
         let prefetch_api_announcements =
@@ -373,6 +375,7 @@ impl ClientBuilder {
                 });
 
         self.preview_inner(
+            connectors,
             config,
             invite_code.api_secret(),
             Some(api),
@@ -387,32 +390,31 @@ impl ClientBuilder {
     /// to speed up the final join.
     pub async fn preview_with_existing_config(
         self,
+        connectors: ConnectorRegistry,
         config: ClientConfig,
         api_secret: Option<String>,
-        reuse_api: Option<DynGlobalApi>,
     ) -> anyhow::Result<ClientPreview> {
-        self.preview_inner(config, api_secret, reuse_api, None)
+        self.preview_inner(connectors, config, api_secret, None, None)
             .await
     }
 
     async fn preview_inner(
-        mut self,
+        self,
+        connectors: ConnectorRegistry,
         config: ClientConfig,
         api_secret: Option<String>,
-        reuse_api: Option<DynGlobalApi>,
+        prefetch_api: Option<DynGlobalApi>,
         prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     ) -> anyhow::Result<ClientPreview> {
-        let preview_prefetch_api_version_set = if let Some(api) = reuse_api {
-            self.reuse_connector = Some(api.connector().clone());
-
-            Some(JitTry::new_try({
+        let preview_prefetch_api_version_set = prefetch_api.map(|api| {
+            JitTry::new_try({
                 let config = config.clone();
                 || async move { Client::fetch_common_api_versions(&config, &api).await }
-            }))
-        } else {
-            None
-        };
+            })
+        });
+
         Ok(ClientPreview {
+            connectors,
             inner: self,
             config,
             api_secret,
@@ -423,6 +425,7 @@ impl ClientBuilder {
 
     pub async fn open(
         self,
+        connectors: ConnectorRegistry,
         db_no_decoders: Database,
         pre_root_secret: RootSecret,
     ) -> anyhow::Result<ClientHandle> {
@@ -469,6 +472,7 @@ impl ClientBuilder {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let client = self
             .build_stopped(
+                connectors,
                 db_no_decoders,
                 pre_root_secret,
                 &config,
@@ -489,6 +493,7 @@ impl ClientBuilder {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn build(
         self,
+        connectors: ConnectorRegistry,
         db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
         config: ClientConfig,
@@ -503,6 +508,7 @@ impl ClientBuilder {
         let request_hook = self.request_hook.clone();
         let client = self
             .build_stopped(
+                connectors,
                 db_no_decoders,
                 pre_root_secret,
                 &config,
@@ -525,6 +531,7 @@ impl ClientBuilder {
     #[allow(clippy::too_many_arguments)]
     async fn build_stopped(
         self,
+        connectors: ConnectorRegistry,
         db_no_decoders: Database,
         pre_root_secret: DerivableSecret,
         config: &ClientConfig,
@@ -551,46 +558,21 @@ impl ClientBuilder {
         let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
         let api = match self.admin_creds.as_ref() {
-            Some(admin_creds) => {
-                let connector = make_admin_connector(
-                    admin_creds.peer_id,
-                    peer_urls
-                        .into_iter()
-                        .find_map(|(peer, api_url)| {
-                            (admin_creds.peer_id == peer).then_some(api_url)
-                        })
-                        .context("Admin creds should match a peer")?,
-                    &api_secret,
-                    self.iroh_enable_dht,
-                    self.iroh_enable_next,
-                )
-                .await?;
-                ReconnectFederationApi::new_admin(connector, admin_creds.peer_id)
-                    .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
-                    .with_request_hook(&request_hook)
-                    .with_cache()
-                    .into()
-            }
-            None => {
-                let connector = if let Some(connector) = self.reuse_connector.clone()
-                    && connector.peers().len() == peer_urls.len()
-                {
-                    connector
-                } else {
-                    make_connector(
-                        peer_urls,
-                        &api_secret,
-                        self.iroh_enable_dht,
-                        self.iroh_enable_next,
-                    )
-                    .await?
-                };
-                ReconnectFederationApi::new(connector, None)
-                    .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
-                    .with_request_hook(&request_hook)
-                    .with_cache()
-                    .into()
-            }
+            Some(admin_creds) => FederationApi::new(
+                connectors.clone(),
+                peer_urls,
+                Some(admin_creds.peer_id),
+                Some(&admin_creds.auth.0),
+            )
+            .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+            .with_request_hook(&request_hook)
+            .with_cache()
+            .into(),
+            None => FederationApi::new(connectors.clone(), peer_urls, None, api_secret.as_deref())
+                .with_client_ext(db.clone(), log_ordering_wakeup_tx.clone())
+                .with_request_hook(&request_hook)
+                .with_cache()
+                .into(),
         };
 
         let task_group = TaskGroup::new();
@@ -898,6 +880,7 @@ impl ClientBuilder {
             api_secret,
             decoders,
             db: db.clone(),
+            connectors,
             federation_id: fed_id,
             federation_config_meta: config.global.meta,
             primary_modules,
@@ -1141,9 +1124,14 @@ impl ClientBuilder {
     }
 }
 
+/// An intermediate step before Client joining or recovering
+///
+/// Meant to support showing user some initial information about the Federation
+/// before actually joining.
 pub struct ClientPreview {
     inner: ClientBuilder,
     config: ClientConfig,
+    connectors: ConnectorRegistry,
     api_secret: Option<String>,
     prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     preview_prefetch_api_version_set:
@@ -1182,6 +1170,7 @@ impl ClientPreview {
     /// # use fedimint_client::{Client, ClientBuilder, RootSecret};
     /// # use fedimint_core::db::Database;
     /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
+    /// # use fedimint_api_client::api::ConnectorRegistry;
     /// #
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {
@@ -1209,6 +1198,7 @@ impl ClientPreview {
     /// // let db_path = format!("./path/to/db/{}", config.federation_id());
     /// // let db = RocksDb::open(db_path).expect("error opening DB");
     /// # let db: Database = unimplemented!();
+    /// # let connectors: ConnectorRegistry = unimplemented!();
     ///
     /// let preview = Client::builder().await
     ///     // Mount the modules the client should support:
@@ -1216,7 +1206,7 @@ impl ClientPreview {
     ///     // .with_module(MintClientInit)
     ///     // .with_module(WalletClientInit::default())
     ///      .expect("Error building client")
-    ///      .preview(&invite_code).await?;
+    ///      .preview(connectors, &invite_code).await?;
     ///
     /// println!(
     ///     "The federation name is: {}",
@@ -1242,6 +1232,7 @@ impl ClientPreview {
         let client = self
             .inner
             .init(
+                self.connectors,
                 db_no_decoders,
                 pre_root_secret,
                 self.config,
@@ -1277,6 +1268,7 @@ impl ClientPreview {
         let client = self
             .inner
             .init(
+                self.connectors,
                 db_no_decoders,
                 pre_root_secret,
                 self.config,
@@ -1298,18 +1290,17 @@ impl ClientPreview {
         pre_root_secret: RootSecret,
     ) -> anyhow::Result<Option<ClientBackup>> {
         let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
-        let api = DynGlobalApi::from_endpoints(
+        let api = DynGlobalApi::new(
+            self.connectors.clone(),
             // TODO: change join logic to use FederationId v2
             self.config
                 .global
                 .api_endpoints
                 .iter()
-                .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
-            &self.api_secret,
-            self.inner.iroh_enable_dht,
-            self.inner.iroh_enable_next,
-        )
-        .await?;
+                .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone()))
+                .collect(),
+            self.api_secret.as_deref(),
+        )?;
 
         Client::download_backup_from_federation_static(
             &api,

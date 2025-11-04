@@ -2706,6 +2706,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-rustls 0.26.2",
+ "tor-rtcompat",
  "tracing",
  "url",
  "webpki-roots 1.0.2",
@@ -2872,6 +2873,7 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
+ "fedimint-api-client",
  "fedimint-client-rpc",
  "fedimint-core",
  "fedimint-cursed-redb",

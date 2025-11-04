@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{
@@ -49,13 +49,12 @@ pub async fn start_api_announcement_service(
 
     let db = db.clone();
     // FIXME: (@leonardo) how should we handle the connector here ?
-    let api_client = DynGlobalApi::from_endpoints(
+    let api_client = DynGlobalApi::new(
+        // TODO: get from somewhere/unify?
+        ConnectorRegistry::build_from_server_env()?.bind().await?,
         get_api_urls(&db, &cfg.consensus).await,
-        &api_secret,
-        true,
-        true,
-    )
-    .await?;
+        api_secret.as_deref(),
+    )?;
 
     let our_peer_id = cfg.local.identity;
     tg.spawn_cancellable("submit-api-url-announcement", async move {

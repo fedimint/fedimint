@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{Client, RootSecret};
 use fedimint_core::db::Database;
@@ -41,9 +42,12 @@ async fn make_client_builder() -> Result<(fedimint_client::ClientBuilder, Databa
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
     let (mut builder, db) = make_client_builder().await?;
     let client_secret = load_or_generate_mnemonic(&db).await?;
+    let connectors = ConnectorRegistry::build_from_testing_defaults()
+        .bind()
+        .await?;
     builder.stopped();
     let client = builder
-        .preview(invite_code)
+        .preview(connectors, invite_code)
         .await?
         .join(
             db,

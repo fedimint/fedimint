@@ -1,11 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
+use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use async_trait::async_trait;
-use fedimint_core::PeerId;
 use fedimint_core::envs::parse_kv_list_from_env;
 use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::module::{
@@ -26,25 +26,24 @@ use tokio::sync::OnceCell;
 use tracing::{debug, trace, warn};
 use url::Url;
 
-use super::{DynClientConnection, IClientConnection, IClientConnector, PeerError, PeerResult};
+use super::{DynClientConnection, IClientConnection, PeerError, PeerResult};
 
-#[derive(Debug, Clone)]
-pub struct IrohConnector {
-    node_ids: BTreeMap<PeerId, NodeId>,
-    endpoint_stable: Endpoint,
-    endpoint_next: Option<iroh_next::Endpoint>,
+#[derive(Clone)]
+pub(crate) struct IrohEndpoint {
+    stable: iroh::endpoint::Endpoint,
+    next: Option<iroh_next::endpoint::Endpoint>,
 
     /// List of overrides to use when attempting to connect to given
     /// `NodeId`
     ///
     /// This is useful for testing, or forcing non-default network
     /// connectivity.
-    pub connection_overrides: BTreeMap<NodeId, NodeAddr>,
+    connection_overrides: BTreeMap<NodeId, NodeAddr>,
 
     /// Connection pool for stable endpoint connections
     connections_stable: Arc<tokio::sync::Mutex<HashMap<NodeId, Arc<OnceCell<Connection>>>>>,
 
-    /// Connection pool for next endpoint connections  
+    /// Connection pool for next endpoint connections
     connections_next: Arc<
         tokio::sync::Mutex<
             HashMap<iroh_next::NodeId, Arc<OnceCell<iroh_next::endpoint::Connection>>>,
@@ -52,51 +51,26 @@ pub struct IrohConnector {
     >,
 }
 
-impl IrohConnector {
-    #[cfg(not(target_family = "wasm"))]
-    fn spawn_connection_monitoring_stable(endpoint: &Endpoint, node_id: NodeId) {
-        if let Ok(mut conn_type_watcher) = endpoint.conn_type(node_id) {
-            #[allow(clippy::let_underscore_future)]
-            let _ = spawn("iroh connection (stable)", async move {
-                if let Ok(conn_type) = conn_type_watcher.get() {
-                    debug!(target: LOG_NET_IROH, %node_id, type = %conn_type, "Connection type (initial)");
-                }
-                while let Ok(event) = conn_type_watcher.updated().await {
-                    debug!(target: LOG_NET_IROH, %node_id, type = %event, "Connection type (changed)");
-                }
-            });
-        }
+impl fmt::Debug for IrohEndpoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IrohEndpoint")
+            .field("stable-id", &self.stable.node_id())
+            .field(
+                "next-id",
+                &self.next.as_ref().map(iroh_next::Endpoint::node_id),
+            )
+            .finish_non_exhaustive()
     }
+}
 
-    #[cfg(not(target_family = "wasm"))]
-    fn spawn_connection_monitoring_next(
-        endpoint: &iroh_next::Endpoint,
-        node_addr: &iroh_next::NodeAddr,
-    ) {
-        if let Some(mut conn_type_watcher) = endpoint.conn_type(node_addr.node_id) {
-            let node_id = node_addr.node_id;
-            #[allow(clippy::let_underscore_future)]
-            let _ = spawn("iroh connection (next)", async move {
-                if let Ok(conn_type) = conn_type_watcher.get() {
-                    debug!(target: LOG_NET_IROH, %node_id, type = %conn_type, "Connection type (initial)");
-                }
-                while let Ok(event) = conn_type_watcher.updated().await {
-                    debug!(target: LOG_NET_IROH, node_id = %node_id, %event, "Connection type changed");
-                }
-            });
-        }
-    }
-
+impl IrohEndpoint {
     pub async fn new(
-        peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
-        warn!(target: LOG_NET_IROH, "Iroh support is experimental");
-        let mut s =
-            Self::new_no_overrides(peers, iroh_dns, iroh_enable_dht, iroh_enable_next).await?;
+        let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, iroh_enable_next).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
@@ -106,7 +80,6 @@ impl IrohConnector {
     }
 
     pub async fn new_no_overrides(
-        peers: BTreeMap<PeerId, SafeUrl>,
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         iroh_enable_next: bool,
@@ -120,16 +93,6 @@ impl IrohConnector {
             },
             |url| vec![url.to_unsafe()],
         );
-        let node_ids = peers
-            .into_iter()
-            .map(|(peer, url)| {
-                let host = url.host_str().context("Url is missing host")?;
-
-                let node_id = PublicKey::from_str(host).context("Failed to parse node id")?;
-
-                Ok((peer, node_id))
-            })
-            .collect::<anyhow::Result<BTreeMap<PeerId, NodeId>>>()?;
 
         let endpoint_stable = Box::pin({
             let iroh_dns_servers = iroh_dns_servers.clone();
@@ -224,12 +187,11 @@ impl IrohConnector {
         };
 
         Ok(Self {
-            node_ids,
-            endpoint_stable,
-            endpoint_next,
+            stable: endpoint_stable,
+            next: endpoint_next,
             connection_overrides: BTreeMap::new(),
-            connections_stable: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-            connections_next: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            connections_stable: Arc::new(tokio::sync::Mutex::new(HashMap::default())),
+            connections_next: Arc::new(tokio::sync::Mutex::new(HashMap::default())),
         })
     }
 
@@ -238,6 +200,134 @@ impl IrohConnector {
         self
     }
 
+    pub fn node_id_from_url(url: &SafeUrl) -> anyhow::Result<NodeId> {
+        if url.scheme() != "iroh" {
+            bail!(
+                "Unsupported scheme: {}, passed to iroh endpoint handler",
+                url.scheme()
+            );
+        }
+        let host = url.host_str().context("Missing host string in Iroh URL")?;
+
+        let node_id = PublicKey::from_str(host).context("Failed to parse node id")?;
+
+        Ok(node_id)
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::api::Connector for IrohEndpoint {
+    async fn connect(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<DynClientConnection> {
+        if api_secret.is_some() {
+            // There seem to be no way to pass secret over current Iroh calling
+            // convention
+            PeerError::Connection(anyhow::format_err!(
+                "Iroh api secrets currently not supported"
+            ));
+        }
+        let node_id = Self::node_id_from_url(url).map_err(|source| PeerError::InvalidPeerUrl {
+            source,
+            url: url.to_owned(),
+        })?;
+        let mut futures = FuturesUnordered::<
+            Pin<Box<dyn Future<Output = (PeerResult<DynClientConnection>, &'static str)> + Send>>,
+        >::new();
+        let connection_override = self.connection_overrides.get(&node_id).cloned();
+
+        // Use connection pool for stable endpoint
+        let self_clone = self.clone();
+        futures.push(Box::pin({
+            let connection_override = connection_override.clone();
+            async move {
+                (
+                    self_clone
+                        .get_or_create_connection_stable(node_id, connection_override)
+                        .await
+                        .map(super::IClientConnection::into_dyn),
+                    "stable",
+                )
+            }
+        }));
+
+        // Use connection pool for next endpoint if available
+        if let Some(endpoint_next) = &self.next {
+            let self_clone = self.clone();
+            let endpoint_next = endpoint_next.clone();
+            futures.push(Box::pin(async move {
+                (
+                    self_clone
+                        .get_or_create_connection_next(&endpoint_next, node_id, connection_override)
+                        .await
+                        .map(super::IClientConnection::into_dyn),
+                    "next",
+                )
+            }));
+        }
+
+        // Remember last error, so we have something to return if
+        // neither connection works.
+        let mut prev_err = None;
+
+        // Loop until first success, or running out of connections.
+        while let Some((result, iroh_stack)) = futures.next().await {
+            match result {
+                Ok(connection) => return Ok(connection),
+                Err(err) => {
+                    warn!(
+                        target: LOG_NET_IROH,
+                        err = %err.fmt_compact(),
+                        %iroh_stack,
+                        "Join error in iroh connection task"
+                    );
+                    prev_err = Some(err);
+                }
+            }
+        }
+
+        Err(prev_err.unwrap_or_else(|| {
+            PeerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
+        }))
+    }
+}
+
+impl IrohEndpoint {
+    #[cfg(not(target_family = "wasm"))]
+    fn spawn_connection_monitoring_stable(endpoint: &Endpoint, node_id: NodeId) {
+        if let Ok(mut conn_type_watcher) = endpoint.conn_type(node_id) {
+            #[allow(clippy::let_underscore_future)]
+            let _ = spawn("iroh connection (stable)", async move {
+                if let Ok(conn_type) = conn_type_watcher.get() {
+                    debug!(target: LOG_NET_IROH, %node_id, type = %conn_type, "Connection type (initial)");
+                }
+                while let Ok(event) = conn_type_watcher.updated().await {
+                    debug!(target: LOG_NET_IROH, %node_id, type = %event, "Connection type (changed)");
+                }
+            });
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn spawn_connection_monitoring_next(
+        endpoint: &iroh_next::Endpoint,
+        node_addr: &iroh_next::NodeAddr,
+    ) {
+        if let Some(mut conn_type_watcher) = endpoint.conn_type(node_addr.node_id) {
+            let node_id = node_addr.node_id;
+            #[allow(clippy::let_underscore_future)]
+            let _ = spawn("iroh connection (next)", async move {
+                if let Ok(conn_type) = conn_type_watcher.get() {
+                    debug!(target: LOG_NET_IROH, %node_id, type = %conn_type, "Connection type (initial)");
+                }
+                while let Ok(event) = conn_type_watcher.updated().await {
+                    debug!(target: LOG_NET_IROH, node_id = %node_id, %event, "Connection type changed");
+                }
+            });
+        }
+    }
     async fn get_or_create_connection_stable(
         &self,
         node_id: NodeId,
@@ -267,17 +357,17 @@ impl IrohConnector {
                 let conn = match node_addr.clone() {
                     Some(node_addr) => {
                         trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                        let conn = self.endpoint_stable
+                        let conn = self.stable
                             .connect(node_addr.clone(), FEDIMINT_API_ALPN)
                             .await;
 
                         #[cfg(not(target_family = "wasm"))]
                         if conn.is_ok() {
-                            Self::spawn_connection_monitoring_stable(&self.endpoint_stable, node_id);
+                            Self::spawn_connection_monitoring_stable(&self.stable, node_id);
                         }
                         conn
                     }
-                    None => self.endpoint_stable.connect(node_id, FEDIMINT_API_ALPN).await,
+                    None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
                 }.map_err(PeerError::Connection)?;
 
                 Ok(conn)
@@ -347,79 +437,6 @@ impl IrohConnector {
 
         trace!(target: LOG_NET_IROH, %node_id, "Using next connection");
         Ok(conn.clone())
-    }
-}
-
-#[async_trait]
-impl IClientConnector for IrohConnector {
-    fn peers(&self) -> BTreeSet<PeerId> {
-        self.node_ids.keys().copied().collect()
-    }
-
-    async fn connect(&self, peer_id: PeerId) -> PeerResult<DynClientConnection> {
-        let node_id = *self
-            .node_ids
-            .get(&peer_id)
-            .ok_or(PeerError::InvalidPeerId { peer_id })?;
-
-        let mut futures = FuturesUnordered::<
-            Pin<Box<dyn Future<Output = (PeerResult<DynClientConnection>, &'static str)> + Send>>,
-        >::new();
-        let connection_override = self.connection_overrides.get(&node_id).cloned();
-
-        // Use connection pool for stable endpoint
-        let self_clone = self.clone();
-        futures.push(Box::pin({
-            let connection_override = connection_override.clone();
-            async move {
-                (
-                    self_clone
-                        .get_or_create_connection_stable(node_id, connection_override)
-                        .await
-                        .map(super::IClientConnection::into_dyn),
-                    "stable",
-                )
-            }
-        }));
-
-        // Use connection pool for next endpoint if available
-        if let Some(endpoint_next) = &self.endpoint_next {
-            let self_clone = self.clone();
-            let endpoint_next = endpoint_next.clone();
-            futures.push(Box::pin(async move {
-                (
-                    self_clone
-                        .get_or_create_connection_next(&endpoint_next, node_id, connection_override)
-                        .await
-                        .map(super::IClientConnection::into_dyn),
-                    "next",
-                )
-            }));
-        }
-
-        // Remember last error, so we have something to return if
-        // neither connection works.
-        let mut prev_err = None;
-
-        // Loop until first success, or running out of connections.
-        while let Some((result, iroh_stack)) = futures.next().await {
-            match result {
-                Ok(connection) => return Ok(connection),
-                Err(err) => {
-                    warn!(
-                        target: LOG_NET_IROH,
-                        err = %err.fmt_compact(),
-                        %iroh_stack,
-                        "Join error in iroh connection task"
-                    );
-                    prev_err = Some(err);
-                }
-            }
-        }
-
-        Err(prev_err.unwrap_or_else(|| {
-            PeerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
-        }))
     }
 }
 

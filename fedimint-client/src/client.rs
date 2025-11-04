@@ -14,7 +14,8 @@ use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
+    ApiVersionSet, ConnectorRegistry, DynGlobalApi, FederationApiExt as _, FederationResult,
+    IGlobalFederationApi,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
@@ -130,6 +131,7 @@ pub struct Client {
     config: tokio::sync::RwLock<ClientConfig>,
     api_secret: Option<String>,
     decoders: ModuleDecoderRegistry,
+    connectors: ConnectorRegistry,
     db: Database,
     federation_id: FederationId,
     federation_config_meta: BTreeMap<String, String>,
@@ -313,6 +315,7 @@ impl Client {
         self.config.read().await.clone()
     }
 
+    // TODO: change to `-> Option<&str>`
     pub fn api_secret(&self) -> &Option<String> {
         &self.api_secret
     }
@@ -737,6 +740,10 @@ impl Client {
 
     pub fn db(&self) -> &Database {
         &self.db
+    }
+
+    pub fn endpoints(&self) -> &ConnectorRegistry {
+        &self.connectors
     }
 
     /// Returns a stream of transaction updates for the given operation id that

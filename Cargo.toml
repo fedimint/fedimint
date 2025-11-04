@@ -148,6 +148,7 @@ clap = { version = "4.5.41", features = ["derive", "env"] }
 clap_complete = "4.5.55"
 console-subscriber = "0.4.1"
 criterion = "0.5.1"
+tor-rtcompat = { version = "0.33.0" }
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
 # It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.
 curve25519-dalek = ">=4.1.3"

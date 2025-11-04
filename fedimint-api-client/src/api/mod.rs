@@ -6,12 +6,11 @@ pub mod net;
 use core::{fmt, panic};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
-use std::iter::once;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
+use anyhow::{Context, anyhow, bail};
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use arti_client::{TorAddr, TorClient, TorClientConfig};
 use async_channel::bounded;
@@ -27,9 +26,7 @@ use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{
-    FM_IROH_DNS_ENV, FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env,
-};
+use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -47,7 +44,7 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
-use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API, LOG_NET_WS};
+use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET, LOG_NET_API, LOG_NET_WS};
 use futures::channel::oneshot;
 use futures::future::pending;
 use futures::stream::FuturesUnordered;
@@ -72,6 +69,7 @@ use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::{TlsConnector, rustls::ClientConfig as TlsClientConfig};
 use tracing::{Instrument, debug, instrument, trace, trace_span, warn};
 
+use crate::api;
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
@@ -122,8 +120,6 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         method: &str,
         params: &ApiRequestErased,
     ) -> PeerResult<Value>;
-
-    fn connector(&self) -> &DynClientConnector;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -427,55 +423,41 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
-    pub async fn new_admin(
+    pub fn new(
+        connectors: ConnectorRegistry,
+        peers: BTreeMap<PeerId, SafeUrl>,
+        api_secret: Option<&str>,
+    ) -> anyhow::Result<Self> {
+        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
+            connectors, peers, None, api_secret,
+        ))
+        .into())
+    }
+    pub fn new_admin(
+        connectors: ConnectorRegistry,
         peer: PeerId,
         url: SafeUrl,
-        api_secret: &Option<String>,
-        iroh_enable_dht: bool,
-        iroh_enable_next: bool,
+        api_secret: Option<&str>,
     ) -> anyhow::Result<DynGlobalApi> {
-        let connector =
-            make_admin_connector(peer, url, api_secret, iroh_enable_dht, iroh_enable_next).await?;
-        Ok(
-            GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, Some(peer)))
-                .into(),
-        )
+        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
+            connectors,
+            [(peer, url)].into(),
+            Some(peer),
+            api_secret,
+        ))
+        .into())
     }
 
-    pub fn new(connector: DynClientConnector) -> anyhow::Result<Self> {
-        Ok(GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, None)).into())
-    }
-    // FIXME: (@leonardo) Should we have the option to do DKG and config related
-    // actions through Tor ? Should we add the `Connector` choice to
-    // ConfigParams then ?
-    pub async fn from_setup_endpoint(
-        url: SafeUrl,
-        api_secret: &Option<String>,
-        iroh_enable_dht: bool,
-        iroh_enable_next: bool,
-    ) -> anyhow::Result<Self> {
+    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> anyhow::Result<Self> {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
-
         Self::new_admin(
+            connectors,
             PeerId::from(1024),
             url,
-            api_secret,
-            iroh_enable_dht,
-            iroh_enable_next,
+            // Setup does not have api secrets yet
+            None,
         )
-        .await
-    }
-
-    pub async fn from_endpoints(
-        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-        api_secret: &Option<String>,
-        iroh_enable_dht: bool,
-        iroh_enable_next: bool,
-    ) -> anyhow::Result<Self> {
-        let connector =
-            make_connector(peers, api_secret, iroh_enable_dht, iroh_enable_next).await?;
-        Ok(GlobalFederationApiWithCache::new(ReconnectFederationApi::new(connector, None)).into())
     }
 }
 
@@ -652,55 +634,33 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct WebsocketConnector {
-    peers: BTreeMap<PeerId, SafeUrl>,
-    api_secret: Option<String>,
-
-    /// List of overrides to use when attempting to connect to given
-    /// `PeerId`
-    ///
-    /// This is useful for testing, or forcing non-default network
-    /// connectivity.
-    pub connection_overrides: BTreeMap<PeerId, SafeUrl>,
-
+pub struct WebsocketEndpoint {
     /// Connection pool for websocket connections
     #[allow(clippy::type_complexity)]
-    connections: Arc<tokio::sync::Mutex<HashMap<PeerId, Arc<OnceCell<Arc<WsClient>>>>>>,
+    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<OnceCell<Arc<WsClient>>>>>>,
 }
 
-impl WebsocketConnector {
-    fn new(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> anyhow::Result<Self> {
-        let mut s = Self::new_no_overrides(peers, api_secret);
-
-        for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
-            s = s.with_connection_override(k, v);
-        }
-
-        Ok(s)
-    }
-    pub fn with_connection_override(mut self, peer_id: PeerId, url: SafeUrl) -> Self {
-        self.connection_overrides.insert(peer_id, url);
-        self
-    }
-    pub fn new_no_overrides(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> Self {
+impl WebsocketEndpoint {
+    pub fn new() -> Self {
         Self {
-            peers,
-            api_secret,
-            connection_overrides: BTreeMap::default(),
             connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
-    async fn get_or_create_connection(&self, peer_id: PeerId) -> PeerResult<Arc<WsClient>> {
+    async fn get_or_create_connection(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<Arc<WsClient>> {
         let mut pool_lock = self.connections.lock().await;
 
         let entry_arc = pool_lock
-            .entry(peer_id)
+            .entry(url.to_owned())
             .and_modify(|entry_arc| {
                 // Check if existing connection is disconnected and remove it
                 if let Some(existing_conn) = entry_arc.get()
                     && !existing_conn.is_connected() {
-                        trace!(target: LOG_NET_WS, %peer_id, "Existing connection is disconnected, removing from pool");
+                        trace!(target: LOG_NET_WS, %url, "Existing connection is disconnected, removing from pool");
                         *entry_arc = Arc::new(OnceCell::new());
                     }
             })
@@ -712,16 +672,7 @@ impl WebsocketConnector {
 
         let conn = entry_arc
             .get_or_try_init(|| async {
-                trace!(target: LOG_NET_WS, %peer_id, "Creating new websocket connection");
-                let api_endpoint = match self.connection_overrides.get(&peer_id) {
-                    Some(url) => {
-                        trace!(target: LOG_NET_WS, %peer_id, "Using a connectivity override for connection");
-                        url
-                    }
-                    None => self.peers.get(&peer_id).ok_or_else(|| {
-                        PeerError::InternalClientError(anyhow!("Invalid peer_id: {peer_id}"))
-                    })?,
-                };
+                trace!(target: LOG_NET_WS, %url, "Creating new websocket connection");
 
                 #[cfg(not(target_family = "wasm"))]
                 let mut client = {
@@ -742,7 +693,7 @@ impl WebsocketConnector {
                 #[cfg(target_family = "wasm")]
                 let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
 
-                if let Some(api_secret) = &self.api_secret {
+                if let Some(api_secret) = api_secret {
                     #[cfg(not(target_family = "wasm"))]
                     {
                         // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
@@ -763,7 +714,7 @@ impl WebsocketConnector {
                     {
                         // on wasm, url will be handled by the browser, which should take care of
                         // `user:pass@...`
-                        let mut url = api_endpoint.clone();
+                        let mut url = url.clone();
                         url.set_username("fedimint")
                             .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid username")))?;
                         url.set_password(Some(&api_secret))
@@ -779,7 +730,7 @@ impl WebsocketConnector {
                 }
 
                 let client = client
-                    .build(api_endpoint.as_str())
+                    .build(url.as_str())
                     .await
                     .map_err(|err| PeerError::InternalClientError(err.into()))?;
 
@@ -787,51 +738,46 @@ impl WebsocketConnector {
             })
             .await?;
 
-        trace!(target: LOG_NET_WS, %peer_id, "Using websocket connection");
+        trace!(target: LOG_NET_WS, %url, "Using websocket connection");
         Ok(conn.clone())
     }
 }
 
-#[async_trait]
-impl IClientConnector for WebsocketConnector {
-    fn peers(&self) -> BTreeSet<PeerId> {
-        self.peers.keys().copied().collect()
+impl Default for WebsocketEndpoint {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    async fn connect(&self, peer_id: PeerId) -> PeerResult<DynClientConnection> {
-        let client = self.get_or_create_connection(peer_id).await?;
+#[async_trait::async_trait]
+impl Connector for WebsocketEndpoint {
+    async fn connect(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<DynClientConnection> {
+        let client = self.get_or_create_connection(url, api_secret).await?;
         Ok(client.into_dyn())
     }
 }
 
+// TODO: move this type to sub-module
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-#[derive(Debug, Clone)]
-pub struct TorConnector {
-    peers: BTreeMap<PeerId, SafeUrl>,
-    api_secret: Option<String>,
+#[derive(Clone)]
+pub struct TorEndpoint {
+    tor_client: TorClient<tor_rtcompat::PreferredRuntime>,
 }
 
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-impl TorConnector {
-    pub fn new(peers: BTreeMap<PeerId, SafeUrl>, api_secret: Option<String>) -> Self {
-        Self { peers, api_secret }
+impl fmt::Debug for TorEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TorEndpoint").finish_non_exhaustive()
     }
 }
 
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-#[async_trait]
-impl IClientConnector for TorConnector {
-    fn peers(&self) -> BTreeSet<PeerId> {
-        self.peers.keys().copied().collect()
-    }
-
-    #[allow(clippy::too_many_lines)]
-    async fn connect(&self, peer_id: PeerId) -> PeerResult<DynClientConnection> {
-        let api_endpoint = self
-            .peers
-            .get(&peer_id)
-            .ok_or_else(|| PeerError::InternalClientError(anyhow!("Invalid peer_id: {peer_id}")))?;
-
+impl TorEndpoint {
+    pub async fn bootstrap() -> anyhow::Result<Self> {
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)
             .await
@@ -840,14 +786,23 @@ impl IClientConnector for TorConnector {
 
         debug!("Successfully created and bootstrapped the `TorClient`, for given `TorConfig`.");
 
-        // TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
-        // instead?
+        Ok(Self { tor_client })
+    }
+}
+
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
+#[async_trait]
+impl Connector for TorEndpoint {
+    #[allow(clippy::too_many_lines)]
+    async fn connect(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<DynClientConnection> {
         let addr = (
-            api_endpoint
-                .host_str()
+            url.host_str()
                 .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Expected host str")))?,
-            api_endpoint
-                .port_or_known_default()
+            url.port_or_known_default()
                 .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Expected port number")))?,
         );
         let tor_addr = TorAddr::from(addr).map_err(|e| {
@@ -864,11 +819,12 @@ impl IClientConnector for TorConnector {
 
         // TODO: It can be updated to use `is_onion_address()` implementation,
         // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
-        let anonymized_stream = if api_endpoint.is_onion_address() {
+        let anonymized_stream = if url.is_onion_address() {
             let mut stream_prefs = arti_client::StreamPrefs::default();
             stream_prefs.connect_to_onion_services(arti_client::config::BoolOrAuto::Explicit(true));
 
-            let anonymized_stream = tor_client
+            let anonymized_stream = self
+                .tor_client
                 .connect_with_prefs(tor_addr, &stream_prefs)
                 .await
                 .map_err(|e| PeerError::Connection(e.into()))?;
@@ -879,7 +835,8 @@ impl IClientConnector for TorConnector {
             );
             anonymized_stream
         } else {
-            let anonymized_stream = tor_client
+            let anonymized_stream = self
+                .tor_client
                 .connect(tor_addr)
                 .await
                 .map_err(|e| PeerError::Connection(e.into()))?;
@@ -891,7 +848,7 @@ impl IClientConnector for TorConnector {
             anonymized_stream
         };
 
-        let is_tls = match api_endpoint.scheme() {
+        let is_tls = match url.scheme() {
             "wss" => true,
             "ws" => false,
             unexpected_scheme => {
@@ -918,7 +875,7 @@ impl IClientConnector for TorConnector {
         let mut ws_client_builder =
             WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
 
-        if let Some(api_secret) = &self.api_secret {
+        if let Some(api_secret) = api_secret {
             // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
             // but we can set up the headers manually
             let mut headers = HeaderMap::new();
@@ -937,14 +894,14 @@ impl IClientConnector for TorConnector {
         match tls_connector {
             None => {
                 let client = ws_client_builder
-                    .build_with_stream(api_endpoint.as_str(), anonymized_stream)
+                    .build_with_stream(url.as_str(), anonymized_stream)
                     .await
                     .map_err(|e| PeerError::Connection(e.into()))?;
 
                 Ok(client.into_dyn())
             }
             Some(tls_connector) => {
-                let host = api_endpoint
+                let host = url
                     .host_str()
                     .map(ToOwned::to_owned)
                     .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Invalid host str")))?;
@@ -960,7 +917,7 @@ impl IClientConnector for TorConnector {
                     .map_err(|e| PeerError::Connection(e.into()))?;
 
                 let client = ws_client_builder
-                    .build_with_stream(api_endpoint.as_str(), anonymized_tls_stream)
+                    .build_with_stream(url.as_str(), anonymized_tls_stream)
                     .await
                     .map_err(|e| PeerError::Connection(e.into()))?;
 
@@ -1046,28 +1003,252 @@ impl IClientConnection for Arc<WsClient> {
     }
 }
 
-pub type DynClientConnector = Arc<dyn IClientConnector>;
+/// Builder for [`ConnectorRegistry`]
+///
+/// See [`ConnectorRegistry::build_from_client_env`] and similar
+/// to create.
+#[allow(clippy::struct_excessive_bools)] // Shut up, Clippy
+pub struct ConnectorRegistryBuilder {
+    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
 
-/// Allows to connect to peers. Connections are request based and should be
-/// authenticated and encrypted for production deployments.
-#[async_trait]
-pub trait IClientConnector: Send + Sync + 'static + fmt::Debug {
-    fn peers(&self) -> BTreeSet<PeerId>;
+    /// Enable Iroh endpoints at all?
+    iroh_enable: bool,
+    /// Override the Iroh DNS server to use
+    iroh_dns: Option<SafeUrl>,
+    /// Should start the "next/unstable" Iroh stack
+    iroh_next: bool,
+    /// Enable Pkarr DHT discovery
+    iroh_pkarr_dht: bool,
 
-    async fn connect(&self, peer: PeerId) -> PeerResult<DynClientConnection>;
+    /// Enable Websocket API handling at all?
+    ws_enable: bool,
+    ws_force_tor: bool,
+}
 
-    fn into_dyn(self) -> DynClientConnector
-    where
-        Self: Sized,
-    {
-        Arc::new(self)
+impl ConnectorRegistryBuilder {
+    pub async fn bind(self) -> anyhow::Result<ConnectorRegistry> {
+        let mut inner: BTreeMap<String, DynConnector> = BTreeMap::new();
+
+        if self.iroh_enable {
+            inner.insert(
+                "iroh".to_string(),
+                Arc::new(
+                    api::iroh::IrohEndpoint::new(
+                        self.iroh_dns,
+                        self.iroh_pkarr_dht,
+                        self.iroh_next,
+                    )
+                    .await?,
+                ),
+            );
+        }
+
+        if self.ws_enable {
+            match self.ws_force_tor {
+                #[cfg(all(feature = "tor", not(target_family = "wasm")))]
+                true => {
+                    let tor_endpoint = Arc::new(TorEndpoint::bootstrap().await?);
+                    inner.insert("wss".into(), tor_endpoint.clone());
+                    inner.insert("ws".into(), tor_endpoint);
+                }
+
+                false => {
+                    let websocket_endpoint = Arc::new(api::WebsocketEndpoint::new());
+                    inner.insert("wss".into(), websocket_endpoint.clone());
+                    inner.insert("ws".into(), websocket_endpoint);
+                }
+                #[allow(unreachable_patterns)]
+                _ => bail!("Tor requested, but not support not compiled in"),
+            }
+        }
+
+        Ok(ConnectorRegistry {
+            inner,
+            connection_overrides: self.connection_overrides,
+        })
     }
 
-    fn is_admin(&self) -> bool {
-        self.peers().len() == 1
+    pub fn iroh_pkarr_dht(self, enable: bool) -> Self {
+        Self {
+            iroh_pkarr_dht: enable,
+            ..self
+        }
+    }
+
+    pub fn iroh_next(self, enable: bool) -> Self {
+        Self {
+            iroh_next: enable,
+            ..self
+        }
+    }
+
+    pub fn ws_force_tor(self, enable: bool) -> Self {
+        Self {
+            ws_force_tor: enable,
+            ..self
+        }
+    }
+
+    pub fn set_iroh_dns(self, url: SafeUrl) -> Self {
+        Self {
+            iroh_dns: Some(url),
+            ..self
+        }
+    }
+
+    /// Apply overrides from env variables
+    pub fn with_env_var_overrides(mut self) -> anyhow::Result<Self> {
+        // TODO: read rest of the env
+        for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
+            self = self.with_connection_override(k, v);
+        }
+
+        Ok(Self { ..self })
+    }
+    pub fn with_connection_override(
+        mut self,
+        original_url: SafeUrl,
+        replacement_url: SafeUrl,
+    ) -> Self {
+        self.connection_overrides
+            .insert(original_url, replacement_url);
+        self
     }
 }
 
+/// A set of available connectivity protocols a client can use to make
+/// network API requests (typically to federation).
+///
+/// Maps from connection URL schema to [`Connector`] to use to connect to it.
+///
+/// See [`ConnectorRegistry::build_from_client_env`] and similar
+/// to create.
+///
+/// [`ConnectorRegistry::connect`] is the main entry point for making
+/// mixed-networking stack connection.
+#[derive(Clone, Debug)]
+pub struct ConnectorRegistry {
+    inner: BTreeMap<String, DynConnector>,
+
+    /// List of overrides to use when attempting to connect to given url
+    ///
+    /// This is useful for testing, or forcing non-default network
+    /// connectivity.
+    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
+}
+
+impl ConnectorRegistry {
+    /// Create a builder with recommended defaults intended for client-side
+    /// usage
+    ///
+    /// In particular mobile devices are considered.
+    pub fn build_from_client_defaults() -> ConnectorRegistryBuilder {
+        ConnectorRegistryBuilder {
+            iroh_enable: true,
+            iroh_dns: None,
+            iroh_pkarr_dht: false,
+            iroh_next: true,
+            ws_enable: true,
+            ws_force_tor: false,
+
+            connection_overrides: BTreeMap::default(),
+        }
+    }
+
+    /// Create a builder with recommended defaults intended for the server-side
+    /// usage
+    pub fn build_from_server_defaults() -> ConnectorRegistryBuilder {
+        ConnectorRegistryBuilder {
+            iroh_enable: true,
+            iroh_dns: None,
+            iroh_pkarr_dht: true,
+            iroh_next: true,
+            ws_enable: true,
+            ws_force_tor: false,
+
+            connection_overrides: BTreeMap::default(),
+        }
+    }
+
+    /// Create a builder with recommended defaults intended for testing
+    /// usage
+    pub fn build_from_testing_defaults() -> ConnectorRegistryBuilder {
+        ConnectorRegistryBuilder {
+            iroh_enable: true,
+            iroh_dns: None,
+            iroh_pkarr_dht: false,
+            iroh_next: false,
+            ws_enable: true,
+            ws_force_tor: false,
+
+            connection_overrides: BTreeMap::default(),
+        }
+    }
+
+    /// Like [`Self::build_from_client_defaults`] build will apply
+    /// environment-provided overrides.
+    pub fn build_from_client_env() -> anyhow::Result<ConnectorRegistryBuilder> {
+        let builder = Self::build_from_client_defaults().with_env_var_overrides()?;
+        Ok(builder)
+    }
+
+    /// Like [`Self::build_from_server_defaults`] build will apply
+    /// environment-provided overrides.
+    pub fn build_from_server_env() -> anyhow::Result<ConnectorRegistryBuilder> {
+        let builder = Self::build_from_server_defaults().with_env_var_overrides()?;
+        Ok(builder)
+    }
+
+    /// Like [`Self::build_from_testing_defaults`] build will apply
+    /// environment-provided overrides.
+    pub fn build_from_testing_env() -> anyhow::Result<ConnectorRegistryBuilder> {
+        let builder = Self::build_from_testing_defaults().with_env_var_overrides()?;
+        Ok(builder)
+    }
+
+    /// Connect to a given `url` using matching [`Connector`]
+    ///
+    /// This is the main function consumed by the downstream use for making
+    /// connection.
+    pub async fn connect(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<DynClientConnection> {
+        let url = match self.connection_overrides.get(url) {
+            Some(replacement) => {
+                trace!(
+                    target: LOG_NET,
+                    original_url = %url,
+                    replacement_url = %replacement,
+                    "Using a connectivity override for connection"
+                );
+
+                replacement
+            }
+            None => url,
+        };
+
+        let Some(endpoint) = self.inner.get(url.scheme()) else {
+            return Err(PeerError::InvalidEndpoint(anyhow!(
+                "Unsupported scheme: {}; missing endpoint handler",
+                url.scheme()
+            )));
+        };
+
+        endpoint.connect(url, api_secret).await
+    }
+}
+pub type DynConnector = Arc<dyn Connector>;
+
+#[async_trait]
+pub trait Connector: Send + Sync + 'static + fmt::Debug {
+    async fn connect(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<DynClientConnection>;
+}
 pub type DynClientConnection = Arc<dyn IClientConnection>;
 
 #[async_trait]
@@ -1084,96 +1265,55 @@ pub trait IClientConnection: Debug + Send + Sync + 'static {
     }
 }
 
+/// Federation API client
+///
+/// The core underlying object used to make API requests to a federation.
+///
+/// It has an `endpoints` handle to making outgoing connections,
+/// and knows which peers there are and what URLs to connect to
+/// to reach them.
 #[derive(Clone, Debug)]
-pub struct ReconnectFederationApi {
-    connector: DynClientConnector,
-    peers: BTreeSet<PeerId>,
+pub struct FederationApi {
+    /// Available endpoints which we can make connections
+    connectors: ConnectorRegistry,
+    /// Map of known URLs to use to connect to peers
+    peers: BTreeMap<PeerId, SafeUrl>,
+    /// List of peer ids, redundant to avoid collecting all the time
+    peers_keys: BTreeSet<PeerId>,
+    /// Our own [`PeerId`] to use when making admin apis
     admin_id: Option<PeerId>,
+    /// Set when this API is used to communicate with a module
     module_id: Option<ModuleInstanceId>,
-    connections: ReconnectClientConnections,
-}
-
-impl ReconnectFederationApi {
-    pub fn new(connector: DynClientConnector, admin_peer_id: Option<PeerId>) -> Self {
-        Self {
-            peers: connector.peers(),
-            admin_id: admin_peer_id,
-            module_id: None,
-            connections: ReconnectClientConnections::new(&connector),
-            connector,
-        }
-    }
-
-    pub fn new_admin(connector: DynClientConnector, peer: PeerId) -> Self {
-        Self::new(connector, Some(peer))
-    }
-}
-
-impl IModuleFederationApi for ReconnectFederationApi {}
-
-#[apply(async_trait_maybe_send!)]
-impl IRawFederationApi for ReconnectFederationApi {
-    fn all_peers(&self) -> &BTreeSet<PeerId> {
-        &self.peers
-    }
-
-    fn self_peer(&self) -> Option<PeerId> {
-        self.admin_id
-    }
-
-    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
-        ReconnectFederationApi {
-            connector: self.connector.clone(),
-            peers: self.peers.clone(),
-            admin_id: self.admin_id,
-            module_id: Some(id),
-            connections: self.connections.clone(),
-        }
-        .into()
-    }
-
-    #[instrument(
-        target = LOG_NET_API,
-        skip_all,
-        fields(
-            peer_id = %peer_id,
-            method = %method,
-            params = %params.params,
-        )
-    )]
-    async fn request_raw(
-        &self,
-        peer_id: PeerId,
-        method: &str,
-        params: &ApiRequestErased,
-    ) -> PeerResult<Value> {
-        let method = match self.module_id {
-            Some(module_id) => ApiMethod::Module(module_id, method.to_string()),
-            None => ApiMethod::Core(method.to_string()),
-        };
-
-        self.connections
-            .request(peer_id, method, params.clone())
-            .await
-    }
-    fn connector(&self) -> &DynClientConnector {
-        &self.connector
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ReconnectClientConnections {
     connections: BTreeMap<PeerId, ClientConnection>,
 }
 
-impl ReconnectClientConnections {
-    pub fn new(connector: &DynClientConnector) -> Self {
-        ReconnectClientConnections {
-            connections: connector
-                .peers()
+impl FederationApi {
+    pub fn new(
+        connectors: ConnectorRegistry,
+        peers: BTreeMap<PeerId, SafeUrl>,
+        admin_peer_id: Option<PeerId>,
+        api_secret: Option<&str>,
+    ) -> Self {
+        Self {
+            peers: peers.clone(),
+            peers_keys: peers.keys().copied().collect(),
+            admin_id: admin_peer_id,
+            module_id: None,
+            connections: peers
                 .into_iter()
-                .map(|peer| (peer, ClientConnection::new(peer, connector.clone())))
+                .map(|(peer_id, url)| {
+                    (
+                        peer_id,
+                        ClientConnection::new(
+                            connectors.clone(),
+                            peer_id,
+                            url,
+                            api_secret.map(Into::into),
+                        ),
+                    )
+                })
                 .collect(),
+            connectors,
         }
     }
 
@@ -1201,13 +1341,66 @@ impl ReconnectClientConnections {
     }
 }
 
+impl IModuleFederationApi for FederationApi {}
+
+#[apply(async_trait_maybe_send!)]
+impl IRawFederationApi for FederationApi {
+    fn all_peers(&self) -> &BTreeSet<PeerId> {
+        &self.peers_keys
+    }
+
+    fn self_peer(&self) -> Option<PeerId> {
+        self.admin_id
+    }
+
+    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
+        FederationApi {
+            connectors: self.connectors.clone(),
+            peers: self.peers.clone(),
+            peers_keys: self.peers_keys.clone(),
+            admin_id: self.admin_id,
+            module_id: Some(id),
+            connections: self.connections.clone(),
+        }
+        .into()
+    }
+
+    #[instrument(
+        target = LOG_NET_API,
+        skip_all,
+        fields(
+            peer_id = %peer_id,
+            method = %method,
+            params = %params.params,
+        )
+    )]
+    async fn request_raw(
+        &self,
+        peer_id: PeerId,
+        method: &str,
+        params: &ApiRequestErased,
+    ) -> PeerResult<Value> {
+        let method = match self.module_id {
+            Some(module_id) => ApiMethod::Module(module_id, method.to_string()),
+            None => ApiMethod::Core(method.to_string()),
+        };
+
+        self.request(peer_id, method, params.clone()).await
+    }
+}
+
 #[derive(Clone, Debug)]
 struct ClientConnection {
     sender: async_channel::Sender<oneshot::Sender<DynClientConnection>>,
 }
 
 impl ClientConnection {
-    fn new(peer: PeerId, connector: DynClientConnector) -> ClientConnection {
+    fn new(
+        connectors: ConnectorRegistry,
+        peer: PeerId,
+        url: SafeUrl,
+        api_secret: Option<String>,
+    ) -> ClientConnection {
         let (sender, receiver) = bounded::<oneshot::Sender<DynClientConnection>>(1024);
 
         fedimint_core::task::spawn(
@@ -1224,7 +1417,7 @@ impl ClientConnection {
                         senders.push(sender);
                     }
 
-                    match connector.connect(peer).await {
+                    match connectors.connect(&url, api_secret.as_deref()).await {
                         Ok(connection) => {
                             trace!(target: LOG_CLIENT_NET_API, "Connected to peer api");
 
@@ -1322,52 +1515,6 @@ pub enum LegacyP2PConnectionStatus {
 pub struct StatusResponse {
     pub server: ServerStatusLegacy,
     pub federation: Option<LegacyFederationStatus>,
-}
-
-pub async fn make_admin_connector(
-    admin_peer_id: PeerId,
-    url: SafeUrl,
-    api_secret: &Option<String>,
-    iroh_enable_dht: bool,
-    iroh_enable_next: bool,
-) -> anyhow::Result<DynClientConnector> {
-    make_connector(
-        once((admin_peer_id, url)),
-        api_secret,
-        iroh_enable_dht,
-        iroh_enable_next,
-    )
-    .await
-}
-
-pub async fn make_connector(
-    peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
-    api_secret: &Option<String>,
-    iroh_enable_dht: bool,
-    iroh_enable_next: bool,
-) -> anyhow::Result<DynClientConnector> {
-    let peers = peers.into_iter().collect::<BTreeMap<PeerId, SafeUrl>>();
-
-    let scheme = peers
-        .values()
-        .next()
-        .expect("Federation api has been initialized with no peers")
-        .scheme();
-
-    Ok(match scheme {
-        "ws" | "wss" => WebsocketConnector::new(peers, api_secret.clone())?.into_dyn(),
-        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-        "tor" => TorConnector::new(peers, api_secret.clone()).into_dyn(),
-        "iroh" => {
-            let iroh_dns = std::env::var(FM_IROH_DNS_ENV)
-                .ok()
-                .and_then(|dns| dns.parse().ok());
-            iroh::IrohConnector::new(peers, iroh_dns, iroh_enable_dht, iroh_enable_next)
-                .await?
-                .into_dyn()
-        }
-        scheme => anyhow::bail!("Unsupported connector scheme: {scheme}"),
-    })
 }
 
 #[cfg(test)]

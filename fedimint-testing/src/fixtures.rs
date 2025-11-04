@@ -230,7 +230,9 @@ impl Fixtures {
 
         // Create federation client builder for the gateway
         let client_builder: GatewayClientBuilder =
-            GatewayClientBuilder::new(path.clone(), registry, DatabaseBackend::RocksDb);
+            GatewayClientBuilder::new(path.clone(), registry, DatabaseBackend::RocksDb)
+                .await
+                .expect("Failed to initialize gateway");
 
         let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
 

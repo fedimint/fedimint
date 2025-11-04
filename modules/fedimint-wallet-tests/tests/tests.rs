@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, anyhow, bail};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1;
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -708,16 +708,15 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         &task_group,
         PeerId::from(0),
         // FIXME: use proper mock
-        DynGlobalApi::from_endpoints(
+        DynGlobalApi::new(
+            ConnectorRegistry::build_from_testing_env()?.bind().await?,
             [(
                 PeerId::from(0),
                 SafeUrl::from_str("ws://dummy.xyz").unwrap(),
-            )],
-            &None,
-            false,
-            false,
-        )
-        .await?
+            )]
+            .into(),
+            None,
+        )?
         .with_module(module_instance_id),
         ServerBitcoinRpcMonitor::new(
             bitcoin_rpc_connection.clone(),
