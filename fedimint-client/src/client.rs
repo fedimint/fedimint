@@ -68,7 +68,7 @@ use fedimint_eventlog::{
     EventPersistence, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
-use futures::stream::FuturesUnordered;
+use futures::stream::{self, FuturesUnordered};
 use futures::{Stream, StreamExt as _};
 use global_ctx::ModuleGlobalClientContext;
 use serde::{Deserialize, Serialize};
@@ -1876,6 +1876,51 @@ impl Client {
         self.log_event_added_transient_tx.subscribe()
     }
 
+    /// Subscribe to a stream of all persisted events without polling.
+    ///
+    /// Returns a stream that yields all events from the ordered event log.
+    /// Efficiently waits for new events using the event notification system
+    /// instead of polling.
+    ///
+    /// Module clients should filter this stream to their specific event types.
+    pub fn subscribe_persisted_events(&self) -> impl Stream<Item = PersistedLogEntry> + 'static {
+        let db = self.db.clone();
+        let log_event_added_rx = self.log_event_added_rx.clone();
+
+        stream::unfold(EventLogId::LOG_START, move |mut pos| {
+            let db = db.clone();
+            let mut log_event_added_rx = log_event_added_rx.clone();
+
+            async move {
+                loop {
+                    const BATCH_SIZE: u64 = 100;
+
+                    let batch = db
+                        .begin_transaction_nc()
+                        .await
+                        .get_event_log(Some(pos), BATCH_SIZE)
+                        .await;
+
+                    if batch.is_empty() {
+                        // Wait for notification of new events
+                        if log_event_added_rx.changed().await.is_err() {
+                            return None; // Shutdown
+                        }
+                    } else {
+                        // Update position for next batch
+                        if let Some(last) = batch.last() {
+                            pos = last.event_id.saturating_add(1);
+                        }
+
+                        // Yield batch as a stream
+                        return Some((stream::iter(batch), pos));
+                    }
+                }
+            }
+        })
+        .flatten()
+    }
+
     pub fn iroh_enable_dht(&self) -> bool {
         self.iroh_enable_dht
     }
@@ -2034,6 +2079,12 @@ impl ClientContextIface for Client {
             persist,
         )
         .await;
+    }
+
+    fn subscribe_persisted_events(
+        &self,
+    ) -> BoxStream<'static, fedimint_eventlog::PersistedLogEntry> {
+        Box::pin(Client::subscribe_persisted_events(self))
     }
 
     async fn read_operation_active_states<'dbtx>(

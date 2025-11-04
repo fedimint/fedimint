@@ -111,6 +111,10 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         persist: EventPersistence,
     );
 
+    fn subscribe_persisted_events(
+        &self,
+    ) -> BoxStream<'static, fedimint_eventlog::PersistedLogEntry>;
+
     async fn read_operation_active_states<'dbtx>(
         &self,
         operation_id: OperationId,
@@ -264,6 +268,13 @@ where
     /// A set of all decoders of all modules of the client
     pub fn decoders(&self) -> ModuleDecoderRegistry {
         Clone::clone(self.client.get().decoders())
+    }
+
+    /// Subscribe to the persisted events stream
+    pub fn subscribe_persisted_events(
+        &self,
+    ) -> BoxStream<'static, fedimint_eventlog::PersistedLogEntry> {
+        self.client.get().subscribe_persisted_events()
     }
 
     pub fn input_from_dyn<'i>(

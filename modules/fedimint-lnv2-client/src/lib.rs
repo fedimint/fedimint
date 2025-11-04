@@ -8,6 +8,7 @@ mod api;
 #[cfg(feature = "cli")]
 mod cli;
 mod db;
+pub mod events;
 mod receive_sm;
 mod send_sm;
 
@@ -41,6 +42,7 @@ use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_eventlog::Event;
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
@@ -51,6 +53,7 @@ use fedimint_lnv2_common::{
     LightningOutput, LightningOutputV0, lnurl, tweak,
 };
 use futures::StreamExt;
+use futures::stream::Stream;
 use lightning_invoice::{Bolt11Invoice, Currency};
 use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, ecdh};
 use serde::{Deserialize, Serialize};
@@ -61,6 +64,9 @@ use tpe::{AggregateDecryptionKey, derive_agg_dk};
 use tracing::warn;
 
 use crate::api::LightningFederationApi;
+use crate::events::{
+    LightningPaymentEvent, ReceivePaymentEvent, SendPaymentEvent, SendPaymentUpdateEvent,
+};
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
@@ -288,6 +294,7 @@ impl ClientModuleInit for LightningClientInit {
 pub struct LightningClientContext {
     federation_id: FederationId,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    pub(crate) client_ctx: ClientContext<LightningClientModule>,
 }
 
 impl Context for LightningClientContext {
@@ -320,6 +327,7 @@ impl ClientModule for LightningClientModule {
         LightningClientContext {
             federation_id: self.federation_id,
             gateway_conn: self.gateway_conn.clone(),
+            client_ctx: self.client_ctx.clone(),
         }
     }
 
@@ -486,6 +494,7 @@ impl LightningClientModule {
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
+    #[allow(clippy::too_many_lines)]
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
@@ -584,6 +593,9 @@ impl LightningClientModule {
         ));
         let transaction = TransactionBuilder::new().with_outputs(client_output);
 
+        let contract_amount = contract.amount;
+        let invoice_for_event = invoice.clone();
+
         self.client_ctx
             .finalize_and_submit_transaction(
                 operation_id,
@@ -601,6 +613,21 @@ impl LightningClientModule {
             )
             .await
             .map_err(|e| SendPaymentError::FinalizationError(e.to_string()))?;
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                SendPaymentEvent {
+                    operation_id,
+                    amount: contract_amount,
+                    invoice: Some(LightningInvoice::Bolt11(invoice_for_event)),
+                },
+            )
+            .await;
+
+        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
@@ -1023,6 +1050,53 @@ impl LightningClientModule {
         .map_err(|e| RegisterLnurlError::RegistrationError(e.to_string()))?;
 
         Ok(lnurl)
+    }
+
+    /// Subscribe to a stream of Lightning events (both send and receive).
+    ///
+    /// Emits an event each time a send or receive operation reaches a
+    /// significant state:
+    /// - [`SendPaymentEvent`]: When a send transaction is successfully funded
+    /// - [`SendPaymentUpdateEvent`]: When a send operation reaches a final
+    ///   state (success, refunded, or failure)
+    /// - [`ReceivePaymentEvent`]: When a receive operation completes and
+    ///   transitions to claiming
+    ///
+    /// The stream efficiently waits for new events using the notification
+    /// system instead of polling, filtering for only this module's
+    /// Lightning payment events.
+    pub fn subscribe_payment_events(&self) -> impl Stream<Item = LightningPaymentEvent> {
+        self.client_ctx
+            .subscribe_persisted_events()
+            .filter_map(move |entry| async move {
+                // Check if this is a lnv2 module event
+                if entry.module?.0 != KIND {
+                    return None;
+                }
+
+                // Try to deserialize as SendPaymentEvent
+                if entry.event_kind == SendPaymentEvent::KIND {
+                    return serde_json::from_value::<SendPaymentEvent>(entry.value)
+                        .ok()
+                        .map(|send| LightningPaymentEvent::Send(send, entry.timestamp));
+                }
+
+                // Try to deserialize as SendPaymentUpdateEvent
+                if entry.event_kind == SendPaymentUpdateEvent::KIND {
+                    return serde_json::from_value::<SendPaymentUpdateEvent>(entry.value)
+                        .ok()
+                        .map(|update| LightningPaymentEvent::SendUpdate(update, entry.timestamp));
+                }
+
+                // Try to deserialize as ReceivePaymentEvent
+                if entry.event_kind == ReceivePaymentEvent::KIND {
+                    return serde_json::from_value::<ReceivePaymentEvent>(entry.value)
+                        .ok()
+                        .map(|receive| LightningPaymentEvent::Receive(receive, entry.timestamp));
+                }
+
+                None
+            })
     }
 
     fn spawn_receive_lnurl_task(

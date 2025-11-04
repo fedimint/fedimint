@@ -45,7 +45,10 @@ use client_db::{
     DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey, ReusedNoteIndices, migrate_state_to_v2,
     migrate_to_v1,
 };
-use event::{NoteSpent, OOBNotesReissued, OOBNotesSpent};
+use event::{
+    MintPaymentEvent, NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent,
+    ReceivePaymentUpdateEvent, SendPaymentEvent,
+};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -81,11 +84,13 @@ use fedimint_core::{
     async_trait_maybe_send, base32, push_db_pair_items,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_eventlog::Event;
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::future::try_join_all;
+use futures::stream::Stream;
 use futures::{StreamExt, pin_mut};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
@@ -1545,10 +1550,23 @@ impl MintClientModule {
             )
             .await
             .context(ReissueExternalNotesError::AlreadyReissued)?;
+
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
         self.client_ctx
             .log_event(&mut dbtx, OOBNotesReissued { amount })
             .await;
+
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                ReceivePaymentEvent {
+                    operation_id,
+                    amount,
+                },
+            )
+            .await;
+
         dbtx.commit_tx().await;
 
         Ok(operation_id)
@@ -1733,6 +1751,17 @@ impl MintClientModule {
                             )
                             .await;
 
+                        self.client_ctx
+                            .log_event(
+                                dbtx,
+                                SendPaymentEvent {
+                                    operation_id,
+                                    amount: oob_notes.total_amount(),
+                                    oob_notes: oob_notes.to_string(),
+                                },
+                            )
+                            .await;
+
                         Ok((operation_id, oob_notes))
                     })
                 },
@@ -1888,6 +1917,50 @@ impl MintClientModule {
                     }
                 }
             }))
+    }
+
+    /// Subscribe to a stream of Mint payment events (both send and receive).
+    ///
+    /// Emits an event each time a send or receive operation occurs:
+    /// - [`SendPaymentEvent`]: When e-cash is sent out-of-band
+    /// - [`ReceivePaymentEvent`]: When a reissuance operation is initiated
+    /// - [`ReceivePaymentUpdateEvent`]: When a reissuance operation completes
+    ///
+    /// The stream efficiently waits for new events using the notification
+    /// system instead of polling, filtering for only this module's
+    /// Mint payment events.
+    pub fn subscribe_payment_events(&self) -> impl Stream<Item = MintPaymentEvent> {
+        self.client_ctx
+            .subscribe_persisted_events()
+            .filter_map(move |entry| async move {
+                // Check if this is a mint module event
+                if entry.module?.0 != KIND {
+                    return None;
+                }
+
+                // Try to deserialize as SendPaymentEvent
+                if entry.event_kind == SendPaymentEvent::KIND {
+                    return serde_json::from_value::<SendPaymentEvent>(entry.value)
+                        .ok()
+                        .map(|send| MintPaymentEvent::Send(send, entry.timestamp));
+                }
+
+                // Try to deserialize as ReceivePaymentEvent
+                if entry.event_kind == ReceivePaymentEvent::KIND {
+                    return serde_json::from_value::<ReceivePaymentEvent>(entry.value)
+                        .ok()
+                        .map(|receive| MintPaymentEvent::Receive(receive, entry.timestamp));
+                }
+
+                // Try to deserialize as ReceivePaymentUpdateEvent
+                if entry.event_kind == ReceivePaymentUpdateEvent::KIND {
+                    return serde_json::from_value::<ReceivePaymentUpdateEvent>(entry.value)
+                        .ok()
+                        .map(|update| MintPaymentEvent::ReceiveUpdate(update, entry.timestamp));
+                }
+
+                None
+            })
     }
 
     async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {

@@ -29,7 +29,7 @@ use tbs::{
 use tracing::debug;
 
 use crate::client_db::NoteKey;
-use crate::event::NoteCreated;
+use crate::event::{NoteCreated, ReceivePaymentStatus, ReceivePaymentUpdateEvent};
 use crate::{MintClientContext, MintClientModule, SpendableNote};
 
 /// Child ID used to derive the spend key from a note's [`DerivableSecret`]
@@ -535,6 +535,17 @@ impl MintOutputStatesCreatedMulti {
                 crit!(target: LOG_CLIENT_MODULE_MINT, %note, "E-cash note was replaced in DB");
             }
         }
+
+        client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                ReceivePaymentUpdateEvent {
+                    operation_id: old_state.common.operation_id,
+                    status: ReceivePaymentStatus::Success,
+                },
+            )
+            .await;
+
         MintOutputStateMachine {
             common: old_state.common,
             state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {

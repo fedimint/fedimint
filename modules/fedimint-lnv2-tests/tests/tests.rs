@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::module::ClientModule;
+use fedimint_client_module::transaction::{ClientOutput, ClientOutputBundle};
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::Amounts;
 use fedimint_core::util::NextOrPending as _;
@@ -11,16 +12,21 @@ use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
+use fedimint_lnv2_client::events::{
+    LightningEvent, ReceiveEvent, SendEvent, SendStatus, SendUpdateEvent,
+};
 use fedimint_lnv2_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveOperationState,
     SendOperationState, SendPaymentError,
 };
 use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, LightningInput, LightningInputV0, OutgoingWitness,
+    Bolt11InvoiceDescription, LightningInput, LightningInputV0, LightningOutput, LightningOutputV0,
+    OutgoingWitness,
 };
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::fixtures::Fixtures;
+use futures::StreamExt;
 use serde_json::Value;
 
 use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
@@ -97,6 +103,23 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
         Err(SendPaymentError::SuccessfulPreviousPayment(operation_id)),
     );
 
+    let module = client.get_first_module::<LightningClientModule>()?;
+
+    let mut events = Box::pin(module.subscribe_payment_events());
+
+    assert!(matches!(
+        events.next().await.unwrap(),
+        LightningEvent::Send(SendEvent { .. })
+    ));
+
+    assert_eq!(
+        events.next().await.unwrap(),
+        LightningEvent::SendUpdate(SendUpdateEvent {
+            operation_id,
+            status: SendStatus::Success(MOCK_INVOICE_PREIMAGE)
+        })
+    );
+
     Ok(())
 }
 
@@ -136,6 +159,23 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, SendOperationState::Refunding);
     assert_eq!(sub.ok().await?, SendOperationState::Refunded);
 
+    let module = client.get_first_module::<LightningClientModule>()?;
+
+    let mut events = Box::pin(module.subscribe_payment_events());
+
+    assert!(matches!(
+        events.next().await.unwrap(),
+        LightningEvent::Send(SendEvent { .. })
+    ));
+
+    assert_eq!(
+        events.next().await.unwrap(),
+        LightningEvent::SendUpdate(SendUpdateEvent {
+            operation_id,
+            status: SendStatus::Refunded
+        })
+    );
+
     Ok(())
 }
 
@@ -173,6 +213,23 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     assert_eq!(sub.ok().await?, SendOperationState::Refunding);
     assert_eq!(sub.ok().await?, SendOperationState::Refunded);
+
+    let module = client.get_first_module::<LightningClientModule>()?;
+
+    let mut events = Box::pin(module.subscribe_payment_events());
+
+    assert!(matches!(
+        events.next().await.unwrap(),
+        LightningEvent::Send(SendEvent { .. })
+    ));
+
+    assert_eq!(
+        events.next().await.unwrap(),
+        LightningEvent::SendUpdate(SendUpdateEvent {
+            operation_id,
+            status: SendStatus::Refunded
+        })
+    );
 
     Ok(())
 }
@@ -249,6 +306,109 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     assert_eq!(
         sub.ok().await?,
         SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
+    );
+
+    let module = client.get_first_module::<LightningClientModule>()?;
+
+    let mut events = Box::pin(module.subscribe_payment_events());
+
+    assert!(matches!(
+        events.next().await.unwrap(),
+        LightningEvent::Send(SendEvent { .. })
+    ));
+
+    assert_eq!(
+        events.next().await.unwrap(),
+        LightningEvent::SendUpdate(SendUpdateEvent {
+            operation_id,
+            status: SendStatus::Success(MOCK_INVOICE_PREIMAGE)
+        })
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn funding_incoming_contract_triggers_success() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    let (_invoice, operation_id) = client
+        .get_first_module::<LightningClientModule>()?
+        .receive(
+            Amount::from_sats(1000),
+            600,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?;
+
+    let mut sub = client
+        .get_first_module::<LightningClientModule>()?
+        .subscribe_receive_operation_state_updates(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Pending);
+
+    let operation = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .ok_or(anyhow::anyhow!("Operation not found"))?;
+
+    let contract = match operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::Receive(meta) => meta.contract,
+        LightningOperationMeta::Send(..) => panic!("Operation Meta is a Send variant"),
+        LightningOperationMeta::LnurlReceive(..) => {
+            panic!("Operation Meta is a LnurlReceive variant")
+        }
+    };
+
+    let (op, outpoint) = client
+        .get_first_module::<DummyClientModule>()?
+        .print_money(sats(10_000))
+        .await?;
+
+    client
+        .await_primary_bitcoin_module_output(op, outpoint)
+        .await?;
+
+    let client_output = ClientOutput::<LightningOutput> {
+        output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+        amounts: Amounts::new_bitcoin(contract.commitment.amount),
+    };
+
+    let lnv2_module_id = client
+        .get_first_instance(&LightningClientModule::kind())
+        .unwrap();
+
+    client
+        .finalize_and_submit_transaction(
+            OperationId::new_random(),
+            "Funding Incoming Contract",
+            |_| (),
+            TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![client_output]).into_dyn(lnv2_module_id),
+            ),
+        )
+        .await
+        .expect("Failed to fund incoming contract");
+
+    assert_eq!(sub.ok().await?, ReceiveOperationState::Claiming);
+
+    let module = client.get_first_module::<LightningClientModule>()?;
+
+    let mut events = Box::pin(module.subscribe_payment_events());
+
+    assert_eq!(
+        events.next().await.unwrap(),
+        LightningEvent::Receive(ReceiveEvent {
+            operation_id,
+            amount: contract.commitment.amount,
+        })
     );
 
     Ok(())

@@ -16,6 +16,7 @@ pub mod client_db;
 /// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
 pub mod events;
+use events::{ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatusEvent, WalletPaymentEvent};
 /// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 mod pegin_monitor;
 mod withdraw;
@@ -62,6 +63,7 @@ use fedimint_core::{
     runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_eventlog::Event;
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -1316,6 +1318,21 @@ impl WalletClientModule {
                 )
                 .await?;
 
+            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+            self.client_ctx
+                .log_event(
+                    &mut dbtx,
+                    SendPaymentEvent {
+                        operation_id,
+                        amount,
+                        fee,
+                    },
+                )
+                .await;
+
+            dbtx.commit_tx().await;
+
             Ok(operation_id)
         }
     }
@@ -1420,6 +1437,51 @@ impl WalletClientModule {
                     }
                 }
             }))
+    }
+
+    /// Subscribe to a stream of Wallet payment events.
+    ///
+    /// Emits events for wallet operations:
+    /// - [`SendPaymentEvent`]: When a peg-out operation is initiated
+    /// - [`SendPaymentStatusEvent`]: When a peg-out operation completes
+    ///   (success or aborted)
+    /// - [`ReceivePaymentEvent`]: When a peg-in (deposit) is confirmed
+    ///
+    /// The stream efficiently waits for new events using the notification
+    /// system instead of polling, filtering for only this module's
+    /// Wallet payment events.
+    pub fn subscribe_payment_events(&self) -> impl Stream<Item = WalletPaymentEvent> {
+        self.client_ctx
+            .subscribe_persisted_events()
+            .filter_map(move |entry| async move {
+                // Check if this is a wallet module event
+                if entry.module?.0 != KIND {
+                    return None;
+                }
+
+                // Try to deserialize as SendPaymentEvent
+                if entry.event_kind == SendPaymentEvent::KIND {
+                    return serde_json::from_value::<SendPaymentEvent>(entry.value)
+                        .ok()
+                        .map(|send| WalletPaymentEvent::Send(send, entry.timestamp));
+                }
+
+                // Try to deserialize as SendPaymentStatusEvent
+                if entry.event_kind == SendPaymentStatusEvent::KIND {
+                    return serde_json::from_value::<SendPaymentStatusEvent>(entry.value)
+                        .ok()
+                        .map(|status| WalletPaymentEvent::SendStatus(status, entry.timestamp));
+                }
+
+                // Try to deserialize as ReceivePaymentEvent
+                if entry.event_kind == ReceivePaymentEvent::KIND {
+                    return serde_json::from_value::<ReceivePaymentEvent>(entry.value)
+                        .ok()
+                        .map(|receive| WalletPaymentEvent::Receive(receive, entry.timestamp));
+                }
+
+                None
+            })
     }
 
     fn admin_auth(&self) -> anyhow::Result<ApiAuth> {

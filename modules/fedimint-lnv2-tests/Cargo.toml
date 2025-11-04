@@ -33,6 +33,7 @@ fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-testing = { workspace = true }
+futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
 lnurl-rs = { workspace = true }
