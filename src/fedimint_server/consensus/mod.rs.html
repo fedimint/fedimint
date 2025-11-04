@@ -14,7 +14,7 @@
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>anyhow::bail;
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>async_channel::Sender;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>db::{ServerDbMigrationContext, get_global_database_migrations};
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::NumPeers;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::config::P2PMessage;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -57,56 +57,56 @@
 <a href=#57 id=57 data-nosnippet>57</a>
 <a href=#58 id=58 data-nosnippet>58</a><span class="attr">#[allow(clippy::too_many_arguments)]
 <a href=#59 id=59 data-nosnippet>59</a></span><span class="kw">pub async fn </span>run(
-<a href=#60 id=60 data-nosnippet>60</a>    connections: DynP2PConnections&lt;P2PMessage&gt;,
-<a href=#61 id=61 data-nosnippet>61</a>    p2p_status_receivers: P2PStatusReceivers,
-<a href=#62 id=62 data-nosnippet>62</a>    p2p_connection_type_receivers: P2PConnectionTypeReceivers,
-<a href=#63 id=63 data-nosnippet>63</a>    api_bind: SocketAddr,
-<a href=#64 id=64 data-nosnippet>64</a>    iroh_dns: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-<a href=#65 id=65 data-nosnippet>65</a>    iroh_relays: Vec&lt;SafeUrl&gt;,
-<a href=#66 id=66 data-nosnippet>66</a>    cfg: ServerConfig,
-<a href=#67 id=67 data-nosnippet>67</a>    db: Database,
-<a href=#68 id=68 data-nosnippet>68</a>    module_init_registry: ServerModuleInitRegistry,
-<a href=#69 id=69 data-nosnippet>69</a>    task_group: <span class="kw-2">&amp;</span>TaskGroup,
-<a href=#70 id=70 data-nosnippet>70</a>    force_api_secrets: ApiSecrets,
-<a href=#71 id=71 data-nosnippet>71</a>    data_dir: PathBuf,
-<a href=#72 id=72 data-nosnippet>72</a>    code_version_str: String,
-<a href=#73 id=73 data-nosnippet>73</a>    dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
-<a href=#74 id=74 data-nosnippet>74</a>    ui_bind: SocketAddr,
-<a href=#75 id=75 data-nosnippet>75</a>    dashboard_ui_router: DashboardUiRouter,
-<a href=#76 id=76 data-nosnippet>76</a>    db_checkpoint_retention: u64,
-<a href=#77 id=77 data-nosnippet>77</a>    iroh_api_limits: ConnectionLimits,
-<a href=#78 id=78 data-nosnippet>78</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#79 id=79 data-nosnippet>79</a>    cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
-<a href=#80 id=80 data-nosnippet>80</a>
-<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
-<a href=#82 id=82 data-nosnippet>82</a>    apply_migrations_server_dbtx(
-<a href=#83 id=83 data-nosnippet>83</a>        <span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(),
-<a href=#84 id=84 data-nosnippet>84</a>        Arc::new(ServerDbMigrationContext),
-<a href=#85 id=85 data-nosnippet>85</a>        <span class="string">"fedimint-server"</span>.to_string(),
-<a href=#86 id=86 data-nosnippet>86</a>        get_global_database_migrations(),
-<a href=#87 id=87 data-nosnippet>87</a>    )
-<a href=#88 id=88 data-nosnippet>88</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#89 id=89 data-nosnippet>89</a>
-<a href=#90 id=90 data-nosnippet>90</a>    update_server_info_version_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(), <span class="kw-2">&amp;</span>code_version_str).<span class="kw">await</span>;
-<a href=#91 id=91 data-nosnippet>91</a>
-<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">if </span>is_running_in_test_env() {
-<a href=#93 id=93 data-nosnippet>93</a>        verify_server_db_integrity_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc()).<span class="kw">await</span>;
-<a href=#94 id=94 data-nosnippet>94</a>    }
-<a href=#95 id=95 data-nosnippet>95</a>    global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#96 id=96 data-nosnippet>96</a>
-<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
-<a href=#98 id=98 data-nosnippet>98</a>
-<a href=#99 id=99 data-nosnippet>99</a>    <span class="comment">// TODO: make it work with all transports and federation secrets
-<a href=#100 id=100 data-nosnippet>100</a>    </span><span class="kw">let </span>global_api = DynGlobalApi::from_endpoints(
-<a href=#101 id=101 data-nosnippet>101</a>        cfg.consensus
-<a href=#102 id=102 data-nosnippet>102</a>            .api_endpoints()
-<a href=#103 id=103 data-nosnippet>103</a>            .iter()
-<a href=#104 id=104 data-nosnippet>104</a>            .map(|(<span class="kw-2">&amp;</span>peer_id, url)| (peer_id, url.url.clone())),
-<a href=#105 id=105 data-nosnippet>105</a>        <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
-<a href=#106 id=106 data-nosnippet>106</a>        <span class="bool-val">true</span>,
-<a href=#107 id=107 data-nosnippet>107</a>        <span class="bool-val">true</span>,
-<a href=#108 id=108 data-nosnippet>108</a>    )
-<a href=#109 id=109 data-nosnippet>109</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#60 id=60 data-nosnippet>60</a>    connectors: ConnectorRegistry,
+<a href=#61 id=61 data-nosnippet>61</a>    connections: DynP2PConnections&lt;P2PMessage&gt;,
+<a href=#62 id=62 data-nosnippet>62</a>    p2p_status_receivers: P2PStatusReceivers,
+<a href=#63 id=63 data-nosnippet>63</a>    p2p_connection_type_receivers: P2PConnectionTypeReceivers,
+<a href=#64 id=64 data-nosnippet>64</a>    api_bind: SocketAddr,
+<a href=#65 id=65 data-nosnippet>65</a>    iroh_dns: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+<a href=#66 id=66 data-nosnippet>66</a>    iroh_relays: Vec&lt;SafeUrl&gt;,
+<a href=#67 id=67 data-nosnippet>67</a>    cfg: ServerConfig,
+<a href=#68 id=68 data-nosnippet>68</a>    db: Database,
+<a href=#69 id=69 data-nosnippet>69</a>    module_init_registry: ServerModuleInitRegistry,
+<a href=#70 id=70 data-nosnippet>70</a>    task_group: <span class="kw-2">&amp;</span>TaskGroup,
+<a href=#71 id=71 data-nosnippet>71</a>    force_api_secrets: ApiSecrets,
+<a href=#72 id=72 data-nosnippet>72</a>    data_dir: PathBuf,
+<a href=#73 id=73 data-nosnippet>73</a>    code_version_str: String,
+<a href=#74 id=74 data-nosnippet>74</a>    dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
+<a href=#75 id=75 data-nosnippet>75</a>    ui_bind: SocketAddr,
+<a href=#76 id=76 data-nosnippet>76</a>    dashboard_ui_router: DashboardUiRouter,
+<a href=#77 id=77 data-nosnippet>77</a>    db_checkpoint_retention: u64,
+<a href=#78 id=78 data-nosnippet>78</a>    iroh_api_limits: ConnectionLimits,
+<a href=#79 id=79 data-nosnippet>79</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#80 id=80 data-nosnippet>80</a>    cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
+<a href=#83 id=83 data-nosnippet>83</a>    apply_migrations_server_dbtx(
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(),
+<a href=#85 id=85 data-nosnippet>85</a>        Arc::new(ServerDbMigrationContext),
+<a href=#86 id=86 data-nosnippet>86</a>        <span class="string">"fedimint-server"</span>.to_string(),
+<a href=#87 id=87 data-nosnippet>87</a>        get_global_database_migrations(),
+<a href=#88 id=88 data-nosnippet>88</a>    )
+<a href=#89 id=89 data-nosnippet>89</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#90 id=90 data-nosnippet>90</a>
+<a href=#91 id=91 data-nosnippet>91</a>    update_server_info_version_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(), <span class="kw-2">&amp;</span>code_version_str).<span class="kw">await</span>;
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">if </span>is_running_in_test_env() {
+<a href=#94 id=94 data-nosnippet>94</a>        verify_server_db_integrity_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc()).<span class="kw">await</span>;
+<a href=#95 id=95 data-nosnippet>95</a>    }
+<a href=#96 id=96 data-nosnippet>96</a>    global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="comment">// TODO: make it work with all transports and federation secrets
+<a href=#101 id=101 data-nosnippet>101</a>    </span><span class="kw">let </span>global_api = DynGlobalApi::new(
+<a href=#102 id=102 data-nosnippet>102</a>        connectors.clone(),
+<a href=#103 id=103 data-nosnippet>103</a>        cfg.consensus
+<a href=#104 id=104 data-nosnippet>104</a>            .api_endpoints()
+<a href=#105 id=105 data-nosnippet>105</a>            .iter()
+<a href=#106 id=106 data-nosnippet>106</a>            .map(|(<span class="kw-2">&amp;</span>peer_id, url)| (peer_id, url.url.clone()))
+<a href=#107 id=107 data-nosnippet>107</a>            .collect(),
+<a href=#108 id=108 data-nosnippet>108</a>        <span class="prelude-val">None</span>,
+<a href=#109 id=109 data-nosnippet>109</a>    )<span class="question-mark">?</span>;
 <a href=#110 id=110 data-nosnippet>110</a>
 <a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">let </span>server_bitcoin_rpc_monitor = ServerBitcoinRpcMonitor::new(
 <a href=#112 id=112 data-nosnippet>112</a>        dyn_server_bitcoin_rpc,
@@ -270,314 +270,312 @@
 <a href=#270 id=270 data-nosnippet>270</a>    // Using the `Connector::default()` for now!
 <a href=#271 id=271 data-nosnippet>271</a>    </span>ConsensusEngine {
 <a href=#272 id=272 data-nosnippet>272</a>        db,
-<a href=#273 id=273 data-nosnippet>273</a>        federation_api: DynGlobalApi::from_endpoints(
-<a href=#274 id=274 data-nosnippet>274</a>            api_urls,
-<a href=#275 id=275 data-nosnippet>275</a>            <span class="kw-2">&amp;</span>force_api_secrets.get_active(),
-<a href=#276 id=276 data-nosnippet>276</a>            <span class="bool-val">true</span>,
-<a href=#277 id=277 data-nosnippet>277</a>            <span class="bool-val">true</span>,
-<a href=#278 id=278 data-nosnippet>278</a>        )
-<a href=#279 id=279 data-nosnippet>279</a>        .<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#280 id=280 data-nosnippet>280</a>        cfg: cfg.clone(),
-<a href=#281 id=281 data-nosnippet>281</a>        connections,
-<a href=#282 id=282 data-nosnippet>282</a>        ord_latency_sender,
-<a href=#283 id=283 data-nosnippet>283</a>        ci_status_senders,
-<a href=#284 id=284 data-nosnippet>284</a>        submission_receiver,
-<a href=#285 id=285 data-nosnippet>285</a>        shutdown_receiver,
-<a href=#286 id=286 data-nosnippet>286</a>        modules: module_registry,
-<a href=#287 id=287 data-nosnippet>287</a>        task_group: task_group.clone(),
-<a href=#288 id=288 data-nosnippet>288</a>        data_dir,
-<a href=#289 id=289 data-nosnippet>289</a>        db_checkpoint_retention,
-<a href=#290 id=290 data-nosnippet>290</a>    }
-<a href=#291 id=291 data-nosnippet>291</a>    .run()
-<a href=#292 id=292 data-nosnippet>292</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>    api_handler
-<a href=#295 id=295 data-nosnippet>295</a>        .stop()
-<a href=#296 id=296 data-nosnippet>296</a>        .expect(<span class="string">"Consensus api should still be running"</span>);
+<a href=#273 id=273 data-nosnippet>273</a>        federation_api: DynGlobalApi::new(
+<a href=#274 id=274 data-nosnippet>274</a>            connectors,
+<a href=#275 id=275 data-nosnippet>275</a>            api_urls,
+<a href=#276 id=276 data-nosnippet>276</a>            force_api_secrets.get_active().as_deref(),
+<a href=#277 id=277 data-nosnippet>277</a>        )<span class="question-mark">?</span>,
+<a href=#278 id=278 data-nosnippet>278</a>        cfg: cfg.clone(),
+<a href=#279 id=279 data-nosnippet>279</a>        connections,
+<a href=#280 id=280 data-nosnippet>280</a>        ord_latency_sender,
+<a href=#281 id=281 data-nosnippet>281</a>        ci_status_senders,
+<a href=#282 id=282 data-nosnippet>282</a>        submission_receiver,
+<a href=#283 id=283 data-nosnippet>283</a>        shutdown_receiver,
+<a href=#284 id=284 data-nosnippet>284</a>        modules: module_registry,
+<a href=#285 id=285 data-nosnippet>285</a>        task_group: task_group.clone(),
+<a href=#286 id=286 data-nosnippet>286</a>        data_dir,
+<a href=#287 id=287 data-nosnippet>287</a>        db_checkpoint_retention,
+<a href=#288 id=288 data-nosnippet>288</a>    }
+<a href=#289 id=289 data-nosnippet>289</a>    .run()
+<a href=#290 id=290 data-nosnippet>290</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#291 id=291 data-nosnippet>291</a>
+<a href=#292 id=292 data-nosnippet>292</a>    api_handler
+<a href=#293 id=293 data-nosnippet>293</a>        .stop()
+<a href=#294 id=294 data-nosnippet>294</a>        .expect(<span class="string">"Consensus api should still be running"</span>);
+<a href=#295 id=295 data-nosnippet>295</a>
+<a href=#296 id=296 data-nosnippet>296</a>    api_handler.stopped().<span class="kw">await</span>;
 <a href=#297 id=297 data-nosnippet>297</a>
-<a href=#298 id=298 data-nosnippet>298</a>    api_handler.stopped().<span class="kw">await</span>;
-<a href=#299 id=299 data-nosnippet>299</a>
-<a href=#300 id=300 data-nosnippet>300</a>    <span class="prelude-val">Ok</span>(())
-<a href=#301 id=301 data-nosnippet>301</a>}
-<a href=#302 id=302 data-nosnippet>302</a>
-<a href=#303 id=303 data-nosnippet>303</a><span class="kw">async fn </span>start_consensus_api(
-<a href=#304 id=304 data-nosnippet>304</a>    cfg: <span class="kw-2">&amp;</span>ServerConfigLocal,
-<a href=#305 id=305 data-nosnippet>305</a>    api: ConsensusApi,
-<a href=#306 id=306 data-nosnippet>306</a>    force_api_secrets: ApiSecrets,
-<a href=#307 id=307 data-nosnippet>307</a>    api_bind: SocketAddr,
-<a href=#308 id=308 data-nosnippet>308</a>) -&gt; ServerHandle {
-<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcModule::new(api.clone());
+<a href=#298 id=298 data-nosnippet>298</a>    <span class="prelude-val">Ok</span>(())
+<a href=#299 id=299 data-nosnippet>299</a>}
+<a href=#300 id=300 data-nosnippet>300</a>
+<a href=#301 id=301 data-nosnippet>301</a><span class="kw">async fn </span>start_consensus_api(
+<a href=#302 id=302 data-nosnippet>302</a>    cfg: <span class="kw-2">&amp;</span>ServerConfigLocal,
+<a href=#303 id=303 data-nosnippet>303</a>    api: ConsensusApi,
+<a href=#304 id=304 data-nosnippet>304</a>    force_api_secrets: ApiSecrets,
+<a href=#305 id=305 data-nosnippet>305</a>    api_bind: SocketAddr,
+<a href=#306 id=306 data-nosnippet>306</a>) -&gt; ServerHandle {
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcModule::new(api.clone());
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>    net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, api::server_endpoints(), <span class="prelude-val">None</span>);
 <a href=#310 id=310 data-nosnippet>310</a>
-<a href=#311 id=311 data-nosnippet>311</a>    net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, api::server_endpoints(), <span class="prelude-val">None</span>);
-<a href=#312 id=312 data-nosnippet>312</a>
-<a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">for </span>(id, <span class="kw">_</span>, module) <span class="kw">in </span>api.modules.iter_modules() {
-<a href=#314 id=314 data-nosnippet>314</a>        net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
-<a href=#315 id=315 data-nosnippet>315</a>    }
-<a href=#316 id=316 data-nosnippet>316</a>
-<a href=#317 id=317 data-nosnippet>317</a>    net::api::spawn(
-<a href=#318 id=318 data-nosnippet>318</a>        <span class="string">"consensus"</span>,
-<a href=#319 id=319 data-nosnippet>319</a>        api_bind,
-<a href=#320 id=320 data-nosnippet>320</a>        rpc_module,
-<a href=#321 id=321 data-nosnippet>321</a>        cfg.max_connections,
-<a href=#322 id=322 data-nosnippet>322</a>        force_api_secrets,
-<a href=#323 id=323 data-nosnippet>323</a>    )
-<a href=#324 id=324 data-nosnippet>324</a>    .<span class="kw">await
-<a href=#325 id=325 data-nosnippet>325</a></span>}
+<a href=#311 id=311 data-nosnippet>311</a>    <span class="kw">for </span>(id, <span class="kw">_</span>, module) <span class="kw">in </span>api.modules.iter_modules() {
+<a href=#312 id=312 data-nosnippet>312</a>        net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
+<a href=#313 id=313 data-nosnippet>313</a>    }
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a>    net::api::spawn(
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="string">"consensus"</span>,
+<a href=#317 id=317 data-nosnippet>317</a>        api_bind,
+<a href=#318 id=318 data-nosnippet>318</a>        rpc_module,
+<a href=#319 id=319 data-nosnippet>319</a>        cfg.max_connections,
+<a href=#320 id=320 data-nosnippet>320</a>        force_api_secrets,
+<a href=#321 id=321 data-nosnippet>321</a>    )
+<a href=#322 id=322 data-nosnippet>322</a>    .<span class="kw">await
+<a href=#323 id=323 data-nosnippet>323</a></span>}
+<a href=#324 id=324 data-nosnippet>324</a>
+<a href=#325 id=325 data-nosnippet>325</a><span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
 <a href=#326 id=326 data-nosnippet>326</a>
-<a href=#327 id=327 data-nosnippet>327</a><span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
-<a href=#328 id=328 data-nosnippet>328</a>
-<a href=#329 id=329 data-nosnippet>329</a><span class="kw">fn </span>submit_module_ci_proposals(
-<a href=#330 id=330 data-nosnippet>330</a>    task_group: <span class="kw-2">&amp;</span>TaskGroup,
-<a href=#331 id=331 data-nosnippet>331</a>    db: Database,
-<a href=#332 id=332 data-nosnippet>332</a>    module_id: ModuleInstanceId,
-<a href=#333 id=333 data-nosnippet>333</a>    kind: ModuleKind,
-<a href=#334 id=334 data-nosnippet>334</a>    module: DynServerModule,
-<a href=#335 id=335 data-nosnippet>335</a>    submission_sender: Sender&lt;ConsensusItem&gt;,
-<a href=#336 id=336 data-nosnippet>336</a>) {
-<a href=#337 id=337 data-nosnippet>337</a>    <span class="kw">let </span><span class="kw-2">mut </span>interval = tokio::time::interval(<span class="kw">if </span>is_running_in_test_env() {
-<a href=#338 id=338 data-nosnippet>338</a>        Duration::from_millis(<span class="number">100</span>)
-<a href=#339 id=339 data-nosnippet>339</a>    } <span class="kw">else </span>{
-<a href=#340 id=340 data-nosnippet>340</a>        Duration::from_secs(<span class="number">1</span>)
-<a href=#341 id=341 data-nosnippet>341</a>    });
-<a href=#342 id=342 data-nosnippet>342</a>
-<a href=#343 id=343 data-nosnippet>343</a>    task_group.spawn(
-<a href=#344 id=344 data-nosnippet>344</a>        <span class="macro">format!</span>(<span class="string">"citem_proposals_{module_id}"</span>),
-<a href=#345 id=345 data-nosnippet>345</a>        <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
-<a href=#346 id=346 data-nosnippet>346</a>            <span class="kw">while </span>!task_handle.is_shutting_down() {
-<a href=#347 id=347 data-nosnippet>347</a>                <span class="kw">let </span>module_consensus_items = tokio::time::timeout(
-<a href=#348 id=348 data-nosnippet>348</a>                    CONSENSUS_PROPOSAL_TIMEOUT,
-<a href=#349 id=349 data-nosnippet>349</a>                    module.consensus_proposal(
-<a href=#350 id=350 data-nosnippet>350</a>                        <span class="kw-2">&amp;mut </span>db
-<a href=#351 id=351 data-nosnippet>351</a>                            .begin_transaction_nc()
-<a href=#352 id=352 data-nosnippet>352</a>                            .<span class="kw">await
-<a href=#353 id=353 data-nosnippet>353</a>                            </span>.to_ref_with_prefix_module_id(module_id)
-<a href=#354 id=354 data-nosnippet>354</a>                            .<span class="number">0
-<a href=#355 id=355 data-nosnippet>355</a>                            </span>.into_nc(),
-<a href=#356 id=356 data-nosnippet>356</a>                        module_id,
-<a href=#357 id=357 data-nosnippet>357</a>                    ),
-<a href=#358 id=358 data-nosnippet>358</a>                )
-<a href=#359 id=359 data-nosnippet>359</a>                .<span class="kw">await</span>;
-<a href=#360 id=360 data-nosnippet>360</a>
-<a href=#361 id=361 data-nosnippet>361</a>                <span class="kw">match </span>module_consensus_items {
-<a href=#362 id=362 data-nosnippet>362</a>                    <span class="prelude-val">Ok</span>(items) =&gt; {
-<a href=#363 id=363 data-nosnippet>363</a>                        <span class="kw">for </span>item <span class="kw">in </span>items {
-<a href=#364 id=364 data-nosnippet>364</a>                            <span class="kw">if </span>submission_sender
-<a href=#365 id=365 data-nosnippet>365</a>                                .send(ConsensusItem::Module(item))
-<a href=#366 id=366 data-nosnippet>366</a>                                .<span class="kw">await
-<a href=#367 id=367 data-nosnippet>367</a>                                </span>.is_err()
-<a href=#368 id=368 data-nosnippet>368</a>                            {
-<a href=#369 id=369 data-nosnippet>369</a>                                <span class="macro">warn!</span>(
-<a href=#370 id=370 data-nosnippet>370</a>                                    target: LOG_CONSENSUS,
-<a href=#371 id=371 data-nosnippet>371</a>                                    module_id,
-<a href=#372 id=372 data-nosnippet>372</a>                                    <span class="string">"Unable to submit module consensus item proposal via channel"
-<a href=#373 id=373 data-nosnippet>373</a>                                </span>);
-<a href=#374 id=374 data-nosnippet>374</a>                            }
-<a href=#375 id=375 data-nosnippet>375</a>                        }
-<a href=#376 id=376 data-nosnippet>376</a>                    }
-<a href=#377 id=377 data-nosnippet>377</a>                    <span class="prelude-val">Err</span>(..) =&gt; {
-<a href=#378 id=378 data-nosnippet>378</a>                        <span class="macro">warn!</span>(
-<a href=#379 id=379 data-nosnippet>379</a>                            target: LOG_CONSENSUS,
-<a href=#380 id=380 data-nosnippet>380</a>                            module_id,
-<a href=#381 id=381 data-nosnippet>381</a>                            %kind,
-<a href=#382 id=382 data-nosnippet>382</a>                            <span class="string">"Module failed to propose consensus items on time"
-<a href=#383 id=383 data-nosnippet>383</a>                        </span>);
-<a href=#384 id=384 data-nosnippet>384</a>                    }
-<a href=#385 id=385 data-nosnippet>385</a>                }
-<a href=#386 id=386 data-nosnippet>386</a>
-<a href=#387 id=387 data-nosnippet>387</a>                interval.tick().<span class="kw">await</span>;
-<a href=#388 id=388 data-nosnippet>388</a>            }
-<a href=#389 id=389 data-nosnippet>389</a>        },
-<a href=#390 id=390 data-nosnippet>390</a>    );
-<a href=#391 id=391 data-nosnippet>391</a>}
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a><span class="kw">async fn </span>start_iroh_api(
-<a href=#394 id=394 data-nosnippet>394</a>    secret_key: iroh::SecretKey,
-<a href=#395 id=395 data-nosnippet>395</a>    api_bind: SocketAddr,
-<a href=#396 id=396 data-nosnippet>396</a>    iroh_dns: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-<a href=#397 id=397 data-nosnippet>397</a>    iroh_relays: Vec&lt;SafeUrl&gt;,
-<a href=#398 id=398 data-nosnippet>398</a>    consensus_api: ConsensusApi,
-<a href=#399 id=399 data-nosnippet>399</a>    task_group: <span class="kw-2">&amp;</span>TaskGroup,
-<a href=#400 id=400 data-nosnippet>400</a>    iroh_api_limits: ConnectionLimits,
-<a href=#401 id=401 data-nosnippet>401</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">let </span>endpoint = build_iroh_endpoint(
-<a href=#403 id=403 data-nosnippet>403</a>        secret_key,
-<a href=#404 id=404 data-nosnippet>404</a>        api_bind,
-<a href=#405 id=405 data-nosnippet>405</a>        iroh_dns,
-<a href=#406 id=406 data-nosnippet>406</a>        iroh_relays,
-<a href=#407 id=407 data-nosnippet>407</a>        FEDIMINT_API_ALPN,
-<a href=#408 id=408 data-nosnippet>408</a>    )
-<a href=#409 id=409 data-nosnippet>409</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#410 id=410 data-nosnippet>410</a>    task_group.spawn_cancellable(
-<a href=#411 id=411 data-nosnippet>411</a>        <span class="string">"iroh-api"</span>,
-<a href=#412 id=412 data-nosnippet>412</a>        run_iroh_api(consensus_api, endpoint, task_group.clone(), iroh_api_limits),
-<a href=#413 id=413 data-nosnippet>413</a>    );
-<a href=#414 id=414 data-nosnippet>414</a>
-<a href=#415 id=415 data-nosnippet>415</a>    <span class="prelude-val">Ok</span>(())
-<a href=#416 id=416 data-nosnippet>416</a>}
-<a href=#417 id=417 data-nosnippet>417</a>
-<a href=#418 id=418 data-nosnippet>418</a><span class="kw">async fn </span>run_iroh_api(
-<a href=#419 id=419 data-nosnippet>419</a>    consensus_api: ConsensusApi,
-<a href=#420 id=420 data-nosnippet>420</a>    endpoint: Endpoint,
-<a href=#421 id=421 data-nosnippet>421</a>    task_group: TaskGroup,
-<a href=#422 id=422 data-nosnippet>422</a>    iroh_api_limits: ConnectionLimits,
-<a href=#423 id=423 data-nosnippet>423</a>) {
-<a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">let </span>core_api = server_endpoints()
-<a href=#425 id=425 data-nosnippet>425</a>        .into_iter()
-<a href=#426 id=426 data-nosnippet>426</a>        .map(|endpoint| (endpoint.path.to_string(), endpoint))
-<a href=#427 id=427 data-nosnippet>427</a>        .collect::&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;();
-<a href=#428 id=428 data-nosnippet>428</a>
-<a href=#429 id=429 data-nosnippet>429</a>    <span class="kw">let </span>module_api = consensus_api
-<a href=#430 id=430 data-nosnippet>430</a>        .modules
-<a href=#431 id=431 data-nosnippet>431</a>        .iter_modules()
-<a href=#432 id=432 data-nosnippet>432</a>        .map(|(id, <span class="kw">_</span>, module)| {
-<a href=#433 id=433 data-nosnippet>433</a>            <span class="kw">let </span>api_endpoints = module
-<a href=#434 id=434 data-nosnippet>434</a>                .api_endpoints()
-<a href=#435 id=435 data-nosnippet>435</a>                .into_iter()
-<a href=#436 id=436 data-nosnippet>436</a>                .map(|endpoint| (endpoint.path.to_string(), endpoint))
-<a href=#437 id=437 data-nosnippet>437</a>                .collect::&lt;BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;();
-<a href=#438 id=438 data-nosnippet>438</a>
-<a href=#439 id=439 data-nosnippet>439</a>            (id, api_endpoints)
-<a href=#440 id=440 data-nosnippet>440</a>        })
-<a href=#441 id=441 data-nosnippet>441</a>        .collect::&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;();
-<a href=#442 id=442 data-nosnippet>442</a>
-<a href=#443 id=443 data-nosnippet>443</a>    <span class="kw">let </span>consensus_api = Arc::new(consensus_api);
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">let </span>core_api = Arc::new(core_api);
-<a href=#445 id=445 data-nosnippet>445</a>    <span class="kw">let </span>module_api = Arc::new(module_api);
-<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">let </span>parallel_connections_limit = Arc::new(Semaphore::new(iroh_api_limits.max_connections));
-<a href=#447 id=447 data-nosnippet>447</a>
-<a href=#448 id=448 data-nosnippet>448</a>    <span class="kw">loop </span>{
-<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">match </span>endpoint.accept().<span class="kw">await </span>{
-<a href=#450 id=450 data-nosnippet>450</a>            <span class="prelude-val">Some</span>(incoming) =&gt; {
-<a href=#451 id=451 data-nosnippet>451</a>                <span class="kw">if </span>parallel_connections_limit.available_permits() == <span class="number">0 </span>{
-<a href=#452 id=452 data-nosnippet>452</a>                    <span class="macro">warn!</span>(
-<a href=#453 id=453 data-nosnippet>453</a>                        target: LOG_NET_API,
-<a href=#454 id=454 data-nosnippet>454</a>                        limit = iroh_api_limits.max_connections,
-<a href=#455 id=455 data-nosnippet>455</a>                        <span class="string">"Iroh API connection limit reached, blocking new connections"
-<a href=#456 id=456 data-nosnippet>456</a>                    </span>);
-<a href=#457 id=457 data-nosnippet>457</a>                }
-<a href=#458 id=458 data-nosnippet>458</a>                <span class="kw">let </span>permit = parallel_connections_limit
-<a href=#459 id=459 data-nosnippet>459</a>                    .clone()
-<a href=#460 id=460 data-nosnippet>460</a>                    .acquire_owned()
-<a href=#461 id=461 data-nosnippet>461</a>                    .<span class="kw">await
-<a href=#462 id=462 data-nosnippet>462</a>                    </span>.expect(<span class="string">"semaphore should not be closed"</span>);
-<a href=#463 id=463 data-nosnippet>463</a>                task_group.spawn_cancellable_silent(
-<a href=#464 id=464 data-nosnippet>464</a>                    <span class="string">"handle-iroh-connection"</span>,
-<a href=#465 id=465 data-nosnippet>465</a>                    handle_incoming(
-<a href=#466 id=466 data-nosnippet>466</a>                        consensus_api.clone(),
-<a href=#467 id=467 data-nosnippet>467</a>                        core_api.clone(),
-<a href=#468 id=468 data-nosnippet>468</a>                        module_api.clone(),
-<a href=#469 id=469 data-nosnippet>469</a>                        task_group.clone(),
-<a href=#470 id=470 data-nosnippet>470</a>                        incoming,
-<a href=#471 id=471 data-nosnippet>471</a>                        permit,
-<a href=#472 id=472 data-nosnippet>472</a>                        iroh_api_limits.max_requests_per_connection,
-<a href=#473 id=473 data-nosnippet>473</a>                    )
-<a href=#474 id=474 data-nosnippet>474</a>                    .then(|result| <span class="kw">async </span>{
-<a href=#475 id=475 data-nosnippet>475</a>                        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = result {
-<a href=#476 id=476 data-nosnippet>476</a>                            <span class="macro">warn!</span>(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), <span class="string">"Failed to handle iroh connection"</span>);
-<a href=#477 id=477 data-nosnippet>477</a>                        }
-<a href=#478 id=478 data-nosnippet>478</a>                    }),
-<a href=#479 id=479 data-nosnippet>479</a>                );
-<a href=#480 id=480 data-nosnippet>480</a>            }
-<a href=#481 id=481 data-nosnippet>481</a>            <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
-<a href=#482 id=482 data-nosnippet>482</a>        }
-<a href=#483 id=483 data-nosnippet>483</a>    }
-<a href=#484 id=484 data-nosnippet>484</a>}
-<a href=#485 id=485 data-nosnippet>485</a>
-<a href=#486 id=486 data-nosnippet>486</a><span class="kw">async fn </span>handle_incoming(
-<a href=#487 id=487 data-nosnippet>487</a>    consensus_api: Arc&lt;ConsensusApi&gt;,
-<a href=#488 id=488 data-nosnippet>488</a>    core_api: Arc&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;,
-<a href=#489 id=489 data-nosnippet>489</a>    module_api: Arc&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;,
-<a href=#490 id=490 data-nosnippet>490</a>    task_group: TaskGroup,
-<a href=#491 id=491 data-nosnippet>491</a>    incoming: Incoming,
-<a href=#492 id=492 data-nosnippet>492</a>    _connection_permit: tokio::sync::OwnedSemaphorePermit,
-<a href=#493 id=493 data-nosnippet>493</a>    iroh_api_max_requests_per_connection: usize,
-<a href=#494 id=494 data-nosnippet>494</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#495 id=495 data-nosnippet>495</a>    <span class="kw">let </span>connection = incoming.accept()<span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">let </span>parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
-<a href=#497 id=497 data-nosnippet>497</a>
-<a href=#498 id=498 data-nosnippet>498</a>    <span class="kw">loop </span>{
-<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw">let </span>(send_stream, recv_stream) = connection.accept_bi().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#500 id=500 data-nosnippet>500</a>
-<a href=#501 id=501 data-nosnippet>501</a>        <span class="kw">if </span>parallel_requests_limit.available_permits() == <span class="number">0 </span>{
-<a href=#502 id=502 data-nosnippet>502</a>            <span class="macro">warn!</span>(
-<a href=#503 id=503 data-nosnippet>503</a>                target: LOG_NET_API,
-<a href=#504 id=504 data-nosnippet>504</a>                limit = iroh_api_max_requests_per_connection,
-<a href=#505 id=505 data-nosnippet>505</a>                <span class="string">"Iroh API request limit reached for connection, blocking new requests"
-<a href=#506 id=506 data-nosnippet>506</a>            </span>);
-<a href=#507 id=507 data-nosnippet>507</a>        }
-<a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">let </span>permit = parallel_requests_limit
-<a href=#509 id=509 data-nosnippet>509</a>            .clone()
-<a href=#510 id=510 data-nosnippet>510</a>            .acquire_owned()
-<a href=#511 id=511 data-nosnippet>511</a>            .<span class="kw">await
-<a href=#512 id=512 data-nosnippet>512</a>            </span>.expect(<span class="string">"semaphore should not be closed"</span>);
-<a href=#513 id=513 data-nosnippet>513</a>        task_group.spawn_cancellable_silent(
-<a href=#514 id=514 data-nosnippet>514</a>            <span class="string">"handle-iroh-request"</span>,
-<a href=#515 id=515 data-nosnippet>515</a>            handle_request(
-<a href=#516 id=516 data-nosnippet>516</a>                consensus_api.clone(),
-<a href=#517 id=517 data-nosnippet>517</a>                core_api.clone(),
-<a href=#518 id=518 data-nosnippet>518</a>                module_api.clone(),
-<a href=#519 id=519 data-nosnippet>519</a>                send_stream,
-<a href=#520 id=520 data-nosnippet>520</a>                recv_stream,
-<a href=#521 id=521 data-nosnippet>521</a>                permit,
-<a href=#522 id=522 data-nosnippet>522</a>            )
-<a href=#523 id=523 data-nosnippet>523</a>            .then(|result| <span class="kw">async </span>{
-<a href=#524 id=524 data-nosnippet>524</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = result {
-<a href=#525 id=525 data-nosnippet>525</a>                    <span class="macro">warn!</span>(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), <span class="string">"Failed to handle iroh request"</span>);
-<a href=#526 id=526 data-nosnippet>526</a>                }
-<a href=#527 id=527 data-nosnippet>527</a>            }),
-<a href=#528 id=528 data-nosnippet>528</a>        );
-<a href=#529 id=529 data-nosnippet>529</a>    }
-<a href=#530 id=530 data-nosnippet>530</a>}
-<a href=#531 id=531 data-nosnippet>531</a>
-<a href=#532 id=532 data-nosnippet>532</a><span class="kw">async fn </span>handle_request(
-<a href=#533 id=533 data-nosnippet>533</a>    consensus_api: Arc&lt;ConsensusApi&gt;,
-<a href=#534 id=534 data-nosnippet>534</a>    core_api: Arc&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;,
-<a href=#535 id=535 data-nosnippet>535</a>    module_api: Arc&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;,
-<a href=#536 id=536 data-nosnippet>536</a>    <span class="kw-2">mut </span>send_stream: SendStream,
-<a href=#537 id=537 data-nosnippet>537</a>    <span class="kw-2">mut </span>recv_stream: RecvStream,
-<a href=#538 id=538 data-nosnippet>538</a>    _request_permit: tokio::sync::OwnedSemaphorePermit,
-<a href=#539 id=539 data-nosnippet>539</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#540 id=540 data-nosnippet>540</a>    <span class="kw">let </span>request = recv_stream.read_to_end(<span class="number">100_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#327 id=327 data-nosnippet>327</a><span class="kw">fn </span>submit_module_ci_proposals(
+<a href=#328 id=328 data-nosnippet>328</a>    task_group: <span class="kw-2">&amp;</span>TaskGroup,
+<a href=#329 id=329 data-nosnippet>329</a>    db: Database,
+<a href=#330 id=330 data-nosnippet>330</a>    module_id: ModuleInstanceId,
+<a href=#331 id=331 data-nosnippet>331</a>    kind: ModuleKind,
+<a href=#332 id=332 data-nosnippet>332</a>    module: DynServerModule,
+<a href=#333 id=333 data-nosnippet>333</a>    submission_sender: Sender&lt;ConsensusItem&gt;,
+<a href=#334 id=334 data-nosnippet>334</a>) {
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">let </span><span class="kw-2">mut </span>interval = tokio::time::interval(<span class="kw">if </span>is_running_in_test_env() {
+<a href=#336 id=336 data-nosnippet>336</a>        Duration::from_millis(<span class="number">100</span>)
+<a href=#337 id=337 data-nosnippet>337</a>    } <span class="kw">else </span>{
+<a href=#338 id=338 data-nosnippet>338</a>        Duration::from_secs(<span class="number">1</span>)
+<a href=#339 id=339 data-nosnippet>339</a>    });
+<a href=#340 id=340 data-nosnippet>340</a>
+<a href=#341 id=341 data-nosnippet>341</a>    task_group.spawn(
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="macro">format!</span>(<span class="string">"citem_proposals_{module_id}"</span>),
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
+<a href=#344 id=344 data-nosnippet>344</a>            <span class="kw">while </span>!task_handle.is_shutting_down() {
+<a href=#345 id=345 data-nosnippet>345</a>                <span class="kw">let </span>module_consensus_items = tokio::time::timeout(
+<a href=#346 id=346 data-nosnippet>346</a>                    CONSENSUS_PROPOSAL_TIMEOUT,
+<a href=#347 id=347 data-nosnippet>347</a>                    module.consensus_proposal(
+<a href=#348 id=348 data-nosnippet>348</a>                        <span class="kw-2">&amp;mut </span>db
+<a href=#349 id=349 data-nosnippet>349</a>                            .begin_transaction_nc()
+<a href=#350 id=350 data-nosnippet>350</a>                            .<span class="kw">await
+<a href=#351 id=351 data-nosnippet>351</a>                            </span>.to_ref_with_prefix_module_id(module_id)
+<a href=#352 id=352 data-nosnippet>352</a>                            .<span class="number">0
+<a href=#353 id=353 data-nosnippet>353</a>                            </span>.into_nc(),
+<a href=#354 id=354 data-nosnippet>354</a>                        module_id,
+<a href=#355 id=355 data-nosnippet>355</a>                    ),
+<a href=#356 id=356 data-nosnippet>356</a>                )
+<a href=#357 id=357 data-nosnippet>357</a>                .<span class="kw">await</span>;
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a>                <span class="kw">match </span>module_consensus_items {
+<a href=#360 id=360 data-nosnippet>360</a>                    <span class="prelude-val">Ok</span>(items) =&gt; {
+<a href=#361 id=361 data-nosnippet>361</a>                        <span class="kw">for </span>item <span class="kw">in </span>items {
+<a href=#362 id=362 data-nosnippet>362</a>                            <span class="kw">if </span>submission_sender
+<a href=#363 id=363 data-nosnippet>363</a>                                .send(ConsensusItem::Module(item))
+<a href=#364 id=364 data-nosnippet>364</a>                                .<span class="kw">await
+<a href=#365 id=365 data-nosnippet>365</a>                                </span>.is_err()
+<a href=#366 id=366 data-nosnippet>366</a>                            {
+<a href=#367 id=367 data-nosnippet>367</a>                                <span class="macro">warn!</span>(
+<a href=#368 id=368 data-nosnippet>368</a>                                    target: LOG_CONSENSUS,
+<a href=#369 id=369 data-nosnippet>369</a>                                    module_id,
+<a href=#370 id=370 data-nosnippet>370</a>                                    <span class="string">"Unable to submit module consensus item proposal via channel"
+<a href=#371 id=371 data-nosnippet>371</a>                                </span>);
+<a href=#372 id=372 data-nosnippet>372</a>                            }
+<a href=#373 id=373 data-nosnippet>373</a>                        }
+<a href=#374 id=374 data-nosnippet>374</a>                    }
+<a href=#375 id=375 data-nosnippet>375</a>                    <span class="prelude-val">Err</span>(..) =&gt; {
+<a href=#376 id=376 data-nosnippet>376</a>                        <span class="macro">warn!</span>(
+<a href=#377 id=377 data-nosnippet>377</a>                            target: LOG_CONSENSUS,
+<a href=#378 id=378 data-nosnippet>378</a>                            module_id,
+<a href=#379 id=379 data-nosnippet>379</a>                            %kind,
+<a href=#380 id=380 data-nosnippet>380</a>                            <span class="string">"Module failed to propose consensus items on time"
+<a href=#381 id=381 data-nosnippet>381</a>                        </span>);
+<a href=#382 id=382 data-nosnippet>382</a>                    }
+<a href=#383 id=383 data-nosnippet>383</a>                }
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a>                interval.tick().<span class="kw">await</span>;
+<a href=#386 id=386 data-nosnippet>386</a>            }
+<a href=#387 id=387 data-nosnippet>387</a>        },
+<a href=#388 id=388 data-nosnippet>388</a>    );
+<a href=#389 id=389 data-nosnippet>389</a>}
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a><span class="kw">async fn </span>start_iroh_api(
+<a href=#392 id=392 data-nosnippet>392</a>    secret_key: iroh::SecretKey,
+<a href=#393 id=393 data-nosnippet>393</a>    api_bind: SocketAddr,
+<a href=#394 id=394 data-nosnippet>394</a>    iroh_dns: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+<a href=#395 id=395 data-nosnippet>395</a>    iroh_relays: Vec&lt;SafeUrl&gt;,
+<a href=#396 id=396 data-nosnippet>396</a>    consensus_api: ConsensusApi,
+<a href=#397 id=397 data-nosnippet>397</a>    task_group: <span class="kw-2">&amp;</span>TaskGroup,
+<a href=#398 id=398 data-nosnippet>398</a>    iroh_api_limits: ConnectionLimits,
+<a href=#399 id=399 data-nosnippet>399</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="kw">let </span>endpoint = build_iroh_endpoint(
+<a href=#401 id=401 data-nosnippet>401</a>        secret_key,
+<a href=#402 id=402 data-nosnippet>402</a>        api_bind,
+<a href=#403 id=403 data-nosnippet>403</a>        iroh_dns,
+<a href=#404 id=404 data-nosnippet>404</a>        iroh_relays,
+<a href=#405 id=405 data-nosnippet>405</a>        FEDIMINT_API_ALPN,
+<a href=#406 id=406 data-nosnippet>406</a>    )
+<a href=#407 id=407 data-nosnippet>407</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#408 id=408 data-nosnippet>408</a>    task_group.spawn_cancellable(
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="string">"iroh-api"</span>,
+<a href=#410 id=410 data-nosnippet>410</a>        run_iroh_api(consensus_api, endpoint, task_group.clone(), iroh_api_limits),
+<a href=#411 id=411 data-nosnippet>411</a>    );
+<a href=#412 id=412 data-nosnippet>412</a>
+<a href=#413 id=413 data-nosnippet>413</a>    <span class="prelude-val">Ok</span>(())
+<a href=#414 id=414 data-nosnippet>414</a>}
+<a href=#415 id=415 data-nosnippet>415</a>
+<a href=#416 id=416 data-nosnippet>416</a><span class="kw">async fn </span>run_iroh_api(
+<a href=#417 id=417 data-nosnippet>417</a>    consensus_api: ConsensusApi,
+<a href=#418 id=418 data-nosnippet>418</a>    endpoint: Endpoint,
+<a href=#419 id=419 data-nosnippet>419</a>    task_group: TaskGroup,
+<a href=#420 id=420 data-nosnippet>420</a>    iroh_api_limits: ConnectionLimits,
+<a href=#421 id=421 data-nosnippet>421</a>) {
+<a href=#422 id=422 data-nosnippet>422</a>    <span class="kw">let </span>core_api = server_endpoints()
+<a href=#423 id=423 data-nosnippet>423</a>        .into_iter()
+<a href=#424 id=424 data-nosnippet>424</a>        .map(|endpoint| (endpoint.path.to_string(), endpoint))
+<a href=#425 id=425 data-nosnippet>425</a>        .collect::&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;();
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">let </span>module_api = consensus_api
+<a href=#428 id=428 data-nosnippet>428</a>        .modules
+<a href=#429 id=429 data-nosnippet>429</a>        .iter_modules()
+<a href=#430 id=430 data-nosnippet>430</a>        .map(|(id, <span class="kw">_</span>, module)| {
+<a href=#431 id=431 data-nosnippet>431</a>            <span class="kw">let </span>api_endpoints = module
+<a href=#432 id=432 data-nosnippet>432</a>                .api_endpoints()
+<a href=#433 id=433 data-nosnippet>433</a>                .into_iter()
+<a href=#434 id=434 data-nosnippet>434</a>                .map(|endpoint| (endpoint.path.to_string(), endpoint))
+<a href=#435 id=435 data-nosnippet>435</a>                .collect::&lt;BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;();
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>            (id, api_endpoints)
+<a href=#438 id=438 data-nosnippet>438</a>        })
+<a href=#439 id=439 data-nosnippet>439</a>        .collect::&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;();
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>    <span class="kw">let </span>consensus_api = Arc::new(consensus_api);
+<a href=#442 id=442 data-nosnippet>442</a>    <span class="kw">let </span>core_api = Arc::new(core_api);
+<a href=#443 id=443 data-nosnippet>443</a>    <span class="kw">let </span>module_api = Arc::new(module_api);
+<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">let </span>parallel_connections_limit = Arc::new(Semaphore::new(iroh_api_limits.max_connections));
+<a href=#445 id=445 data-nosnippet>445</a>
+<a href=#446 id=446 data-nosnippet>446</a>    <span class="kw">loop </span>{
+<a href=#447 id=447 data-nosnippet>447</a>        <span class="kw">match </span>endpoint.accept().<span class="kw">await </span>{
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="prelude-val">Some</span>(incoming) =&gt; {
+<a href=#449 id=449 data-nosnippet>449</a>                <span class="kw">if </span>parallel_connections_limit.available_permits() == <span class="number">0 </span>{
+<a href=#450 id=450 data-nosnippet>450</a>                    <span class="macro">warn!</span>(
+<a href=#451 id=451 data-nosnippet>451</a>                        target: LOG_NET_API,
+<a href=#452 id=452 data-nosnippet>452</a>                        limit = iroh_api_limits.max_connections,
+<a href=#453 id=453 data-nosnippet>453</a>                        <span class="string">"Iroh API connection limit reached, blocking new connections"
+<a href=#454 id=454 data-nosnippet>454</a>                    </span>);
+<a href=#455 id=455 data-nosnippet>455</a>                }
+<a href=#456 id=456 data-nosnippet>456</a>                <span class="kw">let </span>permit = parallel_connections_limit
+<a href=#457 id=457 data-nosnippet>457</a>                    .clone()
+<a href=#458 id=458 data-nosnippet>458</a>                    .acquire_owned()
+<a href=#459 id=459 data-nosnippet>459</a>                    .<span class="kw">await
+<a href=#460 id=460 data-nosnippet>460</a>                    </span>.expect(<span class="string">"semaphore should not be closed"</span>);
+<a href=#461 id=461 data-nosnippet>461</a>                task_group.spawn_cancellable_silent(
+<a href=#462 id=462 data-nosnippet>462</a>                    <span class="string">"handle-iroh-connection"</span>,
+<a href=#463 id=463 data-nosnippet>463</a>                    handle_incoming(
+<a href=#464 id=464 data-nosnippet>464</a>                        consensus_api.clone(),
+<a href=#465 id=465 data-nosnippet>465</a>                        core_api.clone(),
+<a href=#466 id=466 data-nosnippet>466</a>                        module_api.clone(),
+<a href=#467 id=467 data-nosnippet>467</a>                        task_group.clone(),
+<a href=#468 id=468 data-nosnippet>468</a>                        incoming,
+<a href=#469 id=469 data-nosnippet>469</a>                        permit,
+<a href=#470 id=470 data-nosnippet>470</a>                        iroh_api_limits.max_requests_per_connection,
+<a href=#471 id=471 data-nosnippet>471</a>                    )
+<a href=#472 id=472 data-nosnippet>472</a>                    .then(|result| <span class="kw">async </span>{
+<a href=#473 id=473 data-nosnippet>473</a>                        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = result {
+<a href=#474 id=474 data-nosnippet>474</a>                            <span class="macro">warn!</span>(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), <span class="string">"Failed to handle iroh connection"</span>);
+<a href=#475 id=475 data-nosnippet>475</a>                        }
+<a href=#476 id=476 data-nosnippet>476</a>                    }),
+<a href=#477 id=477 data-nosnippet>477</a>                );
+<a href=#478 id=478 data-nosnippet>478</a>            }
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
+<a href=#480 id=480 data-nosnippet>480</a>        }
+<a href=#481 id=481 data-nosnippet>481</a>    }
+<a href=#482 id=482 data-nosnippet>482</a>}
+<a href=#483 id=483 data-nosnippet>483</a>
+<a href=#484 id=484 data-nosnippet>484</a><span class="kw">async fn </span>handle_incoming(
+<a href=#485 id=485 data-nosnippet>485</a>    consensus_api: Arc&lt;ConsensusApi&gt;,
+<a href=#486 id=486 data-nosnippet>486</a>    core_api: Arc&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;,
+<a href=#487 id=487 data-nosnippet>487</a>    module_api: Arc&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;,
+<a href=#488 id=488 data-nosnippet>488</a>    task_group: TaskGroup,
+<a href=#489 id=489 data-nosnippet>489</a>    incoming: Incoming,
+<a href=#490 id=490 data-nosnippet>490</a>    _connection_permit: tokio::sync::OwnedSemaphorePermit,
+<a href=#491 id=491 data-nosnippet>491</a>    iroh_api_max_requests_per_connection: usize,
+<a href=#492 id=492 data-nosnippet>492</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#493 id=493 data-nosnippet>493</a>    <span class="kw">let </span>connection = incoming.accept()<span class="question-mark">?</span>.<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#494 id=494 data-nosnippet>494</a>    <span class="kw">let </span>parallel_requests_limit = Arc::new(Semaphore::new(iroh_api_max_requests_per_connection));
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">loop </span>{
+<a href=#497 id=497 data-nosnippet>497</a>        <span class="kw">let </span>(send_stream, recv_stream) = connection.accept_bi().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#498 id=498 data-nosnippet>498</a>
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="kw">if </span>parallel_requests_limit.available_permits() == <span class="number">0 </span>{
+<a href=#500 id=500 data-nosnippet>500</a>            <span class="macro">warn!</span>(
+<a href=#501 id=501 data-nosnippet>501</a>                target: LOG_NET_API,
+<a href=#502 id=502 data-nosnippet>502</a>                limit = iroh_api_max_requests_per_connection,
+<a href=#503 id=503 data-nosnippet>503</a>                <span class="string">"Iroh API request limit reached for connection, blocking new requests"
+<a href=#504 id=504 data-nosnippet>504</a>            </span>);
+<a href=#505 id=505 data-nosnippet>505</a>        }
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="kw">let </span>permit = parallel_requests_limit
+<a href=#507 id=507 data-nosnippet>507</a>            .clone()
+<a href=#508 id=508 data-nosnippet>508</a>            .acquire_owned()
+<a href=#509 id=509 data-nosnippet>509</a>            .<span class="kw">await
+<a href=#510 id=510 data-nosnippet>510</a>            </span>.expect(<span class="string">"semaphore should not be closed"</span>);
+<a href=#511 id=511 data-nosnippet>511</a>        task_group.spawn_cancellable_silent(
+<a href=#512 id=512 data-nosnippet>512</a>            <span class="string">"handle-iroh-request"</span>,
+<a href=#513 id=513 data-nosnippet>513</a>            handle_request(
+<a href=#514 id=514 data-nosnippet>514</a>                consensus_api.clone(),
+<a href=#515 id=515 data-nosnippet>515</a>                core_api.clone(),
+<a href=#516 id=516 data-nosnippet>516</a>                module_api.clone(),
+<a href=#517 id=517 data-nosnippet>517</a>                send_stream,
+<a href=#518 id=518 data-nosnippet>518</a>                recv_stream,
+<a href=#519 id=519 data-nosnippet>519</a>                permit,
+<a href=#520 id=520 data-nosnippet>520</a>            )
+<a href=#521 id=521 data-nosnippet>521</a>            .then(|result| <span class="kw">async </span>{
+<a href=#522 id=522 data-nosnippet>522</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = result {
+<a href=#523 id=523 data-nosnippet>523</a>                    <span class="macro">warn!</span>(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), <span class="string">"Failed to handle iroh request"</span>);
+<a href=#524 id=524 data-nosnippet>524</a>                }
+<a href=#525 id=525 data-nosnippet>525</a>            }),
+<a href=#526 id=526 data-nosnippet>526</a>        );
+<a href=#527 id=527 data-nosnippet>527</a>    }
+<a href=#528 id=528 data-nosnippet>528</a>}
+<a href=#529 id=529 data-nosnippet>529</a>
+<a href=#530 id=530 data-nosnippet>530</a><span class="kw">async fn </span>handle_request(
+<a href=#531 id=531 data-nosnippet>531</a>    consensus_api: Arc&lt;ConsensusApi&gt;,
+<a href=#532 id=532 data-nosnippet>532</a>    core_api: Arc&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;,
+<a href=#533 id=533 data-nosnippet>533</a>    module_api: Arc&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;,
+<a href=#534 id=534 data-nosnippet>534</a>    <span class="kw-2">mut </span>send_stream: SendStream,
+<a href=#535 id=535 data-nosnippet>535</a>    <span class="kw-2">mut </span>recv_stream: RecvStream,
+<a href=#536 id=536 data-nosnippet>536</a>    _request_permit: tokio::sync::OwnedSemaphorePermit,
+<a href=#537 id=537 data-nosnippet>537</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#538 id=538 data-nosnippet>538</a>    <span class="kw">let </span>request = recv_stream.read_to_end(<span class="number">100_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#539 id=539 data-nosnippet>539</a>
+<a href=#540 id=540 data-nosnippet>540</a>    <span class="kw">let </span>request = serde_json::from_slice::&lt;IrohApiRequest&gt;(<span class="kw-2">&amp;</span>request)<span class="question-mark">?</span>;
 <a href=#541 id=541 data-nosnippet>541</a>
-<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">let </span>request = serde_json::from_slice::&lt;IrohApiRequest&gt;(<span class="kw-2">&amp;</span>request)<span class="question-mark">?</span>;
+<a href=#542 id=542 data-nosnippet>542</a>    <span class="kw">let </span>response = await_response(consensus_api, core_api, module_api, request).<span class="kw">await</span>;
 <a href=#543 id=543 data-nosnippet>543</a>
-<a href=#544 id=544 data-nosnippet>544</a>    <span class="kw">let </span>response = await_response(consensus_api, core_api, module_api, request).<span class="kw">await</span>;
+<a href=#544 id=544 data-nosnippet>544</a>    <span class="kw">let </span>response = serde_json::to_vec(<span class="kw-2">&amp;</span>response)<span class="question-mark">?</span>;
 <a href=#545 id=545 data-nosnippet>545</a>
-<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">let </span>response = serde_json::to_vec(<span class="kw-2">&amp;</span>response)<span class="question-mark">?</span>;
+<a href=#546 id=546 data-nosnippet>546</a>    send_stream.write_all(<span class="kw-2">&amp;</span>response).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#547 id=547 data-nosnippet>547</a>
-<a href=#548 id=548 data-nosnippet>548</a>    send_stream.write_all(<span class="kw-2">&amp;</span>response).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#548 id=548 data-nosnippet>548</a>    send_stream.finish()<span class="question-mark">?</span>;
 <a href=#549 id=549 data-nosnippet>549</a>
-<a href=#550 id=550 data-nosnippet>550</a>    send_stream.finish()<span class="question-mark">?</span>;
-<a href=#551 id=551 data-nosnippet>551</a>
-<a href=#552 id=552 data-nosnippet>552</a>    <span class="prelude-val">Ok</span>(())
-<a href=#553 id=553 data-nosnippet>553</a>}
-<a href=#554 id=554 data-nosnippet>554</a>
-<a href=#555 id=555 data-nosnippet>555</a><span class="kw">async fn </span>await_response(
-<a href=#556 id=556 data-nosnippet>556</a>    consensus_api: Arc&lt;ConsensusApi&gt;,
-<a href=#557 id=557 data-nosnippet>557</a>    core_api: Arc&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;,
-<a href=#558 id=558 data-nosnippet>558</a>    module_api: Arc&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;,
-<a href=#559 id=559 data-nosnippet>559</a>    request: IrohApiRequest,
-<a href=#560 id=560 data-nosnippet>560</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Value, ApiError&gt; {
-<a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">match </span>request.method {
-<a href=#562 id=562 data-nosnippet>562</a>        ApiMethod::Core(method) =&gt; {
-<a href=#563 id=563 data-nosnippet>563</a>            <span class="kw">let </span>endpoint = core_api.get(<span class="kw-2">&amp;</span>method).ok_or(ApiError::not_found(method))<span class="question-mark">?</span>;
+<a href=#550 id=550 data-nosnippet>550</a>    <span class="prelude-val">Ok</span>(())
+<a href=#551 id=551 data-nosnippet>551</a>}
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a><span class="kw">async fn </span>await_response(
+<a href=#554 id=554 data-nosnippet>554</a>    consensus_api: Arc&lt;ConsensusApi&gt;,
+<a href=#555 id=555 data-nosnippet>555</a>    core_api: Arc&lt;BTreeMap&lt;String, ApiEndpoint&lt;ConsensusApi&gt;&gt;&gt;,
+<a href=#556 id=556 data-nosnippet>556</a>    module_api: Arc&lt;BTreeMap&lt;ModuleInstanceId, BTreeMap&lt;String, ApiEndpoint&lt;DynServerModule&gt;&gt;&gt;&gt;,
+<a href=#557 id=557 data-nosnippet>557</a>    request: IrohApiRequest,
+<a href=#558 id=558 data-nosnippet>558</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Value, ApiError&gt; {
+<a href=#559 id=559 data-nosnippet>559</a>    <span class="kw">match </span>request.method {
+<a href=#560 id=560 data-nosnippet>560</a>        ApiMethod::Core(method) =&gt; {
+<a href=#561 id=561 data-nosnippet>561</a>            <span class="kw">let </span>endpoint = core_api.get(<span class="kw-2">&amp;</span>method).ok_or(ApiError::not_found(method))<span class="question-mark">?</span>;
+<a href=#562 id=562 data-nosnippet>562</a>
+<a href=#563 id=563 data-nosnippet>563</a>            <span class="kw">let </span>(state, context) = consensus_api.context(<span class="kw-2">&amp;</span>request.request, <span class="prelude-val">None</span>).<span class="kw">await</span>;
 <a href=#564 id=564 data-nosnippet>564</a>
-<a href=#565 id=565 data-nosnippet>565</a>            <span class="kw">let </span>(state, context) = consensus_api.context(<span class="kw-2">&amp;</span>request.request, <span class="prelude-val">None</span>).<span class="kw">await</span>;
-<a href=#566 id=566 data-nosnippet>566</a>
-<a href=#567 id=567 data-nosnippet>567</a>            (endpoint.handler)(state, context, request.request).<span class="kw">await
-<a href=#568 id=568 data-nosnippet>568</a>        </span>}
-<a href=#569 id=569 data-nosnippet>569</a>        ApiMethod::Module(module_id, method) =&gt; {
-<a href=#570 id=570 data-nosnippet>570</a>            <span class="kw">let </span>endpoint = module_api
-<a href=#571 id=571 data-nosnippet>571</a>                .get(<span class="kw-2">&amp;</span>module_id)
-<a href=#572 id=572 data-nosnippet>572</a>                .ok_or(ApiError::not_found(module_id.to_string()))<span class="question-mark">?
-<a href=#573 id=573 data-nosnippet>573</a>                </span>.get(<span class="kw-2">&amp;</span>method)
-<a href=#574 id=574 data-nosnippet>574</a>                .ok_or(ApiError::not_found(method))<span class="question-mark">?</span>;
-<a href=#575 id=575 data-nosnippet>575</a>
-<a href=#576 id=576 data-nosnippet>576</a>            <span class="kw">let </span>(state, context) = consensus_api
-<a href=#577 id=577 data-nosnippet>577</a>                .context(<span class="kw-2">&amp;</span>request.request, <span class="prelude-val">Some</span>(module_id))
-<a href=#578 id=578 data-nosnippet>578</a>                .<span class="kw">await</span>;
-<a href=#579 id=579 data-nosnippet>579</a>
-<a href=#580 id=580 data-nosnippet>580</a>            (endpoint.handler)(state, context, request.request).<span class="kw">await
-<a href=#581 id=581 data-nosnippet>581</a>        </span>}
-<a href=#582 id=582 data-nosnippet>582</a>    }
-<a href=#583 id=583 data-nosnippet>583</a>}</code></pre></div></section></main></body></html>
+<a href=#565 id=565 data-nosnippet>565</a>            (endpoint.handler)(state, context, request.request).<span class="kw">await
+<a href=#566 id=566 data-nosnippet>566</a>        </span>}
+<a href=#567 id=567 data-nosnippet>567</a>        ApiMethod::Module(module_id, method) =&gt; {
+<a href=#568 id=568 data-nosnippet>568</a>            <span class="kw">let </span>endpoint = module_api
+<a href=#569 id=569 data-nosnippet>569</a>                .get(<span class="kw-2">&amp;</span>module_id)
+<a href=#570 id=570 data-nosnippet>570</a>                .ok_or(ApiError::not_found(module_id.to_string()))<span class="question-mark">?
+<a href=#571 id=571 data-nosnippet>571</a>                </span>.get(<span class="kw-2">&amp;</span>method)
+<a href=#572 id=572 data-nosnippet>572</a>                .ok_or(ApiError::not_found(method))<span class="question-mark">?</span>;
+<a href=#573 id=573 data-nosnippet>573</a>
+<a href=#574 id=574 data-nosnippet>574</a>            <span class="kw">let </span>(state, context) = consensus_api
+<a href=#575 id=575 data-nosnippet>575</a>                .context(<span class="kw-2">&amp;</span>request.request, <span class="prelude-val">Some</span>(module_id))
+<a href=#576 id=576 data-nosnippet>576</a>                .<span class="kw">await</span>;
+<a href=#577 id=577 data-nosnippet>577</a>
+<a href=#578 id=578 data-nosnippet>578</a>            (endpoint.handler)(state, context, request.request).<span class="kw">await
+<a href=#579 id=579 data-nosnippet>579</a>        </span>}
+<a href=#580 id=580 data-nosnippet>580</a>    }
+<a href=#581 id=581 data-nosnippet>581</a>}</code></pre></div></section></main></body></html>

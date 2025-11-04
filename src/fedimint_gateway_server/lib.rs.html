@@ -390,7 +390,7 @@
 <a href=#390 id=390 data-nosnippet>390</a>        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
 <a href=#391 id=391 data-nosnippet>391</a>
 <a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span>client_builder =
-<a href=#393 id=393 data-nosnippet>393</a>            GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend);
+<a href=#393 id=393 data-nosnippet>393</a>            GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#394 id=394 data-nosnippet>394</a>
 <a href=#395 id=395 data-nosnippet>395</a>        <span class="macro">info!</span>(
 <a href=#396 id=396 data-nosnippet>396</a>            target: LOG_GATEWAY,
