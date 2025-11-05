@@ -52,8 +52,8 @@ async fn login_submit<E>(
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
-    if bcrypt::verify(input.password, &state.api.get_password_hash())
-        .expect("bcyrpt hash should be valid")
+    if let Ok(verify) = bcrypt::verify(input.password, &state.api.get_password_hash())
+        && verify
     {
         let mut cookie = Cookie::new(state.auth_cookie_name.clone(), state.auth_cookie_value);
         cookie.set_path(ROOT_ROUTE);
