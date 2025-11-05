@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["dashboard_view","login_form","login_submit","router"],"mod":["federation","general","lightning"],"trait":["IAdminGateway"],"type":["DynGatewayApi"]};

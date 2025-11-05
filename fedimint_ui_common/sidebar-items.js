@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["LOGIN_ROUTE","ROOT_ROUTE"],"fn":["common_head","dashboard_layout","login_form_response","login_layout"],"mod":["assets","auth"],"struct":["LoginInput","UiState"]};

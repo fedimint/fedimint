@@ -55,19 +55,19 @@
 <a href=#55 id=55 data-nosnippet>55</a>    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
 <a href=#56 id=56 data-nosnippet>56</a>    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 <a href=#57 id=57 data-nosnippet>57</a>};
-<a href=#58 id=58 data-nosnippet>58</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
-<a href=#59 id=59 data-nosnippet>59</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-<a href=#60 id=60 data-nosnippet>60</a></span><span class="kw">use </span>fedimint_core::task::sleep;
-<a href=#61 id=61 data-nosnippet>61</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, FmtCompactAnyhow <span class="kw">as _</span>, backoff_util, retry};
-<a href=#62 id=62 data-nosnippet>62</a><span class="kw">use </span>fedimint_core::{
-<a href=#63 id=63 data-nosnippet>63</a>    Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
-<a href=#64 id=64 data-nosnippet>64</a>    get_network_for_address, push_db_key_items, push_db_pair_items,
-<a href=#65 id=65 data-nosnippet>65</a>};
-<a href=#66 id=66 data-nosnippet>66</a><span class="kw">use </span>fedimint_logging::LOG_MODULE_WALLET;
-<a href=#67 id=67 data-nosnippet>67</a><span class="kw">use </span>fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
-<a href=#68 id=68 data-nosnippet>68</a><span class="kw">use </span>fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
-<a href=#69 id=69 data-nosnippet>69</a><span class="kw">use </span>fedimint_server_core::migration::ServerModuleDbMigrationFn;
-<a href=#70 id=70 data-nosnippet>70</a><span class="kw">use </span>fedimint_server_core::net::check_auth;
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">use </span>fedimint_core::net::auth::check_auth;
+<a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
+<a href=#60 id=60 data-nosnippet>60</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">use </span>fedimint_core::task::sleep;
+<a href=#62 id=62 data-nosnippet>62</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, FmtCompactAnyhow <span class="kw">as _</span>, backoff_util, retry};
+<a href=#63 id=63 data-nosnippet>63</a><span class="kw">use </span>fedimint_core::{
+<a href=#64 id=64 data-nosnippet>64</a>    Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+<a href=#65 id=65 data-nosnippet>65</a>    get_network_for_address, push_db_key_items, push_db_pair_items,
+<a href=#66 id=66 data-nosnippet>66</a>};
+<a href=#67 id=67 data-nosnippet>67</a><span class="kw">use </span>fedimint_logging::LOG_MODULE_WALLET;
+<a href=#68 id=68 data-nosnippet>68</a><span class="kw">use </span>fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
+<a href=#69 id=69 data-nosnippet>69</a><span class="kw">use </span>fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
+<a href=#70 id=70 data-nosnippet>70</a><span class="kw">use </span>fedimint_server_core::migration::ServerModuleDbMigrationFn;
 <a href=#71 id=71 data-nosnippet>71</a><span class="kw">use </span>fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 <a href=#72 id=72 data-nosnippet>72</a><span class="kw">pub use </span>fedimint_wallet_common <span class="kw">as </span>common;
 <a href=#73 id=73 data-nosnippet>73</a><span class="kw">use </span>fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};

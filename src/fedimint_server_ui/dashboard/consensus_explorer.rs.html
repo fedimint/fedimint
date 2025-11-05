@@ -5,10 +5,10 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::session_outcome::{AcceptedItem, SessionStatusV2};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::transaction::TransactionSignature;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_server_core::dashboard_ui::DynDashboardApi;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>maud::{Markup, html};
-<a href=#9 id=9 data-nosnippet>9</a>
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="kw">crate</span>::UiState;
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::auth::UserAuth;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_ui_common::UiState;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_ui_common::auth::UserAuth;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>maud::{Markup, html};
+<a href=#11 id=11 data-nosnippet>11</a>
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span><span class="kw">crate</span>::dashboard::dashboard_layout;
 <a href=#13 id=13 data-nosnippet>13</a>
 <a href=#14 id=14 data-nosnippet>14</a><span class="doccomment">/// Handler for the consensus explorer view
@@ -135,7 +135,7 @@
 <a href=#135 id=135 data-nosnippet>135</a>        }
 <a href=#136 id=136 data-nosnippet>136</a>    };
 <a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>    Html(dashboard_layout(content, <span class="prelude-val">None</span>).into_string()).into_response()
+<a href=#138 id=138 data-nosnippet>138</a>    Html(dashboard_layout(content, <span class="string">"Fedimint Guardian UI"</span>, <span class="prelude-val">None</span>).into_string()).into_response()
 <a href=#139 id=139 data-nosnippet>139</a>}
 <a href=#140 id=140 data-nosnippet>140</a>
 <a href=#141 id=141 data-nosnippet>141</a><span class="doccomment">/// Format the type of consensus item for display
