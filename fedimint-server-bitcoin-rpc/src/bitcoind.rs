@@ -29,7 +29,7 @@ impl BitcoindClient {
         info!(
             target: LOG_SERVER,
             %url,
-            "Initiallizing bitcoin bitcoind backend"
+            "Initializing bitcoin bitcoind backend"
         );
         Ok(Self {
             client: Client::new(url.as_str(), auth)?,

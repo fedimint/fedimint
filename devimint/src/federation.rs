@@ -677,7 +677,7 @@ impl Federation {
         Ok(())
     }
 
-    /// Inititates multiple peg-ins to the same federation for the set of
+    /// Initiates multiple peg-ins to the same federation for the set of
     /// gateways to save on mining blocks in parallel.
     pub async fn pegin_gateways(
         &self,

@@ -51,7 +51,7 @@ use fedimint_wallet_server::common::config::{
     WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 };
 use fedimintd_envs::{
-    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
     FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
@@ -187,7 +187,7 @@ struct ServerOpts {
     with_jaeger: bool,
 
     /// Enable prometheus metrics
-    #[arg(long, env = FM_BIND_METRCIS_ENV)]
+    #[arg(long, env = FM_BIND_METRICS_ENV)]
     bind_metrics: Option<SocketAddr>,
 
     /// Comma separated list of API secrets.
