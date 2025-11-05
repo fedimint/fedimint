@@ -26,14 +26,14 @@ use super::Connector;
 use crate::api::{DynClientConnection, IClientConnection, PeerError, PeerResult};
 
 #[derive(Debug, Clone)]
-pub struct WebsocketEndpoint {
+pub struct WebsocketConnector {
     /// Connection pool for websocket connections
     #[allow(clippy::type_complexity)]
     connections:
         Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<tokio::sync::OnceCell<Arc<WsClient>>>>>>,
 }
 
-impl WebsocketEndpoint {
+impl WebsocketConnector {
     pub fn new() -> Self {
         Self {
             connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
@@ -142,14 +142,14 @@ impl WebsocketEndpoint {
     }
 }
 
-impl Default for WebsocketEndpoint {
+impl Default for WebsocketConnector {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait::async_trait]
-impl Connector for WebsocketEndpoint {
+impl Connector for WebsocketConnector {
     async fn connect(
         &self,
         url: &SafeUrl,

@@ -16,17 +16,17 @@ use super::{Connector, DynClientConnection};
 use crate::api::{IClientConnection as _, PeerError};
 
 #[derive(Clone)]
-pub struct TorEndpoint {
+pub struct TorConnector {
     tor_client: TorClient<tor_rtcompat::PreferredRuntime>,
 }
 
-impl fmt::Debug for TorEndpoint {
+impl fmt::Debug for TorConnector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TorEndpoint").finish_non_exhaustive()
     }
 }
 
-impl TorEndpoint {
+impl TorConnector {
     pub async fn bootstrap() -> anyhow::Result<Self> {
         use tracing::debug;
 
@@ -45,7 +45,7 @@ impl TorEndpoint {
 }
 
 #[async_trait]
-impl Connector for TorEndpoint {
+impl Connector for TorConnector {
     #[allow(clippy::too_many_lines)]
     async fn connect(
         &self,

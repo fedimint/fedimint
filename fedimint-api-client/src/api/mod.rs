@@ -56,7 +56,7 @@ use serde_json::Value;
 use tracing::{Instrument, debug, instrument, trace, trace_span, warn};
 
 use crate::api;
-use crate::api::ws::WebsocketEndpoint;
+use crate::api::ws::WebsocketConnector;
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
@@ -649,7 +649,7 @@ impl ConnectorRegistryBuilder {
             inner.insert(
                 "iroh".to_string(),
                 Arc::new(
-                    api::iroh::IrohEndpoint::new(
+                    api::iroh::IrohConnector::new(
                         self.iroh_dns,
                         self.iroh_pkarr_dht,
                         self.iroh_next,
@@ -663,15 +663,15 @@ impl ConnectorRegistryBuilder {
             match self.ws_force_tor {
                 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
                 true => {
-                    use crate::api::tor::TorEndpoint;
+                    use crate::api::tor::TorConnector;
 
-                    let tor_endpoint = Arc::new(TorEndpoint::bootstrap().await?);
+                    let tor_endpoint = Arc::new(TorConnector::bootstrap().await?);
                     inner.insert("wss".into(), tor_endpoint.clone());
                     inner.insert("ws".into(), tor_endpoint);
                 }
 
                 false => {
-                    let websocket_endpoint = Arc::new(WebsocketEndpoint::new());
+                    let websocket_endpoint = Arc::new(WebsocketConnector::new());
                     inner.insert("wss".into(), websocket_endpoint.clone());
                     inner.insert("ws".into(), websocket_endpoint);
                 }

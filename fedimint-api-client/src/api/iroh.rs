@@ -29,7 +29,7 @@ use url::Url;
 use super::{DynClientConnection, IClientConnection, PeerError, PeerResult};
 
 #[derive(Clone)]
-pub(crate) struct IrohEndpoint {
+pub(crate) struct IrohConnector {
     stable: iroh::endpoint::Endpoint,
     next: Option<iroh_next::endpoint::Endpoint>,
 
@@ -51,7 +51,7 @@ pub(crate) struct IrohEndpoint {
     >,
 }
 
-impl fmt::Debug for IrohEndpoint {
+impl fmt::Debug for IrohConnector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IrohEndpoint")
             .field("stable-id", &self.stable.node_id())
@@ -63,7 +63,7 @@ impl fmt::Debug for IrohEndpoint {
     }
 }
 
-impl IrohEndpoint {
+impl IrohConnector {
     pub async fn new(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
@@ -216,7 +216,7 @@ impl IrohEndpoint {
 }
 
 #[async_trait::async_trait]
-impl crate::api::Connector for IrohEndpoint {
+impl crate::api::Connector for IrohConnector {
     async fn connect(
         &self,
         url: &SafeUrl,
@@ -294,7 +294,7 @@ impl crate::api::Connector for IrohEndpoint {
     }
 }
 
-impl IrohEndpoint {
+impl IrohConnector {
     #[cfg(not(target_family = "wasm"))]
     fn spawn_connection_monitoring_stable(endpoint: &Endpoint, node_id: NodeId) {
         if let Ok(mut conn_type_watcher) = endpoint.conn_type(node_id) {
