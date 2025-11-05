@@ -1460,16 +1460,6 @@ impl Gateway {
         Ok(response)
     }
 
-    /// Returns a list of Lightning network channels from the Gateway's
-    /// Lightning node.
-    pub async fn handle_list_channels_msg(
-        &self,
-    ) -> AdminResult<Vec<fedimint_gateway_common::ChannelInfo>> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.list_channels().await?;
-        Ok(response.channels)
-    }
-
     /// Send funds from the gateway's lightning node on-chain wallet.
     pub async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
@@ -2168,6 +2158,16 @@ impl IAdminGateway for Gateway {
                 .expect("could not parse iroh api"),
             lightning_mode: self.lightning_mode.clone(),
         })
+    }
+
+    /// Returns a list of Lightning network channels from the Gateway's
+    /// Lightning node.
+    async fn handle_list_channels_msg(
+        &self,
+    ) -> AdminResult<Vec<fedimint_gateway_common::ChannelInfo>> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.list_channels().await?;
+        Ok(response.channels)
     }
 
     fn get_password_hash(&self) -> String {

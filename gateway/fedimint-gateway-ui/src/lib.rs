@@ -29,6 +29,10 @@ pub trait IAdminGateway {
 
     async fn handle_get_info(&self) -> Result<GatewayInfo, Self::Error>;
 
+    async fn handle_list_channels_msg(
+        &self,
+    ) -> Result<Vec<fedimint_gateway_common::ChannelInfo>, Self::Error>;
+
     fn get_password_hash(&self) -> String;
 
     fn gatewayd_version(&self) -> String;
@@ -94,12 +98,14 @@ where
 
     let content = html! {
         div class="row gy-4" {
-            div class="col-md-6" {
+            div class="col-md-12" {
                 (general::render(&gateway_info))
             }
+        }
 
-            div class="col-md-6" {
-                (lightning::render(&gateway_info))
+        div class="row gy-4 mt-2" {
+            div class="col-md-12" {
+                (lightning::render(&gateway_info, &state.api).await)
             }
         }
 
