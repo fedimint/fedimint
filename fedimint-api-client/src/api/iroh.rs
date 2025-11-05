@@ -1,8 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use async_trait::async_trait;
@@ -22,7 +21,6 @@ use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_next::Watcher as _;
 use serde_json::Value;
-use tokio::sync::OnceCell;
 use tracing::{debug, trace, warn};
 use url::Url;
 
@@ -39,16 +37,6 @@ pub(crate) struct IrohConnector {
     /// This is useful for testing, or forcing non-default network
     /// connectivity.
     connection_overrides: BTreeMap<NodeId, NodeAddr>,
-
-    /// Connection pool for stable endpoint connections
-    connections_stable: Arc<tokio::sync::Mutex<HashMap<NodeId, Arc<OnceCell<Connection>>>>>,
-
-    /// Connection pool for next endpoint connections
-    connections_next: Arc<
-        tokio::sync::Mutex<
-            HashMap<iroh_next::NodeId, Arc<OnceCell<iroh_next::endpoint::Connection>>>,
-        >,
-    >,
 }
 
 impl fmt::Debug for IrohConnector {
@@ -190,8 +178,6 @@ impl IrohConnector {
             stable: endpoint_stable,
             next: endpoint_next,
             connection_overrides: BTreeMap::new(),
-            connections_stable: Arc::new(tokio::sync::Mutex::new(HashMap::default())),
-            connections_next: Arc::new(tokio::sync::Mutex::new(HashMap::default())),
         })
     }
 
@@ -238,14 +224,13 @@ impl crate::api::Connector for IrohConnector {
         >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
 
-        // Use connection pool for stable endpoint
         let self_clone = self.clone();
         futures.push(Box::pin({
             let connection_override = connection_override.clone();
             async move {
                 (
                     self_clone
-                        .get_or_create_connection_stable(node_id, connection_override)
+                        .make_new_connection_stable(node_id, connection_override)
                         .await
                         .map(super::IClientConnection::into_dyn),
                     "stable",
@@ -253,14 +238,13 @@ impl crate::api::Connector for IrohConnector {
             }
         }));
 
-        // Use connection pool for next endpoint if available
         if let Some(endpoint_next) = &self.next {
             let self_clone = self.clone();
             let endpoint_next = endpoint_next.clone();
             futures.push(Box::pin(async move {
                 (
                     self_clone
-                        .get_or_create_connection_next(&endpoint_next, node_id, connection_override)
+                        .make_new_connection_next(&endpoint_next, node_id, connection_override)
                         .await
                         .map(super::IClientConnection::into_dyn),
                     "next",
@@ -328,33 +312,13 @@ impl IrohConnector {
             });
         }
     }
-    async fn get_or_create_connection_stable(
+    async fn make_new_connection_stable(
         &self,
         node_id: NodeId,
         node_addr: Option<NodeAddr>,
     ) -> PeerResult<Connection> {
-        let mut pool_lock = self.connections_stable.lock().await;
-
-        let entry_arc = pool_lock
-            .entry(node_id)
-            .and_modify(|entry_arc| {
-                // Check if existing connection is disconnected and remove it
-                if let Some(existing_conn) = entry_arc.get()
-                    && existing_conn.close_reason().is_some() {
-                        trace!(target: LOG_NET_IROH, %node_id, "Existing stable connection is disconnected, removing from pool");
-                        *entry_arc = Arc::new(OnceCell::new());
-                    }
-            })
-            .or_insert_with(|| Arc::new(OnceCell::new()))
-            .clone();
-
-        // Drop the pool lock so other connections can work in parallel
-        drop(pool_lock);
-
-        let conn = entry_arc
-            .get_or_try_init(|| async {
-                trace!(target: LOG_NET_IROH, %node_id, "Creating new stable connection");
-                let conn = match node_addr.clone() {
+        trace!(target: LOG_NET_IROH, %node_id, "Creating new stable connection");
+        let conn = match node_addr.clone() {
                     Some(node_addr) => {
                         trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
                         let conn = self.stable
@@ -370,15 +334,10 @@ impl IrohConnector {
                     None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
                 }.map_err(PeerError::Connection)?;
 
-                Ok(conn)
-            })
-            .await?;
-
-        trace!(target: LOG_NET_IROH, %node_id, "Using stable connection");
-        Ok(conn.clone())
+        Ok(conn)
     }
 
-    async fn get_or_create_connection_next(
+    async fn make_new_connection_next(
         &self,
         endpoint_next: &iroh_next::Endpoint,
         node_id: NodeId,
@@ -386,29 +345,10 @@ impl IrohConnector {
     ) -> PeerResult<iroh_next::endpoint::Connection> {
         let next_node_id = iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail");
 
-        let mut pool_lock = self.connections_next.lock().await;
-
-        let entry_arc = pool_lock
-            .entry(next_node_id)
-            .and_modify(|entry_arc| {
-                // Check if existing connection is disconnected and remove it
-                if let Some(existing_conn) = entry_arc.get()
-                    && existing_conn.close_reason().is_some() {
-                        trace!(target: LOG_NET_IROH, %node_id, "Existing next connection is disconnected, removing from pool");
-                        *entry_arc = Arc::new(OnceCell::new());
-                    }
-            })
-            .or_insert_with(|| Arc::new(OnceCell::new()))
-            .clone();
-
-        // Drop the pool lock so other connections can work in parallel
-        drop(pool_lock);
-
         let endpoint_next = endpoint_next.clone();
-        let conn = entry_arc
-            .get_or_try_init(|| async move {
-                trace!(target: LOG_NET_IROH, %node_id, "Creating new next connection");
-                let conn = match node_addr.clone() {
+
+        trace!(target: LOG_NET_IROH, %node_id, "Creating new next connection");
+        let conn = match node_addr.clone() {
                     Some(node_addr) => {
                         trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
                         let node_addr = node_addr_stable_to_next(&node_addr);
@@ -431,12 +371,7 @@ impl IrohConnector {
                 .map_err(Into::into)
                 .map_err(PeerError::Connection)?;
 
-                Ok(conn)
-            })
-            .await?;
-
-        trace!(target: LOG_NET_IROH, %node_id, "Using next connection");
-        Ok(conn.clone())
+        Ok(conn)
     }
 }
 
@@ -482,6 +417,10 @@ impl IClientConnection for Connection {
     async fn await_disconnection(&self) {
         self.closed().await;
     }
+
+    fn is_connected(&self) -> bool {
+        self.close_reason().is_none()
+    }
 }
 
 #[async_trait]
@@ -515,5 +454,9 @@ impl IClientConnection for iroh_next::endpoint::Connection {
 
     async fn await_disconnection(&self) {
         self.closed().await;
+    }
+
+    fn is_connected(&self) -> bool {
+        self.close_reason().is_none()
     }
 }
