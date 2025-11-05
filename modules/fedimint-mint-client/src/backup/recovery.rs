@@ -2,20 +2,24 @@ use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt;
 
+use anyhow::Context;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
     RecoveryFromHistory, RecoveryFromHistoryCommon,
 };
 use fedimint_client_module::module::{ClientContext, OutPointRange};
+use fedimint_client_module::transaction::TransactionBuilder;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{
     Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply, async_trait_maybe_send,
 };
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY, LOG_CLIENT_RECOVERY_MINT};
-use fedimint_mint_common::{MintInput, MintOutput, Nonce};
+use fedimint_logging::{LOG_CLIENT_RECOVERY, LOG_CLIENT_RECOVERY_MINT};
+use fedimint_mint_common::{MintCommonInit, MintInput, MintOutput, Nonce};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
 use threshold_crypto::G1Affine;
@@ -24,13 +28,19 @@ use tracing::{debug, info, trace, warn};
 use super::EcashBackup;
 use crate::backup::EcashBackupV0;
 use crate::client_db::{
-    NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey, ReusedNoteIndices,
+    NextECashNoteIndexKey, RecoveryFinalizedKey, RecoveryStateKey, ReusedNoteIndices,
 };
-use crate::event::NoteCreated;
+use crate::event::RecoveryReissuanceStarted;
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
 };
-use crate::{MintClientInit, MintClientModule, MintClientStateMachines, NoteIndex, SpendableNote};
+use crate::{
+    MintClientInit, MintClientModule, MintClientStateMachines, MintOperationMeta,
+    MintOperationMetaVariant, NoteIndex, ReissueExternalNotesError, SpendableNote,
+    create_bundle_for_inputs,
+};
+
+const MAX_REISSUE_NOTES_PER_TX: usize = 100;
 
 #[derive(Clone, Debug)]
 pub struct MintRecovery {
@@ -161,6 +171,7 @@ impl RecoveryFromHistory for MintRecovery {
     }
 
     /// Handle session outcome, adjusting the current state
+    #[allow(clippy::too_many_lines)]
     async fn finalize_dbtx(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         let finalized = self.state.clone().finalize();
 
@@ -182,24 +193,69 @@ impl RecoveryFromHistory for MintRecovery {
         debug!(
             target: LOG_CLIENT_RECOVERY_MINT,
             len = finalized.spendable_notes.count_items(),
-            "Restoring spendable notes"
+            "Reissuing spendable notes"
         );
-        for (amount, note) in finalized.spendable_notes.into_iter_items() {
-            let key = NoteKey {
-                amount,
-                nonce: note.nonce(),
-            };
-            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Restoring note");
-            self.client_ctx
-                .log_event(
-                    dbtx,
-                    NoteCreated {
-                        nonce: note.nonce(),
-                    },
-                )
-                .await;
-            dbtx.insert_new_entry(&key, &note.to_undecoded()).await;
+
+        let operation_id = OperationId::new_random();
+        let mut out_point_ranges = Vec::new();
+        let reissue_amount = finalized.spendable_notes.total_amount();
+
+        // We reissue notes in chunks to avoid hitting consensus size limits and in the
+        // future minimize transaction fees.
+        for notes in finalized
+            .spendable_notes
+            .into_iter_items()
+            .chunks(MAX_REISSUE_NOTES_PER_TX)
+            .into_iter()
+            .map(Iterator::collect::<TieredMulti<_>>)
+            .collect::<Vec<_>>()
+        {
+            let amount = notes.total_amount();
+            debug!(
+                target: LOG_CLIENT_RECOVERY_MINT,
+                len = notes.count_items(),
+                %amount,
+                ?operation_id,
+                "Reissuing chunk of spendable notes"
+            );
+
+            let mint_inputs = self.client_ctx.self_ref().create_input_from_notes(notes)?;
+
+            let tx = TransactionBuilder::new().with_inputs(
+                self.client_ctx
+                    .make_dyn(create_bundle_for_inputs(mint_inputs, operation_id)),
+            );
+
+            let out_range = self
+                .client_ctx
+                .finalize_and_submit_transaction_dbtx(dbtx, operation_id, tx)
+                .await
+                .context(ReissueExternalNotesError::AlreadyReissued)?;
+            out_point_ranges.push(out_range);
         }
+
+        self.client_ctx
+            .log_event(
+                dbtx,
+                RecoveryReissuanceStarted {
+                    amount: reissue_amount,
+                    operation_id,
+                },
+            )
+            .await;
+
+        self.client_ctx
+            .add_operation_log_entry_dbtx(
+                dbtx,
+                operation_id,
+                MintCommonInit::KIND.as_str(),
+                MintOperationMeta {
+                    variant: MintOperationMetaVariant::Recovery { out_point_ranges },
+                    amount: reissue_amount,
+                    extra_meta: serde_json::Value::Null,
+                },
+            )
+            .await;
 
         for (amount, note_idx) in finalized.next_note_idx.iter() {
             debug!(
