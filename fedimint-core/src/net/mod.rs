@@ -1,4 +1,5 @@
 pub mod api_announcement;
+pub mod auth;
 pub mod iroh;
 pub mod peers;
 

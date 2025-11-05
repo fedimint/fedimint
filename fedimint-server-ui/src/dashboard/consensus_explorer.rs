@@ -5,10 +5,10 @@ use fedimint_core::hex;
 use fedimint_core::session_outcome::{AcceptedItem, SessionStatusV2};
 use fedimint_core::transaction::TransactionSignature;
 use fedimint_server_core::dashboard_ui::DynDashboardApi;
+use fedimint_ui_common::UiState;
+use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
-use crate::UiState;
-use crate::auth::UserAuth;
 use crate::dashboard::dashboard_layout;
 
 /// Handler for the consensus explorer view
@@ -135,7 +135,7 @@ pub async fn consensus_explorer_view(
         }
     };
 
-    Html(dashboard_layout(content, None).into_string()).into_response()
+    Html(dashboard_layout(content, "Fedimint Guardian UI", None).into_string()).into_response()
 }
 
 /// Format the type of consensus item for display

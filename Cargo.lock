@@ -3255,6 +3255,7 @@ dependencies = [
  "fedimint-eventlog",
  "fedimint-gateway-common",
  "fedimint-gateway-server-db",
+ "fedimint-gateway-ui",
  "fedimint-gw-client",
  "fedimint-gwv2-client",
  "fedimint-lightning",
@@ -3324,6 +3325,21 @@ dependencies = [
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-gateway-ui"
+version = "0.10.0-alpha"
+dependencies = [
+ "async-trait",
+ "axum 0.8.4",
+ "axum-extra",
+ "bcrypt",
+ "fedimint-core",
+ "fedimint-gateway-common",
+ "fedimint-ui-common",
+ "maud",
  "tracing",
 ]
 
@@ -4113,6 +4129,7 @@ dependencies = [
  "fedimint-lnv2-server",
  "fedimint-meta-server",
  "fedimint-server-core",
+ "fedimint-ui-common",
  "fedimint-wallet-server",
  "maud",
  "serde",
@@ -4246,6 +4263,17 @@ dependencies = [
  "rand_chacha 0.3.1",
  "serde",
  "serde-big-array",
+]
+
+[[package]]
+name = "fedimint-ui-common"
+version = "0.10.0-alpha"
+dependencies = [
+ "axum 0.8.4",
+ "axum-extra",
+ "fedimint-core",
+ "maud",
+ "serde",
 ]
 
 [[package]]

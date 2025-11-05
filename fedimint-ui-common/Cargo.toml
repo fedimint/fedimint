@@ -1,0 +1,23 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-ui-common contains common utilities for all UIs."
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-ui-common"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[lib]
+name = "fedimint_ui_common"
+path = "src/lib.rs"
+
+[dependencies]
+axum = { workspace = true, features = ["macros"] }
+axum-extra = { workspace = true, features = ["cookie"] }
+fedimint-core = { workspace = true }
+maud = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

@@ -81,6 +81,7 @@ use fedimint_gateway_common::{
     WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
+use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{
@@ -851,66 +852,6 @@ impl Gateway {
     async fn set_gateway_state(&self, state: GatewayState) {
         let mut lock = self.state.write().await;
         *lock = state;
-    }
-
-    /// Returns information about the Gateway back to the client when requested
-    /// via the webserver.
-    pub async fn handle_get_info(&self) -> AdminResult<GatewayInfo> {
-        let GatewayState::Running { lightning_context } = self.get_state().await else {
-            return Ok(GatewayInfo {
-                federations: vec![],
-                federation_fake_scids: None,
-                version_hash: fedimint_build_code_version_env!().to_string(),
-                lightning_pub_key: None,
-                lightning_alias: None,
-                gateway_id: self.gateway_id,
-                gateway_state: self.state.read().await.to_string(),
-                network: self.network,
-                block_height: None,
-                synced_to_chain: false,
-                api: self.versioned_api.clone(),
-                iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
-                    .expect("could not parse iroh api"),
-                lightning_mode: self.lightning_mode.clone(),
-            });
-        };
-
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
-        let federations = self
-            .federation_manager
-            .read()
-            .await
-            .federation_info_all_federations(dbtx)
-            .await;
-
-        let channels: BTreeMap<u64, FederationId> = federations
-            .iter()
-            .map(|federation_info| {
-                (
-                    federation_info.config.federation_index,
-                    federation_info.federation_id,
-                )
-            })
-            .collect();
-
-        let node_info = lightning_context.lnrpc.parsed_node_info().await?;
-
-        Ok(GatewayInfo {
-            federations,
-            federation_fake_scids: Some(channels),
-            version_hash: fedimint_build_code_version_env!().to_string(),
-            lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
-            lightning_alias: Some(lightning_context.lightning_alias.clone()),
-            gateway_id: self.gateway_id,
-            gateway_state: self.state.read().await.to_string(),
-            network: self.network,
-            block_height: Some(node_info.3),
-            synced_to_chain: node_info.4,
-            api: self.versioned_api.clone(),
-            iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
-                .expect("could not parse iroh api"),
-            lightning_mode: self.lightning_mode.clone(),
-        })
     }
 
     /// If the Gateway is connected to the Lightning node, returns the
@@ -2162,6 +2103,80 @@ impl Gateway {
                 .expect("Failed to create LDK client"),
             ),
         }
+    }
+}
+
+#[async_trait]
+impl IAdminGateway for Gateway {
+    type Error = AdminGatewayError;
+
+    /// Returns information about the Gateway back to the client when requested
+    /// via the webserver.
+    async fn handle_get_info(&self) -> AdminResult<GatewayInfo> {
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Ok(GatewayInfo {
+                federations: vec![],
+                federation_fake_scids: None,
+                version_hash: fedimint_build_code_version_env!().to_string(),
+                lightning_pub_key: None,
+                lightning_alias: None,
+                gateway_id: self.gateway_id,
+                gateway_state: self.state.read().await.to_string(),
+                network: self.network,
+                block_height: None,
+                synced_to_chain: false,
+                api: self.versioned_api.clone(),
+                iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
+                    .expect("could not parse iroh api"),
+                lightning_mode: self.lightning_mode.clone(),
+            });
+        };
+
+        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let federations = self
+            .federation_manager
+            .read()
+            .await
+            .federation_info_all_federations(dbtx)
+            .await;
+
+        let channels: BTreeMap<u64, FederationId> = federations
+            .iter()
+            .map(|federation_info| {
+                (
+                    federation_info.config.federation_index,
+                    federation_info.federation_id,
+                )
+            })
+            .collect();
+
+        let node_info = lightning_context.lnrpc.parsed_node_info().await?;
+
+        Ok(GatewayInfo {
+            federations,
+            federation_fake_scids: Some(channels),
+            version_hash: fedimint_build_code_version_env!().to_string(),
+            lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
+            lightning_alias: Some(lightning_context.lightning_alias.clone()),
+            gateway_id: self.gateway_id,
+            gateway_state: self.state.read().await.to_string(),
+            network: self.network,
+            block_height: Some(node_info.3),
+            synced_to_chain: node_info.4,
+            api: self.versioned_api.clone(),
+            iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
+                .expect("could not parse iroh api"),
+            lightning_mode: self.lightning_mode.clone(),
+        })
+    }
+
+    fn get_password_hash(&self) -> String {
+        self.bcrypt_password_hash.to_string()
+    }
+
+    fn gatewayd_version(&self) -> String {
+        let gatewayd_version = env!("CARGO_PKG_VERSION");
+        gatewayd_version.to_string()
     }
 }
 

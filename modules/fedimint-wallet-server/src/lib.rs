@@ -55,6 +55,7 @@ use fedimint_core::module::{
     CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
     SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 };
+use fedimint_core::net::auth::check_auth;
 use fedimint_core::task::TaskGroup;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
@@ -67,7 +68,6 @@ use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::net::check_auth;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
