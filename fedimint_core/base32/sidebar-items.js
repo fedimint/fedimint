@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["RFC4648"],"fn":["decode","encode"]};
+window.SIDEBAR_ITEMS = {"constant":["FEDIMINT_PREFIX","RFC4648"],"fn":["decode","decode_prefixed","decode_prefixed_bytes","encode","encode_prefixed","encode_prefixed_bytes"]};
