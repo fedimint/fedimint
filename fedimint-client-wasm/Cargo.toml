@@ -17,9 +17,6 @@ crate-type = ["cdylib", "rlib"]
 name = "fedimint_client_wasm"
 path = "src/lib.rs"
 
-[lints]
-workspace = true
-
 [target.'cfg(target_family = "wasm")'.dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -33,6 +30,9 @@ tracing = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 web-sys = { version = "0.3", features = [
-  "FileSystemSyncAccessHandle",
-  "FileSystemReadWriteOptions",
+    "FileSystemSyncAccessHandle",
+    "FileSystemReadWriteOptions",
 ] }
+
+[lints]
+workspace = true

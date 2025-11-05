@@ -47,7 +47,7 @@ fs-lock = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 iroh-base = { workspace = true, features = [
-  "ticket",
+    "ticket",
 ], default-features = false }
 itertools = { workspace = true }
 nix = { workspace = true, features = ["signal"] }

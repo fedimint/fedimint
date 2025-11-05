@@ -10,10 +10,10 @@ version = { workspace = true }
 
 [features]
 telemetry = [
-  "tracing-opentelemetry",
-  "opentelemetry-jaeger",
-  "console-subscriber",
-  "opentelemetry",
+    "tracing-opentelemetry",
+    "opentelemetry-jaeger",
+    "console-subscriber",
+    "opentelemetry",
 ]
 
 [lib]

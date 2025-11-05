@@ -57,11 +57,11 @@ time = { workspace = true, features = ["formatting"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
 
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
+tikv-jemallocator = { workspace = true }
+
 [build-dependencies]
 fedimint-build = { workspace = true }
 
 [lints]
 workspace = true
-
-[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
-tikv-jemallocator = { workspace = true }
