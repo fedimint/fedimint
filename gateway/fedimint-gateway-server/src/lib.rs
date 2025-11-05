@@ -521,7 +521,7 @@ impl Gateway {
     /// Begins the task for listening for intercepted payments from the
     /// lightning node.
     fn start_gateway(&self, runtime: Arc<tokio::runtime::Runtime>) {
-        const PAYMENT_STREAM_RETRY_SECONDS: u64 = 5;
+        const PAYMENT_STREAM_RETRY_SECONDS: u64 = 60;
 
         let self_copy = self.clone();
         let tg = self.task_group.clone();
@@ -544,6 +544,7 @@ impl Gateway {
                         Ok((stream, ln_client)) => (stream, ln_client),
                         Err(err) => {
                             warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to open lightning payment stream");
+                            sleep(Duration::from_secs(PAYMENT_STREAM_RETRY_SECONDS)).await;
                             continue
                         }
                     };
