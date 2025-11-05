@@ -2334,7 +2334,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         gateway: &LightningGateway,
     ) -> Result<(), GatewayRpcError>;
 
-    // Send a POST request to the gateway to request it to pay a BOLT11 invoice.
+    // Request the gateway to pay a BOLT11 invoice
     async fn pay_invoice(
         &self,
         gateway: LightningGateway,

@@ -93,9 +93,7 @@ impl GatewayRpcClient {
                 builder = builder.bearer_auth(password);
             }
             if let Some(payload) = payload {
-                builder = builder
-                    .json(&payload)
-                    .header(reqwest::header::CONTENT_TYPE, "application/json");
+                builder = builder.json(&payload);
             }
 
             let response = builder
