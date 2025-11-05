@@ -21,7 +21,11 @@ use fedimint_ui_common::{
 };
 use maud::html;
 
+use crate::lightning::channels_fragment_handler;
+
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
+
+pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/channels/fragment";
 
 #[async_trait]
 pub trait IAdminGateway {
@@ -122,6 +126,7 @@ pub fn router<E: Display + 'static>(api: DynGatewayApi<E>) -> Router {
     let app = Router::new()
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
+        .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))

@@ -1,7 +1,10 @@
-use fedimint_gateway_common::{GatewayInfo, LightningMode};
+use axum::extract::State;
+use axum::response::Html;
+use fedimint_gateway_common::{ChannelInfo, GatewayInfo, LightningMode};
+use fedimint_ui_common::UiState;
 use maud::{Markup, html};
 
-use crate::DynGatewayApi;
+use crate::{CHANNEL_FRAGMENT_ROUTE, DynGatewayApi};
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
 where
@@ -123,81 +126,90 @@ where
                         role="tabpanel"
                         aria-labelledby="channels-tab" {
 
-                        @match channels_result {
-                            Err(err) => {
-                                div class="alert alert-danger" {
-                                    "Failed to load channels: " (err.to_string())
+                        // header + refresh button aligned right
+                        div class="d-flex justify-content-between align-items-center mb-2" {
+                            div { strong { "Channels" } }
+                            // HTMX refresh button:
+                            // hx-get should point to the route we will create below
+                            button class="btn btn-sm btn-outline-secondary"
+                                hx-get=(CHANNEL_FRAGMENT_ROUTE)
+                                hx-target="#channels-container"
+                                hx-swap="outerHTML"
+                                type="button"
+                            { "Refresh" }
+                        }
+
+                        // The initial fragment markup (from the channels_result we fetched above)
+                        (channels_fragment_markup(channels_result))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// channels_fragment_markup converts either the channels Vec or an error string
+// into a chunk of HTML (the thing HTMX will replace).
+pub fn channels_fragment_markup<E>(channels_result: Result<Vec<ChannelInfo>, E>) -> Markup
+where
+    E: std::fmt::Display,
+{
+    html! {
+        // This outer div is what we'll replace with hx-swap="outerHTML"
+        div id="channels-container" {
+            @match channels_result {
+                Err(err_str) => {
+                    div class="alert alert-danger" {
+                        "Failed to load channels: " (err_str)
+                    }
+                }
+                Ok(channels) => {
+                    @if channels.is_empty() {
+                        div class="alert alert-info" { "No channels found." }
+                    } @else {
+                        table class="table table-sm align-middle" {
+                            thead {
+                                tr {
+                                    th { "Remote PubKey" }
+                                    th { "Size (sats)" }
+                                    th { "Active" }
+                                    th { "Liquidity" }
                                 }
                             }
-                            Ok(channels) => {
-                                @if channels.is_empty() {
-                                    div class="alert alert-info" {
-                                        "No channels found."
-                                    }
-                                } @else {
-                                    table class="table table-sm align-middle" {
-                                        thead {
-                                            tr {
-                                                th { "Remote PubKey" }
-                                                th { "Size (sats)" }
-                                                th { "Active" }
-                                                th { "Liquidity" }
+                            tbody {
+                                @for ch in channels {
+                                    // precompute safely (no @let inline arithmetic)
+                                    @let size = ch.channel_size_sats.max(1);
+                                    @let outbound_pct = (ch.outbound_liquidity_sats as f64 / size as f64) * 100.0;
+                                    @let inbound_pct  = (ch.inbound_liquidity_sats  as f64 / size as f64) * 100.0;
+
+                                    tr {
+                                        td { (ch.remote_pubkey.to_string()) }
+                                        td { (ch.channel_size_sats) }
+                                        td {
+                                            @if ch.is_active {
+                                                span class="badge bg-success" { "active" }
+                                            } @else {
+                                                span class="badge bg-secondary" { "inactive" }
                                             }
                                         }
-                                        tbody {
-                                            @for ch in channels {
-                                                // Precompute
-                                                @let size = ch.channel_size_sats.max(1);
-                                                @let outbound_pct = (ch.outbound_liquidity_sats as f64 / size as f64) * 100.0;
-                                                @let inbound_pct  = (ch.inbound_liquidity_sats  as f64 / size as f64) * 100.0;
 
-                                                tr {
-                                                    // Remote PubKey
-                                                    td { (ch.remote_pubkey.to_string()) }
+                                        // Liquidity bar: single horizontal bar split by two divs
+                                        td {
+                                            div style="width:240px;" {
+                                                div style="display:flex;height:10px;width:100%;border-radius:3px;overflow:hidden" {
+                                                    div style=(format!("background:#28a745;width:{:.2}%;", outbound_pct)) {}
+                                                    div style=(format!("background:#0d6efd;width:{:.2}%;", inbound_pct)) {}
+                                                }
 
-                                                    // Size
-                                                    td { (ch.channel_size_sats) }
-
-                                                    // Active?
-                                                    td {
-                                                        @if ch.is_active {
-                                                            span class="badge bg-success" { "active" }
-                                                        } @else {
-                                                            span class="badge bg-secondary" { "inactive" }
-                                                        }
+                                                div style="font-size:0.75rem;display:flex;justify-content:space-between;margin-top:3px;" {
+                                                    span {
+                                                        span style="display:inline-block;width:10px;height:10px;background:#28a745;margin-right:4px;border-radius:2px;" {}
+                                                        "Outbound"
                                                     }
-
-                                                    // Liquidity visualization
-                                                    td {
-                                                        div style="width:240px;" {
-
-                                                            // Bar (side-by-side)
-                                                            div style="display:flex;height:10px;width:100%;border-radius:3px;overflow:hidden" {
-                                                                // Outbound
-                                                                div style=(format!(
-                                                                    "background:#28a745;width:{:.2}%;",
-                                                                    outbound_pct
-                                                                )) {}
-
-                                                                // Inbound
-                                                                div style=(format!(
-                                                                    "background:#0d6efd;width:{:.2}%;",
-                                                                    inbound_pct
-                                                                )) {}
-                                                            }
-
-                                                            // Legend
-                                                            div style="font-size:0.75rem;display:flex;justify-content:space-between;margin-top:3px;" {
-                                                                span {
-                                                                    span style="display:inline-block;width:10px;height:10px;background:#28a745;margin-right:4px;border-radius:2px;" {}
-                                                                    "Outbound"
-                                                                }
-                                                                span {
-                                                                    span style="display:inline-block;width:10px;height:10px;background:#0d6efd;margin-right:4px;border-radius:2px;" {}
-                                                                    "Inbound"
-                                                                }
-                                                            }
-                                                        }
+                                                    span {
+                                                        span style="display:inline-block;width:10px;height:10px;background:#0d6efd;margin-right:4px;border-radius:2px;" {}
+                                                        "Inbound"
                                                     }
                                                 }
                                             }
@@ -211,4 +223,16 @@ where
             }
         }
     }
+}
+
+pub async fn channels_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let channels_result: Result<_, E> = state.api.handle_list_channels_msg().await;
+
+    let markup = channels_fragment_markup(channels_result);
+    Html(markup.into_string())
 }
