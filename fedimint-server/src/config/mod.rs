@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, bail, ensure, format_err};
+use anyhow::{Context, bail, format_err};
 use bitcoin::hashes::sha256;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
@@ -31,7 +31,7 @@ use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::fedimint_core::encoding::Encodable;
 use crate::net::p2p::P2PStatusReceivers;
@@ -543,6 +543,7 @@ impl ServerConfig {
                 &registry,
                 &code_version_str,
             );
+
             return Ok(server[&params.identity].clone());
         }
 
@@ -552,14 +553,21 @@ impl ServerConfig {
         );
 
         while p2p_status_receivers.values().any(|r| r.borrow().is_none()) {
-            let peers = p2p_status_receivers
+            let connected_peers = p2p_status_receivers
                 .iter()
-                .filter_map(|entry| entry.1.borrow().map(|_| *entry.0))
+                .filter_map(|entry| entry.1.borrow().is_some().then_some(*entry.0))
+                .collect::<Vec<PeerId>>();
+
+            let disconnected_peers = p2p_status_receivers
+                .iter()
+                .filter_map(|entry| entry.1.borrow().is_none().then_some(*entry.0))
                 .collect::<Vec<PeerId>>();
 
             info!(
                 target: LOG_NET_PEER_DKG,
-                "Connected to peers: {peers:?}..."
+                connected_peers = ?connected_peers,
+                disconnected_peers = ?disconnected_peers,
+                "Waiting for all p2p connections to open..."
             );
 
             sleep(Duration::from_secs(1)).await;
@@ -581,13 +589,25 @@ impl ServerConfig {
             .into_iter()
             .filter(|p| *p != params.identity)
         {
-            ensure!(
-                connections
-                    .receive_from_peer(peer)
-                    .await
-                    .context("Unexpected shutdown of p2p connections")?
-                    == P2PMessage::Checksum(checksum),
-                "Peer {peer} has not send the correct checksum message"
+            let peer_message = connections
+                .receive_from_peer(peer)
+                .await
+                .context("Unexpected shutdown of p2p connections")?;
+
+            if peer_message != P2PMessage::Checksum(checksum) {
+                error!(
+                    target: LOG_NET_PEER_DKG,
+                    expected = ?P2PMessage::Checksum(checksum),
+                    received = ?peer_message,
+                    "Peer {peer} has sent invalid connection code checksum message"
+                );
+
+                bail!("Peer {peer} has sent invalid connection code checksum message");
+            }
+
+            info!(
+                target: LOG_NET_PEER_DKG,
+                "Peer {peer} has sent valid connection code checksum message"
             );
         }
 
@@ -659,10 +679,16 @@ impl ServerConfig {
                     expected = ?P2PMessage::Checksum(checksum),
                     received = ?peer_message,
                     config = ?cfg.consensus,
-                    "Peer {peer} has not sent the correct checksum message"
+                    "Peer {peer} has sent invalid consensus config checksum message"
                 );
-                bail!("Peer {peer} has not send the correct checksum message");
+
+                bail!("Peer {peer} has sent invalid consensus config checksum message");
             }
+
+            info!(
+                target: LOG_NET_PEER_DKG,
+                "Peer {peer} has sent valid consensus config checksum message"
+            );
         }
 
         info!(
