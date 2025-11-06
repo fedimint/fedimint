@@ -122,7 +122,15 @@ impl OperationLogEntry {
     /// in the module's client crate. The module can be determined by calling
     /// [`OperationLogEntry::operation_module_kind`].
     pub fn meta<M: DeserializeOwned>(&self) -> M {
-        serde_json::from_value(self.meta.0.clone()).expect("JSON deserialization should not fail")
+        self.try_meta()
+            .expect("JSON deserialization should not fail")
+    }
+
+    /// Fallible version of [`OperationLogEntry::meta`]. Used to avoid panics in
+    /// the case of failed past migrations, resulting in invalid encodings in
+    /// the DB.
+    pub fn try_meta<M: DeserializeOwned>(&self) -> Result<M, serde_json::Error> {
+        serde_json::from_value(self.meta.0.clone())
     }
 
     /// Returns the last state update of the operation, if any was cached yet.
@@ -143,10 +151,18 @@ impl OperationLogEntry {
     /// often called `<OperationType>State`. Alternatively one can also use
     /// [`serde_json::Value`] to get the unstructured data.
     pub fn outcome<D: DeserializeOwned>(&self) -> Option<D> {
-        self.outcome.as_ref().map(|outcome| {
-            serde_json::from_value(outcome.outcome.0.clone())
-                .expect("JSON deserialization should not fail")
-        })
+        self.try_outcome()
+            .expect("JSON deserialization should not fail")
+    }
+
+    /// Fallible version of [`OperationLogEntry::outcome`]. Used to avoid panics
+    /// in the case of failed past migrations, resulting in invalid encodings in
+    /// the DB.
+    pub fn try_outcome<D: DeserializeOwned>(&self) -> Result<Option<D>, serde_json::Error> {
+        self.outcome
+            .as_ref()
+            .map(|outcome| serde_json::from_value(outcome.outcome.0.clone()))
+            .transpose()
     }
 
     /// Returns the time when the outcome was cached.
