@@ -3110,6 +3110,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-ecash-migration-client"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-api-client",
+ "fedimint-client-module",
+ "fedimint-core",
+ "fedimint-ecash-migration-common",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "fedimint-ecash-migration-common"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "fedimint-core",
+ "serde",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "fedimint-ecash-migration-server"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-ecash-migration-common",
+ "fedimint-server-core",
+ "futures",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+]
+
+[[package]]
 name = "fedimint-empty-client"
 version = "0.10.0-alpha"
 dependencies = [

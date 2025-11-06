@@ -1,0 +1,31 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-ecash-migration is an ecash migration fedimint module."
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-ecash-migration-server"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "tokio_unstable"]
+
+[lib]
+name = "fedimint_ecash_migration_server"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+erased-serde = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-ecash-migration-common = { workspace = true }
+fedimint-server-core = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+
+[lints]
+workspace = true
