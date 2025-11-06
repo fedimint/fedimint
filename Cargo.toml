@@ -57,7 +57,10 @@ members = [
     "modules/fedimint-dummy-common",
     "modules/fedimint-dummy-server",
     "modules/fedimint-dummy-tests",
-    "modules/fedimint-empty-client",
+    "modules/fedimint-ecash-migration-client",
+  "modules/fedimint-ecash-migration-common",
+  "modules/fedimint-ecash-migration-server",
+  "modules/fedimint-empty-client",
     "modules/fedimint-empty-common",
     "modules/fedimint-empty-server",
     "modules/fedimint-gw-client",
@@ -183,6 +186,9 @@ fedimint-derive-secret = { path = "./crypto/derive-secret", version = "=0.10.0-a
 fedimint-dummy-client = { path = "./modules/fedimint-dummy-client", version = "=0.10.0-alpha" }
 fedimint-dummy-common = { path = "./modules/fedimint-dummy-common", version = "=0.10.0-alpha" }
 fedimint-dummy-server = { path = "./modules/fedimint-dummy-server", version = "=0.10.0-alpha" }
+fedimint-ecash-migration-client = { path = "./modules/fedimint-ecash-migration-client", version = "=0.10.0-alpha" }
+fedimint-ecash-migration-common = { path = "./modules/fedimint-ecash-migration-common", version = "=0.10.0-alpha" }
+fedimint-ecash-migration-server = { path = "./modules/fedimint-ecash-migration-server", version = "=0.10.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.10.0-alpha" }
 fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.10.0-alpha" }
 fedimint-gateway-common = { package = "fedimint-gateway-common", path = "./gateway/fedimint-gateway-common", version = "=0.10.0-alpha" }
