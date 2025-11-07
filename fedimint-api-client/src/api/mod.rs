@@ -36,6 +36,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
+use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff, custom_backoff};
@@ -642,21 +643,22 @@ pub struct ConnectorRegistryBuilder {
 }
 
 impl ConnectorRegistryBuilder {
+    #[allow(clippy::unused_async)] // Leave room for async in the future
     pub async fn bind(self) -> anyhow::Result<ConnectorRegistry> {
-        let mut inner: BTreeMap<String, DynConnector> = BTreeMap::new();
+        let mut inner: BTreeMap<String, JitTryAnyhow<DynConnector>> = BTreeMap::new();
 
         if self.iroh_enable {
-            inner.insert(
-                "iroh".to_string(),
-                Arc::new(
+            let iroh_connector = JitTryAnyhow::new_try(move || async move {
+                Ok(Arc::new(
                     api::iroh::IrohConnector::new(
                         self.iroh_dns,
                         self.iroh_pkarr_dht,
                         self.iroh_next,
                     )
                     .await?,
-                ),
-            );
+                ) as DynConnector)
+            });
+            inner.insert("iroh".to_string(), iroh_connector);
         }
 
         if self.ws_enable {
@@ -665,15 +667,19 @@ impl ConnectorRegistryBuilder {
                 true => {
                     use crate::api::tor::TorConnector;
 
-                    let tor_endpoint = Arc::new(TorConnector::bootstrap().await?);
-                    inner.insert("wss".into(), tor_endpoint.clone());
-                    inner.insert("ws".into(), tor_endpoint);
+                    let tor_connector = JitTry::new_try(move || async move {
+                        Ok(Arc::new(TorConnector::bootstrap().await?) as DynConnector)
+                    });
+                    inner.insert("wss".into(), tor_connector.clone());
+                    inner.insert("ws".into(), tor_connector);
                 }
 
                 false => {
-                    let websocket_endpoint = Arc::new(WebsocketConnector::new());
-                    inner.insert("wss".into(), websocket_endpoint.clone());
-                    inner.insert("ws".into(), websocket_endpoint);
+                    let websocket_connector = JitTry::new_try(move || async move {
+                        Ok(Arc::new(WebsocketConnector::new()) as DynConnector)
+                    });
+                    inner.insert("wss".into(), websocket_connector.clone());
+                    inner.insert("ws".into(), websocket_connector);
                 }
                 #[allow(unreachable_patterns)]
                 _ => bail!("Tor requested, but not support not compiled in"),
@@ -748,7 +754,7 @@ impl ConnectorRegistryBuilder {
 /// Responsibilities:
 #[derive(Clone, Debug)]
 pub struct ConnectorRegistry {
-    connectors: BTreeMap<String, DynConnector>,
+    connectors: BTreeMap<String, JitTryAnyhow<DynConnector>>,
 
     /// List of overrides to use when attempting to connect to given url
     ///
@@ -849,14 +855,24 @@ impl ConnectorRegistry {
             None => url,
         };
 
-        let Some(endpoint) = self.connectors.get(url.scheme()) else {
+        let Some(connector) = self.connectors.get(url.scheme()) else {
             return Err(PeerError::InvalidEndpoint(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
             )));
         };
 
-        endpoint.connect(url, api_secret).await
+        connector
+            .get_try()
+            .await
+            .map_err(|e| {
+                PeerError::Transport(anyhow!(
+                    "Connector failed to initialize: {}",
+                    e.fmt_compact()
+                ))
+            })?
+            .connect(url, api_secret)
+            .await
     }
 }
 pub type DynConnector = Arc<dyn Connector>;
@@ -899,7 +915,7 @@ pub trait IClientConnection: Debug + Send + Sync + 'static {
 // in the future.
 #[derive(Clone, Debug)]
 pub struct FederationApi {
-    /// Available endpoints which we can make connections
+    /// Available connectors which we can make connections
     connectors: ConnectorRegistry,
     /// Map of known URLs to use to connect to peers
     peers: BTreeMap<PeerId, SafeUrl>,
