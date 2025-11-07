@@ -215,39 +215,38 @@ impl ClientBuilder {
     /// [`Client::builder`], to ensure db matches the code at all times,
     /// while migrating modules requires figuring out what modules actually
     /// are first.
-    async fn migrate_module_dbs(&self, db: &Database) -> anyhow::Result<()> {
-        // Only apply the client database migrations if the database has been
-        // initialized.
-        // This only works as long as you don't change the client config
-        if let Ok(client_config) = self.load_existing_config(db).await {
-            for (module_id, module_cfg) in client_config.modules {
-                let kind = module_cfg.kind.clone();
-                let Some(init) = self.module_inits.get(&kind) else {
-                    // normal, expected and already logged about when building the client
-                    continue;
-                };
+    async fn migrate_module_dbs(
+        &self,
+        db: &Database,
+        client_config: &ClientConfig,
+    ) -> anyhow::Result<()> {
+        for (module_id, module_cfg) in &client_config.modules {
+            let kind = module_cfg.kind.clone();
+            let Some(init) = self.module_inits.get(&kind) else {
+                // normal, expected and already logged about when building the client
+                continue;
+            };
 
-                let mut dbtx = db.begin_transaction().await;
-                apply_migrations_client_module_dbtx(
+            let mut dbtx = db.begin_transaction().await;
+            apply_migrations_client_module_dbtx(
+                &mut dbtx.to_ref_nc(),
+                kind.to_string(),
+                init.get_database_migrations(),
+                *module_id,
+            )
+            .await?;
+            if let Some(used_db_prefixes) = init.used_db_prefixes()
+                && is_running_in_test_env()
+            {
+                verify_module_db_integrity_dbtx(
                     &mut dbtx.to_ref_nc(),
-                    kind.to_string(),
-                    init.get_database_migrations(),
-                    module_id,
+                    *module_id,
+                    kind,
+                    &used_db_prefixes,
                 )
-                .await?;
-                if let Some(used_db_prefixes) = init.used_db_prefixes()
-                    && is_running_in_test_env()
-                {
-                    verify_module_db_integrity_dbtx(
-                        &mut dbtx.to_ref_nc(),
-                        module_id,
-                        kind,
-                        &used_db_prefixes,
-                    )
-                    .await;
-                }
-                dbtx.commit_tx_result().await?;
+                .await;
             }
+            dbtx.commit_tx_result().await?;
         }
 
         Ok(())
@@ -579,7 +578,7 @@ impl ClientBuilder {
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
-        self.migrate_module_dbs(&db).await?;
+        self.migrate_module_dbs(&db, &config).await?;
 
         let init_state = Self::load_init_state(&db).await;
 

@@ -229,13 +229,14 @@ impl ClientConfig {
             modules: self
                 .modules
                 .into_iter()
-                .map(|(k, v)| {
+                .map(|(module_id, v)| {
                     // Assuming this isn't running in any hot path it's better to have the debug
                     // info than saving one allocation
                     let kind = v.kind.clone();
+
                     v.redecode_raw(modules)
-                        .context(format!("redecode_raw: instance: {k}, kind: {kind}"))
-                        .map(|v| (k, v))
+                        .context(format!("redecode_raw: instance: {module_id}, kind: {kind}"))
+                        .map(|v| (module_id, v))
                 })
                 .collect::<Result<_, _>>()?,
             ..self
