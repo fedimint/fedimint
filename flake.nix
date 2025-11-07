@@ -386,14 +386,24 @@
                   commonShellArgs.nativeBuildInputs
                   ++ [
                     cargo-hongfuzz
-                    libbfd_2_38
-                    libunwind.dev
-                    libopcodes_2_38
-                    pkgsStatic.libblocksruntime
                     lldb
                     clang
                   ];
 
+                buildInputs =
+                  with pkgs;
+                  commonShellArgs.buildInputs
+                  ++ [
+                    libbfd_2_38
+                    libunwind.dev
+                    libopcodes_2_38
+                    pkgsStatic.libblocksruntime
+                  ];
+
+                shellHook = ''
+                  export UNSCREW_WERROR_ORIG=$(which clang)
+                  export PATH="$(pwd)/scripts/dev/unscrew-werror/:$PATH"
+                '';
               }
             );
 

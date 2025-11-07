@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# C/C++ and `-Werror` are the worst. "Let's have our software stop compiling,
+# every time some toolchain somewhere decides to change some minor warning. Ugh..."
+
+set -eouo pipefail
+
+if [ -z "${UNSCREW_WERROR_ORIG:-}" ]; then
+	>&2 echo "Must set UNSCREW_WERROR_ORIG" to the original clang binary
+	exit 1
+fi
+
+args=()
+for arg in "$@"; do
+    [[ "$arg" != "-Werror" ]] && args+=("$arg")
+done
+
+exec "$UNSCREW_WERROR_ORIG" "${args[@]}"
