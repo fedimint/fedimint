@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["TorEndpoint"]};
+window.SIDEBAR_ITEMS = {"struct":["TorConnector"]};

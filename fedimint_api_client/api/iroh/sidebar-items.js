@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["node_addr_stable_to_next"],"struct":["IrohEndpoint"]};
+window.SIDEBAR_ITEMS = {"fn":["node_addr_stable_to_next"],"struct":["IrohConnector"]};

@@ -6,57 +6,57 @@
 <a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">pub mod </span>tor;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">pub mod </span>ws;
 <a href=#8 id=8 data-nosnippet>8</a>
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>core::{fmt, panic};
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>core::fmt;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>std::fmt::Debug;
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>std::pin::Pin;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>std::result;
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>std::sync::Arc;
-<a href=#15 id=15 data-nosnippet>15</a>
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>anyhow::{Context, anyhow, bail};
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>async_channel::bounded;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>async_trait::async_trait;
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>bitcoin::hashes::sha256;
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>bitcoin::secp256k1;
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">pub use </span>error::{FederationError, OutputOutcomeError, PeerError};
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::admin_client::{
-<a href=#23 id=23 data-nosnippet>23</a>    GuardianConfigBackup, PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus,
-<a href=#24 id=24 data-nosnippet>24</a>};
-<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
-<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
-<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_core::invite_code::InviteCode;
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
-<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>fedimint_core::module::{
-<a href=#34 id=34 data-nosnippet>34</a>    ApiAuth, ApiMethod, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
-<a href=#35 id=35 data-nosnippet>35</a>};
-<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
-<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
-<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
-<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>fedimint_core::util::backoff_util::api_networking_backoff;
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, SafeUrl};
-<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>fedimint_core::{
-<a href=#43 id=43 data-nosnippet>43</a>    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
-<a href=#44 id=44 data-nosnippet>44</a>};
-<a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET, LOG_NET_API};
-<a href=#46 id=46 data-nosnippet>46</a><span class="kw">use </span>futures::channel::oneshot;
-<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span>futures::future::pending;
-<a href=#48 id=48 data-nosnippet>48</a><span class="kw">use </span>futures::stream::FuturesUnordered;
-<a href=#49 id=49 data-nosnippet>49</a><span class="kw">use </span>futures::{Future, StreamExt};
-<a href=#50 id=50 data-nosnippet>50</a><span class="kw">use </span>global_api::with_cache::GlobalFederationApiWithCache;
-<a href=#51 id=51 data-nosnippet>51</a><span class="kw">use </span>jsonrpsee_core::DeserializeOwned;
-<a href=#52 id=52 data-nosnippet>52</a><span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
-<a href=#53 id=53 data-nosnippet>53</a></span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
-<a href=#54 id=54 data-nosnippet>54</a><span class="kw">use </span>serde::{Deserialize, Serialize};
-<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use </span>serde_json::Value;
-<a href=#56 id=56 data-nosnippet>56</a><span class="kw">use </span>tracing::{Instrument, debug, instrument, trace, trace_span, warn};
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>std::future::pending;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>std::pin::Pin;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>std::result;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>std::sync::Arc;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>std::time::Duration;
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>anyhow::{Context, anyhow, bail};
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>async_trait::async_trait;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>bitcoin::hashes::sha256;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>bitcoin::secp256k1;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">pub use </span>error::{FederationError, OutputOutcomeError, PeerError};
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_core::admin_client::{
+<a href=#24 id=24 data-nosnippet>24</a>    GuardianConfigBackup, PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus,
+<a href=#25 id=25 data-nosnippet>25</a>};
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::invite_code::InviteCode;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>fedimint_core::module::{
+<a href=#35 id=35 data-nosnippet>35</a>    ApiAuth, ApiMethod, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
+<a href=#36 id=36 data-nosnippet>36</a>};
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff, custom_backoff};
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, SafeUrl};
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span>fedimint_core::{
+<a href=#44 id=44 data-nosnippet>44</a>    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
+<a href=#45 id=45 data-nosnippet>45</a>};
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET, LOG_NET_API};
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span>futures::stream::FuturesUnordered;
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">use </span>futures::{Future, StreamExt};
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">use </span>global_api::with_cache::GlobalFederationApiWithCache;
+<a href=#50 id=50 data-nosnippet>50</a><span class="kw">use </span>jsonrpsee_core::DeserializeOwned;
+<a href=#51 id=51 data-nosnippet>51</a><span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">use </span>serde_json::Value;
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use </span>tokio::sync::OnceCell;
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 <a href=#57 id=57 data-nosnippet>57</a>
 <a href=#58 id=58 data-nosnippet>58</a><span class="kw">use </span><span class="kw">crate</span>::api;
-<a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span><span class="kw">crate</span>::api::ws::WebsocketEndpoint;
+<a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span><span class="kw">crate</span>::api::ws::WebsocketConnector;
 <a href=#60 id=60 data-nosnippet>60</a><span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 <a href=#61 id=61 data-nosnippet>61</a>
 <a href=#62 id=62 data-nosnippet>62</a><span class="kw">pub const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(<span class="number">0</span>, <span class="number">5</span>);
@@ -649,7 +649,7 @@
 <a href=#649 id=649 data-nosnippet>649</a>            inner.insert(
 <a href=#650 id=650 data-nosnippet>650</a>                <span class="string">"iroh"</span>.to_string(),
 <a href=#651 id=651 data-nosnippet>651</a>                Arc::new(
-<a href=#652 id=652 data-nosnippet>652</a>                    api::iroh::IrohEndpoint::new(
+<a href=#652 id=652 data-nosnippet>652</a>                    api::iroh::IrohConnector::new(
 <a href=#653 id=653 data-nosnippet>653</a>                        <span class="self">self</span>.iroh_dns,
 <a href=#654 id=654 data-nosnippet>654</a>                        <span class="self">self</span>.iroh_pkarr_dht,
 <a href=#655 id=655 data-nosnippet>655</a>                        <span class="self">self</span>.iroh_next,
@@ -663,15 +663,15 @@
 <a href=#663 id=663 data-nosnippet>663</a>            <span class="kw">match </span><span class="self">self</span>.ws_force_tor {
 <a href=#664 id=664 data-nosnippet>664</a>                <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 <a href=#665 id=665 data-nosnippet>665</a>                </span><span class="bool-val">true </span>=&gt; {
-<a href=#666 id=666 data-nosnippet>666</a>                    <span class="kw">use </span><span class="kw">crate</span>::api::tor::TorEndpoint;
+<a href=#666 id=666 data-nosnippet>666</a>                    <span class="kw">use </span><span class="kw">crate</span>::api::tor::TorConnector;
 <a href=#667 id=667 data-nosnippet>667</a>
-<a href=#668 id=668 data-nosnippet>668</a>                    <span class="kw">let </span>tor_endpoint = Arc::new(TorEndpoint::bootstrap().<span class="kw">await</span><span class="question-mark">?</span>);
+<a href=#668 id=668 data-nosnippet>668</a>                    <span class="kw">let </span>tor_endpoint = Arc::new(TorConnector::bootstrap().<span class="kw">await</span><span class="question-mark">?</span>);
 <a href=#669 id=669 data-nosnippet>669</a>                    inner.insert(<span class="string">"wss"</span>.into(), tor_endpoint.clone());
 <a href=#670 id=670 data-nosnippet>670</a>                    inner.insert(<span class="string">"ws"</span>.into(), tor_endpoint);
 <a href=#671 id=671 data-nosnippet>671</a>                }
 <a href=#672 id=672 data-nosnippet>672</a>
 <a href=#673 id=673 data-nosnippet>673</a>                <span class="bool-val">false </span>=&gt; {
-<a href=#674 id=674 data-nosnippet>674</a>                    <span class="kw">let </span>websocket_endpoint = Arc::new(WebsocketEndpoint::new());
+<a href=#674 id=674 data-nosnippet>674</a>                    <span class="kw">let </span>websocket_endpoint = Arc::new(WebsocketConnector::new());
 <a href=#675 id=675 data-nosnippet>675</a>                    inner.insert(<span class="string">"wss"</span>.into(), websocket_endpoint.clone());
 <a href=#676 id=676 data-nosnippet>676</a>                    inner.insert(<span class="string">"ws"</span>.into(), websocket_endpoint);
 <a href=#677 id=677 data-nosnippet>677</a>                }
@@ -681,7 +681,7 @@
 <a href=#681 id=681 data-nosnippet>681</a>        }
 <a href=#682 id=682 data-nosnippet>682</a>
 <a href=#683 id=683 data-nosnippet>683</a>        <span class="prelude-val">Ok</span>(ConnectorRegistry {
-<a href=#684 id=684 data-nosnippet>684</a>            inner,
+<a href=#684 id=684 data-nosnippet>684</a>            connectors: inner,
 <a href=#685 id=685 data-nosnippet>685</a>            connection_overrides: <span class="self">self</span>.connection_overrides,
 <a href=#686 id=686 data-nosnippet>686</a>        })
 <a href=#687 id=687 data-nosnippet>687</a>    }
@@ -744,396 +744,403 @@
 <a href=#744 id=744 data-nosnippet>744</a>///
 <a href=#745 id=745 data-nosnippet>745</a>/// [`ConnectorRegistry::connect`] is the main entry point for making
 <a href=#746 id=746 data-nosnippet>746</a>/// mixed-networking stack connection.
-<a href=#747 id=747 data-nosnippet>747</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#748 id=748 data-nosnippet>748</a></span><span class="kw">pub struct </span>ConnectorRegistry {
-<a href=#749 id=749 data-nosnippet>749</a>    inner: BTreeMap&lt;String, DynConnector&gt;,
-<a href=#750 id=750 data-nosnippet>750</a>
-<a href=#751 id=751 data-nosnippet>751</a>    <span class="doccomment">/// List of overrides to use when attempting to connect to given url
-<a href=#752 id=752 data-nosnippet>752</a>    ///
-<a href=#753 id=753 data-nosnippet>753</a>    /// This is useful for testing, or forcing non-default network
-<a href=#754 id=754 data-nosnippet>754</a>    /// connectivity.
-<a href=#755 id=755 data-nosnippet>755</a>    </span>connection_overrides: BTreeMap&lt;SafeUrl, SafeUrl&gt;,
-<a href=#756 id=756 data-nosnippet>756</a>}
-<a href=#757 id=757 data-nosnippet>757</a>
-<a href=#758 id=758 data-nosnippet>758</a><span class="kw">impl </span>ConnectorRegistry {
-<a href=#759 id=759 data-nosnippet>759</a>    <span class="doccomment">/// Create a builder with recommended defaults intended for client-side
-<a href=#760 id=760 data-nosnippet>760</a>    /// usage
-<a href=#761 id=761 data-nosnippet>761</a>    ///
-<a href=#762 id=762 data-nosnippet>762</a>    /// In particular mobile devices are considered.
-<a href=#763 id=763 data-nosnippet>763</a>    </span><span class="kw">pub fn </span>build_from_client_defaults() -&gt; ConnectorRegistryBuilder {
-<a href=#764 id=764 data-nosnippet>764</a>        ConnectorRegistryBuilder {
-<a href=#765 id=765 data-nosnippet>765</a>            iroh_enable: <span class="bool-val">true</span>,
-<a href=#766 id=766 data-nosnippet>766</a>            iroh_dns: <span class="prelude-val">None</span>,
-<a href=#767 id=767 data-nosnippet>767</a>            iroh_pkarr_dht: <span class="bool-val">false</span>,
-<a href=#768 id=768 data-nosnippet>768</a>            iroh_next: <span class="bool-val">true</span>,
-<a href=#769 id=769 data-nosnippet>769</a>            ws_enable: <span class="bool-val">true</span>,
-<a href=#770 id=770 data-nosnippet>770</a>            ws_force_tor: <span class="bool-val">false</span>,
-<a href=#771 id=771 data-nosnippet>771</a>
-<a href=#772 id=772 data-nosnippet>772</a>            connection_overrides: BTreeMap::default(),
-<a href=#773 id=773 data-nosnippet>773</a>        }
-<a href=#774 id=774 data-nosnippet>774</a>    }
-<a href=#775 id=775 data-nosnippet>775</a>
-<a href=#776 id=776 data-nosnippet>776</a>    <span class="doccomment">/// Create a builder with recommended defaults intended for the server-side
-<a href=#777 id=777 data-nosnippet>777</a>    /// usage
-<a href=#778 id=778 data-nosnippet>778</a>    </span><span class="kw">pub fn </span>build_from_server_defaults() -&gt; ConnectorRegistryBuilder {
-<a href=#779 id=779 data-nosnippet>779</a>        ConnectorRegistryBuilder {
-<a href=#780 id=780 data-nosnippet>780</a>            iroh_enable: <span class="bool-val">true</span>,
-<a href=#781 id=781 data-nosnippet>781</a>            iroh_dns: <span class="prelude-val">None</span>,
-<a href=#782 id=782 data-nosnippet>782</a>            iroh_pkarr_dht: <span class="bool-val">true</span>,
-<a href=#783 id=783 data-nosnippet>783</a>            iroh_next: <span class="bool-val">true</span>,
-<a href=#784 id=784 data-nosnippet>784</a>            ws_enable: <span class="bool-val">true</span>,
-<a href=#785 id=785 data-nosnippet>785</a>            ws_force_tor: <span class="bool-val">false</span>,
-<a href=#786 id=786 data-nosnippet>786</a>
-<a href=#787 id=787 data-nosnippet>787</a>            connection_overrides: BTreeMap::default(),
-<a href=#788 id=788 data-nosnippet>788</a>        }
-<a href=#789 id=789 data-nosnippet>789</a>    }
-<a href=#790 id=790 data-nosnippet>790</a>
-<a href=#791 id=791 data-nosnippet>791</a>    <span class="doccomment">/// Create a builder with recommended defaults intended for testing
-<a href=#792 id=792 data-nosnippet>792</a>    /// usage
-<a href=#793 id=793 data-nosnippet>793</a>    </span><span class="kw">pub fn </span>build_from_testing_defaults() -&gt; ConnectorRegistryBuilder {
-<a href=#794 id=794 data-nosnippet>794</a>        ConnectorRegistryBuilder {
-<a href=#795 id=795 data-nosnippet>795</a>            iroh_enable: <span class="bool-val">true</span>,
-<a href=#796 id=796 data-nosnippet>796</a>            iroh_dns: <span class="prelude-val">None</span>,
-<a href=#797 id=797 data-nosnippet>797</a>            iroh_pkarr_dht: <span class="bool-val">false</span>,
-<a href=#798 id=798 data-nosnippet>798</a>            iroh_next: <span class="bool-val">false</span>,
-<a href=#799 id=799 data-nosnippet>799</a>            ws_enable: <span class="bool-val">true</span>,
-<a href=#800 id=800 data-nosnippet>800</a>            ws_force_tor: <span class="bool-val">false</span>,
-<a href=#801 id=801 data-nosnippet>801</a>
-<a href=#802 id=802 data-nosnippet>802</a>            connection_overrides: BTreeMap::default(),
-<a href=#803 id=803 data-nosnippet>803</a>        }
-<a href=#804 id=804 data-nosnippet>804</a>    }
-<a href=#805 id=805 data-nosnippet>805</a>
-<a href=#806 id=806 data-nosnippet>806</a>    <span class="doccomment">/// Like [`Self::build_from_client_defaults`] build will apply
-<a href=#807 id=807 data-nosnippet>807</a>    /// environment-provided overrides.
-<a href=#808 id=808 data-nosnippet>808</a>    </span><span class="kw">pub fn </span>build_from_client_env() -&gt; anyhow::Result&lt;ConnectorRegistryBuilder&gt; {
-<a href=#809 id=809 data-nosnippet>809</a>        <span class="kw">let </span>builder = <span class="self">Self</span>::build_from_client_defaults().with_env_var_overrides()<span class="question-mark">?</span>;
-<a href=#810 id=810 data-nosnippet>810</a>        <span class="prelude-val">Ok</span>(builder)
-<a href=#811 id=811 data-nosnippet>811</a>    }
-<a href=#812 id=812 data-nosnippet>812</a>
-<a href=#813 id=813 data-nosnippet>813</a>    <span class="doccomment">/// Like [`Self::build_from_server_defaults`] build will apply
-<a href=#814 id=814 data-nosnippet>814</a>    /// environment-provided overrides.
-<a href=#815 id=815 data-nosnippet>815</a>    </span><span class="kw">pub fn </span>build_from_server_env() -&gt; anyhow::Result&lt;ConnectorRegistryBuilder&gt; {
-<a href=#816 id=816 data-nosnippet>816</a>        <span class="kw">let </span>builder = <span class="self">Self</span>::build_from_server_defaults().with_env_var_overrides()<span class="question-mark">?</span>;
-<a href=#817 id=817 data-nosnippet>817</a>        <span class="prelude-val">Ok</span>(builder)
-<a href=#818 id=818 data-nosnippet>818</a>    }
-<a href=#819 id=819 data-nosnippet>819</a>
-<a href=#820 id=820 data-nosnippet>820</a>    <span class="doccomment">/// Like [`Self::build_from_testing_defaults`] build will apply
-<a href=#821 id=821 data-nosnippet>821</a>    /// environment-provided overrides.
-<a href=#822 id=822 data-nosnippet>822</a>    </span><span class="kw">pub fn </span>build_from_testing_env() -&gt; anyhow::Result&lt;ConnectorRegistryBuilder&gt; {
-<a href=#823 id=823 data-nosnippet>823</a>        <span class="kw">let </span>builder = <span class="self">Self</span>::build_from_testing_defaults().with_env_var_overrides()<span class="question-mark">?</span>;
-<a href=#824 id=824 data-nosnippet>824</a>        <span class="prelude-val">Ok</span>(builder)
-<a href=#825 id=825 data-nosnippet>825</a>    }
-<a href=#826 id=826 data-nosnippet>826</a>
-<a href=#827 id=827 data-nosnippet>827</a>    <span class="doccomment">/// Connect to a given `url` using matching [`Connector`]
-<a href=#828 id=828 data-nosnippet>828</a>    ///
-<a href=#829 id=829 data-nosnippet>829</a>    /// This is the main function consumed by the downstream use for making
-<a href=#830 id=830 data-nosnippet>830</a>    /// connection.
-<a href=#831 id=831 data-nosnippet>831</a>    </span><span class="kw">pub async fn </span>connect(
-<a href=#832 id=832 data-nosnippet>832</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#833 id=833 data-nosnippet>833</a>        url: <span class="kw-2">&amp;</span>SafeUrl,
-<a href=#834 id=834 data-nosnippet>834</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
-<a href=#835 id=835 data-nosnippet>835</a>    ) -&gt; PeerResult&lt;DynClientConnection&gt; {
-<a href=#836 id=836 data-nosnippet>836</a>        <span class="kw">let </span>url = <span class="kw">match </span><span class="self">self</span>.connection_overrides.get(url) {
-<a href=#837 id=837 data-nosnippet>837</a>            <span class="prelude-val">Some</span>(replacement) =&gt; {
-<a href=#838 id=838 data-nosnippet>838</a>                <span class="macro">trace!</span>(
-<a href=#839 id=839 data-nosnippet>839</a>                    target: LOG_NET,
-<a href=#840 id=840 data-nosnippet>840</a>                    original_url = %url,
-<a href=#841 id=841 data-nosnippet>841</a>                    replacement_url = %replacement,
-<a href=#842 id=842 data-nosnippet>842</a>                    <span class="string">"Using a connectivity override for connection"
-<a href=#843 id=843 data-nosnippet>843</a>                </span>);
-<a href=#844 id=844 data-nosnippet>844</a>
-<a href=#845 id=845 data-nosnippet>845</a>                replacement
-<a href=#846 id=846 data-nosnippet>846</a>            }
-<a href=#847 id=847 data-nosnippet>847</a>            <span class="prelude-val">None </span>=&gt; url,
-<a href=#848 id=848 data-nosnippet>848</a>        };
-<a href=#849 id=849 data-nosnippet>849</a>
-<a href=#850 id=850 data-nosnippet>850</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(endpoint) = <span class="self">self</span>.inner.get(url.scheme()) <span class="kw">else </span>{
-<a href=#851 id=851 data-nosnippet>851</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PeerError::InvalidEndpoint(<span class="macro">anyhow!</span>(
-<a href=#852 id=852 data-nosnippet>852</a>                <span class="string">"Unsupported scheme: {}; missing endpoint handler"</span>,
-<a href=#853 id=853 data-nosnippet>853</a>                url.scheme()
-<a href=#854 id=854 data-nosnippet>854</a>            )));
-<a href=#855 id=855 data-nosnippet>855</a>        };
-<a href=#856 id=856 data-nosnippet>856</a>
-<a href=#857 id=857 data-nosnippet>857</a>        endpoint.connect(url, api_secret).<span class="kw">await
-<a href=#858 id=858 data-nosnippet>858</a>    </span>}
-<a href=#859 id=859 data-nosnippet>859</a>}
-<a href=#860 id=860 data-nosnippet>860</a><span class="kw">pub type </span>DynConnector = Arc&lt;<span class="kw">dyn </span>Connector&gt;;
-<a href=#861 id=861 data-nosnippet>861</a>
-<a href=#862 id=862 data-nosnippet>862</a><span class="attr">#[async_trait]
-<a href=#863 id=863 data-nosnippet>863</a></span><span class="kw">pub trait </span>Connector: Send + Sync + <span class="lifetime">'static </span>+ fmt::Debug {
-<a href=#864 id=864 data-nosnippet>864</a>    <span class="kw">async fn </span>connect(
-<a href=#865 id=865 data-nosnippet>865</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#866 id=866 data-nosnippet>866</a>        url: <span class="kw-2">&amp;</span>SafeUrl,
-<a href=#867 id=867 data-nosnippet>867</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
-<a href=#868 id=868 data-nosnippet>868</a>    ) -&gt; PeerResult&lt;DynClientConnection&gt;;
-<a href=#869 id=869 data-nosnippet>869</a>}
-<a href=#870 id=870 data-nosnippet>870</a><span class="kw">pub type </span>DynClientConnection = Arc&lt;<span class="kw">dyn </span>IClientConnection&gt;;
-<a href=#871 id=871 data-nosnippet>871</a>
-<a href=#872 id=872 data-nosnippet>872</a><span class="attr">#[async_trait]
-<a href=#873 id=873 data-nosnippet>873</a></span><span class="kw">pub trait </span>IClientConnection: Debug + Send + Sync + <span class="lifetime">'static </span>{
-<a href=#874 id=874 data-nosnippet>874</a>    <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: ApiMethod, request: ApiRequestErased) -&gt; PeerResult&lt;Value&gt;;
-<a href=#875 id=875 data-nosnippet>875</a>
-<a href=#876 id=876 data-nosnippet>876</a>    <span class="kw">async fn </span>await_disconnection(<span class="kw-2">&amp;</span><span class="self">self</span>);
+<a href=#747 id=747 data-nosnippet>747</a>///
+<a href=#748 id=748 data-nosnippet>748</a>/// Responsibilities:
+<a href=#749 id=749 data-nosnippet>749</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#750 id=750 data-nosnippet>750</a></span><span class="kw">pub struct </span>ConnectorRegistry {
+<a href=#751 id=751 data-nosnippet>751</a>    connectors: BTreeMap&lt;String, DynConnector&gt;,
+<a href=#752 id=752 data-nosnippet>752</a>
+<a href=#753 id=753 data-nosnippet>753</a>    <span class="doccomment">/// List of overrides to use when attempting to connect to given url
+<a href=#754 id=754 data-nosnippet>754</a>    ///
+<a href=#755 id=755 data-nosnippet>755</a>    /// This is useful for testing, or forcing non-default network
+<a href=#756 id=756 data-nosnippet>756</a>    /// connectivity.
+<a href=#757 id=757 data-nosnippet>757</a>    </span>connection_overrides: BTreeMap&lt;SafeUrl, SafeUrl&gt;,
+<a href=#758 id=758 data-nosnippet>758</a>}
+<a href=#759 id=759 data-nosnippet>759</a>
+<a href=#760 id=760 data-nosnippet>760</a><span class="kw">impl </span>ConnectorRegistry {
+<a href=#761 id=761 data-nosnippet>761</a>    <span class="doccomment">/// Create a builder with recommended defaults intended for client-side
+<a href=#762 id=762 data-nosnippet>762</a>    /// usage
+<a href=#763 id=763 data-nosnippet>763</a>    ///
+<a href=#764 id=764 data-nosnippet>764</a>    /// In particular mobile devices are considered.
+<a href=#765 id=765 data-nosnippet>765</a>    </span><span class="kw">pub fn </span>build_from_client_defaults() -&gt; ConnectorRegistryBuilder {
+<a href=#766 id=766 data-nosnippet>766</a>        ConnectorRegistryBuilder {
+<a href=#767 id=767 data-nosnippet>767</a>            iroh_enable: <span class="bool-val">true</span>,
+<a href=#768 id=768 data-nosnippet>768</a>            iroh_dns: <span class="prelude-val">None</span>,
+<a href=#769 id=769 data-nosnippet>769</a>            iroh_pkarr_dht: <span class="bool-val">false</span>,
+<a href=#770 id=770 data-nosnippet>770</a>            iroh_next: <span class="bool-val">true</span>,
+<a href=#771 id=771 data-nosnippet>771</a>            ws_enable: <span class="bool-val">true</span>,
+<a href=#772 id=772 data-nosnippet>772</a>            ws_force_tor: <span class="bool-val">false</span>,
+<a href=#773 id=773 data-nosnippet>773</a>
+<a href=#774 id=774 data-nosnippet>774</a>            connection_overrides: BTreeMap::default(),
+<a href=#775 id=775 data-nosnippet>775</a>        }
+<a href=#776 id=776 data-nosnippet>776</a>    }
+<a href=#777 id=777 data-nosnippet>777</a>
+<a href=#778 id=778 data-nosnippet>778</a>    <span class="doccomment">/// Create a builder with recommended defaults intended for the server-side
+<a href=#779 id=779 data-nosnippet>779</a>    /// usage
+<a href=#780 id=780 data-nosnippet>780</a>    </span><span class="kw">pub fn </span>build_from_server_defaults() -&gt; ConnectorRegistryBuilder {
+<a href=#781 id=781 data-nosnippet>781</a>        ConnectorRegistryBuilder {
+<a href=#782 id=782 data-nosnippet>782</a>            iroh_enable: <span class="bool-val">true</span>,
+<a href=#783 id=783 data-nosnippet>783</a>            iroh_dns: <span class="prelude-val">None</span>,
+<a href=#784 id=784 data-nosnippet>784</a>            iroh_pkarr_dht: <span class="bool-val">true</span>,
+<a href=#785 id=785 data-nosnippet>785</a>            iroh_next: <span class="bool-val">true</span>,
+<a href=#786 id=786 data-nosnippet>786</a>            ws_enable: <span class="bool-val">true</span>,
+<a href=#787 id=787 data-nosnippet>787</a>            ws_force_tor: <span class="bool-val">false</span>,
+<a href=#788 id=788 data-nosnippet>788</a>
+<a href=#789 id=789 data-nosnippet>789</a>            connection_overrides: BTreeMap::default(),
+<a href=#790 id=790 data-nosnippet>790</a>        }
+<a href=#791 id=791 data-nosnippet>791</a>    }
+<a href=#792 id=792 data-nosnippet>792</a>
+<a href=#793 id=793 data-nosnippet>793</a>    <span class="doccomment">/// Create a builder with recommended defaults intended for testing
+<a href=#794 id=794 data-nosnippet>794</a>    /// usage
+<a href=#795 id=795 data-nosnippet>795</a>    </span><span class="kw">pub fn </span>build_from_testing_defaults() -&gt; ConnectorRegistryBuilder {
+<a href=#796 id=796 data-nosnippet>796</a>        ConnectorRegistryBuilder {
+<a href=#797 id=797 data-nosnippet>797</a>            iroh_enable: <span class="bool-val">true</span>,
+<a href=#798 id=798 data-nosnippet>798</a>            iroh_dns: <span class="prelude-val">None</span>,
+<a href=#799 id=799 data-nosnippet>799</a>            iroh_pkarr_dht: <span class="bool-val">false</span>,
+<a href=#800 id=800 data-nosnippet>800</a>            iroh_next: <span class="bool-val">false</span>,
+<a href=#801 id=801 data-nosnippet>801</a>            ws_enable: <span class="bool-val">true</span>,
+<a href=#802 id=802 data-nosnippet>802</a>            ws_force_tor: <span class="bool-val">false</span>,
+<a href=#803 id=803 data-nosnippet>803</a>
+<a href=#804 id=804 data-nosnippet>804</a>            connection_overrides: BTreeMap::default(),
+<a href=#805 id=805 data-nosnippet>805</a>        }
+<a href=#806 id=806 data-nosnippet>806</a>    }
+<a href=#807 id=807 data-nosnippet>807</a>
+<a href=#808 id=808 data-nosnippet>808</a>    <span class="doccomment">/// Like [`Self::build_from_client_defaults`] build will apply
+<a href=#809 id=809 data-nosnippet>809</a>    /// environment-provided overrides.
+<a href=#810 id=810 data-nosnippet>810</a>    </span><span class="kw">pub fn </span>build_from_client_env() -&gt; anyhow::Result&lt;ConnectorRegistryBuilder&gt; {
+<a href=#811 id=811 data-nosnippet>811</a>        <span class="kw">let </span>builder = <span class="self">Self</span>::build_from_client_defaults().with_env_var_overrides()<span class="question-mark">?</span>;
+<a href=#812 id=812 data-nosnippet>812</a>        <span class="prelude-val">Ok</span>(builder)
+<a href=#813 id=813 data-nosnippet>813</a>    }
+<a href=#814 id=814 data-nosnippet>814</a>
+<a href=#815 id=815 data-nosnippet>815</a>    <span class="doccomment">/// Like [`Self::build_from_server_defaults`] build will apply
+<a href=#816 id=816 data-nosnippet>816</a>    /// environment-provided overrides.
+<a href=#817 id=817 data-nosnippet>817</a>    </span><span class="kw">pub fn </span>build_from_server_env() -&gt; anyhow::Result&lt;ConnectorRegistryBuilder&gt; {
+<a href=#818 id=818 data-nosnippet>818</a>        <span class="kw">let </span>builder = <span class="self">Self</span>::build_from_server_defaults().with_env_var_overrides()<span class="question-mark">?</span>;
+<a href=#819 id=819 data-nosnippet>819</a>        <span class="prelude-val">Ok</span>(builder)
+<a href=#820 id=820 data-nosnippet>820</a>    }
+<a href=#821 id=821 data-nosnippet>821</a>
+<a href=#822 id=822 data-nosnippet>822</a>    <span class="doccomment">/// Like [`Self::build_from_testing_defaults`] build will apply
+<a href=#823 id=823 data-nosnippet>823</a>    /// environment-provided overrides.
+<a href=#824 id=824 data-nosnippet>824</a>    </span><span class="kw">pub fn </span>build_from_testing_env() -&gt; anyhow::Result&lt;ConnectorRegistryBuilder&gt; {
+<a href=#825 id=825 data-nosnippet>825</a>        <span class="kw">let </span>builder = <span class="self">Self</span>::build_from_testing_defaults().with_env_var_overrides()<span class="question-mark">?</span>;
+<a href=#826 id=826 data-nosnippet>826</a>        <span class="prelude-val">Ok</span>(builder)
+<a href=#827 id=827 data-nosnippet>827</a>    }
+<a href=#828 id=828 data-nosnippet>828</a>
+<a href=#829 id=829 data-nosnippet>829</a>    <span class="doccomment">/// Connect to a given `url` using matching [`Connector`]
+<a href=#830 id=830 data-nosnippet>830</a>    ///
+<a href=#831 id=831 data-nosnippet>831</a>    /// This is the main function consumed by the downstream use for making
+<a href=#832 id=832 data-nosnippet>832</a>    /// connection.
+<a href=#833 id=833 data-nosnippet>833</a>    </span><span class="kw">pub async fn </span>connect(
+<a href=#834 id=834 data-nosnippet>834</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#835 id=835 data-nosnippet>835</a>        url: <span class="kw-2">&amp;</span>SafeUrl,
+<a href=#836 id=836 data-nosnippet>836</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
+<a href=#837 id=837 data-nosnippet>837</a>    ) -&gt; PeerResult&lt;DynClientConnection&gt; {
+<a href=#838 id=838 data-nosnippet>838</a>        <span class="kw">let </span>url = <span class="kw">match </span><span class="self">self</span>.connection_overrides.get(url) {
+<a href=#839 id=839 data-nosnippet>839</a>            <span class="prelude-val">Some</span>(replacement) =&gt; {
+<a href=#840 id=840 data-nosnippet>840</a>                <span class="macro">trace!</span>(
+<a href=#841 id=841 data-nosnippet>841</a>                    target: LOG_NET,
+<a href=#842 id=842 data-nosnippet>842</a>                    original_url = %url,
+<a href=#843 id=843 data-nosnippet>843</a>                    replacement_url = %replacement,
+<a href=#844 id=844 data-nosnippet>844</a>                    <span class="string">"Using a connectivity override for connection"
+<a href=#845 id=845 data-nosnippet>845</a>                </span>);
+<a href=#846 id=846 data-nosnippet>846</a>
+<a href=#847 id=847 data-nosnippet>847</a>                replacement
+<a href=#848 id=848 data-nosnippet>848</a>            }
+<a href=#849 id=849 data-nosnippet>849</a>            <span class="prelude-val">None </span>=&gt; url,
+<a href=#850 id=850 data-nosnippet>850</a>        };
+<a href=#851 id=851 data-nosnippet>851</a>
+<a href=#852 id=852 data-nosnippet>852</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(endpoint) = <span class="self">self</span>.connectors.get(url.scheme()) <span class="kw">else </span>{
+<a href=#853 id=853 data-nosnippet>853</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PeerError::InvalidEndpoint(<span class="macro">anyhow!</span>(
+<a href=#854 id=854 data-nosnippet>854</a>                <span class="string">"Unsupported scheme: {}; missing endpoint handler"</span>,
+<a href=#855 id=855 data-nosnippet>855</a>                url.scheme()
+<a href=#856 id=856 data-nosnippet>856</a>            )));
+<a href=#857 id=857 data-nosnippet>857</a>        };
+<a href=#858 id=858 data-nosnippet>858</a>
+<a href=#859 id=859 data-nosnippet>859</a>        endpoint.connect(url, api_secret).<span class="kw">await
+<a href=#860 id=860 data-nosnippet>860</a>    </span>}
+<a href=#861 id=861 data-nosnippet>861</a>}
+<a href=#862 id=862 data-nosnippet>862</a><span class="kw">pub type </span>DynConnector = Arc&lt;<span class="kw">dyn </span>Connector&gt;;
+<a href=#863 id=863 data-nosnippet>863</a>
+<a href=#864 id=864 data-nosnippet>864</a><span class="attr">#[async_trait]
+<a href=#865 id=865 data-nosnippet>865</a></span><span class="kw">pub trait </span>Connector: Send + Sync + <span class="lifetime">'static </span>+ fmt::Debug {
+<a href=#866 id=866 data-nosnippet>866</a>    <span class="kw">async fn </span>connect(
+<a href=#867 id=867 data-nosnippet>867</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#868 id=868 data-nosnippet>868</a>        url: <span class="kw-2">&amp;</span>SafeUrl,
+<a href=#869 id=869 data-nosnippet>869</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
+<a href=#870 id=870 data-nosnippet>870</a>    ) -&gt; PeerResult&lt;DynClientConnection&gt;;
+<a href=#871 id=871 data-nosnippet>871</a>}
+<a href=#872 id=872 data-nosnippet>872</a><span class="kw">pub type </span>DynClientConnection = Arc&lt;<span class="kw">dyn </span>IClientConnection&gt;;
+<a href=#873 id=873 data-nosnippet>873</a>
+<a href=#874 id=874 data-nosnippet>874</a><span class="attr">#[async_trait]
+<a href=#875 id=875 data-nosnippet>875</a></span><span class="kw">pub trait </span>IClientConnection: Debug + Send + Sync + <span class="lifetime">'static </span>{
+<a href=#876 id=876 data-nosnippet>876</a>    <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: ApiMethod, request: ApiRequestErased) -&gt; PeerResult&lt;Value&gt;;
 <a href=#877 id=877 data-nosnippet>877</a>
-<a href=#878 id=878 data-nosnippet>878</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; DynClientConnection
-<a href=#879 id=879 data-nosnippet>879</a>    <span class="kw">where
-<a href=#880 id=880 data-nosnippet>880</a>        </span><span class="self">Self</span>: Sized,
-<a href=#881 id=881 data-nosnippet>881</a>    {
-<a href=#882 id=882 data-nosnippet>882</a>        Arc::new(<span class="self">self</span>)
-<a href=#883 id=883 data-nosnippet>883</a>    }
-<a href=#884 id=884 data-nosnippet>884</a>}
-<a href=#885 id=885 data-nosnippet>885</a>
-<a href=#886 id=886 data-nosnippet>886</a><span class="doccomment">/// Federation API client
-<a href=#887 id=887 data-nosnippet>887</a>///
-<a href=#888 id=888 data-nosnippet>888</a>/// The core underlying object used to make API requests to a federation.
-<a href=#889 id=889 data-nosnippet>889</a>///
-<a href=#890 id=890 data-nosnippet>890</a>/// It has an `endpoints` handle to making outgoing connections,
-<a href=#891 id=891 data-nosnippet>891</a>/// and knows which peers there are and what URLs to connect to
-<a href=#892 id=892 data-nosnippet>892</a>/// to reach them.
-<a href=#893 id=893 data-nosnippet>893</a></span><span class="attr">#[derive(Clone, Debug)]
-<a href=#894 id=894 data-nosnippet>894</a></span><span class="kw">pub struct </span>FederationApi {
-<a href=#895 id=895 data-nosnippet>895</a>    <span class="doccomment">/// Available endpoints which we can make connections
-<a href=#896 id=896 data-nosnippet>896</a>    </span>connectors: ConnectorRegistry,
-<a href=#897 id=897 data-nosnippet>897</a>    <span class="doccomment">/// Map of known URLs to use to connect to peers
-<a href=#898 id=898 data-nosnippet>898</a>    </span>peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
-<a href=#899 id=899 data-nosnippet>899</a>    <span class="doccomment">/// List of peer ids, redundant to avoid collecting all the time
-<a href=#900 id=900 data-nosnippet>900</a>    </span>peers_keys: BTreeSet&lt;PeerId&gt;,
-<a href=#901 id=901 data-nosnippet>901</a>    <span class="doccomment">/// Our own [`PeerId`] to use when making admin apis
-<a href=#902 id=902 data-nosnippet>902</a>    </span>admin_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
-<a href=#903 id=903 data-nosnippet>903</a>    <span class="doccomment">/// Set when this API is used to communicate with a module
-<a href=#904 id=904 data-nosnippet>904</a>    </span>module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-<a href=#905 id=905 data-nosnippet>905</a>    connections: BTreeMap&lt;PeerId, ClientConnection&gt;,
-<a href=#906 id=906 data-nosnippet>906</a>}
-<a href=#907 id=907 data-nosnippet>907</a>
-<a href=#908 id=908 data-nosnippet>908</a><span class="kw">impl </span>FederationApi {
-<a href=#909 id=909 data-nosnippet>909</a>    <span class="kw">pub fn </span>new(
-<a href=#910 id=910 data-nosnippet>910</a>        connectors: ConnectorRegistry,
-<a href=#911 id=911 data-nosnippet>911</a>        peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
-<a href=#912 id=912 data-nosnippet>912</a>        admin_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
-<a href=#913 id=913 data-nosnippet>913</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
-<a href=#914 id=914 data-nosnippet>914</a>    ) -&gt; <span class="self">Self </span>{
-<a href=#915 id=915 data-nosnippet>915</a>        <span class="self">Self </span>{
-<a href=#916 id=916 data-nosnippet>916</a>            peers: peers.clone(),
-<a href=#917 id=917 data-nosnippet>917</a>            peers_keys: peers.keys().copied().collect(),
-<a href=#918 id=918 data-nosnippet>918</a>            admin_id: admin_peer_id,
-<a href=#919 id=919 data-nosnippet>919</a>            module_id: <span class="prelude-val">None</span>,
-<a href=#920 id=920 data-nosnippet>920</a>            connections: peers
-<a href=#921 id=921 data-nosnippet>921</a>                .into_iter()
-<a href=#922 id=922 data-nosnippet>922</a>                .map(|(peer_id, url)| {
-<a href=#923 id=923 data-nosnippet>923</a>                    (
-<a href=#924 id=924 data-nosnippet>924</a>                        peer_id,
-<a href=#925 id=925 data-nosnippet>925</a>                        ClientConnection::new(
-<a href=#926 id=926 data-nosnippet>926</a>                            connectors.clone(),
-<a href=#927 id=927 data-nosnippet>927</a>                            peer_id,
-<a href=#928 id=928 data-nosnippet>928</a>                            url,
-<a href=#929 id=929 data-nosnippet>929</a>                            api_secret.map(Into::into),
-<a href=#930 id=930 data-nosnippet>930</a>                        ),
-<a href=#931 id=931 data-nosnippet>931</a>                    )
-<a href=#932 id=932 data-nosnippet>932</a>                })
-<a href=#933 id=933 data-nosnippet>933</a>                .collect(),
-<a href=#934 id=934 data-nosnippet>934</a>            connectors,
-<a href=#935 id=935 data-nosnippet>935</a>        }
-<a href=#936 id=936 data-nosnippet>936</a>    }
-<a href=#937 id=937 data-nosnippet>937</a>
-<a href=#938 id=938 data-nosnippet>938</a>    <span class="kw">async fn </span>request(
-<a href=#939 id=939 data-nosnippet>939</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#940 id=940 data-nosnippet>940</a>        peer: PeerId,
-<a href=#941 id=941 data-nosnippet>941</a>        method: ApiMethod,
-<a href=#942 id=942 data-nosnippet>942</a>        request: ApiRequestErased,
-<a href=#943 id=943 data-nosnippet>943</a>    ) -&gt; PeerResult&lt;Value&gt; {
-<a href=#944 id=944 data-nosnippet>944</a>        <span class="macro">trace!</span>(target: LOG_NET_API, %method, <span class="string">"Api request"</span>);
-<a href=#945 id=945 data-nosnippet>945</a>        <span class="kw">let </span>res = <span class="self">self
-<a href=#946 id=946 data-nosnippet>946</a>            </span>.connections
-<a href=#947 id=947 data-nosnippet>947</a>            .get(<span class="kw-2">&amp;</span>peer)
-<a href=#948 id=948 data-nosnippet>948</a>            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })<span class="question-mark">?
-<a href=#949 id=949 data-nosnippet>949</a>            </span>.connection()
-<a href=#950 id=950 data-nosnippet>950</a>            .<span class="kw">await
-<a href=#951 id=951 data-nosnippet>951</a>            </span>.context(<span class="string">"Failed to connect to peer"</span>)
-<a href=#952 id=952 data-nosnippet>952</a>            .map_err(PeerError::Connection)<span class="question-mark">?
-<a href=#953 id=953 data-nosnippet>953</a>            </span>.request(method.clone(), request)
-<a href=#954 id=954 data-nosnippet>954</a>            .<span class="kw">await</span>;
-<a href=#955 id=955 data-nosnippet>955</a>
-<a href=#956 id=956 data-nosnippet>956</a>        <span class="macro">trace!</span>(target: LOG_NET_API, <span class="question-mark">?</span>method, res_ok = res.is_ok(), <span class="string">"Api response"</span>);
-<a href=#957 id=957 data-nosnippet>957</a>
-<a href=#958 id=958 data-nosnippet>958</a>        res
-<a href=#959 id=959 data-nosnippet>959</a>    }
-<a href=#960 id=960 data-nosnippet>960</a>}
-<a href=#961 id=961 data-nosnippet>961</a>
-<a href=#962 id=962 data-nosnippet>962</a><span class="kw">impl </span>IModuleFederationApi <span class="kw">for </span>FederationApi {}
-<a href=#963 id=963 data-nosnippet>963</a>
-<a href=#964 id=964 data-nosnippet>964</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#965 id=965 data-nosnippet>965</a></span><span class="kw">impl </span>IRawFederationApi <span class="kw">for </span>FederationApi {
-<a href=#966 id=966 data-nosnippet>966</a>    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
-<a href=#967 id=967 data-nosnippet>967</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.peers_keys
-<a href=#968 id=968 data-nosnippet>968</a>    }
-<a href=#969 id=969 data-nosnippet>969</a>
-<a href=#970 id=970 data-nosnippet>970</a>    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
-<a href=#971 id=971 data-nosnippet>971</a>        <span class="self">self</span>.admin_id
-<a href=#972 id=972 data-nosnippet>972</a>    }
-<a href=#973 id=973 data-nosnippet>973</a>
-<a href=#974 id=974 data-nosnippet>974</a>    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
-<a href=#975 id=975 data-nosnippet>975</a>        FederationApi {
-<a href=#976 id=976 data-nosnippet>976</a>            connectors: <span class="self">self</span>.connectors.clone(),
-<a href=#977 id=977 data-nosnippet>977</a>            peers: <span class="self">self</span>.peers.clone(),
-<a href=#978 id=978 data-nosnippet>978</a>            peers_keys: <span class="self">self</span>.peers_keys.clone(),
-<a href=#979 id=979 data-nosnippet>979</a>            admin_id: <span class="self">self</span>.admin_id,
-<a href=#980 id=980 data-nosnippet>980</a>            module_id: <span class="prelude-val">Some</span>(id),
-<a href=#981 id=981 data-nosnippet>981</a>            connections: <span class="self">self</span>.connections.clone(),
-<a href=#982 id=982 data-nosnippet>982</a>        }
-<a href=#983 id=983 data-nosnippet>983</a>        .into()
+<a href=#878 id=878 data-nosnippet>878</a>    <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
+<a href=#879 id=879 data-nosnippet>879</a>
+<a href=#880 id=880 data-nosnippet>880</a>    <span class="kw">async fn </span>await_disconnection(<span class="kw-2">&amp;</span><span class="self">self</span>);
+<a href=#881 id=881 data-nosnippet>881</a>
+<a href=#882 id=882 data-nosnippet>882</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; DynClientConnection
+<a href=#883 id=883 data-nosnippet>883</a>    <span class="kw">where
+<a href=#884 id=884 data-nosnippet>884</a>        </span><span class="self">Self</span>: Sized,
+<a href=#885 id=885 data-nosnippet>885</a>    {
+<a href=#886 id=886 data-nosnippet>886</a>        Arc::new(<span class="self">self</span>)
+<a href=#887 id=887 data-nosnippet>887</a>    }
+<a href=#888 id=888 data-nosnippet>888</a>}
+<a href=#889 id=889 data-nosnippet>889</a>
+<a href=#890 id=890 data-nosnippet>890</a><span class="doccomment">/// Federation API client
+<a href=#891 id=891 data-nosnippet>891</a>///
+<a href=#892 id=892 data-nosnippet>892</a>/// The core underlying object used to make API requests to a federation.
+<a href=#893 id=893 data-nosnippet>893</a>///
+<a href=#894 id=894 data-nosnippet>894</a>/// It has an `connectors` handle to actually making outgoing connections
+<a href=#895 id=895 data-nosnippet>895</a>/// to given URLs, and knows which peers there are and what URLs to connect to
+<a href=#896 id=896 data-nosnippet>896</a>/// to reach them.
+<a href=#897 id=897 data-nosnippet>897</a></span><span class="comment">// TODO: As it is currently it mixes a bit the role of connecting to "peers" with
+<a href=#898 id=898 data-nosnippet>898</a>// general purpose outgoing connection. Not a big deal, but might need refactor
+<a href=#899 id=899 data-nosnippet>899</a>// in the future.
+<a href=#900 id=900 data-nosnippet>900</a></span><span class="attr">#[derive(Clone, Debug)]
+<a href=#901 id=901 data-nosnippet>901</a></span><span class="kw">pub struct </span>FederationApi {
+<a href=#902 id=902 data-nosnippet>902</a>    <span class="doccomment">/// Available endpoints which we can make connections
+<a href=#903 id=903 data-nosnippet>903</a>    </span>connectors: ConnectorRegistry,
+<a href=#904 id=904 data-nosnippet>904</a>    <span class="doccomment">/// Map of known URLs to use to connect to peers
+<a href=#905 id=905 data-nosnippet>905</a>    </span>peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
+<a href=#906 id=906 data-nosnippet>906</a>    <span class="doccomment">/// List of peer ids, redundant to avoid collecting all the time
+<a href=#907 id=907 data-nosnippet>907</a>    </span>peers_keys: BTreeSet&lt;PeerId&gt;,
+<a href=#908 id=908 data-nosnippet>908</a>    <span class="doccomment">/// Our own [`PeerId`] to use when making admin apis
+<a href=#909 id=909 data-nosnippet>909</a>    </span>admin_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
+<a href=#910 id=910 data-nosnippet>910</a>    <span class="doccomment">/// Set when this API is used to communicate with a module
+<a href=#911 id=911 data-nosnippet>911</a>    </span>module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+<a href=#912 id=912 data-nosnippet>912</a>
+<a href=#913 id=913 data-nosnippet>913</a>    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#914 id=914 data-nosnippet>914</a>
+<a href=#915 id=915 data-nosnippet>915</a>    <span class="doccomment">/// Connection pool
+<a href=#916 id=916 data-nosnippet>916</a>    ///
+<a href=#917 id=917 data-nosnippet>917</a>    /// Every entry in this map will be created on demand and correspond to a
+<a href=#918 id=918 data-nosnippet>918</a>    /// single outgoing connection to a certain URL that is in the process
+<a href=#919 id=919 data-nosnippet>919</a>    /// of being established, or we already established.
+<a href=#920 id=920 data-nosnippet>920</a>    </span><span class="attr">#[allow(clippy::type_complexity)]
+<a href=#921 id=921 data-nosnippet>921</a>    </span>connections: Arc&lt;tokio::sync::Mutex&lt;HashMap&lt;SafeUrl, Arc&lt;ConnectionState&gt;&gt;&gt;&gt;,
+<a href=#922 id=922 data-nosnippet>922</a>}
+<a href=#923 id=923 data-nosnippet>923</a>
+<a href=#924 id=924 data-nosnippet>924</a><span class="doccomment">/// Inner part of [`ConnectionState`] preserving state between attempts to
+<a href=#925 id=925 data-nosnippet>925</a>/// initialize [`ConnectionState::connection`]
+<a href=#926 id=926 data-nosnippet>926</a></span><span class="attr">#[derive(Debug)]
+<a href=#927 id=927 data-nosnippet>927</a></span><span class="kw">struct </span>ConnectionStateInner {
+<a href=#928 id=928 data-nosnippet>928</a>    attempts: u64,
+<a href=#929 id=929 data-nosnippet>929</a>    backoff: FibonacciBackoff,
+<a href=#930 id=930 data-nosnippet>930</a>}
+<a href=#931 id=931 data-nosnippet>931</a>
+<a href=#932 id=932 data-nosnippet>932</a><span class="attr">#[derive(Debug)]
+<a href=#933 id=933 data-nosnippet>933</a></span><span class="kw">struct </span>ConnectionState {
+<a href=#934 id=934 data-nosnippet>934</a>    <span class="doccomment">/// Connection we are trying to or already established
+<a href=#935 id=935 data-nosnippet>935</a>    </span>connection: tokio::sync::OnceCell&lt;DynClientConnection&gt;,
+<a href=#936 id=936 data-nosnippet>936</a>    <span class="doccomment">/// State that technically is protected every time by
+<a href=#937 id=937 data-nosnippet>937</a>    /// the serialization of `OnceCell::get_or_try_init`, but
+<a href=#938 id=938 data-nosnippet>938</a>    /// for Rust purposes needs to be locked.
+<a href=#939 id=939 data-nosnippet>939</a>    </span>inner: std::sync::Mutex&lt;ConnectionStateInner&gt;,
+<a href=#940 id=940 data-nosnippet>940</a>}
+<a href=#941 id=941 data-nosnippet>941</a>
+<a href=#942 id=942 data-nosnippet>942</a><span class="kw">impl </span>ConnectionState {
+<a href=#943 id=943 data-nosnippet>943</a>    <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#944 id=944 data-nosnippet>944</a>        <span class="self">Self </span>{
+<a href=#945 id=945 data-nosnippet>945</a>            connection: OnceCell::new(),
+<a href=#946 id=946 data-nosnippet>946</a>            inner: std::sync::Mutex::new(ConnectionStateInner {
+<a href=#947 id=947 data-nosnippet>947</a>                attempts: <span class="number">0</span>,
+<a href=#948 id=948 data-nosnippet>948</a>                backoff: custom_backoff(Duration::from_millis(<span class="number">50</span>), Duration::from_secs(<span class="number">30</span>), <span class="prelude-val">None</span>),
+<a href=#949 id=949 data-nosnippet>949</a>            }),
+<a href=#950 id=950 data-nosnippet>950</a>        }
+<a href=#951 id=951 data-nosnippet>951</a>    }
+<a href=#952 id=952 data-nosnippet>952</a>
+<a href=#953 id=953 data-nosnippet>953</a>    <span class="doccomment">/// Record the fact that an attempt to connect is being made, and return
+<a href=#954 id=954 data-nosnippet>954</a>    /// time the caller should wait.
+<a href=#955 id=955 data-nosnippet>955</a>    </span><span class="kw">fn </span>pre_reconnect_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Duration {
+<a href=#956 id=956 data-nosnippet>956</a>        <span class="kw">let </span><span class="kw-2">mut </span>backoff_locked = <span class="self">self</span>.inner.lock().expect(<span class="string">"Locking failed"</span>);
+<a href=#957 id=957 data-nosnippet>957</a>        <span class="kw">let </span>attempts = backoff_locked.attempts;
+<a href=#958 id=958 data-nosnippet>958</a>
+<a href=#959 id=959 data-nosnippet>959</a>        backoff_locked.attempts += <span class="number">1</span>;
+<a href=#960 id=960 data-nosnippet>960</a>
+<a href=#961 id=961 data-nosnippet>961</a>        <span class="kw">if </span>attempts == <span class="number">0 </span>{
+<a href=#962 id=962 data-nosnippet>962</a>            Duration::default()
+<a href=#963 id=963 data-nosnippet>963</a>        } <span class="kw">else </span>{
+<a href=#964 id=964 data-nosnippet>964</a>            backoff_locked.backoff.next().expect(<span class="string">"Keeps retrying"</span>)
+<a href=#965 id=965 data-nosnippet>965</a>        }
+<a href=#966 id=966 data-nosnippet>966</a>    }
+<a href=#967 id=967 data-nosnippet>967</a>}
+<a href=#968 id=968 data-nosnippet>968</a><span class="kw">impl </span>FederationApi {
+<a href=#969 id=969 data-nosnippet>969</a>    <span class="kw">pub fn </span>new(
+<a href=#970 id=970 data-nosnippet>970</a>        connectors: ConnectorRegistry,
+<a href=#971 id=971 data-nosnippet>971</a>        peers: BTreeMap&lt;PeerId, SafeUrl&gt;,
+<a href=#972 id=972 data-nosnippet>972</a>        admin_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
+<a href=#973 id=973 data-nosnippet>973</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
+<a href=#974 id=974 data-nosnippet>974</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#975 id=975 data-nosnippet>975</a>        <span class="self">Self </span>{
+<a href=#976 id=976 data-nosnippet>976</a>            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+<a href=#977 id=977 data-nosnippet>977</a>            peers_keys: peers.keys().copied().collect(),
+<a href=#978 id=978 data-nosnippet>978</a>            peers,
+<a href=#979 id=979 data-nosnippet>979</a>            admin_id: admin_peer_id,
+<a href=#980 id=980 data-nosnippet>980</a>            module_id: <span class="prelude-val">None</span>,
+<a href=#981 id=981 data-nosnippet>981</a>            connectors,
+<a href=#982 id=982 data-nosnippet>982</a>            api_secret: api_secret.map(ToOwned::to_owned),
+<a href=#983 id=983 data-nosnippet>983</a>        }
 <a href=#984 id=984 data-nosnippet>984</a>    }
 <a href=#985 id=985 data-nosnippet>985</a>
-<a href=#986 id=986 data-nosnippet>986</a>    <span class="attr">#[instrument(
-<a href=#987 id=987 data-nosnippet>987</a>        target = LOG_NET_API,
-<a href=#988 id=988 data-nosnippet>988</a>        skip_all,
-<a href=#989 id=989 data-nosnippet>989</a>        fields(
-<a href=#990 id=990 data-nosnippet>990</a>            peer_id = %peer_id,
-<a href=#991 id=991 data-nosnippet>991</a>            method = %method,
-<a href=#992 id=992 data-nosnippet>992</a>            params = %params.params,
-<a href=#993 id=993 data-nosnippet>993</a>        )
-<a href=#994 id=994 data-nosnippet>994</a>    )]
-<a href=#995 id=995 data-nosnippet>995</a>    </span><span class="kw">async fn </span>request_raw(
-<a href=#996 id=996 data-nosnippet>996</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#997 id=997 data-nosnippet>997</a>        peer_id: PeerId,
-<a href=#998 id=998 data-nosnippet>998</a>        method: <span class="kw-2">&amp;</span>str,
-<a href=#999 id=999 data-nosnippet>999</a>        params: <span class="kw-2">&amp;</span>ApiRequestErased,
-<a href=#1000 id=1000 data-nosnippet>1000</a>    ) -&gt; PeerResult&lt;Value&gt; {
-<a href=#1001 id=1001 data-nosnippet>1001</a>        <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
-<a href=#1002 id=1002 data-nosnippet>1002</a>            <span class="prelude-val">Some</span>(module_id) =&gt; ApiMethod::Module(module_id, method.to_string()),
-<a href=#1003 id=1003 data-nosnippet>1003</a>            <span class="prelude-val">None </span>=&gt; ApiMethod::Core(method.to_string()),
-<a href=#1004 id=1004 data-nosnippet>1004</a>        };
-<a href=#1005 id=1005 data-nosnippet>1005</a>
-<a href=#1006 id=1006 data-nosnippet>1006</a>        <span class="self">self</span>.request(peer_id, method, params.clone()).<span class="kw">await
-<a href=#1007 id=1007 data-nosnippet>1007</a>    </span>}
-<a href=#1008 id=1008 data-nosnippet>1008</a>}
+<a href=#986 id=986 data-nosnippet>986</a>    <span class="kw">async fn </span>get_or_create_connection(
+<a href=#987 id=987 data-nosnippet>987</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#988 id=988 data-nosnippet>988</a>        url: <span class="kw-2">&amp;</span>SafeUrl,
+<a href=#989 id=989 data-nosnippet>989</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
+<a href=#990 id=990 data-nosnippet>990</a>    ) -&gt; PeerResult&lt;DynClientConnection&gt; {
+<a href=#991 id=991 data-nosnippet>991</a>        <span class="kw">let </span><span class="kw-2">mut </span>pool_locked = <span class="self">self</span>.connections.lock().<span class="kw">await</span>;
+<a href=#992 id=992 data-nosnippet>992</a>
+<a href=#993 id=993 data-nosnippet>993</a>        <span class="kw">let </span>pool_entry_arc = pool_locked
+<a href=#994 id=994 data-nosnippet>994</a>            .entry(url.to_owned())
+<a href=#995 id=995 data-nosnippet>995</a>                        .and_modify(|entry_arc| {
+<a href=#996 id=996 data-nosnippet>996</a>                <span class="comment">// Check if existing connection is disconnected and reset the whole entry.
+<a href=#997 id=997 data-nosnippet>997</a>                //
+<a href=#998 id=998 data-nosnippet>998</a>                // This resets the state (like connectivity backoff), which is what we want.
+<a href=#999 id=999 data-nosnippet>999</a>                // Since the (`OnceCell`) was already initialized, it means connection was successfully
+<a href=#1000 id=1000 data-nosnippet>1000</a>                // before, and disconnected afterwards.
+<a href=#1001 id=1001 data-nosnippet>1001</a>                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(existing_conn) = entry_arc.connection.get()
+<a href=#1002 id=1002 data-nosnippet>1002</a>                    &amp;&amp; !existing_conn.is_connected(){
+<a href=#1003 id=1003 data-nosnippet>1003</a>                        <span class="macro">trace!</span>(target: LOG_NET_API, %url, <span class="string">"Existing connection is disconnected, removing from pool"</span>);
+<a href=#1004 id=1004 data-nosnippet>1004</a>                        <span class="kw-2">*</span>entry_arc = Arc::new(ConnectionState::new());
+<a href=#1005 id=1005 data-nosnippet>1005</a>                    }
+<a href=#1006 id=1006 data-nosnippet>1006</a>            })
+<a href=#1007 id=1007 data-nosnippet>1007</a>            .or_insert_with(|| Arc::new(ConnectionState::new()))
+<a href=#1008 id=1008 data-nosnippet>1008</a>            .clone();
 <a href=#1009 id=1009 data-nosnippet>1009</a>
-<a href=#1010 id=1010 data-nosnippet>1010</a><span class="attr">#[derive(Clone, Debug)]
-<a href=#1011 id=1011 data-nosnippet>1011</a></span><span class="kw">struct </span>ClientConnection {
-<a href=#1012 id=1012 data-nosnippet>1012</a>    sender: async_channel::Sender&lt;oneshot::Sender&lt;DynClientConnection&gt;&gt;,
-<a href=#1013 id=1013 data-nosnippet>1013</a>}
-<a href=#1014 id=1014 data-nosnippet>1014</a>
-<a href=#1015 id=1015 data-nosnippet>1015</a><span class="kw">impl </span>ClientConnection {
-<a href=#1016 id=1016 data-nosnippet>1016</a>    <span class="kw">fn </span>new(
-<a href=#1017 id=1017 data-nosnippet>1017</a>        connectors: ConnectorRegistry,
-<a href=#1018 id=1018 data-nosnippet>1018</a>        peer: PeerId,
-<a href=#1019 id=1019 data-nosnippet>1019</a>        url: SafeUrl,
-<a href=#1020 id=1020 data-nosnippet>1020</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#1021 id=1021 data-nosnippet>1021</a>    ) -&gt; ClientConnection {
-<a href=#1022 id=1022 data-nosnippet>1022</a>        <span class="kw">let </span>(sender, receiver) = bounded::&lt;oneshot::Sender&lt;DynClientConnection&gt;&gt;(<span class="number">1024</span>);
-<a href=#1023 id=1023 data-nosnippet>1023</a>
-<a href=#1024 id=1024 data-nosnippet>1024</a>        fedimint_core::task::spawn(
-<a href=#1025 id=1025 data-nosnippet>1025</a>            <span class="string">"peer-api-connection"</span>,
-<a href=#1026 id=1026 data-nosnippet>1026</a>            <span class="kw">async move </span>{
-<a href=#1027 id=1027 data-nosnippet>1027</a>                <span class="kw">let </span><span class="kw-2">mut </span>backoff = api_networking_backoff();
-<a href=#1028 id=1028 data-nosnippet>1028</a>
-<a href=#1029 id=1029 data-nosnippet>1029</a>                <span class="kw">while let </span><span class="prelude-val">Ok</span>(sender) = receiver.recv().<span class="kw">await </span>{
-<a href=#1030 id=1030 data-nosnippet>1030</a>                    <span class="kw">let </span><span class="kw-2">mut </span>senders = <span class="macro">vec!</span>[sender];
+<a href=#1010 id=1010 data-nosnippet>1010</a>        <span class="comment">// Drop the pool lock so other connections can work in parallel
+<a href=#1011 id=1011 data-nosnippet>1011</a>        </span>drop(pool_locked);
+<a href=#1012 id=1012 data-nosnippet>1012</a>
+<a href=#1013 id=1013 data-nosnippet>1013</a>        <span class="kw">let </span>conn = pool_entry_arc
+<a href=#1014 id=1014 data-nosnippet>1014</a>            .connection
+<a href=#1015 id=1015 data-nosnippet>1015</a>            <span class="comment">// This serializes all the connection attempts. If one attempt to connect (including
+<a href=#1016 id=1016 data-nosnippet>1016</a>            // waiting for the reconnect backoff) succeeds, all waiting ones will use it. If it
+<a href=#1017 id=1017 data-nosnippet>1017</a>            // fails, any already pending/next will attempt it right afterwards.
+<a href=#1018 id=1018 data-nosnippet>1018</a>            // Nit: if multiple calls are trying to connect to the same host that is offline, it
+<a href=#1019 id=1019 data-nosnippet>1019</a>            // will take some of them multiples of maximum retry delay to actually return with
+<a href=#1020 id=1020 data-nosnippet>1020</a>            // an error. This should be fine in practice and hard to avoid without a lot of
+<a href=#1021 id=1021 data-nosnippet>1021</a>            // complexity.
+<a href=#1022 id=1022 data-nosnippet>1022</a>            </span>.get_or_try_init(|| <span class="kw">async </span>{
+<a href=#1023 id=1023 data-nosnippet>1023</a>                <span class="kw">let </span>retry_delay = pool_entry_arc.pre_reconnect_delay();
+<a href=#1024 id=1024 data-nosnippet>1024</a>                fedimint_core::runtime::sleep(retry_delay).<span class="kw">await</span>;
+<a href=#1025 id=1025 data-nosnippet>1025</a>
+<a href=#1026 id=1026 data-nosnippet>1026</a>                <span class="kw">let </span>conn = <span class="self">self</span>.connectors.connect(url, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1027 id=1027 data-nosnippet>1027</a>
+<a href=#1028 id=1028 data-nosnippet>1028</a>                <span class="prelude-val">Ok</span>(conn)
+<a href=#1029 id=1029 data-nosnippet>1029</a>            })
+<a href=#1030 id=1030 data-nosnippet>1030</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1031 id=1031 data-nosnippet>1031</a>
-<a href=#1032 id=1032 data-nosnippet>1032</a>                    <span class="comment">// Drain the queue, so we everyone that already joined fail or succeed
-<a href=#1033 id=1033 data-nosnippet>1033</a>                    // together.
-<a href=#1034 id=1034 data-nosnippet>1034</a>                    </span><span class="kw">while let </span><span class="prelude-val">Ok</span>(sender) = receiver.try_recv() {
-<a href=#1035 id=1035 data-nosnippet>1035</a>                        senders.push(sender);
-<a href=#1036 id=1036 data-nosnippet>1036</a>                    }
-<a href=#1037 id=1037 data-nosnippet>1037</a>
-<a href=#1038 id=1038 data-nosnippet>1038</a>                    <span class="kw">match </span>connectors.connect(<span class="kw-2">&amp;</span>url, api_secret.as_deref()).<span class="kw">await </span>{
-<a href=#1039 id=1039 data-nosnippet>1039</a>                        <span class="prelude-val">Ok</span>(connection) =&gt; {
-<a href=#1040 id=1040 data-nosnippet>1040</a>                            <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Connected to peer api"</span>);
-<a href=#1041 id=1041 data-nosnippet>1041</a>
-<a href=#1042 id=1042 data-nosnippet>1042</a>                            <span class="kw">for </span>sender <span class="kw">in </span>senders {
-<a href=#1043 id=1043 data-nosnippet>1043</a>                                sender.send(connection.clone()).ok();
-<a href=#1044 id=1044 data-nosnippet>1044</a>                            }
-<a href=#1045 id=1045 data-nosnippet>1045</a>
-<a href=#1046 id=1046 data-nosnippet>1046</a>                            <span class="kw">loop </span>{
-<a href=#1047 id=1047 data-nosnippet>1047</a>                                <span class="macro">tokio::select!</span> {
-<a href=#1048 id=1048 data-nosnippet>1048</a>                                    sender = receiver.recv() =&gt; {
-<a href=#1049 id=1049 data-nosnippet>1049</a>                                        <span class="kw">match </span>sender.ok() {
-<a href=#1050 id=1050 data-nosnippet>1050</a>                                            <span class="prelude-val">Some</span>(sender) =&gt; sender.send(connection.clone()).ok(),
-<a href=#1051 id=1051 data-nosnippet>1051</a>                                            <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
-<a href=#1052 id=1052 data-nosnippet>1052</a>                                        };
-<a href=#1053 id=1053 data-nosnippet>1053</a>                                    }
-<a href=#1054 id=1054 data-nosnippet>1054</a>                                    () = connection.await_disconnection() =&gt; <span class="kw">break</span>,
-<a href=#1055 id=1055 data-nosnippet>1055</a>                                }
-<a href=#1056 id=1056 data-nosnippet>1056</a>                            }
-<a href=#1057 id=1057 data-nosnippet>1057</a>
-<a href=#1058 id=1058 data-nosnippet>1058</a>                            <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Disconnected from peer api"</span>);
+<a href=#1032 id=1032 data-nosnippet>1032</a>        <span class="macro">trace!</span>(target: LOG_NET_API, %url, <span class="string">"Using websocket connection"</span>);
+<a href=#1033 id=1033 data-nosnippet>1033</a>        <span class="prelude-val">Ok</span>(conn.clone())
+<a href=#1034 id=1034 data-nosnippet>1034</a>    }
+<a href=#1035 id=1035 data-nosnippet>1035</a>
+<a href=#1036 id=1036 data-nosnippet>1036</a>    <span class="kw">async fn </span>request(
+<a href=#1037 id=1037 data-nosnippet>1037</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1038 id=1038 data-nosnippet>1038</a>        peer: PeerId,
+<a href=#1039 id=1039 data-nosnippet>1039</a>        method: ApiMethod,
+<a href=#1040 id=1040 data-nosnippet>1040</a>        request: ApiRequestErased,
+<a href=#1041 id=1041 data-nosnippet>1041</a>    ) -&gt; PeerResult&lt;Value&gt; {
+<a href=#1042 id=1042 data-nosnippet>1042</a>        <span class="macro">trace!</span>(target: LOG_NET_API, %peer, %method, <span class="string">"Api request"</span>);
+<a href=#1043 id=1043 data-nosnippet>1043</a>        <span class="kw">let </span>url = <span class="self">self
+<a href=#1044 id=1044 data-nosnippet>1044</a>            </span>.peers
+<a href=#1045 id=1045 data-nosnippet>1045</a>            .get(<span class="kw-2">&amp;</span>peer)
+<a href=#1046 id=1046 data-nosnippet>1046</a>            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })<span class="question-mark">?</span>;
+<a href=#1047 id=1047 data-nosnippet>1047</a>        <span class="kw">let </span>conn = <span class="self">self
+<a href=#1048 id=1048 data-nosnippet>1048</a>            </span>.get_or_create_connection(url, <span class="self">self</span>.api_secret.as_deref())
+<a href=#1049 id=1049 data-nosnippet>1049</a>            .<span class="kw">await
+<a href=#1050 id=1050 data-nosnippet>1050</a>            </span>.context(<span class="string">"Failed to connect to peer"</span>)
+<a href=#1051 id=1051 data-nosnippet>1051</a>            .map_err(PeerError::Connection)<span class="question-mark">?</span>;
+<a href=#1052 id=1052 data-nosnippet>1052</a>        <span class="kw">let </span>res = conn.request(method.clone(), request).<span class="kw">await</span>;
+<a href=#1053 id=1053 data-nosnippet>1053</a>
+<a href=#1054 id=1054 data-nosnippet>1054</a>        <span class="macro">trace!</span>(target: LOG_NET_API, <span class="question-mark">?</span>method, res_ok = res.is_ok(), <span class="string">"Api response"</span>);
+<a href=#1055 id=1055 data-nosnippet>1055</a>
+<a href=#1056 id=1056 data-nosnippet>1056</a>        res
+<a href=#1057 id=1057 data-nosnippet>1057</a>    }
+<a href=#1058 id=1058 data-nosnippet>1058</a>}
 <a href=#1059 id=1059 data-nosnippet>1059</a>
-<a href=#1060 id=1060 data-nosnippet>1060</a>                            backoff = api_networking_backoff();
-<a href=#1061 id=1061 data-nosnippet>1061</a>                        }
-<a href=#1062 id=1062 data-nosnippet>1062</a>                        <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#1063 id=1063 data-nosnippet>1063</a>                            <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Failed to connect to peer api {e}"</span>);
-<a href=#1064 id=1064 data-nosnippet>1064</a>
-<a href=#1065 id=1065 data-nosnippet>1065</a>                            drop(senders);
-<a href=#1066 id=1066 data-nosnippet>1066</a>
-<a href=#1067 id=1067 data-nosnippet>1067</a>                            fedimint_core::task::sleep(
-<a href=#1068 id=1068 data-nosnippet>1068</a>                                backoff.next().expect(<span class="string">"No limit to the number of retries"</span>),
-<a href=#1069 id=1069 data-nosnippet>1069</a>                            )
-<a href=#1070 id=1070 data-nosnippet>1070</a>                            .<span class="kw">await</span>;
-<a href=#1071 id=1071 data-nosnippet>1071</a>                        }
-<a href=#1072 id=1072 data-nosnippet>1072</a>                    }
-<a href=#1073 id=1073 data-nosnippet>1073</a>                }
-<a href=#1074 id=1074 data-nosnippet>1074</a>
-<a href=#1075 id=1075 data-nosnippet>1075</a>                <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Shutting down peer api connection task"</span>);
-<a href=#1076 id=1076 data-nosnippet>1076</a>            }
-<a href=#1077 id=1077 data-nosnippet>1077</a>            .instrument(<span class="macro">trace_span!</span>(<span class="string">"peer-api-connection"</span>, <span class="question-mark">?</span>peer)),
-<a href=#1078 id=1078 data-nosnippet>1078</a>        );
-<a href=#1079 id=1079 data-nosnippet>1079</a>
-<a href=#1080 id=1080 data-nosnippet>1080</a>        ClientConnection { sender }
-<a href=#1081 id=1081 data-nosnippet>1081</a>    }
-<a href=#1082 id=1082 data-nosnippet>1082</a>
-<a href=#1083 id=1083 data-nosnippet>1083</a>    <span class="kw">async fn </span>connection(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;DynClientConnection&gt; {
-<a href=#1084 id=1084 data-nosnippet>1084</a>        <span class="kw">let </span>(sender, receiver) = oneshot::channel();
-<a href=#1085 id=1085 data-nosnippet>1085</a>
-<a href=#1086 id=1086 data-nosnippet>1086</a>        <span class="self">self</span>.sender
-<a href=#1087 id=1087 data-nosnippet>1087</a>            .send(sender)
-<a href=#1088 id=1088 data-nosnippet>1088</a>            .<span class="kw">await
-<a href=#1089 id=1089 data-nosnippet>1089</a>            </span>.inspect_err(|err| {
-<a href=#1090 id=1090 data-nosnippet>1090</a>                <span class="macro">warn!</span>(
-<a href=#1091 id=1091 data-nosnippet>1091</a>                    target: LOG_CLIENT_NET_API,
-<a href=#1092 id=1092 data-nosnippet>1092</a>                    err = %err.fmt_compact(),
-<a href=#1093 id=1093 data-nosnippet>1093</a>                    <span class="string">"Api connection request channel closed unexpectedly"
-<a href=#1094 id=1094 data-nosnippet>1094</a>                </span>);
-<a href=#1095 id=1095 data-nosnippet>1095</a>            })
-<a href=#1096 id=1096 data-nosnippet>1096</a>            .ok()<span class="question-mark">?</span>;
-<a href=#1097 id=1097 data-nosnippet>1097</a>
-<a href=#1098 id=1098 data-nosnippet>1098</a>        receiver.<span class="kw">await</span>.ok()
-<a href=#1099 id=1099 data-nosnippet>1099</a>    }
-<a href=#1100 id=1100 data-nosnippet>1100</a>}
-<a href=#1101 id=1101 data-nosnippet>1101</a>
-<a href=#1102 id=1102 data-nosnippet>1102</a><span class="doccomment">/// The status of a server, including how it views its peers
-<a href=#1103 id=1103 data-nosnippet>1103</a></span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-<a href=#1104 id=1104 data-nosnippet>1104</a></span><span class="kw">pub struct </span>LegacyFederationStatus {
-<a href=#1105 id=1105 data-nosnippet>1105</a>    <span class="kw">pub </span>session_count: u64,
-<a href=#1106 id=1106 data-nosnippet>1106</a>    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, LegacyPeerStatus&gt;,
-<a href=#1107 id=1107 data-nosnippet>1107</a>    <span class="kw">pub </span>peers_online: u64,
-<a href=#1108 id=1108 data-nosnippet>1108</a>    <span class="kw">pub </span>peers_offline: u64,
-<a href=#1109 id=1109 data-nosnippet>1109</a>    <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
-<a href=#1110 id=1110 data-nosnippet>1110</a>    /// should generate an alert if this is not the case.
-<a href=#1111 id=1111 data-nosnippet>1111</a>    </span><span class="kw">pub </span>peers_flagged: u64,
-<a href=#1112 id=1112 data-nosnippet>1112</a>    <span class="kw">pub </span>scheduled_shutdown: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#1113 id=1113 data-nosnippet>1113</a>}
-<a href=#1114 id=1114 data-nosnippet>1114</a>
-<a href=#1115 id=1115 data-nosnippet>1115</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-<a href=#1116 id=1116 data-nosnippet>1116</a></span><span class="kw">pub struct </span>LegacyPeerStatus {
-<a href=#1117 id=1117 data-nosnippet>1117</a>    <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#1118 id=1118 data-nosnippet>1118</a>    <span class="kw">pub </span>connection_status: LegacyP2PConnectionStatus,
-<a href=#1119 id=1119 data-nosnippet>1119</a>    <span class="doccomment">/// Indicates that this peer needs attention from the operator since
-<a href=#1120 id=1120 data-nosnippet>1120</a>    /// it has not contributed to the consensus in a long time
-<a href=#1121 id=1121 data-nosnippet>1121</a>    </span><span class="kw">pub </span>flagged: bool,
-<a href=#1122 id=1122 data-nosnippet>1122</a>}
-<a href=#1123 id=1123 data-nosnippet>1123</a>
-<a href=#1124 id=1124 data-nosnippet>1124</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-<a href=#1125 id=1125 data-nosnippet>1125</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
-<a href=#1126 id=1126 data-nosnippet>1126</a></span><span class="kw">pub enum </span>LegacyP2PConnectionStatus {
-<a href=#1127 id=1127 data-nosnippet>1127</a>    <span class="attr">#[default]
-<a href=#1128 id=1128 data-nosnippet>1128</a>    </span>Disconnected,
-<a href=#1129 id=1129 data-nosnippet>1129</a>    Connected,
-<a href=#1130 id=1130 data-nosnippet>1130</a>}
-<a href=#1131 id=1131 data-nosnippet>1131</a>
-<a href=#1132 id=1132 data-nosnippet>1132</a><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-<a href=#1133 id=1133 data-nosnippet>1133</a></span><span class="kw">pub struct </span>StatusResponse {
-<a href=#1134 id=1134 data-nosnippet>1134</a>    <span class="kw">pub </span>server: ServerStatusLegacy,
-<a href=#1135 id=1135 data-nosnippet>1135</a>    <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;LegacyFederationStatus&gt;,
-<a href=#1136 id=1136 data-nosnippet>1136</a>}
-<a href=#1137 id=1137 data-nosnippet>1137</a>
-<a href=#1138 id=1138 data-nosnippet>1138</a><span class="attr">#[cfg(test)]
-<a href=#1139 id=1139 data-nosnippet>1139</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#1060 id=1060 data-nosnippet>1060</a><span class="kw">impl </span>IModuleFederationApi <span class="kw">for </span>FederationApi {}
+<a href=#1061 id=1061 data-nosnippet>1061</a>
+<a href=#1062 id=1062 data-nosnippet>1062</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#1063 id=1063 data-nosnippet>1063</a></span><span class="kw">impl </span>IRawFederationApi <span class="kw">for </span>FederationApi {
+<a href=#1064 id=1064 data-nosnippet>1064</a>    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.peers_keys
+<a href=#1066 id=1066 data-nosnippet>1066</a>    }
+<a href=#1067 id=1067 data-nosnippet>1067</a>
+<a href=#1068 id=1068 data-nosnippet>1068</a>    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
+<a href=#1069 id=1069 data-nosnippet>1069</a>        <span class="self">self</span>.admin_id
+<a href=#1070 id=1070 data-nosnippet>1070</a>    }
+<a href=#1071 id=1071 data-nosnippet>1071</a>
+<a href=#1072 id=1072 data-nosnippet>1072</a>    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
+<a href=#1073 id=1073 data-nosnippet>1073</a>        FederationApi {
+<a href=#1074 id=1074 data-nosnippet>1074</a>            api_secret: <span class="self">self</span>.api_secret.clone(),
+<a href=#1075 id=1075 data-nosnippet>1075</a>            connections: <span class="self">self</span>.connections.clone(),
+<a href=#1076 id=1076 data-nosnippet>1076</a>            connectors: <span class="self">self</span>.connectors.clone(),
+<a href=#1077 id=1077 data-nosnippet>1077</a>            peers: <span class="self">self</span>.peers.clone(),
+<a href=#1078 id=1078 data-nosnippet>1078</a>            peers_keys: <span class="self">self</span>.peers_keys.clone(),
+<a href=#1079 id=1079 data-nosnippet>1079</a>            admin_id: <span class="self">self</span>.admin_id,
+<a href=#1080 id=1080 data-nosnippet>1080</a>            module_id: <span class="prelude-val">Some</span>(id),
+<a href=#1081 id=1081 data-nosnippet>1081</a>        }
+<a href=#1082 id=1082 data-nosnippet>1082</a>        .into()
+<a href=#1083 id=1083 data-nosnippet>1083</a>    }
+<a href=#1084 id=1084 data-nosnippet>1084</a>
+<a href=#1085 id=1085 data-nosnippet>1085</a>    <span class="attr">#[instrument(
+<a href=#1086 id=1086 data-nosnippet>1086</a>        target = LOG_NET_API,
+<a href=#1087 id=1087 data-nosnippet>1087</a>        skip_all,
+<a href=#1088 id=1088 data-nosnippet>1088</a>        fields(
+<a href=#1089 id=1089 data-nosnippet>1089</a>            peer_id = %peer_id,
+<a href=#1090 id=1090 data-nosnippet>1090</a>            method = %method,
+<a href=#1091 id=1091 data-nosnippet>1091</a>            params = %params.params,
+<a href=#1092 id=1092 data-nosnippet>1092</a>        )
+<a href=#1093 id=1093 data-nosnippet>1093</a>    )]
+<a href=#1094 id=1094 data-nosnippet>1094</a>    </span><span class="kw">async fn </span>request_raw(
+<a href=#1095 id=1095 data-nosnippet>1095</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1096 id=1096 data-nosnippet>1096</a>        peer_id: PeerId,
+<a href=#1097 id=1097 data-nosnippet>1097</a>        method: <span class="kw-2">&amp;</span>str,
+<a href=#1098 id=1098 data-nosnippet>1098</a>        params: <span class="kw-2">&amp;</span>ApiRequestErased,
+<a href=#1099 id=1099 data-nosnippet>1099</a>    ) -&gt; PeerResult&lt;Value&gt; {
+<a href=#1100 id=1100 data-nosnippet>1100</a>        <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
+<a href=#1101 id=1101 data-nosnippet>1101</a>            <span class="prelude-val">Some</span>(module_id) =&gt; ApiMethod::Module(module_id, method.to_string()),
+<a href=#1102 id=1102 data-nosnippet>1102</a>            <span class="prelude-val">None </span>=&gt; ApiMethod::Core(method.to_string()),
+<a href=#1103 id=1103 data-nosnippet>1103</a>        };
+<a href=#1104 id=1104 data-nosnippet>1104</a>
+<a href=#1105 id=1105 data-nosnippet>1105</a>        <span class="self">self</span>.request(peer_id, method, params.clone()).<span class="kw">await
+<a href=#1106 id=1106 data-nosnippet>1106</a>    </span>}
+<a href=#1107 id=1107 data-nosnippet>1107</a>}
+<a href=#1108 id=1108 data-nosnippet>1108</a>
+<a href=#1109 id=1109 data-nosnippet>1109</a><span class="doccomment">/// The status of a server, including how it views its peers
+<a href=#1110 id=1110 data-nosnippet>1110</a></span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+<a href=#1111 id=1111 data-nosnippet>1111</a></span><span class="kw">pub struct </span>LegacyFederationStatus {
+<a href=#1112 id=1112 data-nosnippet>1112</a>    <span class="kw">pub </span>session_count: u64,
+<a href=#1113 id=1113 data-nosnippet>1113</a>    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, LegacyPeerStatus&gt;,
+<a href=#1114 id=1114 data-nosnippet>1114</a>    <span class="kw">pub </span>peers_online: u64,
+<a href=#1115 id=1115 data-nosnippet>1115</a>    <span class="kw">pub </span>peers_offline: u64,
+<a href=#1116 id=1116 data-nosnippet>1116</a>    <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
+<a href=#1117 id=1117 data-nosnippet>1117</a>    /// should generate an alert if this is not the case.
+<a href=#1118 id=1118 data-nosnippet>1118</a>    </span><span class="kw">pub </span>peers_flagged: u64,
+<a href=#1119 id=1119 data-nosnippet>1119</a>    <span class="kw">pub </span>scheduled_shutdown: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1120 id=1120 data-nosnippet>1120</a>}
+<a href=#1121 id=1121 data-nosnippet>1121</a>
+<a href=#1122 id=1122 data-nosnippet>1122</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#1123 id=1123 data-nosnippet>1123</a></span><span class="kw">pub struct </span>LegacyPeerStatus {
+<a href=#1124 id=1124 data-nosnippet>1124</a>    <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1125 id=1125 data-nosnippet>1125</a>    <span class="kw">pub </span>connection_status: LegacyP2PConnectionStatus,
+<a href=#1126 id=1126 data-nosnippet>1126</a>    <span class="doccomment">/// Indicates that this peer needs attention from the operator since
+<a href=#1127 id=1127 data-nosnippet>1127</a>    /// it has not contributed to the consensus in a long time
+<a href=#1128 id=1128 data-nosnippet>1128</a>    </span><span class="kw">pub </span>flagged: bool,
+<a href=#1129 id=1129 data-nosnippet>1129</a>}
+<a href=#1130 id=1130 data-nosnippet>1130</a>
+<a href=#1131 id=1131 data-nosnippet>1131</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#1132 id=1132 data-nosnippet>1132</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
+<a href=#1133 id=1133 data-nosnippet>1133</a></span><span class="kw">pub enum </span>LegacyP2PConnectionStatus {
+<a href=#1134 id=1134 data-nosnippet>1134</a>    <span class="attr">#[default]
+<a href=#1135 id=1135 data-nosnippet>1135</a>    </span>Disconnected,
+<a href=#1136 id=1136 data-nosnippet>1136</a>    Connected,
+<a href=#1137 id=1137 data-nosnippet>1137</a>}
+<a href=#1138 id=1138 data-nosnippet>1138</a>
+<a href=#1139 id=1139 data-nosnippet>1139</a><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+<a href=#1140 id=1140 data-nosnippet>1140</a></span><span class="kw">pub struct </span>StatusResponse {
+<a href=#1141 id=1141 data-nosnippet>1141</a>    <span class="kw">pub </span>server: ServerStatusLegacy,
+<a href=#1142 id=1142 data-nosnippet>1142</a>    <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;LegacyFederationStatus&gt;,
+<a href=#1143 id=1143 data-nosnippet>1143</a>}
+<a href=#1144 id=1144 data-nosnippet>1144</a>
+<a href=#1145 id=1145 data-nosnippet>1145</a><span class="attr">#[cfg(test)]
+<a href=#1146 id=1146 data-nosnippet>1146</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>

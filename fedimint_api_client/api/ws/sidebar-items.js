@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["JsonRpcClientError"],"fn":["jsonrpc_error_to_peer_error"],"struct":["WebsocketEndpoint"],"type":["JsonRpcResult"]};
+window.SIDEBAR_ITEMS = {"enum":["JsonRpcClientError"],"fn":["jsonrpc_error_to_peer_error"],"struct":["WebsocketConnector"],"type":["JsonRpcResult"]};
