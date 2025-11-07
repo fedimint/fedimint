@@ -6,15 +6,16 @@ pub mod net;
 pub mod tor;
 pub mod ws;
 
-use core::{fmt, panic};
+use core::fmt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
+use std::future::pending;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, anyhow, bail};
-use async_channel::bounded;
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
@@ -37,14 +38,12 @@ use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
-use fedimint_core::util::backoff_util::api_networking_backoff;
+use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff, custom_backoff};
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET, LOG_NET_API};
-use futures::channel::oneshot;
-use futures::future::pending;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
@@ -53,10 +52,11 @@ use jsonrpsee_core::DeserializeOwned;
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tracing::{Instrument, debug, instrument, trace, trace_span, warn};
+use tokio::sync::OnceCell;
+use tracing::{debug, instrument, trace, warn};
 
 use crate::api;
-use crate::api::ws::WebsocketEndpoint;
+use crate::api::ws::WebsocketConnector;
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
@@ -649,7 +649,7 @@ impl ConnectorRegistryBuilder {
             inner.insert(
                 "iroh".to_string(),
                 Arc::new(
-                    api::iroh::IrohEndpoint::new(
+                    api::iroh::IrohConnector::new(
                         self.iroh_dns,
                         self.iroh_pkarr_dht,
                         self.iroh_next,
@@ -663,15 +663,15 @@ impl ConnectorRegistryBuilder {
             match self.ws_force_tor {
                 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
                 true => {
-                    use crate::api::tor::TorEndpoint;
+                    use crate::api::tor::TorConnector;
 
-                    let tor_endpoint = Arc::new(TorEndpoint::bootstrap().await?);
+                    let tor_endpoint = Arc::new(TorConnector::bootstrap().await?);
                     inner.insert("wss".into(), tor_endpoint.clone());
                     inner.insert("ws".into(), tor_endpoint);
                 }
 
                 false => {
-                    let websocket_endpoint = Arc::new(WebsocketEndpoint::new());
+                    let websocket_endpoint = Arc::new(WebsocketConnector::new());
                     inner.insert("wss".into(), websocket_endpoint.clone());
                     inner.insert("ws".into(), websocket_endpoint);
                 }
@@ -681,7 +681,7 @@ impl ConnectorRegistryBuilder {
         }
 
         Ok(ConnectorRegistry {
-            inner,
+            connectors: inner,
             connection_overrides: self.connection_overrides,
         })
     }
@@ -744,9 +744,11 @@ impl ConnectorRegistryBuilder {
 ///
 /// [`ConnectorRegistry::connect`] is the main entry point for making
 /// mixed-networking stack connection.
+///
+/// Responsibilities:
 #[derive(Clone, Debug)]
 pub struct ConnectorRegistry {
-    inner: BTreeMap<String, DynConnector>,
+    connectors: BTreeMap<String, DynConnector>,
 
     /// List of overrides to use when attempting to connect to given url
     ///
@@ -847,7 +849,7 @@ impl ConnectorRegistry {
             None => url,
         };
 
-        let Some(endpoint) = self.inner.get(url.scheme()) else {
+        let Some(endpoint) = self.connectors.get(url.scheme()) else {
             return Err(PeerError::InvalidEndpoint(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
@@ -873,6 +875,8 @@ pub type DynClientConnection = Arc<dyn IClientConnection>;
 pub trait IClientConnection: Debug + Send + Sync + 'static {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value>;
 
+    fn is_connected(&self) -> bool;
+
     async fn await_disconnection(&self);
 
     fn into_dyn(self) -> DynClientConnection
@@ -887,9 +891,12 @@ pub trait IClientConnection: Debug + Send + Sync + 'static {
 ///
 /// The core underlying object used to make API requests to a federation.
 ///
-/// It has an `endpoints` handle to making outgoing connections,
-/// and knows which peers there are and what URLs to connect to
+/// It has an `connectors` handle to actually making outgoing connections
+/// to given URLs, and knows which peers there are and what URLs to connect to
 /// to reach them.
+// TODO: As it is currently it mixes a bit the role of connecting to "peers" with
+// general purpose outgoing connection. Not a big deal, but might need refactor
+// in the future.
 #[derive(Clone, Debug)]
 pub struct FederationApi {
     /// Available endpoints which we can make connections
@@ -902,9 +909,62 @@ pub struct FederationApi {
     admin_id: Option<PeerId>,
     /// Set when this API is used to communicate with a module
     module_id: Option<ModuleInstanceId>,
-    connections: BTreeMap<PeerId, ClientConnection>,
+
+    api_secret: Option<String>,
+
+    /// Connection pool
+    ///
+    /// Every entry in this map will be created on demand and correspond to a
+    /// single outgoing connection to a certain URL that is in the process
+    /// of being established, or we already established.
+    #[allow(clippy::type_complexity)]
+    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState>>>>,
 }
 
+/// Inner part of [`ConnectionState`] preserving state between attempts to
+/// initialize [`ConnectionState::connection`]
+#[derive(Debug)]
+struct ConnectionStateInner {
+    attempts: u64,
+    backoff: FibonacciBackoff,
+}
+
+#[derive(Debug)]
+struct ConnectionState {
+    /// Connection we are trying to or already established
+    connection: tokio::sync::OnceCell<DynClientConnection>,
+    /// State that technically is protected every time by
+    /// the serialization of `OnceCell::get_or_try_init`, but
+    /// for Rust purposes needs to be locked.
+    inner: std::sync::Mutex<ConnectionStateInner>,
+}
+
+impl ConnectionState {
+    fn new() -> Self {
+        Self {
+            connection: OnceCell::new(),
+            inner: std::sync::Mutex::new(ConnectionStateInner {
+                attempts: 0,
+                backoff: custom_backoff(Duration::from_millis(50), Duration::from_secs(30), None),
+            }),
+        }
+    }
+
+    /// Record the fact that an attempt to connect is being made, and return
+    /// time the caller should wait.
+    fn pre_reconnect_delay(&self) -> Duration {
+        let mut backoff_locked = self.inner.lock().expect("Locking failed");
+        let attempts = backoff_locked.attempts;
+
+        backoff_locked.attempts += 1;
+
+        if attempts == 0 {
+            Duration::default()
+        } else {
+            backoff_locked.backoff.next().expect("Keeps retrying")
+        }
+    }
+}
 impl FederationApi {
     pub fn new(
         connectors: ConnectorRegistry,
@@ -913,26 +973,64 @@ impl FederationApi {
         api_secret: Option<&str>,
     ) -> Self {
         Self {
-            peers: peers.clone(),
+            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             peers_keys: peers.keys().copied().collect(),
+            peers,
             admin_id: admin_peer_id,
             module_id: None,
-            connections: peers
-                .into_iter()
-                .map(|(peer_id, url)| {
-                    (
-                        peer_id,
-                        ClientConnection::new(
-                            connectors.clone(),
-                            peer_id,
-                            url,
-                            api_secret.map(Into::into),
-                        ),
-                    )
-                })
-                .collect(),
             connectors,
+            api_secret: api_secret.map(ToOwned::to_owned),
         }
+    }
+
+    async fn get_or_create_connection(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<DynClientConnection> {
+        let mut pool_locked = self.connections.lock().await;
+
+        let pool_entry_arc = pool_locked
+            .entry(url.to_owned())
+                        .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and reset the whole entry.
+                //
+                // This resets the state (like connectivity backoff), which is what we want.
+                // Since the (`OnceCell`) was already initialized, it means connection was successfully
+                // before, and disconnected afterwards.
+                if let Some(existing_conn) = entry_arc.connection.get()
+                    && !existing_conn.is_connected(){
+                        trace!(target: LOG_NET_API, %url, "Existing connection is disconnected, removing from pool");
+                        *entry_arc = Arc::new(ConnectionState::new());
+                    }
+            })
+            .or_insert_with(|| Arc::new(ConnectionState::new()))
+            .clone();
+
+        // Drop the pool lock so other connections can work in parallel
+        drop(pool_locked);
+
+        let conn = pool_entry_arc
+            .connection
+            // This serializes all the connection attempts. If one attempt to connect (including
+            // waiting for the reconnect backoff) succeeds, all waiting ones will use it. If it
+            // fails, any already pending/next will attempt it right afterwards.
+            // Nit: if multiple calls are trying to connect to the same host that is offline, it
+            // will take some of them multiples of maximum retry delay to actually return with
+            // an error. This should be fine in practice and hard to avoid without a lot of
+            // complexity.
+            .get_or_try_init(|| async {
+                let retry_delay = pool_entry_arc.pre_reconnect_delay();
+                fedimint_core::runtime::sleep(retry_delay).await;
+
+                let conn = self.connectors.connect(url, api_secret).await?;
+
+                Ok(conn)
+            })
+            .await?;
+
+        trace!(target: LOG_NET_API, %url, "Using websocket connection");
+        Ok(conn.clone())
     }
 
     async fn request(
@@ -941,17 +1039,17 @@ impl FederationApi {
         method: ApiMethod,
         request: ApiRequestErased,
     ) -> PeerResult<Value> {
-        trace!(target: LOG_NET_API, %method, "Api request");
-        let res = self
-            .connections
+        trace!(target: LOG_NET_API, %peer, %method, "Api request");
+        let url = self
+            .peers
             .get(&peer)
-            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })?
-            .connection()
+            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })?;
+        let conn = self
+            .get_or_create_connection(url, self.api_secret.as_deref())
             .await
             .context("Failed to connect to peer")
-            .map_err(PeerError::Connection)?
-            .request(method.clone(), request)
-            .await;
+            .map_err(PeerError::Connection)?;
+        let res = conn.request(method.clone(), request).await;
 
         trace!(target: LOG_NET_API, ?method, res_ok = res.is_ok(), "Api response");
 
@@ -973,12 +1071,13 @@ impl IRawFederationApi for FederationApi {
 
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         FederationApi {
+            api_secret: self.api_secret.clone(),
+            connections: self.connections.clone(),
             connectors: self.connectors.clone(),
             peers: self.peers.clone(),
             peers_keys: self.peers_keys.clone(),
             admin_id: self.admin_id,
             module_id: Some(id),
-            connections: self.connections.clone(),
         }
         .into()
     }
@@ -1004,98 +1103,6 @@ impl IRawFederationApi for FederationApi {
         };
 
         self.request(peer_id, method, params.clone()).await
-    }
-}
-
-#[derive(Clone, Debug)]
-struct ClientConnection {
-    sender: async_channel::Sender<oneshot::Sender<DynClientConnection>>,
-}
-
-impl ClientConnection {
-    fn new(
-        connectors: ConnectorRegistry,
-        peer: PeerId,
-        url: SafeUrl,
-        api_secret: Option<String>,
-    ) -> ClientConnection {
-        let (sender, receiver) = bounded::<oneshot::Sender<DynClientConnection>>(1024);
-
-        fedimint_core::task::spawn(
-            "peer-api-connection",
-            async move {
-                let mut backoff = api_networking_backoff();
-
-                while let Ok(sender) = receiver.recv().await {
-                    let mut senders = vec![sender];
-
-                    // Drain the queue, so we everyone that already joined fail or succeed
-                    // together.
-                    while let Ok(sender) = receiver.try_recv() {
-                        senders.push(sender);
-                    }
-
-                    match connectors.connect(&url, api_secret.as_deref()).await {
-                        Ok(connection) => {
-                            trace!(target: LOG_CLIENT_NET_API, "Connected to peer api");
-
-                            for sender in senders {
-                                sender.send(connection.clone()).ok();
-                            }
-
-                            loop {
-                                tokio::select! {
-                                    sender = receiver.recv() => {
-                                        match sender.ok() {
-                                            Some(sender) => sender.send(connection.clone()).ok(),
-                                            None => break,
-                                        };
-                                    }
-                                    () = connection.await_disconnection() => break,
-                                }
-                            }
-
-                            trace!(target: LOG_CLIENT_NET_API, "Disconnected from peer api");
-
-                            backoff = api_networking_backoff();
-                        }
-                        Err(e) => {
-                            trace!(target: LOG_CLIENT_NET_API, "Failed to connect to peer api {e}");
-
-                            drop(senders);
-
-                            fedimint_core::task::sleep(
-                                backoff.next().expect("No limit to the number of retries"),
-                            )
-                            .await;
-                        }
-                    }
-                }
-
-                trace!(target: LOG_CLIENT_NET_API, "Shutting down peer api connection task");
-            }
-            .instrument(trace_span!("peer-api-connection", ?peer)),
-        );
-
-        ClientConnection { sender }
-    }
-
-    async fn connection(&self) -> Option<DynClientConnection> {
-        let (sender, receiver) = oneshot::channel();
-
-        self.sender
-            .send(sender)
-            .await
-            .inspect_err(|err| {
-                warn!(
-                    target: LOG_CLIENT_NET_API,
-                    err = %err.fmt_compact(),
-                    "Api connection request channel closed unexpectedly"
-                );
-            })
-            .ok()?;
-
-        receiver.await.ok()
     }
 }
 

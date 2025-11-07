@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -18,7 +17,6 @@ use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBui
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde_json::Value;
-use tokio::sync::OnceCell;
 use tracing::trace;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 
@@ -26,136 +24,104 @@ use super::Connector;
 use crate::api::{DynClientConnection, IClientConnection, PeerError, PeerResult};
 
 #[derive(Debug, Clone)]
-pub struct WebsocketEndpoint {
-    /// Connection pool for websocket connections
-    #[allow(clippy::type_complexity)]
-    connections:
-        Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<tokio::sync::OnceCell<Arc<WsClient>>>>>>,
-}
+pub struct WebsocketConnector {}
 
-impl WebsocketEndpoint {
+impl WebsocketConnector {
     pub fn new() -> Self {
-        Self {
-            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-        }
+        Self {}
     }
 
-    async fn get_or_create_connection(
+    async fn make_new_connection(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
     ) -> PeerResult<Arc<WsClient>> {
-        let mut pool_lock = self.connections.lock().await;
+        trace!(target: LOG_NET_WS, %url, "Creating new websocket connection");
 
-        let entry_arc = pool_lock
-            .entry(url.to_owned())
-            .and_modify(|entry_arc| {
-                // Check if existing connection is disconnected and remove it
-                if let Some(existing_conn) = entry_arc.get()
-                    && !existing_conn.is_connected() {
-                        trace!(target: LOG_NET_WS, %url, "Existing connection is disconnected, removing from pool");
-                        *entry_arc = Arc::new(OnceCell::new());
-                    }
-            })
-            .or_insert_with(|| Arc::new(OnceCell::new()))
-            .clone();
+        #[cfg(not(target_family = "wasm"))]
+        let mut client = {
+            use jsonrpsee_ws_client::{CustomCertStore, WsClientBuilder};
+            use tokio_rustls::rustls::RootCertStore;
 
-        // Drop the pool lock so other connections can work in parallel
-        drop(pool_lock);
+            install_crypto_provider().await;
+            let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
+            let mut root_certs = RootCertStore::empty();
+            root_certs.extend(webpki_roots);
 
-        let conn = entry_arc
-            .get_or_try_init(|| async {
-                trace!(target: LOG_NET_WS, %url, "Creating new websocket connection");
+            let tls_cfg = CustomCertStore::builder()
+                .with_root_certificates(root_certs)
+                .with_no_client_auth();
 
-                #[cfg(not(target_family = "wasm"))]
-                let mut client = {
-                    use jsonrpsee_ws_client::{CustomCertStore, WsClientBuilder};
-                    use tokio_rustls::rustls::RootCertStore;
+            WsClientBuilder::default()
+                .max_concurrent_requests(u16::MAX as usize)
+                .with_custom_cert_store(tls_cfg)
+        };
 
-                    install_crypto_provider().await;
-                    let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
-                    let mut root_certs = RootCertStore::empty();
-                    root_certs.extend(webpki_roots);
+        #[cfg(target_family = "wasm")]
+        let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
 
-                    let tls_cfg = CustomCertStore::builder()
-                        .with_root_certificates(root_certs)
-                        .with_no_client_auth();
+        if let Some(api_secret) = api_secret {
+            #[cfg(not(target_family = "wasm"))]
+            {
+                // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
+                // but we can set up the headers manually
 
-                    WsClientBuilder::default()
-                        .max_concurrent_requests(u16::MAX as usize)
-                        .with_custom_cert_store(tls_cfg)
-                };
+                use base64::Engine as _;
+                use jsonrpsee_ws_client::{HeaderMap, HeaderValue};
+                let mut headers = HeaderMap::new();
 
-                #[cfg(target_family = "wasm")]
-                let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
+                let auth = base64::engine::general_purpose::STANDARD
+                    .encode(format!("fedimint:{api_secret}"));
 
-                if let Some(api_secret) = api_secret {
-                    #[cfg(not(target_family = "wasm"))]
-                    {
-                        // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
-                        // but we can set up the headers manually
+                headers.insert(
+                    "Authorization",
+                    HeaderValue::from_str(&format!("Basic {auth}")).expect("Can't fail"),
+                );
 
-                        use base64::Engine as _;
-                        use jsonrpsee_ws_client::{HeaderMap, HeaderValue};
-                        let mut headers = HeaderMap::new();
-
-                        let auth = base64::engine::general_purpose::STANDARD
-                            .encode(format!("fedimint:{api_secret}"));
-
-                        headers.insert(
-                            "Authorization",
-                            HeaderValue::from_str(&format!("Basic {auth}")).expect("Can't fail"),
-                        );
-
-                        client = client.set_headers(headers);
-                    }
-                    #[cfg(target_family = "wasm")]
-                    {
-                        // on wasm, url will be handled by the browser, which should take care of
-                        // `user:pass@...`
-                        let mut url = url.clone();
-                        url.set_username("fedimint")
-                            .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid username")))?;
-                        url.set_password(Some(&api_secret))
-                            .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid secret")))?;
-
-                        let client = client
-                            .build(url.as_str())
-                            .await
-                            .map_err(|err| PeerError::InternalClientError(err.into()))?;
-
-                        return Ok(Arc::new(client));
-                    }
-                }
+                client = client.set_headers(headers);
+            }
+            #[cfg(target_family = "wasm")]
+            {
+                // on wasm, url will be handled by the browser, which should take care of
+                // `user:pass@...`
+                let mut url = url.clone();
+                url.set_username("fedimint")
+                    .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid username")))?;
+                url.set_password(Some(&api_secret))
+                    .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid secret")))?;
 
                 let client = client
                     .build(url.as_str())
                     .await
                     .map_err(|err| PeerError::InternalClientError(err.into()))?;
 
-                Ok(Arc::new(client))
-            })
-            .await?;
+                return Ok(Arc::new(client));
+            }
+        }
 
-        trace!(target: LOG_NET_WS, %url, "Using websocket connection");
-        Ok(conn.clone())
+        let client = client
+            .build(url.as_str())
+            .await
+            .map_err(|err| PeerError::InternalClientError(err.into()))?;
+
+        Ok(Arc::new(client))
     }
 }
 
-impl Default for WebsocketEndpoint {
+impl Default for WebsocketConnector {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait::async_trait]
-impl Connector for WebsocketEndpoint {
+impl Connector for WebsocketConnector {
     async fn connect(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
     ) -> PeerResult<DynClientConnection> {
-        let client = self.get_or_create_connection(url, api_secret).await?;
+        let client = self.make_new_connection(url, api_secret).await?;
         Ok(client.into_dyn())
     }
 }
@@ -176,6 +142,10 @@ impl IClientConnection for WsClient {
     async fn await_disconnection(&self) {
         self.on_disconnect().await;
     }
+
+    fn is_connected(&self) -> bool {
+        WsClient::is_connected(self)
+    }
 }
 
 #[async_trait]
@@ -195,6 +165,9 @@ impl IClientConnection for Arc<WsClient> {
 
     async fn await_disconnection(&self) {
         self.on_disconnect().await;
+    }
+    fn is_connected(&self) -> bool {
+        WsClient::is_connected(self)
     }
 }
 
