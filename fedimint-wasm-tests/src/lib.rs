@@ -6,9 +6,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{Client, RootSecret};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::invite_code::InviteCode;

@@ -51,7 +51,6 @@ lightning-types = { workspace = true }
 macro_rules_attribute = { workspace = true }
 miniscript = { workspace = true, features = ["serde"] }
 n0-future = { workspace = true }
-parity-scale-codec = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 scopeguard = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
@@ -69,6 +68,9 @@ z32 = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 aws-lc-sys = { version = "0.30", features = ["bindgen"] }
+iroh = { workspace = true, default-features = false, features = [
+    "discovery-pkarr-dht",
+] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 

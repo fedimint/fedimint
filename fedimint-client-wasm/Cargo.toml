@@ -20,8 +20,8 @@ path = "src/lib.rs"
 [target.'cfg(target_family = "wasm")'.dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-fedimint-api-client = { workspace = true }
 fedimint-client-rpc = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-cursed-redb = { workspace = true }
 js-sys = { workspace = true }

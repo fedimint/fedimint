@@ -59,6 +59,7 @@ tbs = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

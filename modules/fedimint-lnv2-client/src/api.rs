@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use fedimint_api_client::api::{
-    FederationApiExt, FederationResult, IModuleFederationApi, PeerResult,
+    FederationApiExt, FederationResult, IModuleFederationApi, ServerResult,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -33,7 +33,7 @@ pub trait LightningFederationApi {
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>>;
 
-    async fn gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>>;
+    async fn gateways_from_peer(&self, peer: PeerId) -> ServerResult<Vec<SafeUrl>>;
 
     async fn add_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
 
@@ -115,7 +115,7 @@ where
         Ok(union)
     }
 
-    async fn gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>> {
+    async fn gateways_from_peer(&self, peer: PeerId) -> ServerResult<Vec<SafeUrl>> {
         let gateways = self
             .request_single_peer::<Vec<SafeUrl>>(
                 GATEWAYS_ENDPOINT.to_string(),

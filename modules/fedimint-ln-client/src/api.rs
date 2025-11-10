@@ -5,7 +5,7 @@ use std::time::Duration;
 use anyhow::anyhow;
 use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
 use fedimint_api_client::api::{
-    FederationApiExt, FederationResult, IModuleFederationApi, PeerError,
+    FederationApiExt, FederationResult, IModuleFederationApi, ServerError,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
@@ -214,7 +214,7 @@ where
                 ),
             )
             .await
-            .map_err(|e| PeerError::Transport(anyhow!("Request timed out: {e}")))
+            .map_err(|e| ServerError::Transport(anyhow!("Request timed out: {e}")))
             .and_then(identity)
             {
                 responses.insert(*peer, response);
@@ -238,7 +238,7 @@ where
                 ),
             )
             .await
-            .map_err(|e| PeerError::Transport(anyhow!("Request timed out: {e}")))
+            .map_err(|e| ServerError::Transport(anyhow!("Request timed out: {e}")))
             .and_then(identity)
             {
                 if response {

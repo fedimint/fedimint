@@ -28,7 +28,7 @@ pub trait IP2PConnector<M>: Send + Sync + 'static {
     async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<M>)>;
 
     /// Get the connection type for a specific peer
-    async fn connection_type(&self, peer: PeerId) -> ConnectionType;
+    fn connection_type(&self, peer: PeerId) -> Option<ConnectionType>;
 
     fn into_dyn(self) -> DynP2PConnector<M>
     where

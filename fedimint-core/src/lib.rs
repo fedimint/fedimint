@@ -40,6 +40,7 @@ extern crate self as fedimint_core;
 
 use std::fmt::{self, Debug};
 use std::io::Error;
+use std::ops::{self, Range};
 use std::str::FromStr;
 
 pub use amount::*;
@@ -53,7 +54,7 @@ use lightning::util::ser::Writeable;
 use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;
 pub use peer_id::*;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
@@ -143,12 +144,10 @@ mod txid {
 pub use txid::TransactionId;
 
 /// Amount of bitcoin to send, or `All` to send all available funds
-#[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Eq, PartialEq, Copy, Hash, Clone)]
 pub enum BitcoinAmountOrAll {
     All,
-    #[serde(untagged)]
-    Amount(#[serde(with = "bitcoin::amount::serde::as_sat")] bitcoin::Amount),
+    Amount(bitcoin::Amount),
 }
 
 impl std::fmt::Display for BitcoinAmountOrAll {
@@ -164,11 +163,76 @@ impl FromStr for BitcoinAmountOrAll {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        if s == "all" {
+        if s.eq_ignore_ascii_case("all") {
             Ok(Self::All)
         } else {
             let amount = Amount::from_str(s)?;
             Ok(Self::Amount(amount.try_into()?))
+        }
+    }
+}
+
+// Custom serde to handle both "all" and numbers/strings
+impl<'de> Deserialize<'de> for BitcoinAmountOrAll {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        struct Visitor;
+
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = BitcoinAmountOrAll;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "a bitcoin amount as number or 'all'")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                if v.eq_ignore_ascii_case("all") {
+                    Ok(BitcoinAmountOrAll::All)
+                } else {
+                    let sat: u64 = v.parse().map_err(E::custom)?;
+                    Ok(BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(sat)))
+                }
+            }
+
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(v)))
+            }
+
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                if v < 0 {
+                    return Err(E::custom("amount cannot be negative"));
+                }
+                Ok(BitcoinAmountOrAll::Amount(bitcoin::Amount::from_sat(
+                    v as u64,
+                )))
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
+impl Serialize for BitcoinAmountOrAll {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::All => serializer.serialize_str("all"),
+            Self::Amount(a) => serializer.serialize_u64(a.to_sat()),
         }
     }
 }
@@ -232,6 +296,113 @@ pub struct OutPoint {
 impl std::fmt::Display for OutPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.txid, self.out_idx)
+    }
+}
+
+/// A contiguous range of input/output indexes
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct IdxRange {
+    start: u64,
+    end: u64,
+}
+
+impl IdxRange {
+    pub fn new_single(start: u64) -> Option<Self> {
+        start.checked_add(1).map(|end| Self { start, end })
+    }
+
+    pub fn start(self) -> u64 {
+        self.start
+    }
+
+    pub fn count(self) -> usize {
+        self.into_iter().count()
+    }
+
+    pub fn from_inclusive(range: ops::RangeInclusive<u64>) -> Option<Self> {
+        range.end().checked_add(1).map(|end| Self {
+            start: *range.start(),
+            end,
+        })
+    }
+}
+
+impl From<Range<u64>> for IdxRange {
+    fn from(Range { start, end }: Range<u64>) -> Self {
+        Self { start, end }
+    }
+}
+
+impl IntoIterator for IdxRange {
+    type Item = u64;
+    type IntoIter = ops::Range<u64>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ops::Range {
+            start: self.start,
+            end: self.end,
+        }
+    }
+}
+
+/// Represents a range of output indices for a single transaction
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct OutPointRange {
+    pub txid: TransactionId,
+    idx_range: IdxRange,
+}
+
+impl OutPointRange {
+    pub fn new(txid: TransactionId, idx_range: IdxRange) -> Self {
+        Self { txid, idx_range }
+    }
+
+    pub fn new_single(txid: TransactionId, idx: u64) -> Option<Self> {
+        IdxRange::new_single(idx).map(|idx_range| Self { txid, idx_range })
+    }
+
+    pub fn start_idx(self) -> u64 {
+        self.idx_range.start()
+    }
+
+    pub fn out_idx_iter(self) -> impl Iterator<Item = u64> {
+        self.idx_range.into_iter()
+    }
+
+    pub fn count(self) -> usize {
+        self.idx_range.count()
+    }
+
+    pub fn txid(&self) -> TransactionId {
+        self.txid
+    }
+}
+
+impl IntoIterator for OutPointRange {
+    type Item = OutPoint;
+    type IntoIter = OutPointRangeIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OutPointRangeIter {
+            txid: self.txid,
+            inner: self.idx_range.into_iter(),
+        }
+    }
+}
+
+pub struct OutPointRangeIter {
+    txid: TransactionId,
+    inner: ops::Range<u64>,
+}
+
+impl Iterator for OutPointRangeIter {
+    type Item = OutPoint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|idx| OutPoint {
+            txid: self.txid,
+            out_idx: idx,
+        })
     }
 }
 

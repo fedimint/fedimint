@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
+use fedimint_api_client::api::DynGlobalApi;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{

@@ -2,12 +2,11 @@ use std::collections::BTreeMap;
 use std::io::Write as _;
 
 use bitcoin::hashes::{Hash, sha256};
-use parity_scale_codec::{Decode, Encode};
-use secp256k1::{Message, PublicKey, SECP256K1, schnorr};
+use secp256k1::{Message, PublicKey, SECP256K1};
 
 use crate::encoding::{Decodable, Encodable};
 use crate::epoch::ConsensusItem;
-use crate::{NumPeersExt as _, PeerId};
+use crate::{NumPeersExt as _, PeerId, secp256k1};
 
 /// A consensus item accepted in the consensus
 ///
@@ -62,9 +61,6 @@ impl SessionOutcome {
     }
 }
 
-#[derive(Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash)]
-pub struct SchnorrSignature(pub [u8; 64]);
-
 /// A [`SessionOutcome`], signed by the Federation.
 ///
 /// A signed block combines a block with the naive threshold secp schnorr
@@ -74,7 +70,7 @@ pub struct SchnorrSignature(pub [u8; 64]);
 #[derive(Clone, Debug, Encodable, Decodable, Eq, PartialEq)]
 pub struct SignedSessionOutcome {
     pub session_outcome: SessionOutcome,
-    pub signatures: std::collections::BTreeMap<PeerId, SchnorrSignature>,
+    pub signatures: std::collections::BTreeMap<PeerId, secp256k1::schnorr::Signature>,
 }
 
 impl SignedSessionOutcome {
@@ -103,11 +99,9 @@ impl SignedSessionOutcome {
             let Some(pub_key) = broadcast_public_keys.get(peer_id) else {
                 return false;
             };
-            let Ok(signature) = schnorr::Signature::from_slice(&signature.0) else {
-                return false;
-            };
+
             SECP256K1
-                .verify_schnorr(&signature, &message, &pub_key.x_only_public_key().0)
+                .verify_schnorr(signature, &message, &pub_key.x_only_public_key().0)
                 .is_ok()
         })
     }

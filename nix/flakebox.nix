@@ -553,6 +553,46 @@ in
       doCheck = false;
     };
 
+    cargoWorkspacesCommand =
+      { cmd, pnameSuffix }:
+      let
+        pname = "${commonArgs.pname}-cargo-workspaces-cmd-${pnameSuffix}";
+        nativeBuildInputs = commonArgs.nativeBuildInputs ++ [
+          pkgs.cargo-workspaces
+        ];
+        buildPhaseCargoCommand = "cargo workspaces exec ${cmd}";
+        deps = craneLib.buildDepsOnly {
+          inherit pname nativeBuildInputs buildPhaseCargoCommand;
+          doCheck = false;
+        };
+      in
+      craneLib.mkCargoDerivation {
+        inherit pname nativeBuildInputs buildPhaseCargoCommand;
+        cargoArtifacts = deps;
+        doInstallCargoArtifacts = false;
+        doCheck = false;
+      };
+
+    cargoCheckCommand =
+      { args }:
+      let
+        fullCmd = "cargo check ${args}";
+        deps = craneLib.buildDepsOnly {
+          pname = "${commonArgs.pname}-cargo-check-features-deps";
+          nativeBuildInputs = commonArgs.nativeBuildInputs;
+          buildPhaseCargoCommand = fullCmd;
+          doCheck = false;
+        };
+      in
+      craneLib.mkCargoDerivation {
+        pname = "${commonArgs.pname}-cargo-workspaces-cmd";
+        cargoArtifacts = deps;
+        nativeBuildInputs = commonArgs.nativeBuildInputs;
+        buildPhaseCargoCommand = fullCmd;
+        doInstallCargoArtifacts = false;
+        doCheck = false;
+      };
+
     cargoAudit = craneLib.cargoAudit {
       inherit advisory-db;
       src = filterWorkspaceAuditFiles commonSrc;
@@ -934,5 +974,24 @@ in
           };
         };
       };
+
+    cargoCheckWasmNoDefaultFeatures = cargoCheckCommand {
+      args = "--package fedimint-client --package fedimint-client-wasm --package fedimint-wasm-tests --no-default-features";
+    };
+
+    cargoWorkspacesCheckDefaultFeatures = cargoWorkspacesCommand {
+      cmd = "cargo check";
+      pnameSuffix = "default-feats";
+    };
+
+    cargoWorkspacesCheckNoDefaultFeatures = cargoWorkspacesCommand {
+      cmd = "cargo check --no-default-features";
+      pnameSuffix = "no-default-feats";
+
+    };
+    cargoWorkspacesCheckAllFeatures = cargoWorkspacesCommand {
+      cmd = "cargo check --all-features";
+      pnameSuffix = "all-feats";
+    };
   }
 )

@@ -47,13 +47,13 @@ use federation_manager::FederationManager;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_bitcoind::bitcoincore::BitcoindClient;
-use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
+use fedimint_bitcoind::{BlockchainInfo, EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
+use fedimint_core::db::{Committable, Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
@@ -73,7 +73,7 @@ use fedimint_gateway_common::{
     ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
     DepositAddressPayload, DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig,
     FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
-    GetInvoiceResponse, LeaveFedPayload, LightningMode, ListTransactionsPayload,
+    GetInvoiceResponse, LeaveFedPayload, LightningInfo, LightningMode, ListTransactionsPayload,
     ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
     PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
@@ -81,7 +81,7 @@ use fedimint_gateway_common::{
     WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
-use fedimint_gateway_ui::IAdminGateway;
+pub use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{
@@ -233,6 +233,9 @@ pub struct Gateway {
     /// The source of the Bitcoin blockchain data
     chain_source: ChainSource,
 
+    /// Client to get blockchain information
+    bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
+
     /// The default routing fees for new federations
     default_routing_fees: PaymentFee,
 
@@ -283,6 +286,7 @@ impl Gateway {
         gateway_state: GatewayState,
         chain_source: ChainSource,
         iroh_listen: SocketAddr,
+        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -305,6 +309,7 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
+            bitcoin_rpc,
         )
         .await
     }
@@ -388,7 +393,7 @@ impl Gateway {
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
-        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
+        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc.clone()));
 
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
@@ -406,6 +411,7 @@ impl Gateway {
             client_builder,
             GatewayState::Disconnected,
             chain_source,
+            dyn_bitcoin_rpc,
         )
         .await
     }
@@ -419,6 +425,7 @@ impl Gateway {
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
         chain_source: ChainSource,
+        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         // Apply database migrations before using the database to ensure old database
         // structures are readable.
@@ -453,6 +460,7 @@ impl Gateway {
             num_route_hints,
             network,
             chain_source,
+            bitcoin_rpc,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
             iroh_sk: Self::load_or_create_iroh_key(&gateway_db).await,
@@ -512,11 +520,59 @@ impl Gateway {
         self.register_clients_timer();
         self.load_clients().await?;
         self.start_gateway(runtime);
+        self.spawn_backup_task();
         // start webserver last to avoid handling requests before fully initialized
         let handle = self.task_group.make_handle();
         run_webserver(Arc::new(self)).await?;
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
+    }
+
+    /// Spawns a background task that checks every `BACKUP_UPDATE_INTERVAL` to
+    /// see if any federations need to be backed up.
+    fn spawn_backup_task(&self) {
+        let self_copy = self.clone();
+        self.task_group
+            .spawn_cancellable_silent("backup ecash", async move {
+                const BACKUP_UPDATE_INTERVAL: Duration = Duration::from_secs(60 * 60);
+                let mut interval = tokio::time::interval(BACKUP_UPDATE_INTERVAL);
+                interval.tick().await;
+                loop {
+                    {
+                        let mut dbtx = self_copy.gateway_db.begin_transaction().await;
+                        self_copy.backup_all_federations(&mut dbtx).await;
+                        dbtx.commit_tx().await;
+                        interval.tick().await;
+                    }
+                }
+            });
+    }
+
+    /// Loops through all federations and checks their last save backup time. If
+    /// the last saved backup time is past the threshold time, backup the
+    /// federation.
+    pub async fn backup_all_federations(&self, dbtx: &mut DatabaseTransaction<'_, Committable>) {
+        /// How long the federation manager should wait to backup the ecash for
+        /// each federation
+        const BACKUP_THRESHOLD_DURATION: Duration = Duration::from_secs(24 * 60 * 60);
+
+        let now = fedimint_core::time::now();
+        let threshold = now
+            .checked_sub(BACKUP_THRESHOLD_DURATION)
+            .expect("Cannot be negative");
+        for (id, last_backup) in dbtx.load_backup_records().await {
+            match last_backup {
+                Some(backup_time) if backup_time < threshold => {
+                    let fed_manager = self.federation_manager.read().await;
+                    fed_manager.backup_federation(&id, dbtx, now).await;
+                }
+                None => {
+                    let fed_manager = self.federation_manager.read().await;
+                    fed_manager.backup_federation(&id, dbtx, now).await;
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Begins the task for listening for intercepted payments from the
@@ -585,25 +641,17 @@ impl Gateway {
         mut stream: RouteHtlcStream<'a>,
         ln_client: Arc<dyn ILnRpcClient>,
     ) -> ReceivePaymentStreamAction {
-        let (lightning_public_key, lightning_alias, lightning_network, synced_to_chain) =
-            match ln_client.parsed_node_info().await {
-                Ok((
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    _block_height,
-                    synced_to_chain,
-                )) => (
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    synced_to_chain,
-                ),
-                Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to retrieve Lightning info");
-                    return ReceivePaymentStreamAction::RetryAfterDelay;
-                }
-            };
+        let LightningInfo::Connected {
+            public_key: lightning_public_key,
+            alias: lightning_alias,
+            network: lightning_network,
+            block_height: _,
+            synced_to_chain,
+        } = ln_client.parsed_node_info().await
+        else {
+            warn!(target: LOG_GATEWAY, "Failed to retrieve Lightning info");
+            return ReceivePaymentStreamAction::RetryAfterDelay;
+        };
 
         assert!(
             self.network == lightning_network,
@@ -1121,165 +1169,6 @@ impl Gateway {
         )))
     }
 
-    /// Handles a connection request to join a new federation. The gateway will
-    /// download the federation's client configuration, construct a new
-    /// client, registers, the gateway with the federation, and persists the
-    /// necessary config to reconstruct the client when restarting the gateway.
-    pub async fn handle_connect_federation(
-        &self,
-        payload: ConnectFedPayload,
-    ) -> AdminResult<FederationInfo> {
-        let GatewayState::Running { lightning_context } = self.get_state().await else {
-            return Err(AdminGatewayError::Lightning(
-                LightningRpcError::FailedToConnect,
-            ));
-        };
-
-        let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
-            AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Invalid federation member string {e:?}"
-            )))
-        })?;
-
-        #[cfg(feature = "tor")]
-        let connector = match &payload.use_tor {
-            Some(true) => ConnectorType::tor(),
-            Some(false) => ConnectorType::default(),
-            None => {
-                debug!(target: LOG_GATEWAY, "Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
-                ConnectorType::default()
-            }
-        };
-
-        #[cfg(not(feature = "tor"))]
-        let connector = ConnectorType::default();
-
-        let federation_id = invite_code.federation_id();
-
-        let mut federation_manager = self.federation_manager.write().await;
-
-        // Check if this federation has already been registered
-        if federation_manager.has_federation(federation_id) {
-            return Err(AdminGatewayError::ClientCreationError(anyhow!(
-                "Federation has already been registered"
-            )));
-        }
-
-        // The gateway deterministically assigns a unique identifier (u64) to each
-        // federation connected.
-        let federation_index = federation_manager.pop_next_index()?;
-
-        let federation_config = FederationConfig {
-            invite_code,
-            federation_index,
-            lightning_fee: self.default_routing_fees,
-            transaction_fee: self.default_transaction_fees,
-            connector,
-        };
-
-        let recover = payload.recover.unwrap_or(false);
-        if recover {
-            self.client_builder
-                .recover(
-                    federation_config.clone(),
-                    Arc::new(self.clone()),
-                    &self.mnemonic,
-                )
-                .await?;
-        }
-
-        let client = self
-            .client_builder
-            .build(
-                federation_config.clone(),
-                Arc::new(self.clone()),
-                &self.mnemonic,
-            )
-            .await?;
-
-        if recover {
-            client.wait_for_all_active_state_machines().await?;
-        }
-
-        // Instead of using `FederationManager::federation_info`, we manually create
-        // federation info here because short channel id is not yet persisted.
-        let federation_info = FederationInfo {
-            federation_id,
-            federation_name: federation_manager.federation_name(&client).await,
-            balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
-                warn!(
-                    target: LOG_GATEWAY,
-                    err = %err.fmt_compact_anyhow(),
-                    %federation_id,
-                    "Balance not immediately available after joining/recovering."
-                );
-                Amount::default()
-            }),
-            config: federation_config.clone(),
-        };
-
-        Self::check_lnv1_federation_network(&client, self.network).await?;
-        Self::check_lnv2_federation_network(&client, self.network).await?;
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
-            client
-                .get_first_module::<GatewayClientModule>()?
-                .try_register_with_federation(
-                    // Route hints will be updated in the background
-                    Vec::new(),
-                    GW_ANNOUNCEMENT_TTL,
-                    federation_config.lightning_fee.into(),
-                    lightning_context,
-                    self.versioned_api.clone(),
-                    self.gateway_id,
-                )
-                .await;
-        }
-
-        // no need to enter span earlier, because connect-fed has a span
-        federation_manager.add_client(
-            federation_index,
-            Spanned::new(
-                info_span!(target: LOG_GATEWAY, "client", federation_id=%federation_id.clone()),
-                async { client },
-            )
-            .await,
-        );
-
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-        dbtx.save_federation_config(&federation_config).await;
-        dbtx.commit_tx().await;
-        debug!(
-            target: LOG_GATEWAY,
-            federation_id = %federation_id,
-            federation_index = %federation_index,
-            "Federation connected"
-        );
-
-        Ok(federation_info)
-    }
-
-    /// Handle a request to have the Gateway leave a federation. The Gateway
-    /// will request the federation to remove the registration record and
-    /// the gateway will remove the configuration needed to construct the
-    /// federation client.
-    pub async fn handle_leave_federation(
-        &self,
-        payload: LeaveFedPayload,
-    ) -> AdminResult<FederationInfo> {
-        // Lock the federation manager before starting the db transaction to reduce the
-        // chance of db write conflicts.
-        let mut federation_manager = self.federation_manager.write().await;
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-
-        let federation_info = federation_manager
-            .leave_federation(payload.federation_id, &mut dbtx.to_ref_nc())
-            .await?;
-
-        dbtx.remove_federation_config(payload.federation_id).await;
-        dbtx.commit_tx().await;
-        Ok(federation_info)
-    }
-
     /// Handles a request for the gateway to backup a connected federation's
     /// ecash.
     pub async fn handle_backup_msg(
@@ -1302,174 +1191,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Handles an authenticated request for the gateway's mnemonic. This also
-    /// returns a vector of federations that are not using the mnemonic
-    /// backup strategy.
-    pub async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
-        let words = self
-            .mnemonic
-            .words()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>();
-        let all_federations = self
-            .federation_manager
-            .read()
-            .await
-            .get_all_federation_configs()
-            .await
-            .keys()
-            .copied()
-            .collect::<BTreeSet<_>>();
-        let legacy_federations = self.client_builder.legacy_federations(all_federations);
-        let mnemonic_response = MnemonicResponse {
-            mnemonic: words,
-            legacy_federations,
-        };
-        Ok(mnemonic_response)
-    }
-
-    /// Handles a request to change the lightning or transaction fees for all
-    /// federations or a federation specified by the `FederationId`.
-    pub async fn handle_set_fees_msg(
-        &self,
-        SetFeesPayload {
-            federation_id,
-            lightning_base,
-            lightning_parts_per_million,
-            transaction_base,
-            transaction_parts_per_million,
-        }: SetFeesPayload,
-    ) -> AdminResult<()> {
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-        let mut fed_configs = if let Some(fed_id) = federation_id {
-            dbtx.load_federation_configs()
-                .await
-                .into_iter()
-                .filter(|(id, _)| *id == fed_id)
-                .collect::<BTreeMap<_, _>>()
-        } else {
-            dbtx.load_federation_configs().await
-        };
-
-        let federation_manager = self.federation_manager.read().await;
-
-        for (federation_id, config) in &mut fed_configs {
-            let mut lightning_fee = config.lightning_fee;
-            if let Some(lightning_base) = lightning_base {
-                lightning_fee.base = lightning_base;
-            }
-
-            if let Some(lightning_ppm) = lightning_parts_per_million {
-                lightning_fee.parts_per_million = lightning_ppm;
-            }
-
-            let mut transaction_fee = config.transaction_fee;
-            if let Some(transaction_base) = transaction_base {
-                transaction_fee.base = transaction_base;
-            }
-
-            if let Some(transaction_ppm) = transaction_parts_per_million {
-                transaction_fee.parts_per_million = transaction_ppm;
-            }
-
-            let client =
-                federation_manager
-                    .client(federation_id)
-                    .ok_or(FederationNotConnected {
-                        federation_id_prefix: federation_id.to_prefix(),
-                    })?;
-            let client_config = client.value().config().await;
-            let contains_lnv2 = client_config
-                .modules
-                .values()
-                .any(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
-
-            // Check if the lightning fee + transaction fee is higher than the send limit
-            let send_fees = lightning_fee + transaction_fee;
-            if contains_lnv2 && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
-                return Err(AdminGatewayError::GatewayConfigurationError(format!(
-                    "Total Send fees exceeded {}",
-                    PaymentFee::SEND_FEE_LIMIT
-                )));
-            }
-
-            // Check if the transaction fee is higher than the receive limit
-            if contains_lnv2 && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
-                return Err(AdminGatewayError::GatewayConfigurationError(format!(
-                    "Transaction fees exceeded RECEIVE LIMIT {}",
-                    PaymentFee::RECEIVE_FEE_LIMIT
-                )));
-            }
-
-            config.lightning_fee = lightning_fee;
-            config.transaction_fee = transaction_fee;
-            dbtx.save_federation_config(config).await;
-        }
-
-        dbtx.commit_tx().await;
-
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
-            let register_task_group = TaskGroup::new();
-
-            self.register_federations(&fed_configs, &register_task_group)
-                .await;
-        }
-
-        Ok(())
-    }
-
-    /// Generates an onchain address to fund the gateway's lightning node.
-    pub async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.get_ln_onchain_address().await?;
-
-        let address = Address::from_str(&response.address).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: e.to_string(),
-            })
-        })?;
-
-        address.require_network(self.network).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: e.to_string(),
-            })
-        })
-    }
-
-    /// Instructs the Gateway's Lightning node to open a channel to a peer
-    /// specified by `pubkey`.
-    pub async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
-        info!(target: LOG_GATEWAY, pubkey = %payload.pubkey, host = %payload.host, amount = %payload.channel_size_sats, "Opening Lightning channel...");
-        let context = self.get_lightning_context().await?;
-        let res = context.lnrpc.open_channel(payload).await?;
-        info!(target: LOG_GATEWAY, txid = %res.funding_txid, "Initiated channel open");
-        Txid::from_str(&res.funding_txid).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: format!("Received invalid channel funding txid string {e}"),
-            })
-        })
-    }
-
-    /// Instructs the Gateway's Lightning node to close all channels with a peer
-    /// specified by `pubkey`.
-    pub async fn handle_close_channels_with_peer_msg(
-        &self,
-        payload: CloseChannelsWithPeerRequest,
-    ) -> AdminResult<CloseChannelsWithPeerResponse> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.close_channels_with_peer(payload).await?;
-        Ok(response)
-    }
-
-    /// Send funds from the gateway's lightning node on-chain wallet.
-    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.send_onchain(payload).await?;
-        Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
-        })
-    }
-
     /// Trigger rechecking for deposits on an address
     pub async fn handle_recheck_address_msg(
         &self,
@@ -1483,39 +1204,6 @@ impl Gateway {
             .recheck_pegin_address_by_address(payload.address)
             .await?;
         Ok(())
-    }
-
-    /// Returns the ecash, lightning, and onchain balances for the gateway and
-    /// the gateway's lightning node.
-    pub async fn handle_get_balances_msg(&self) -> AdminResult<GatewayBalances> {
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
-        let federation_infos = self
-            .federation_manager
-            .read()
-            .await
-            .federation_info_all_federations(dbtx)
-            .await;
-
-        let ecash_balances: Vec<FederationBalanceInfo> = federation_infos
-            .iter()
-            .map(|federation_info| FederationBalanceInfo {
-                federation_id: federation_info.federation_id,
-                ecash_balance_msats: Amount {
-                    msats: federation_info.balance_msat.msats,
-                },
-            })
-            .collect();
-
-        let context = self.get_lightning_context().await?;
-        let lightning_node_balances = context.lnrpc.get_balances().await?;
-
-        Ok(GatewayBalances {
-            onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
-            lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
-            ecash_balances,
-            inbound_lightning_liquidity_msats: lightning_node_balances
-                .inbound_lightning_liquidity_msats,
-        })
     }
 
     // Handles a request the spend the gateway's ecash for a given federation.
@@ -1680,7 +1368,7 @@ impl Gateway {
             let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
             let mut filtered_batch = batch
                 .into_iter()
-                .filter(|e| e.event_id <= end_position && event_kinds.contains(&e.event_kind))
+                .filter(|e| e.id() <= end_position && event_kinds.contains(&e.as_raw().kind))
                 .collect::<Vec<_>>();
             filtered_batch.reverse();
             payment_log.extend(filtered_batch);
@@ -2065,13 +1753,9 @@ impl IAdminGateway for Gateway {
                 federations: vec![],
                 federation_fake_scids: None,
                 version_hash: fedimint_build_code_version_env!().to_string(),
-                lightning_pub_key: None,
-                lightning_alias: None,
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
-                network: self.network,
-                block_height: None,
-                synced_to_chain: false,
+                lightning_info: LightningInfo::NotConnected,
                 api: self.versioned_api.clone(),
                 iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                     .expect("could not parse iroh api"),
@@ -2097,19 +1781,15 @@ impl IAdminGateway for Gateway {
             })
             .collect();
 
-        let node_info = lightning_context.lnrpc.parsed_node_info().await?;
+        let lightning_info = lightning_context.lnrpc.parsed_node_info().await;
 
         Ok(GatewayInfo {
             federations,
             federation_fake_scids: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
-            lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
-            lightning_alias: Some(lightning_context.lightning_alias.clone()),
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
-            network: self.network,
-            block_height: Some(node_info.3),
-            synced_to_chain: node_info.4,
+            lightning_info,
             api: self.versioned_api.clone(),
             iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                 .expect("could not parse iroh api"),
@@ -2169,6 +1849,383 @@ impl IAdminGateway for Gateway {
         })
     }
 
+    /// Handle a request to have the Gateway leave a federation. The Gateway
+    /// will request the federation to remove the registration record and
+    /// the gateway will remove the configuration needed to construct the
+    /// federation client.
+    async fn handle_leave_federation(
+        &self,
+        payload: LeaveFedPayload,
+    ) -> AdminResult<FederationInfo> {
+        // Lock the federation manager before starting the db transaction to reduce the
+        // chance of db write conflicts.
+        let mut federation_manager = self.federation_manager.write().await;
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        let federation_info = federation_manager
+            .leave_federation(payload.federation_id, &mut dbtx.to_ref_nc())
+            .await?;
+
+        dbtx.remove_federation_config(payload.federation_id).await;
+        dbtx.commit_tx().await;
+        Ok(federation_info)
+    }
+
+    /// Handles a connection request to join a new federation. The gateway will
+    /// download the federation's client configuration, construct a new
+    /// client, registers, the gateway with the federation, and persists the
+    /// necessary config to reconstruct the client when restarting the gateway.
+    async fn handle_connect_federation(
+        &self,
+        payload: ConnectFedPayload,
+    ) -> AdminResult<FederationInfo> {
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Err(AdminGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
+            ));
+        };
+
+        let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
+            AdminGatewayError::ClientCreationError(anyhow!(format!(
+                "Invalid federation member string {e:?}"
+            )))
+        })?;
+
+        #[cfg(feature = "tor")]
+        let connector = match &payload.use_tor {
+            Some(true) => ConnectorType::tor(),
+            Some(false) => ConnectorType::default(),
+            None => {
+                debug!(target: LOG_GATEWAY, "Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
+                ConnectorType::default()
+            }
+        };
+
+        #[cfg(not(feature = "tor"))]
+        let connector = ConnectorType::default();
+
+        let federation_id = invite_code.federation_id();
+
+        let mut federation_manager = self.federation_manager.write().await;
+
+        // Check if this federation has already been registered
+        if federation_manager.has_federation(federation_id) {
+            return Err(AdminGatewayError::ClientCreationError(anyhow!(
+                "Federation has already been registered"
+            )));
+        }
+
+        // The gateway deterministically assigns a unique identifier (u64) to each
+        // federation connected.
+        let federation_index = federation_manager.pop_next_index()?;
+
+        let federation_config = FederationConfig {
+            invite_code,
+            federation_index,
+            lightning_fee: self.default_routing_fees,
+            transaction_fee: self.default_transaction_fees,
+            connector,
+        };
+
+        let recover = payload.recover.unwrap_or(false);
+        if recover {
+            self.client_builder
+                .recover(
+                    federation_config.clone(),
+                    Arc::new(self.clone()),
+                    &self.mnemonic,
+                )
+                .await?;
+        }
+
+        let client = self
+            .client_builder
+            .build(
+                federation_config.clone(),
+                Arc::new(self.clone()),
+                &self.mnemonic,
+            )
+            .await?;
+
+        if recover {
+            client.wait_for_all_active_state_machines().await?;
+        }
+
+        // Instead of using `FederationManager::federation_info`, we manually create
+        // federation info here because short channel id is not yet persisted.
+        let federation_info = FederationInfo {
+            federation_id,
+            federation_name: federation_manager.federation_name(&client).await,
+            balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
+                warn!(
+                    target: LOG_GATEWAY,
+                    err = %err.fmt_compact_anyhow(),
+                    %federation_id,
+                    "Balance not immediately available after joining/recovering."
+                );
+                Amount::default()
+            }),
+            config: federation_config.clone(),
+            last_backup_time: None,
+        };
+
+        Self::check_lnv1_federation_network(&client, self.network).await?;
+        Self::check_lnv2_federation_network(&client, self.network).await?;
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+            client
+                .get_first_module::<GatewayClientModule>()?
+                .try_register_with_federation(
+                    // Route hints will be updated in the background
+                    Vec::new(),
+                    GW_ANNOUNCEMENT_TTL,
+                    federation_config.lightning_fee.into(),
+                    lightning_context,
+                    self.versioned_api.clone(),
+                    self.gateway_id,
+                )
+                .await;
+        }
+
+        // no need to enter span earlier, because connect-fed has a span
+        federation_manager.add_client(
+            federation_index,
+            Spanned::new(
+                info_span!(target: LOG_GATEWAY, "client", federation_id=%federation_id.clone()),
+                async { client },
+            )
+            .await,
+        );
+
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        dbtx.save_federation_config(&federation_config).await;
+        dbtx.save_federation_backup_record(federation_id, None)
+            .await;
+        dbtx.commit_tx().await;
+        debug!(
+            target: LOG_GATEWAY,
+            federation_id = %federation_id,
+            federation_index = %federation_index,
+            "Federation connected"
+        );
+
+        Ok(federation_info)
+    }
+
+    /// Handles a request to change the lightning or transaction fees for all
+    /// federations or a federation specified by the `FederationId`.
+    async fn handle_set_fees_msg(
+        &self,
+        SetFeesPayload {
+            federation_id,
+            lightning_base,
+            lightning_parts_per_million,
+            transaction_base,
+            transaction_parts_per_million,
+        }: SetFeesPayload,
+    ) -> AdminResult<()> {
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut fed_configs = if let Some(fed_id) = federation_id {
+            dbtx.load_federation_configs()
+                .await
+                .into_iter()
+                .filter(|(id, _)| *id == fed_id)
+                .collect::<BTreeMap<_, _>>()
+        } else {
+            dbtx.load_federation_configs().await
+        };
+
+        let federation_manager = self.federation_manager.read().await;
+
+        for (federation_id, config) in &mut fed_configs {
+            let mut lightning_fee = config.lightning_fee;
+            if let Some(lightning_base) = lightning_base {
+                lightning_fee.base = lightning_base;
+            }
+
+            if let Some(lightning_ppm) = lightning_parts_per_million {
+                lightning_fee.parts_per_million = lightning_ppm;
+            }
+
+            let mut transaction_fee = config.transaction_fee;
+            if let Some(transaction_base) = transaction_base {
+                transaction_fee.base = transaction_base;
+            }
+
+            if let Some(transaction_ppm) = transaction_parts_per_million {
+                transaction_fee.parts_per_million = transaction_ppm;
+            }
+
+            let client =
+                federation_manager
+                    .client(federation_id)
+                    .ok_or(FederationNotConnected {
+                        federation_id_prefix: federation_id.to_prefix(),
+                    })?;
+            let client_config = client.value().config().await;
+            let contains_lnv2 = client_config
+                .modules
+                .values()
+                .any(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
+
+            // Check if the lightning fee + transaction fee is higher than the send limit
+            let send_fees = lightning_fee + transaction_fee;
+            if contains_lnv2 && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
+                return Err(AdminGatewayError::GatewayConfigurationError(format!(
+                    "Total Send fees exceeded {}",
+                    PaymentFee::SEND_FEE_LIMIT
+                )));
+            }
+
+            // Check if the transaction fee is higher than the receive limit
+            if contains_lnv2 && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
+                return Err(AdminGatewayError::GatewayConfigurationError(format!(
+                    "Transaction fees exceeded RECEIVE LIMIT {}",
+                    PaymentFee::RECEIVE_FEE_LIMIT
+                )));
+            }
+
+            config.lightning_fee = lightning_fee;
+            config.transaction_fee = transaction_fee;
+            dbtx.save_federation_config(config).await;
+        }
+
+        dbtx.commit_tx().await;
+
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+            let register_task_group = TaskGroup::new();
+
+            self.register_federations(&fed_configs, &register_task_group)
+                .await;
+        }
+
+        Ok(())
+    }
+
+    /// Handles an authenticated request for the gateway's mnemonic. This also
+    /// returns a vector of federations that are not using the mnemonic
+    /// backup strategy.
+    async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
+        let words = self
+            .mnemonic
+            .words()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>();
+        let all_federations = self
+            .federation_manager
+            .read()
+            .await
+            .get_all_federation_configs()
+            .await
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let legacy_federations = self.client_builder.legacy_federations(all_federations);
+        let mnemonic_response = MnemonicResponse {
+            mnemonic: words,
+            legacy_federations,
+        };
+        Ok(mnemonic_response)
+    }
+
+    /// Instructs the Gateway's Lightning node to open a channel to a peer
+    /// specified by `pubkey`.
+    async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
+        info!(target: LOG_GATEWAY, pubkey = %payload.pubkey, host = %payload.host, amount = %payload.channel_size_sats, "Opening Lightning channel...");
+        let context = self.get_lightning_context().await?;
+        let res = context.lnrpc.open_channel(payload).await?;
+        info!(target: LOG_GATEWAY, txid = %res.funding_txid, "Initiated channel open");
+        Txid::from_str(&res.funding_txid).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: format!("Received invalid channel funding txid string {e}"),
+            })
+        })
+    }
+
+    /// Instructs the Gateway's Lightning node to close all channels with a peer
+    /// specified by `pubkey`.
+    async fn handle_close_channels_with_peer_msg(
+        &self,
+        payload: CloseChannelsWithPeerRequest,
+    ) -> AdminResult<CloseChannelsWithPeerResponse> {
+        info!(target: LOG_GATEWAY, close_channel_request = %payload, "Closing lightning channel...");
+        let context = self.get_lightning_context().await?;
+        let response = context
+            .lnrpc
+            .close_channels_with_peer(payload.clone())
+            .await?;
+        info!(target: LOG_GATEWAY, close_channel_request = %payload, "Initiated channel closure");
+        Ok(response)
+    }
+
+    /// Returns the ecash, lightning, and onchain balances for the gateway and
+    /// the gateway's lightning node.
+    async fn handle_get_balances_msg(&self) -> AdminResult<GatewayBalances> {
+        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let federation_infos = self
+            .federation_manager
+            .read()
+            .await
+            .federation_info_all_federations(dbtx)
+            .await;
+
+        let ecash_balances: Vec<FederationBalanceInfo> = federation_infos
+            .iter()
+            .map(|federation_info| FederationBalanceInfo {
+                federation_id: federation_info.federation_id,
+                ecash_balance_msats: Amount {
+                    msats: federation_info.balance_msat.msats,
+                },
+            })
+            .collect();
+
+        let context = self.get_lightning_context().await?;
+        let lightning_node_balances = context.lnrpc.get_balances().await?;
+
+        Ok(GatewayBalances {
+            onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
+            lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
+            ecash_balances,
+            inbound_lightning_liquidity_msats: lightning_node_balances
+                .inbound_lightning_liquidity_msats,
+        })
+    }
+
+    /// Send funds from the gateway's lightning node on-chain wallet.
+    async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.send_onchain(payload.clone()).await?;
+        let txid =
+            Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
+                failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
+            })?;
+        info!(onchain_request = %payload, txid = %txid, "Sent onchain transaction");
+        Ok(txid)
+    }
+
+    /// Generates an onchain address to fund the gateway's lightning node.
+    async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.get_ln_onchain_address().await?;
+
+        let address = Address::from_str(&response.address).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })?;
+
+        address.require_network(self.network).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })
+    }
+    async fn handle_deposit_address_msg(
+        &self,
+        payload: DepositAddressPayload,
+    ) -> AdminResult<Address> {
+        self.handle_address_msg(payload).await
+    }
+
     fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
     }
@@ -2176,6 +2233,18 @@ impl IAdminGateway for Gateway {
     fn gatewayd_version(&self) -> String {
         let gatewayd_version = env!("CARGO_PKG_VERSION");
         gatewayd_version.to_string()
+    }
+
+    async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network) {
+        if let Ok(info) = self.bitcoin_rpc.get_info().await {
+            (Some(info), self.chain_source.clone(), self.network)
+        } else {
+            (None, self.chain_source.clone(), self.network)
+        }
+    }
+
+    fn lightning_mode(&self) -> LightningMode {
+        self.lightning_mode.clone()
     }
 }
 

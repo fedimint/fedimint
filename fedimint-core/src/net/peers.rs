@@ -11,11 +11,8 @@ pub type DynP2PConnections<M> = Arc<dyn IP2PConnections<M>>;
 /// Connection manager that tries to keep connections open to all peers
 #[async_trait]
 pub trait IP2PConnections<M>: Send + Sync + 'static {
-    /// Send message to recipient; block if channel is full.
-    async fn send(&self, recipient: Recipient, msg: M);
-
-    /// Try to send message to recipient; drop message if channel is full.
-    fn try_send(&self, recipient: Recipient, msg: M);
+    /// Send message to recipient; drop message if channel is full.
+    fn send(&self, recipient: Recipient, msg: M);
 
     /// Await the next message; return None if we are shutting down.
     async fn receive(&self) -> Option<(PeerId, M)>;

@@ -1,8 +1,3 @@
-//! Fountain encoder/decoder for splitting and recombining byte payloads
-//!
-//! This is an inline fork of the fountain module from ur-rs,
-//! providing rateless fountain codes for efficient data transmission.
-//!
 //! The fountain encoder splits a byte payload into multiple segments
 //! and emits an unbounded stream of parts which can be recombined at
 //! the receiving decoder side. The emitted parts are either original
@@ -14,7 +9,7 @@ mod fountain;
 use std::marker::PhantomData;
 
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+pub use fountain::Fragment;
 
 pub struct FountainEncoder {
     encoder: fountain::Encoder,
@@ -31,7 +26,7 @@ impl FountainEncoder {
     }
 
     /// Fragments never repeat, so this can be called indefinitely
-    pub fn next_fragment(&mut self) -> fountain::Fragment {
+    pub fn next_fragment(&mut self) -> Fragment {
         self.encoder.next_fragment()
     }
 }
@@ -52,24 +47,24 @@ impl<E: Decodable> Default for FountainDecoder<E> {
 }
 
 impl<E: Decodable> FountainDecoder<E> {
-    /// Add a scanned fragment. Returns Some(E) when decoding is complete
-    pub fn add_fragment(&mut self, fragment: &fountain::Fragment) -> Option<E> {
-        // Try to receive the fragment
-        match self.decoder.receive(fragment.clone()) {
-            Ok(Some(bytes)) => {
-                // Decoding complete!
-                Decodable::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default()).ok()
-            }
-            Ok(None) => {
-                // Not done yet
-                None
-            }
-            Err(_) => {
-                // Invalid fragment, reset decoder
-                self.decoder = fountain::Decoder::default();
-                None
-            }
+    /// Add a scanned fragment. Returns Some(E) when decoding is complete. If we
+    /// receive an invalid fragment, possibly belonging to a different fountain
+    /// encoding, the decoder is reset.
+    pub fn add_fragment(&mut self, fragment: &Fragment) -> Option<E> {
+        if let Some(Some(d)) = self
+            .decoder
+            .receive(fragment.clone())
+            .transpose()? // The fragment is valid but the decoding is not yet complete
+            .ok()
+            .map(|b| Decodable::consensus_decode_whole(&b, &Default::default()).ok())
+        {
+            return Some(d);
         }
+
+        // The received fragment was either invalid or we failed to decode the raw bytes
+        self.decoder = fountain::Decoder::default();
+
+        None
     }
 }
 

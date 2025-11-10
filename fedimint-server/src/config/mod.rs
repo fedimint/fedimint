@@ -302,7 +302,7 @@ impl ServerConfig {
     pub fn supported_api_versions() -> SupportedCoreApiVersions {
         SupportedCoreApiVersions {
             core_consensus: CORE_CONSENSUS_VERSION,
-            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 7 }])
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 8 }])
                 .expect("not version conflicts"),
         }
     }
@@ -592,9 +592,7 @@ impl ServerConfig {
             "Comparing connection codes checksum {checksum}..."
         );
 
-        connections
-            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
-            .await;
+        connections.send(Recipient::Everyone, P2PMessage::Checksum(checksum));
 
         for peer in params
             .peer_ids()
@@ -671,9 +669,7 @@ impl ServerConfig {
             "Comparing consensus config checksum {checksum}..."
         );
 
-        connections
-            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
-            .await;
+        connections.send(Recipient::Everyone, P2PMessage::Checksum(checksum));
 
         for peer in params
             .peer_ids()

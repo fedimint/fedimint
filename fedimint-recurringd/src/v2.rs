@@ -6,6 +6,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{self, PublicKey};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::Scalar;
@@ -17,7 +18,7 @@ use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::lnurl::{LnurlRequest, LnurlResponse};
-use fedimint_lnv2_common::{Bolt11InvoiceDescription, tweak};
+use fedimint_lnv2_common::{Bolt11InvoiceDescription, GatewayApi, tweak};
 use lightning_invoice::Bolt11Invoice;
 use lnurl::Tag;
 use lnurl::pay::PayResponse;
@@ -34,6 +35,7 @@ const MIN_SENDABLE_MSAT: u64 = 100_000;
 struct Recurringd {
     base_url: SafeUrl,
     encryption_key: [u8; 32],
+    gateway_conn: RealGatewayConnection,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,20 +81,27 @@ impl IntoResponse for LnurlError {
     }
 }
 
-pub fn router(base_url: SafeUrl, encryption_key: String) -> Router {
+pub async fn router(base_url: SafeUrl, encryption_key: String) -> anyhow::Result<Router> {
+    let connector_registry = ConnectorRegistry::build_from_client_defaults()
+        .with_env_var_overrides()?
+        .bind()
+        .await?;
+    let api = GatewayApi::new(None, connector_registry);
+    let gateway_conn = RealGatewayConnection { api };
     let state = Recurringd {
         base_url: base_url.clone(),
         encryption_key: encryption_key
             .consensus_hash::<sha256::Hash>()
             .to_byte_array(),
+        gateway_conn,
     };
 
-    Router::new()
+    Ok(Router::new()
         .route("/", get(health_check))
         .route("/lnurl", post(lnv2_register))
         .route("/pay/{payload}", get(lnv2_pay))
         .route("/invoice/{payload}", get(lnv2_invoice))
-        .with_state(state)
+        .with_state(state))
 }
 
 async fn health_check() -> impl IntoResponse {
@@ -155,6 +164,7 @@ async fn lnv2_invoice(
         request.gateways,
         params.amount,
         3600, // standard expiry time of one hour
+        &state.gateway_conn,
     )
     .await
     .map_err(LnurlError::internal)?;
@@ -173,6 +183,7 @@ pub async fn create_contract_and_fetch_invoice(
     gateways: Vec<SafeUrl>,
     amount: u64,
     expiry_secs: u32,
+    gateway_conn: &RealGatewayConnection,
 ) -> anyhow::Result<(SafeUrl, Bolt11Invoice)> {
     let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_pk);
 
@@ -190,7 +201,7 @@ pub async fn create_contract_and_fetch_invoice(
         .consensus_hash::<sha256::Hash>()
         .to_byte_array();
 
-    let (routing_info, gateway) = select_gateway(gateways, federation_id).await?;
+    let (routing_info, gateway) = select_gateway(gateways, federation_id, gateway_conn).await?;
 
     ensure!(
         routing_info.receive_fee.le(&PaymentFee::RECEIVE_FEE_LIMIT),
@@ -219,7 +230,7 @@ pub async fn create_contract_and_fetch_invoice(
         ephemeral_pk,
     );
 
-    let invoice = RealGatewayConnection
+    let invoice = gateway_conn
         .bolt11_invoice(
             gateway.clone(),
             federation_id,
@@ -246,9 +257,10 @@ pub async fn create_contract_and_fetch_invoice(
 async fn select_gateway(
     gateways: Vec<SafeUrl>,
     federation_id: FederationId,
+    gateway_conn: &RealGatewayConnection,
 ) -> anyhow::Result<(RoutingInfo, SafeUrl)> {
     for gateway in gateways {
-        if let Ok(Some(routing_info)) = RealGatewayConnection
+        if let Ok(Some(routing_info)) = gateway_conn
             .routing_info(gateway.clone(), &federation_id)
             .await
         {

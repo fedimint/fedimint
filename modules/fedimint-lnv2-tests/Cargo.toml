@@ -22,6 +22,7 @@ bitcoin = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
@@ -32,6 +33,7 @@ fedimint-ln-common = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
+fedimint-logging = { workspace = true }
 fedimint-testing = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }

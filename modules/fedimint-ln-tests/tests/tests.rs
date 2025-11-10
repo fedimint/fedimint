@@ -56,7 +56,7 @@ fn fixtures() -> Fixtures {
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
     fixtures.with_module(
         LightningClientInit {
-            gateway_conn: Arc::new(MockGatewayConnection),
+            gateway_conn: Some(Arc::new(MockGatewayConnection)),
         },
         LightningInit,
         ln_params,

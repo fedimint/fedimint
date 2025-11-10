@@ -31,6 +31,7 @@ bitcoin = { workspace = true, features = ["rand-std"] }
 fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client-module = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }

@@ -31,7 +31,7 @@ jobs:
     name: Flake self-check
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check Nix flake inputs
         if: github.event_name == 'pull_request' && github.base_ref == 'master'
         uses: DeterminateSystems/flake-checker-action@v12
@@ -44,7 +44,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v16
         with:
@@ -91,7 +91,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
@@ -131,7 +131,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - name: Prepare
@@ -212,6 +212,26 @@ jobs:
                 -- \
           nix build -L .#wasm32-unknown.ci.wasmTest
 
+  check-packages-features:
+    name: "Check package features"
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    if: github.event_name == 'merge_group'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+      - uses: cachix/cachix-action@v16
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+      - name: Check package features
+        run: |
+          nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
+          nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
+          nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
+          nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
+
   audit:
     if: github.repository == 'fedimint/fedimint'
     name: "Audit"
@@ -221,7 +241,7 @@ jobs:
     # we don't want to stop the world because of it
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v16
         with:
@@ -262,7 +282,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
@@ -317,11 +337,11 @@ jobs:
     steps:
       - name: Checkout Code
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Prepare
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
         uses: ./.github/actions/prepare
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
@@ -379,7 +399,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Prepare
         uses: ./.github/actions/prepare
       - name: Login to Docker Hub
@@ -495,7 +515,7 @@ jobs:
         Please report any issues you encounter.
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v16
         with:
@@ -672,7 +692,7 @@ jobs:
 
   status:
     name: Status
-    needs: [lint, shell, build, cross, containers, pkgs]
+    needs: [lint, shell, build, cross, containers, pkgs, check-packages-features]
     if: ${{ always() }}
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -691,7 +711,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
-    needs: [ lint, build, shell, cross, containers, pkgs]
+    needs: [ lint, build, shell, cross, containers, pkgs, check-packages-features]
 
     steps:
     - name: Discord notifications on failure

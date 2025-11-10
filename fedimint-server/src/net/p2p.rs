@@ -6,7 +6,6 @@
 //! details.
 
 use std::collections::BTreeMap;
-use std::time::Duration;
 
 use async_channel::{Receiver, Sender, bounded};
 use async_trait::async_trait;
@@ -16,21 +15,18 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff};
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
-use fedimint_server_core::dashboard_ui::ConnectionType;
+use fedimint_server_core::dashboard_ui::P2PConnectionStatus;
 use futures::FutureExt;
 use futures::future::select_all;
 use tokio::sync::watch;
-use tracing::{Instrument, info, info_span, warn};
+use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::p2p_connection::DynP2PConnection;
 use crate::net::p2p_connector::DynP2PConnector;
 
-pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<Option<Duration>>>;
-pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<Option<Duration>>>;
-
-pub type P2PConnectionTypeSenders = BTreeMap<PeerId, watch::Sender<ConnectionType>>;
-pub type P2PConnectionTypeReceivers = BTreeMap<PeerId, watch::Receiver<ConnectionType>>;
+pub type P2PStatusSenders = BTreeMap<PeerId, watch::Sender<Option<P2PConnectionStatus>>>;
+pub type P2PStatusReceivers = BTreeMap<PeerId, watch::Receiver<Option<P2PConnectionStatus>>>;
 
 pub fn p2p_status_channels(peers: Vec<PeerId>) -> (P2PStatusSenders, P2PStatusReceivers) {
     let mut senders = BTreeMap::new();
@@ -38,22 +34,6 @@ pub fn p2p_status_channels(peers: Vec<PeerId>) -> (P2PStatusSenders, P2PStatusRe
 
     for peer in peers {
         let (sender, receiver) = watch::channel(None);
-
-        senders.insert(peer, sender);
-        receivers.insert(peer, receiver);
-    }
-
-    (senders, receivers)
-}
-
-pub fn p2p_connection_type_channels(
-    peers: Vec<PeerId>,
-) -> (P2PConnectionTypeSenders, P2PConnectionTypeReceivers) {
-    let mut senders = BTreeMap::new();
-    let mut receivers = BTreeMap::new();
-
-    for peer in peers {
-        let (sender, receiver) = watch::channel(ConnectionType::Direct);
 
         senders.insert(peer, sender);
         receivers.insert(peer, receiver);
@@ -73,7 +53,6 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
         connector: DynP2PConnector<M>,
         task_group: &TaskGroup,
         status_senders: P2PStatusSenders,
-        connection_type_senders: P2PConnectionTypeSenders,
     ) -> Self {
         let mut connection_senders = BTreeMap::new();
         let mut connections = BTreeMap::new();
@@ -91,10 +70,6 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
                 status_senders
                     .get(&peer_id)
                     .expect("No p2p status sender for peer")
-                    .clone(),
-                connection_type_senders
-                    .get(&peer_id)
-                    .expect("No p2p connection type sender for peer")
                     .clone(),
                 task_group,
             );
@@ -134,25 +109,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
 
 #[async_trait]
 impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M> {
-    async fn send(&self, recipient: Recipient, message: M) {
-        match recipient {
-            Recipient::Everyone => {
-                for connection in self.connections.values() {
-                    connection.send(message.clone()).await;
-                }
-            }
-            Recipient::Peer(peer) => match self.connections.get(&peer) {
-                Some(connection) => {
-                    connection.send(message).await;
-                }
-                _ => {
-                    warn!(target: LOG_NET_PEER, "No connection for peer {peer}");
-                }
-            },
-        }
-    }
-
-    fn try_send(&self, recipient: Recipient, message: M) {
+    fn send(&self, recipient: Recipient, message: M) {
         match recipient {
             Recipient::Everyone => {
                 for connection in self.connections.values() {
@@ -189,40 +146,27 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M
 
 #[derive(Clone)]
 struct P2PConnection<M> {
-    outgoing: Sender<M>,
-    incoming: Receiver<M>,
+    outgoing_sender: Sender<M>,
+    incoming_receiver: Receiver<M>,
 }
 
 impl<M: Send + 'static> P2PConnection<M> {
-    #[allow(clippy::too_many_arguments)]
     fn new(
         our_id: PeerId,
         peer_id: PeerId,
         connector: DynP2PConnector<M>,
         incoming_connections: Receiver<DynP2PConnection<M>>,
-        status_sender: watch::Sender<Option<Duration>>,
-        connection_type_sender: watch::Sender<ConnectionType>,
+        status_sender: watch::Sender<Option<P2PConnectionStatus>>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
-        let (outgoing_sender, outgoing_receiver) = bounded(1024);
-        let (incoming_sender, incoming_receiver) = bounded(1024);
-
-        let connector_clone = connector.clone();
-        let connection_type_sender_clone = connection_type_sender.clone();
-
-        // Spawn periodic connection type polling task
-        task_group.spawn_cancellable(
-            format!("connection-type-poller-{peer_id}"),
-            async move {
-                let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
-                loop {
-                    interval.tick().await;
-                    let connection_type = connector_clone.connection_type(peer_id).await;
-                    let _ = connection_type_sender_clone.send_replace(connection_type);
-                }
-            }
-            .instrument(info_span!("connection-type-poller", ?peer_id)),
-        );
+        // We use small message queues here to avoid outdated messages such as requests
+        // for signed session outcomes to queue up while a peer is disconnected. The
+        // consensus expects an unreliable networking layer and will resend lost
+        // messages accordingly. Furthermore, during the DKG there will never be more
+        // than two messages in those channels at once, due to its sequential
+        // nature there.
+        let (outgoing_sender, outgoing_receiver) = bounded(5);
+        let (incoming_sender, incoming_receiver) = bounded(5);
 
         task_group.spawn_cancellable(
             format!("io-state-machine-{peer_id}"),
@@ -254,21 +198,19 @@ impl<M: Send + 'static> P2PConnection<M> {
         );
 
         P2PConnection {
-            outgoing: outgoing_sender,
-            incoming: incoming_receiver,
+            outgoing_sender,
+            incoming_receiver,
         }
     }
 
-    async fn send(&self, message: M) {
-        self.outgoing.send(message).await.ok();
-    }
-
     fn try_send(&self, message: M) {
-        self.outgoing.try_send(message).ok();
+        if self.outgoing_sender.try_send(message).is_err() {
+            debug!(target: LOG_NET_PEER, "Outgoing message channel is full");
+        }
     }
 
     async fn receive(&self) -> Option<M> {
-        self.incoming.recv().await.ok()
+        self.incoming_receiver.recv().await.ok()
     }
 }
 
@@ -286,7 +228,7 @@ struct P2PConnectionSMCommon<M> {
     peer_id_str: String,
     connector: DynP2PConnector<M>,
     incoming_connections: Receiver<DynP2PConnection<M>>,
-    status_sender: watch::Sender<Option<Duration>>,
+    status_sender: watch::Sender<Option<P2PConnectionStatus>>,
 }
 
 enum P2PConnectionSMState<M> {
@@ -303,9 +245,12 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
                 self.common.transition_disconnected(backoff).await
             }
             P2PConnectionSMState::Connected(connection) => {
-                self.common
-                    .status_sender
-                    .send_replace(Some(connection.rtt()));
+                let status = P2PConnectionStatus {
+                    conn_type: self.common.connector.connection_type(self.common.peer_id),
+                    rtt: connection.rtt(),
+                };
+
+                self.common.status_sender.send_replace(Some(status));
 
                 self.common.transition_connected(connection).await
             }
@@ -343,7 +288,9 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                             .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "incoming"])
                             .inc();
 
-                         self.incoming_sender.send(message).await.ok()?;
+                        if self.incoming_sender.try_send(message).is_err() {
+                            debug!(target: LOG_NET_PEER, "Incoming message channel is full");
+                        }
                     },
                     Err(e) => return Some(self.disconnect(e)),
                 }
@@ -397,8 +344,9 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
                 Some(P2PConnectionSMState::Connected(connection.ok()?))
             },
+            // to prevent "reconnection ping-pongs", only the side with lower PeerId reconnects
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
-                // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
+
 
                 info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
 

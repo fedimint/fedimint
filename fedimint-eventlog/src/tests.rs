@@ -3,10 +3,13 @@ use std::sync::atomic::AtomicU8;
 
 use anyhow::bail;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _};
+use fedimint_core::db::{
+    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
+    NonCommittable,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_record;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::{apply, async_trait_maybe_send, impl_db_record};
 use futures::StreamExt as _;
 use tokio::sync::{broadcast, watch};
 use tokio::try_join;
@@ -17,11 +20,39 @@ use super::{
     EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE, TRIMABLE_EVENTLOG_MIN_TS_AGE,
     handle_events, run_event_log_ordering_task, trim_trimable_log,
 };
+use crate::EventLogNonTrimableTracker;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
-pub struct TestLogIdKey;
+pub struct TestEventLogIdKey;
 
-impl_db_record!(key = TestLogIdKey, value = EventLogId, db_prefix = 0x00,);
+impl_db_record!(
+    key = TestEventLogIdKey,
+    value = EventLogId,
+    db_prefix = 0x00,
+);
+
+struct TestEventLogTracker;
+
+#[apply(async_trait_maybe_send!)]
+impl EventLogNonTrimableTracker for TestEventLogTracker {
+    // Store position in the event log
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogId,
+    ) -> anyhow::Result<()> {
+        dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
+        Ok(())
+    }
+
+    /// Load the last previous stored position (or None if never stored)
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> anyhow::Result<Option<EventLogId>> {
+        Ok(dbtx.get_value(&TestEventLogIdKey).await)
+    }
+}
 
 #[test_log::test(tokio::test)]
 async fn sanity_handle_events() {
@@ -47,7 +78,7 @@ async fn sanity_handle_events() {
     let _ = try_join!(
         handle_events(
             db.clone(),
-            &TestLogIdKey,
+            Box::new(TestEventLogTracker),
             log_event_added_rx,
             move |_dbtx, event| {
                 let counter = counter.clone();

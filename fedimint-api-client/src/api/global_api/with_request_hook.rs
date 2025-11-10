@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use fedimint_connectors::ServerResult;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -8,7 +9,6 @@ use fedimint_core::{PeerId, apply, async_trait_maybe_send, maybe_add_send_sync};
 use serde_json::Value;
 
 use super::super::{DynModuleApi, IRawFederationApi};
-use crate::api::PeerResult;
 
 /// "Api Request Hook"
 ///
@@ -82,7 +82,7 @@ impl IRawFederationApi for RawFederationApiWithRequestHook {
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> PeerResult<Value> {
+    ) -> ServerResult<Value> {
         self.inner.request_raw(peer_id, method, params).await
     }
 }

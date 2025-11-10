@@ -169,12 +169,13 @@ pub fn compute_lnv2_stats(
         join_events::<OutgoingPaymentStarted, OutgoingPaymentSucceeded, (u64, Amount)>(
             &outgoing_start_events,
             &outgoing_success_events,
+            None,
             |start_event, success_event, latency| {
                 if start_event.outgoing_contract.payment_image == success_event.payment_image {
                     start_event
                         .min_contract_amount
                         .checked_sub(start_event.invoice_amount)
-                        .map(|fee| (latency, fee))
+                        .map(|fee| (latency.as_millis() as u64, fee))
                 } else {
                     None
                 }
@@ -185,9 +186,10 @@ pub fn compute_lnv2_stats(
     let outgoing_failure_stats = join_events::<OutgoingPaymentStarted, OutgoingPaymentFailed, u64>(
         &outgoing_start_events,
         &outgoing_failure_events,
+        None,
         |start_event, fail_event, latency| {
             if start_event.outgoing_contract.payment_image == fail_event.payment_image {
-                Some(latency)
+                Some(latency.as_millis() as u64)
             } else {
                 None
             }
@@ -218,6 +220,7 @@ pub fn compute_lnv2_stats(
         join_events::<IncomingPaymentStarted, IncomingPaymentSucceeded, (u64, Amount)>(
             &incoming_start_events,
             &incoming_success_events,
+            None,
             |start_event, success_event, latency| {
                 if start_event.incoming_contract_commitment.payment_image
                     == success_event.payment_image
@@ -225,7 +228,7 @@ pub fn compute_lnv2_stats(
                     start_event
                         .invoice_amount
                         .checked_sub(start_event.incoming_contract_commitment.amount)
-                        .map(|fee| (latency, fee))
+                        .map(|fee| (latency.as_millis() as u64, fee))
                 } else {
                     None
                 }
@@ -236,9 +239,10 @@ pub fn compute_lnv2_stats(
     let incoming_failure_stats = join_events::<IncomingPaymentStarted, IncomingPaymentFailed, u64>(
         &incoming_start_events,
         &incoming_failure_events,
+        None,
         |start_event, fail_event, latency| {
             if start_event.incoming_contract_commitment.payment_image == fail_event.payment_image {
-                Some(latency)
+                Some(latency.as_millis() as u64)
             } else {
                 None
             }

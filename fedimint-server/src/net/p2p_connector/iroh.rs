@@ -148,29 +148,14 @@ where
         Ok((*auth_peer, connection.into_dyn()))
     }
 
-    async fn connection_type(&self, peer: PeerId) -> ConnectionType {
+    fn connection_type(&self, peer: PeerId) -> Option<ConnectionType> {
         let node_id = *self.node_ids.get(&peer).expect("No node id found for peer");
 
-        // Try to get connection information from Iroh endpoint
-        let conn_type_watcher = if let Ok(watcher) = self.endpoint.conn_type(node_id) {
-            watcher
-        } else {
-            // If conn_type returns None, return Unknown
-            return ConnectionType::Unknown;
-        };
-
-        let conn_type = if let Ok(conn_type) = conn_type_watcher.get() {
-            conn_type
-        } else {
-            // If we can't get the connection type, return Unknown
-            return ConnectionType::Unknown;
-        };
-
-        match conn_type {
-            iroh::endpoint::ConnectionType::Relay(_) => ConnectionType::Relay,
-            iroh::endpoint::ConnectionType::Direct(_)
-            | iroh::endpoint::ConnectionType::Mixed(_, _) => ConnectionType::Direct, /* Mixed connections include direct, so consider as Direct */
-            iroh::endpoint::ConnectionType::None => ConnectionType::Unknown,
+        match self.endpoint.conn_type(node_id).ok()?.get().ok()? {
+            iroh::endpoint::ConnectionType::None => None,
+            iroh::endpoint::ConnectionType::Direct(..) => Some(ConnectionType::Direct),
+            iroh::endpoint::ConnectionType::Relay(..) => Some(ConnectionType::Relay),
+            iroh::endpoint::ConnectionType::Mixed(..) => Some(ConnectionType::Mixed),
         }
     }
 }

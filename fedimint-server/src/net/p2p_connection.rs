@@ -5,6 +5,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::{SinkExt, StreamExt};
 use iroh::endpoint::{Connection, RecvStream};
 use serde::Serialize;
@@ -12,6 +13,10 @@ use serde::de::DeserializeOwned;
 use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+
+/// Maximum size of a p2p message in bytes. The largest message we expect to
+/// receive is a signed session outcome.
+const MAX_P2P_MESSAGE_SIZE: usize = 10_000_000;
 
 pub type DynP2PConnection<M> = Box<dyn IP2PConnection<M>>;
 
@@ -42,7 +47,7 @@ pub trait IP2PConnection<M>: Send + 'static {
     async fn receive(&mut self) -> anyhow::Result<DynIP2PFrame<M>>;
 
     /// Get the round-trip time of the connection.
-    fn rtt(&self) -> Duration;
+    fn rtt(&self) -> Option<Duration>;
 
     fn into_dyn(self) -> DynP2PConnection<M>
     where
@@ -57,9 +62,13 @@ pub trait IP2PConnection<M>: Send + 'static {
 #[async_trait]
 impl<M> IP2PFrame<M> for BytesMut
 where
-    M: DeserializeOwned + Send + 'static,
+    M: Decodable + DeserializeOwned + Send + 'static,
 {
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
+        if let Ok(message) = M::consensus_decode_whole(self, &ModuleDecoderRegistry::default()) {
+            return Ok(message);
+        }
+
         Ok(bincode::deserialize_from(Cursor::new(&**self))?)
     }
 }
@@ -89,8 +98,8 @@ where
         Ok(message)
     }
 
-    fn rtt(&self) -> Duration {
-        Duration::from_millis(0)
+    fn rtt(&self) -> Option<Duration> {
+        None
     }
 }
 
@@ -99,19 +108,23 @@ where
 #[async_trait]
 impl<M> IP2PFrame<M> for RecvStream
 where
-    M: DeserializeOwned + Send + 'static,
+    M: Decodable + DeserializeOwned + Send + 'static,
 {
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
-        Ok(bincode::deserialize_from(Cursor::new(
-            &self.read_to_end(1_000_000).await?,
-        ))?)
+        let bytes = self.read_to_end(MAX_P2P_MESSAGE_SIZE).await?;
+
+        if let Ok(message) = M::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default()) {
+            return Ok(message);
+        }
+
+        Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
     }
 }
 
 #[async_trait]
 impl<M> IP2PConnection<M> for Connection
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
@@ -131,7 +144,7 @@ where
         Ok(self.accept_uni().await?.into_dyn())
     }
 
-    fn rtt(&self) -> Duration {
-        self.rtt()
+    fn rtt(&self) -> Option<Duration> {
+        Some(Connection::rtt(self))
     }
 }

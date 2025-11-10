@@ -575,7 +575,11 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn close_channels_with_peer(
         &self,
-        CloseChannelsWithPeerRequest { pubkey, force }: CloseChannelsWithPeerRequest,
+        CloseChannelsWithPeerRequest {
+            pubkey,
+            force,
+            sats_per_vbyte: _,
+        }: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut num_channels_closed = 0;
 
@@ -627,6 +631,7 @@ impl ILnRpcClient for GatewayLdkClient {
                 outbound_liquidity_sats: channel_details.outbound_capacity_msat / 1000,
                 inbound_liquidity_sats: channel_details.inbound_capacity_msat / 1000,
                 is_active: channel_details.is_usable,
+                funding_outpoint: channel_details.funding_txo,
             });
         }
 

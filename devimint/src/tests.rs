@@ -37,8 +37,8 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA};
-use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
+use crate::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
     pub min: Duration,
@@ -1227,10 +1227,15 @@ pub async fn lightning_gw_reconnect_test(
     let ln_type = gw_lnd.ln.ln_type().to_string();
     gw_lnd.stop_lightning_node().await?;
     let lightning_info = info_cmd.out_json().await?;
-    let lightning_pub_key: Option<String> =
-        serde_json::from_value(lightning_info["lightning_pub_key"].clone())?;
+    if gw_lnd.gatewayd_version < *VERSION_0_10_0_ALPHA {
+        let lightning_pub_key: Option<String> =
+            serde_json::from_value(lightning_info["lightning_pub_key"].clone())?;
 
-    assert!(lightning_pub_key.is_none());
+        assert!(lightning_pub_key.is_none());
+    } else {
+        let not_connected = lightning_info["lightning_info"].clone();
+        assert!(not_connected.as_str().expect("ln info is not a string") == "not_connected");
+    }
 
     // Restart LND
     tracing::info!("Restarting LND...");
@@ -1298,7 +1303,6 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let gw_ldk_name = gw_ldk.gw_name.clone();
     let gw_ldk_port = gw_ldk.gw_port;
     let gw_lightning_port = gw_ldk.ldk_port;
-    let gw_ldk_iroh_port = gw_ldk.iroh_port;
     drop(gw_lnd);
     drop(gw_ldk);
 
@@ -1316,15 +1320,15 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
     let (new_gw_lnd, new_gw_ldk) = try_join!(
-        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
+        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()), 0),
         Gatewayd::new(
             process_mgr,
             LightningNode::Ldk {
                 name: gw_ldk_name,
                 gw_port: gw_ldk_port,
                 ldk_port: gw_lightning_port,
-                iroh_port: gw_ldk_iroh_port,
-            }
+            },
+            1,
         )
     )?;
 
@@ -1386,18 +1390,11 @@ pub async fn do_try_create_and_pay_invoice(
     // automatically reconnects and can query the lightning node
     // info again.
     poll("Waiting for info to succeed after restart", || async {
-        let lightning_pub_key = cmd!(gw_lnd, "info")
-            .out_json()
+        gw_lnd
+            .lightning_pubkey()
             .await
-            .map_err(ControlFlow::Continue)?
-            .get("lightning_pub_key")
-            .map(|ln_pk| {
-                serde_json::from_value::<Option<String>>(ln_pk.clone())
-                    .expect("could not parse lightning_pub_key")
-            })
-            .expect("missing lightning_pub_key");
-
-        poll_eq!(lightning_pub_key.is_some(), true)
+            .map_err(ControlFlow::Continue)?;
+        Ok(())
     })
     .await?;
 
@@ -2263,9 +2260,10 @@ pub async fn test_guardian_password_change(
 
     let client = fed.new_joined_client("config-change-test-client").await?;
 
+    let peer_id = 0;
     let data_dir: PathBuf = fed
         .vars
-        .get(&2)
+        .get(&peer_id)
         .expect("peer not found")
         .FM_DATA_DIR
         .clone();
@@ -2279,7 +2277,7 @@ pub async fn test_guardian_password_change(
     cmd!(
         client,
         "--our-id",
-        "2",
+        &peer_id.to_string(),
         "--password",
         "pass",
         "admin",
@@ -2290,22 +2288,25 @@ pub async fn test_guardian_password_change(
     .await
     .context("Failed to change guardian password")?;
 
-    info!(target: LOG_DEVIMINT, "Waiting for fedimintd 2 to be shut down");
-    timeout(Duration::from_secs(30), fed.await_server_terminated(2))
-        .await
-        .context("Fedimintd didn't shut down in time after password change")??;
+    info!(target: LOG_DEVIMINT, "Waiting for fedimintd to be shut down");
+    timeout(
+        Duration::from_secs(30),
+        fed.await_server_terminated(peer_id),
+    )
+    .await
+    .context("Fedimintd didn't shut down in time after password change")??;
 
-    info!(target: LOG_DEVIMINT, "Restarting fedimintd 2");
-    fed.start_server(process_mgr, 2).await?;
+    info!(target: LOG_DEVIMINT, "Restarting fedimintd");
+    fed.start_server(process_mgr, peer_id).await?;
 
-    info!(target: LOG_DEVIMINT, "Wait for fedimintd 2 to come online again");
-    fed.await_peer(2).await?;
+    info!(target: LOG_DEVIMINT, "Wait for fedimintd to come online again");
+    fed.await_peer(peer_id).await?;
 
     info!(target: LOG_DEVIMINT, "Testing password change worked");
     cmd!(
         client,
         "--our-id",
-        "2",
+        &peer_id.to_string(),
         "--password",
         "foobar",
         "admin",

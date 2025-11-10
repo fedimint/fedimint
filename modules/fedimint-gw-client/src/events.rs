@@ -167,13 +167,14 @@ pub fn compute_lnv1_stats(
         join_events::<OutgoingPaymentStarted, OutgoingPaymentSucceeded, (u64, Amount)>(
             &outgoing_start_events,
             &outgoing_success_events,
+            None,
             |start_event, success_event, latency| {
                 if start_event.contract_id == success_event.contract_id {
                     success_event
                         .outgoing_contract
                         .amount
                         .checked_sub(start_event.invoice_amount)
-                        .map(|fee| (latency, fee))
+                        .map(|fee| (latency.as_millis() as u64, fee))
                 } else {
                     None
                 }
@@ -184,9 +185,10 @@ pub fn compute_lnv1_stats(
     let outgoing_failure_stats = join_events::<OutgoingPaymentStarted, OutgoingPaymentFailed, u64>(
         &outgoing_start_events,
         &outgoing_failure_events,
+        None,
         |start_event, fail_event, latency| {
             if start_event.contract_id == fail_event.contract_id {
-                Some(latency)
+                Some(latency.as_millis() as u64)
             } else {
                 None
             }
@@ -216,12 +218,13 @@ pub fn compute_lnv1_stats(
         join_events::<IncomingPaymentStarted, IncomingPaymentSucceeded, (u64, Amount)>(
             &incoming_start_events,
             &incoming_success_events,
+            None,
             |start_event, success_event, latency| {
                 if start_event.payment_hash == success_event.payment_hash {
                     start_event
                         .contract_amount
                         .checked_sub(start_event.invoice_amount)
-                        .map(|fee| (latency, fee))
+                        .map(|fee| (latency.as_millis() as u64, fee))
                 } else {
                     None
                 }
@@ -232,9 +235,10 @@ pub fn compute_lnv1_stats(
     let incoming_failure_stats = join_events::<IncomingPaymentStarted, IncomingPaymentFailed, u64>(
         &incoming_start_events,
         &incoming_failure_events,
+        None,
         |start_event, fail_event, latency| {
             if start_event.payment_hash == fail_event.payment_hash {
-                Some(latency)
+                Some(latency.as_millis() as u64)
             } else {
                 None
             }

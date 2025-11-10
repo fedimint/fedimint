@@ -18,16 +18,25 @@ use crate::{DynServerModule, ServerModule};
 
 pub type DynDashboardApi = Arc<dyn IDashboardApi + Send + Sync + 'static>;
 
-/// Type of the connection to a peer
+/// Type of the connection to a peer. Mirrors iroh::endpoint::ConnectionType.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionType {
-    /// Direct connectivity
+    /// Direct UDP connectivity
     Direct,
     /// Going through an Iroh relay
     Relay,
-    /// Unknown connection type
-    Unknown,
+    /// Both relay and direct paths available
+    Mixed,
+}
+
+/// P2P connection status for a peer. None indicates disconnected.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct P2PConnectionStatus {
+    /// The type of connection (Direct, Relay, Mixed), None if unknown
+    pub conn_type: Option<ConnectionType>,
+    /// Round-trip time (only available for iroh connections)
+    pub rtt: Option<Duration>,
 }
 
 /// Interface for guardian dashboard API in a running federation
@@ -54,11 +63,8 @@ pub trait IDashboardApi {
     /// The time it took to order our last proposal in the current session
     async fn consensus_ord_latency(&self) -> Option<Duration>;
 
-    /// Returns a map of peer ID to estimated round trip time
-    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<Duration>>;
-
-    /// Returns a map of peer ID to connection type (Direct or Relay)
-    async fn p2p_connection_type_status(&self) -> BTreeMap<PeerId, ConnectionType>;
+    /// Returns a map of peer ID to connection status (None = disconnected)
+    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<P2PConnectionStatus>>;
 
     /// Get the federation invite code to share with users
     async fn federation_invite_code(&self) -> String;

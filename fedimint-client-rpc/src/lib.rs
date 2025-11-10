@@ -5,22 +5,22 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_stream::try_stream;
-use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::ClientModule;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{ClientHandleArc, ClientPreview, RootSecret};
-use fedimint_core::config::FederationId;
+use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::impl_db_record;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::{BoxFuture, BoxStream};
+use fedimint_core::{Amount, TieredCounts, impl_db_record};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_meta_client::MetaClientInit;
-use fedimint_mint_client::{MintClientInit, MintClientModule};
+use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::StreamExt;
 use futures::future::{AbortHandle, Abortable};
@@ -47,6 +47,21 @@ impl_db_record!(
     value = Vec<u8>,
     db_prefix = DbKeyPrefix::Mnemonic,
 );
+
+/// Parsed details from an OOB note.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParsedNoteDetails {
+    /// Total amount of all notes in the OOB notes
+    pub total_amount: Amount,
+    /// Federation ID prefix (always present)
+    pub federation_id_prefix: FederationIdPrefix,
+    /// Full federation ID (if invite is present)
+    pub federation_id: Option<FederationId>,
+    /// Invite code to join the federation (if present)
+    pub invite_code: Option<InviteCode>,
+    /// Number of notes per denomination
+    pub note_counts: TieredCounts,
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -93,6 +108,9 @@ pub enum RpcRequestKind {
     },
     PreviewFederation {
         invite_code: String,
+    },
+    ParseOobNotes {
+        oob_notes: String,
     },
 }
 
@@ -453,6 +471,10 @@ impl RpcGlobalState {
                 let result = self.preview_federation(invite_code).await?;
                 yield result;
             })),
+            RpcRequestKind::ParseOobNotes { oob_notes } => Some(Box::pin(try_stream! {
+                let parsed = parse_oob_notes(&oob_notes)?;
+                yield serde_json::to_value(parsed)?;
+            })),
             RpcRequestKind::CancelRpc { cancel_request_id } => {
                 if let Some(handle) = self.remove_rpc_handle(cancel_request_id) {
                     handle.abort();
@@ -592,4 +614,29 @@ impl RpcGlobalState {
             Ok(None)
         }
     }
+}
+
+pub fn parse_oob_notes(oob_notes_str: &str) -> anyhow::Result<ParsedNoteDetails> {
+    let oob_notes =
+        OOBNotes::from_str(oob_notes_str).context("Failed to parse OOB notes string")?;
+
+    let total_amount = oob_notes.total_amount();
+    let federation_id_prefix = oob_notes.federation_id_prefix();
+    let invite_code = oob_notes.federation_invite();
+    let federation_id = invite_code.as_ref().map(|inv| inv.federation_id());
+
+    // Get note counts by denomination
+    let notes = oob_notes.notes();
+    let mut note_counts = TieredCounts::default();
+    for (amount, _note) in notes.iter_items() {
+        note_counts.inc(amount, 1);
+    }
+
+    Ok(ParsedNoteDetails {
+        total_amount,
+        federation_id_prefix,
+        federation_id,
+        invite_code,
+        note_counts,
+    })
 }

@@ -24,14 +24,14 @@ use fedimint_core::db::{
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::endpoint_constants::{
-    API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    BACKUP_STATISTICS_ENDPOINT, CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
-    CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT,
-    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
-    P2P_CONNECTION_STATUS_ENDPOINT, P2P_CONNECTION_TYPE_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUTS_OUTCOMES_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
+    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT,
+    CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
+    CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
+    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
     SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
@@ -54,10 +54,12 @@ use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
 use fedimint_core::util::{FmtCompact, SafeUrl};
-use fedimint_core::{OutPoint, PeerId, TransactionId, secp256k1};
+use fedimint_core::{OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
-use fedimint_server_core::dashboard_ui::{ConnectionType, IDashboardApi, ServerBitcoinRpcStatus};
+use fedimint_server_core::dashboard_ui::{
+    IDashboardApi, P2PConnectionStatus, ServerBitcoinRpcStatus,
+};
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use tokio::sync::watch::{self, Receiver, Sender};
@@ -74,7 +76,7 @@ use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_d
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
-use crate::net::p2p::{P2PConnectionTypeReceivers, P2PStatusReceivers};
+use crate::net::p2p::P2PStatusReceivers;
 
 #[derive(Clone)]
 pub struct ConsensusApi {
@@ -95,7 +97,6 @@ pub struct ConsensusApi {
     pub shutdown_sender: Sender<Option<u64>>,
     pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
     pub p2p_status_receivers: P2PStatusReceivers,
-    pub p2p_connection_type_receivers: P2PConnectionTypeReceivers,
     pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub supported_api_versions: SupportedApiVersionsSummary,
@@ -195,6 +196,38 @@ impl ConsensusApi {
             .context("No output outcome for outpoint")?;
 
         Ok((&outcome).into())
+    }
+
+    pub async fn await_outputs_outcomes(
+        &self,
+        outpoint_range: OutPointRange,
+    ) -> Result<Vec<Option<SerdeModuleEncoding<DynOutputOutcome>>>> {
+        // Wait for the transaction to be accepted first
+        let (module_ids, mut dbtx) = self.await_transaction(outpoint_range.txid()).await;
+
+        let mut outcomes = Vec::with_capacity(outpoint_range.count());
+
+        for outpoint in outpoint_range {
+            let module_id = module_ids
+                .get(outpoint.out_idx as usize)
+                .with_context(|| format!("Outpoint index out of bounds {outpoint:?}"))?;
+
+            #[allow(deprecated)]
+            let outcome = self
+                .modules
+                .get_expect(*module_id)
+                .output_status(
+                    &mut dbtx.to_ref_with_prefix_module_id(*module_id).0.into_nc(),
+                    outpoint,
+                    *module_id,
+                )
+                .await
+                .map(|outcome| (&outcome).into());
+
+            outcomes.push(outcome);
+        }
+
+        Ok(outcomes)
     }
 
     pub async fn session_count(&self) -> u64 {
@@ -513,8 +546,7 @@ impl ConsensusApi {
         reencrypt_private_config(&self.cfg_dir, &self.cfg.private, new_password)
             .map_err(|e| ApiError::server_error(format!("Failed to change password: {e}")))?;
 
-        info!(target: LOG_NET_API, "Successfully changed guardian password, shutting down to restart with new password");
-        self.task_group.shutdown();
+        info!(target: LOG_NET_API, "Successfully changed guardian password");
 
         Ok(())
     }
@@ -600,17 +632,10 @@ impl IDashboardApi for ConsensusApi {
         *self.ord_latency_receiver.borrow()
     }
 
-    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<Duration>> {
+    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<P2PConnectionStatus>> {
         self.p2p_status_receivers
             .iter()
-            .map(|(peer, receiver)| (*peer, *receiver.borrow()))
-            .collect()
-    }
-
-    async fn p2p_connection_type_status(&self) -> BTreeMap<PeerId, ConnectionType> {
-        self.p2p_connection_type_receivers
-            .iter()
-            .map(|(peer, receiver)| (*peer, *receiver.borrow()))
+            .map(|(peer, receiver)| (*peer, receiver.borrow().clone()))
             .collect()
     }
 
@@ -703,6 +728,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
+            AWAIT_OUTPUTS_OUTCOMES_ENDPOINT,
+            ApiVersion::new(0, 8),
+            async |fedimint: &ConsensusApi, _context, outpoint_range: OutPointRange| -> Vec<Option<SerdeModuleEncoding<DynOutputOutcome>>> {
+                let outcomes = fedimint
+                    .await_outputs_outcomes(outpoint_range)
+                    .await
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+                Ok(outcomes)
+            }
+        },
+        api_endpoint! {
             INVITE_CODE_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
@@ -764,20 +801,10 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             P2P_CONNECTION_STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<Duration>> {
+            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<P2PConnectionStatus>> {
                 Ok(fedimint.p2p_status_receivers
                     .iter()
-                    .map(|(peer, receiver)| (*peer, *receiver.borrow()))
-                    .collect())
-            }
-        },
-        api_endpoint! {
-            P2P_CONNECTION_TYPE_ENDPOINT,
-            ApiVersion::new(0, 7),
-            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, ConnectionType> {
-                Ok(fedimint.p2p_connection_type_receivers
-                    .iter()
-                    .map(|(peer, receiver)| (*peer, *receiver.borrow()))
+                    .map(|(peer, receiver)| (*peer, receiver.borrow().clone()))
                     .collect())
             }
         },
@@ -910,7 +937,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 6),
             async |fedimint: &ConsensusApi, context, new_password: String| -> () {
                 let auth = check_auth(context)?;
-                fedimint.change_guardian_password(&new_password, &auth)
+                fedimint.change_guardian_password(&new_password, &auth)?;
+                let task_group = fedimint.task_group.clone();
+                fedimint_core::runtime::spawn("shutdown after password change",  async move {
+                    info!(target: LOG_NET_API, "Will shutdown after password change");
+                    fedimint_core:: runtime::sleep(Duration::from_secs(1)).await;
+                    task_group.shutdown();
+                });
+                Ok(())
             }
         },
     ]

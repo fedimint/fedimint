@@ -25,6 +25,7 @@ fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }

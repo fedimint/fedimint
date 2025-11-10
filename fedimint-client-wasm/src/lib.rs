@@ -31,7 +31,7 @@ impl RpcHandler {
         // Create the database directly
         let cursed_db = MemAndRedb::new(sync_handle).unwrap();
         let database = Database::new(cursed_db, Default::default());
-        let connectors = fedimint_api_client::api::ConnectorRegistry::build_from_client_defaults()
+        let connectors = fedimint_connectors::ConnectorRegistry::build_from_client_defaults()
             .bind()
             .await
             .unwrap();

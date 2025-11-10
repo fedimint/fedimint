@@ -4,7 +4,8 @@ use std::time::{Duration, SystemTime};
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::sha256;
-use bitcoin::{Address, Network};
+use bitcoin::secp256k1::PublicKey;
+use bitcoin::{Address, Network, OutPoint};
 use clap::Subcommand;
 use envs::{
     FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
@@ -123,6 +124,7 @@ pub struct FederationInfo {
     pub federation_name: Option<String>,
     pub balance_msat: Amount,
     pub config: FederationConfig,
+    pub last_backup_time: Option<SystemTime>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -133,19 +135,9 @@ pub struct GatewayInfo {
     // TODO: Remove this alias once it no longer breaks backwards compatibility.
     #[serde(alias = "channels")]
     pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
-    pub lightning_pub_key: Option<String>,
-    pub lightning_alias: Option<String>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
-    pub network: Network,
-    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
-    // should be able to remove it once 0.4.0 is released.
-    #[serde(default)]
-    pub block_height: Option<u32>,
-    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
-    // should be able to remove it once 0.4.0 is released.
-    #[serde(default)]
-    pub synced_to_chain: bool,
+    pub lightning_info: LightningInfo,
     pub api: SafeUrl,
     pub iroh_api: SafeUrl,
     pub lightning_mode: LightningMode,
@@ -279,10 +271,10 @@ impl PaymentStats {
     /// Computes the payment statistics for the given structured payment events.
     pub fn compute(events: &StructuredPaymentEvents) -> Self {
         PaymentStats {
-            average_latency: get_average(&events.latencies).map(Duration::from_micros),
-            median_latency: get_median(&events.latencies).map(Duration::from_micros),
+            average_latency: get_average(&events.latencies_usecs).map(Duration::from_micros),
+            median_latency: get_median(&events.latencies_usecs).map(Duration::from_micros),
             total_fees: Amount::from_msats(events.fees.iter().map(|a| a.msats).sum()),
-            total_success: events.latencies.len(),
+            total_success: events.latencies_usecs.len(),
             total_failure: events.latencies_failure.len(),
         }
     }
@@ -301,6 +293,7 @@ pub struct ChannelInfo {
     pub outbound_liquidity_sats: u64,
     pub inbound_liquidity_sats: u64,
     pub is_active: bool,
+    pub funding_outpoint: Option<OutPoint>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -318,10 +311,39 @@ pub struct SendOnchainRequest {
     pub fee_rate_sats_per_vbyte: u64,
 }
 
+impl fmt::Display for SendOnchainRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SendOnchainRequest {{ address: {}, amount: {}, fee_rate_sats_per_vbyte: {} }}",
+            self.address.assume_checked_ref(),
+            self.amount,
+            self.fee_rate_sats_per_vbyte
+        )
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,
+    #[serde(default)]
     pub force: bool,
+    pub sats_per_vbyte: Option<u64>,
+}
+
+impl fmt::Display for CloseChannelsWithPeerRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CloseChannelsWithPeerRequest {{ pubkey: {}, force: {}, sats_per_vbyte: {} }}",
+            self.pubkey,
+            self.force,
+            match self.sats_per_vbyte {
+                Some(sats) => sats.to_string(),
+                None => "None".to_string(),
+            }
+        )
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -467,4 +489,17 @@ impl fmt::Display for ChainSource {
             }
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum LightningInfo {
+    Connected {
+        public_key: PublicKey,
+        alias: String,
+        network: Network,
+        block_height: u64,
+        synced_to_chain: bool,
+    },
+    NotConnected,
 }

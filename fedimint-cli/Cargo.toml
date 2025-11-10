@@ -34,6 +34,7 @@ fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bip39 = { workspace = true }
 fedimint-client = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-cursed-redb = { workspace = true }
 fedimint-eventlog = { workspace = true }

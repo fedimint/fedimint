@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{

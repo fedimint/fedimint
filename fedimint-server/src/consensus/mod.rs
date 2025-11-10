@@ -14,7 +14,8 @@ use std::time::Duration;
 use anyhow::bail;
 use async_channel::Sender;
 use db::{ServerDbMigrationContext, get_global_database_migrations};
-use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
+use fedimint_api_client::api::DynGlobalApi;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::NumPeers;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -25,7 +26,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, FEDIMINT_API_ALPN, IrohApiRequest};
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::net::peers::DynP2PConnections;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, ServerBitcoinRpcMonitor};
@@ -49,7 +50,7 @@ use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
-use crate::net::p2p::{P2PConnectionTypeReceivers, P2PStatusReceivers};
+use crate::net::p2p::P2PStatusReceivers;
 use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
@@ -60,7 +61,6 @@ pub async fn run(
     connectors: ConnectorRegistry,
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
-    p2p_connection_type_receivers: P2PConnectionTypeReceivers,
     api_bind: SocketAddr,
     iroh_dns: Option<SafeUrl>,
     iroh_relays: Vec<SafeUrl>,
@@ -108,7 +108,7 @@ pub async fn run(
         None,
     )?;
 
-    let server_bitcoin_rpc_monitor = ServerBitcoinRpcMonitor::new(
+    let bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
         if is_running_in_test_env() {
             Duration::from_millis(100)
@@ -155,7 +155,7 @@ pub async fn run(
                         task_group,
                         cfg.local.identity,
                         global_api.with_module(*module_id),
-                        server_bitcoin_rpc_monitor.clone(),
+                        bitcoin_rpc_connection.clone(),
                     )
                     .await?;
 
@@ -197,10 +197,9 @@ pub async fn run(
             &module_init_registry,
         ),
         p2p_status_receivers,
-        p2p_connection_type_receivers,
         ci_status_receivers,
         ord_latency_receiver,
-        bitcoin_rpc_connection: server_bitcoin_rpc_monitor,
+        bitcoin_rpc_connection: bitcoin_rpc_connection.clone(),
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
         task_group: task_group.clone(),
@@ -247,10 +246,6 @@ pub async fn run(
         );
     }
 
-    info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
-
-    let api_urls = get_api_urls(&db, &cfg.consensus).await;
-
     let ui_service = dashboard_ui_router(consensus_api.clone().into_dyn()).into_make_service();
 
     let ui_listener = TcpListener::bind(ui_bind)
@@ -265,6 +260,31 @@ pub async fn run(
     });
 
     info!(target: LOG_CONSENSUS, "Dashboard UI running at http://{ui_bind} 🚀");
+
+    loop {
+        match bitcoin_rpc_connection.status() {
+            Some(status) => {
+                if let Some(progress) = status.sync_progress {
+                    if progress >= 0.999 {
+                        break;
+                    }
+
+                    info!(target: LOG_CONSENSUS, "Waiting for bitcoin backend to sync... {progress:.1}%");
+                } else {
+                    break;
+                }
+            }
+            None => {
+                info!(target: LOG_CONSENSUS, "Waiting to connect to bitcoin backend...");
+            }
+        }
+
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
+
+    let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!

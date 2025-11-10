@@ -319,7 +319,26 @@ pub struct IrohApiRequest {
     pub request: ApiRequestErased,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayRequest {
+    /// REST API route for specifying which action to take
+    pub route: String,
+
+    /// Parameters for the request
+    pub params: Option<serde_json::Value>,
+
+    /// Password for authenticated requests to the gateway
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayResponse {
+    pub status: u16,
+    pub body: serde_json::Value,
+}
+
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
+pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
 // TODO: either nuke or turn all `api_secret: Option<String>` into `api_secret:
 // Option<ApiAuth>`
@@ -812,6 +831,24 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
             module_instance,
             &ModuleRegistry::default(),
         )
+    }
+}
+
+impl<T: Encodable + Decodable> Encodable for SerdeModuleEncoding<T> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.0.consensus_encode(writer)
+    }
+}
+
+impl<T: Encodable + Decodable> Decodable for SerdeModuleEncoding<T> {
+    fn consensus_decode_partial_from_finite_reader<R: std::io::Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self(
+            Vec::<u8>::consensus_decode_partial_from_finite_reader(reader, modules)?,
+            PhantomData,
+        ))
     }
 }
 

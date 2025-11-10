@@ -7,17 +7,17 @@
 
 use anyhow::{Context as _, bail};
 use api::net::ConnectorType;
-use api::{DynGlobalApi, FederationApiExt as _, PeerError};
+use api::{DynGlobalApi, FederationApiExt as _};
+use fedimint_connectors::ConnectorRegistry;
+use fedimint_connectors::error::ServerError;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::backoff_util;
-use fedimint_logging::LOG_CLIENT;
+use fedimint_logging::LOG_CLIENT_NET;
 use query::FilterMap;
 use tracing::debug;
-
-use crate::api::ConnectorRegistry;
 
 pub mod api;
 /// Client query system
@@ -33,7 +33,7 @@ impl ConnectorType {
         invite: &InviteCode,
     ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
         debug!(
-            target: LOG_CLIENT,
+            target: LOG_CLIENT_NET,
             %invite,
             peers = ?invite.peers(),
             "Downloading client config via invite code"
@@ -71,11 +71,11 @@ impl ConnectorType {
         federation_id: FederationId,
         api_secret: Option<String>,
     ) -> anyhow::Result<(ClientConfig, DynGlobalApi)> {
-        debug!(target: LOG_CLIENT, "Downloading client config from peer");
+        debug!(target: LOG_CLIENT_NET, "Downloading client config from peer");
         // TODO: use new download approach based on guardian PKs
         let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
             if federation_id != cfg.global.calculate_federation_id() {
-                return Err(PeerError::ConditionFailed(anyhow::anyhow!(
+                return Err(ServerError::ConditionFailed(anyhow::anyhow!(
                     "FederationId in invite code does not match client config"
                 )));
             }
@@ -97,7 +97,7 @@ impl ConnectorType {
             .map(|(peer, url)| (peer, url.url))
             .collect();
 
-        debug!(target: LOG_CLIENT, "Verifying client config with all peers");
+        debug!(target: LOG_CLIENT_NET, "Verifying client config with all peers");
 
         let api_full = DynGlobalApi::new(endpoints.clone(), api_endpoints, api_secret.as_deref())?;
         let client_config = api_full

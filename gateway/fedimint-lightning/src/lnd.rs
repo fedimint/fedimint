@@ -5,6 +5,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::ensure;
 use async_trait::async_trait;
+use bitcoin::OutPoint;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{TaskGroup, sleep};
@@ -1227,7 +1228,11 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn close_channels_with_peer(
         &self,
-        CloseChannelsWithPeerRequest { pubkey, force }: CloseChannelsWithPeerRequest,
+        CloseChannelsWithPeerRequest {
+            pubkey,
+            force,
+            sats_per_vbyte,
+        }: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
@@ -1255,25 +1260,48 @@ impl ILnRpcClient for GatewayLndClient {
                     }
                 })?;
 
-            client
-                .lightning()
-                .close_channel(CloseChannelRequest {
-                    channel_point: Some(ChannelPoint {
-                        funding_txid: Some(
-                            tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
-                                <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
-                                    .to_vec(),
+            if force {
+                client
+                    .lightning()
+                    .close_channel(CloseChannelRequest {
+                        channel_point: Some(ChannelPoint {
+                            funding_txid: Some(
+                                tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
+                                    <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
+                                        .to_vec(),
+                                ),
                             ),
-                        ),
-                        output_index: channel_point.vout,
-                    }),
-                    force,
-                    ..Default::default()
-                })
-                .await
-                .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
-                    failure_reason: format!("Failed to close channel {e:?}"),
-                })?;
+                            output_index: channel_point.vout,
+                        }),
+                        force,
+                        ..Default::default()
+                    })
+                    .await
+                    .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                        failure_reason: format!("Failed to close channel {e:?}"),
+                    })?;
+            } else {
+                client
+                    .lightning()
+                    .close_channel(CloseChannelRequest {
+                        channel_point: Some(ChannelPoint {
+                            funding_txid: Some(
+                                tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
+                                    <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
+                                        .to_vec(),
+                                ),
+                            ),
+                            output_index: channel_point.vout,
+                        }),
+                        force,
+                        sat_per_vbyte: sats_per_vbyte.unwrap_or_default(),
+                        ..Default::default()
+                    })
+                    .await
+                    .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                        failure_reason: format!("Failed to close channel {e:?}"),
+                    })?;
+            }
         }
 
         Ok(CloseChannelsWithPeerResponse {
@@ -1323,6 +1351,8 @@ impl ILnRpcClient for GatewayLndClient {
                         let inbound_liquidity_sats =
                             remote_balance_sats.saturating_sub(remote_channel_reserve_sats);
 
+                        let funding_outpoint = OutPoint::from_str(&channel.channel_point).ok();
+
                         ChannelInfo {
                             remote_pubkey: PublicKey::from_str(&channel.remote_pubkey)
                                 .expect("Lightning node returned invalid remote channel pubkey"),
@@ -1330,6 +1360,7 @@ impl ILnRpcClient for GatewayLndClient {
                             outbound_liquidity_sats,
                             inbound_liquidity_sats,
                             is_active: channel.active,
+                            funding_outpoint,
                         }
                     })
                     .collect(),

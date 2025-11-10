@@ -2,13 +2,12 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use fedimint_core::PeerId;
-use fedimint_server_core::dashboard_ui::ConnectionType;
+use fedimint_server_core::dashboard_ui::{ConnectionType, P2PConnectionStatus};
 use maud::{Markup, html};
 
 pub fn render(
     consensus_ord_latency: Option<Duration>,
-    p2p_connection_status: &BTreeMap<PeerId, Option<Duration>>,
-    p2p_connection_type_status: &BTreeMap<PeerId, ConnectionType>,
+    p2p_connection_status: &BTreeMap<PeerId, Option<P2PConnectionStatus>>,
 ) -> Markup {
     html! {
         div class="card h-100" id="consensus-latency" {
@@ -40,11 +39,11 @@ pub fn render(
                             }
                         }
                         tbody {
-                            @for (peer_id, rtt) in p2p_connection_status {
+                            @for (peer_id, status) in p2p_connection_status {
                                 tr {
                                     td { (peer_id.to_string()) }
                                     td {
-                                        @match rtt {
+                                        @match status {
                                             Some(_) => {
                                                 span class="badge bg-success" { "Connected" }
                                             }
@@ -54,28 +53,27 @@ pub fn render(
                                         }
                                     }
                                     td {
-                                        @if let Some(connection_type) = p2p_connection_type_status.get(peer_id) {
-                                            @match connection_type {
-                                                ConnectionType::Direct => {
-                                                    span class="badge bg-success" { "Direct" }
-                                                }
-                                                ConnectionType::Relay => {
-                                                    span class="badge bg-warning" { "Relay" }
-                                                }
-                                                ConnectionType::Unknown => {
-                                                    span class="badge bg-secondary" { "Unknown" }
-                                                }
+                                        @match status.as_ref().and_then(|s| s.conn_type) {
+                                            Some(ConnectionType::Direct) => {
+                                                span class="badge bg-success" { "Direct" }
                                             }
-                                        } @else {
-                                            span class="text-muted" { "Unknown" }
+                                            Some(ConnectionType::Relay) => {
+                                                span class="badge bg-warning" { "Relay" }
+                                            }
+                                            Some(ConnectionType::Mixed) => {
+                                                span class="badge bg-info" { "Mixed" }
+                                            }
+                                            None => {
+                                                span class="text-muted" { "N/A" }
+                                            }
                                         }
                                     }
                                     td {
-                                        @match rtt {
-                                            Some(duration) if duration.as_millis() > 0 => {
+                                        @match status.as_ref().and_then(|s| s.rtt) {
+                                            Some(duration) => {
                                                 (format!("{} ms", duration.as_millis()))
                                             }
-                                            Some(_) | None => {
+                                            None => {
                                                 span class="text-muted" { "N/A" }
                                             }
                                         }

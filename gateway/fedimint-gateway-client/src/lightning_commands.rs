@@ -11,10 +11,10 @@ use fedimint_gateway_common::{
     GetInvoiceRequest, ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
     PayOfferPayload,
 };
-use fedimint_ln_common::client::GatewayRpcClient;
+use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
 
-use crate::print_response;
+use crate::{SafeUrl, print_response};
 
 /// This API is intentionally kept very minimal, as its main purpose is to
 /// provide a simple and consistent way to establish liquidity between gateways
@@ -53,12 +53,18 @@ pub enum LightningCommands {
     /// Close all channels with a peer, claiming the funds to the lightning
     /// node's on-chain wallet.
     CloseChannelsWithPeer {
-        // The public key of the node to close channels with
+        /// The public key of the node to close channels with
         #[clap(long)]
         pubkey: bitcoin::secp256k1::PublicKey,
 
+        /// Flag to specify if the channel should be force closed
         #[clap(long)]
         force: bool,
+
+        /// Fee rate to use when closing the channel (required unless --force is
+        /// set)
+        #[clap(long, required_unless_present = "force")]
+        sats_per_vbyte: Option<u64>,
     },
     /// List channels.
     ListChannels,
@@ -115,7 +121,7 @@ fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
 
 impl LightningCommands {
     #![allow(clippy::too_many_lines)]
-    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
         match self {
             Self::CreateInvoice {
                 amount_msats,
@@ -124,6 +130,7 @@ impl LightningCommands {
             } => {
                 let response = create_invoice_for_self(
                     client,
+                    base_url,
                     CreateInvoiceForOperatorPayload {
                         amount_msats,
                         expiry_secs,
@@ -135,7 +142,7 @@ impl LightningCommands {
             }
             Self::PayInvoice { invoice } => {
                 let response =
-                    pay_invoice(client, PayInvoiceForOperatorPayload { invoice }).await?;
+                    pay_invoice(client, base_url, PayInvoiceForOperatorPayload { invoice }).await?;
                 println!("{response}");
             }
             Self::OpenChannel {
@@ -146,6 +153,7 @@ impl LightningCommands {
             } => {
                 let funding_txid = open_channel(
                     client,
+                    base_url,
                     OpenChannelRequest {
                         pubkey,
                         host,
@@ -156,20 +164,30 @@ impl LightningCommands {
                 .await?;
                 println!("{funding_txid}");
             }
-            Self::CloseChannelsWithPeer { pubkey, force } => {
+            Self::CloseChannelsWithPeer {
+                pubkey,
+                force,
+                sats_per_vbyte,
+            } => {
                 let response = close_channels_with_peer(
                     client,
-                    CloseChannelsWithPeerRequest { pubkey, force },
+                    base_url,
+                    CloseChannelsWithPeerRequest {
+                        pubkey,
+                        force,
+                        sats_per_vbyte,
+                    },
                 )
                 .await?;
                 print_response(response);
             }
             Self::ListChannels => {
-                let response = list_channels(client).await?;
+                let response = list_channels(client, base_url).await?;
                 print_response(response);
             }
             Self::GetInvoice { payment_hash } => {
-                let response = get_invoice(client, GetInvoiceRequest { payment_hash }).await?;
+                let response =
+                    get_invoice(client, base_url, GetInvoiceRequest { payment_hash }).await?;
                 print_response(response);
             }
             Self::ListTransactions {
@@ -180,6 +198,7 @@ impl LightningCommands {
                 let end_secs = end_time.timestamp().try_into()?;
                 let response = list_transactions(
                     client,
+                    base_url,
                     ListTransactionsPayload {
                         start_secs,
                         end_secs,
@@ -196,6 +215,7 @@ impl LightningCommands {
             } => {
                 let response = create_offer(
                     client,
+                    base_url,
                     CreateOfferPayload {
                         amount: amount_msat.map(Amount::from_msats),
                         description,
@@ -214,6 +234,7 @@ impl LightningCommands {
             } => {
                 let response = pay_offer(
                     client,
+                    base_url,
                     PayOfferPayload {
                         offer,
                         amount: amount_msat.map(Amount::from_msats),

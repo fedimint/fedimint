@@ -14,6 +14,7 @@ use tracing::instrument;
 
 use crate::LightningClientContext;
 use crate::api::LightningFederationApi;
+use crate::events::ReceivePaymentEvent;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveStateMachine {
@@ -60,10 +61,11 @@ impl State for ReceiveStateMachine {
 
     fn transitions(
         &self,
-        _context: &Self::ModuleContext,
+        context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let gc = global_context.clone();
+        let ctx = context.clone();
 
         match &self.state {
             ReceiveSMState::Pending => {
@@ -73,6 +75,7 @@ impl State for ReceiveStateMachine {
                         Box::pin(Self::transition_incoming_contract(
                             dbtx,
                             old_state,
+                            ctx.clone(),
                             gc.clone(),
                             contract_confirmed,
                         ))
@@ -105,6 +108,7 @@ impl ReceiveStateMachine {
     async fn transition_incoming_contract(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: ReceiveStateMachine,
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
         outpoint: Option<OutPoint>,
     ) -> ReceiveStateMachine {
@@ -125,6 +129,18 @@ impl ReceiveStateMachine {
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed");
+
+        // Log event when receive completes successfully
+        context
+            .client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                ReceivePaymentEvent {
+                    operation_id: old_state.common.operation_id,
+                    amount: old_state.common.contract.commitment.amount,
+                },
+            )
+            .await;
 
         old_state.update(ReceiveSMState::Claiming(change_range.into_iter().collect()))
     }
