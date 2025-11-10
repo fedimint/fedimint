@@ -925,7 +925,7 @@ pub struct FederationApi {
 /// initialize [`ConnectionState::connection`]
 #[derive(Debug)]
 struct ConnectionStateInner {
-    attempts: u64,
+    fresh: bool,
     backoff: FibonacciBackoff,
 }
 
@@ -940,12 +940,36 @@ struct ConnectionState {
 }
 
 impl ConnectionState {
-    fn new() -> Self {
+    /// Create a new connection state for a first time connection
+    fn new_initial() -> Self {
         Self {
             connection: OnceCell::new(),
             inner: std::sync::Mutex::new(ConnectionStateInner {
-                attempts: 0,
-                backoff: custom_backoff(Duration::from_millis(50), Duration::from_secs(30), None),
+                fresh: true,
+                backoff: custom_backoff(
+                    // First time connections start quick
+                    Duration::from_millis(5),
+                    Duration::from_secs(30),
+                    None,
+                ),
+            }),
+        }
+    }
+
+    /// Create a new connection state for a connection that already failed, and
+    /// is being reset
+    fn new_reconnecting() -> Self {
+        Self {
+            connection: OnceCell::new(),
+            inner: std::sync::Mutex::new(ConnectionStateInner {
+                // set the attempts to 1, indicating that
+                fresh: false,
+                backoff: custom_backoff(
+                    // Connections after a disconnect start with some minimum delay
+                    Duration::from_millis(500),
+                    Duration::from_secs(30),
+                    None,
+                ),
             }),
         }
     }
@@ -954,11 +978,11 @@ impl ConnectionState {
     /// time the caller should wait.
     fn pre_reconnect_delay(&self) -> Duration {
         let mut backoff_locked = self.inner.lock().expect("Locking failed");
-        let attempts = backoff_locked.attempts;
+        let fresh = backoff_locked.fresh;
 
-        backoff_locked.attempts += 1;
+        backoff_locked.fresh = false;
 
-        if attempts == 0 {
+        if fresh {
             Duration::default()
         } else {
             backoff_locked.backoff.next().expect("Keeps retrying")
@@ -1001,10 +1025,10 @@ impl FederationApi {
                 if let Some(existing_conn) = entry_arc.connection.get()
                     && !existing_conn.is_connected(){
                         trace!(target: LOG_NET_API, %url, "Existing connection is disconnected, removing from pool");
-                        *entry_arc = Arc::new(ConnectionState::new());
+                        *entry_arc = Arc::new(ConnectionState::new_reconnecting());
                     }
             })
-            .or_insert_with(|| Arc::new(ConnectionState::new()))
+            .or_insert_with(|| Arc::new(ConnectionState::new_initial()))
             .clone();
 
         // Drop the pool lock so other connections can work in parallel
