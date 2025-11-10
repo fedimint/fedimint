@@ -10,7 +10,22 @@ if [ -z "$test_name" ]; then
     exit 1
 fi
 
-version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS)}"
+if [ -z "${FM_ENABLE_IROH:-}" ]; then
+    # Iroh generates a lot of network socket usage, which
+    # combined with amount of things running in our test suite
+    # potentially highly in parallel and default lingering tcp
+    # connection timeouts, can lead to exhaustion of available socket space
+    # and connectivity failing during `just test-ci-all`.
+    #
+    # For this reason, enable Iroh only some of the time. 🤷
+    if (( $((RANDOM % 2)) == 0 )); then
+        export FM_ENABLE_IROH=true
+    else
+        export FM_ENABLE_IROH=false
+    fi
+fi
+
+version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS, iroh: $FM_ENABLE_IROH)}"
 test_out_path="$(mktemp --tmpdir fm-XXXXX)"
 time_out_path="$(mktemp --tmpdir fm-XXXXX)"
 time_fmt='%e\t%M\t%w\t%c'
