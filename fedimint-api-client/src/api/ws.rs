@@ -21,7 +21,7 @@ use tracing::trace;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 
 use super::Connector;
-use crate::api::{DynClientConnection, IClientConnection, PeerError, PeerResult};
+use crate::api::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
 
 #[derive(Debug, Clone)]
 pub struct WebsocketConnector {}
@@ -116,18 +116,18 @@ impl Default for WebsocketConnector {
 
 #[async_trait::async_trait]
 impl Connector for WebsocketConnector {
-    async fn connect(
+    async fn connect_guardian(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynClientConnection> {
+    ) -> PeerResult<DynGuaridianConnection> {
         let client = self.make_new_connection(url, api_secret).await?;
         Ok(client.into_dyn())
     }
 }
 
 #[async_trait]
-impl IClientConnection for WsClient {
+impl IGuardianConnection for WsClient {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
         let method = match method {
             ApiMethod::Core(method) => method,
@@ -149,7 +149,7 @@ impl IClientConnection for WsClient {
 }
 
 #[async_trait]
-impl IClientConnection for Arc<WsClient> {
+impl IGuardianConnection for Arc<WsClient> {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
         let method = match method {
             ApiMethod::Core(method) => method,

@@ -748,7 +748,7 @@ impl ConnectorRegistryBuilder {
 /// See [`ConnectorRegistry::build_from_client_env`] and similar
 /// to create.
 ///
-/// [`ConnectorRegistry::connect`] is the main entry point for making
+/// [`ConnectorRegistry::connect_guardian`] is the main entry point for making
 /// mixed-networking stack connection.
 ///
 /// Responsibilities:
@@ -836,11 +836,11 @@ impl ConnectorRegistry {
     ///
     /// This is the main function consumed by the downstream use for making
     /// connection.
-    pub async fn connect(
+    pub async fn connect_guardian(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynClientConnection> {
+    ) -> PeerResult<DynGuaridianConnection> {
         let url = match self.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
@@ -871,7 +871,7 @@ impl ConnectorRegistry {
                     e.fmt_compact()
                 ))
             })?
-            .connect(url, api_secret)
+            .connect_guardian(url, api_secret)
             .await
     }
 }
@@ -879,23 +879,26 @@ pub type DynConnector = Arc<dyn Connector>;
 
 #[async_trait]
 pub trait Connector: Send + Sync + 'static + fmt::Debug {
-    async fn connect(
+    async fn connect_guardian(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynClientConnection>;
+    ) -> PeerResult<DynGuaridianConnection>;
 }
-pub type DynClientConnection = Arc<dyn IClientConnection>;
 
+/// A connection from api client to a federation guardian (type erased)
+pub type DynGuaridianConnection = Arc<dyn IGuardianConnection>;
+
+/// A connection from api client to a federation guardian
 #[async_trait]
-pub trait IClientConnection: Debug + Send + Sync + 'static {
+pub trait IGuardianConnection: Debug + Send + Sync + 'static {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value>;
 
     fn is_connected(&self) -> bool;
 
     async fn await_disconnection(&self);
 
-    fn into_dyn(self) -> DynClientConnection
+    fn into_dyn(self) -> DynGuaridianConnection
     where
         Self: Sized,
     {
@@ -948,7 +951,7 @@ struct ConnectionStateInner {
 #[derive(Debug)]
 struct ConnectionState {
     /// Connection we are trying to or already established
-    connection: tokio::sync::OnceCell<DynClientConnection>,
+    connection: tokio::sync::OnceCell<DynGuaridianConnection>,
     /// State that technically is protected every time by
     /// the serialization of `OnceCell::get_or_try_init`, but
     /// for Rust purposes needs to be locked.
@@ -1027,7 +1030,7 @@ impl FederationApi {
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynClientConnection> {
+    ) -> PeerResult<DynGuaridianConnection> {
         let mut pool_locked = self.connections.lock().await;
 
         let pool_entry_arc = pool_locked
@@ -1063,7 +1066,7 @@ impl FederationApi {
                 let retry_delay = pool_entry_arc.pre_reconnect_delay();
                 fedimint_core::runtime::sleep(retry_delay).await;
 
-                let conn = self.connectors.connect(url, api_secret).await?;
+                let conn = self.connectors.connect_guardian(url, api_secret).await?;
 
                 Ok(conn)
             })
