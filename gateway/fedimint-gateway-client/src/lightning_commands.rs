@@ -2,12 +2,16 @@ use bitcoin::hashes::sha256;
 use chrono::{DateTime, Utc};
 use clap::Subcommand;
 use fedimint_core::Amount;
-use fedimint_gateway_client::GatewayRpcClient;
+use fedimint_gateway_client::{
+    close_channels_with_peer, create_invoice_for_self, create_offer, get_invoice, list_channels,
+    list_transactions, open_channel, pay_invoice, pay_offer,
+};
 use fedimint_gateway_common::{
     CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
     GetInvoiceRequest, ListTransactionsPayload, OpenChannelRequest, PayInvoiceForOperatorPayload,
     PayOfferPayload,
 };
+use fedimint_ln_common::client::GatewayRpcClient;
 use lightning_invoice::Bolt11Invoice;
 
 use crate::print_response;
@@ -118,19 +122,20 @@ impl LightningCommands {
                 expiry_secs,
                 description,
             } => {
-                let response = client
-                    .create_invoice_for_self(CreateInvoiceForOperatorPayload {
+                let response = create_invoice_for_self(
+                    client,
+                    CreateInvoiceForOperatorPayload {
                         amount_msats,
                         expiry_secs,
                         description,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 println!("{response}");
             }
             Self::PayInvoice { invoice } => {
-                let response = client
-                    .pay_invoice(PayInvoiceForOperatorPayload { invoice })
-                    .await?;
+                let response =
+                    pay_invoice(client, PayInvoiceForOperatorPayload { invoice }).await?;
                 println!("{response}");
             }
             Self::OpenChannel {
@@ -139,30 +144,32 @@ impl LightningCommands {
                 channel_size_sats,
                 push_amount_sats,
             } => {
-                let funding_txid = client
-                    .open_channel(OpenChannelRequest {
+                let funding_txid = open_channel(
+                    client,
+                    OpenChannelRequest {
                         pubkey,
                         host,
                         channel_size_sats,
                         push_amount_sats: push_amount_sats.unwrap_or(0),
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 println!("{funding_txid}");
             }
             Self::CloseChannelsWithPeer { pubkey, force } => {
-                let response = client
-                    .close_channels_with_peer(CloseChannelsWithPeerRequest { pubkey, force })
-                    .await?;
+                let response = close_channels_with_peer(
+                    client,
+                    CloseChannelsWithPeerRequest { pubkey, force },
+                )
+                .await?;
                 print_response(response);
             }
             Self::ListChannels => {
-                let response = client.list_channels().await?;
+                let response = list_channels(client).await?;
                 print_response(response);
             }
             Self::GetInvoice { payment_hash } => {
-                let response = client
-                    .get_invoice(GetInvoiceRequest { payment_hash })
-                    .await?;
+                let response = get_invoice(client, GetInvoiceRequest { payment_hash }).await?;
                 print_response(response);
             }
             Self::ListTransactions {
@@ -171,12 +178,14 @@ impl LightningCommands {
             } => {
                 let start_secs = start_time.timestamp().try_into()?;
                 let end_secs = end_time.timestamp().try_into()?;
-                let response = client
-                    .list_transactions(ListTransactionsPayload {
+                let response = list_transactions(
+                    client,
+                    ListTransactionsPayload {
                         start_secs,
                         end_secs,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 print_response(response);
             }
             Self::CreateOffer {
@@ -185,14 +194,16 @@ impl LightningCommands {
                 expiry_secs,
                 quantity,
             } => {
-                let response = client
-                    .create_offer(CreateOfferPayload {
+                let response = create_offer(
+                    client,
+                    CreateOfferPayload {
                         amount: amount_msat.map(Amount::from_msats),
                         description,
                         expiry_secs,
                         quantity,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 print_response(response);
             }
             Self::PayOffer {
@@ -201,14 +212,16 @@ impl LightningCommands {
                 quantity,
                 payer_note,
             } => {
-                let response = client
-                    .pay_offer(PayOfferPayload {
+                let response = pay_offer(
+                    client,
+                    PayOfferPayload {
                         offer,
                         amount: amount_msat.map(Amount::from_msats),
                         quantity,
                         payer_note,
-                    })
-                    .await?;
+                    },
+                )
+                .await?;
                 print_response(response);
             }
         }

@@ -60,6 +60,7 @@ use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_ln_common::client::{GatewayRpcClient, GatewayRpcError};
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
@@ -304,7 +305,7 @@ pub struct LightningClientInit {
 impl Default for LightningClientInit {
     fn default() -> Self {
         LightningClientInit {
-            gateway_conn: Arc::new(RealGatewayConnection::default()),
+            gateway_conn: Arc::new(RealGatewayConnection),
         }
     }
 }
@@ -2328,9 +2329,12 @@ impl fedimint_client_module::sm::Context for LightningClientContext {
 pub trait GatewayConnection: std::fmt::Debug {
     // Ping gateway endpoint to verify that it is available before locking funds in
     // OutgoingContract
-    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()>;
+    async fn verify_gateway_availability(
+        &self,
+        gateway: &LightningGateway,
+    ) -> Result<(), GatewayRpcError>;
 
-    // Send a POST request to the gateway to request it to pay a BOLT11 invoice.
+    // Request the gateway to pay a BOLT11 invoice
     async fn pay_invoice(
         &self,
         gateway: LightningGateway,
@@ -2339,36 +2343,25 @@ pub trait GatewayConnection: std::fmt::Debug {
 }
 
 #[derive(Debug, Default)]
-pub struct RealGatewayConnection {
-    client: reqwest::Client,
-}
+pub struct RealGatewayConnection;
 
 #[apply(async_trait_maybe_send!)]
 impl GatewayConnection for RealGatewayConnection {
-    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
-        let response = self
-            .client
-            .get(
-                gateway
-                    .api
-                    .join(GET_GATEWAY_ID_ENDPOINT)
-                    .expect("id contains no invalid characters for a URL")
-                    .as_str(),
-            )
-            .send()
+    async fn verify_gateway_availability(
+        &self,
+        gateway: &LightningGateway,
+    ) -> Result<(), GatewayRpcError> {
+        let api = gateway.api.clone();
+        let client = GatewayRpcClient::new(api, None, None, None)
             .await
-            .context("Gateway is not available")?;
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Gateway is not available. Returned error code: {}",
-                response.status()
-            ));
-        }
-
-        let text_gateway_id = response.text().await?;
-        let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
+            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
+        let text_gateway_id: String = client.call_get(GET_GATEWAY_ID_ENDPOINT).await?;
+        let gateway_id = PublicKey::from_str(&text_gateway_id)
+            .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?;
         if gateway_id != gateway.gateway_id {
-            return Err(anyhow!("Unexpected gateway id returned: {gateway_id}"));
+            return Err(GatewayRpcError::RequestError(format!(
+                "Unexpected gateway id returned {gateway_id}"
+            )));
         }
 
         Ok(())
@@ -2379,41 +2372,20 @@ impl GatewayConnection for RealGatewayConnection {
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
-        let response = self
-            .client
-            .post(
-                gateway
-                    .api
-                    .join(PAY_INVOICE_ENDPOINT)
-                    .expect("'pay_invoice' contains no invalid characters for a URL")
-                    .as_str(),
-            )
-            .json(&payload)
-            .send()
+        let api = gateway.api.clone();
+        let client = GatewayRpcClient::new(api, None, None, None)
             .await
             .map_err(|e| GatewayPayError::GatewayInternalError {
                 error_code: None,
                 error_message: e.to_string(),
             })?;
-
-        if !response.status().is_success() {
-            return Err(GatewayPayError::GatewayInternalError {
-                error_code: Some(response.status().as_u16()),
-                error_message: response
-                    .text()
-                    .await
-                    .expect("Could not retrieve text from response"),
-            });
-        }
-
-        let preimage =
-            response
-                .text()
-                .await
-                .map_err(|_| GatewayPayError::GatewayInternalError {
-                    error_code: None,
-                    error_message: "Error retrieving preimage from response".to_string(),
-                })?;
+        let preimage: String = client
+            .call_post(PAY_INVOICE_ENDPOINT, payload)
+            .await
+            .map_err(|e| GatewayPayError::GatewayInternalError {
+                error_code: None,
+                error_message: e.to_string(),
+            })?;
         let length = preimage.len();
         Ok(preimage[1..length - 1].to_string())
     }
@@ -2424,7 +2396,10 @@ pub struct MockGatewayConnection;
 
 #[apply(async_trait_maybe_send!)]
 impl GatewayConnection for MockGatewayConnection {
-    async fn verify_gateway_availability(&self, _gateway: &LightningGateway) -> anyhow::Result<()> {
+    async fn verify_gateway_availability(
+        &self,
+        _gateway: &LightningGateway,
+    ) -> Result<(), GatewayRpcError> {
         Ok(())
     }
 
