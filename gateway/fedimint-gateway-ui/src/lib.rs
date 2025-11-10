@@ -21,13 +21,21 @@ use fedimint_ui_common::{
 };
 use maud::html;
 
+use crate::lightning::channels_fragment_handler;
+
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
+
+pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/channels/fragment";
 
 #[async_trait]
 pub trait IAdminGateway {
     type Error;
 
     async fn handle_get_info(&self) -> Result<GatewayInfo, Self::Error>;
+
+    async fn handle_list_channels_msg(
+        &self,
+    ) -> Result<Vec<fedimint_gateway_common::ChannelInfo>, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -44,8 +52,8 @@ async fn login_submit<E>(
     jar: CookieJar,
     Form(input): Form<LoginInput>,
 ) -> impl IntoResponse {
-    if bcrypt::verify(input.password, &state.api.get_password_hash())
-        .expect("bcyrpt hash should be valid")
+    if let Ok(verify) = bcrypt::verify(input.password, &state.api.get_password_hash())
+        && verify
     {
         let mut cookie = Cookie::new(state.auth_cookie_name.clone(), state.auth_cookie_value);
         cookie.set_path(ROOT_ROUTE);
@@ -94,12 +102,14 @@ where
 
     let content = html! {
         div class="row gy-4" {
-            div class="col-md-6" {
+            div class="col-md-12" {
                 (general::render(&gateway_info))
             }
+        }
 
-            div class="col-md-6" {
-                (lightning::render(&gateway_info))
+        div class="row gy-4 mt-2" {
+            div class="col-md-12" {
+                (lightning::render(&gateway_info, &state.api).await)
             }
         }
 
@@ -116,6 +126,7 @@ pub fn router<E: Display + 'static>(api: DynGatewayApi<E>) -> Router {
     let app = Router::new()
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
+        .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))
