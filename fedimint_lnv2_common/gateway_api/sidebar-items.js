@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayConnectionError"],"struct":["CreateBolt11InvoicePayload","PaymentFee","RealGatewayConnection","RoutingInfo","SendPaymentPayload"],"trait":["GatewayConnection"]};
+window.SIDEBAR_ITEMS = {"struct":["CreateBolt11InvoicePayload","PaymentFee","RealGatewayConnection","RoutingInfo","SendPaymentPayload"],"trait":["GatewayConnection"]};
