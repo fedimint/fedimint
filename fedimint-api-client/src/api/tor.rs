@@ -12,8 +12,8 @@ use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::{ClientConfig as TlsClientConfig, RootCertStore};
 use tracing::debug;
 
-use super::{Connector, DynClientConnection};
-use crate::api::{IClientConnection as _, PeerError};
+use super::{Connector, DynGuaridianConnection};
+use crate::api::{IGuardianConnection as _, PeerError};
 
 #[derive(Clone)]
 pub struct TorConnector {
@@ -47,11 +47,11 @@ impl TorConnector {
 #[async_trait]
 impl Connector for TorConnector {
     #[allow(clippy::too_many_lines)]
-    async fn connect(
+    async fn connect_guardian(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> super::PeerResult<DynClientConnection> {
+    ) -> super::PeerResult<DynGuaridianConnection> {
         let addr = (
             url.host_str()
                 .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Expected host str")))?,

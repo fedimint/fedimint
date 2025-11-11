@@ -24,7 +24,7 @@ use serde_json::Value;
 use tracing::{debug, trace, warn};
 use url::Url;
 
-use super::{DynClientConnection, IClientConnection, PeerError, PeerResult};
+use super::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
 
 #[derive(Clone)]
 pub(crate) struct IrohConnector {
@@ -203,11 +203,11 @@ impl IrohConnector {
 
 #[async_trait::async_trait]
 impl crate::api::Connector for IrohConnector {
-    async fn connect(
+    async fn connect_guardian(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynClientConnection> {
+    ) -> PeerResult<DynGuaridianConnection> {
         if api_secret.is_some() {
             // There seem to be no way to pass secret over current Iroh calling
             // convention
@@ -220,7 +220,9 @@ impl crate::api::Connector for IrohConnector {
             url: url.to_owned(),
         })?;
         let mut futures = FuturesUnordered::<
-            Pin<Box<dyn Future<Output = (PeerResult<DynClientConnection>, &'static str)> + Send>>,
+            Pin<
+                Box<dyn Future<Output = (PeerResult<DynGuaridianConnection>, &'static str)> + Send>,
+            >,
         >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
 
@@ -232,7 +234,7 @@ impl crate::api::Connector for IrohConnector {
                     self_clone
                         .make_new_connection_stable(node_id, connection_override)
                         .await
-                        .map(super::IClientConnection::into_dyn),
+                        .map(super::IGuardianConnection::into_dyn),
                     "stable",
                 )
             }
@@ -246,7 +248,7 @@ impl crate::api::Connector for IrohConnector {
                     self_clone
                         .make_new_connection_next(&endpoint_next, node_id, connection_override)
                         .await
-                        .map(super::IClientConnection::into_dyn),
+                        .map(super::IGuardianConnection::into_dyn),
                     "next",
                 )
             }));
@@ -386,7 +388,7 @@ fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::NodeAddr {
     }
 }
 #[async_trait]
-impl IClientConnection for Connection {
+impl IGuardianConnection for Connection {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
@@ -424,7 +426,7 @@ impl IClientConnection for Connection {
 }
 
 #[async_trait]
-impl IClientConnection for iroh_next::endpoint::Connection {
+impl IGuardianConnection for iroh_next::endpoint::Connection {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
