@@ -103,7 +103,7 @@
 <a href=#103 id=103 data-nosnippet>103</a>        </span>);
 <a href=#104 id=104 data-nosnippet>104</a>        <span class="kw">let </span>start_time = fedimint_core::time::now();
 <a href=#105 id=105 data-nosnippet>105</a>
-<a href=#106 id=106 data-nosnippet>106</a>        <span class="macro">debug!</span>(<span class="string">"Starting dev federation"</span>);
+<a href=#106 id=106 data-nosnippet>106</a>        <span class="macro">debug!</span>(target: LOG_DEVIMINT, %fed_size, %offline_nodes, <span class="string">"Starting dev federation"</span>);
 <a href=#107 id=107 data-nosnippet>107</a>
 <a href=#108 id=108 data-nosnippet>108</a>        <span class="kw">let </span>bitcoind = JitTry::new_try({
 <a href=#109 id=109 data-nosnippet>109</a>            <span class="kw">let </span>process_mgr = process_mgr.to_owned();
