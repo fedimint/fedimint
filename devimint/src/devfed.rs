@@ -103,7 +103,7 @@ impl DevJitFed {
         );
         let start_time = fedimint_core::time::now();
 
-        debug!("Starting dev federation");
+        debug!(target: LOG_DEVIMINT, %fed_size, %offline_nodes, "Starting dev federation");
 
         let bitcoind = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();

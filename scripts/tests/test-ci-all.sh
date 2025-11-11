@@ -274,6 +274,11 @@ function always_success_test() {
 }
 export -f always_success_test
 
+function large_setup_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/large-setup-test.sh
+}
+export -f large_setup_test
+
 # allows versions to be passed in as either a single string or multiple params
 # e.g. `"v0.3.0 v0.4.0"` is the same as `v0.3.0 v0.4.0`
 if [ "$#" -eq 1 ]; then
@@ -357,6 +362,7 @@ tests_to_run_in_parallel+=(
   "wallet_recovery"
   "wallet_recovery_2"
   "recurringd_test"
+  "large_setup_test"
 )
 done
 
