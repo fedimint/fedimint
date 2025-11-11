@@ -21,7 +21,7 @@
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, JsonRpcClientError&gt;;
 <a href=#22 id=22 data-nosnippet>22</a>
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span><span class="kw">super</span>::Connector;
-<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span><span class="kw">crate</span>::api::{DynClientConnection, IClientConnection, PeerError, PeerResult};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span><span class="kw">crate</span>::api::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
 <a href=#25 id=25 data-nosnippet>25</a>
 <a href=#26 id=26 data-nosnippet>26</a><span class="attr">#[derive(Debug, Clone)]
 <a href=#27 id=27 data-nosnippet>27</a></span><span class="kw">pub struct </span>WebsocketConnector {}
@@ -116,18 +116,18 @@
 <a href=#116 id=116 data-nosnippet>116</a>
 <a href=#117 id=117 data-nosnippet>117</a><span class="attr">#[async_trait::async_trait]
 <a href=#118 id=118 data-nosnippet>118</a></span><span class="kw">impl </span>Connector <span class="kw">for </span>WebsocketConnector {
-<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">async fn </span>connect(
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">async fn </span>connect_guardian(
 <a href=#120 id=120 data-nosnippet>120</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#121 id=121 data-nosnippet>121</a>        url: <span class="kw-2">&amp;</span>SafeUrl,
 <a href=#122 id=122 data-nosnippet>122</a>        api_secret: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
-<a href=#123 id=123 data-nosnippet>123</a>    ) -&gt; PeerResult&lt;DynClientConnection&gt; {
+<a href=#123 id=123 data-nosnippet>123</a>    ) -&gt; PeerResult&lt;DynGuaridianConnection&gt; {
 <a href=#124 id=124 data-nosnippet>124</a>        <span class="kw">let </span>client = <span class="self">self</span>.make_new_connection(url, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#125 id=125 data-nosnippet>125</a>        <span class="prelude-val">Ok</span>(client.into_dyn())
 <a href=#126 id=126 data-nosnippet>126</a>    }
 <a href=#127 id=127 data-nosnippet>127</a>}
 <a href=#128 id=128 data-nosnippet>128</a>
 <a href=#129 id=129 data-nosnippet>129</a><span class="attr">#[async_trait]
-<a href=#130 id=130 data-nosnippet>130</a></span><span class="kw">impl </span>IClientConnection <span class="kw">for </span>WsClient {
+<a href=#130 id=130 data-nosnippet>130</a></span><span class="kw">impl </span>IGuardianConnection <span class="kw">for </span>WsClient {
 <a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: ApiMethod, request: ApiRequestErased) -&gt; PeerResult&lt;Value&gt; {
 <a href=#132 id=132 data-nosnippet>132</a>        <span class="kw">let </span>method = <span class="kw">match </span>method {
 <a href=#133 id=133 data-nosnippet>133</a>            ApiMethod::Core(method) =&gt; method,
@@ -149,7 +149,7 @@
 <a href=#149 id=149 data-nosnippet>149</a>}
 <a href=#150 id=150 data-nosnippet>150</a>
 <a href=#151 id=151 data-nosnippet>151</a><span class="attr">#[async_trait]
-<a href=#152 id=152 data-nosnippet>152</a></span><span class="kw">impl </span>IClientConnection <span class="kw">for </span>Arc&lt;WsClient&gt; {
+<a href=#152 id=152 data-nosnippet>152</a></span><span class="kw">impl </span>IGuardianConnection <span class="kw">for </span>Arc&lt;WsClient&gt; {
 <a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: ApiMethod, request: ApiRequestErased) -&gt; PeerResult&lt;Value&gt; {
 <a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">let </span>method = <span class="kw">match </span>method {
 <a href=#155 id=155 data-nosnippet>155</a>            ApiMethod::Core(method) =&gt; method,
