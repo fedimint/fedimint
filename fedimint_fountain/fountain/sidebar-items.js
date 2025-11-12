@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["checksum","choose_fragments","fragment_length","partition","xor"],"struct":["Decoder","Encoder","EncodingMetadata","Fragment"]};
