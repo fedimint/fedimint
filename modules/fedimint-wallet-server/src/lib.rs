@@ -13,6 +13,7 @@ pub mod db;
 pub mod envs;
 
 use std::clone::Clone;
+use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -457,8 +458,16 @@ impl ServerModule for Wallet {
         // the latest block count.
         match self.get_block_count() {
             Ok(block_count) => {
-                let block_count_vote =
+                let mut block_count_vote =
                     block_count.saturating_sub(self.cfg.consensus.finality_delay);
+
+                let current_consensus_block_count = self.consensus_block_count(dbtx).await;
+
+                // This will prevent that more then five blocks are synced in a single database
+                // transaction if the federation was offline for a prolonged period of time.
+                if current_consensus_block_count != 0 {
+                    block_count_vote = min(block_count_vote, current_consensus_block_count + 5);
+                }
 
                 let current_vote = dbtx
                     .get_value(&BlockCountVoteKey(self.our_peer_id))
@@ -470,6 +479,7 @@ impl ServerModule for Wallet {
                     ?current_vote,
                     ?block_count_vote,
                     ?block_count,
+                    ?current_consensus_block_count,
                     "Proposing block count"
                 );
 
