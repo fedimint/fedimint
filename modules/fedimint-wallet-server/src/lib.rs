@@ -1288,9 +1288,10 @@ impl Wallet {
     ) {
         info!(
             target: LOG_MODULE_WALLET,
+            old_count,
             new_count,
             blocks_to_go = new_count - old_count,
-            "New block count consensus, syncing up",
+            "New block count consensus, initiating sync",
         );
 
         // Before we can safely call our bitcoin backend to process the new consensus
@@ -1298,12 +1299,11 @@ impl Wallet {
         self.wait_for_finality_confs_or_shutdown(new_count).await;
 
         for height in old_count..new_count {
-            if height % 100 == 0 {
-                debug!(
-                    target: LOG_MODULE_WALLET,
-                    "Caught up to block {height}"
-                );
-            }
+            info!(
+                target: LOG_MODULE_WALLET,
+                height,
+                "Processing block of height {height}",
+            );
 
             // TODO: use batching for mainnet syncing
             trace!(block = height, "Fetching block hash");
@@ -1410,6 +1410,13 @@ impl Wallet {
                 &BlockHashByHeightValue(block_hash),
             )
             .await;
+
+            info!(
+                target: LOG_MODULE_WALLET,
+                height,
+                ?block_hash,
+                "Successfully processed block of height {height}",
+            );
         }
     }
 
