@@ -1723,6 +1723,36 @@ impl LightningClientModule {
         let receiving_key =
             ReceivingKey::Personal(Keypair::new(&self.secp, &mut rand::rngs::OsRng));
         self.create_bolt11_invoice_internal(
+            None,
+            amount,
+            description,
+            expiry_time,
+            receiving_key,
+            extra_meta,
+            gateway,
+        )
+        .await
+    }
+
+    /// Receive over LN with a new invoice for another user, tweaking their key
+    /// by the given index. This method takes a dbtx as argument so it can be
+    /// used atomically in a database transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_bolt11_invoice_for_user_tweaked_dbtx<M: Serialize + Send + Sync>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        amount: Amount,
+        description: lightning_invoice::Bolt11InvoiceDescription,
+        expiry_time: Option<u64>,
+        user_key: PublicKey,
+        index: u64,
+        extra_meta: M,
+        gateway: Option<LightningGateway>,
+    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+        let tweaked_key = tweak_user_key(&self.secp, user_key, index);
+        let receiving_key = ReceivingKey::External(tweaked_key);
+        self.create_bolt11_invoice_internal(
+            Some(dbtx),
             amount,
             description,
             expiry_time,
@@ -1747,18 +1777,18 @@ impl LightningClientModule {
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
         let tweaked_key = tweak_user_key(&self.secp, user_key, index);
-        self.create_bolt11_invoice_for_user(
+        self.create_bolt11_invoice_internal(
+            None,
             amount,
             description,
             expiry_time,
-            tweaked_key,
+            ReceivingKey::External(tweaked_key),
             extra_meta,
             gateway,
         )
         .await
     }
 
-    /// Receive over LN with a new invoice for another user
     pub async fn create_bolt11_invoice_for_user<M: Serialize + Send + Sync>(
         &self,
         amount: Amount,
@@ -1768,12 +1798,12 @@ impl LightningClientModule {
         extra_meta: M,
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
-        let receiving_key = ReceivingKey::External(user_key);
         self.create_bolt11_invoice_internal(
+            None,
             amount,
             description,
             expiry_time,
-            receiving_key,
+            ReceivingKey::External(user_key),
             extra_meta,
             gateway,
         )
@@ -1781,8 +1811,13 @@ impl LightningClientModule {
     }
 
     /// Receive over LN with a new invoice
+    #[allow(clippy::too_many_arguments)]
     async fn create_bolt11_invoice_internal<M: Serialize + Send + Sync>(
         &self,
+        // We don't have access to a global DB handle in the module scope, so we can't just make
+        // this fn always accept a dbtx and then have module-internal callers use autocommit.
+        // Hence, to reduce duplicate code, an optional dbtx is passed in.
+        maybe_dbtx: Option<&mut DatabaseTransaction<'_>>,
         amount: Amount,
         description: lightning_invoice::Bolt11InvoiceDescription,
         expiry_time: Option<u64>,
@@ -1834,28 +1869,28 @@ impl LightningClientModule {
                 extra_meta: extra_meta.clone(),
             }
         };
-        let change_range = self
-            .client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                LightningCommonInit::KIND.as_str(),
-                operation_meta_gen,
-                tx,
-            )
-            .await?;
+        let change_range = if let Some(dbtx) = maybe_dbtx {
+            self.client_ctx
+                .finalize_and_submit_transaction_dbtx(
+                    dbtx,
+                    operation_id,
+                    LightningCommonInit::KIND.as_str(),
+                    operation_meta_gen,
+                    tx,
+                )
+                .await?
+        } else {
+            self.client_ctx
+                .finalize_and_submit_transaction(
+                    operation_id,
+                    LightningCommonInit::KIND.as_str(),
+                    operation_meta_gen,
+                    tx,
+                )
+                .await?
+        };
 
         debug!(target: LOG_CLIENT_MODULE_LN, txid = ?change_range.txid(), ?operation_id, "Waiting for LN invoice to be confirmed");
-
-        // Wait for the transaction to be accepted by the federation, otherwise the
-        // invoice will not be able to be paid
-        self.client_ctx
-            .transaction_updates(operation_id)
-            .await
-            .await_tx_accepted(change_range.txid())
-            .await
-            .map_err(|e| anyhow!("Offer transaction was not accepted: {e:?}"))?;
-
-        debug!(target: LOG_CLIENT_MODULE_LN, %invoice, "Invoice confirmed");
 
         Ok((operation_id, invoice, preimage))
     }
