@@ -332,7 +332,12 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                 Some(P2PConnectionSMState::Connected(connection.ok()?))
             },
             message = connection.receive() => {
-                match message {
+                let mut message = match message {
+                    Ok(message) => message,
+                    Err(e) => return Some(self.disconnect(e)),
+                };
+
+                match message.read_to_end().await {
                     Ok(message) => {
                         PEER_MESSAGES_COUNT
                             .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "incoming"])
