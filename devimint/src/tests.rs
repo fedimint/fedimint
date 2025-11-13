@@ -1824,7 +1824,9 @@ async fn peer_block_count(client: &Client, peer: PeerId) -> Result<u64> {
         "api",
         "--peer-id",
         peer.to_string(),
-        "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count",
+        "--module",
+        LEGACY_HARDCODED_INSTANCE_ID_WALLET.to_string(),
+        "block_count",
     )
     .out_json()
     .await?["value"]
