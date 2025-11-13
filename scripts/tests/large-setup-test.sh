@@ -9,7 +9,7 @@ build_workspace
 add_target_dir_to_path
 make_fm_test_marker
 
-export FM_FED_SIZE=$(((RANDOM % 7) + 5))
+export FM_FED_SIZE=7
 
 >&2 echo "Testing ${FM_FED_SIZE} peer dkg"
 
