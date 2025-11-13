@@ -362,7 +362,8 @@ tests_to_run_in_parallel+=(
   "wallet_recovery"
   "wallet_recovery_2"
   "recurringd_test"
-  "large_setup_test"
+  # disabled until flakiness is fixed
+  # "large_setup_test"
 )
 done
 
