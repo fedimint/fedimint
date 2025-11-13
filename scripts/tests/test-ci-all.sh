@@ -12,6 +12,9 @@ if [ "$(ulimit -Sn)" -lt "10000" ]; then
   ulimit -Sn 10000
 fi
 
+>&2 echo "Iroh DHT is disabled"
+export FM_IROH_ENABLE_DHT=false
+
 # https://stackoverflow.com/a/72183258/134409
 # this hangs in CI (no tty?)
 # yes 'will cite' | parallel --citation 2>/dev/null 1>/dev/null || true
