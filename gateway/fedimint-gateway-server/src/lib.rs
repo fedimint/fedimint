@@ -1699,48 +1699,6 @@ impl Gateway {
         Ok(PaymentLogResponse(payment_log))
     }
 
-    /// Computes the 24 hour payment summary statistics for this gateway.
-    /// Combines the LNv1 and LNv2 stats together.
-    pub async fn handle_payment_summary_msg(
-        &self,
-        PaymentSummaryPayload {
-            start_millis,
-            end_millis,
-        }: PaymentSummaryPayload,
-    ) -> AdminResult<PaymentSummaryResponse> {
-        let federation_manager = self.federation_manager.read().await;
-        let fed_configs = federation_manager.get_all_federation_configs().await;
-        let federation_ids = fed_configs.keys().collect::<Vec<_>>();
-        let start = UNIX_EPOCH + Duration::from_millis(start_millis);
-        let end = UNIX_EPOCH + Duration::from_millis(end_millis);
-
-        if start > end {
-            return Err(AdminGatewayError::Unexpected(anyhow!("Invalid time range")));
-        }
-
-        let mut outgoing = StructuredPaymentEvents::default();
-        let mut incoming = StructuredPaymentEvents::default();
-        for fed_id in federation_ids {
-            let client = federation_manager
-                .client(fed_id)
-                .expect("No client available")
-                .value();
-            let all_events = &get_events_for_duration(client, start, end).await;
-
-            let (mut lnv1_outgoing, mut lnv1_incoming) = compute_lnv1_stats(all_events);
-            let (mut lnv2_outgoing, mut lnv2_incoming) = compute_lnv2_stats(all_events);
-            outgoing.combine(&mut lnv1_outgoing);
-            incoming.combine(&mut lnv1_incoming);
-            outgoing.combine(&mut lnv2_outgoing);
-            incoming.combine(&mut lnv2_incoming);
-        }
-
-        Ok(PaymentSummaryResponse {
-            outgoing: PaymentStats::compute(&outgoing),
-            incoming: PaymentStats::compute(&incoming),
-        })
-    }
-
     /// Retrieves an invoice by the payment hash if it exists, otherwise returns
     /// `None`.
     pub async fn handle_get_invoice_msg(
@@ -2169,6 +2127,48 @@ impl IAdminGateway for Gateway {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.list_channels().await?;
         Ok(response.channels)
+    }
+
+    /// Computes the 24 hour payment summary statistics for this gateway.
+    /// Combines the LNv1 and LNv2 stats together.
+    async fn handle_payment_summary_msg(
+        &self,
+        PaymentSummaryPayload {
+            start_millis,
+            end_millis,
+        }: PaymentSummaryPayload,
+    ) -> AdminResult<PaymentSummaryResponse> {
+        let federation_manager = self.federation_manager.read().await;
+        let fed_configs = federation_manager.get_all_federation_configs().await;
+        let federation_ids = fed_configs.keys().collect::<Vec<_>>();
+        let start = UNIX_EPOCH + Duration::from_millis(start_millis);
+        let end = UNIX_EPOCH + Duration::from_millis(end_millis);
+
+        if start > end {
+            return Err(AdminGatewayError::Unexpected(anyhow!("Invalid time range")));
+        }
+
+        let mut outgoing = StructuredPaymentEvents::default();
+        let mut incoming = StructuredPaymentEvents::default();
+        for fed_id in federation_ids {
+            let client = federation_manager
+                .client(fed_id)
+                .expect("No client available")
+                .value();
+            let all_events = &get_events_for_duration(client, start, end).await;
+
+            let (mut lnv1_outgoing, mut lnv1_incoming) = compute_lnv1_stats(all_events);
+            let (mut lnv2_outgoing, mut lnv2_incoming) = compute_lnv2_stats(all_events);
+            outgoing.combine(&mut lnv1_outgoing);
+            incoming.combine(&mut lnv1_incoming);
+            outgoing.combine(&mut lnv2_outgoing);
+            incoming.combine(&mut lnv2_incoming);
+        }
+
+        Ok(PaymentSummaryResponse {
+            outgoing: PaymentStats::compute(&outgoing),
+            incoming: PaymentStats::compute(&incoming),
+        })
     }
 
     fn get_password_hash(&self) -> String {
