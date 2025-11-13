@@ -13,7 +13,7 @@ export FM_FED_SIZE=7
 
 >&2 echo "Testing ${FM_FED_SIZE} peer dkg"
 
-env
+env \
   RUST_LOG="${RUST_LOG:-info,jsonrpsee-client=off}" \
   FM_EXTRA_LONG_POLL=true \
   devimint "$@" dev-fed \
