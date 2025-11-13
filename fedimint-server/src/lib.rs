@@ -26,6 +26,7 @@ pub mod db;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::Context;
 use config::ServerConfig;
@@ -37,7 +38,7 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::net::peers::DynP2PConnections;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::write_new;
 use fedimint_logging::LOG_CONSENSUS;
 pub use fedimint_server_core as core;
@@ -296,6 +297,9 @@ pub async fn run_config_gen(
         .recv()
         .await
         .expect("Config gen params receiver closed unexpectedly");
+
+    // prevent failure of start dkg command in CI
+    sleep(Duration::from_millis(10)).await;
 
     api_handler
         .stop()
