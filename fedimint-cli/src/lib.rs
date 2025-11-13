@@ -438,7 +438,7 @@ enum AdminCmd {
     },
     /// Show statistics about client backups stored by the federation
     BackupStatistics,
-    /// Change guardian password, will shut down fedimintd and requrie manual
+    /// Change guardian password, will shut down fedimintd and require manual
     /// restart
     ChangePassword {
         /// New password to set

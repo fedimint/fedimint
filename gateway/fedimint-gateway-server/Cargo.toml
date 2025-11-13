@@ -10,9 +10,9 @@ version = { workspace = true }
 
 [features]
 tor = [
-  "fedimint-client/tor",
-  "fedimint-api-client/tor",
-  "fedimint-gateway-common/tor",
+    "fedimint-client/tor",
+    "fedimint-api-client/tor",
+    "fedimint-gateway-common/tor",
 ]
 
 [[bin]]
@@ -65,10 +65,10 @@ futures = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
 iroh = { workspace = true, features = [
-  "discovery-pkarr-dht",
+    "discovery-pkarr-dht",
 ], default-features = false }
 iroh-base = { workspace = true, default-features = false, features = [
-  "ticket",
+    "ticket",
 ] }
 iroh-relay = { workspace = true, default-features = false }
 lightning-invoice = { workspace = true }
@@ -89,6 +89,9 @@ tower-http = { workspace = true, features = ["cors", "auth"] }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true, features = ["serde"] }
 
+[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
+tikv-jemallocator = { workspace = true }
+
 [dev-dependencies]
 assert_matches = { workspace = true }
 fedimint-dummy-client = { workspace = true }
@@ -107,6 +110,3 @@ fedimint-build = { workspace = true }
 
 [lints]
 workspace = true
-
-[target.'cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))'.dependencies]
-tikv-jemallocator = { workspace = true }

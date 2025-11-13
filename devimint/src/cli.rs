@@ -420,7 +420,7 @@ fn devimint_static_data_dir() -> ffi::OsString {
     // If set, use the runtime, otherwise the compile time value
     env::var_os(FM_DEVIMINT_STATIC_DATA_DIR_ENV).unwrap_or(
         env!(
-            // Note: consant expression, not allowed, so we can't use the constant :/
+            // Note: constant expression, not allowed, so we can't use the constant :/
             "FM_DEVIMINT_STATIC_DATA_DIR"
         )
         .into(),

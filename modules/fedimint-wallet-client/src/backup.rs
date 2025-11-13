@@ -309,7 +309,7 @@ impl RecoveryFromHistory for WalletRecovery {
             = recover_scan_idxes_for_activity(
                 if self.state.already_claimed_tweak_idxes_from_backup.is_some() {
                     // If the backup contains list of already claimed tweak_indices, we can just scan
-                    // the blockchain addresses starting from tweakidx `0`, without loosing too much privacy,
+                    // the blockchain addresses starting from tweakidx `0`, without losing too much privacy,
                     // as we will skip all the idxes that had peg-ins already
                     TweakIdx(0)
                 } else {

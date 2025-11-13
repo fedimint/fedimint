@@ -2192,7 +2192,7 @@ macro_rules! push_db_key_items {
 /// Typically should not be referred to directly, and instead by a type-alias,
 /// where the inner-context is set.
 ///
-/// Notably it has the (optional) module id (innacessible to the modules
+/// Notably it has the (optional) module id (inaccessible to the modules
 /// directly, but used internally) and an inner context `C` injected by the
 /// outer-layer.
 ///

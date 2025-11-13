@@ -15,6 +15,9 @@ bck = "bck"
 # metric id that typos doesn't like
 "Fo" = "Fo"
 
+# some crypt term :D
+tpe = "tpe"
+
 [files]
 extend-exclude = [
   "db/**",

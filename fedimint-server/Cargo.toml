@@ -40,10 +40,10 @@ group = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
 iroh = { workspace = true, features = [
-  "discovery-pkarr-dht",
+    "discovery-pkarr-dht",
 ], default-features = false }
 iroh-base = { workspace = true, default-features = false, features = [
-  "ticket",
+    "ticket",
 ] }
 iroh-relay = { workspace = true, default-features = false }
 itertools = { workspace = true }

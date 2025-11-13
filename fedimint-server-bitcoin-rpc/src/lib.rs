@@ -30,7 +30,7 @@ impl BitcoindClientWithFallback {
             target: LOG_SERVER,
             %bitcoind_url,
             %esplora_url,
-            "Initiallizing bitcoin bitcoind backend with esplora fallback"
+            "Initializing bitcoin bitcoind backend with esplora fallback"
         );
         let bitcoind_client = BitcoindClient::new(username, password, bitcoind_url)?;
         let esplora_client = EsploraClient::new(esplora_url)?;

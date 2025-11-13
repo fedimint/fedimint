@@ -35,7 +35,7 @@ impl EsploraClient {
         info!(
             target: LOG_SERVER,
             %url,
-            "Initiallizing bitcoin esplora backend"
+            "Initializing bitcoin esplora backend"
         );
         // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');

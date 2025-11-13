@@ -245,8 +245,6 @@ let
       ]
       ++ lib.optionals stdenv.isDarwin [
         libiconv
-        darwin.apple_sdk.frameworks.Security
-        darwin.apple_sdk.frameworks.SystemConfiguration
       ];
 
     CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS = "--cfg getrandom_backend=\"wasm_js\"";
@@ -262,7 +260,7 @@ let
         rust-bindgen
 
         # tests
-        (hiPrio pkgs.bashInteractive)
+        (lib.hiPrio pkgs.bashInteractive)
         bc
         bitcoind
         jq

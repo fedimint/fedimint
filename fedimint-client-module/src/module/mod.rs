@@ -949,7 +949,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// to complete.
     ///
     /// This function should return an error if it's not currently possible
-    /// to safely (e.g. without loosing funds) leave the Federation.
+    /// to safely (e.g. without losing funds) leave the Federation.
     /// It should avoid running indefinitely trying to complete any cleanup
     /// actions necessary to reach a clean state, preferring spawning new
     /// state machines and returning an informative error about cleanup

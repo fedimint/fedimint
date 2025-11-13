@@ -67,13 +67,6 @@ tracing = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 z32 = { workspace = true }
 
-[dev-dependencies]
-test-log = { workspace = true }
-tokio-test = { workspace = true }
-
-[lints]
-workspace = true
-
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 aws-lc-sys = { version = "0.30", features = ["bindgen"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
@@ -82,13 +75,20 @@ tokio-rustls = { workspace = true }
 [target.'cfg(target_family = "wasm")'.dependencies]
 async-lock = { workspace = true }
 futures-util = { workspace = true }
-tokio = { workspace = true, features = ["io-util"] }
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { workspace = true, features = ["wasm_js"] }
 gloo-timers = { workspace = true, features = ["futures"] }
 js-sys = { workspace = true }
-wasm-bindgen-futures = { workspace = true }
 # enable lowmemory for better bundle size
 secp256k1 = { workspace = true, features = ["lowmemory"] }
+tokio = { workspace = true, features = ["io-util"] }
+wasm-bindgen-futures = { workspace = true }
+
+[dev-dependencies]
+test-log = { workspace = true }
+tokio-test = { workspace = true }
+
+[lints]
+workspace = true

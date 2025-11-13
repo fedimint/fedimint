@@ -16,7 +16,7 @@ pub const FM_BIND_UI_ENV: &str = "FM_BIND_UI";
 
 pub const FM_BITCOIN_NETWORK_ENV: &str = "FM_BITCOIN_NETWORK";
 
-pub const FM_BIND_METRCIS_ENV: &str = "FM_BIND_METRICS";
+pub const FM_BIND_METRICS_ENV: &str = "FM_BIND_METRICS";
 
 pub const FM_PORT_ESPLORA_ENV: &str = "FM_PORT_ESPLORA";
 

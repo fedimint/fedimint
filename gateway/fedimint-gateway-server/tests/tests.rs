@@ -969,7 +969,7 @@ async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, m
     let client = gateway
         .select_client(federation_id)
         .await
-        .expect("Failed to selcet gateway client")
+        .expect("Failed to select gateway client")
         .into_value();
 
     let (op, outpoints) = client

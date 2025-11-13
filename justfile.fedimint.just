@@ -281,16 +281,17 @@ publish-release:
   CARGO_PROFILE_DEV_OPT_LEVEL=2 cargo workspaces publish --from-git --allow-dirty
 
 cargo_sort_defaults := "-w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies"
+taplo_opts := "-o indent_string=\"    \""
 
 # Fix sort order in `Cargo.toml` files
 cargo-sort-fix *ARGS="":
   cargo sort {{cargo_sort_defaults}} {{ARGS}}
-  shopt -s globstar && taplo fmt -- **/Cargo.toml
+  shopt -s globstar && RUST_LOG=taplo=warn taplo fmt {{taplo_opts}} -- **/Cargo.toml
 
 # Check sort order in `Cargo.toml` files
 cargo-sort-check *ARGS="":
   cargo sort {{cargo_sort_defaults}} --check {{ARGS}}
-  shopt -s globstar && taplo fmt -- --check **/Cargo.toml
+  shopt -s globstar && RUST_LOG=taplo=warn taplo fmt {{taplo_opts}} --check -- **/Cargo.toml
 
 # deploy our docker-compose deployment to HOST
 deploy-docker-demo HOST:

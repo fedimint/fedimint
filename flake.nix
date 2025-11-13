@@ -1,7 +1,8 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-25.05";
+      # TODO: nixos-25.11, which should be soon(TM)
+      url = "github:nixos/nixpkgs/nixos-unstable";
     };
     nixpkgs-unstable = {
       url = "github:nixos/nixpkgs/nixos-unstable";
@@ -12,9 +13,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flakebox = {
-      url = "github:dpc/flakebox?rev=2f15f65d60c198fe49d849d68c2a2c95dc771ae5";
+      url = "github:dpc/flakebox?rev=9a22c690bc3c15291c3c70f662c855b5bdaffc0e";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.fenix.follows = "fenix";
+    };
+    wild = {
+      url = "github:davidlattimore/wild";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     cargo-deluxe = {
       url = "github:rustshop/cargo-deluxe?rev=4acc6488d02f032434a5a1341f21f20d328bba40";
@@ -40,7 +45,7 @@
       advisory-db,
       bundlers,
       ...
-    }:
+    }@inputs:
     let
       # overlay combining all overlays we use
       overlayAll = nixpkgs.lib.composeManyExtensions [
@@ -73,11 +78,11 @@
     // flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
         pkgs = import nixpkgs {
           inherit system;
           overlays = [
             overlayAll
+            (import inputs.wild)
 
             (final: prev: {
               cargo-deluxe = cargo-deluxe.packages.${system}.default;
@@ -90,13 +95,14 @@
 
         stdenv = pkgs.stdenv;
 
-        flakeboxLib = flakebox.lib.${system} {
+        flakeboxLib = flakebox.lib.mkLib pkgs {
           # customizations will go here in the future
           config = {
             direnv.enable = false;
             github.ci = {
               workflows.flakebox-flakehub-publish.enable = false;
             };
+            linker.wild.enable = false;
 
             toolchain.components = [
               "rustc"
@@ -144,13 +150,13 @@
 
         toolchainArgs = lib.optionalAttrs stdenv.isLinux {
           # TODO: we seem to be hitting some miscompilation(?) with
-          # the new (as of nixos-24.11 default: clang 18), which causes
-          # fedimint-cli segfault randomly, but only in Nix sandbox.
+          # the newer (clang 18, clang 19) toolchains, which causes
+          # fedimint-cli segfault randomly, but only in Nix sandbox (?!).
           # Supper weird.
-          stdenv = pkgs.clang14Stdenv;
-          clang = pkgs.llvmPackages_14.clang;
-          libclang = pkgs.llvmPackages_14.libclang.lib;
-          clang-unwrapped = pkgs.llvmPackages_14.clang-unwrapped;
+          stdenv = p: p.clang_20.stdenv;
+          clang = pkgs.llvmPackages_20.clang;
+          libclang = pkgs.llvmPackages_20.libclang.lib;
+          clang-unwrapped = pkgs.llvmPackages_20.clang-unwrapped;
         };
 
         stdTargets = flakeboxLib.mkStdTargets { };
@@ -310,7 +316,7 @@
 
                     # This is required to prevent a mangled bash shell in nix develop
                     # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
-                    (pkgs.hiPrio pkgs.bashInteractive)
+                    (pkgs.lib.hiPrio pkgs.bashInteractive)
                     pkgs.mprocs
                     pkgs.docker-compose
                     pkgs.tokio-console
@@ -380,14 +386,24 @@
                   commonShellArgs.nativeBuildInputs
                   ++ [
                     cargo-hongfuzz
-                    libbfd_2_38
-                    libunwind.dev
-                    libopcodes_2_38
-                    pkgsStatic.libblocksruntime
                     lldb
                     clang
                   ];
 
+                buildInputs =
+                  with pkgs;
+                  commonShellArgs.buildInputs
+                  ++ [
+                    libbfd_2_38
+                    libunwind.dev
+                    libopcodes_2_38
+                    pkgsStatic.libblocksruntime
+                  ];
+
+                shellHook = ''
+                  export UNSCREW_WERROR_ORIG=$(which clang)
+                  export PATH="$(pwd)/scripts/dev/unscrew-werror/:$PATH"
+                '';
               }
             );
 

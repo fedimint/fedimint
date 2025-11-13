@@ -264,14 +264,14 @@ pub struct LightningOperationMeta {
     pub extra_meta: serde_json::Value,
 }
 
-pub use depreacated_variant_hack::LightningOperationMetaVariant;
+pub use deprecated_variant_hack::LightningOperationMetaVariant;
 
 /// This is a hack to allow us to use the deprecated variant in the database
 /// without the serde derived implementation throwing warnings.
 ///
 /// See <https://github.com/serde-rs/serde/issues/2195>
 #[allow(deprecated)]
-mod depreacated_variant_hack {
+mod deprecated_variant_hack {
     use super::{
         Bolt11Invoice, Deserialize, LightningOperationMetaPay, OutPoint, Serialize, secp256k1,
     };

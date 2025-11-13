@@ -74,7 +74,7 @@ static UNORDEREDED_EVENT_LOG_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// The goal here is to avoid concurrent database transaction
 /// conflicts due the ID allocation. Instead they are picked based on
 /// a time and a counter, so they are mostly but not strictly ordered and
-/// monotonic, and even more imporantly: not contiguous.
+/// monotonic, and even more importantly: not contiguous.
 #[derive(Debug, Encodable, Decodable)]
 pub struct UnordedEventLogId {
     ts_usecs: u64,
