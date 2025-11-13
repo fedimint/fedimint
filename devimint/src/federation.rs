@@ -1154,83 +1154,56 @@ pub async fn run_cli_dkg_v2(
 ) -> Result<()> {
     let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].api_auth };
 
-    // Parallelize setup status checks
-    let status_futures = endpoints.iter().map(|(peer, endpoint)| {
-        let peer = *peer;
-        let endpoint = endpoint.clone();
-        async move {
-            let status = poll("awaiting-setup-status-awaiting-local-params", || async {
-                crate::util::FedimintCli
-                    .setup_status(auth_for(&peer), &endpoint)
-                    .await
-                    .map_err(ControlFlow::Continue)
-            })
-            .await
-            .unwrap();
+    for (peer, endpoint) in &endpoints {
+        let status = poll("awaiting-setup-status-awaiting-local-params", || async {
+            crate::util::FedimintCli
+                .setup_status(auth_for(peer), endpoint)
+                .await
+                .map_err(ControlFlow::Continue)
+        })
+        .await
+        .unwrap();
 
-            assert_eq!(status, SetupStatus::AwaitingLocalParams);
-        }
-    });
-    join_all(status_futures).await;
+        assert_eq!(status, SetupStatus::AwaitingLocalParams);
+    }
 
     debug!(target: LOG_DEVIMINT, "Setting local parameters...");
 
-    // Parallelize setting local parameters
-    let local_params_futures = endpoints.iter().map(|(peer, endpoint)| {
-        let peer = *peer;
-        let endpoint = endpoint.clone();
-        async move {
-            let info = if peer.to_usize() == 0 {
-                crate::util::FedimintCli
-                    .set_local_params_leader(&peer, auth_for(&peer), &endpoint)
-                    .await
-            } else {
-                crate::util::FedimintCli
-                    .set_local_params_follower(&peer, auth_for(&peer), &endpoint)
-                    .await
-            };
-            info.map(|i| (peer, i))
-        }
-    });
-    let connection_info: BTreeMap<_, _> = try_join_all(local_params_futures)
-        .await?
-        .into_iter()
-        .collect();
+    let mut connection_info = BTreeMap::new();
+
+    for (peer, endpoint) in &endpoints {
+        let info = if peer.to_usize() == 0 {
+            crate::util::FedimintCli
+                .set_local_params_leader(peer, auth_for(peer), endpoint)
+                .await?
+        } else {
+            crate::util::FedimintCli
+                .set_local_params_follower(peer, auth_for(peer), endpoint)
+                .await?
+        };
+
+        connection_info.insert(peer, info);
+    }
 
     debug!(target: LOG_DEVIMINT, "Exchanging peer connection info...");
 
-    // Parallelize peer addition - flatten the nested loop into a single parallel
-    // operation
-    let add_peer_futures = connection_info.iter().flat_map(|(peer, info)| {
-        endpoints
-            .iter()
-            .filter(move |(p, _)| *p != peer)
-            .map(move |(p, endpoint)| {
-                let p = *p;
-                let endpoint = endpoint.clone();
-                let info = info.clone();
-                async move {
-                    crate::util::FedimintCli
-                        .add_peer(&info, auth_for(&p), &endpoint)
-                        .await
-                }
-            })
-    });
-    try_join_all(add_peer_futures).await?;
+    for (peer, info) in connection_info {
+        for (p, endpoint) in &endpoints {
+            if p != peer {
+                crate::util::FedimintCli
+                    .add_peer(&info, auth_for(p), endpoint)
+                    .await?;
+            }
+        }
+    }
 
     debug!(target: LOG_DEVIMINT, "Starting DKG...");
 
-    // Parallelize DKG start
-    let start_dkg_futures = endpoints.iter().map(|(peer, endpoint)| {
-        let peer = *peer;
-        let endpoint = endpoint.clone();
-        async move {
-            crate::util::FedimintCli
-                .start_dkg(auth_for(&peer), &endpoint)
-                .await
-        }
-    });
-    try_join_all(start_dkg_futures).await?;
+    for (peer, endpoint) in &endpoints {
+        crate::util::FedimintCli
+            .start_dkg(auth_for(peer), endpoint)
+            .await?;
+    }
 
     Ok(())
 }
