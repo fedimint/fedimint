@@ -528,6 +528,7 @@ where
 }
 
 const DEFAULT_POLL_TIMEOUT: Duration = Duration::from_secs(60);
+const EXTRA_LONG_POLL_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Retry until `f` succeeds or default timeout is reached
 ///
@@ -539,7 +540,16 @@ pub async fn poll<Fut, R>(name: &str, f: impl Fn() -> Fut) -> Result<R>
 where
     Fut: Future<Output = Result<R, ControlFlow<anyhow::Error, anyhow::Error>>>,
 {
-    poll_with_timeout(name, DEFAULT_POLL_TIMEOUT, f).await
+    poll_with_timeout(
+        name,
+        if is_env_var_set("FM_EXTRA_LONG_POLL") {
+            EXTRA_LONG_POLL_TIMEOUT
+        } else {
+            DEFAULT_POLL_TIMEOUT
+        },
+        f,
+    )
+    .await
 }
 
 pub async fn poll_simple<Fut, R>(name: &str, f: impl Fn() -> Fut) -> Result<R>
