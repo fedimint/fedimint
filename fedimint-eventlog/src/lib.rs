@@ -17,11 +17,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, DatabaseKey, DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    NonCommittable,
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
@@ -49,6 +47,30 @@ const TRIMABLE_EVENTLOG_MIN_TS_AGE: u64 = 14 * 24 * 60 * 60 * 1_000_000;
 /// Maximum number of entries to trim in one operation
 const TRIMABLE_EVENTLOG_MAX_TRIMMED_EVENTS: usize = 100_000;
 
+/// Type of persistence the [`Event`] uses.
+///
+/// As a compromise between richness of events and amount of data to store
+/// Fedimint maintains two event logs in parallel:
+///
+/// * untrimable
+/// * trimable
+///
+/// Untrimable log will append only a subset of events that are infrequent,
+/// but important enough to be forever useful, e.g. for processing or debugging
+/// of historical events.
+///
+/// Trimable log will append all persistent events, but will over time remove
+/// the oldest ones. It will always retain enough events, that no log follower
+/// actively processing it should ever miss any event, but restarting processing
+/// from the start (index 0) can't be used for processing historical data.
+///
+/// Notably the positions in both logs are not interchangeable, so they use
+/// different types.
+///
+/// On top of it, some events are transient and are not persisted at all,
+/// and emitted only at runtime.
+///
+/// Consult [`Event::PERSISTENCE`] to know which event uses which persistence.
 pub enum EventPersistence {
     /// Not written anywhere, just broadcasted as notification at runtime
     Transient,
@@ -596,23 +618,67 @@ pub async fn run_event_log_ordering_task(
     debug!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task finished");
 }
 
-pub async fn handle_events<F, R, K>(
+/// Persistent tracker of a position in the event log
+///
+/// During processing of event log the downstream consumer needs to
+/// keep track of which event were processed already. It needs to do it
+/// atomically and persist it so event in the presence of crashes no
+/// event is ever missed or processed twice.
+///
+/// This trait allows abstracting away where and how is such position stored,
+/// e.g. which key exactly is used, in what prefixed namespace etc.
+///
+/// ## Trimmable vs Non-Trimable log
+///
+/// See [`EventPersistence`]
+#[apply(async_trait_maybe_send!)]
+pub trait EventLogNonTrimableTracker {
+    // Store position in the event log
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogId,
+    ) -> anyhow::Result<()>;
+
+    /// Load the last previous stored position (or None if never stored)
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> anyhow::Result<Option<EventLogId>>;
+}
+pub type DynEventLogTracker = Box<dyn EventLogNonTrimableTracker>;
+
+/// Like [`EventLogNonTrimableTracker`] but for trimable event log
+#[apply(async_trait_maybe_send!)]
+pub trait EventLogTrimableTracker {
+    // Store position in the event log
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogTrimableId,
+    ) -> anyhow::Result<()>;
+
+    /// Load the last previous stored position (or None if never stored)
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> anyhow::Result<Option<EventLogTrimableId>>;
+}
+pub type DynEventLogTrimableTracker = Box<dyn EventLogTrimableTracker>;
+
+pub async fn handle_events<F, R>(
     db: Database,
-    pos_key: &K,
+    mut tracker: DynEventLogTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-    K: DatabaseRecord<Value = EventLogId>,
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
-    let mut next_key: EventLogId = db
-        .begin_transaction_nc()
-        .await
-        .get_value(pos_key)
-        .await
+    let mut next_key: EventLogId = tracker
+        .load(&mut db.begin_transaction_nc().await)
+        .await?
         .unwrap_or_default();
 
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
@@ -625,7 +691,8 @@ where
                 (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
 
                 next_key = next_key.next();
-                dbtx.insert_entry(pos_key, &next_key).await;
+
+                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
 
                 dbtx.commit_tx().await;
             }
@@ -638,25 +705,20 @@ where
     }
 }
 
-pub async fn handle_trimable_events<F, R, K>(
+pub async fn handle_trimable_events<F, R>(
     db: Database,
-    pos_key: &K,
+    mut tracker: DynEventLogTrimableTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-    K: DatabaseRecord<Value = EventLogTrimableId>,
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
-    let mut next_key: EventLogTrimableId = db
-        .begin_transaction_nc()
-        .await
-        .get_value(pos_key)
-        .await
+    let mut next_key: EventLogTrimableId = tracker
+        .load(&mut db.begin_transaction_nc().await)
+        .await?
         .unwrap_or_default();
-
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling trimable events");
 
     loop {
@@ -667,7 +729,7 @@ where
                 (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
 
                 next_key = next_key.next();
-                dbtx.insert_entry(pos_key, &next_key).await;
+                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
 
                 dbtx.commit_tx().await;
             }

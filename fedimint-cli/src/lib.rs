@@ -645,6 +645,9 @@ Examples:
         #[arg(long, default_value = "10")]
         limit: u64,
     },
+    /// Test the built-in event handling and tracking by printing events to
+    /// console
+    TestEventLogHandling,
     /// Manually submit a fedimint transaction to guardians
     ///
     /// This can be useful to check why a transaction may have been rejected
@@ -1383,6 +1386,26 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     serde_json::to_value(tx_outcome.0.map_err_cli()?).expect("Can be encoded"),
                 ))
+            }
+            Command::Dev(DevCmd::TestEventLogHandling) => {
+                let client = self.client_open(&cli).await?;
+
+                client
+                    .handle_events(
+                        client.built_in_application_event_log_tracker(),
+                        move |_dbtx, event| {
+                            Box::pin(async move {
+                                info!(target: LOG_CLIENT, "{event:?}");
+
+                                Ok(())
+                            })
+                        },
+                    )
+                    .await
+                    .map_err_cli()?;
+                unreachable!(
+                    "handle_events exits only if client shuts down, which we don't do here"
+                )
             }
             Command::Completion { shell } => {
                 let bin_path = PathBuf::from(
