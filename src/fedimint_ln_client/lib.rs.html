@@ -264,14 +264,14 @@
 <a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">pub </span>extra_meta: serde_json::Value,
 <a href=#265 id=265 data-nosnippet>265</a>}
 <a href=#266 id=266 data-nosnippet>266</a>
-<a href=#267 id=267 data-nosnippet>267</a><span class="kw">pub use </span>depreacated_variant_hack::LightningOperationMetaVariant;
+<a href=#267 id=267 data-nosnippet>267</a><span class="kw">pub use </span>deprecated_variant_hack::LightningOperationMetaVariant;
 <a href=#268 id=268 data-nosnippet>268</a>
 <a href=#269 id=269 data-nosnippet>269</a><span class="doccomment">/// This is a hack to allow us to use the deprecated variant in the database
 <a href=#270 id=270 data-nosnippet>270</a>/// without the serde derived implementation throwing warnings.
 <a href=#271 id=271 data-nosnippet>271</a>///
 <a href=#272 id=272 data-nosnippet>272</a>/// See &lt;https://github.com/serde-rs/serde/issues/2195&gt;
 <a href=#273 id=273 data-nosnippet>273</a></span><span class="attr">#[allow(deprecated)]
-<a href=#274 id=274 data-nosnippet>274</a></span><span class="kw">mod </span>depreacated_variant_hack {
+<a href=#274 id=274 data-nosnippet>274</a></span><span class="kw">mod </span>deprecated_variant_hack {
 <a href=#275 id=275 data-nosnippet>275</a>    <span class="kw">use super</span>::{
 <a href=#276 id=276 data-nosnippet>276</a>        Bolt11Invoice, Deserialize, LightningOperationMetaPay, OutPoint, Serialize, secp256k1,
 <a href=#277 id=277 data-nosnippet>277</a>    };

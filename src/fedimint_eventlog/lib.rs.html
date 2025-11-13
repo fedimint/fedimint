@@ -74,7 +74,7 @@
 <a href=#74 id=74 data-nosnippet>74</a>/// The goal here is to avoid concurrent database transaction
 <a href=#75 id=75 data-nosnippet>75</a>/// conflicts due the ID allocation. Instead they are picked based on
 <a href=#76 id=76 data-nosnippet>76</a>/// a time and a counter, so they are mostly but not strictly ordered and
-<a href=#77 id=77 data-nosnippet>77</a>/// monotonic, and even more imporantly: not contiguous.
+<a href=#77 id=77 data-nosnippet>77</a>/// monotonic, and even more importantly: not contiguous.
 <a href=#78 id=78 data-nosnippet>78</a></span><span class="attr">#[derive(Debug, Encodable, Decodable)]
 <a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub struct </span>UnordedEventLogId {
 <a href=#80 id=80 data-nosnippet>80</a>    ts_usecs: u64,

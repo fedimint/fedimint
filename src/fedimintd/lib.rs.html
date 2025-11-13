@@ -51,7 +51,7 @@
 <a href=#51 id=51 data-nosnippet>51</a>    WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
 <a href=#52 id=52 data-nosnippet>52</a>};
 <a href=#53 id=53 data-nosnippet>53</a><span class="kw">use </span>fedimintd_envs::{
-<a href=#54 id=54 data-nosnippet>54</a>    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRCIS_ENV, FM_BIND_P2P_ENV,
+<a href=#54 id=54 data-nosnippet>54</a>    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
 <a href=#55 id=55 data-nosnippet>55</a>    FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
 <a href=#56 id=56 data-nosnippet>56</a>    FM_BITCOIND_URL_ENV, FM_BITCOIND_URL_PASSWORD_FILE_ENV, FM_BITCOIND_USERNAME_ENV,
 <a href=#57 id=57 data-nosnippet>57</a>    FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
@@ -187,7 +187,7 @@
 <a href=#187 id=187 data-nosnippet>187</a>    </span>with_jaeger: bool,
 <a href=#188 id=188 data-nosnippet>188</a>
 <a href=#189 id=189 data-nosnippet>189</a>    <span class="doccomment">/// Enable prometheus metrics
-<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="attr">#[arg(long, env = FM_BIND_METRCIS_ENV)]
+<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="attr">#[arg(long, env = FM_BIND_METRICS_ENV)]
 <a href=#191 id=191 data-nosnippet>191</a>    </span>bind_metrics: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
 <a href=#192 id=192 data-nosnippet>192</a>
 <a href=#193 id=193 data-nosnippet>193</a>    <span class="doccomment">/// Comma separated list of API secrets.
