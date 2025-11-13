@@ -25,14 +25,12 @@ use fedimint_core::module::{
 use fedimint_core::net::auth::check_auth;
 use fedimint_core::setup_code::PeerEndpoints;
 use fedimint_core::{PeerId, base32};
-use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::setup_ui::ISetupApi;
 use iroh::SecretKey;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tokio_rustls::rustls;
-use tracing::warn;
 
 use crate::config::{ConfigGenParams, ConfigGenSettings, PeerSetupCode};
 use crate::net::api::HasApiContext;
@@ -185,8 +183,6 @@ impl ISetupApi for SetupApi {
         );
 
         let lp = if self.settings.enable_iroh {
-            warn!(target: LOG_SERVER, "Iroh support is experimental");
-
             let iroh_api_sk = if let Ok(var) = std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV) {
                 SecretKey::from_str(&var)
                     .with_context(|| format!("Parsing {FM_IROH_API_SECRET_KEY_OVERRIDE_ENV}"))?
