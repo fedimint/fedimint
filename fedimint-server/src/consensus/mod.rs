@@ -108,7 +108,7 @@ pub async fn run(
         None,
     )?;
 
-    let server_bitcoin_rpc_monitor = ServerBitcoinRpcMonitor::new(
+    let bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
         if is_running_in_test_env() {
             Duration::from_millis(100)
@@ -155,7 +155,7 @@ pub async fn run(
                         task_group,
                         cfg.local.identity,
                         global_api.with_module(*module_id),
-                        server_bitcoin_rpc_monitor.clone(),
+                        bitcoin_rpc_connection.clone(),
                     )
                     .await?;
 
@@ -200,7 +200,7 @@ pub async fn run(
         p2p_connection_type_receivers,
         ci_status_receivers,
         ord_latency_receiver,
-        bitcoin_rpc_connection: server_bitcoin_rpc_monitor,
+        bitcoin_rpc_connection: bitcoin_rpc_connection.clone(),
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
         task_group: task_group.clone(),
@@ -247,10 +247,6 @@ pub async fn run(
         );
     }
 
-    info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
-
-    let api_urls = get_api_urls(&db, &cfg.consensus).await;
-
     let ui_service = dashboard_ui_router(consensus_api.clone().into_dyn()).into_make_service();
 
     let ui_listener = TcpListener::bind(ui_bind)
@@ -266,6 +262,10 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Dashboard UI running at http://{ui_bind} 🚀");
 
+    info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
+
+    let api_urls = get_api_urls(&db, &cfg.consensus).await;
+
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!
     ConsensusEngine {
@@ -277,6 +277,7 @@ pub async fn run(
         )?,
         cfg: cfg.clone(),
         connections,
+        bitcoin_rpc_connection,
         ord_latency_sender,
         ci_status_senders,
         submission_receiver,
