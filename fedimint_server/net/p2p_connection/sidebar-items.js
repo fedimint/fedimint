@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":["IP2PConnection"],"type":["DynP2PConnection"]};
+window.SIDEBAR_ITEMS = {"trait":["IP2PConnection","IP2PFrame"],"type":["DynIP2PFrame","DynP2PConnection"]};
