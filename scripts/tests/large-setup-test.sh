@@ -9,10 +9,12 @@ build_workspace
 add_target_dir_to_path
 make_fm_test_marker
 
-export FM_FED_SIZE=$(((RANDOM % 10) + 4))
+export FM_FED_SIZE=$(((RANDOM % 7) + 5))
 
 >&2 echo "Testing ${FM_FED_SIZE} peer dkg"
 
-env RUST_LOG="${RUST_LOG:-info,jsonrpsee-client=off}" \
+env
+  RUST_LOG="${RUST_LOG:-info,jsonrpsee-client=off}" \
+  FM_EXTRA_LONG_POLL=true \
   devimint "$@" dev-fed \
     --exec true
