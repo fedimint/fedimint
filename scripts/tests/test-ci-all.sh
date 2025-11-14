@@ -7,10 +7,13 @@ source scripts/_common.sh
 # prevent locale settings messing with some setups
 export LANG=C
 
-if [ "$(ulimit -Sn)" -lt "10000" ]; then
-  >&2 echo "⚠️  ulimit too small. Running 'ulimit -Sn 10000' to avoid problems running tests"
-  ulimit -Sn 10000
+if [ "$(ulimit -Sn)" -lt "32000" ]; then
+  >&2 echo "⚠️  ulimit too small. Running 'ulimit -Sn 50000' to avoid problems running tests"
+  # raise the limit as far as we can
+  ulimit -Sn "$(ulimit -Hn)"
 fi
+
+>&2 echo "ulimit: $(ulimit -Sn)"
 
 >&2 echo "Iroh DHT & Iroh next-stack are disabled during tests"
 export FM_IROH_ENABLE_DHT=false
