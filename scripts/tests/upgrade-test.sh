@@ -2,7 +2,12 @@
 # Runs a test to determine if upgrading binaries succeeds
 
 set -euo pipefail
+
 export RUST_LOG="${RUST_LOG:-info}"
+
+# Older version might not support iroh
+export FM_ENABLE_IROH=false
+
 source scripts/_common.sh
 
 if [ "$#" -eq 0 ]; then
