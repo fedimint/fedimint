@@ -2696,6 +2696,7 @@ dependencies = [
  "jsonrpsee-ws-client",
  "lru 0.13.0",
  "rand 0.8.5",
+ "reqwest 0.12.22",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -3520,7 +3521,9 @@ name = "fedimint-ln-common"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bitcoin",
+ "fedimint-api-client",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-threshold-crypto",

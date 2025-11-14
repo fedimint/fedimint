@@ -50,6 +50,7 @@ use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::OnceCell;
@@ -935,6 +936,36 @@ impl ConnectorRegistry {
         );
         Ok(conn)
     }
+
+    pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+        let url = match self.connection_overrides.get(url) {
+            Some(replacement) => {
+                trace!(
+                    target: LOG_NET,
+                    original_url = %url,
+                    replacement_url = %replacement,
+                    "Using a connectivity override for connection"
+                );
+
+                replacement
+            }
+            None => url,
+        };
+
+        let Some(connector) = self.gateway_connectors.get(url.scheme()) else {
+            return Err(anyhow!(
+                "Unsupported scheme: {}; missing endpoint handler",
+                url.scheme()
+            ));
+        };
+
+        connector
+            .get_try()
+            .await
+            .map_err(|e| anyhow!("Connector failed to initialize: {}", e.fmt_compact()))?
+            .connect_gateway(url)
+            .await
+    }
 }
 pub type DynConnector = Arc<dyn Connector>;
 
@@ -946,6 +977,15 @@ pub trait Connector: Send + Sync + 'static + fmt::Debug {
         api_secret: Option<&str>,
     ) -> PeerResult<DynGuaridianConnection>;
 }
+
+pub type DynGatewayConnector = Arc<dyn GatewayConnector>;
+
+#[async_trait]
+pub trait GatewayConnector: Send + Sync + 'static + fmt::Debug {
+    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection>;
+}
+
+pub type DynGatewayConnection = Arc<dyn IGatewayConnection>;
 
 /// A connection from api client to a federation guardian (type erased)
 pub type DynGuaridianConnection = Arc<dyn IGuardianConnection>;
@@ -960,6 +1000,28 @@ pub trait IGuardianConnection: Debug + Send + Sync + 'static {
     async fn await_disconnection(&self);
 
     fn into_dyn(self) -> DynGuaridianConnection
+    where
+        Self: Sized,
+    {
+        Arc::new(self)
+    }
+}
+
+#[async_trait]
+pub trait IGatewayConnection: Debug + Send + Sync + 'static {
+    async fn request(
+        &self,
+        password: Option<&str>,
+        method: Method,
+        route: &str,
+        payload: Option<Value>,
+    ) -> PeerResult<Value>;
+
+    fn is_connected(&self) -> bool;
+
+    async fn await_disconnection(&self);
+
+    fn into_dyn(self) -> DynGatewayConnection
     where
         Self: Sized,
     {

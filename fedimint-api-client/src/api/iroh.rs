@@ -11,7 +11,8 @@ use fedimint_core::envs::{
 };
 use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::module::{
-    ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
+    ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, FEDIMINT_GATEWAY_ALPN,
+    IrohApiRequest, IrohGatewayRequest, IrohGatewayResponse,
 };
 use fedimint_core::task::spawn;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
@@ -23,11 +24,13 @@ use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_next::Watcher as _;
+use reqwest::{Method, StatusCode};
 use serde_json::Value;
 use tracing::{debug, trace, warn};
 use url::Url;
 
 use super::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
+use crate::api::{DynGatewayConnection, IGatewayConnection};
 
 #[derive(Clone)]
 pub(crate) struct IrohConnector {
@@ -298,6 +301,31 @@ impl crate::api::Connector for IrohConnector {
     }
 }
 
+#[async_trait::async_trait]
+impl crate::api::GatewayConnector for IrohConnector {
+    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+        let node_id = Self::node_id_from_url(url)?;
+        let connection_override = self.connection_overrides.get(&node_id).cloned();
+        match connection_override {
+            Some(node_addr) => {
+                let conn = self
+                    .stable
+                    .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
+                    .await?;
+
+                #[cfg(not(target_family = "wasm"))]
+                Self::spawn_connection_monitoring_stable(&self.stable, node_id);
+
+                Ok(IGatewayConnection::into_dyn(conn))
+            }
+            None => {
+                let conn = self.stable.connect(node_id, FEDIMINT_GATEWAY_ALPN).await?;
+                Ok(IGatewayConnection::into_dyn(conn))
+            }
+        }
+    }
+}
+
 impl IrohConnector {
     #[cfg(not(target_family = "wasm"))]
     fn spawn_connection_monitoring_stable(endpoint: &Endpoint, node_id: NodeId) {
@@ -471,6 +499,61 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
             .map_err(|e| PeerError::InvalidResponse(e.into()))?;
 
         response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+    }
+
+    async fn await_disconnection(&self) {
+        self.closed().await;
+    }
+
+    fn is_connected(&self) -> bool {
+        self.close_reason().is_none()
+    }
+}
+
+// TODO: This might need to be in this crate
+#[async_trait]
+impl IGatewayConnection for Connection {
+    async fn request(
+        &self,
+        password: Option<&str>,
+        _method: Method,
+        route: &str,
+        payload: Option<Value>,
+    ) -> PeerResult<Value> {
+        let iroh_request = IrohGatewayRequest {
+            route: route.to_string(),
+            params: payload,
+            password: password.map(str::to_string),
+        };
+        let json = serde_json::to_vec(&iroh_request).expect("serialization cant fail");
+
+        let (mut sink, mut stream) = self
+            .open_bi()
+            .await
+            .map_err(|e| PeerError::Transport(e.into()))?;
+
+        sink.write_all(&json)
+            .await
+            .map_err(|e| PeerError::Transport(e.into()))?;
+
+        sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
+
+        let response = stream
+            .read_to_end(1_000_000)
+            .await
+            .map_err(|e| PeerError::Transport(e.into()))?;
+
+        let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
+            .map_err(|e| PeerError::InvalidResponse(e.into()))?;
+        match StatusCode::from_u16(response.status).map_err(|e| {
+            PeerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
+        })? {
+            StatusCode::OK => Ok(response.body),
+            status => Err(PeerError::ServerError(anyhow::anyhow!(
+                "Server returned status code: {}",
+                status
+            ))),
+        }
     }
 
     async fn await_disconnection(&self) {

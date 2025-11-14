@@ -1,8 +1,12 @@
 use std::collections::BTreeSet;
+use std::fmt::Debug;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Context;
+use async_trait::async_trait;
+use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_core::util::SafeUrl;
 use iroh::NodeAddr;
 use reqwest::{Method, StatusCode};
@@ -11,6 +15,12 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use crate::iroh::GatewayIrohConnector;
+
+#[derive(Clone, Debug)]
+pub struct GatewayApi {
+    connectors: ConnectorRegistry,
+    password: Option<String>,
+}
 
 pub struct GatewayRpcClient {
     base_url: SafeUrl,
