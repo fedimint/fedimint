@@ -657,7 +657,7 @@ in
         times,
         useIroh ? false,
       }:
-      craneLibTests.mkCargoDerivation {
+      (craneLibTests.mkCargoDerivation {
         pname = "${commonCliTestArgs.pname}-all";
         cargoArtifacts = craneMultiBuild.default.${craneLib.cargoProfile or "release"}.workspaceBuild;
 
@@ -696,7 +696,14 @@ in
           ./scripts/tests/test-ci-all.sh 1>/dev/null 2>/dev/null && exit 1
           cp -f scripts/tests/always-success-test.sh.bck scripts/tests/always-success-test.sh
         '';
-      };
+      }).overrideAttrs
+        (
+          final: prev: {
+            # flakebox will append wasm toolchain to the pname, which
+            # looks meh in the logs
+            pname = "test-ci-all";
+          }
+        );
 
     ciTestAll = ciTestAllBase { times = 1; };
     ciTestAllWithIroh = ciTestAllBase {
