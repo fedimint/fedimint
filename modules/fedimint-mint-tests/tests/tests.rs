@@ -18,7 +18,8 @@ use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SpendOOBState, SpendableNoteUndecoded,
+    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState,
+    SpendableNoteUndecoded,
 };
 use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
@@ -510,7 +511,11 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn repair_wallet() -> anyhow::Result<()> {
     // Print notes for client1
-    let fed = fixtures().new_fed_degraded().await;
+    let fed = fixtures()
+        .new_fed_builder(1)
+        .disable_mint_fees()
+        .build()
+        .await;
     let client = fed.new_client().await;
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
@@ -524,7 +529,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(&mut client_mint.db.begin_transaction_nc().await)
             .await;
         let repair_summary = client_mint
-            .try_repair_wallet()
+            .try_repair_wallet(100)
             .await
             .expect("Repair should succeed");
 
@@ -591,7 +596,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .await;
 
         let repair_summary = client_mint
-            .try_repair_wallet()
+            .try_repair_wallet(100)
             .await
             .expect("Repair should succeed");
 
@@ -636,7 +641,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .await;
 
         let repair_summary = client_mint
-            .try_repair_wallet()
+            .try_repair_wallet(100)
             .await
             .expect("Repair should succeed");
 
@@ -648,6 +653,74 @@ async fn repair_wallet() -> anyhow::Result<()> {
             repair_summary.used_indices.count_items(),
             1,
             "One used index should be found"
+        );
+
+        let new_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+        assert_eq!(
+            initial_balance, new_balance,
+            "Balance should remain unchanged after repair"
+        );
+    }
+
+    // Check that already used blind nonces with gaps in between are detected and
+    // repaired
+    {
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        const TEST_NOTE_INDEX_KEY: NextECashNoteIndexKey =
+            NextECashNoteIndexKey(Amount::from_msats(1));
+        let old_nonce_index = dbtx
+            .get_value(&TEST_NOTE_INDEX_KEY)
+            .await
+            .expect("Amount tier exists");
+        dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &(old_nonce_index + 1))
+            .await
+            .expect("Failed to insert test note index");
+        dbtx.commit_tx().await;
+
+        let (_, reissue_note) = client_mint
+            .spend_notes_with_selector(
+                &SelectNotesWithExactAmount,
+                Amount::from_msats(1),
+                TIMEOUT,
+                false,
+                (),
+            )
+            .await?;
+        let op_id = client_mint.reissue_external_notes(reissue_note, ()).await?;
+        assert!(matches!(
+            client_mint
+                .subscribe_reissue_external_notes(op_id)
+                .await?
+                .await_outcome()
+                .await,
+            Some(ReissueExternalNotesState::Done)
+        ));
+
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &(old_nonce_index - 1))
+            .await
+            .expect("Failed to insert test note index");
+        dbtx.commit_tx().await;
+
+        let initial_balance = client_mint
+            .get_balance(&mut client_mint.db.begin_transaction_nc().await)
+            .await;
+
+        let repair_summary = client_mint
+            .try_repair_wallet(100)
+            .await
+            .expect("Repair should succeed");
+
+        assert!(
+            repair_summary.spent_notes.is_empty(),
+            "No spent notes should be found"
+        );
+        assert_eq!(
+            repair_summary.used_indices.get(Amount::from_msats(1)),
+            3,
+            "We should have skipped one index and reused another"
         );
 
         let new_balance = client_mint
