@@ -12,8 +12,9 @@ if [ "$(ulimit -Sn)" -lt "10000" ]; then
   ulimit -Sn 10000
 fi
 
->&2 echo "Iroh DHT is disabled"
+>&2 echo "Iroh DHT & Iroh next-stack are disabled during tests"
 export FM_IROH_ENABLE_DHT=false
+export FM_IROH_ENABLE_NEXT=false
 
 # https://stackoverflow.com/a/72183258/134409
 # this hangs in CI (no tty?)
