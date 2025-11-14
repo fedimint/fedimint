@@ -26,6 +26,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::task::sleep;
+use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_core::{
     Amount, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
     push_db_pair_items,
@@ -935,8 +936,8 @@ impl ServerModule for Lightning {
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
                     match module.remove_gateway(remove_gateway_request.clone(), &mut context.dbtx().into_nc()).await {
                         Ok(()) => Ok(true),
-                        Err(e) => {
-                            warn!(target: LOG_MODULE_LN, "Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}");
+                        Err(err) => {
+                            warn!(target: LOG_MODULE_LN, err = %err.fmt_compact_anyhow(), gateway_id = %remove_gateway_request.gateway_id, "Unable to remove gateway registration");
                             Ok(false)
                         },
                     }
