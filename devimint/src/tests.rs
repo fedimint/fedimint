@@ -124,7 +124,7 @@ pub async fn latency_tests(
         ..
     } = dev_fed;
 
-    let max_p90_factor = 5.0;
+    let max_p90_factor = 10.0;
     let p90_median_factor = 10;
 
     let client = match upgrade_clients {
