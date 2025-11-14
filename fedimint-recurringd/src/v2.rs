@@ -219,6 +219,8 @@ pub async fn create_contract_and_fetch_invoice(
         ephemeral_pk,
     );
 
+    // TODO: Fix me
+    /*
     let invoice = RealGatewayConnection
         .bolt11_invoice(
             gateway.clone(),
@@ -241,20 +243,25 @@ pub async fn create_contract_and_fetch_invoice(
     );
 
     Ok((gateway, invoice))
+    */
+    todo!()
 }
 
 async fn select_gateway(
     gateways: Vec<SafeUrl>,
     federation_id: FederationId,
 ) -> anyhow::Result<(RoutingInfo, SafeUrl)> {
+    // TODO: Fix me
+    /*
     for gateway in gateways {
-        if let Ok(Some(routing_info)) = RealGatewayConnection
+        if let Ok(Some(routing_info)) = MockGatewayConnection
             .routing_info(gateway.clone(), &federation_id)
             .await
         {
             return Ok((routing_info, gateway));
         }
     }
+    */
 
     bail!("All gateways are offline or do not support this federation")
 }

@@ -18,7 +18,7 @@ use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-use fedimint_api_client::api::DynModuleApi;
+use fedimint_api_client::api::{ConnectorRegistry, DynModuleApi, PeerError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -47,7 +47,7 @@ use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, GatewayRpcError, KIND, LightningCommonInit, LightningInvoice,
+    Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
     LightningModuleTypes, LightningOutput, LightningOutputV0, lnurl, tweak,
 };
 use futures::StreamExt;
@@ -213,7 +213,7 @@ pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
 
 #[derive(Clone)]
 pub struct LightningClientInit {
-    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    pub gateway_conn: Option<Arc<dyn GatewayConnection + Send + Sync>>,
     pub custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
 }
 
@@ -229,7 +229,7 @@ impl std::fmt::Debug for LightningClientInit {
 impl Default for LightningClientInit {
     fn default() -> Self {
         LightningClientInit {
-            gateway_conn: Arc::new(RealGatewayConnection),
+            gateway_conn: None,
             custom_meta_fn: Arc::new(|| Value::Null),
         }
     }
@@ -257,6 +257,15 @@ impl ClientModuleInit for LightningClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        let gateway_conn = if let Some(gateway_conn) = self.gateway_conn.clone() {
+            gateway_conn
+        } else {
+            let connector_registry = ConnectorRegistry::build_from_gateway_defaults()
+                .bind()
+                .await?;
+            let api = GatewayApi::new(None, connector_registry);
+            Arc::new(RealGatewayConnection { api })
+        };
         Ok(LightningClientModule::new(
             *args.federation_id(),
             args.cfg().clone(),
@@ -264,7 +273,7 @@ impl ClientModuleInit for LightningClientInit {
             args.context(),
             args.module_api().clone(),
             args.module_root_secret(),
-            self.gateway_conn.clone(),
+            gateway_conn,
             self.custom_meta_fn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
@@ -461,10 +470,7 @@ impl LightningClientModule {
         Err(SelectGatewayError::FailedToFetchRoutingInfo)
     }
 
-    async fn routing_info(
-        &self,
-        gateway: &SafeUrl,
-    ) -> Result<Option<RoutingInfo>, GatewayRpcError> {
+    async fn routing_info(&self, gateway: &SafeUrl) -> Result<Option<RoutingInfo>, PeerError> {
         self.gateway_conn
             .routing_info(gateway.clone(), &self.federation_id)
             .await
@@ -520,7 +526,7 @@ impl LightningClientModule {
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
                     .await
-                    .map_err(SendPaymentError::GatewayConnectionError)?
+                    .map_err(|e| SendPaymentError::GatewayConnectionError(e.to_string()))?
                     .ok_or(SendPaymentError::UnknownFederation)?,
             ),
             None => self
@@ -792,7 +798,7 @@ impl LightningClientModule {
                 gateway.clone(),
                 self.routing_info(&gateway)
                     .await
-                    .map_err(ReceiveError::GatewayConnectionError)?
+                    .map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))?
                     .ok_or(ReceiveError::UnknownFederation)?,
             ),
             None => self
@@ -847,7 +853,7 @@ impl LightningClientModule {
                 expiry_secs,
             )
             .await
-            .map_err(ReceiveError::GatewayConnectionError)?;
+            .map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))?;
 
         if invoice.payment_hash() != &preimage.consensus_hash() {
             return Err(ReceiveError::InvalidInvoicePaymentHash);
@@ -1100,7 +1106,7 @@ pub enum SendPaymentError {
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(GatewayRpcError),
+    GatewayConnectionError(String),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee of exceeds the limit")]
@@ -1125,7 +1131,7 @@ pub enum ReceiveError {
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(GatewayRpcError),
+    GatewayConnectionError(String),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee exceeds the limit")]

@@ -6,10 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use async_trait::async_trait;
-use fedimint_api_client::api::{
-    ConnectorRegistry, ConnectorRegistryBuilder, DynGatewayConnection, PeerError, PeerResult,
-};
+use fedimint_api_client::api::{ConnectorRegistry, DynGatewayConnection, PeerError, PeerResult};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::util::backoff_util::{FibonacciBackoff, custom_backoff};
 use fedimint_logging::LOG_GATEWAY;
@@ -164,7 +161,7 @@ impl GatewayApi {
         Ok(conn.clone())
     }
 
-    async fn request<P: Serialize, T: DeserializeOwned>(
+    pub async fn request<P: Serialize, T: DeserializeOwned>(
         &self,
         base_url: &SafeUrl,
         method: Method,
