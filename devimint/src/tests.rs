@@ -642,12 +642,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let fed_id = fed.calculate_federation_id();
     let invite = fed.invite_code()?;
 
-    // LNv1 expects no gateway routing fees
-    gw_lnd
-        .set_federation_routing_fee(fed_id.clone(), 0, 0)
-        .await?;
-    cmd!(client, "list-gateways").run().await?;
-
     let invite_code = cmd!(client, "dev", "decode", "invite-code", invite.clone())
         .out_json()
         .await?;
