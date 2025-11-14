@@ -515,7 +515,7 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
 impl IGatewayConnection for Connection {
     async fn request(
         &self,
-        password: Option<&str>,
+        password: Option<String>,
         _method: Method,
         route: &str,
         payload: Option<Value>,
@@ -523,7 +523,7 @@ impl IGatewayConnection for Connection {
         let iroh_request = IrohGatewayRequest {
             route: route.to_string(),
             params: payload,
-            password: password.map(str::to_string),
+            password: password,
         };
         let json = serde_json::to_vec(&iroh_request).expect("serialization cant fail");
 

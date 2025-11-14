@@ -35,6 +35,7 @@ serde-big-array = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

@@ -800,6 +800,19 @@ impl fmt::Debug for ConnectorRegistry {
 }
 
 impl ConnectorRegistry {
+    pub fn build_from_gateway_defaults() -> ConnectorRegistryBuilder {
+        ConnectorRegistryBuilder {
+            iroh_enable: true,
+            iroh_dns: None,
+            iroh_pkarr_dht: false,
+            iroh_next: false,
+            ws_enable: false,
+            ws_force_tor: false,
+
+            connection_overrides: BTreeMap::default(),
+        }
+    }
+
     /// Create a builder with recommended defaults intended for client-side
     /// usage
     ///
@@ -1011,7 +1024,7 @@ pub trait IGuardianConnection: Debug + Send + Sync + 'static {
 pub trait IGatewayConnection: Debug + Send + Sync + 'static {
     async fn request(
         &self,
-        password: Option<&str>,
+        password: Option<String>,
         method: Method,
         route: &str,
         payload: Option<Value>,

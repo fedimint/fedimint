@@ -3535,6 +3535,7 @@ dependencies = [
  "serde-big-array",
  "serde_json",
  "thiserror 2.0.12",
+ "tokio",
  "tracing",
 ]
 
