@@ -6,8 +6,8 @@ default-fedi:
 # check if ulimit is set correctly
 check-ulimit:
   #!/usr/bin/env bash
-  if [ "$(ulimit -Sn)" -lt "1024" ]; then
-      >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
+  if [ "$(ulimit -Sn)" -lt "32000" ]; then
+      >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 32000' to avoid problems running tests"
   fi
 
 # run tests against real services (like bitcoind)
