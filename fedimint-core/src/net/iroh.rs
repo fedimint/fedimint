@@ -6,10 +6,14 @@ use iroh::defaults::DEFAULT_STUN_PORT;
 use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_relay::RelayQuicConfig;
-use tracing::info;
+use tracing::{info, warn};
 use url::Url;
 
-use crate::envs::{FM_IROH_ENABLE_DHT_ENV, is_env_var_set};
+use crate::envs::{
+    FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
+    FM_IROH_PKARR_RESOLVER_ENABLE_ENV, FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set,
+    is_env_var_set_opt,
+};
 use crate::iroh_prod::{FM_IROH_DNS_FEDIMINT_PROD, FM_IROH_RELAYS_FEDIMINT_PROD};
 
 pub async fn build_iroh_endpoint(
@@ -29,7 +33,13 @@ pub async fn build_iroh_endpoint(
         |iroh_dns| vec![iroh_dns.to_unsafe()],
     );
 
-    let relay_mode = if iroh_relays.is_empty() {
+    let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
+        warn!(
+            target: LOG_NET_IROH,
+            "Iroh relays are disabled"
+        );
+        RelayMode::Disabled
+    } else if iroh_relays.is_empty() {
         RelayMode::Custom(
             FM_IROH_RELAYS_FEDIMINT_PROD
                 .into_iter()
@@ -58,16 +68,30 @@ pub async fn build_iroh_endpoint(
     let mut builder = Endpoint::builder();
 
     for iroh_dns in iroh_dns_servers {
-        builder = builder
-            .add_discovery({
+        if is_env_var_set_opt(FM_IROH_PKARR_PUBLISHER_ENABLE_ENV).unwrap_or(true) {
+            builder = builder.add_discovery({
                 let iroh_dns = iroh_dns.clone();
                 move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
-            })
-            .add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+            });
+        } else {
+            warn!(
+                target: LOG_NET_IROH,
+                "Iroh pkarr publisher is disabled"
+            );
+        }
+
+        if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
+            builder = builder.add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
+        } else {
+            warn!(
+                target: LOG_NET_IROH,
+                "Iroh pkarr resolver is disabled"
+            );
+        }
     }
 
     // See <https://github.com/fedimint/fedimint/issues/7811>
-    if is_env_var_set(FM_IROH_ENABLE_DHT_ENV) {
+    if is_env_var_set(FM_IROH_DHT_ENABLE_ENV) {
         #[cfg(not(target_family = "wasm"))]
         {
             builder = builder.discovery_dht();
@@ -79,8 +103,16 @@ pub async fn build_iroh_endpoint(
         );
     }
 
+    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
+        builder = builder.discovery_n0();
+    } else {
+        warn!(
+            target: LOG_NET_IROH,
+            "Iroh n0 discovery is disabled"
+        );
+    }
+
     let builder = builder
-        .discovery_n0()
         .relay_mode(relay_mode)
         .secret_key(secret_key)
         .alpns(vec![alpn.to_vec()]);

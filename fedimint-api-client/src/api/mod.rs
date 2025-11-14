@@ -36,11 +36,10 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
-use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff, custom_backoff};
-use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
@@ -59,6 +58,11 @@ use tracing::{debug, instrument, trace, warn};
 use crate::api;
 use crate::api::ws::WebsocketConnector;
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
+
+/// Type for connector initialization functions
+type ConnectorInitFn = Arc<
+    dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>> + Send + Sync,
+>;
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
 
@@ -624,8 +628,13 @@ where
 ///
 /// See [`ConnectorRegistry::build_from_client_env`] and similar
 /// to create.
+#[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)] // Shut up, Clippy
 pub struct ConnectorRegistryBuilder {
+    /// List of overrides to use when attempting to connect to given url
+    ///
+    /// This is useful for testing, or forcing non-default network
+    /// connectivity.
     connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
 
     /// Enable Iroh endpoints at all?
@@ -645,51 +654,71 @@ pub struct ConnectorRegistryBuilder {
 impl ConnectorRegistryBuilder {
     #[allow(clippy::unused_async)] // Leave room for async in the future
     pub async fn bind(self) -> anyhow::Result<ConnectorRegistry> {
-        let mut inner: BTreeMap<String, JitTryAnyhow<DynConnector>> = BTreeMap::new();
+        // Create initialization functions for each connector type
+        let mut connectors_lazy: BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)> =
+            BTreeMap::new();
 
-        if self.iroh_enable {
-            let iroh_connector = JitTryAnyhow::new_try(move || async move {
-                Ok(Arc::new(
-                    api::iroh::IrohConnector::new(
-                        self.iroh_dns,
-                        self.iroh_pkarr_dht,
-                        self.iroh_next,
-                    )
-                    .await?,
-                ) as DynConnector)
-            });
-            inner.insert("iroh".to_string(), iroh_connector);
-        }
+        // WS connector init function
+        let builder_ws = self.clone();
+        let ws_connector_init = Arc::new(move || {
+            let builder = builder_ws.clone();
+            Box::pin(async move { builder.build_ws_connector().await })
+                as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+        });
+        connectors_lazy.insert("ws".into(), (ws_connector_init.clone(), OnceCell::new()));
+        connectors_lazy.insert("wss".into(), (ws_connector_init.clone(), OnceCell::new()));
 
-        if self.ws_enable {
-            match self.ws_force_tor {
-                #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-                true => {
-                    use crate::api::tor::TorConnector;
-
-                    let tor_connector = JitTry::new_try(move || async move {
-                        Ok(Arc::new(TorConnector::bootstrap().await?) as DynConnector)
-                    });
-                    inner.insert("wss".into(), tor_connector.clone());
-                    inner.insert("ws".into(), tor_connector);
-                }
-
-                false => {
-                    let websocket_connector = JitTry::new_try(move || async move {
-                        Ok(Arc::new(WebsocketConnector::new()) as DynConnector)
-                    });
-                    inner.insert("wss".into(), websocket_connector.clone());
-                    inner.insert("ws".into(), websocket_connector);
-                }
-                #[allow(unreachable_patterns)]
-                _ => bail!("Tor requested, but not support not compiled in"),
-            }
-        }
+        // Iroh connector init function
+        let builder_iroh = self.clone();
+        connectors_lazy.insert(
+            "iroh".into(),
+            (
+                Arc::new(move || {
+                    let builder = builder_iroh.clone();
+                    Box::pin(async move { builder.build_iroh_connector().await })
+                        as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+                }),
+                OnceCell::new(),
+            ),
+        );
 
         Ok(ConnectorRegistry {
-            connectors: inner,
+            connectors_lazy,
             connection_overrides: self.connection_overrides,
         })
+    }
+
+    pub async fn build_iroh_connector(&self) -> anyhow::Result<DynConnector> {
+        if !self.iroh_enable {
+            bail!("Iroh connector not enabled");
+        }
+        Ok(Arc::new(
+            api::iroh::IrohConnector::new(
+                self.iroh_dns.clone(),
+                self.iroh_pkarr_dht,
+                self.iroh_next,
+            )
+            .await?,
+        ) as DynConnector)
+    }
+
+    pub async fn build_ws_connector(&self) -> anyhow::Result<DynConnector> {
+        if !self.ws_enable {
+            bail!("Websocket connector not enabled");
+        }
+
+        match self.ws_force_tor {
+            #[cfg(all(feature = "tor", not(target_family = "wasm")))]
+            true => {
+                use crate::api::tor::TorConnector;
+
+                Ok(Arc::new(TorConnector::bootstrap().await?) as DynConnector)
+            }
+
+            false => Ok(Arc::new(WebsocketConnector::new()) as DynConnector),
+            #[allow(unreachable_patterns)]
+            _ => bail!("Tor requested, but not support not compiled in"),
+        }
     }
 
     pub fn iroh_pkarr_dht(self, enable: bool) -> Self {
@@ -729,6 +758,7 @@ impl ConnectorRegistryBuilder {
 
         Ok(Self { ..self })
     }
+
     pub fn with_connection_override(
         mut self,
         original_url: SafeUrl,
@@ -752,15 +782,20 @@ impl ConnectorRegistryBuilder {
 /// mixed-networking stack connection.
 ///
 /// Responsibilities:
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ConnectorRegistry {
-    connectors: BTreeMap<String, JitTryAnyhow<DynConnector>>,
-
-    /// List of overrides to use when attempting to connect to given url
-    ///
-    /// This is useful for testing, or forcing non-default network
-    /// connectivity.
+    connectors_lazy: BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>,
+    /// Connection URL overrides for testing/custom routing
     connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
+}
+
+impl fmt::Debug for ConnectorRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConnectorRegistry")
+            .field("connectors_lazy", &self.connectors_lazy.len())
+            .field("connection_overrides", &self.connection_overrides)
+            .finish()
+    }
 }
 
 impl ConnectorRegistry {
@@ -855,20 +890,26 @@ impl ConnectorRegistry {
             None => url,
         };
 
-        let Some(connector) = self.connectors.get(url.scheme()) else {
+        let connector_key = url.scheme();
+
+        let Some(connector_lazy) = self.connectors_lazy.get(connector_key) else {
             return Err(PeerError::InvalidEndpoint(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
             )));
         };
 
-        connector
-            .get_try()
+        // Clone the init function to use in the async block
+        let init_fn = connector_lazy.0.clone();
+
+        connector_lazy
+            .1
+            .get_or_try_init(|| async move { init_fn().await })
             .await
             .map_err(|e| {
                 PeerError::Transport(anyhow!(
                     "Connector failed to initialize: {}",
-                    e.fmt_compact()
+                    e.fmt_compact_anyhow()
                 ))
             })?
             .connect_guardian(url, api_secret)

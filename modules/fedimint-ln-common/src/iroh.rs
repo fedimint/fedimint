@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::envs::{FM_IROH_ENABLE_DHT_ENV, is_env_var_set};
+use fedimint_core::envs::{FM_IROH_DHT_ENABLE_ENV, is_env_var_set};
 use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_NET_IROH;
@@ -68,7 +68,7 @@ impl GatewayIrohConnector {
         let mut builder = builder.relay_mode(iroh::RelayMode::Disabled);
 
         // See <https://github.com/fedimint/fedimint/issues/7811>
-        if is_env_var_set(FM_IROH_ENABLE_DHT_ENV) {
+        if is_env_var_set(FM_IROH_DHT_ENABLE_ENV) {
             #[cfg(not(target_family = "wasm"))]
             {
                 builder = builder.discovery_dht();

@@ -1782,8 +1782,9 @@ impl Gateway {
                     let api = self.versioned_api.clone();
                     let gateway_id = self.gateway_id;
 
-                    if let Err(err) = register_task_group
-                        .spawn_cancellable("register_federation", async move {
+                    register_task_group.spawn_cancellable_silent(
+                        "register federation",
+                        async move {
                             let gateway_client = client_arc
                                 .get_first_module::<GatewayClientModule>()
                                 .expect("No GatewayClientModule exists");
@@ -1797,11 +1798,8 @@ impl Gateway {
                                     gateway_id,
                                 )
                                 .await;
-                        })
-                        .await
-                    {
-                        warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to shutdown register federation task");
-                    }
+                        },
+                    );
                 }
             }
         }
