@@ -45,7 +45,7 @@ use client_db::{
     DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey, ReusedNoteIndices, migrate_state_to_v2,
     migrate_to_v1,
 };
-use event::{NoteSpent, OOBNotesReissued, OOBNotesSpent};
+use event::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -1545,10 +1545,23 @@ impl MintClientModule {
             )
             .await
             .context(ReissueExternalNotesError::AlreadyReissued)?;
+
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
         self.client_ctx
             .log_event(&mut dbtx, OOBNotesReissued { amount })
             .await;
+
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                ReceivePaymentEvent {
+                    operation_id,
+                    amount,
+                },
+            )
+            .await;
+
         dbtx.commit_tx().await;
 
         Ok(operation_id)
@@ -1729,6 +1742,17 @@ impl MintClientModule {
                                     spent_amount: oob_notes.total_amount(),
                                     timeout: try_cancel_after,
                                     include_invite,
+                                },
+                            )
+                            .await;
+
+                        self.client_ctx
+                            .log_event(
+                                dbtx,
+                                SendPaymentEvent {
+                                    operation_id,
+                                    amount: oob_notes.total_amount(),
+                                    oob_notes: oob_notes.to_string(),
                                 },
                             )
                             .await;
