@@ -8,7 +8,7 @@ use iroh::discovery::pkarr::PkarrResolver;
 use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId};
 use serde::{Deserialize, Serialize};
-use tracing::{info, trace};
+use tracing::{debug, trace};
 
 pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
@@ -74,7 +74,7 @@ impl GatewayIrohConnector {
                 builder = builder.discovery_dht();
             }
         } else {
-            info!(
+            debug!(
                 target: LOG_NET_IROH,
                 "Iroh DHT is disabled"
             );

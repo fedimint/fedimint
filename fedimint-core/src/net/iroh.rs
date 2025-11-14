@@ -6,7 +6,7 @@ use iroh::defaults::DEFAULT_STUN_PORT;
 use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_relay::RelayQuicConfig;
-use tracing::info;
+use tracing::{debug, info};
 use url::Url;
 
 use crate::envs::{FM_IROH_ENABLE_DHT_ENV, is_env_var_set};
@@ -73,7 +73,7 @@ pub async fn build_iroh_endpoint(
             builder = builder.discovery_dht();
         }
     } else {
-        info!(
+        debug!(
             target: LOG_NET_IROH,
             "Iroh DHT is disabled"
         );
