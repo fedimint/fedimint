@@ -52,6 +52,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
+use fedimint_core::runtime::sleep;
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::backoff_util::custom_backoff;
@@ -1173,6 +1174,10 @@ impl Client {
             task_group
                 .clone()
                 .spawn_cancellable("refresh_common_api_version_static", async move {
+                    // Delay making any network connections, just in case this is a short-running
+                    // invocation of the client (e.g. `fedimint-cli info`), so the attempt probably
+                    // won't succeed anyway.
+                    sleep(Duration::from_secs(1)).await;
                     if let Err(error) = Self::refresh_common_api_version_static(
                         &config,
                         &client_module_init,
@@ -1382,7 +1387,7 @@ impl Client {
             if self.executor.get_active_states().await.is_empty() {
                 break;
             }
-            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+            sleep(Duration::from_millis(100)).await;
         }
         Ok(())
     }
