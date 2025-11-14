@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CHANNEL_FRAGMENT_ROUTE"],"fn":["dashboard_view","login_form","login_submit","router"],"mod":["federation","general","lightning"],"trait":["IAdminGateway"],"type":["DynGatewayApi"]};
+window.SIDEBAR_ITEMS = {"constant":["CHANNEL_FRAGMENT_ROUTE"],"fn":["dashboard_view","login_form","login_submit","router"],"mod":["federation","general","lightning","payment_summary"],"trait":["IAdminGateway"],"type":["DynGatewayApi"]};
