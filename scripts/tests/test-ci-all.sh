@@ -18,6 +18,10 @@ fi
 >&2 echo "Iroh DHT & Iroh next-stack are disabled during tests"
 export FM_IROH_ENABLE_DHT=false
 export FM_IROH_ENABLE_NEXT=false
+# We want to prevent iroh from attempting to reach out and wasting time connecting
+# to places needlessly. We rely on direct connections anyway, especially when running
+# in Nix sandbox.
+export FM_IROH_RELAY="http://localhost"
 
 # https://stackoverflow.com/a/72183258/134409
 # this hangs in CI (no tty?)
