@@ -1,6 +1,7 @@
 mod federation;
 mod general;
 mod lightning;
+mod payment_summary;
 
 use std::fmt::Display;
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use axum::routing::get;
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use fedimint_gateway_common::GatewayInfo;
+use fedimint_gateway_common::{GatewayInfo, PaymentSummaryPayload, PaymentSummaryResponse};
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
@@ -36,6 +37,14 @@ pub trait IAdminGateway {
     async fn handle_list_channels_msg(
         &self,
     ) -> Result<Vec<fedimint_gateway_common::ChannelInfo>, Self::Error>;
+
+    async fn handle_payment_summary_msg(
+        &self,
+        PaymentSummaryPayload {
+            start_millis,
+            end_millis,
+        }: PaymentSummaryPayload,
+    ) -> Result<PaymentSummaryResponse, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -102,8 +111,11 @@ where
 
     let content = html! {
         div class="row gy-4" {
-            div class="col-md-12" {
+            div class="col-md-6" {
                 (general::render(&gateway_info))
+            }
+            div class="col-md-6" {
+                (payment_summary::render(&state.api).await)
             }
         }
 
