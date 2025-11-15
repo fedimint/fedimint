@@ -85,6 +85,12 @@ async fn dashboard_view(
     let audit_summary = state.api.federation_audit().await;
     let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
     let bitcoin_rpc_status = state.api.bitcoin_rpc_status().await;
+    let consensus_block_count = state
+        .api
+        .get_module::<fedimint_wallet_server::Wallet>()
+        .expect("Wallet module must be available")
+        .consensus_block_count_ui()
+        .await;
 
     let content = html! {
         div class="row gy-4" {
@@ -93,7 +99,7 @@ async fn dashboard_view(
             }
 
             div class="col-md-6" {
-                (invite::render(&invite_code))
+                (invite::render(&invite_code, consensus_block_count))
             }
         }
 
