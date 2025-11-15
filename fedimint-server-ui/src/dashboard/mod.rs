@@ -93,7 +93,7 @@ async fn dashboard_view(
             }
 
             div class="col-md-6" {
-                (invite::render(&invite_code))
+                (invite::render(&invite_code, session_count))
             }
         }
 
