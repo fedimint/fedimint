@@ -3,10 +3,10 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use fedimint_core::encoding::{Decodable, Encodable};
 use futures::{SinkExt, StreamExt};
-use iroh::endpoint::Connection;
+use iroh::endpoint::{Connection, RecvStream};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::net::TcpStream;
@@ -15,12 +15,33 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 pub type DynP2PConnection<M> = Box<dyn IP2PConnection<M>>;
 
+pub type DynIP2PFrame<M> = Box<dyn IP2PFrame<M>>;
+
+#[async_trait]
+pub trait IP2PFrame<M>: Send + 'static {
+    /// Read the entire frame from the connection and deserialize it into a
+    /// message. This is *not* required to be cancel-safe.
+    async fn read_to_end(&mut self) -> anyhow::Result<M>;
+
+    fn into_dyn(self) -> DynIP2PFrame<M>
+    where
+        Self: Sized,
+    {
+        Box::new(self)
+    }
+}
+
 #[async_trait]
 pub trait IP2PConnection<M>: Send + 'static {
+    /// Send a message over the connection. This is *not* required to be
+    /// cancel-safe.
     async fn send(&mut self, message: M) -> anyhow::Result<()>;
 
-    async fn receive(&mut self) -> anyhow::Result<M>;
+    /// Receive a p2p frame from the connection. This is *required* to be
+    /// cancel-safe.
+    async fn receive(&mut self) -> anyhow::Result<DynIP2PFrame<M>>;
 
+    /// Get the round-trip time of the connection.
     fn rtt(&self) -> Duration;
 
     fn into_dyn(self) -> DynP2PConnection<M>
@@ -28,6 +49,18 @@ pub trait IP2PConnection<M>: Send + 'static {
         Self: Sized,
     {
         Box::new(self)
+    }
+}
+
+/// Implementations of the IP2PFrame and IP2PConnection traits for TLS
+
+#[async_trait]
+impl<M> IP2PFrame<M> for BytesMut
+where
+    M: DeserializeOwned + Send + 'static,
+{
+    async fn read_to_end(&mut self) -> anyhow::Result<M> {
+        Ok(bincode::deserialize_from(Cursor::new(&**self))?)
     }
 }
 
@@ -46,14 +79,32 @@ where
         Ok(())
     }
 
-    async fn receive(&mut self) -> anyhow::Result<M> {
-        Ok(bincode::deserialize_from(Cursor::new(
-            &self.next().await.context("Framed stream is closed")??,
-        ))?)
+    async fn receive(&mut self) -> anyhow::Result<DynIP2PFrame<M>> {
+        let message = self
+            .next()
+            .await
+            .context("Framed stream is closed")??
+            .into_dyn();
+
+        Ok(message)
     }
 
     fn rtt(&self) -> Duration {
         Duration::from_millis(0)
+    }
+}
+
+/// Implementations of the IP2PFrame and IP2PConnection traits for Iroh
+
+#[async_trait]
+impl<M> IP2PFrame<M> for RecvStream
+where
+    M: DeserializeOwned + Send + 'static,
+{
+    async fn read_to_end(&mut self) -> anyhow::Result<M> {
+        Ok(bincode::deserialize_from(Cursor::new(
+            &self.read_to_end(1_000_000).await?,
+        ))?)
     }
 }
 
@@ -76,10 +127,8 @@ where
         Ok(())
     }
 
-    async fn receive(&mut self) -> anyhow::Result<M> {
-        Ok(bincode::deserialize_from(Cursor::new(
-            &self.accept_uni().await?.read_to_end(1_000_000_000).await?,
-        ))?)
+    async fn receive(&mut self) -> anyhow::Result<DynIP2PFrame<M>> {
+        Ok(self.accept_uni().await?.into_dyn())
     }
 
     fn rtt(&self) -> Duration {
