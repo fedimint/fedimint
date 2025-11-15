@@ -146,6 +146,7 @@ impl MintOutputStatesCreated {
     ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let tbs_pks = context.tbs_pks.clone();
         let client_ctx = context.client_ctx.clone();
+        let balance_update_sender = context.balance_update_sender.clone();
 
         vec![
             // Check if transaction was rejected
@@ -170,6 +171,7 @@ impl MintOutputStatesCreated {
                         blinded_signature_shares,
                         old_state,
                         tbs_pks.clone(),
+                        balance_update_sender.clone(),
                     ))
                 },
             ),
@@ -237,6 +239,7 @@ impl MintOutputStatesCreated {
         blinded_signature_shares: BTreeMap<PeerId, BlindedSignatureShare>,
         old_state: MintOutputStateMachine,
         tbs_pks: Tiered<AggregatePublicKey>,
+        balance_update_sender: tokio::sync::watch::Sender<()>,
     ) -> MintOutputStateMachine {
         // we combine the shares, finalize the issuance request with the blind signature
         // and store the resulting note in the database
@@ -298,6 +301,9 @@ impl MintOutputStatesCreated {
             crit!(target: LOG_CLIENT_MODULE_MINT, %note, "E-cash note was replaced in DB");
         }
 
+        dbtx.module_tx()
+            .on_commit(move || balance_update_sender.send_replace(()));
+
         MintOutputStateMachine {
             common: old_state.common,
             state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
@@ -324,6 +330,7 @@ impl MintOutputStatesCreatedMulti {
         let tbs_pks = context.tbs_pks.clone();
         let client_ctx = context.client_ctx.clone();
         let client_ctx_rejected = context.client_ctx.clone();
+        let balance_update_sender = context.balance_update_sender.clone();
 
         vec![
             // Check if transaction was rejected
@@ -353,6 +360,7 @@ impl MintOutputStatesCreatedMulti {
                         blinded_signature_shares,
                         old_state,
                         tbs_pks.clone(),
+                        balance_update_sender.clone(),
                     ))
                 },
             ),
@@ -493,6 +501,7 @@ impl MintOutputStatesCreatedMulti {
         blinded_signature_shares: Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)>,
         old_state: MintOutputStateMachine,
         tbs_pks: Tiered<AggregatePublicKey>,
+        balance_update_sender: tokio::sync::watch::Sender<()>,
     ) -> MintOutputStateMachine {
         // we combine the shares, finalize the issuance request with the blind signature
         // and store the resulting note in the database
@@ -566,6 +575,9 @@ impl MintOutputStatesCreatedMulti {
                 },
             )
             .await;
+
+        dbtx.module_tx()
+            .on_commit(move || balance_update_sender.send_replace(()));
 
         MintOutputStateMachine {
             common: old_state.common,
