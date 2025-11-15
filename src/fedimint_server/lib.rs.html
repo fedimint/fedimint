@@ -298,88 +298,90 @@
 <a href=#298 id=298 data-nosnippet>298</a>        .<span class="kw">await
 <a href=#299 id=299 data-nosnippet>299</a>        </span>.expect(<span class="string">"Config gen params receiver closed unexpectedly"</span>);
 <a href=#300 id=300 data-nosnippet>300</a>
-<a href=#301 id=301 data-nosnippet>301</a>    <span class="comment">// prevent failure of start dkg command in CI
-<a href=#302 id=302 data-nosnippet>302</a>    </span>sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
-<a href=#303 id=303 data-nosnippet>303</a>
-<a href=#304 id=304 data-nosnippet>304</a>    api_handler
-<a href=#305 id=305 data-nosnippet>305</a>        .stop()
-<a href=#306 id=306 data-nosnippet>306</a>        .expect(<span class="string">"Config api should still be running"</span>);
-<a href=#307 id=307 data-nosnippet>307</a>
-<a href=#308 id=308 data-nosnippet>308</a>    api_handler.stopped().<span class="kw">await</span>;
+<a href=#301 id=301 data-nosnippet>301</a>    <span class="comment">// HACK: The `start-dkg` API call needs to have some time to finish
+<a href=#302 id=302 data-nosnippet>302</a>    // before we shut down api handling. There's no easy and good way to do
+<a href=#303 id=303 data-nosnippet>303</a>    // that other than just giving it some grace period.
+<a href=#304 id=304 data-nosnippet>304</a>    </span>sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>    api_handler
+<a href=#307 id=307 data-nosnippet>307</a>        .stop()
+<a href=#308 id=308 data-nosnippet>308</a>        .expect(<span class="string">"Config api should still be running"</span>);
 <a href=#309 id=309 data-nosnippet>309</a>
-<a href=#310 id=310 data-nosnippet>310</a>    ui_task_group
-<a href=#311 id=311 data-nosnippet>311</a>        .shutdown_join_all(<span class="prelude-val">None</span>)
-<a href=#312 id=312 data-nosnippet>312</a>        .<span class="kw">await
-<a href=#313 id=313 data-nosnippet>313</a>        </span>.context(<span class="string">"Failed to shutdown UI server after config gen"</span>)<span class="question-mark">?</span>;
-<a href=#314 id=314 data-nosnippet>314</a>
-<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">let </span>connector = <span class="kw">if </span>cg_params.iroh_endpoints().is_empty() {
-<a href=#316 id=316 data-nosnippet>316</a>        TlsTcpConnector::new(
-<a href=#317 id=317 data-nosnippet>317</a>            cg_params.tls_config(),
-<a href=#318 id=318 data-nosnippet>318</a>            settings.p2p_bind,
-<a href=#319 id=319 data-nosnippet>319</a>            cg_params.p2p_urls(),
-<a href=#320 id=320 data-nosnippet>320</a>            cg_params.identity,
-<a href=#321 id=321 data-nosnippet>321</a>        )
-<a href=#322 id=322 data-nosnippet>322</a>        .<span class="kw">await
-<a href=#323 id=323 data-nosnippet>323</a>        </span>.into_dyn()
-<a href=#324 id=324 data-nosnippet>324</a>    } <span class="kw">else </span>{
-<a href=#325 id=325 data-nosnippet>325</a>        IrohConnector::new(
-<a href=#326 id=326 data-nosnippet>326</a>            cg_params.iroh_p2p_sk.clone().unwrap(),
-<a href=#327 id=327 data-nosnippet>327</a>            settings.p2p_bind,
-<a href=#328 id=328 data-nosnippet>328</a>            settings.iroh_dns,
-<a href=#329 id=329 data-nosnippet>329</a>            settings.iroh_relays,
-<a href=#330 id=330 data-nosnippet>330</a>            cg_params
-<a href=#331 id=331 data-nosnippet>331</a>                .iroh_endpoints()
-<a href=#332 id=332 data-nosnippet>332</a>                .iter()
-<a href=#333 id=333 data-nosnippet>333</a>                .map(|(peer, endpoints)| (<span class="kw-2">*</span>peer, endpoints.p2p_pk))
-<a href=#334 id=334 data-nosnippet>334</a>                .collect(),
-<a href=#335 id=335 data-nosnippet>335</a>        )
-<a href=#336 id=336 data-nosnippet>336</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#337 id=337 data-nosnippet>337</a>        </span>.into_dyn()
-<a href=#338 id=338 data-nosnippet>338</a>    };
-<a href=#339 id=339 data-nosnippet>339</a>
-<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">let </span>(p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
-<a href=#341 id=341 data-nosnippet>341</a>    <span class="kw">let </span>(p2p_connection_type_senders, p2p_connection_type_receivers) =
-<a href=#342 id=342 data-nosnippet>342</a>        p2p_connection_type_channels(connector.peers());
-<a href=#343 id=343 data-nosnippet>343</a>
-<a href=#344 id=344 data-nosnippet>344</a>    <span class="kw">let </span>connections = ReconnectP2PConnections::new(
-<a href=#345 id=345 data-nosnippet>345</a>        cg_params.identity,
-<a href=#346 id=346 data-nosnippet>346</a>        connector,
-<a href=#347 id=347 data-nosnippet>347</a>        task_group,
-<a href=#348 id=348 data-nosnippet>348</a>        p2p_status_senders,
-<a href=#349 id=349 data-nosnippet>349</a>        p2p_connection_type_senders,
-<a href=#350 id=350 data-nosnippet>350</a>    )
-<a href=#351 id=351 data-nosnippet>351</a>    .into_dyn();
-<a href=#352 id=352 data-nosnippet>352</a>
-<a href=#353 id=353 data-nosnippet>353</a>    <span class="kw">let </span>cfg = ServerConfig::distributed_gen(
-<a href=#354 id=354 data-nosnippet>354</a>        settings.modules,
-<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw-2">&amp;</span>cg_params,
-<a href=#356 id=356 data-nosnippet>356</a>        settings.registry.clone(),
-<a href=#357 id=357 data-nosnippet>357</a>        code_version_str.clone(),
-<a href=#358 id=358 data-nosnippet>358</a>        connections.clone(),
-<a href=#359 id=359 data-nosnippet>359</a>        p2p_status_receivers.clone(),
-<a href=#360 id=360 data-nosnippet>360</a>    )
-<a href=#361 id=361 data-nosnippet>361</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#362 id=362 data-nosnippet>362</a>
-<a href=#363 id=363 data-nosnippet>363</a>    <span class="macro">assert_ne!</span>(
-<a href=#364 id=364 data-nosnippet>364</a>        cfg.consensus.iroh_endpoints.is_empty(),
-<a href=#365 id=365 data-nosnippet>365</a>        cfg.consensus.api_endpoints.is_empty(),
-<a href=#366 id=366 data-nosnippet>366</a>    );
-<a href=#367 id=367 data-nosnippet>367</a>
-<a href=#368 id=368 data-nosnippet>368</a>    <span class="comment">// TODO: Make writing password optional
-<a href=#369 id=369 data-nosnippet>369</a>    </span>write_new(data_dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>)<span class="question-mark">?</span>;
-<a href=#370 id=370 data-nosnippet>370</a>    write_new(data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
-<a href=#371 id=371 data-nosnippet>371</a>    write_server_config(
-<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw-2">&amp;</span>cfg,
-<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw-2">&amp;</span>data_dir,
-<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
-<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw-2">&amp;</span>settings.registry,
-<a href=#376 id=376 data-nosnippet>376</a>        api_secrets.get_active(),
-<a href=#377 id=377 data-nosnippet>377</a>    )<span class="question-mark">?</span>;
-<a href=#378 id=378 data-nosnippet>378</a>
-<a href=#379 id=379 data-nosnippet>379</a>    <span class="prelude-val">Ok</span>((
-<a href=#380 id=380 data-nosnippet>380</a>        cfg,
-<a href=#381 id=381 data-nosnippet>381</a>        connections,
-<a href=#382 id=382 data-nosnippet>382</a>        p2p_status_receivers,
-<a href=#383 id=383 data-nosnippet>383</a>        p2p_connection_type_receivers,
-<a href=#384 id=384 data-nosnippet>384</a>    ))
-<a href=#385 id=385 data-nosnippet>385</a>}</code></pre></div></section></main></body></html>
+<a href=#310 id=310 data-nosnippet>310</a>    api_handler.stopped().<span class="kw">await</span>;
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>    ui_task_group
+<a href=#313 id=313 data-nosnippet>313</a>        .shutdown_join_all(<span class="prelude-val">None</span>)
+<a href=#314 id=314 data-nosnippet>314</a>        .<span class="kw">await
+<a href=#315 id=315 data-nosnippet>315</a>        </span>.context(<span class="string">"Failed to shutdown UI server after config gen"</span>)<span class="question-mark">?</span>;
+<a href=#316 id=316 data-nosnippet>316</a>
+<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">let </span>connector = <span class="kw">if </span>cg_params.iroh_endpoints().is_empty() {
+<a href=#318 id=318 data-nosnippet>318</a>        TlsTcpConnector::new(
+<a href=#319 id=319 data-nosnippet>319</a>            cg_params.tls_config(),
+<a href=#320 id=320 data-nosnippet>320</a>            settings.p2p_bind,
+<a href=#321 id=321 data-nosnippet>321</a>            cg_params.p2p_urls(),
+<a href=#322 id=322 data-nosnippet>322</a>            cg_params.identity,
+<a href=#323 id=323 data-nosnippet>323</a>        )
+<a href=#324 id=324 data-nosnippet>324</a>        .<span class="kw">await
+<a href=#325 id=325 data-nosnippet>325</a>        </span>.into_dyn()
+<a href=#326 id=326 data-nosnippet>326</a>    } <span class="kw">else </span>{
+<a href=#327 id=327 data-nosnippet>327</a>        IrohConnector::new(
+<a href=#328 id=328 data-nosnippet>328</a>            cg_params.iroh_p2p_sk.clone().unwrap(),
+<a href=#329 id=329 data-nosnippet>329</a>            settings.p2p_bind,
+<a href=#330 id=330 data-nosnippet>330</a>            settings.iroh_dns,
+<a href=#331 id=331 data-nosnippet>331</a>            settings.iroh_relays,
+<a href=#332 id=332 data-nosnippet>332</a>            cg_params
+<a href=#333 id=333 data-nosnippet>333</a>                .iroh_endpoints()
+<a href=#334 id=334 data-nosnippet>334</a>                .iter()
+<a href=#335 id=335 data-nosnippet>335</a>                .map(|(peer, endpoints)| (<span class="kw-2">*</span>peer, endpoints.p2p_pk))
+<a href=#336 id=336 data-nosnippet>336</a>                .collect(),
+<a href=#337 id=337 data-nosnippet>337</a>        )
+<a href=#338 id=338 data-nosnippet>338</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#339 id=339 data-nosnippet>339</a>        </span>.into_dyn()
+<a href=#340 id=340 data-nosnippet>340</a>    };
+<a href=#341 id=341 data-nosnippet>341</a>
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">let </span>(p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
+<a href=#343 id=343 data-nosnippet>343</a>    <span class="kw">let </span>(p2p_connection_type_senders, p2p_connection_type_receivers) =
+<a href=#344 id=344 data-nosnippet>344</a>        p2p_connection_type_channels(connector.peers());
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a>    <span class="kw">let </span>connections = ReconnectP2PConnections::new(
+<a href=#347 id=347 data-nosnippet>347</a>        cg_params.identity,
+<a href=#348 id=348 data-nosnippet>348</a>        connector,
+<a href=#349 id=349 data-nosnippet>349</a>        task_group,
+<a href=#350 id=350 data-nosnippet>350</a>        p2p_status_senders,
+<a href=#351 id=351 data-nosnippet>351</a>        p2p_connection_type_senders,
+<a href=#352 id=352 data-nosnippet>352</a>    )
+<a href=#353 id=353 data-nosnippet>353</a>    .into_dyn();
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">let </span>cfg = ServerConfig::distributed_gen(
+<a href=#356 id=356 data-nosnippet>356</a>        settings.modules,
+<a href=#357 id=357 data-nosnippet>357</a>        <span class="kw-2">&amp;</span>cg_params,
+<a href=#358 id=358 data-nosnippet>358</a>        settings.registry.clone(),
+<a href=#359 id=359 data-nosnippet>359</a>        code_version_str.clone(),
+<a href=#360 id=360 data-nosnippet>360</a>        connections.clone(),
+<a href=#361 id=361 data-nosnippet>361</a>        p2p_status_receivers.clone(),
+<a href=#362 id=362 data-nosnippet>362</a>    )
+<a href=#363 id=363 data-nosnippet>363</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a>    <span class="macro">assert_ne!</span>(
+<a href=#366 id=366 data-nosnippet>366</a>        cfg.consensus.iroh_endpoints.is_empty(),
+<a href=#367 id=367 data-nosnippet>367</a>        cfg.consensus.api_endpoints.is_empty(),
+<a href=#368 id=368 data-nosnippet>368</a>    );
+<a href=#369 id=369 data-nosnippet>369</a>
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="comment">// TODO: Make writing password optional
+<a href=#371 id=371 data-nosnippet>371</a>    </span>write_new(data_dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>)<span class="question-mark">?</span>;
+<a href=#372 id=372 data-nosnippet>372</a>    write_new(data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
+<a href=#373 id=373 data-nosnippet>373</a>    write_server_config(
+<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw-2">&amp;</span>cfg,
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw-2">&amp;</span>data_dir,
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw-2">&amp;</span>settings.registry,
+<a href=#378 id=378 data-nosnippet>378</a>        api_secrets.get_active(),
+<a href=#379 id=379 data-nosnippet>379</a>    )<span class="question-mark">?</span>;
+<a href=#380 id=380 data-nosnippet>380</a>
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="prelude-val">Ok</span>((
+<a href=#382 id=382 data-nosnippet>382</a>        cfg,
+<a href=#383 id=383 data-nosnippet>383</a>        connections,
+<a href=#384 id=384 data-nosnippet>384</a>        p2p_status_receivers,
+<a href=#385 id=385 data-nosnippet>385</a>        p2p_connection_type_receivers,
+<a href=#386 id=386 data-nosnippet>386</a>    ))
+<a href=#387 id=387 data-nosnippet>387</a>}</code></pre></div></section></main></body></html>
