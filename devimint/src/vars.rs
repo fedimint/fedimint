@@ -182,6 +182,7 @@ declare_vars! {
 
         FM_GATEWAY_SKIP_WAIT_FOR_SYNC: String = "1"; env: "FM_GATEWAY_SKIP_WAIT_FOR_SYNC";
         FM_GATEWAY_NETWORK: String = "regtest"; env: "FM_GATEWAY_NETWORK";
+        FM_DEFAULT_ROUTING_FEES: String = "0,0"; env: "FM_DEFAULT_ROUTING_FEES";
 
         FM_FAUCET_BIND_ADDR: String = f!("0.0.0.0:{FM_PORT_FAUCET}"); env: "FM_FAUCET_BIND_ADDR";
 

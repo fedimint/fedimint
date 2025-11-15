@@ -25,11 +25,13 @@ use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::PeerHandleOpsExt as _;
 use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
+use futures::future::select_all;
 use hex::{FromHex, ToHex};
 use peer_handle::PeerHandle;
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
+use tokio::select;
 use tokio_rustls::rustls;
 use tracing::{error, info, warn};
 
@@ -57,6 +59,7 @@ fn default_broadcast_rounds_per_session() -> u16 {
 const DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS: u16 = 50;
 const DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION: u16 = 200;
 
+#[allow(clippy::unsafe_derive_deserialize)] // clippy fires on `select!` https://github.com/rust-lang/rust-clippy/issues/13062
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
 pub struct ServerConfig {
@@ -531,7 +534,7 @@ impl ServerConfig {
         registry: ServerModuleInitRegistry,
         code_version_str: String,
         connections: DynP2PConnections<P2PMessage>,
-        p2p_status_receivers: P2PStatusReceivers,
+        mut p2p_status_receivers: P2PStatusReceivers,
     ) -> anyhow::Result<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
 
@@ -552,25 +555,34 @@ impl ServerConfig {
             "Waiting for all p2p connections to open..."
         );
 
-        while p2p_status_receivers.values().any(|r| r.borrow().is_none()) {
-            let connected_peers = p2p_status_receivers
-                .iter()
-                .filter_map(|entry| entry.1.borrow().is_some().then_some(*entry.0))
-                .collect::<Vec<PeerId>>();
+        loop {
+            let mut pending_connection_receivers: Vec<_> = p2p_status_receivers
+                .iter_mut()
+                .filter_map(|(p, r)| {
+                    r.mark_unchanged();
+                    r.borrow().is_none().then_some((*p, r.clone()))
+                })
+                .collect();
 
-            let disconnected_peers = p2p_status_receivers
+            if pending_connection_receivers.is_empty() {
+                break;
+            }
+
+            let disconnected_peers = pending_connection_receivers
                 .iter()
-                .filter_map(|entry| entry.1.borrow().is_none().then_some(*entry.0))
+                .map(|entry| entry.0)
                 .collect::<Vec<PeerId>>();
 
             info!(
                 target: LOG_NET_PEER_DKG,
-                connected_peers = ?connected_peers,
-                disconnected_peers = ?disconnected_peers,
+                pending = ?disconnected_peers,
                 "Waiting for all p2p connections to open..."
             );
 
-            sleep(Duration::from_secs(1)).await;
+            select! {
+                _ = select_all(pending_connection_receivers.iter_mut().map(|r| Box::pin(r.1.changed()))) => {}
+                () = sleep(Duration::from_secs(10)) => {}
+            }
         }
 
         let checksum = params.peers.consensus_hash_sha256();
