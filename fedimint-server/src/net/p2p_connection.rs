@@ -5,6 +5,7 @@ use anyhow::Context;
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use futures::{SinkExt, StreamExt};
 use iroh::endpoint::{Connection, RecvStream};
 use serde::Serialize;
@@ -57,9 +58,13 @@ pub trait IP2PConnection<M>: Send + 'static {
 #[async_trait]
 impl<M> IP2PFrame<M> for BytesMut
 where
-    M: DeserializeOwned + Send + 'static,
+    M: Decodable + DeserializeOwned + Send + 'static,
 {
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
+        if let Ok(message) = M::consensus_decode_whole(self, &ModuleDecoderRegistry::default()) {
+            return Ok(message);
+        }
+
         Ok(bincode::deserialize_from(Cursor::new(&**self))?)
     }
 }
@@ -99,19 +104,23 @@ where
 #[async_trait]
 impl<M> IP2PFrame<M> for RecvStream
 where
-    M: DeserializeOwned + Send + 'static,
+    M: Decodable + DeserializeOwned + Send + 'static,
 {
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
-        Ok(bincode::deserialize_from(Cursor::new(
-            &self.read_to_end(1_000_000).await?,
-        ))?)
+        let bytes = self.read_to_end(1_000_000).await?;
+
+        if let Ok(message) = M::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default()) {
+            return Ok(message);
+        }
+
+        Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
     }
 }
 
 #[async_trait]
 impl<M> IP2PConnection<M> for Connection
 where
-    M: Serialize + DeserializeOwned + Send + 'static,
+    M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&mut self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
