@@ -85,3 +85,74 @@ impl Event for RecoveryReissuanceStarted {
     const KIND: EventKind = EventKind::from_static("recovered-notes-reissued");
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
+
+/// Event emitted when e-cash send operation is initiated.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct SendPaymentEvent {
+    pub operation_id: OperationId,
+    pub amount: Amount,
+    pub oob_notes: Option<String>,
+}
+
+impl Event for SendPaymentEvent {
+    const MODULE: Option<ModuleKind> = Some(KIND);
+    const KIND: EventKind = EventKind::from_static("payment-send");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
+}
+
+/// Status of a send (ecash) operation.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub enum SendPaymentStatus {
+    /// The send was successful, includes the ecash notes.
+    Success(String),
+    /// The send was aborted/failed.
+    Aborted,
+}
+
+/// Event emitted when a send (ecash) operation reaches a final state.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct SendPaymentUpdateEvent {
+    pub operation_id: OperationId,
+    pub status: SendPaymentStatus,
+}
+
+impl Event for SendPaymentUpdateEvent {
+    const MODULE: Option<ModuleKind> = Some(KIND);
+    const KIND: EventKind = EventKind::from_static("payment-send-update");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
+}
+
+/// Event emitted when a receive (reissuance) operation is initiated.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ReceivePaymentEvent {
+    pub operation_id: OperationId,
+    pub amount: Amount,
+}
+
+impl Event for ReceivePaymentEvent {
+    const MODULE: Option<ModuleKind> = Some(KIND);
+    const KIND: EventKind = EventKind::from_static("payment-receive");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
+}
+
+/// Status of a receive (reissuance) operation.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub enum ReceivePaymentStatus {
+    /// The reissuance was successful.
+    Success,
+    /// The reissuance was aborted/failed.
+    Aborted,
+}
+
+/// Event emitted when a receive (reissuance) operation reaches a final state.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ReceivePaymentUpdateEvent {
+    pub operation_id: OperationId,
+    pub status: ReceivePaymentStatus,
+}
+
+impl Event for ReceivePaymentUpdateEvent {
+    const MODULE: Option<ModuleKind> = Some(KIND);
+    const KIND: EventKind = EventKind::from_static("payment-receive-update");
+    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
+}
