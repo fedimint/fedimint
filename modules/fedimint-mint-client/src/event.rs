@@ -86,13 +86,12 @@ impl Event for RecoveryReissuanceStarted {
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
-/// Event emitted when e-cash is sent out-of-band.
-/// This is a final event - once e-cash is sent, the operation is complete.
+/// Event emitted when e-cash send operation is initiated.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SendPaymentEvent {
     pub operation_id: OperationId,
     pub amount: Amount,
-    pub oob_notes: String,
+    pub oob_notes: Option<String>,
 }
 
 impl Event for SendPaymentEvent {
