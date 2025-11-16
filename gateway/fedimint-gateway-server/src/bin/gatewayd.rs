@@ -14,14 +14,12 @@ use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_gateway_server::Gateway;
 use fedimint_logging::{LOG_GATEWAY, TracingSetup};
-#[cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))]
-use tikv_jemallocator::Jemalloc;
 use tracing::info;
 
-#[cfg(not(any(target_env = "msvc", target_os = "ios", target_os = "android")))]
+#[cfg(feature = "jemalloc")]
 #[global_allocator]
 // rocksdb suffers from memory fragmentation when using standard allocator
-static GLOBAL: Jemalloc = Jemalloc;
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() -> Result<(), anyhow::Error> {
     let runtime = Arc::new(tokio::runtime::Runtime::new()?);
