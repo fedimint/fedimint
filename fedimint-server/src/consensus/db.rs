@@ -5,6 +5,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::secp256k1::schnorr;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
@@ -17,6 +18,23 @@ use futures::StreamExt;
 use serde::Serialize;
 
 use crate::db::DbKeyPrefix;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct SessionOutcomeSignatureKey(pub u64);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct SessionOutcomeSignaturePrefix;
+
+impl_db_record!(
+    key = SessionOutcomeSignatureKey,
+    value = schnorr::Signature,
+    db_prefix = DbKeyPrefix::SessionOutcomeSignature,
+    notify_on_modify = true,
+);
+impl_db_lookup!(
+    key = SessionOutcomeSignatureKey,
+    query_prefix = SessionOutcomeSignaturePrefix
+);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct AcceptedItemKey(pub u64);

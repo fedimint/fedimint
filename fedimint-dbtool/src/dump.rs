@@ -276,6 +276,16 @@ impl DatabaseDump {
         consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
     ) {
         match table {
+            server_db::DbKeyPrefix::SessionOutcomeSignature => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    consensus_db::SessionOutcomeSignaturePrefix,
+                    consensus_db::SessionOutcomeSignatureKey,
+                    fedimint_core::secp256k1::schnorr::Signature,
+                    consensus,
+                    "Session Outcome Signatures"
+                );
+            }
             server_db::DbKeyPrefix::AcceptedItem => {
                 push_db_pair_items_no_serde!(
                     dbtx,

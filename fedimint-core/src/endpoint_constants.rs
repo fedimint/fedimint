@@ -16,6 +16,7 @@ pub const SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT: &str = "server_config_consensus
 pub const SESSION_COUNT_ENDPOINT: &str = "session_count";
 pub const AWAIT_SESSION_OUTCOME_ENDPOINT: &str = "await_session_outcome";
 pub const AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT: &str = "await_signed_session_outcome";
+pub const AWAIT_SESSION_OUTCOME_SIGNATURE_ENDPOINT: &str = "await_session_outcome_signature";
 pub const SESSION_STATUS_ENDPOINT: &str = "session_status";
 pub const SESSION_STATUS_V2_ENDPOINT: &str = "signed_session_status";
 pub const SHUTDOWN_ENDPOINT: &str = "shutdown";
