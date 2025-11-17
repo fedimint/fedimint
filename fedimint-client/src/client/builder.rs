@@ -801,6 +801,7 @@ impl ClientBuilder {
                                 api.clone(),
                                 self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                                 task_group.clone(),
+                                connectors.clone(),
                             )
                             .await?;
 

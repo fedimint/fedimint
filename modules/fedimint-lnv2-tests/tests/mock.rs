@@ -13,7 +13,7 @@ use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
 use fedimint_ln_common::bitcoin;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{GatewayConnection, PaymentFee, RoutingInfo};
-use fedimint_lnv2_common::{Bolt11InvoiceDescription, GatewayRpcError, LightningInvoice};
+use fedimint_lnv2_common::{Bolt11InvoiceDescription, LightningInvoice};
 use lightning_invoice::{
     Bolt11Invoice, Currency, DEFAULT_EXPIRY_TIME, InvoiceBuilder, PaymentSecret,
 };

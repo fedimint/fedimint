@@ -18,7 +18,7 @@ use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-use fedimint_api_client::api::{ConnectorRegistry, DynModuleApi, PeerError};
+use fedimint_api_client::api::{DynModuleApi, PeerError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -260,10 +260,7 @@ impl ClientModuleInit for LightningClientInit {
         let gateway_conn = if let Some(gateway_conn) = self.gateway_conn.clone() {
             gateway_conn
         } else {
-            let connector_registry = ConnectorRegistry::build_from_client_defaults()
-                .bind()
-                .await?;
-            let api = GatewayApi::new(None, connector_registry);
+            let api = GatewayApi::new(None, args.connector_registry.clone());
             Arc::new(RealGatewayConnection { api })
         };
         Ok(LightningClientModule::new(
