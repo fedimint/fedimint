@@ -800,19 +800,6 @@ impl fmt::Debug for ConnectorRegistry {
 }
 
 impl ConnectorRegistry {
-    pub fn build_from_gateway_defaults() -> ConnectorRegistryBuilder {
-        ConnectorRegistryBuilder {
-            iroh_enable: true,
-            iroh_dns: None,
-            iroh_pkarr_dht: false,
-            iroh_next: false,
-            ws_enable: false,
-            ws_force_tor: false,
-
-            connection_overrides: BTreeMap::default(),
-        }
-    }
-
     /// Create a builder with recommended defaults intended for client-side
     /// usage
     ///
@@ -965,17 +952,28 @@ impl ConnectorRegistry {
             None => url,
         };
 
-        let Some(connector) = self.gateway_connectors.get(url.scheme()) else {
+        let connector_key = url.scheme();
+
+        let Some(connector_lazy) = self.connectors_lazy.get(connector_key) else {
             return Err(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
             ));
         };
 
-        connector
-            .get_try()
+        // Clone the init function to use in the async block
+        let init_fn = connector_lazy.0.clone();
+
+        connector_lazy
+            .1
+            .get_or_try_init(|| async move { init_fn().await })
             .await
-            .map_err(|e| anyhow!("Connector failed to initialize: {}", e.fmt_compact()))?
+            .map_err(|e| {
+                PeerError::Transport(anyhow!(
+                    "Connector failed to initialize: {}",
+                    e.fmt_compact_anyhow()
+                ))
+            })?
             .connect_gateway(url)
             .await
     }
@@ -989,12 +987,7 @@ pub trait Connector: Send + Sync + 'static + fmt::Debug {
         url: &SafeUrl,
         api_secret: Option<&str>,
     ) -> PeerResult<DynGuaridianConnection>;
-}
 
-pub type DynGatewayConnector = Arc<dyn GatewayConnector>;
-
-#[async_trait]
-pub trait GatewayConnector: Send + Sync + 'static + fmt::Debug {
     async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection>;
 }
 

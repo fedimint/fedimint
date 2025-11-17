@@ -260,7 +260,7 @@ impl ClientModuleInit for LightningClientInit {
         let gateway_conn = if let Some(gateway_conn) = self.gateway_conn.clone() {
             gateway_conn
         } else {
-            let connector_registry = ConnectorRegistry::build_from_gateway_defaults()
+            let connector_registry = ConnectorRegistry::build_from_client_defaults()
                 .bind()
                 .await?;
             let api = GatewayApi::new(None, connector_registry);

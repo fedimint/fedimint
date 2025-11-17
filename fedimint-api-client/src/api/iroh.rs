@@ -299,10 +299,7 @@ impl crate::api::Connector for IrohConnector {
             PeerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
         }))
     }
-}
 
-#[async_trait::async_trait]
-impl crate::api::GatewayConnector for IrohConnector {
     async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
         let node_id = Self::node_id_from_url(url)?;
         let connection_override = self.connection_overrides.get(&node_id).cloned();

@@ -21,7 +21,9 @@ use tracing::trace;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 
 use super::Connector;
-use crate::api::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
+use crate::api::{
+    DynGatewayConnection, DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult,
+};
 
 #[derive(Debug, Clone)]
 pub struct WebsocketConnector {}
@@ -123,6 +125,10 @@ impl Connector for WebsocketConnector {
     ) -> PeerResult<DynGuaridianConnection> {
         let client = self.make_new_connection(url, api_secret).await?;
         Ok(client.into_dyn())
+    }
+
+    async fn connect_gateway(&self, _url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+        Err(anyhow!("Unsupported transport method"))
     }
 }
 
