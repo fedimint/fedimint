@@ -32,8 +32,8 @@ pub fn is_env_var_set(var: &str) -> bool {
 
 /// Check if env variable is unset or equal `0` or `false` which are common
 /// ways to disable a setting if it on by default.
-pub fn is_env_var_disabled(var: &str) -> bool {
-    std::env::var_os(var).is_none_or(|v| v == "0" && v == "false")
+pub fn is_env_var_set_default_on(var: &str) -> bool {
+    std::env::var_os(var).is_none_or(|v| v != "0" && v != "false")
 }
 
 /// Use to detect if running in a test environment, either `cargo test` or
@@ -92,7 +92,19 @@ pub const FM_IROH_DNS_ENV: &str = "FM_IROH_DNS";
 pub const FM_IROH_RELAY_ENV: &str = "FM_IROH_RELAY";
 
 /// Env var to disable Iroh's use of DHT
-pub const FM_IROH_ENABLE_DHT_ENV: &str = "FM_IROH_ENABLE_DHT";
+pub const FM_IROH_DHT_ENABLE_ENV: &str = "FM_IROH_DHT_ENABLE";
+
+/// Env var to disable default n0 discovery
+pub const FM_IROH_N0_DISCOVERY_ENABLE_ENV: &str = "FM_IROH_N0_DISCOVERY_ENABLE";
+
+/// Env var to disable default pkarr resolver
+pub const FM_IROH_PKARR_RESOLVER_ENABLE_ENV: &str = "FM_IROH_PKARR_RESOLVER_ENABLE";
+
+/// Env var to disable default pkarr publisher
+pub const FM_IROH_PKARR_PUBLISHER_ENABLE_ENV: &str = "FM_IROH_PKARR_PUBLISHER_ENABLE";
+
+/// Env var to disable Iroh's use of relays
+pub const FM_IROH_RELAYS_ENABLE_ENV: &str = "FM_IROH_RELAYS_ENABLE";
 
 /// Env var to override tcp api connectivity
 ///
