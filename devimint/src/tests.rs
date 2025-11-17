@@ -20,6 +20,7 @@ use fedimint_core::util::{retry, write_overwrite_async};
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::LightningPaymentOutcome;
 use fedimint_ln_client::cli::LnInvoiceResponse;
+use fedimint_ln_server::common::LightningGatewayAnnouncement;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_client::FinalSendOperationState;
 use fedimint_logging::LOG_DEVIMINT;
@@ -36,7 +37,7 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::VERSION_0_9_0_ALPHA;
+use crate::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA};
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
 
 pub struct Stats {
@@ -642,12 +643,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let fed_id = fed.calculate_federation_id();
     let invite = fed.invite_code()?;
 
-    // LNv1 expects no gateway routing fees
-    gw_lnd
-        .set_federation_routing_fee(fed_id.clone(), 0, 0)
-        .await?;
-    cmd!(client, "list-gateways").run().await?;
-
     let invite_code = cmd!(client, "dev", "decode", "invite-code", invite.clone())
         .out_json()
         .await?;
@@ -784,6 +779,38 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // LND gateway tests
     info!("Testing LND gateway");
+
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    // Gatewayd did not support default fees before v0.8.0
+    // In order for the amount tests to pass, we need to reliably set the fees to
+    // 0,0.
+    if gatewayd_version < *VERSION_0_8_0_ALPHA {
+        gw_lnd
+            .set_federation_routing_fee(fed_id.clone(), 0, 0)
+            .await?;
+
+        // Poll until the client has heard about the updated fees
+        poll("Waiting for LND GW fees to update", || async {
+            let gateways_val = cmd!(client, "list-gateways")
+                .out_json()
+                .await
+                .map_err(ControlFlow::Break)?;
+            let gateways =
+                serde_json::from_value::<Vec<LightningGatewayAnnouncement>>(gateways_val)
+                    .expect("Could not deserialize");
+            let fees = gateways
+                .first()
+                .expect("No gateway was registered")
+                .info
+                .fees;
+            if fees.base_msat == 0 && fees.proportional_millionths == 0 {
+                Ok(())
+            } else {
+                Err(ControlFlow::Continue(anyhow!("Fees have not been updated")))
+            }
+        })
+        .await?;
+    }
 
     // OUTGOING: fedimint-cli pays LDK via LND gateway
     info!("Testing outgoing payment from client to LDK via LND gateway");
