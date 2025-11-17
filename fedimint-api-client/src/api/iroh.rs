@@ -507,7 +507,6 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
     }
 }
 
-// TODO: This might need to be in this crate
 #[async_trait]
 impl IGatewayConnection for Connection {
     async fn request(

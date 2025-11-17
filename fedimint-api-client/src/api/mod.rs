@@ -1,5 +1,6 @@
 mod error;
 pub mod global_api;
+pub mod http;
 pub mod iroh;
 pub mod net;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
@@ -57,6 +58,7 @@ use tokio::sync::OnceCell;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::api;
+use crate::api::http::HttpConnector;
 use crate::api::ws::WebsocketConnector;
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
@@ -650,6 +652,9 @@ pub struct ConnectorRegistryBuilder {
     /// Enable Websocket API handling at all?
     ws_enable: bool,
     ws_force_tor: bool,
+
+    // Enable HTTP
+    http_enable: bool,
 }
 
 impl ConnectorRegistryBuilder {
@@ -682,6 +687,14 @@ impl ConnectorRegistryBuilder {
                 OnceCell::new(),
             ),
         );
+
+        if self.http_enable {
+            let http_connector = JitTry::new_try(move || async move {
+                Ok(Arc::new(HttpConnector::default()) as DynConnector)
+            });
+            inner.insert("https".into(), http_connector.clone());
+            inner.insert("http".into(), http_connector);
+        }
 
         Ok(ConnectorRegistry {
             connectors_lazy,
@@ -812,6 +825,7 @@ impl ConnectorRegistry {
             iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
+            http_enable: true,
 
             connection_overrides: BTreeMap::default(),
         }
@@ -827,6 +841,7 @@ impl ConnectorRegistry {
             iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
+            http_enable: false,
 
             connection_overrides: BTreeMap::default(),
         }
@@ -842,6 +857,7 @@ impl ConnectorRegistry {
             iroh_next: false,
             ws_enable: true,
             ws_force_tor: false,
+            http_enable: true,
 
             connection_overrides: BTreeMap::default(),
         }
