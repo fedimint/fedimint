@@ -1,9 +1,10 @@
 use clap::Subcommand;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
+use fedimint_core::util::SafeUrl;
 use fedimint_gateway_client::{get_config, get_info, set_fees};
 use fedimint_gateway_common::{ConfigPayload, SetFeesPayload};
-use fedimint_ln_common::client::GatewayRpcClient;
+use fedimint_ln_common::client::GatewayApi;
 
 use crate::print_response;
 
@@ -39,15 +40,16 @@ pub enum ConfigCommands {
 }
 
 impl ConfigCommands {
-    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
         match self {
             Self::ClientConfig { federation_id } => {
-                let response = get_config(client, ConfigPayload { federation_id }).await?;
+                let response =
+                    get_config(client, base_url, ConfigPayload { federation_id }).await?;
 
                 print_response(response);
             }
             Self::Display { federation_id } => {
-                let info = get_info(client).await?;
+                let info = get_info(client, base_url).await?;
                 let federations = info
                     .federations
                     .into_iter()
@@ -68,6 +70,7 @@ impl ConfigCommands {
             } => {
                 set_fees(
                     client,
+                    base_url,
                     SetFeesPayload {
                         federation_id,
                         lightning_base: ln_base,

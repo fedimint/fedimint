@@ -2,6 +2,7 @@ use bitcoin::Address;
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_client::{
     backup, get_deposit_address, receive_ecash, recheck_address, spend_ecash, withdraw,
@@ -10,7 +11,7 @@ use fedimint_gateway_common::{
     BackupPayload, DepositAddressPayload, DepositAddressRecheckPayload, ReceiveEcashPayload,
     SpendEcashPayload, WithdrawPayload,
 };
-use fedimint_ln_common::client::GatewayRpcClient;
+use fedimint_ln_common::client::GatewayApi;
 use fedimint_mint_client::OOBNotes;
 
 use crate::print_response;
@@ -68,14 +69,15 @@ pub enum EcashCommands {
 }
 
 impl EcashCommands {
-    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
         match self {
             Self::Backup { federation_id } => {
-                backup(client, BackupPayload { federation_id }).await?;
+                backup(client, base_url, BackupPayload { federation_id }).await?;
             }
             Self::Pegin { federation_id } => {
                 let response =
-                    get_deposit_address(client, DepositAddressPayload { federation_id }).await?;
+                    get_deposit_address(client, base_url, DepositAddressPayload { federation_id })
+                        .await?;
 
                 print_response(response);
             }
@@ -85,6 +87,7 @@ impl EcashCommands {
             } => {
                 let response = recheck_address(
                     client,
+                    base_url,
                     DepositAddressRecheckPayload {
                         address,
                         federation_id,
@@ -100,6 +103,7 @@ impl EcashCommands {
             } => {
                 let response = withdraw(
                     client,
+                    base_url,
                     WithdrawPayload {
                         federation_id,
                         amount,
@@ -119,6 +123,7 @@ impl EcashCommands {
             } => {
                 let response = spend_ecash(
                     client,
+                    base_url,
                     SpendEcashPayload {
                         federation_id,
                         amount,
@@ -132,7 +137,8 @@ impl EcashCommands {
                 print_response(response);
             }
             Self::Receive { notes, wait } => {
-                let response = receive_ecash(client, ReceiveEcashPayload { notes, wait }).await?;
+                let response =
+                    receive_ecash(client, base_url, ReceiveEcashPayload { notes, wait }).await?;
                 print_response(response);
             }
         }

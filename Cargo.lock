@@ -3201,6 +3201,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
+ "fedimint-api-client",
  "fedimint-build",
  "fedimint-core",
  "fedimint-eventlog",
