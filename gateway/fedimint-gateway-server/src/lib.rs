@@ -1258,28 +1258,6 @@ impl Gateway {
         Ok(federation_info)
     }
 
-    /// Handle a request to have the Gateway leave a federation. The Gateway
-    /// will request the federation to remove the registration record and
-    /// the gateway will remove the configuration needed to construct the
-    /// federation client.
-    pub async fn handle_leave_federation(
-        &self,
-        payload: LeaveFedPayload,
-    ) -> AdminResult<FederationInfo> {
-        // Lock the federation manager before starting the db transaction to reduce the
-        // chance of db write conflicts.
-        let mut federation_manager = self.federation_manager.write().await;
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-
-        let federation_info = federation_manager
-            .leave_federation(payload.federation_id, &mut dbtx.to_ref_nc())
-            .await?;
-
-        dbtx.remove_federation_config(payload.federation_id).await;
-        dbtx.commit_tx().await;
-        Ok(federation_info)
-    }
-
     /// Handles a request for the gateway to backup a connected federation's
     /// ecash.
     pub async fn handle_backup_msg(
@@ -2167,6 +2145,28 @@ impl IAdminGateway for Gateway {
             outgoing: PaymentStats::compute(&outgoing),
             incoming: PaymentStats::compute(&incoming),
         })
+    }
+
+    /// Handle a request to have the Gateway leave a federation. The Gateway
+    /// will request the federation to remove the registration record and
+    /// the gateway will remove the configuration needed to construct the
+    /// federation client.
+    async fn handle_leave_federation(
+        &self,
+        payload: LeaveFedPayload,
+    ) -> AdminResult<FederationInfo> {
+        // Lock the federation manager before starting the db transaction to reduce the
+        // chance of db write conflicts.
+        let mut federation_manager = self.federation_manager.write().await;
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        let federation_info = federation_manager
+            .leave_federation(payload.federation_id, &mut dbtx.to_ref_nc())
+            .await?;
+
+        dbtx.remove_federation_config(payload.federation_id).await;
+        dbtx.commit_tx().await;
+        Ok(federation_info)
     }
 
     fn get_password_hash(&self) -> String {

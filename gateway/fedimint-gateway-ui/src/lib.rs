@@ -9,11 +9,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Redirect};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
-use fedimint_gateway_common::{GatewayInfo, PaymentSummaryPayload, PaymentSummaryResponse};
+use fedimint_gateway_common::{
+    FederationInfo, GatewayInfo, LeaveFedPayload, PaymentSummaryPayload, PaymentSummaryResponse,
+};
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
@@ -22,11 +24,13 @@ use fedimint_ui_common::{
 };
 use maud::html;
 
+use crate::federation::leave_federation_handler;
 use crate::lightning::channels_fragment_handler;
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
 pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/channels/fragment";
+pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 
 #[async_trait]
 pub trait IAdminGateway {
@@ -45,6 +49,11 @@ pub trait IAdminGateway {
             end_millis,
         }: PaymentSummaryPayload,
     ) -> Result<PaymentSummaryResponse, Self::Error>;
+
+    async fn handle_leave_federation(
+        &self,
+        payload: LeaveFedPayload,
+    ) -> Result<FederationInfo, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -139,6 +148,7 @@ pub fn router<E: Display + 'static>(api: DynGatewayApi<E>) -> Router {
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
         .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
+        .route(LEAVE_FEDERATION_ROUTE, post(leave_federation_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))
