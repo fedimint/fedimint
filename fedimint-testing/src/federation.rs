@@ -19,7 +19,7 @@ use fedimint_core::net::peers::IP2PConnections;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::{TaskGroup, block_in_place, sleep_in_test};
 use fedimint_gateway_common::ConnectFedPayload;
-use fedimint_gateway_server::Gateway;
+use fedimint_gateway_server::{Gateway, IAdminGateway};
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ServerConfig;

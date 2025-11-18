@@ -1,3 +1,4 @@
+mod connect_fed;
 mod federation;
 mod general;
 mod lightning;
@@ -14,7 +15,8 @@ use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_gateway_common::{
-    FederationInfo, GatewayInfo, LeaveFedPayload, PaymentSummaryPayload, PaymentSummaryResponse,
+    ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, PaymentSummaryPayload,
+    PaymentSummaryResponse,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -24,6 +26,7 @@ use fedimint_ui_common::{
 };
 use maud::html;
 
+use crate::connect_fed::connect_federation_handler;
 use crate::federation::leave_federation_handler;
 use crate::lightning::channels_fragment_handler;
 
@@ -31,6 +34,7 @@ pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'st
 
 pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
+pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
 
 #[async_trait]
 pub trait IAdminGateway {
@@ -53,6 +57,11 @@ pub trait IAdminGateway {
     async fn handle_leave_federation(
         &self,
         payload: LeaveFedPayload,
+    ) -> Result<FederationInfo, Self::Error>;
+
+    async fn handle_connect_federation(
+        &self,
+        payload: ConnectFedPayload,
     ) -> Result<FederationInfo, Self::Error>;
 
     fn get_password_hash(&self) -> String;
@@ -134,6 +143,12 @@ where
             }
         }
 
+        div class="row gy-4 mt-2" {
+            div class="col-md-12" {
+                (connect_fed::render())
+            }
+        }
+
         @for fed in gateway_info.federations {
             (federation::render(&fed))
         }
@@ -149,6 +164,7 @@ pub fn router<E: Display + 'static>(api: DynGatewayApi<E>) -> Router {
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
         .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
         .route(LEAVE_FEDERATION_ROUTE, post(leave_federation_handler))
+        .route(CONNECT_FEDERATION_ROUTE, post(connect_federation_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))

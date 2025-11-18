@@ -127,7 +127,7 @@ async-stream = "0.3.6"
 async-trait = "0.1.88"
 axum = "0.8.4"
 axum-auth = "0.8.1"
-axum-extra = "0.10.1"
+axum-extra = "0.12.0"
 backon = { version = "1.5.1", default-features = false }
 backtrace = "0.3.75"
 base64 = "0.22.1"
@@ -314,7 +314,7 @@ tokio-rustls = { version = "0.26.0", features = ["aws_lc_rs"] }
 tokio-stream = "0.1.17"
 tokio-test = "0.4.4"
 tokio-util = "0.7.15"
-tonic = "0.13.1"
+tonic = "0.14.2"
 tonic_lnd = { version = "0.3.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
