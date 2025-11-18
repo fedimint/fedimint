@@ -1,5 +1,6 @@
 mod error;
 pub mod global_api;
+#[cfg(not(target_family = "wasm"))]
 pub mod http;
 pub mod iroh;
 pub mod net;
@@ -58,7 +59,6 @@ use tokio::sync::OnceCell;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::api;
-use crate::api::http::HttpConnector;
 use crate::api::ws::WebsocketConnector;
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
@@ -688,9 +688,10 @@ impl ConnectorRegistryBuilder {
             ),
         );
 
+        #[cfg(not(target_family = "wasm"))]
         if self.http_enable {
             let http_connector = JitTry::new_try(move || async move {
-                Ok(Arc::new(HttpConnector::default()) as DynConnector)
+                Ok(Arc::new(crate::api::http::HttpConnector::default()) as DynConnector)
             });
             inner.insert("https".into(), http_connector.clone());
             inner.insert("http".into(), http_connector);

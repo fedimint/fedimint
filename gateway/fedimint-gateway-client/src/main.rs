@@ -10,7 +10,6 @@ use clap::{CommandFactory, Parser, Subcommand};
 use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
 use fedimint_api_client::api::ConnectorRegistry;
-use fedimint_core::envs::FM_IROH_DNS_ENV;
 use fedimint_core::util::SafeUrl;
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_logging::TracingSetup;
@@ -33,14 +32,6 @@ struct Cli {
     /// Password for authenticated requests to the gateway
     #[clap(long)]
     rpcpassword: Option<String>,
-
-    /// Optional URL of the Iroh DNS server
-    #[arg(long, env = FM_IROH_DNS_ENV)]
-    iroh_dns: Option<SafeUrl>,
-
-    /// Optional override URL for directly connecting to an Iroh endpoint
-    #[arg(long)]
-    connection_override: Option<SafeUrl>,
 }
 
 #[derive(Subcommand)]
@@ -90,7 +81,7 @@ async fn run() -> anyhow::Result<()> {
     match cli.command {
         Commands::General(general_command) => general_command.handle(&client, &cli.address).await?,
         Commands::Lightning(lightning_command) => {
-            lightning_command.handle(&client, &cli.address).await?
+            lightning_command.handle(&client, &cli.address).await?;
         }
         Commands::Ecash(ecash_command) => ecash_command.handle(&client, &cli.address).await?,
         Commands::Onchain(onchain_command) => onchain_command.handle(&client, &cli.address).await?,

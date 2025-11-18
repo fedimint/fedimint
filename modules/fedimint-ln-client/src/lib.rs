@@ -298,15 +298,9 @@ mod deprecated_variant_hack {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LightningClientInit {
     pub gateway_conn: Option<Arc<dyn GatewayConnection + Send + Sync>>,
-}
-
-impl Default for LightningClientInit {
-    fn default() -> Self {
-        LightningClientInit { gateway_conn: None }
-    }
 }
 
 impl ModuleInit for LightningClientInit {

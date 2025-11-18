@@ -302,23 +302,19 @@ impl crate::api::Connector for IrohConnector {
 
     async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
         let node_id = Self::node_id_from_url(url)?;
-        let connection_override = self.connection_overrides.get(&node_id).cloned();
-        match connection_override {
-            Some(node_addr) => {
-                let conn = self
-                    .stable
-                    .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
-                    .await?;
+        if let Some(node_addr) = self.connection_overrides.get(&node_id).cloned() {
+            let conn = self
+                .stable
+                .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
+                .await?;
 
-                #[cfg(not(target_family = "wasm"))]
-                Self::spawn_connection_monitoring_stable(&self.stable, node_id);
+            #[cfg(not(target_family = "wasm"))]
+            Self::spawn_connection_monitoring_stable(&self.stable, node_id);
 
-                Ok(IGatewayConnection::into_dyn(conn))
-            }
-            None => {
-                let conn = self.stable.connect(node_id, FEDIMINT_GATEWAY_ALPN).await?;
-                Ok(IGatewayConnection::into_dyn(conn))
-            }
+            Ok(IGatewayConnection::into_dyn(conn))
+        } else {
+            let conn = self.stable.connect(node_id, FEDIMINT_GATEWAY_ALPN).await?;
+            Ok(IGatewayConnection::into_dyn(conn))
         }
     }
 }
@@ -519,7 +515,7 @@ impl IGatewayConnection for Connection {
         let iroh_request = IrohGatewayRequest {
             route: route.to_string(),
             params: payload,
-            password: password,
+            password,
         };
         let json = serde_json::to_vec(&iroh_request).expect("serialization cant fail");
 

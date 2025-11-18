@@ -278,8 +278,6 @@ impl Gatewayd {
             "--rpcpassword=theresnosecondbest",
             "--address",
             format!("iroh://{}", self.node_id),
-            "--connection-override",
-            format!("http://127.0.0.1:{}", self.iroh_port),
             "info",
         )
         .out_json()
