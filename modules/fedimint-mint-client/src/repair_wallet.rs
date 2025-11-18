@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::TieredCounts;
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::retry;
+use fedimint_core::{Amount, TieredCounts};
 use futures::{StreamExt, TryStreamExt, stream};
 
 use crate::api::MintFederationApi;
@@ -41,7 +42,7 @@ impl MintClientModule {
     /// When invalid notes are found, they are removed from the wallet. Make
     /// sure that the user has a backup of their seed before running this
     /// function.
-    pub async fn try_repair_wallet(&self) -> anyhow::Result<RepairSummary> {
+    pub async fn try_repair_wallet(&self, gap_limit: u64) -> anyhow::Result<RepairSummary> {
         let mut summary = RepairSummary::default();
 
         let module_api = self.client_ctx.module_api();
@@ -98,24 +99,18 @@ impl MintClientModule {
                 async move {
                     let mut next_index = original_next_index;
                     let maybe_advanced_index = loop {
-                        let note_secret = Self::new_note_secret_static(
-                            &self.secret,
-                            amount,
-                            NoteIndex(next_index),
-                        );
-                        let (_, blind_nonce) = NoteIssuanceRequest::new(&self.secp, &note_secret);
-                        let nonce_used = retry(
-                            "checking if blind nonce was already used",
-                            aggressive_backoff(),
-                            || async {
-                                Ok(module_api_inner.check_blind_nonce_used(blind_nonce).await?)
-                            },
-                        )
-                        .await?;
+                        let maybe_nonce_gap = self
+                            .gap_till_next_nonce_used(
+                                &module_api_inner,
+                                amount,
+                                next_index,
+                                gap_limit,
+                            )
+                            .await?;
 
-                        if nonce_used {
+                        if let Some(gap) = maybe_nonce_gap {
                             // If the nonce was already used, try again with the next index
-                            next_index += 1;
+                            next_index += gap + 1;
                         } else if original_next_index == next_index {
                             // If the initial nonce wasn't used we are good, nothing to be done
                             break None;
@@ -146,5 +141,35 @@ impl MintClientModule {
 
         dbtx.commit_tx().await;
         Ok(summary)
+    }
+
+    /// Checks up to `gap_limit` nonces starting from `base_index` for having
+    /// being used already.
+    ///
+    /// If the nonce at `base_index` is used, returns `Some(0)`, if it's unused
+    /// returns `None`. If there's an unused nonce and then a used one returns
+    /// `Some(1)`.
+    async fn gap_till_next_nonce_used(
+        &self,
+        module_api: &DynModuleApi,
+        amount: Amount,
+        base_index: u64,
+        gap_limit: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        for gap in 0..gap_limit {
+            let idx = base_index + gap;
+            let note_secret = Self::new_note_secret_static(&self.secret, amount, NoteIndex(idx));
+            let (_, blind_nonce) = NoteIssuanceRequest::new(&self.secp, &note_secret);
+            let nonce_used = retry(
+                "checking if blind nonce was already used",
+                aggressive_backoff(),
+                || async { Ok(module_api.check_blind_nonce_used(blind_nonce).await?) },
+            )
+            .await?;
+            if nonce_used {
+                return Ok(Some(gap));
+            }
+        }
+        Ok(None)
     }
 }
