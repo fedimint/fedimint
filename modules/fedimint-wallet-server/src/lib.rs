@@ -466,7 +466,11 @@ impl ServerModule for Wallet {
                 // This will prevent that more then five blocks are synced in a single database
                 // transaction if the federation was offline for a prolonged period of time.
                 if current_consensus_block_count != 0 {
-                    block_count_vote = min(block_count_vote, current_consensus_block_count + 5);
+                    block_count_vote = min(
+                        block_count_vote,
+                        current_consensus_block_count
+                            + if is_running_in_test_env() { 100 } else { 5 },
+                    );
                 }
 
                 let current_vote = dbtx
