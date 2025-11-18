@@ -132,6 +132,7 @@ async fn stop_and_recover_gateway(
     // Stop the Gateway
     let gw_type = old_gw.ln.ln_type();
     let gw_name = old_gw.gw_name.clone();
+    let old_gw_index = old_gw.gateway_index;
     old_gw.terminate().await?;
     info!(target: LOG_TEST, "Terminated Gateway");
 
@@ -159,7 +160,7 @@ async fn stop_and_recover_gateway(
     let seed = mnemonic.join(" ");
     // TODO: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("FM_GATEWAY_MNEMONIC", seed) };
-    let new_gw = Gatewayd::new(&process_mgr, new_ln).await?;
+    let new_gw = Gatewayd::new(&process_mgr, new_ln, old_gw_index).await?;
     let new_mnemonic = new_gw.get_mnemonic().await?.mnemonic;
     assert_eq!(mnemonic, new_mnemonic);
     info!(target: LOG_TEST, "Verified mnemonic is the same after creating new Gateway");
@@ -635,8 +636,8 @@ async fn esplora_test() -> anyhow::Result<()> {
                     name: "gateway-ldk-esplora".to_string(),
                     gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                     ldk_port: process_mgr.globals.FM_PORT_LDK,
-                    iroh_port: process_mgr.globals.FM_PORT_GW_LND_IROH,
                 },
+                0,
             )
             .await?;
 

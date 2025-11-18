@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use fedimint_core::envs::FM_IROH_CONNECT_OVERRIDES_ENV;
+use fedimint_core::envs::{FM_GW_IROH_CONNECT_OVERRIDES_ENV, FM_IROH_CONNECT_OVERRIDES_ENV};
 use fedimint_core::{NumPeers, PeerId};
 use iroh_base::NodeAddr;
 use iroh_base::ticket::{NodeTicket, Ticket};
@@ -12,13 +12,13 @@ use crate::federation::{
 };
 
 #[derive(Debug, Clone)]
-pub struct FedimintdEndpoint {
+pub struct FedimintIrohEndpoint {
     node_id: iroh_base::NodeId,
     secret_key: iroh_base::SecretKey,
     port: u16,
 }
 
-impl FedimintdEndpoint {
+impl FedimintIrohEndpoint {
     fn new(port: u16) -> Self {
         let secret_key = iroh_base::SecretKey::generate(&mut rand::thread_rng());
 
@@ -35,6 +35,10 @@ impl FedimintdEndpoint {
 
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    pub fn node_id(&self) -> iroh_base::NodeId {
+        self.node_id
     }
 
     fn to_override(&self) -> String {
@@ -56,16 +60,16 @@ impl FedimintdEndpoint {
 
 #[derive(Debug, Clone)]
 pub struct FedimintdPeerOverrides {
-    pub p2p: FedimintdEndpoint,
-    pub api: FedimintdEndpoint,
+    pub p2p: FedimintIrohEndpoint,
+    pub api: FedimintIrohEndpoint,
     pub base_port: u16,
 }
 
 impl FedimintdPeerOverrides {
     fn new(base_port: u16) -> Self {
         Self {
-            p2p: FedimintdEndpoint::new(base_port + FEDIMINTD_P2P_PORT_OFFSET),
-            api: FedimintdEndpoint::new(base_port + FEDIMINTD_API_PORT_OFFSET),
+            p2p: FedimintIrohEndpoint::new(base_port + FEDIMINTD_P2P_PORT_OFFSET),
+            api: FedimintIrohEndpoint::new(base_port + FEDIMINTD_API_PORT_OFFSET),
             base_port,
         }
     }
@@ -145,6 +149,35 @@ impl ToEnvVar for FederationsNetOverrides {
                 .iter()
                 .flat_map(|f| f.peers.values())
                 .map(|peer| format!("{},{}", peer.p2p.to_override(), peer.api.to_override(),))
+                .collect::<Vec<String>>()
+                .join(","),
+        )]
+        .into_iter()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GatewaydNetOverrides {
+    pub gateway_iroh_endpoints: Vec<FedimintIrohEndpoint>,
+}
+
+impl GatewaydNetOverrides {
+    pub fn new(base_port: u16, num_gateways: usize) -> Self {
+        Self {
+            gateway_iroh_endpoints: (0..num_gateways)
+                .map(|gw_i| FedimintIrohEndpoint::new(base_port + gw_i as u16))
+                .collect(),
+        }
+    }
+}
+
+impl ToEnvVar for GatewaydNetOverrides {
+    fn to_env_values(&self, _base_env: &str) -> impl Iterator<Item = (String, String)> {
+        vec![(
+            FM_GW_IROH_CONNECT_OVERRIDES_ENV.to_string(),
+            self.gateway_iroh_endpoints
+                .iter()
+                .map(|gw| gw.to_override().to_string())
                 .collect::<Vec<String>>()
                 .join(","),
         )]
