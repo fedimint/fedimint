@@ -5,7 +5,10 @@ use std::str::FromStr;
 
 use anyhow::{Context, bail};
 use async_trait::async_trait;
-use fedimint_core::envs::parse_kv_list_from_env;
+use fedimint_core::envs::{
+    FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set_opt,
+    parse_kv_list_from_env,
+};
 use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
@@ -67,6 +70,7 @@ impl IrohConnector {
         Ok(s)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn new_no_overrides(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
@@ -101,16 +105,30 @@ impl IrohConnector {
 
                 // instead of `.discovery_n0`, which brings publisher we don't want
                 {
-                    #[cfg(target_family = "wasm")]
-                    {
-                        builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
+                    if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
+                        #[cfg(target_family = "wasm")]
+                        {
+                            builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
+                        }
+                    } else {
+                        warn!(
+                            target: LOG_NET_IROH,
+                            "Iroh pkarr resolver is disabled"
+                        );
                     }
 
-                    #[cfg(not(target_family = "wasm"))]
-                    {
-                        builder = builder.add_discovery(move |_| {
-                            Some(iroh::discovery::dns::DnsDiscovery::n0_dns())
-                        });
+                    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
+                        #[cfg(not(target_family = "wasm"))]
+                        {
+                            builder = builder.add_discovery(move |_| {
+                                Some(iroh::discovery::dns::DnsDiscovery::n0_dns())
+                            });
+                        }
+                    } else {
+                        warn!(
+                            target: LOG_NET_IROH,
+                            "Iroh n0 discovery is disabled"
+                        );
                     }
                 }
 

@@ -27,13 +27,42 @@ pub const FM_DEBUG_SHOW_SECRETS_ENV: &str = "FM_DEBUG_SHOW_SECRETS";
 /// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.
 pub fn is_env_var_set(var: &str) -> bool {
-    std::env::var_os(var).is_some_and(|v| v != "0" && v != "false")
+    let Some(val) = std::env::var_os(var) else {
+        return false;
+    };
+    match val.as_encoded_bytes() {
+        b"0" | b"false" => false,
+        b"1" | b"true" => true,
+        _ => {
+            warn!(
+                target: LOG_CORE,
+                %var,
+                val = %val.to_string_lossy(),
+                "Env var value invalid is invalid and ignored, assuming `true`"
+            );
+            true
+        }
+    }
 }
 
-/// Check if env variable is unset or equal `0` or `false` which are common
-/// ways to disable a setting if it on by default.
-pub fn is_env_var_disabled(var: &str) -> bool {
-    std::env::var_os(var).is_none_or(|v| v == "0" && v == "false")
+/// Check if env variable is set and not equal `0` or `false` which are common
+/// ways to disable a setting. `None` if env var not set at all, which allows
+/// handling the default value.
+pub fn is_env_var_set_opt(var: &str) -> Option<bool> {
+    let val = std::env::var_os(var)?;
+    match val.as_encoded_bytes() {
+        b"0" | b"false" => Some(false),
+        b"1" | b"true" => Some(true),
+        _ => {
+            warn!(
+                target: LOG_CORE,
+                %var,
+                val = %val.to_string_lossy(),
+                "Env var value invalid is invalid and ignored"
+            );
+            None
+        }
+    }
 }
 
 /// Use to detect if running in a test environment, either `cargo test` or
@@ -92,7 +121,19 @@ pub const FM_IROH_DNS_ENV: &str = "FM_IROH_DNS";
 pub const FM_IROH_RELAY_ENV: &str = "FM_IROH_RELAY";
 
 /// Env var to disable Iroh's use of DHT
-pub const FM_IROH_ENABLE_DHT_ENV: &str = "FM_IROH_ENABLE_DHT";
+pub const FM_IROH_DHT_ENABLE_ENV: &str = "FM_IROH_DHT_ENABLE";
+
+/// Env var to disable default n0 discovery
+pub const FM_IROH_N0_DISCOVERY_ENABLE_ENV: &str = "FM_IROH_N0_DISCOVERY_ENABLE";
+
+/// Env var to disable default pkarr resolver
+pub const FM_IROH_PKARR_RESOLVER_ENABLE_ENV: &str = "FM_IROH_PKARR_RESOLVER_ENABLE";
+
+/// Env var to disable default pkarr publisher
+pub const FM_IROH_PKARR_PUBLISHER_ENABLE_ENV: &str = "FM_IROH_PKARR_PUBLISHER_ENABLE";
+
+/// Env var to disable Iroh's use of relays
+pub const FM_IROH_RELAYS_ENABLE_ENV: &str = "FM_IROH_RELAYS_ENABLE";
 
 /// Env var to override tcp api connectivity
 ///
