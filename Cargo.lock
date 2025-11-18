@@ -3236,6 +3236,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-ecash-migration-client"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "erased-serde",
+ "fedimint-api-client",
+ "fedimint-client-module",
+ "fedimint-core",
+ "fedimint-ecash-migration-common",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "fedimint-ecash-migration-common"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "bitcoin_hashes 0.14.0",
+ "fedimint-core",
+ "fedimint-mint-common",
+ "fedimint-tbs",
+ "futures",
+ "secp256k1",
+ "serde",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "fedimint-ecash-migration-server"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin_hashes 0.14.0",
+ "erased-serde",
+ "fedimint-core",
+ "fedimint-ecash-migration-common",
+ "fedimint-mint-common",
+ "fedimint-server-core",
+ "fedimint-tbs",
+ "futures",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-empty-client"
 version = "0.10.0-alpha"
 dependencies = [

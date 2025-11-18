@@ -18,14 +18,19 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ecash-migration-common = { workspace = true }
+fedimint-mint-common = { workspace = true }
 fedimint-server-core = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+tbs = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true
