@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 use std::pin::pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use async_stream::stream;
 use fedimint_client_module::meta::{FetchKind, MetaSource, MetaValue, MetaValues};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::runtime::sleep;
 use fedimint_core::task::waiter::Waiter;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_logging::LOG_CLIENT;
@@ -173,6 +175,9 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
     ///
     /// Caller should run this method in a task.
     pub(crate) async fn update_continuously(&self, client: &Client) -> ! {
+        // Delay any network activity, in case the `Client` that started it
+        // is very short lived.
+        sleep(Duration::from_secs(1)).await;
         let mut current_revision = self
             .current_revision(&mut client.db().begin_transaction_nc().await)
             .await;

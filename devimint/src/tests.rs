@@ -1011,7 +1011,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     info!("Testing if the client syncs the announcement");
     let announcement = poll("Waiting for the announcement to propagate", || async {
-        cmd!(client, "dev", "wait", "1")
+        cmd!(client, "dev", "wait", "3")
             .run()
             .await
             .map_err(ControlFlow::Break)?;

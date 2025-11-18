@@ -41,6 +41,10 @@ impl_db_lookup!(
 /// Fetches API URL announcements from guardians, validates them and updates the
 /// DB if any new more upt to date ones are found.
 pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>) {
+    // Delay any network activity, in case the `Client` that started it
+    // is very short lived.
+    sleep(Duration::from_secs(1)).await;
+
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
     loop {
