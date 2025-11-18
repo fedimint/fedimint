@@ -2,6 +2,7 @@ use axum::extract::State;
 use axum::response::Html;
 use fedimint_gateway_common::{ChannelInfo, GatewayInfo, LightningMode};
 use fedimint_ui_common::UiState;
+use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
 use crate::{CHANNEL_FRAGMENT_ROUTE, DynGatewayApi};
@@ -227,6 +228,7 @@ where
 
 pub async fn channels_fragment_handler<E>(
     State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
 ) -> Html<String>
 where
     E: std::fmt::Display,
