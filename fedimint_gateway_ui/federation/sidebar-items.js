@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["render"]};
+window.SIDEBAR_ITEMS = {"fn":["leave_federation_handler","render"]};
