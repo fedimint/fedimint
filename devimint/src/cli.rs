@@ -159,7 +159,7 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
     }
-    info!(target: LOG_DEVIMINT, path=%globals.FM_DATA_DIR.display() , "Devimint data dir");
+    info!(target: LOG_DEVIMINT, path = %globals.FM_DATA_DIR.display(), "Devimint data dir");
 
     let mut env_string = String::new();
     for (var, value) in globals.vars() {
@@ -362,7 +362,12 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
 
                     let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
 
-                    info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed().as_millis(), "Devfed ready");
+                    info!(
+                        target: LOG_DEVIMINT,
+                        elapsed_ms = %start_time.elapsed().as_millis(),
+                        path = %process_mgr.globals.FM_DATA_DIR.display(),
+                        "Devfed ready"
+                    );
                     if let Some(exec) = exec {
                         debug!(target: LOG_DEVIMINT, "Starting exec command");
                         exec_user_command(exec).await?;
