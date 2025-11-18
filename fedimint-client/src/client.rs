@@ -551,24 +551,14 @@ impl Client {
                     let tx_builder = tx_builder.clone();
                     let operation_meta_gen = operation_meta_gen.clone();
                     Box::pin(async move {
-                        if Client::operation_exists_dbtx(dbtx, operation_id).await {
-                            bail!("There already exists an operation with id {operation_id:?}")
-                        }
-
-                        let out_point_range = self
-                            .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
-                            .await?;
-
-                        self.operation_log()
-                            .add_operation_log_entry_dbtx(
-                                dbtx,
-                                operation_id,
-                                &operation_type,
-                                operation_meta_gen(out_point_range),
-                            )
-                            .await;
-
-                        Ok(out_point_range)
+                        self.finalize_and_submit_transaction_dbtx(
+                            dbtx,
+                            operation_id,
+                            &operation_type,
+                            operation_meta_gen,
+                            tx_builder,
+                        )
+                        .await
                     })
                 },
                 Some(100), // TODO: handle what happens after 100 retries
@@ -585,6 +575,40 @@ impl Client {
                 "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
             ),
         }
+    }
+
+    /// Same as [`Self::finalize_and_submit_transaction`] but runs inside an
+    /// externally supplied database transaction.
+    pub async fn finalize_and_submit_transaction_dbtx<F, M>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta_gen: F,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange>
+    where
+        F: Fn(OutPointRange) -> M + Clone + MaybeSend + MaybeSync,
+        M: serde::Serialize + MaybeSend,
+    {
+        if Client::operation_exists_dbtx(dbtx, operation_id).await {
+            bail!("There already exists an operation with id {operation_id:?}")
+        }
+
+        let out_point_range = self
+            .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
+            .await?;
+
+        self.operation_log()
+            .add_operation_log_entry_dbtx(
+                dbtx,
+                operation_id,
+                operation_type,
+                operation_meta_gen(out_point_range),
+            )
+            .await;
+
+        Ok(out_point_range)
     }
 
     async fn finalize_and_submit_transaction_inner(
@@ -1948,15 +1972,17 @@ impl ClientContextIface for Client {
         Client::decoders(self)
     }
 
-    async fn finalize_and_submit_transaction(
+    async fn finalize_and_submit_transaction_dbtx(
         &self,
+        dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
     ) -> anyhow::Result<OutPointRange> {
-        Client::finalize_and_submit_transaction(
+        Client::finalize_and_submit_transaction_dbtx(
             self,
+            dbtx,
             operation_id,
             operation_type,
             // |out_point_range| operation_meta_gen(out_point_range),

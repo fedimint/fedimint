@@ -15,7 +15,9 @@ use fedimint_core::core::{
     Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
+use fedimint_core::db::{
+    AutocommitResultExt, Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
@@ -59,8 +61,9 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
     fn get_module(&self, instance: ModuleInstanceId) -> &maybe_add_send_sync!(dyn IClientModule);
     fn api_clone(&self) -> DynGlobalApi;
     fn decoders(&self) -> &ModuleDecoderRegistry;
-    async fn finalize_and_submit_transaction(
+    async fn finalize_and_submit_transaction_dbtx(
         &self,
+        dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
@@ -360,9 +363,51 @@ where
         F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync + 'static,
         Meta: serde::Serialize + MaybeSend,
     {
+        let client = self.client.get();
+        client
+            .db()
+            .autocommit(
+                |dbtx, _| {
+                    let client = client.clone();
+                    let operation_meta_gen = operation_meta_gen.clone();
+                    let tx_builder = tx_builder.clone();
+                    Box::pin(async move {
+                        client
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                operation_type,
+                                Box::new(move |out_point_range| {
+                                    serde_json::to_value(operation_meta_gen(out_point_range))
+                                        .expect("Can't fail")
+                                }),
+                                tx_builder,
+                            )
+                            .await
+                    })
+                },
+                None,
+            )
+            .await
+            .unwrap_autocommit()
+    }
+
+    pub async fn finalize_and_submit_transaction_dbtx<F, Meta>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta_gen: F,
+        tx_builder: TransactionBuilder,
+    ) -> anyhow::Result<OutPointRange>
+    where
+        F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync + 'static,
+        Meta: serde::Serialize + MaybeSend,
+    {
         self.client
             .get()
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_dbtx(
+                dbtx,
                 operation_id,
                 operation_type,
                 Box::new(move |out_point_range| {
