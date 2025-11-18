@@ -3131,7 +3131,10 @@ name = "fedimint-ecash-migration-common"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "bitcoin_hashes 0.14.0",
  "fedimint-core",
+ "fedimint-mint-common",
+ "fedimint-tbs",
  "serde",
  "thiserror 2.0.12",
 ]
@@ -3142,14 +3145,19 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bitcoin_hashes 0.14.0",
  "erased-serde",
  "fedimint-core",
  "fedimint-ecash-migration-common",
+ "fedimint-mint-common",
  "fedimint-server-core",
+ "fedimint-tbs",
  "futures",
  "serde",
+ "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "tracing",
 ]
 
 [[package]]

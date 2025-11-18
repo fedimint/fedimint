@@ -38,11 +38,11 @@ pub struct EcashMigrationConfig {
 
 /// Contains all the configuration for the client
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
-pub struct EcashMigrationClientConfig {}
+pub struct EcashMigrationClientConfig;
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct EcashMigrationConfigConsensus {}
+pub struct EcashMigrationConfigConsensus;
 
 /// Will be encrypted and not shared such as private key material
 #[derive(Clone, Debug, Serialize, Deserialize)]
