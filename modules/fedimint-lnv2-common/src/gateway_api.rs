@@ -48,7 +48,7 @@ pub trait GatewayConnection: std::fmt::Debug {
     ) -> Result<Result<[u8; 32], Signature>, PeerError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RealGatewayConnection {
     pub api: GatewayApi,
 }

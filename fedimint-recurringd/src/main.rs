@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
         });
 
     if let Some(encryption_key) = cli_opts.encryption_key {
-        app = app.merge(v2::router(cli_opts.api_address, encryption_key));
+        app = app.merge(v2::router(cli_opts.api_address, encryption_key).await?);
     }
 
     info!(api_address = %cli_opts.bind_address, "recurringd started");
