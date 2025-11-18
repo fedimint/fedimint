@@ -27,13 +27,42 @@ pub const FM_DEBUG_SHOW_SECRETS_ENV: &str = "FM_DEBUG_SHOW_SECRETS";
 /// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.
 pub fn is_env_var_set(var: &str) -> bool {
-    std::env::var_os(var).is_some_and(|v| v != "0" && v != "false")
+    let Some(val) = std::env::var_os(var) else {
+        return false;
+    };
+    match val.as_encoded_bytes() {
+        b"0" | b"false" => false,
+        b"1" | b"true" => true,
+        _ => {
+            warn!(
+                target: LOG_CORE,
+                %var,
+                val = %val.to_string_lossy(),
+                "Env var value invalid is invalid and ignored, assuming `true`"
+            );
+            true
+        }
+    }
 }
 
-/// Check if env variable is unset or equal `0` or `false` which are common
-/// ways to disable a setting if it on by default.
-pub fn is_env_var_set_default_on(var: &str) -> bool {
-    std::env::var_os(var).is_none_or(|v| v != "0" && v != "false")
+/// Check if env variable is set and not equal `0` or `false` which are common
+/// ways to disable a setting. `None` if env var not set at all, which allows
+/// handling the default value.
+pub fn is_env_var_set_opt(var: &str) -> Option<bool> {
+    let val = std::env::var_os(var)?;
+    match val.as_encoded_bytes() {
+        b"0" | b"false" => Some(false),
+        b"1" | b"true" => Some(true),
+        _ => {
+            warn!(
+                target: LOG_CORE,
+                %var,
+                val = %val.to_string_lossy(),
+                "Env var value invalid is invalid and ignored"
+            );
+            None
+        }
+    }
 }
 
 /// Use to detect if running in a test environment, either `cargo test` or

@@ -12,7 +12,7 @@ use url::Url;
 use crate::envs::{
     FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
     FM_IROH_PKARR_RESOLVER_ENABLE_ENV, FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set,
-    is_env_var_set_default_on,
+    is_env_var_set_opt,
 };
 use crate::iroh_prod::{FM_IROH_DNS_FEDIMINT_PROD, FM_IROH_RELAYS_FEDIMINT_PROD};
 
@@ -33,7 +33,7 @@ pub async fn build_iroh_endpoint(
         |iroh_dns| vec![iroh_dns.to_unsafe()],
     );
 
-    let relay_mode = if !is_env_var_set_default_on(FM_IROH_RELAYS_ENABLE_ENV) {
+    let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
         warn!(
             target: LOG_NET_IROH,
             "Iroh relays are disabled"
@@ -68,7 +68,7 @@ pub async fn build_iroh_endpoint(
     let mut builder = Endpoint::builder();
 
     for iroh_dns in iroh_dns_servers {
-        if is_env_var_set_default_on(FM_IROH_PKARR_PUBLISHER_ENABLE_ENV) {
+        if is_env_var_set_opt(FM_IROH_PKARR_PUBLISHER_ENABLE_ENV).unwrap_or(true) {
             builder = builder.add_discovery({
                 let iroh_dns = iroh_dns.clone();
                 move |sk: &SecretKey| Some(PkarrPublisher::new(sk.clone(), iroh_dns))
@@ -80,7 +80,7 @@ pub async fn build_iroh_endpoint(
             );
         }
 
-        if is_env_var_set_default_on(FM_IROH_PKARR_RESOLVER_ENABLE_ENV) {
+        if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
             builder = builder.add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
         } else {
             warn!(
@@ -103,7 +103,7 @@ pub async fn build_iroh_endpoint(
         );
     }
 
-    if is_env_var_set_default_on(FM_IROH_N0_DISCOVERY_ENABLE_ENV) {
+    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
         builder = builder.discovery_n0();
     } else {
         warn!(

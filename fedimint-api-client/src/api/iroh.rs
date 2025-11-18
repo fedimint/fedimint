@@ -6,7 +6,7 @@ use std::str::FromStr;
 use anyhow::{Context, bail};
 use async_trait::async_trait;
 use fedimint_core::envs::{
-    FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set_default_on,
+    FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set_opt,
     parse_kv_list_from_env,
 };
 use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
@@ -105,7 +105,7 @@ impl IrohConnector {
 
                 // instead of `.discovery_n0`, which brings publisher we don't want
                 {
-                    if is_env_var_set_default_on(FM_IROH_PKARR_RESOLVER_ENABLE_ENV) {
+                    if is_env_var_set_opt(FM_IROH_PKARR_RESOLVER_ENABLE_ENV).unwrap_or(true) {
                         #[cfg(target_family = "wasm")]
                         {
                             builder = builder.add_discovery(move |_| Some(PkarrResolver::n0_dns()));
@@ -117,7 +117,7 @@ impl IrohConnector {
                         );
                     }
 
-                    if is_env_var_set_default_on(FM_IROH_N0_DISCOVERY_ENABLE_ENV) {
+                    if is_env_var_set_opt(FM_IROH_N0_DISCOVERY_ENABLE_ENV).unwrap_or(true) {
                         #[cfg(not(target_family = "wasm"))]
                         {
                             builder = builder.add_discovery(move |_| {
