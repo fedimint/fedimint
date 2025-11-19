@@ -1,6 +1,5 @@
 mod error;
 pub mod global_api;
-#[cfg(not(target_family = "wasm"))]
 pub mod http;
 pub mod iroh;
 pub mod net;
@@ -688,7 +687,6 @@ impl ConnectorRegistryBuilder {
             ),
         );
 
-        #[cfg(not(target_family = "wasm"))]
         if self.http_enable {
             let http_connector = JitTry::new_try(move || async move {
                 Ok(Arc::new(crate::api::http::HttpConnector::default()) as DynConnector)
@@ -1030,7 +1028,7 @@ pub trait IGuardianConnection: Debug + Send + Sync + 'static {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 pub trait IGatewayConnection: Debug + Send + Sync + 'static {
     async fn request(
         &self,

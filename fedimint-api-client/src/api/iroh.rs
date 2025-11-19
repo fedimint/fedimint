@@ -16,6 +16,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::spawn;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_NET_IROH;
 use futures::Future;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -508,7 +509,7 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IGatewayConnection for Connection {
     async fn request(
         &self,

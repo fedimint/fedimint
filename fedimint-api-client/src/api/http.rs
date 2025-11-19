@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use async_trait::async_trait;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{apply, async_trait_maybe_send};
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
@@ -43,7 +43,7 @@ pub(crate) struct HttpConnection {
     base_url: SafeUrl,
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IGatewayConnection for HttpConnection {
     async fn request(
         &self,
