@@ -1084,6 +1084,35 @@ pub struct FederationApi {
     connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState>>>>,
 }
 
+#[derive(Debug)]
+pub enum ConnectionType {
+    Guardian(DynGuaridianConnection),
+    Gateway(DynGatewayConnection),
+}
+
+impl ConnectionType {
+    pub fn is_connected(&self) -> bool {
+        match self {
+            ConnectionType::Guardian(conn) => conn.is_connected(),
+            ConnectionType::Gateway(conn) => conn.is_connected(),
+        }
+    }
+
+    pub fn as_guardian(&self) -> Option<&DynGuaridianConnection> {
+        match self {
+            ConnectionType::Guardian(conn) => Some(conn),
+            ConnectionType::Gateway(_) => None,
+        }
+    }
+
+    pub fn as_gateway(&self) -> Option<&DynGatewayConnection> {
+        match self {
+            ConnectionType::Guardian(_) => None,
+            ConnectionType::Gateway(conn) => Some(conn),
+        }
+    }
+}
+
 /// Inner part of [`ConnectionState`] preserving state between attempts to
 /// initialize [`ConnectionState::connection`]
 #[derive(Debug)]
@@ -1093,9 +1122,9 @@ struct ConnectionStateInner {
 }
 
 #[derive(Debug)]
-struct ConnectionState {
+pub struct ConnectionState {
     /// Connection we are trying to or already established
-    connection: tokio::sync::OnceCell<DynGuaridianConnection>,
+    pub connection: tokio::sync::OnceCell<ConnectionType>,
     /// State that technically is protected every time by
     /// the serialization of `OnceCell::get_or_try_init`, but
     /// for Rust purposes needs to be locked.
@@ -1104,7 +1133,7 @@ struct ConnectionState {
 
 impl ConnectionState {
     /// Create a new connection state for a first time connection
-    fn new_initial() -> Self {
+    pub fn new_initial() -> Self {
         Self {
             connection: OnceCell::new(),
             inner: std::sync::Mutex::new(ConnectionStateInner {
@@ -1121,7 +1150,7 @@ impl ConnectionState {
 
     /// Create a new connection state for a connection that already failed, and
     /// is being reset
-    fn new_reconnecting() -> Self {
+    pub fn new_reconnecting() -> Self {
         Self {
             connection: OnceCell::new(),
             inner: std::sync::Mutex::new(ConnectionStateInner {
@@ -1139,7 +1168,7 @@ impl ConnectionState {
 
     /// Record the fact that an attempt to connect is being made, and return
     /// time the caller should wait.
-    fn pre_reconnect_delay(&self) -> Duration {
+    pub fn pre_reconnect_delay(&self) -> Duration {
         let mut backoff_locked = self.inner.lock().expect("Locking failed");
         let fresh = backoff_locked.fresh;
 
@@ -1213,7 +1242,7 @@ impl FederationApi {
                 trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
                 let conn = self.connectors.connect_guardian(url, api_secret).await?;
 
-                Ok(conn)
+                Ok(ConnectionType::Guardian(conn))
             })
             .await?;
 

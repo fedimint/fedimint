@@ -1,87 +1,17 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Context;
-use fedimint_api_client::api::{ConnectorRegistry, DynGatewayConnection, PeerError, PeerResult};
+use fedimint_api_client::api::{
+    ConnectionState, ConnectionType, ConnectorRegistry, DynGatewayConnection, PeerError, PeerResult,
+};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::util::backoff_util::{FibonacciBackoff, custom_backoff};
 use fedimint_logging::LOG_GATEWAY;
 use reqwest::Method;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use tokio::sync::OnceCell;
 use tracing::trace;
-
-/// Inner part of [`ConnectionState`] preserving state between attempts to
-/// initialize [`ConnectionState::connection`]
-#[derive(Debug)]
-struct ConnectionStateInner {
-    fresh: bool,
-    backoff: FibonacciBackoff,
-}
-
-#[derive(Debug)]
-struct ConnectionState {
-    /// Connection we are trying to or already established
-    connection: tokio::sync::OnceCell<DynGatewayConnection>,
-    /// State that technically is protected every time by
-    /// the serialization of `OnceCell::get_or_try_init`, but
-    /// for Rust purposes needs to be locked.
-    inner: std::sync::Mutex<ConnectionStateInner>,
-}
-
-impl ConnectionState {
-    /// Create a new connection state for a first time connection
-    fn new_initial() -> Self {
-        Self {
-            connection: OnceCell::new(),
-            inner: std::sync::Mutex::new(ConnectionStateInner {
-                fresh: true,
-                backoff: custom_backoff(
-                    // First time connections start quick
-                    Duration::from_millis(5),
-                    Duration::from_secs(30),
-                    None,
-                ),
-            }),
-        }
-    }
-
-    /// Create a new connection state for a connection that already failed, and
-    /// is being reset
-    fn new_reconnecting() -> Self {
-        Self {
-            connection: OnceCell::new(),
-            inner: std::sync::Mutex::new(ConnectionStateInner {
-                // set the attempts to 1, indicating that
-                fresh: false,
-                backoff: custom_backoff(
-                    // Connections after a disconnect start with some minimum delay
-                    Duration::from_millis(500),
-                    Duration::from_secs(30),
-                    None,
-                ),
-            }),
-        }
-    }
-
-    /// Record the fact that an attempt to connect is being made, and return
-    /// time the caller should wait.
-    fn pre_reconnect_delay(&self) -> Duration {
-        let mut backoff_locked = self.inner.lock().expect("Locking failed");
-        let fresh = backoff_locked.fresh;
-
-        backoff_locked.fresh = false;
-
-        if fresh {
-            Duration::default()
-        } else {
-            backoff_locked.backoff.next().expect("Keeps retrying")
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct GatewayApi {
@@ -147,12 +77,12 @@ impl GatewayApi {
 
                 let conn: DynGatewayConnection = self.connectors.connect_gateway(url).await?;
 
-                Ok::<DynGatewayConnection, anyhow::Error>(conn)
+                Ok::<ConnectionType, anyhow::Error>(ConnectionType::Gateway(conn))
             })
             .await?;
 
         trace!(target: LOG_GATEWAY, %url, "Using websocket connection");
-        Ok(conn.clone())
+        Ok(conn.as_gateway().expect("Should be a gateway").clone())
     }
 
     pub async fn request<P: Serialize, T: DeserializeOwned>(
