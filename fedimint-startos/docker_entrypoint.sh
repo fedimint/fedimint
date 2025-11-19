@@ -22,6 +22,11 @@ export FM_BITCOIN_NETWORK=bitcoin
 export FM_BIND_UI=0.0.0.0:8175
 export FM_ENABLE_IROH=true
 
+# Read and set RUST_LOG from config
+RUST_LOG_LEVEL=$(yq '.rust-log-level' /start-os/start9/config.yaml)
+export RUST_LOG="${RUST_LOG_LEVEL}"
+echo "Setting RUST_LOG=${RUST_LOG}"
+
 # Config file structure:
 # fedimintd-bitcoin-backend:
 #   backend-type: <bitcoind|esplora>
