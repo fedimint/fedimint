@@ -132,19 +132,7 @@ where
 
     let content = html! {
 
-        script {
-            "function toggleFeesEdit(id) { \
-                const view = document.getElementById('fees-view-' + id); \
-                const edit = document.getElementById('fees-edit-' + id); \
-                if (view.style.display === 'none') { \
-                    view.style.display = 'block'; \
-                    edit.style.display = 'none'; \
-                } else { \
-                    view.style.display = 'none'; \
-                    edit.style.display = 'block'; \
-                } \
-            }"
-        }
+       (federation::scripts())
 
         div class="row gy-4" {
             div class="col-md-6" {

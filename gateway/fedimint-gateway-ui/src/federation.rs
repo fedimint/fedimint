@@ -13,6 +13,24 @@ use maud::{Markup, html};
 
 use crate::{DynGatewayApi, SET_FEES_ROUTE};
 
+pub fn scripts() -> Markup {
+    html!(
+        script {
+            "function toggleFeesEdit(id) { \
+                const view = document.getElementById('fees-view-' + id); \
+                const edit = document.getElementById('fees-edit-' + id); \
+                if (view.style.display === 'none') { \
+                    view.style.display = 'block'; \
+                    edit.style.display = 'none'; \
+                } else { \
+                    view.style.display = 'none'; \
+                    edit.style.display = 'block'; \
+                } \
+            }"
+        }
+    )
+}
+
 pub fn render(fed: &FederationInfo) -> Markup {
     html!(
         @let bal = fed.balance_msat;
