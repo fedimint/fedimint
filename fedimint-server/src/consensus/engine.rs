@@ -31,7 +31,7 @@ use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::watch;
-use tracing::{Level, debug, info, instrument, trace, warn};
+use tracing::{Level, debug, error, info, instrument, trace, warn};
 
 use crate::LOG_CONSENSUS;
 use crate::config::ServerConfig;
@@ -164,12 +164,18 @@ impl ConsensusEngine {
 
             CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
-            info!(target: LOG_CONSENSUS, session_index, "Starting consensus session");
+            let is_recovery = self.is_recovery().await;
+            info!(
+                target: LOG_CONSENSUS,
+                ?session_index,
+                is_recovery,
+                "Starting consensus session"
+            );
 
             self.run_session(self.connections.clone(), session_index)
                 .await?;
 
-            info!(target: LOG_CONSENSUS, session_index, "Completed consensus session");
+            info!(target: LOG_CONSENSUS, ?session_index, "Completed consensus session");
 
             if Some(session_index) == self.shutdown_receiver.borrow().to_owned() {
                 info!(target: LOG_CONSENSUS, "Initiating shutdown, waiting for peers to complete the session...");
@@ -281,6 +287,8 @@ impl ConsensusEngine {
             )
             .await?;
 
+        info!(target: LOG_CONSENSUS, ?session_index, "Terminating Aleph BFT session");
+
         // We can terminate the session instead of waiting for other peers to complete
         // it since they can always download the signed session outcome from us
         terminator_sender.send(()).ok();
@@ -341,7 +349,7 @@ impl ConsensusEngine {
                             // state upwards, without reporting an error that isn't caused by this
                             // task.
                             while self.task_group.is_shutting_down() {
-                                info!(target: LOG_CONSENSUS, "Shutdown detected");
+                                info!(target: LOG_CONSENSUS, ?session_index, "Shutdown detected");
                                 sleep(Duration::from_millis(100)).await;
                             }
                             // Otherwise, just return the error upwards
@@ -350,6 +358,11 @@ impl ConsensusEngine {
                     };
 
                     if ordered_unit.round >= self.cfg.consensus.broadcast_rounds_per_session {
+                        info!(
+                            target: LOG_CONSENSUS,
+                            ?session_index,
+                            "Reached Aleph BFT round limit, stopping item collection"
+                        );
                         break;
                     }
 
@@ -398,6 +411,12 @@ impl ConsensusEngine {
                     }
                 },
                 signed_session_outcome = &mut request_signed_session_outcome => {
+                    info!(
+                        target: LOG_CONSENSUS,
+                        ?session_index,
+                        "Recovered signed session outcome from peers while collecting signatures"
+                    );
+
                     let pending_accepted_items = self.pending_accepted_items().await;
 
                     // this panics if we have more accepted items than the signed session outcome
@@ -405,6 +424,14 @@ impl ConsensusEngine {
                         .session_outcome
                         .items
                         .split_at(pending_accepted_items.len());
+
+                    info!(
+                        target: LOG_CONSENSUS,
+                        ?session_index,
+                        processed = %processed.len(),
+                        unprocessed = %unprocessed.len(),
+                        "Processing remaining items..."
+                    );
 
                     assert!(
                         processed.iter().eq(pending_accepted_items.iter()),
@@ -435,9 +462,18 @@ impl ConsensusEngine {
 
         assert_eq!(item_index, items.len() as u64);
 
+        info!(target: LOG_CONSENSUS, ?session_index, ?item_index, "Processed all items for session");
+
         let session_outcome = SessionOutcome { items };
 
         let header = session_outcome.header(session_index);
+
+        info!(
+            target: LOG_CONSENSUS,
+            ?session_index,
+            header = %hex::encode(header),
+            "Signing session header..."
+        );
 
         let keychain = Keychain::new(&self.cfg);
 
@@ -458,10 +494,22 @@ impl ConsensusEngine {
                     let ordered_unit = ordered_unit?;
 
                     if let Some(UnitData::Signature(signature)) = ordered_unit.data {
+                        info!(
+                            target: LOG_CONSENSUS,
+                            ?session_index,
+                            peer = %ordered_unit.creator,
+                            "Collected signature from peer, verifying..."
+                        );
+
                         if keychain.verify(&header, &signature, to_node_index(ordered_unit.creator)){
                             signatures.insert(ordered_unit.creator, signature);
                         } else {
-                            warn!(target: LOG_CONSENSUS, "Consensus Failure: invalid header signature from {}", ordered_unit.creator);
+                            error!(
+                                target: LOG_CONSENSUS,
+                                ?session_index,
+                                peer = %ordered_unit.creator,
+                                "Consensus Failure: invalid header signature from peer"
+                            );
 
                             items_dump.get_or_init(|| async {
                                 for (idx, item) in session_outcome.items.iter().enumerate() {
@@ -472,6 +520,14 @@ impl ConsensusEngine {
                     }
                 }
                 signed_session_outcome = &mut request_signed_session_outcome => {
+                    info!(
+                        target: LOG_CONSENSUS,
+                        ?session_index,
+                        "Recovered signed session outcome from peers while collecting signatures"
+                    );
+
+
+
                     assert_eq!(
                         header,
                         signed_session_outcome.session_outcome.header(session_index),
@@ -482,6 +538,12 @@ impl ConsensusEngine {
                 }
             }
         }
+
+        info!(
+            target: LOG_CONSENSUS,
+            ?session_index,
+            "Successfully collected threshold of signatures via the atomic broadcast"
+        );
 
         Ok(SignedSessionOutcome {
             session_outcome,
