@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CHANNEL_FRAGMENT_ROUTE","LEAVE_FEDERATION_ROUTE"],"fn":["dashboard_view","login_form","login_submit","router"],"mod":["federation","general","lightning","payment_summary"],"trait":["IAdminGateway"],"type":["DynGatewayApi"]};
+window.SIDEBAR_ITEMS = {"constant":["CHANNEL_FRAGMENT_ROUTE","CONNECT_FEDERATION_ROUTE","LEAVE_FEDERATION_ROUTE"],"fn":["dashboard_view","login_form","login_submit","router"],"mod":["connect_fed","federation","general","lightning","payment_summary"],"trait":["IAdminGateway"],"type":["DynGatewayApi"]};
