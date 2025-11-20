@@ -178,8 +178,9 @@ pub async fn leave_federation_handler<E: Display>(
                 ))
                 .into_response()
             }
-            Err(err) => redirect_error(format!("Failed to leave federation: {}", err.to_string()))
-                .into_response(),
+            Err(err) => {
+                redirect_error(format!("Failed to leave federation: {err}")).into_response()
+            }
         }
     } else {
         redirect_error("Failed to leave federation: Invalid federation id".to_string())

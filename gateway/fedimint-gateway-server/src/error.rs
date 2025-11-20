@@ -7,6 +7,7 @@ use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::crit;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::fmt_utils::OptStacktrace;
+use fedimint_core::util::FmtCompactAnyhow;
 use fedimint_gw_client::pay::OutgoingPaymentError;
 use fedimint_lightning::LightningRpcError;
 use fedimint_logging::LOG_GATEWAY;
@@ -101,19 +102,19 @@ impl IntoResponse for PublicGatewayError {
 /// error details are returned to the admin client for debugging purposes.
 #[derive(Debug, Error)]
 pub enum AdminGatewayError {
-    #[error("Failed to create a federation client: {}", OptStacktrace(.0))]
+    #[error("Failed to create a federation client")]
     ClientCreationError(anyhow::Error),
-    #[error("Failed to remove a federation client: {}", OptStacktrace(.0))]
+    #[error("Failed to remove a federation client: {0}")]
     ClientRemovalError(String),
-    #[error("There was an error with the Gateway's mnemonic: {}", OptStacktrace(.0))]
+    #[error("There was an error with the Gateway's mnemonic: {}", .0.fmt_compact_anyhow())]
     MnemonicError(anyhow::Error),
-    #[error("Unexpected Error: {}", OptStacktrace(.0))]
+    #[error("Unexpected Error: {}", .0.fmt_compact_anyhow())]
     Unexpected(#[from] anyhow::Error),
     #[error("{}", .0)]
     FederationNotConnected(#[from] FederationNotConnected),
-    #[error("Error configuring the gateway: {}", OptStacktrace(.0))]
+    #[error("Error configuring the gateway: {0}")]
     GatewayConfigurationError(String),
-    #[error("Lightning error: {}", OptStacktrace(.0))]
+    #[error("Lightning error: {}", .0)]
     Lightning(#[from] LightningRpcError),
     #[error("Error registering federation {federation_id}")]
     RegistrationError { federation_id: FederationId },
