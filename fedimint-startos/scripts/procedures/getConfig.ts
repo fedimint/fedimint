@@ -51,17 +51,12 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
     }
   },
   "rust-log-level": {
-    type: "enum",
-    name: "Log Level",
-    description: "Set the Rust logging verbosity for Fedimint. Higher levels provide more detailed logs but may impact performance.",
-    values: ["error", "warn", "info", "debug", "trace"],
-    "value-names": {
-      "error": "Error - Only critical errors",
-      "warn": "Warning - Errors and warnings",
-      "info": "Info - Normal operational messages (Recommended)",
-      "debug": "Debug - Detailed debugging information",
-      "trace": "Trace - Very verbose, all events"
-    },
-    default: "info"
+    type: "string",
+    name: "Rust Log Directives",
+    description: "Rust logging directives",
+    nullable: false,
+    default: "info,jsonrpsee_core::client::async_client=off,hyper=off,h2=off,jsonrpsee_server=warn,jsonrpsee_server::transport=off,AlephBFT-=error,iroh=error",
+    pattern: ".*",
+    "pattern-description": "Any valid Rust log directive string"
   }
 });
