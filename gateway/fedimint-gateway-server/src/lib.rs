@@ -1169,96 +1169,6 @@ impl Gateway {
         Ok(mnemonic_response)
     }
 
-    /// Handles a request to change the lightning or transaction fees for all
-    /// federations or a federation specified by the `FederationId`.
-    pub async fn handle_set_fees_msg(
-        &self,
-        SetFeesPayload {
-            federation_id,
-            lightning_base,
-            lightning_parts_per_million,
-            transaction_base,
-            transaction_parts_per_million,
-        }: SetFeesPayload,
-    ) -> AdminResult<()> {
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-        let mut fed_configs = if let Some(fed_id) = federation_id {
-            dbtx.load_federation_configs()
-                .await
-                .into_iter()
-                .filter(|(id, _)| *id == fed_id)
-                .collect::<BTreeMap<_, _>>()
-        } else {
-            dbtx.load_federation_configs().await
-        };
-
-        let federation_manager = self.federation_manager.read().await;
-
-        for (federation_id, config) in &mut fed_configs {
-            let mut lightning_fee = config.lightning_fee;
-            if let Some(lightning_base) = lightning_base {
-                lightning_fee.base = lightning_base;
-            }
-
-            if let Some(lightning_ppm) = lightning_parts_per_million {
-                lightning_fee.parts_per_million = lightning_ppm;
-            }
-
-            let mut transaction_fee = config.transaction_fee;
-            if let Some(transaction_base) = transaction_base {
-                transaction_fee.base = transaction_base;
-            }
-
-            if let Some(transaction_ppm) = transaction_parts_per_million {
-                transaction_fee.parts_per_million = transaction_ppm;
-            }
-
-            let client =
-                federation_manager
-                    .client(federation_id)
-                    .ok_or(FederationNotConnected {
-                        federation_id_prefix: federation_id.to_prefix(),
-                    })?;
-            let client_config = client.value().config().await;
-            let contains_lnv2 = client_config
-                .modules
-                .values()
-                .any(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
-
-            // Check if the lightning fee + transaction fee is higher than the send limit
-            let send_fees = lightning_fee + transaction_fee;
-            if contains_lnv2 && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
-                return Err(AdminGatewayError::GatewayConfigurationError(format!(
-                    "Total Send fees exceeded {}",
-                    PaymentFee::SEND_FEE_LIMIT
-                )));
-            }
-
-            // Check if the transaction fee is higher than the receive limit
-            if contains_lnv2 && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
-                return Err(AdminGatewayError::GatewayConfigurationError(format!(
-                    "Transaction fees exceeded RECEIVE LIMIT {}",
-                    PaymentFee::RECEIVE_FEE_LIMIT
-                )));
-            }
-
-            config.lightning_fee = lightning_fee;
-            config.transaction_fee = transaction_fee;
-            dbtx.save_federation_config(config).await;
-        }
-
-        dbtx.commit_tx().await;
-
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
-            let register_task_group = TaskGroup::new();
-
-            self.register_federations(&fed_configs, &register_task_group)
-                .await;
-        }
-
-        Ok(())
-    }
-
     /// Generates an onchain address to fund the gateway's lightning node.
     pub async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
         let context = self.get_lightning_context().await?;
@@ -2167,6 +2077,96 @@ impl IAdminGateway for Gateway {
         );
 
         Ok(federation_info)
+    }
+
+    /// Handles a request to change the lightning or transaction fees for all
+    /// federations or a federation specified by the `FederationId`.
+    async fn handle_set_fees_msg(
+        &self,
+        SetFeesPayload {
+            federation_id,
+            lightning_base,
+            lightning_parts_per_million,
+            transaction_base,
+            transaction_parts_per_million,
+        }: SetFeesPayload,
+    ) -> AdminResult<()> {
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut fed_configs = if let Some(fed_id) = federation_id {
+            dbtx.load_federation_configs()
+                .await
+                .into_iter()
+                .filter(|(id, _)| *id == fed_id)
+                .collect::<BTreeMap<_, _>>()
+        } else {
+            dbtx.load_federation_configs().await
+        };
+
+        let federation_manager = self.federation_manager.read().await;
+
+        for (federation_id, config) in &mut fed_configs {
+            let mut lightning_fee = config.lightning_fee;
+            if let Some(lightning_base) = lightning_base {
+                lightning_fee.base = lightning_base;
+            }
+
+            if let Some(lightning_ppm) = lightning_parts_per_million {
+                lightning_fee.parts_per_million = lightning_ppm;
+            }
+
+            let mut transaction_fee = config.transaction_fee;
+            if let Some(transaction_base) = transaction_base {
+                transaction_fee.base = transaction_base;
+            }
+
+            if let Some(transaction_ppm) = transaction_parts_per_million {
+                transaction_fee.parts_per_million = transaction_ppm;
+            }
+
+            let client =
+                federation_manager
+                    .client(federation_id)
+                    .ok_or(FederationNotConnected {
+                        federation_id_prefix: federation_id.to_prefix(),
+                    })?;
+            let client_config = client.value().config().await;
+            let contains_lnv2 = client_config
+                .modules
+                .values()
+                .any(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
+
+            // Check if the lightning fee + transaction fee is higher than the send limit
+            let send_fees = lightning_fee + transaction_fee;
+            if contains_lnv2 && send_fees.gt(&PaymentFee::SEND_FEE_LIMIT) {
+                return Err(AdminGatewayError::GatewayConfigurationError(format!(
+                    "Total Send fees exceeded {}",
+                    PaymentFee::SEND_FEE_LIMIT
+                )));
+            }
+
+            // Check if the transaction fee is higher than the receive limit
+            if contains_lnv2 && transaction_fee.gt(&PaymentFee::RECEIVE_FEE_LIMIT) {
+                return Err(AdminGatewayError::GatewayConfigurationError(format!(
+                    "Transaction fees exceeded RECEIVE LIMIT {}",
+                    PaymentFee::RECEIVE_FEE_LIMIT
+                )));
+            }
+
+            config.lightning_fee = lightning_fee;
+            config.transaction_fee = transaction_fee;
+            dbtx.save_federation_config(config).await;
+        }
+
+        dbtx.commit_tx().await;
+
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+            let register_task_group = TaskGroup::new();
+
+            self.register_federations(&fed_configs, &register_task_group)
+                .await;
+        }
+
+        Ok(())
     }
 
     fn get_password_hash(&self) -> String {

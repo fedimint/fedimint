@@ -26,6 +26,7 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
 use fedimint_gateway_server::Gateway;
+use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
