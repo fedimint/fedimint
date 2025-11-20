@@ -16,7 +16,7 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_gateway_common::{
     ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, PaymentSummaryPayload,
-    PaymentSummaryResponse,
+    PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -27,7 +27,7 @@ use fedimint_ui_common::{
 use maud::html;
 
 use crate::connect_fed::connect_federation_handler;
-use crate::federation::leave_federation_handler;
+use crate::federation::{leave_federation_handler, set_fees_handler};
 use crate::lightning::channels_fragment_handler;
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
@@ -35,6 +35,7 @@ pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'st
 pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
+pub(crate) const SET_FEES_ROUTE: &str = "/ui/federation/set-fees";
 
 #[async_trait]
 pub trait IAdminGateway {
@@ -63,6 +64,8 @@ pub trait IAdminGateway {
         &self,
         payload: ConnectFedPayload,
     ) -> Result<FederationInfo, Self::Error>;
+
+    async fn handle_set_fees_msg(&self, payload: SetFeesPayload) -> Result<(), Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -128,6 +131,9 @@ where
     };
 
     let content = html! {
+
+       (federation::scripts())
+
         div class="row gy-4" {
             div class="col-md-6" {
                 (general::render(&gateway_info))
@@ -165,6 +171,7 @@ pub fn router<E: Display + 'static>(api: DynGatewayApi<E>) -> Router {
         .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
         .route(LEAVE_FEDERATION_ROUTE, post(leave_federation_handler))
         .route(CONNECT_FEDERATION_ROUTE, post(connect_federation_handler))
+        .route(SET_FEES_ROUTE, post(set_fees_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))
