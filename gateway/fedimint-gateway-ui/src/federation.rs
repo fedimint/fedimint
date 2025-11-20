@@ -3,15 +3,15 @@ use std::str::FromStr;
 
 use axum::Form;
 use axum::extract::{Path, State};
-use axum::response::{Html, IntoResponse, Redirect};
+use axum::response::IntoResponse;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_gateway_common::{FederationInfo, LeaveFedPayload, SetFeesPayload};
+use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
-use fedimint_ui_common::{ROOT_ROUTE, UiState, dashboard_layout};
 use maud::{Markup, html};
 
-use crate::{DynGatewayApi, SET_FEES_ROUTE};
+use crate::{DynGatewayApi, SET_FEES_ROUTE, redirect_error, redirect_success};
 
 pub fn scripts() -> Markup {
     html!(
@@ -169,28 +169,21 @@ pub async fn leave_federation_handler<E: Display>(
             .handle_leave_federation(LeaveFedPayload { federation_id })
             .await
         {
-            Ok(_) => {
+            Ok(info) => {
                 // Redirect back to dashboard after success
-                Redirect::to(ROOT_ROUTE).into_response()
+                redirect_success(format!(
+                    "Successfully left {}",
+                    info.federation_name
+                        .unwrap_or("Unnamed Federation".to_string())
+                ))
+                .into_response()
             }
-            Err(err) => {
-                let content = html! {
-                    div class="alert alert-danger mt-4" {
-                        strong { "Failed to leave federation: " }
-                        (err.to_string())
-                    }
-                };
-                Html(dashboard_layout(content, "Fedimint Gateway UI", None).into_string())
-                    .into_response()
-            }
+            Err(err) => redirect_error(format!("Failed to leave federation: {}", err.to_string()))
+                .into_response(),
         }
     } else {
-        let content = html! {
-            div class="alert alert-danger mt-4" {
-                strong { "Failed to leave federation: Invalid federation id" }
-            }
-        };
-        Html(dashboard_layout(content, "Fedimint Gateway UI", None).into_string()).into_response()
+        redirect_error("Failed to leave federation: Invalid federation id".to_string())
+            .into_response()
     }
 }
 
@@ -202,16 +195,7 @@ pub async fn set_fees_handler<E: Display>(
     tracing::info!("Received fees payload: {:?}", payload);
 
     match state.api.handle_set_fees_msg(payload).await {
-        Ok(_) => Redirect::to(ROOT_ROUTE).into_response(),
-        Err(err) => {
-            let content = html! {
-                div class="alert alert-danger mt-4" {
-                    strong { "Failed to update fees: " }
-                    (err.to_string())
-                }
-            };
-            Html(dashboard_layout(content, "Fedimint Gateway UI", None).into_string())
-                .into_response()
-        }
+        Ok(_) => redirect_success("Successfully set fees".to_string()).into_response(),
+        Err(err) => redirect_error(format!("Failed to update fees: {err}")).into_response(),
     }
 }

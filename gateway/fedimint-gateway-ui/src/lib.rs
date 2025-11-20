@@ -8,12 +8,13 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
     ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, PaymentSummaryPayload,
     PaymentSummaryResponse, SetFeesPayload,
@@ -36,6 +37,22 @@ pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
 pub(crate) const SET_FEES_ROUTE: &str = "/ui/federation/set-fees";
+
+#[derive(Default, Deserialize)]
+pub struct DashboardQuery {
+    pub success: Option<String>,
+    pub ui_error: Option<String>,
+}
+
+fn redirect_success(msg: String) -> impl IntoResponse {
+    let encoded: String = url::form_urlencoded::byte_serialize(msg.as_bytes()).collect();
+    Redirect::to(&format!("/?success={}", encoded))
+}
+
+fn redirect_error(msg: String) -> impl IntoResponse {
+    let encoded: String = url::form_urlencoded::byte_serialize(msg.as_bytes()).collect();
+    Redirect::to(&format!("/?ui_error={}", encoded))
+}
 
 #[async_trait]
 pub trait IAdminGateway {
@@ -108,6 +125,7 @@ async fn login_submit<E>(
 async fn dashboard_view<E>(
     State(state): State<UiState<DynGatewayApi<E>>>,
     _auth: UserAuth,
+    Query(msg): Query<DashboardQuery>,
 ) -> impl IntoResponse
 where
     E: std::fmt::Display,
@@ -133,6 +151,25 @@ where
     let content = html! {
 
        (federation::scripts())
+
+        @if let Some(success) = msg.success {
+            div class="alert alert-success mt-2 d-flex justify-content-between align-items-center" {
+                span { (success) }
+                a href=(ROOT_ROUTE)
+                class="ms-3 text-decoration-none text-dark fw-bold"
+                style="font-size: 1.5rem; line-height: 1; cursor: pointer;"
+                { "×" }
+            }
+        }
+        @if let Some(error) = msg.ui_error {
+            div class="alert alert-danger mt-2 d-flex justify-content-between align-items-center" {
+                span { (error) }
+                a href=(ROOT_ROUTE)
+                class="ms-3 text-decoration-none text-dark fw-bold"
+                style="font-size: 1.5rem; line-height: 1; cursor: pointer;"
+                { "×" }
+            }
+        }
 
         div class="row gy-4" {
             div class="col-md-6" {
