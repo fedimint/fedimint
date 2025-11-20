@@ -4,9 +4,8 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{anyhow, bail};
 use async_trait::async_trait;
-use bitcoin_hashes::{Hash as BitcoinHash, HashEngine, sha256};
 use fedimint_core::config::{
     ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -24,34 +23,33 @@ use fedimint_core::{
 };
 use fedimint_ecash_migration_common::config::{
     EcashMigrationClientConfig, EcashMigrationConfig, EcashMigrationConfigConsensus,
-    EcashMigrationConfigPrivate, EcashMigrationGenParams,
+    EcashMigrationConfigPrivate, EcashMigrationGenParams, FeeConfig,
 };
 use fedimint_ecash_migration_common::{
-    CreateTransferRequest, CreateTransferResponse, EcashMigrationCommonInit,
-    EcashMigrationConsensusItem, EcashMigrationInput, EcashMigrationInputError,
-    EcashMigrationModuleTypes, EcashMigrationOutput, EcashMigrationOutputError,
-    EcashMigrationOutputOutcome, FinalizeUploadRequest, FinalizeUploadResponse,
-    GetSpendBookHashRequest, GetSpendBookHashResponse, GetTransferStatusRequest,
-    GetTransferStatusResponse, MODULE_CONSENSUS_VERSION, RequestActivationRequest, SpendBookHash,
-    TransferId, TransferPhase, UploadSpendBookBatchRequest, UploadSpendBookBatchResponse,
+    EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationInput,
+    EcashMigrationInputError, EcashMigrationModuleTypes, EcashMigrationOutput,
+    EcashMigrationOutputError, EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION, TransferId,
 };
-use fedimint_mint_common::Nonce;
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use strum::IntoEnumIterator;
-use tracing::{debug, info, trace};
+use tbs::AggregatePublicKey;
 
 use crate::db::{
-    ActivationVote, ActivationVoteKey, ActivationVotePrefix, DbKeyPrefix, RedeemedNonceKey,
-    RedeemedNoncePrefix, SpendBookEntryKey, SpendBookEntryPrefix, TransferMetadata,
-    TransferMetadataKey, TransferMetadataKeyPrefix,
+    ActivationRequestKey, ActivationRequestPrefix, ActivationVote, ActivationVoteKey,
+    ActivationVotePrefix, ActivationVoteTransferPrefix, DbKeyPrefix, DenominationKeyKey,
+    DenominationKeyKeyPrefix, DepositedAmountKey, DepositedAmountPrefix, LocalSpendBookKey,
+    LocalSpendBookPrefix, OriginSpendBookKey, OriginSpendBookPrefix, OutPointTransferIdKey,
+    OutPointTransferIdPrefix, TransferMetadata, TransferMetadataKey, TransferMetadataKeyPrefix,
+    WithdrawnAmountKey, WithdrawnAmountPrefix,
 };
 
 pub mod db;
 
 /// Log target for the ecash migration module
+#[allow(unused)]
 const LOG_MODULE_ECASH_MIGRATION: &str = "fedimint_ecash_migration_server";
 
 /// Generates the module
@@ -63,6 +61,7 @@ impl ModuleInit for EcashMigrationInit {
     type Common = EcashMigrationCommonInit;
 
     /// Dumps all database items for debugging
+    #[allow(clippy::too_many_lines)]
     async fn dump_database(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -73,10 +72,100 @@ impl ModuleInit for EcashMigrationInit {
             prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
         });
 
-        // TODO: Implement proper database dumping
-        // For now, we skip detailed database dumping as it requires
-        // iterating through complex prefix structures
-        let _ = filtered_prefixes;
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::TransferMetadata => {
+                    push_db_pair_items!(
+                        dbtx,
+                        TransferMetadataKeyPrefix,
+                        TransferMetadataKey,
+                        TransferMetadata,
+                        items,
+                        "Transfer Metadata"
+                    );
+                }
+                DbKeyPrefix::OutPointTransferId => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OutPointTransferIdPrefix,
+                        OutPointTransferIdKey,
+                        TransferId,
+                        items,
+                        "Out Point Transfer ID"
+                    );
+                }
+                DbKeyPrefix::OriginSpendBook => {
+                    push_db_pair_items!(
+                        dbtx,
+                        OriginSpendBookPrefix,
+                        OriginSpendBookKey,
+                        (),
+                        items,
+                        "Origin Spend Book"
+                    );
+                }
+                DbKeyPrefix::LocalSpendBook => {
+                    push_db_pair_items!(
+                        dbtx,
+                        LocalSpendBookPrefix,
+                        LocalSpendBookKey,
+                        Amount,
+                        items,
+                        "Local Spend Book"
+                    );
+                }
+                DbKeyPrefix::ActivationVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ActivationVotePrefix,
+                        ActivationVoteKey,
+                        ActivationVote,
+                        items,
+                        "Activation Vote"
+                    );
+                }
+                DbKeyPrefix::ActivationRequest => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ActivationRequestPrefix,
+                        ActivationRequestKey,
+                        (),
+                        items,
+                        "Activation Request"
+                    );
+                }
+                DbKeyPrefix::DenominationKeys => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DenominationKeyKeyPrefix,
+                        DenominationKeyKey,
+                        AggregatePublicKey,
+                        items,
+                        "Denomination Keys"
+                    );
+                }
+                DbKeyPrefix::DepositedAmount => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DepositedAmountPrefix,
+                        DepositedAmountKey,
+                        Amount,
+                        items,
+                        "Deposited Amount"
+                    );
+                }
+                DbKeyPrefix::WithdrawnAmount => {
+                    push_db_pair_items!(
+                        dbtx,
+                        WithdrawnAmountPrefix,
+                        WithdrawnAmountKey,
+                        Amount,
+                        items,
+                        "Withdrawn Amount"
+                    );
+                }
+            }
+        }
 
         Box::new(items.into_iter())
     }
@@ -106,10 +195,11 @@ impl ServerModuleInit for EcashMigrationInit {
 
     /// Initialize the module
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(EcashMigration::new(
-            args.cfg().to_typed()?,
-            args.num_peers(),
-        ))
+        Ok(EcashMigration {
+            cfg: args.cfg().to_typed()?,
+            own_peer_id: args.our_peer_id(),
+            num_peers: args.num_peers(),
+        })
     }
 
     /// Generates configs for all peers in a trusted manner for testing
@@ -126,7 +216,9 @@ impl ServerModuleInit for EcashMigrationInit {
             .map(|&peer| {
                 let config = EcashMigrationConfig {
                     private: EcashMigrationConfigPrivate,
-                    consensus: EcashMigrationConfigConsensus,
+                    consensus: EcashMigrationConfigConsensus {
+                        fee_config: FeeConfig::default(),
+                    },
                 };
                 (peer, config.to_erased())
             })
@@ -144,7 +236,9 @@ impl ServerModuleInit for EcashMigrationInit {
 
         Ok(EcashMigrationConfig {
             private: EcashMigrationConfigPrivate,
-            consensus: EcashMigrationConfigConsensus,
+            consensus: EcashMigrationConfigConsensus {
+                fee_config: FeeConfig::default(),
+            },
         }
         .to_erased())
     }
@@ -179,6 +273,7 @@ impl ServerModuleInit for EcashMigrationInit {
 #[derive(Debug)]
 pub struct EcashMigration {
     pub cfg: EcashMigrationConfig,
+    pub own_peer_id: PeerId,
     pub num_peers: NumPeers,
 }
 
@@ -193,38 +288,13 @@ impl ServerModule for EcashMigration {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<EcashMigrationConsensusItem> {
-        let mut proposals = Vec::new();
-
-        // Find all transfers in ReadyForActivation phase
-        let transfers: Vec<(TransferId, TransferMetadata)> = dbtx
-            .find_by_prefix(&TransferMetadataKeyPrefix)
+        dbtx.find_by_prefix(&ActivationRequestPrefix)
             .await
-            .map(|(TransferMetadataKey(id), metadata)| (id, metadata))
+            .map(|(ActivationRequestKey { transfer_id }, ())| {
+                EcashMigrationConsensusItem::ActivateTransfer { transfer_id }
+            })
             .collect()
-            .await;
-
-        for (transfer_id, metadata) in transfers {
-            if metadata.phase == TransferPhase::ReadyForActivation {
-                if let (Some(spend_book_hash), total_amount) =
-                    (metadata.spend_book_hash, metadata.total_liability)
-                {
-                    trace!(
-                        target: LOG_MODULE_ECASH_MIGRATION,
-                        transfer_id = %transfer_id,
-                        spend_book_hash = %spend_book_hash,
-                        total_amount = %total_amount,
-                        "Proposing transfer activation"
-                    );
-                    proposals.push(EcashMigrationConsensusItem::ActivateTransfer {
-                        transfer_id,
-                        spend_book_hash,
-                        total_amount,
-                    });
-                }
-            }
-        }
-
-        proposals
+            .await
     }
 
     async fn process_consensus_item<'a, 'b>(
@@ -233,226 +303,215 @@ impl ServerModule for EcashMigration {
         consensus_item: EcashMigrationConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
-        match consensus_item {
-            EcashMigrationConsensusItem::ActivateTransfer {
-                transfer_id,
-                spend_book_hash,
-                total_amount,
-            } => {
-                // Get transfer metadata
-                let metadata = dbtx
-                    .get_value(&TransferMetadataKey(transfer_id))
-                    .await
-                    .ok_or_else(|| anyhow!("Transfer {} does not exist", transfer_id))?;
+        let EcashMigrationConsensusItem::ActivateTransfer { transfer_id } = consensus_item else {
+            bail!("Unknown consensus item variant: {}", consensus_item);
+        };
 
-                // If already active, this is a redundant proposal
-                if metadata.phase == TransferPhase::Active {
-                    bail!("Transfer {} is already active", transfer_id);
-                }
+        // Check that the transfer exists
+        dbtx.get_value(&TransferMetadataKey(transfer_id))
+            .await
+            .ok_or_else(|| anyhow!("Transfer {} does not exist", transfer_id))?;
 
-                // Verify we're in ReadyForActivation phase
-                ensure!(
-                    metadata.phase == TransferPhase::ReadyForActivation,
-                    "Transfer {} is not ready for activation (phase: {})",
+        // Insert vote and check that the peer has already voted. If so, return an error
+        // so we can prune the vote from the consensus log.
+        if dbtx
+            .insert_entry(
+                &ActivationVoteKey {
                     transfer_id,
-                    metadata.phase
-                );
+                    peer_id,
+                },
+                &ActivationVote,
+            )
+            .await
+            .is_some()
+        {
+            bail!(
+                "Peer {} has already voted for transfer {}",
+                peer_id,
+                transfer_id
+            );
+        }
 
-                // Compute local spend book hash and total
-                let (local_hash, local_total) =
-                    compute_spend_book_hash_and_total(dbtx, transfer_id).await?;
-
-                // Verify hash matches
-                ensure!(
-                    local_hash == spend_book_hash,
-                    "Spend book hash mismatch for transfer {}: local={}, proposed={}",
-                    transfer_id,
-                    local_hash,
-                    spend_book_hash
-                );
-
-                // Verify amount matches
-                ensure!(
-                    local_total == total_amount,
-                    "Total amount mismatch for transfer {}: local={}, proposed={}",
-                    transfer_id,
-                    local_total,
-                    total_amount
-                );
-
-                // Record this peer's vote
-                dbtx.insert_new_entry(
-                    &ActivationVoteKey {
-                        transfer_id,
-                        peer_id,
-                    },
-                    &ActivationVote {
-                        spend_book_hash,
-                        total_amount,
-                    },
-                )
+        // Remove the activation request once we've seen our own vote so we stop
+        // proposing our activation vote
+        if peer_id != self.own_peer_id {
+            dbtx.remove_entry(&ActivationRequestKey { transfer_id })
                 .await;
-
-                // Count votes for this transfer
-                let votes: Vec<_> = dbtx
-                    .find_by_prefix(&ActivationVotePrefix { transfer_id })
-                    .await
-                    .collect()
-                    .await;
-
-                // Simple majority threshold
-                let threshold = self.num_peers.threshold();
-
-                if votes.len() >= threshold {
-                    info!(
-                        target: LOG_MODULE_ECASH_MIGRATION,
-                        transfer_id = %transfer_id,
-                        votes = votes.len(),
-                        threshold = threshold,
-                        "Activating transfer"
-                    );
-
-                    // Activate the transfer
-                    let mut activated_metadata = metadata;
-                    activated_metadata.phase = TransferPhase::Active;
-                    dbtx.insert_entry(&TransferMetadataKey(transfer_id), &activated_metadata)
-                        .await;
-
-                    // Clear activation votes
-                    for (vote_key, _) in votes {
-                        dbtx.remove_entry(&vote_key).await;
-                    }
-                }
-
-                Ok(())
-            }
-            EcashMigrationConsensusItem::Default { variant, .. } => {
-                bail!("Unknown consensus item variant: {}", variant)
-            }
         }
-    }
 
-    fn verify_input(&self, input: &EcashMigrationInput) -> Result<(), EcashMigrationInputError> {
-        match input {
-            EcashMigrationInput::RedeemOriginEcash { amount, .. } => {
-                // Basic validation: amount must be non-zero
-                if *amount == Amount::ZERO {
-                    return Err(EcashMigrationInputError::AmountMismatch {
-                        expected: Amount::from_sats(1),
-                        actual: *amount,
-                    });
-                }
-                Ok(())
-            }
-            EcashMigrationInput::Default { variant, .. } => {
-                Err(EcashMigrationInputError::UnknownInputVariant(*variant))
-            }
-        }
+        Ok(())
     }
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b EcashMigrationInput,
-        in_point: InPoint,
+        _in_point: InPoint,
     ) -> Result<InputMeta, EcashMigrationInputError> {
-        match input {
+        let (transfer_id, note, amount) = match input {
             EcashMigrationInput::RedeemOriginEcash {
                 transfer_id,
                 note,
                 amount,
-            } => {
-                // Get transfer metadata
-                let metadata = dbtx
-                    .get_value(&TransferMetadataKey(*transfer_id))
-                    .await
-                    .ok_or_else(|| EcashMigrationInputError::InvalidTransfer(*transfer_id))?;
-
-                // Check transfer is active
-                if metadata.phase != TransferPhase::Active {
-                    return Err(EcashMigrationInputError::TransferNotActive(
-                        *transfer_id,
-                        metadata.phase,
-                    ));
-                }
-
-                // Check nonce exists in spend book
-                let spend_book_amount = dbtx
-                    .get_value(&SpendBookEntryKey {
-                        transfer_id: *transfer_id,
-                        nonce: note.nonce,
-                    })
-                    .await
-                    .ok_or_else(|| EcashMigrationInputError::NotInSpendBook(note.nonce))?;
-
-                // Verify amount matches
-                if spend_book_amount != *amount {
-                    return Err(EcashMigrationInputError::AmountMismatch {
-                        expected: spend_book_amount,
-                        actual: *amount,
-                    });
-                }
-
-                // Check not already redeemed
-                if dbtx
-                    .get_value(&RedeemedNonceKey {
-                        transfer_id: *transfer_id,
-                        nonce: note.nonce,
-                    })
-                    .await
-                    .is_some()
-                {
-                    return Err(EcashMigrationInputError::AlreadyRedeemed(note.nonce));
-                }
-
-                // NOTE: We don't verify the note signature here because:
-                // 1. The spend book is provided by a trusted party
-                // 2. The spend book only contains valid nonces from the origin federation
-                // 3. We trust the origin federation's validation
-                // The signature is primarily for the user to prove ownership when creating the
-                // transaction, but the destination federation doesn't need to verify it since
-                // we're relying on the trusted party's spend book
-
-                // Mark nonce as redeemed
-                dbtx.insert_new_entry(
-                    &RedeemedNonceKey {
-                        transfer_id: *transfer_id,
-                        nonce: note.nonce,
-                    },
-                    &in_point,
-                )
-                .await;
-
-                debug!(
-                    target: LOG_MODULE_ECASH_MIGRATION,
-                    transfer_id = %transfer_id,
-                    nonce = %note.nonce,
-                    amount = %amount,
-                    "Redeemed origin federation ecash"
-                );
-
-                Ok(InputMeta {
-                    amount: TransactionItemAmounts {
-                        amounts: Amounts::new_bitcoin(*amount),
-                        fees: Amounts::new_bitcoin(Amount::ZERO),
-                    },
-                    pub_key: note.nonce.0,
-                })
-            }
+            } => (transfer_id, note, amount),
             EcashMigrationInput::Default { variant, .. } => {
-                Err(EcashMigrationInputError::UnknownInputVariant(*variant))
+                return Err(EcashMigrationInputError::UnknownInputVariant(*variant));
             }
+        };
+
+        // Check transfer is active and exists
+        if !is_transfer_active(dbtx, *transfer_id, self.num_peers).await {
+            return Err(EcashMigrationInputError::InvalidTransfer(*transfer_id));
         }
+
+        // Get current balance in the transfer
+        let deposited_amount = dbtx
+            .get_value(&DepositedAmountKey(*transfer_id))
+            .await
+            .expect("Deposited amount not found for existing transfer");
+        let withdrawn_amount = dbtx
+            .get_value(&WithdrawnAmountKey(*transfer_id))
+            .await
+            .expect("Withdrawn amount not found for existing transfer");
+        let transfer_balance = deposited_amount
+            .checked_sub(withdrawn_amount)
+            .expect("Liability transfer balance cannot be negative");
+
+        // Check amount is within transfer balance
+        if transfer_balance < *amount {
+            return Err(EcashMigrationInputError::UnderfundedTransfer);
+        }
+
+        // Check note signature
+        let denomination_key = dbtx
+            .get_value(&DenominationKeyKey {
+                transfer_id: *transfer_id,
+                amount: *amount,
+            })
+            .await
+            .ok_or(EcashMigrationInputError::InvalidAmountTier(*amount))?;
+        if !note.verify(denomination_key) {
+            return Err(EcashMigrationInputError::InvalidSignature);
+        }
+
+        // Check if already redeemed on either the origin or local spend book
+        let is_spent_on_origin = dbtx
+            .get_value(&OriginSpendBookKey {
+                transfer_id: *transfer_id,
+                nonce: note.nonce,
+            })
+            .await
+            .is_some();
+        let is_spent_on_local = dbtx
+            .get_value(&LocalSpendBookKey {
+                transfer_id: *transfer_id,
+                nonce: note.nonce,
+            })
+            .await
+            .is_some();
+        if is_spent_on_origin || is_spent_on_local {
+            return Err(EcashMigrationInputError::AlreadyRedeemed(note.nonce));
+        }
+
+        // Insert into local spend book
+        dbtx.insert_entry(
+            &LocalSpendBookKey {
+                transfer_id: *transfer_id,
+                nonce: note.nonce,
+            },
+            amount,
+        )
+        .await;
+
+        // Update withdrawn amount
+        dbtx.insert_entry(
+            &WithdrawnAmountKey(*transfer_id),
+            &withdrawn_amount
+                .checked_add(*amount)
+                .ok_or(EcashMigrationInputError::Overflow)?,
+        )
+        .await;
+
+        Ok(InputMeta {
+            amount: TransactionItemAmounts {
+                amounts: Amounts::new_bitcoin(*amount),
+                fees: Amounts::new_bitcoin(self.cfg.consensus.fee_config.transfer_redeem_fee),
+            },
+            pub_key: *(note.spend_key()),
+        })
     }
 
     async fn process_output<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
-        _output: &'a EcashMigrationOutput,
-        _out_point: OutPoint,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a EcashMigrationOutput,
+        out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EcashMigrationOutputError> {
-        // This module does not produce outputs
-        Err(EcashMigrationOutputError::NotSupported)
+        match output {
+            EcashMigrationOutput::CreateTransfer {
+                spend_book_hash,
+                spend_book_entries,
+                key_set_hash,
+                creator_keys,
+            } => {
+                let transfer_id = get_next_transfer_id(dbtx).await;
+
+                dbtx.insert_entry(
+                    &TransferMetadataKey(transfer_id),
+                    &TransferMetadata {
+                        origin_spend_book_hash: *spend_book_hash,
+                        origin_key_set_hash: *key_set_hash,
+                        num_spend_book_entries: *spend_book_entries,
+                        creator_keys: creator_keys.clone(),
+                    },
+                )
+                .await;
+                dbtx.insert_entry(&OutPointTransferIdKey(out_point), &transfer_id)
+                    .await;
+                dbtx.insert_entry(&DepositedAmountKey(transfer_id), &Amount::ZERO)
+                    .await;
+                dbtx.insert_entry(&WithdrawnAmountKey(transfer_id), &Amount::ZERO)
+                    .await;
+
+                let creation_fee = self
+                    .cfg
+                    .consensus
+                    .fee_config
+                    .creation_fee(*spend_book_entries)
+                    .ok_or(EcashMigrationOutputError::CreationFeeCalculationOverflow {
+                        spend_book_entries: *spend_book_entries,
+                    })?;
+
+                Ok(TransactionItemAmounts {
+                    amounts: Amounts::ZERO,
+                    fees: Amounts::new_bitcoin(creation_fee),
+                })
+            }
+            EcashMigrationOutput::FundTransfer {
+                transfer_id,
+                amount,
+            } => {
+                let transfer_balance = dbtx
+                    .get_value(&DepositedAmountKey(*transfer_id))
+                    .await
+                    .expect("Deposited amount not found for existing transfer");
+
+                let new_transfer_balance = transfer_balance
+                    .checked_add(*amount)
+                    .ok_or(EcashMigrationOutputError::FundingOverflow)?;
+
+                dbtx.insert_entry(&DepositedAmountKey(*transfer_id), &new_transfer_balance)
+                    .await;
+
+                Ok(TransactionItemAmounts {
+                    amounts: Amounts::new_bitcoin(*amount),
+                    fees: Amounts::new_bitcoin(self.cfg.consensus.fee_config.transfer_funding_fee),
+                })
+            }
+            EcashMigrationOutput::Default { variant, .. } => {
+                Err(EcashMigrationOutputError::UnknownOutputVariant(*variant))
+            }
+        }
     }
 
     #[allow(deprecated)]
@@ -467,397 +526,72 @@ impl ServerModule for EcashMigration {
     async fn audit(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        _audit: &mut Audit,
-        _module_instance_id: ModuleInstanceId,
+        audit: &mut Audit,
+        module_instance_id: ModuleInstanceId,
     ) {
-        // The ecash migration module doesn't hold any assets
-        // Liabilities are tracked by the spend book, but they are external
-        // to the destination federation (origin federation's responsibility)
-        // Once redeemed, the destination mint module holds the liabilities
-        trace!(
-            target: LOG_MODULE_ECASH_MIGRATION,
-            "Audit: ecash migration module holds no assets or liabilities"
-        );
+        audit
+            .add_items(dbtx, module_instance_id, &DepositedAmountPrefix, |_, v| {
+                v.msats
+                    .try_into()
+                    .expect("Audit conversion to signed integer failed")
+            })
+            .await;
+        audit
+            .add_items(dbtx, module_instance_id, &WithdrawnAmountPrefix, |_, v| {
+                -(i64::try_from(v.msats).expect("Audit conversion to signed integer failed"))
+            })
+            .await;
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
-        vec![
-            api_endpoint! {
-                CREATE_TRANSFER_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &EcashMigration, context, request: CreateTransferRequest| -> CreateTransferResponse {
-                    module.create_transfer(&mut context.dbtx().into_nc(), request).await
-                }
-            },
-            api_endpoint! {
-                UPLOAD_SPEND_BOOK_BATCH_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &EcashMigration, context, request: UploadSpendBookBatchRequest| -> UploadSpendBookBatchResponse {
-                    module.upload_spend_book_batch(&mut context.dbtx().into_nc(), request).await
-                }
-            },
-            api_endpoint! {
-                FINALIZE_UPLOAD_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &EcashMigration, context, request: FinalizeUploadRequest| -> FinalizeUploadResponse {
-                    module.finalize_upload(&mut context.dbtx().into_nc(), request).await
-                }
-            },
-            api_endpoint! {
-                REQUEST_ACTIVATION_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &EcashMigration, context, request: RequestActivationRequest| -> () {
-                    module.request_activation(&mut context.dbtx().into_nc(), request).await
-                }
-            },
-            api_endpoint! {
-                GET_TRANSFER_STATUS_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &EcashMigration, context, request: GetTransferStatusRequest| -> GetTransferStatusResponse {
-                    module.get_transfer_status(&mut context.dbtx().into_nc(), request).await
-                }
-            },
-            api_endpoint! {
-                GET_SPEND_BOOK_HASH_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &EcashMigration, context, request: GetSpendBookHashRequest| -> GetSpendBookHashResponse {
-                    module.get_spend_book_hash(&mut context.dbtx().into_nc(), request).await
-                }
-            },
-        ]
+        vec![api_endpoint! {
+            GET_TRANSFER_ID_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |module: &EcashMigration, context, request: OutPoint| -> TransferId {
+                module.get_transfer_id(&mut context.dbtx().into_nc(), request)
+                    .await
+                    .ok_or_else(|| ApiError::not_found("Transfer ID not found for out point".to_owned()))
+            }
+        }]
     }
 }
 
 impl EcashMigration {
-    /// Create new module instance
-    pub fn new(cfg: EcashMigrationConfig, num_peers: NumPeers) -> EcashMigration {
-        EcashMigration { cfg, num_peers }
-    }
-
-    /// Create a new transfer
-    async fn create_transfer(
+    /// Returns the transfer ID of the transfer created by the output
+    async fn get_transfer_id(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        request: CreateTransferRequest,
-    ) -> Result<CreateTransferResponse, ApiError> {
-        // Find the highest existing transfer ID using reverse iteration
-        let next_id = dbtx
-            .find_by_prefix_sorted_descending(&TransferMetadataKeyPrefix)
-            .await
-            .next()
-            .await
-            .map(|(TransferMetadataKey(id), _): (TransferMetadataKey, TransferMetadata)| id.0 + 1)
-            .unwrap_or(0);
-
-        let transfer_id = TransferId(next_id);
-
-        // Compute HMAC of secret for authentication
-        let secret_hash = sha256::Hash::hash(request.secret.as_bytes());
-
-        let metadata = TransferMetadata {
-            secret_hash,
-            phase: TransferPhase::Initializing,
-            origin_keys: request.origin_keys,
-            spend_book_hash: None,
-            total_liability: Amount::ZERO,
-        };
-
-        dbtx.insert_new_entry(&TransferMetadataKey(transfer_id), &metadata)
-            .await;
-
-        info!(
-            target: LOG_MODULE_ECASH_MIGRATION,
-            transfer_id = %transfer_id,
-            "Created new transfer"
-        );
-
-        Ok(CreateTransferResponse { transfer_id })
-    }
-
-    /// Upload a batch of spend book entries
-    async fn upload_spend_book_batch(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        request: UploadSpendBookBatchRequest,
-    ) -> Result<UploadSpendBookBatchResponse, ApiError> {
-        // Get transfer metadata
-        let mut metadata = dbtx
-            .get_value(&TransferMetadataKey(request.transfer_id))
-            .await
-            .ok_or_else(|| ApiError::not_found("Transfer not found".to_string()))?;
-
-        // Verify HMAC
-        let provided_hash = sha256::Hash::hash(request.auth_hmac.as_bytes());
-        if provided_hash != metadata.secret_hash {
-            return Err(ApiError::unauthorized());
-        }
-
-        // Transition to Uploading phase if in Initializing
-        if metadata.phase == TransferPhase::Initializing {
-            metadata.phase = TransferPhase::Uploading;
-        }
-
-        // Verify we're in correct phase
-        if metadata.phase != TransferPhase::Uploading {
-            return Err(ApiError::bad_request(format!(
-                "Transfer is in {:?} phase, cannot upload",
-                metadata.phase
-            )));
-        }
-
-        // Insert spend book entries (idempotent)
-        for (nonce, amount) in &request.entries {
-            let key = SpendBookEntryKey {
-                transfer_id: request.transfer_id,
-                nonce: *nonce,
-            };
-            dbtx.insert_entry(&key, amount).await;
-        }
-
-        // Update metadata
-        dbtx.insert_entry(&TransferMetadataKey(request.transfer_id), &metadata)
-            .await;
-
-        // Count total entries and amount
-        let mut total_entries = 0u64;
-        let mut total_amount = Amount::ZERO;
-        let entries: Vec<(SpendBookEntryKey, Amount)> = dbtx
-            .find_by_prefix(&SpendBookEntryPrefix {
-                transfer_id: request.transfer_id,
-            })
-            .await
-            .collect()
-            .await;
-
-        for (_, amount) in entries {
-            total_entries += 1;
-            total_amount += amount;
-        }
-
-        debug!(
-            target: LOG_MODULE_ECASH_MIGRATION,
-            transfer_id = %request.transfer_id,
-            batch_size = request.entries.len(),
-            total_entries = total_entries,
-            total_amount = %total_amount,
-            "Uploaded spend book batch"
-        );
-
-        Ok(UploadSpendBookBatchResponse {
-            total_entries,
-            total_amount,
-        })
-    }
-
-    /// Finalize spend book upload
-    async fn finalize_upload(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        request: FinalizeUploadRequest,
-    ) -> Result<FinalizeUploadResponse, ApiError> {
-        // Get transfer metadata
-        let mut metadata = dbtx
-            .get_value(&TransferMetadataKey(request.transfer_id))
-            .await
-            .ok_or_else(|| ApiError::not_found("Transfer not found".to_string()))?;
-
-        // Verify HMAC
-        let provided_hash = sha256::Hash::hash(request.auth_hmac.as_bytes());
-        if provided_hash != metadata.secret_hash {
-            return Err(ApiError::unauthorized());
-        }
-
-        // Verify phase
-        if metadata.phase != TransferPhase::Uploading {
-            return Err(ApiError::bad_request(format!(
-                "Transfer is in {:?} phase, cannot finalize",
-                metadata.phase
-            )));
-        }
-
-        // Compute spend book hash and total
-        let (spend_book_hash, total_amount) =
-            compute_spend_book_hash_and_total(dbtx, request.transfer_id)
-                .await
-                .map_err(|e| ApiError::server_error(e.to_string()))?;
-
-        // Update metadata
-        metadata.phase = TransferPhase::ReadyForActivation;
-        metadata.spend_book_hash = Some(spend_book_hash);
-        metadata.total_liability = total_amount;
-        dbtx.insert_entry(&TransferMetadataKey(request.transfer_id), &metadata)
-            .await;
-
-        info!(
-            target: LOG_MODULE_ECASH_MIGRATION,
-            transfer_id = %request.transfer_id,
-            spend_book_hash = %spend_book_hash,
-            total_amount = %total_amount,
-            "Finalized spend book upload"
-        );
-
-        Ok(FinalizeUploadResponse {
-            spend_book_hash,
-            total_amount,
-        })
-    }
-
-    /// Request activation of a transfer
-    async fn request_activation(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        request: RequestActivationRequest,
-    ) -> Result<(), ApiError> {
-        // Get transfer metadata
-        let metadata = dbtx
-            .get_value(&TransferMetadataKey(request.transfer_id))
-            .await
-            .ok_or_else(|| ApiError::not_found("Transfer not found".to_string()))?;
-
-        // Verify HMAC
-        let provided_hash = sha256::Hash::hash(request.auth_hmac.as_bytes());
-        if provided_hash != metadata.secret_hash {
-            return Err(ApiError::unauthorized());
-        }
-
-        // Verify phase
-        if metadata.phase != TransferPhase::ReadyForActivation {
-            return Err(ApiError::bad_request(format!(
-                "Transfer is in {:?} phase, must be ReadyForActivation",
-                metadata.phase
-            )));
-        }
-
-        info!(
-            target: LOG_MODULE_ECASH_MIGRATION,
-            transfer_id = %request.transfer_id,
-            "Activation requested, will be proposed in next consensus round"
-        );
-
-        Ok(())
-    }
-
-    /// Get transfer status
-    async fn get_transfer_status(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        request: GetTransferStatusRequest,
-    ) -> Result<GetTransferStatusResponse, ApiError> {
-        // Get transfer metadata
-        let metadata = dbtx
-            .get_value(&TransferMetadataKey(request.transfer_id))
-            .await
-            .ok_or_else(|| ApiError::not_found("Transfer not found".to_string()))?;
-
-        // Count entries
-        let mut total_entries = 0u64;
-        let mut total_amount = Amount::ZERO;
-        let entries: Vec<(SpendBookEntryKey, Amount)> = dbtx
-            .find_by_prefix(&SpendBookEntryPrefix {
-                transfer_id: request.transfer_id,
-            })
-            .await
-            .collect()
-            .await;
-
-        for (_, amount) in entries {
-            total_entries += 1;
-            total_amount += amount;
-        }
-
-        // Count redeemed
-        let mut redeemed_count = 0u64;
-        let mut redeemed_amount = Amount::ZERO;
-        let redeemed: Vec<(RedeemedNonceKey, InPoint)> = dbtx
-            .find_by_prefix(&RedeemedNoncePrefix {
-                transfer_id: request.transfer_id,
-            })
-            .await
-            .collect()
-            .await;
-
-        for (redeemed_key, _) in redeemed {
-            redeemed_count += 1;
-            if let Some(amount) = dbtx
-                .get_value(&SpendBookEntryKey {
-                    transfer_id: request.transfer_id,
-                    nonce: redeemed_key.nonce,
-                })
-                .await
-            {
-                redeemed_amount += amount;
-            }
-        }
-
-        Ok(GetTransferStatusResponse {
-            phase: metadata.phase,
-            total_entries,
-            total_amount,
-            spend_book_hash: metadata.spend_book_hash,
-            redeemed_count,
-            redeemed_amount,
-        })
-    }
-
-    /// Get spend book hash
-    async fn get_spend_book_hash(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        request: GetSpendBookHashRequest,
-    ) -> Result<GetSpendBookHashResponse, ApiError> {
-        // Get transfer metadata
-        let metadata = dbtx
-            .get_value(&TransferMetadataKey(request.transfer_id))
-            .await
-            .ok_or_else(|| ApiError::not_found("Transfer not found".to_string()))?;
-
-        let spend_book_hash = metadata
-            .spend_book_hash
-            .ok_or_else(|| ApiError::bad_request("Spend book not finalized".to_string()))?;
-
-        Ok(GetSpendBookHashResponse {
-            spend_book_hash,
-            total_amount: metadata.total_liability,
-        })
+        out_point: OutPoint,
+    ) -> Option<TransferId> {
+        dbtx.get_value(&OutPointTransferIdKey(out_point)).await
     }
 }
 
-/// Compute spend book hash and total amount for a transfer
-async fn compute_spend_book_hash_and_total(
+/// Check if a transfer is active (has enough votes)
+async fn is_transfer_active(
     dbtx: &mut DatabaseTransaction<'_>,
     transfer_id: TransferId,
-) -> anyhow::Result<(SpendBookHash, Amount)> {
-    // Collect all spend book entries in sorted order (deterministic)
-    let mut entries: Vec<(Nonce, Amount)> = dbtx
-        .find_by_prefix(&SpendBookEntryPrefix { transfer_id })
+    num_peers: NumPeers,
+) -> bool {
+    let vote_count = dbtx
+        .find_by_prefix(&ActivationVoteTransferPrefix { transfer_id })
         .await
-        .map(|(key, amount): (SpendBookEntryKey, Amount)| (key.nonce, amount))
-        .collect()
+        .count()
         .await;
 
-    entries.sort_by_key(|(nonce, _)| *nonce);
+    vote_count == num_peers.total()
+}
 
-    // Compute hash
-    let mut engine = sha256::Hash::engine();
-    let mut total = Amount::ZERO;
+async fn get_next_transfer_id(dbtx: &mut DatabaseTransaction<'_>) -> TransferId {
+    let max_id = dbtx
+        .find_by_prefix_sorted_descending(&TransferMetadataKeyPrefix)
+        .await
+        .next()
+        .await
+        .map_or(0, |(TransferMetadataKey(id), _)| id.0);
 
-    for (nonce, amount) in &entries {
-        // Hash nonce
-        engine.input(&nonce.0.serialize());
-        // Hash amount
-        engine.input(&amount.msats.to_le_bytes());
-        total += *amount;
-    }
-
-    let hash = SpendBookHash(sha256::Hash::from_engine(engine));
-
-    Ok((hash, total))
+    TransferId(max_id + 1)
 }
 
 // API endpoint paths
-const CREATE_TRANSFER_ENDPOINT: &str = "create_transfer";
-const UPLOAD_SPEND_BOOK_BATCH_ENDPOINT: &str = "upload_spend_book_batch";
-const FINALIZE_UPLOAD_ENDPOINT: &str = "finalize_upload";
-const REQUEST_ACTIVATION_ENDPOINT: &str = "request_activation";
-const GET_TRANSFER_STATUS_ENDPOINT: &str = "get_transfer_status";
-const GET_SPEND_BOOK_HASH_ENDPOINT: &str = "get_spend_book_hash";
+const GET_TRANSFER_ID_ENDPOINT: &str = "get_transfer_id";

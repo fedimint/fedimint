@@ -1,5 +1,6 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
 
 use std::fmt;
 
@@ -14,10 +15,15 @@ use serde::{Deserialize, Serialize};
 use tbs::AggregatePublicKey;
 use thiserror::Error;
 
+use crate::naive_threshold::NaiveThresholdKey;
+
 // Common contains types shared by both the client and server
 
 // The client and server configuration
 pub mod config;
+
+/// Naive threshold signatures scheme implementation
+pub mod naive_threshold;
 
 /// Unique name for this module
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ecash-migration");
@@ -48,9 +54,13 @@ impl fmt::Display for TransferId {
     }
 }
 
-/// Hash of the spend book for consensus verification
+/// Hash of the spend book of the liability transfer
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct SpendBookHash(pub sha256::Hash);
+
+/// Hash of the key set of the liability transfer
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct KeySetHash(pub sha256::Hash);
 
 impl fmt::Display for SpendBookHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -58,46 +68,19 @@ impl fmt::Display for SpendBookHash {
     }
 }
 
-/// Public keys from the origin federation for verifying note signatures
+/// Threshold public keys for different tiers/denominations
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct OriginFederationKeys {
-    /// Threshold public keys for each denomination from the origin mint
-    pub public_keys: Vec<(Amount, AggregatePublicKey)>,
-}
-
-/// Current phase of a migration transfer
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub enum TransferPhase {
-    /// Transfer created, waiting for spend book upload
-    Initializing,
-    /// Spend book being uploaded
-    Uploading,
-    /// Upload complete, ready for activation
-    ReadyForActivation,
-    /// Active, users can redeem
-    Active,
-}
-
-impl fmt::Display for TransferPhase {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TransferPhase::Initializing => write!(f, "Initializing"),
-            TransferPhase::Uploading => write!(f, "Uploading"),
-            TransferPhase::ReadyForActivation => write!(f, "ReadyForActivation"),
-            TransferPhase::Active => write!(f, "Active"),
-        }
-    }
+pub struct TierKeys {
+    /// Threshold public keys for each tier/denomination
+    pub tiers: Vec<(Amount, AggregatePublicKey)>,
 }
 
 /// Non-transaction items that will be submitted to consensus
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum EcashMigrationConsensusItem {
-    /// Activate a transfer after verifying spend book hash and total amount
-    ActivateTransfer {
-        transfer_id: TransferId,
-        spend_book_hash: SpendBookHash,
-        total_amount: Amount,
-    },
+    /// Activate a transfer after verifying uploaded spend book matches
+    /// pre-committed hash
+    ActivateTransfer { transfer_id: TransferId },
     #[encodable_default]
     Default { variant: u64, bytes: Vec<u8> },
 }
@@ -121,7 +104,19 @@ pub enum EcashMigrationInput {
 /// Output for a fedimint transaction
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum EcashMigrationOutput {
-    /// This module does not produce outputs
+    /// Create a new transfer, this is a transaction output so that we can
+    /// charge a fee for spend book size.
+    CreateTransfer {
+        spend_book_hash: SpendBookHash,
+        spend_book_entries: u64,
+        key_set_hash: KeySetHash,
+        creator_keys: NaiveThresholdKey,
+    },
+    /// Add funding to an existing liability transfer.
+    FundTransfer {
+        transfer_id: TransferId,
+        amount: Amount,
+    },
     #[encodable_default]
     Default { variant: u64, bytes: Vec<u8> },
 }
@@ -137,24 +132,24 @@ pub enum EcashMigrationOutputOutcome {
 /// Errors that might be returned by the server
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum EcashMigrationInputError {
-    /// Transfer does not exist
-    #[error("Transfer {0} does not exist")]
+    /// Transfer does not exist or is not active
+    #[error("Transfer {0} does not exist or is not active")]
     InvalidTransfer(TransferId),
-    /// Transfer is not in active phase
-    #[error("Transfer {0} is not active (current phase: {1})")]
-    TransferNotActive(TransferId, TransferPhase),
-    /// Note has already been redeemed
-    #[error("Note with nonce {0} has already been redeemed")]
-    AlreadyRedeemed(Nonce),
-    /// Note not found in spend book
-    #[error("Note with nonce {0} not found in spend book")]
-    NotInSpendBook(Nonce),
+    /// Invalid amount tier
+    #[error("Invalid amount tier {0}")]
+    InvalidAmountTier(Amount),
     /// Invalid note signature
     #[error("Invalid signature on note")]
     InvalidSignature,
-    /// Amount mismatch
-    #[error("Amount mismatch: expected {expected}, got {actual}")]
-    AmountMismatch { expected: Amount, actual: Amount },
+    /// Already redeemed
+    #[error("Note {0} already redeemed")]
+    AlreadyRedeemed(Nonce),
+    /// Underfunded transfer
+    #[error("Underfunded transfer")]
+    UnderfundedTransfer,
+    /// Overflow
+    #[error("Overflow in processing input")]
+    Overflow,
     /// Unknown input variant
     #[error("Unknown input variant {0}")]
     UnknownInputVariant(u64),
@@ -163,8 +158,14 @@ pub enum EcashMigrationInputError {
 /// Errors that might be returned by the server
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum EcashMigrationOutputError {
-    #[error("This module does not support outputs")]
-    NotSupported,
+    /// Creation fee calculation overflow
+    #[error("Creation fee calculation overflow, too many spend book entries: {spend_book_entries}")]
+    CreationFeeCalculationOverflow { spend_book_entries: u64 },
+    #[error("Funding overflow: no, you don't have more than 21M Bitcoin ...")]
+    FundingOverflow,
+    /// Unknown output variant
+    #[error("Unknown output variant {0}")]
+    UnknownOutputVariant(u64),
 }
 
 /// API: Request to create a new transfer
@@ -172,8 +173,10 @@ pub enum EcashMigrationOutputError {
 pub struct CreateTransferRequest {
     /// Secret for authenticating future operations
     pub secret: String,
-    /// Origin federation public keys
-    pub origin_keys: OriginFederationKeys,
+    /// Pre-committed spend book hash
+    pub spend_book_hash: SpendBookHash,
+    /// Tier public keys for different denominations
+    pub tier_keys: TierKeys,
 }
 
 /// API: Response from creating a transfer
@@ -229,7 +232,7 @@ pub struct GetTransferStatusRequest {
 /// API: Response with transfer status
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetTransferStatusResponse {
-    pub phase: TransferPhase,
+    pub is_active: bool,
     pub total_entries: u64,
     pub total_amount: Amount,
     pub spend_book_hash: Option<SpendBookHash>,
@@ -296,12 +299,11 @@ impl fmt::Display for EcashMigrationInput {
             } => {
                 write!(
                     f,
-                    "RedeemOriginEcash(transfer={}, note={}, amount={})",
-                    transfer_id, note, amount
+                    "RedeemOriginEcash(transfer={transfer_id}, note={note}, amount={amount})",
                 )
             }
             EcashMigrationInput::Default { variant, .. } => {
-                write!(f, "EcashMigrationInput::Default(variant={})", variant)
+                write!(f, "EcashMigrationInput::Default(variant={variant})")
             }
         }
     }
@@ -310,8 +312,28 @@ impl fmt::Display for EcashMigrationInput {
 impl fmt::Display for EcashMigrationOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EcashMigrationOutput::CreateTransfer {
+                spend_book_hash,
+                spend_book_entries,
+                key_set_hash,
+                ..
+            } => {
+                write!(
+                    f,
+                    "EcashMigrationOutput::CreateTransfer(spend_book_hash={spend_book_hash}, spend_book_entries={spend_book_entries}, key_set_hash={key_set_hash:?})"
+                )
+            }
+            EcashMigrationOutput::FundTransfer {
+                transfer_id,
+                amount,
+            } => {
+                write!(
+                    f,
+                    "EcashMigrationOutput::FundTransfer(transfer={transfer_id}, amount={amount})"
+                )
+            }
             EcashMigrationOutput::Default { variant, .. } => {
-                write!(f, "EcashMigrationOutput::Default(variant={})", variant)
+                write!(f, "EcashMigrationOutput::Default(variant={variant})")
             }
         }
     }
@@ -321,11 +343,7 @@ impl fmt::Display for EcashMigrationOutputOutcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EcashMigrationOutputOutcome::Default { variant, .. } => {
-                write!(
-                    f,
-                    "EcashMigrationOutputOutcome::Default(variant={})",
-                    variant
-                )
+                write!(f, "EcashMigrationOutputOutcome::Default(variant={variant})",)
             }
         }
     }
@@ -334,23 +352,11 @@ impl fmt::Display for EcashMigrationOutputOutcome {
 impl fmt::Display for EcashMigrationConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EcashMigrationConsensusItem::ActivateTransfer {
-                transfer_id,
-                spend_book_hash,
-                total_amount,
-            } => {
-                write!(
-                    f,
-                    "ActivateTransfer(transfer={}, hash={}, amount={})",
-                    transfer_id, spend_book_hash, total_amount
-                )
+            EcashMigrationConsensusItem::ActivateTransfer { transfer_id } => {
+                write!(f, "ActivateTransfer(transfer={transfer_id})")
             }
             EcashMigrationConsensusItem::Default { variant, .. } => {
-                write!(
-                    f,
-                    "EcashMigrationConsensusItem::Default(variant={})",
-                    variant
-                )
+                write!(f, "EcashMigrationConsensusItem::Default(variant={variant})",)
             }
         }
     }
