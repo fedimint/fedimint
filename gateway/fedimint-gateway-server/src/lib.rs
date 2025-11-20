@@ -81,7 +81,7 @@ use fedimint_gateway_common::{
     WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
-use fedimint_gateway_ui::IAdminGateway;
+pub use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{
@@ -1121,143 +1121,6 @@ impl Gateway {
         )))
     }
 
-    /// Handles a connection request to join a new federation. The gateway will
-    /// download the federation's client configuration, construct a new
-    /// client, registers, the gateway with the federation, and persists the
-    /// necessary config to reconstruct the client when restarting the gateway.
-    pub async fn handle_connect_federation(
-        &self,
-        payload: ConnectFedPayload,
-    ) -> AdminResult<FederationInfo> {
-        let GatewayState::Running { lightning_context } = self.get_state().await else {
-            return Err(AdminGatewayError::Lightning(
-                LightningRpcError::FailedToConnect,
-            ));
-        };
-
-        let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
-            AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Invalid federation member string {e:?}"
-            )))
-        })?;
-
-        #[cfg(feature = "tor")]
-        let connector = match &payload.use_tor {
-            Some(true) => ConnectorType::tor(),
-            Some(false) => ConnectorType::default(),
-            None => {
-                debug!(target: LOG_GATEWAY, "Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
-                ConnectorType::default()
-            }
-        };
-
-        #[cfg(not(feature = "tor"))]
-        let connector = ConnectorType::default();
-
-        let federation_id = invite_code.federation_id();
-
-        let mut federation_manager = self.federation_manager.write().await;
-
-        // Check if this federation has already been registered
-        if federation_manager.has_federation(federation_id) {
-            return Err(AdminGatewayError::ClientCreationError(anyhow!(
-                "Federation has already been registered"
-            )));
-        }
-
-        // The gateway deterministically assigns a unique identifier (u64) to each
-        // federation connected.
-        let federation_index = federation_manager.pop_next_index()?;
-
-        let federation_config = FederationConfig {
-            invite_code,
-            federation_index,
-            lightning_fee: self.default_routing_fees,
-            transaction_fee: self.default_transaction_fees,
-            connector,
-        };
-
-        let recover = payload.recover.unwrap_or(false);
-        if recover {
-            self.client_builder
-                .recover(
-                    federation_config.clone(),
-                    Arc::new(self.clone()),
-                    &self.mnemonic,
-                )
-                .await?;
-        }
-
-        let client = self
-            .client_builder
-            .build(
-                federation_config.clone(),
-                Arc::new(self.clone()),
-                &self.mnemonic,
-            )
-            .await?;
-
-        if recover {
-            client.wait_for_all_active_state_machines().await?;
-        }
-
-        // Instead of using `FederationManager::federation_info`, we manually create
-        // federation info here because short channel id is not yet persisted.
-        let federation_info = FederationInfo {
-            federation_id,
-            federation_name: federation_manager.federation_name(&client).await,
-            balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
-                warn!(
-                    target: LOG_GATEWAY,
-                    err = %err.fmt_compact_anyhow(),
-                    %federation_id,
-                    "Balance not immediately available after joining/recovering."
-                );
-                Amount::default()
-            }),
-            config: federation_config.clone(),
-        };
-
-        Self::check_lnv1_federation_network(&client, self.network).await?;
-        Self::check_lnv2_federation_network(&client, self.network).await?;
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
-            client
-                .get_first_module::<GatewayClientModule>()?
-                .try_register_with_federation(
-                    // Route hints will be updated in the background
-                    Vec::new(),
-                    GW_ANNOUNCEMENT_TTL,
-                    federation_config.lightning_fee.into(),
-                    lightning_context,
-                    self.versioned_api.clone(),
-                    self.gateway_id,
-                )
-                .await;
-        }
-
-        // no need to enter span earlier, because connect-fed has a span
-        federation_manager.add_client(
-            federation_index,
-            Spanned::new(
-                info_span!(target: LOG_GATEWAY, "client", federation_id=%federation_id.clone()),
-                async { client },
-            )
-            .await,
-        );
-
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-        dbtx.save_federation_config(&federation_config).await;
-        dbtx.commit_tx().await;
-        debug!(
-            target: LOG_GATEWAY,
-            federation_id = %federation_id,
-            federation_index = %federation_index,
-            "Federation connected"
-        );
-
-        Ok(federation_info)
-    }
-
     /// Handles a request for the gateway to backup a connected federation's
     /// ecash.
     pub async fn handle_backup_msg(
@@ -2166,6 +2029,143 @@ impl IAdminGateway for Gateway {
 
         dbtx.remove_federation_config(payload.federation_id).await;
         dbtx.commit_tx().await;
+        Ok(federation_info)
+    }
+
+    /// Handles a connection request to join a new federation. The gateway will
+    /// download the federation's client configuration, construct a new
+    /// client, registers, the gateway with the federation, and persists the
+    /// necessary config to reconstruct the client when restarting the gateway.
+    async fn handle_connect_federation(
+        &self,
+        payload: ConnectFedPayload,
+    ) -> AdminResult<FederationInfo> {
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Err(AdminGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
+            ));
+        };
+
+        let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
+            AdminGatewayError::ClientCreationError(anyhow!(format!(
+                "Invalid federation member string {e:?}"
+            )))
+        })?;
+
+        #[cfg(feature = "tor")]
+        let connector = match &payload.use_tor {
+            Some(true) => ConnectorType::tor(),
+            Some(false) => ConnectorType::default(),
+            None => {
+                debug!(target: LOG_GATEWAY, "Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
+                ConnectorType::default()
+            }
+        };
+
+        #[cfg(not(feature = "tor"))]
+        let connector = ConnectorType::default();
+
+        let federation_id = invite_code.federation_id();
+
+        let mut federation_manager = self.federation_manager.write().await;
+
+        // Check if this federation has already been registered
+        if federation_manager.has_federation(federation_id) {
+            return Err(AdminGatewayError::ClientCreationError(anyhow!(
+                "Federation has already been registered"
+            )));
+        }
+
+        // The gateway deterministically assigns a unique identifier (u64) to each
+        // federation connected.
+        let federation_index = federation_manager.pop_next_index()?;
+
+        let federation_config = FederationConfig {
+            invite_code,
+            federation_index,
+            lightning_fee: self.default_routing_fees,
+            transaction_fee: self.default_transaction_fees,
+            connector,
+        };
+
+        let recover = payload.recover.unwrap_or(false);
+        if recover {
+            self.client_builder
+                .recover(
+                    federation_config.clone(),
+                    Arc::new(self.clone()),
+                    &self.mnemonic,
+                )
+                .await?;
+        }
+
+        let client = self
+            .client_builder
+            .build(
+                federation_config.clone(),
+                Arc::new(self.clone()),
+                &self.mnemonic,
+            )
+            .await?;
+
+        if recover {
+            client.wait_for_all_active_state_machines().await?;
+        }
+
+        // Instead of using `FederationManager::federation_info`, we manually create
+        // federation info here because short channel id is not yet persisted.
+        let federation_info = FederationInfo {
+            federation_id,
+            federation_name: federation_manager.federation_name(&client).await,
+            balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
+                warn!(
+                    target: LOG_GATEWAY,
+                    err = %err.fmt_compact_anyhow(),
+                    %federation_id,
+                    "Balance not immediately available after joining/recovering."
+                );
+                Amount::default()
+            }),
+            config: federation_config.clone(),
+        };
+
+        Self::check_lnv1_federation_network(&client, self.network).await?;
+        Self::check_lnv2_federation_network(&client, self.network).await?;
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+            client
+                .get_first_module::<GatewayClientModule>()?
+                .try_register_with_federation(
+                    // Route hints will be updated in the background
+                    Vec::new(),
+                    GW_ANNOUNCEMENT_TTL,
+                    federation_config.lightning_fee.into(),
+                    lightning_context,
+                    self.versioned_api.clone(),
+                    self.gateway_id,
+                )
+                .await;
+        }
+
+        // no need to enter span earlier, because connect-fed has a span
+        federation_manager.add_client(
+            federation_index,
+            Spanned::new(
+                info_span!(target: LOG_GATEWAY, "client", federation_id=%federation_id.clone()),
+                async { client },
+            )
+            .await,
+        );
+
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        dbtx.save_federation_config(&federation_config).await;
+        dbtx.commit_tx().await;
+        debug!(
+            target: LOG_GATEWAY,
+            federation_id = %federation_id,
+            federation_index = %federation_index,
+            "Federation connected"
+        );
+
         Ok(federation_info)
     }
 
