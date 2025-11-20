@@ -12,6 +12,7 @@ use strum::{EnumIter, IntoEnumIterator as _};
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
 pub enum DbKeyPrefix {
+    SessionOutcomeSignature = 0x00,
     AcceptedItem = 0x01,
     AcceptedTransaction = 0x02,
     SignedSessionOutcome = 0x04,

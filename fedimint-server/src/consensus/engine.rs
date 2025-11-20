@@ -8,21 +8,22 @@ use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{Context as _, anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerError};
-use fedimint_api_client::query::FilterMap;
+use fedimint_api_client::query::{FilterMap, FilterMapThreshold};
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
-use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
+use fedimint_core::endpoint_constants::{
+    AWAIT_SESSION_OUTCOME_SIGNATURE_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
+};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::runtime::spawn;
-use fedimint_core::session_outcome::{
-    AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
-};
+use fedimint_core::secp256k1::schnorr;
+use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
@@ -44,7 +45,7 @@ use crate::consensus::aleph_bft::spawner::Spawner;
 use crate::consensus::aleph_bft::to_node_index;
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
-    SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    SessionOutcomeSignatureKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
@@ -127,7 +128,7 @@ impl ConsensusEngine {
             };
 
             let header = session_outcome.header(session_index);
-            let signature = Keychain::new(&self.cfg).sign(&header);
+            let signature = Keychain::new(&self.cfg).sign_schnorr(&header);
             let signatures = BTreeMap::from_iter([(self.identity(), signature)]);
 
             self.complete_session(
@@ -312,7 +313,7 @@ impl ConsensusEngine {
         &self,
         session_index: u64,
         ordered_unit_receiver: Receiver<OrderedUnit>,
-        signature_sender: watch::Sender<Option<SchnorrSignature>>,
+        signature_sender: watch::Sender<Option<[u8; 64]>>,
         timestamp_receiver: Receiver<Instant>,
     ) -> anyhow::Result<SignedSessionOutcome> {
         // It is guaranteed that aleph bft will always replay all previously processed
@@ -367,7 +368,11 @@ impl ConsensusEngine {
                                     CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
                                 }
                                 Err(err) => {
-                                    debug!(target: LOG_CONSENSUS, err = %err.fmt_compact(), "Missing submission timestamp. This is normal in recovery");
+                                    debug!(target: LOG_CONSENSUS,
+                                        ?session_index,
+                                        err = %err.fmt_compact(),
+                                        "Missing submission timestamp. This is normal in recovery"
+                                    );
                                 }
                             }
                         }
@@ -398,6 +403,15 @@ impl ConsensusEngine {
                     }
                 },
                 signed_session_outcome = &mut request_signed_session_outcome => {
+                    info!(
+                        target: LOG_CONSENSUS,
+                        ?session_index,
+                        signatures = %signed_session_outcome.signatures.len(),
+                        "Recovered signed session outcome from peers while collecting signatures"
+                    );
+
+                    assert_eq!(signed_session_outcome.signatures.len(), self.num_peers().threshold());
+
                     let pending_accepted_items = self.pending_accepted_items().await;
 
                     // this panics if we have more accepted items than the signed session outcome
@@ -405,6 +419,14 @@ impl ConsensusEngine {
                         .session_outcome
                         .items
                         .split_at(pending_accepted_items.len());
+
+                    info!(
+                        target: LOG_CONSENSUS,
+                        ?session_index,
+                        processed = %processed.len(),
+                        unprocessed = %unprocessed.len(),
+                        "Processing remaining items..."
+                    );
 
                     assert!(
                         processed.iter().eq(pending_accepted_items.iter()),
@@ -435,9 +457,13 @@ impl ConsensusEngine {
 
         assert_eq!(item_index, items.len() as u64);
 
+        info!(target: LOG_CONSENSUS, ?session_index, ?item_index, "Processed all items for session");
+
         let session_outcome = SessionOutcome { items };
 
         let header = session_outcome.header(session_index);
+
+        info!(target: LOG_CONSENSUS, ?session_index, ?header, "Signing session header...");
 
         let keychain = Keychain::new(&self.cfg);
 
@@ -446,9 +472,17 @@ impl ConsensusEngine {
         #[allow(clippy::disallowed_methods)]
         signature_sender.send(Some(keychain.sign(&header)))?;
 
+        self.save_session_outcome_signature(session_index, keychain.sign_schnorr(&header))
+            .await;
+
         let mut signatures = BTreeMap::new();
 
         let items_dump = tokio::sync::OnceCell::new();
+
+        let mut request_session_outcome_signature = Box::pin(async {
+            self.request_session_outcome_signature(&self.federation_api, session_index, header)
+                .await
+        });
 
         // We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
@@ -458,10 +492,20 @@ impl ConsensusEngine {
                     let ordered_unit = ordered_unit?;
 
                     if let Some(UnitData::Signature(signature)) = ordered_unit.data {
+                        info!(target: LOG_CONSENSUS,
+                            ?session_index,
+                            peer = %ordered_unit.creator,
+                            "Collected signature from peer, verifying..."
+                        );
+
                         if keychain.verify(&header, &signature, to_node_index(ordered_unit.creator)){
-                            signatures.insert(ordered_unit.creator, signature);
+                            signatures.insert(ordered_unit.creator, schnorr::Signature::from_slice(&signature).expect("Invalid signature"));
                         } else {
-                            warn!(target: LOG_CONSENSUS, "Consensus Failure: invalid header signature from {}", ordered_unit.creator);
+                            warn!(target: LOG_CONSENSUS,
+                                ?session_index,
+                                peer = %ordered_unit.creator,
+                                "Consensus Failure: invalid header signature from peer"
+                            );
 
                             items_dump.get_or_init(|| async {
                                 for (idx, item) in session_outcome.items.iter().enumerate() {
@@ -471,7 +515,26 @@ impl ConsensusEngine {
                         }
                     }
                 }
+                signatures = &mut request_session_outcome_signature => {
+                    info!(target: LOG_CONSENSUS, "Fetched threshold of signatures from peers");
+
+                    assert_eq!(signatures.len(), self.num_peers().threshold());
+
+                    return Ok(SignedSessionOutcome {
+                        session_outcome,
+                        signatures,
+                    });
+                }
                 signed_session_outcome = &mut request_signed_session_outcome => {
+                    info!(
+                        target: LOG_CONSENSUS,
+                        ?session_index,
+                        signatures = %signed_session_outcome.signatures.len(),
+                        "Recovered signed session outcome from peers while collecting signatures"
+                    );
+
+                    assert_eq!(signed_session_outcome.signatures.len(), self.num_peers().threshold());
+
                     assert_eq!(
                         header,
                         signed_session_outcome.session_outcome.header(session_index),
@@ -502,6 +565,21 @@ impl ConsensusEngine {
             .map(|entry| entry.1)
             .collect()
             .await
+    }
+
+    pub async fn save_session_outcome_signature(
+        &self,
+        session_index: u64,
+        signature: schnorr::Signature,
+    ) {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        dbtx.insert_entry(&SessionOutcomeSignatureKey(session_index), &signature)
+            .await;
+
+        dbtx.commit_tx_result()
+            .await
+            .expect("This is the only place where we write to this key");
     }
 
     pub async fn complete_session(
@@ -837,12 +915,14 @@ impl ConsensusEngine {
             let signed_session_outcome = response
                 .try_into_inner(&decoders)
                 .map_err(|x| PeerError::ResponseDeserialization(x.into()))?;
+
             let header = signed_session_outcome.session_outcome.header(index);
+
             if signed_session_outcome.signatures.len() == threshold
                 && signed_session_outcome
                     .signatures
                     .iter()
-                    .all(|(peer_id, sig)| keychain.verify(&header, sig, to_node_index(*peer_id)))
+                    .all(|(peer, sig)| keychain.verify_schnorr(&header, sig, *peer))
             {
                 Ok(signed_session_outcome)
             } else {
@@ -850,25 +930,39 @@ impl ConsensusEngine {
             }
         };
 
-        let mut backoff = fedimint_core::util::backoff_util::api_networking_backoff();
-        loop {
-            let result = federation_api
-                .request_with_strategy(
-                    FilterMap::new(filter_map.clone()),
-                    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
-                    ApiRequestErased::new(index),
-                )
-                .await;
+        federation_api
+            .request_with_strategy_retry(
+                FilterMap::new(filter_map.clone()),
+                AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
+                ApiRequestErased::new(index),
+            )
+            .await
+    }
 
-            match result {
-                Ok(signed_session_outcome) => return signed_session_outcome,
-                Err(error) => {
-                    error.report_if_unusual("Requesting Session Outcome");
-                }
+    async fn request_session_outcome_signature(
+        &self,
+        federation_api: &DynGlobalApi,
+        index: u64,
+        header: [u8; 40],
+    ) -> BTreeMap<PeerId, schnorr::Signature> {
+        let keychain = Keychain::new(&self.cfg);
+        let num_peers = self.num_peers();
+
+        let filter_map = move |peer: PeerId, signature: schnorr::Signature| {
+            if !keychain.verify_schnorr(&header, &signature, peer) {
+                return Err(PeerError::InvalidResponse(anyhow!("Invalid signature")));
             }
 
-            sleep(backoff.next().expect("infinite retries")).await;
-        }
+            Ok(signature)
+        };
+
+        federation_api
+            .request_with_strategy_retry(
+                FilterMapThreshold::new(filter_map.clone(), num_peers),
+                AWAIT_SESSION_OUTCOME_SIGNATURE_ENDPOINT.to_string(),
+                ApiRequestErased::new(index),
+            )
+            .await
     }
 
     /// Returns the number of sessions already saved in the database. This count

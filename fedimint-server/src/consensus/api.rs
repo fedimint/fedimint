@@ -25,15 +25,15 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    BACKUP_STATISTICS_ENDPOINT, CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
-    CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT,
-    FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
-    P2P_CONNECTION_STATUS_ENDPOINT, P2P_CONNECTION_TYPE_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_SIGNATURE_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
+    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, BACKUP_STATISTICS_ENDPOINT,
+    CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
+    CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
+    P2P_CONNECTION_TYPE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -68,7 +68,9 @@ use crate::config::io::{
     reencrypt_private_config,
 };
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
-use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
+use crate::consensus::db::{
+    AcceptedItemPrefix, AcceptedTransactionKey, SessionOutcomeSignatureKey, SignedSessionOutcomeKey,
+};
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -204,6 +206,16 @@ impl ConsensusApi {
     pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
         self.db
             .wait_key_check(&SignedSessionOutcomeKey(index), std::convert::identity)
+            .await
+            .0
+    }
+
+    pub async fn await_session_outcome_signature(
+        &self,
+        index: u64,
+    ) -> secp256k1::schnorr::Signature {
+        self.db
+            .wait_key_check(&SessionOutcomeSignatureKey(index), std::convert::identity)
             .await
             .0
     }
@@ -800,6 +812,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedSessionOutcome> {
                 Ok((&fedimint.await_signed_session_outcome(index).await).into())
+            }
+        },
+        api_endpoint! {
+            AWAIT_SESSION_OUTCOME_SIGNATURE_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |fedimint: &ConsensusApi, _context, index: u64| -> secp256k1::schnorr::Signature {
+                Ok(fedimint.await_session_outcome_signature(index).await)
             }
         },
         api_endpoint! {
