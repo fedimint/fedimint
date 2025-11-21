@@ -1,3 +1,4 @@
+mod bitcoin;
 mod connect_fed;
 mod federation;
 mod general;
@@ -17,7 +18,7 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
-    ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    ChainSource, ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
     PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -90,6 +91,8 @@ pub trait IAdminGateway {
     fn get_password_hash(&self) -> String;
 
     fn gatewayd_version(&self) -> String;
+
+    fn get_chain_source(&self) -> ChainSource;
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
@@ -184,6 +187,9 @@ where
         }
 
         div class="row gy-4 mt-2" {
+            div class="col-md-6" {
+                (bitcoin::render(&state.api))
+            }
             div class="col-md-6" {
                 (mnemonic::render(&state.api).await)
             }
