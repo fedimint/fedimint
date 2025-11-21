@@ -312,6 +312,13 @@ impl IBitcoindRpc for FakeBitcoinTest {
         let proof = inner.proofs.get(&txid);
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
+
+    async fn get_info(&self) -> Result<(u64, bool)> {
+        let inner = self.inner.read().unwrap();
+        let count = inner.blocks.len() as u64;
+        let synced = inner.pending.is_empty();
+        Ok((count - 1, synced))
+    }
 }
 
 fn output_sum(tx: &Transaction) -> u64 {

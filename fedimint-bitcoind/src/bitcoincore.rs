@@ -145,4 +145,10 @@ impl IBitcoindRpc for BitcoindClient {
         )
         .map_err(|error| format_err!("Could not decode tx: {}", error))
     }
+
+    async fn get_info(&self) -> anyhow::Result<(u64, bool)> {
+        let info = block_in_place(|| self.client.get_blockchain_info())
+            .map_err(|err| anyhow::anyhow!("Unable to get blockchain info {err}"))?;
+        Ok((info.blocks, !info.initial_block_download))
+    }
 }
