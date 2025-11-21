@@ -2177,6 +2177,10 @@ impl IAdminGateway for Gateway {
         let gatewayd_version = env!("CARGO_PKG_VERSION");
         gatewayd_version.to_string()
     }
+
+    fn get_chain_source(&self) -> ChainSource {
+        self.chain_source.clone()
+    }
 }
 
 // LNv2 Gateway implementation
