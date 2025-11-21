@@ -1006,19 +1006,20 @@ pub trait Connector: Send + Sync + 'static + fmt::Debug {
     async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection>;
 }
 
-pub type DynGatewayConnection = Arc<dyn IGatewayConnection>;
+#[apply(async_trait_maybe_send!)]
+pub trait IConnection: Debug + Send + Sync + 'static {
+    fn is_connected(&self) -> bool;
+
+    async fn await_disconnection(&self);
+}
 
 /// A connection from api client to a federation guardian (type erased)
 pub type DynGuaridianConnection = Arc<dyn IGuardianConnection>;
 
 /// A connection from api client to a federation guardian
 #[async_trait]
-pub trait IGuardianConnection: Debug + Send + Sync + 'static {
+pub trait IGuardianConnection: IConnection + Debug + Send + Sync + 'static {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value>;
-
-    fn is_connected(&self) -> bool;
-
-    async fn await_disconnection(&self);
 
     fn into_dyn(self) -> DynGuaridianConnection
     where
@@ -1028,8 +1029,10 @@ pub trait IGuardianConnection: Debug + Send + Sync + 'static {
     }
 }
 
+pub type DynGatewayConnection = Arc<dyn IGatewayConnection>;
+
 #[apply(async_trait_maybe_send!)]
-pub trait IGatewayConnection: Debug + Send + Sync + 'static {
+pub trait IGatewayConnection: IConnection + Debug + Send + Sync + 'static {
     async fn request(
         &self,
         password: Option<String>,
@@ -1037,10 +1040,6 @@ pub trait IGatewayConnection: Debug + Send + Sync + 'static {
         route: &str,
         payload: Option<Value>,
     ) -> PeerResult<Value>;
-
-    fn is_connected(&self) -> bool;
-
-    async fn await_disconnection(&self);
 
     fn into_dyn(self) -> DynGatewayConnection
     where
@@ -1081,36 +1080,8 @@ pub struct FederationApi {
     /// single outgoing connection to a certain URL that is in the process
     /// of being established, or we already established.
     #[allow(clippy::type_complexity)]
-    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState>>>>,
-}
-
-#[derive(Debug)]
-pub enum ConnectionType {
-    Guardian(DynGuaridianConnection),
-    Gateway(DynGatewayConnection),
-}
-
-impl ConnectionType {
-    pub fn is_connected(&self) -> bool {
-        match self {
-            ConnectionType::Guardian(conn) => conn.is_connected(),
-            ConnectionType::Gateway(conn) => conn.is_connected(),
-        }
-    }
-
-    pub fn as_guardian(&self) -> Option<&DynGuaridianConnection> {
-        match self {
-            ConnectionType::Guardian(conn) => Some(conn),
-            ConnectionType::Gateway(_) => None,
-        }
-    }
-
-    pub fn as_gateway(&self) -> Option<&DynGatewayConnection> {
-        match self {
-            ConnectionType::Guardian(_) => None,
-            ConnectionType::Gateway(conn) => Some(conn),
-        }
-    }
+    connections:
+        Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState<dyn IGuardianConnection>>>>>,
 }
 
 /// Inner part of [`ConnectionState`] preserving state between attempts to
@@ -1122,16 +1093,16 @@ struct ConnectionStateInner {
 }
 
 #[derive(Debug)]
-pub struct ConnectionState {
+pub struct ConnectionState<T: ?Sized> {
     /// Connection we are trying to or already established
-    pub connection: tokio::sync::OnceCell<ConnectionType>,
+    pub connection: tokio::sync::OnceCell<Arc<T>>,
     /// State that technically is protected every time by
     /// the serialization of `OnceCell::get_or_try_init`, but
     /// for Rust purposes needs to be locked.
     inner: std::sync::Mutex<ConnectionStateInner>,
 }
 
-impl ConnectionState {
+impl<T: ?Sized> ConnectionState<T> {
     /// Create a new connection state for a first time connection
     pub fn new_initial() -> Self {
         Self {
@@ -1242,7 +1213,7 @@ impl FederationApi {
                 trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
                 let conn = self.connectors.connect_guardian(url, api_secret).await?;
 
-                Ok(ConnectionType::Guardian(conn))
+                Ok(conn)
             })
             .await?;
 

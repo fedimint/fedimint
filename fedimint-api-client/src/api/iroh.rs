@@ -31,7 +31,7 @@ use tracing::{debug, trace, warn};
 use url::Url;
 
 use super::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
-use crate::api::{DynGatewayConnection, IGatewayConnection};
+use crate::api::{DynGatewayConnection, IConnection, IGatewayConnection};
 
 #[derive(Clone)]
 pub(crate) struct IrohConnector {
@@ -433,6 +433,18 @@ fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::NodeAddr {
         direct_addresses: stable.direct_addresses.clone(),
     }
 }
+
+#[async_trait]
+impl IConnection for Connection {
+    async fn await_disconnection(&self) {
+        self.closed().await;
+    }
+
+    fn is_connected(&self) -> bool {
+        self.close_reason().is_none()
+    }
+}
+
 #[async_trait]
 impl IGuardianConnection for Connection {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
@@ -461,7 +473,10 @@ impl IGuardianConnection for Connection {
 
         response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
     }
+}
 
+#[async_trait]
+impl IConnection for iroh_next::endpoint::Connection {
     async fn await_disconnection(&self) {
         self.closed().await;
     }
@@ -498,14 +513,6 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
             .map_err(|e| PeerError::InvalidResponse(e.into()))?;
 
         response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
-    }
-
-    async fn await_disconnection(&self) {
-        self.closed().await;
-    }
-
-    fn is_connected(&self) -> bool {
-        self.close_reason().is_none()
     }
 }
 
@@ -552,13 +559,5 @@ impl IGatewayConnection for Connection {
                 status
             ))),
         }
-    }
-
-    async fn await_disconnection(&self) {
-        self.closed().await;
-    }
-
-    fn is_connected(&self) -> bool {
-        self.close_reason().is_none()
     }
 }

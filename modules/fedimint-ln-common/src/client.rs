@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use fedimint_api_client::api::{
-    ConnectionState, ConnectionType, ConnectorRegistry, DynGatewayConnection, PeerError, PeerResult,
+    ConnectionState, ConnectorRegistry, DynGatewayConnection, IGatewayConnection, PeerError,
+    PeerResult,
 };
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_GATEWAY;
@@ -24,7 +25,8 @@ pub struct GatewayApi {
     /// single outgoing connection to a certain URL that is in the process
     /// of being established, or we already established.
     #[allow(clippy::type_complexity)]
-    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState>>>>,
+    connections:
+        Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState<dyn IGatewayConnection>>>>>,
 }
 
 impl GatewayApi {
@@ -77,12 +79,12 @@ impl GatewayApi {
 
                 let conn: DynGatewayConnection = self.connectors.connect_gateway(url).await?;
 
-                Ok::<ConnectionType, anyhow::Error>(ConnectionType::Gateway(conn))
+                Ok::<DynGatewayConnection, anyhow::Error>(conn)
             })
             .await?;
 
         trace!(target: LOG_GATEWAY, %url, "Using websocket connection");
-        Ok(conn.as_gateway().expect("Should be a gateway").clone())
+        Ok(conn.clone())
     }
 
     pub async fn request<P: Serialize, T: DeserializeOwned>(

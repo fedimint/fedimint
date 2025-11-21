@@ -7,7 +7,8 @@ use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
 use crate::api::{
-    DynGatewayConnection, DynGuaridianConnection, IGatewayConnection, PeerError, PeerResult,
+    DynGatewayConnection, DynGuaridianConnection, IConnection, IGatewayConnection, PeerError,
+    PeerResult,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -44,6 +45,20 @@ pub(crate) struct HttpConnection {
 }
 
 #[apply(async_trait_maybe_send!)]
+impl IConnection for HttpConnection {
+    async fn await_disconnection(&self) {}
+
+    fn is_connected(&self) -> bool {
+        // `reqwest::Client` already implemented connection pooling. So instead of
+        // keeping this `HttpConnection` alive, we always return false here and
+        // force the `ConnectionRegistry` to re-create the connection. `HttpConnector`
+        // manages the `reqwest::Client` lifetime, so the same underlying TCP
+        // connection will be used for subsequent requests.
+        false
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
 impl IGatewayConnection for HttpConnection {
     async fn request(
         &self,
@@ -75,16 +90,5 @@ impl IGatewayConnection for HttpConnection {
                 "HTTP request returned unexpected status: {status}"
             ))),
         }
-    }
-
-    async fn await_disconnection(&self) {}
-
-    fn is_connected(&self) -> bool {
-        // `reqwest::Client` already implemented connection pooling. So instead of
-        // keeping this `HttpConnection` alive, we always return false here and
-        // force the `ConnectionRegistry` to re-create the connection. `HttpConnector`
-        // manages the `reqwest::Client` lifetime, so the same underlying TCP
-        // connection will be used for subsequent requests.
-        false
     }
 }

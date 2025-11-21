@@ -22,7 +22,8 @@ pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 
 use super::Connector;
 use crate::api::{
-    DynGatewayConnection, DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult,
+    DynGatewayConnection, DynGuaridianConnection, IConnection, IGuardianConnection, PeerError,
+    PeerResult,
 };
 
 #[derive(Debug, Clone)]
@@ -133,6 +134,17 @@ impl Connector for WebsocketConnector {
 }
 
 #[async_trait]
+impl IConnection for WsClient {
+    async fn await_disconnection(&self) {
+        self.on_disconnect().await;
+    }
+
+    fn is_connected(&self) -> bool {
+        WsClient::is_connected(self)
+    }
+}
+
+#[async_trait]
 impl IGuardianConnection for WsClient {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
         let method = match method {
@@ -144,7 +156,10 @@ impl IGuardianConnection for WsClient {
             .await
             .map_err(jsonrpc_error_to_peer_error)?)
     }
+}
 
+#[async_trait]
+impl IConnection for Arc<WsClient> {
     async fn await_disconnection(&self) {
         self.on_disconnect().await;
     }
@@ -167,13 +182,6 @@ impl IGuardianConnection for Arc<WsClient> {
                 .await
                 .map_err(jsonrpc_error_to_peer_error)?,
         )
-    }
-
-    async fn await_disconnection(&self) {
-        self.on_disconnect().await;
-    }
-    fn is_connected(&self) -> bool {
-        WsClient::is_connected(self)
     }
 }
 
