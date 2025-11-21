@@ -12,37 +12,46 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
-    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
-    TransactionItemAmounts, api_endpoint,
+    Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
+    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 };
+use fedimint_core::secp256k1::Message;
 use fedimint_core::{
-    Amount, InPoint, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items,
+    Amount, InPoint, NumPeers, OutPoint, PeerId, Tiered, apply, async_trait_maybe_send,
+    push_db_pair_items,
 };
 use fedimint_ecash_migration_common::config::{
     EcashMigrationClientConfig, EcashMigrationConfig, EcashMigrationConfigConsensus,
     EcashMigrationConfigPrivate, EcashMigrationGenParams, FeeConfig,
 };
+use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdSignature;
 use fedimint_ecash_migration_common::{
     EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationInput,
     EcashMigrationInputError, EcashMigrationModuleTypes, EcashMigrationOutput,
-    EcashMigrationOutputError, EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION, TransferId,
+    EcashMigrationOutputError, EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION,
+    SpendBookHash, TransferId, UploadKeySetRequest, UploadSpendBookBatchRequest,
+    UploadSpendBookBatchResponse, hash_spend_book,
 };
+use fedimint_mint_common::Nonce;
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
+use tracing::warn;
 
 use crate::db::{
     ActivationRequestKey, ActivationRequestPrefix, ActivationVote, ActivationVoteKey,
     ActivationVotePrefix, ActivationVoteTransferPrefix, DbKeyPrefix, DenominationKeyKey,
     DenominationKeyKeyPrefix, DepositedAmountKey, DepositedAmountPrefix, LocalSpendBookKey,
-    LocalSpendBookPrefix, OriginSpendBookKey, OriginSpendBookPrefix, OutPointTransferIdKey,
-    OutPointTransferIdPrefix, TransferMetadata, TransferMetadataKey, TransferMetadataKeyPrefix,
+    LocalSpendBookPrefix, OriginSpendBookKey, OriginSpendBookPrefix, OriginSpendBookTransferPrefix,
+    OutPointTransferIdKey, OutPointTransferIdPrefix, TransferMetadata, TransferMetadataKey,
+    TransferMetadataKeyPrefix, UploadedSpendBookEntriesKey, UploadedSpendBookEntriesPrefix,
     WithdrawnAmountKey, WithdrawnAmountPrefix,
 };
 
@@ -50,7 +59,7 @@ pub mod db;
 
 /// Log target for the ecash migration module
 #[allow(unused)]
-const LOG_MODULE_ECASH_MIGRATION: &str = "fedimint_ecash_migration_server";
+const LOG_MODULE_ECASH_MIGRATION: &str = "fm::module::ecash_migration";
 
 /// Generates the module
 #[derive(Debug, Clone)]
@@ -92,6 +101,16 @@ impl ModuleInit for EcashMigrationInit {
                         TransferId,
                         items,
                         "Out Point Transfer ID"
+                    );
+                }
+                DbKeyPrefix::UploadedSpendBookEntries => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UploadedSpendBookEntriesPrefix,
+                        UploadedSpendBookEntriesKey,
+                        u64,
+                        items,
+                        "Uploaded Spend Book Entries"
                     );
                 }
                 DbKeyPrefix::OriginSpendBook => {
@@ -544,15 +563,44 @@ impl ServerModule for EcashMigration {
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
-        vec![api_endpoint! {
-            GET_TRANSFER_ID_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |module: &EcashMigration, context, request: OutPoint| -> TransferId {
-                module.get_transfer_id(&mut context.dbtx().into_nc(), request)
-                    .await
-                    .ok_or_else(|| ApiError::not_found("Transfer ID not found for out point".to_owned()))
-            }
-        }]
+        vec![
+            api_endpoint! {
+                GET_TRANSFER_ID_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &EcashMigration, context, request: OutPoint| -> TransferId {
+                    module.get_transfer_id(&mut context.dbtx().into_nc(), request)
+                        .await
+                        .ok_or_else(|| ApiError::not_found("Transfer ID not found for out point".to_owned()))
+                }
+            },
+            api_endpoint! {
+                UPLOAD_KEY_SET_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &EcashMigration, context, request: UploadKeySetRequest| -> () {
+                    check_auth(context, request.transfer_id, &request).await?;
+                    module.upload_key_set(&mut context.dbtx().into_nc(), request.transfer_id, request.tier_keys)
+                        .await
+                }
+            },
+            api_endpoint! {
+                UPLOAD_SPEND_BOOK_BATCH_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &EcashMigration, context, request: UploadSpendBookBatchRequest| -> UploadSpendBookBatchResponse {
+                    check_auth(context, request.transfer_id, &request).await?;
+                    module.upload_spend_book_batch(&mut context.dbtx().into_nc(), request.transfer_id, request.entries)
+                        .await
+                }
+            },
+            api_endpoint! {
+                CHECK_SPEND_BOOK_HASH_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &EcashMigration, context, request: TransferId| -> SpendBookHash {
+                    // TODO: check auth
+                    module.check_spend_book_hash(&mut context.dbtx().into_nc(), request)
+                        .await
+                }
+            },
+        ]
     }
 }
 
@@ -564,6 +612,140 @@ impl EcashMigration {
         out_point: OutPoint,
     ) -> Option<TransferId> {
         dbtx.get_value(&OutPointTransferIdKey(out_point)).await
+    }
+
+    async fn upload_key_set(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        transfer_id: TransferId,
+        key_set: Tiered<AggregatePublicKey>,
+    ) -> Result<(), ApiError> {
+        let transfer_metadata = dbtx
+            .get_value(&TransferMetadataKey(transfer_id))
+            .await
+            .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
+
+        let key_set_hash = key_set.consensus_hash_sha256();
+        if key_set_hash != transfer_metadata.origin_key_set_hash.0 {
+            return Err(ApiError::bad_request(
+                "Key set hash does not match pre-committed hash".to_owned(),
+            ));
+        }
+
+        for (amount, public_key) in key_set {
+            if dbtx
+                .insert_entry(
+                    &DenominationKeyKey {
+                        transfer_id,
+                        amount,
+                    },
+                    &public_key,
+                )
+                .await
+                .is_some()
+            {
+                // We can assume that finding a collision of the key set hash is impossible,
+                // hence if we see one of the keys we can assume all the other keys are also
+                // present.
+                return Ok(());
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn upload_spend_book_batch(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        transfer_id: TransferId,
+        spend_book_batch: Vec<Nonce>,
+    ) -> Result<UploadSpendBookBatchResponse, ApiError> {
+        let transfer_metadata = dbtx
+            .get_value(&TransferMetadataKey(transfer_id))
+            .await
+            .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
+
+        let mut new_spend_book_entries = 0;
+        for nonce in spend_book_batch {
+            if dbtx
+                .insert_entry(&OriginSpendBookKey { transfer_id, nonce }, &())
+                .await
+                .is_none()
+            {
+                new_spend_book_entries += 1;
+            } else {
+                warn!(
+                    target: LOG_MODULE_ECASH_MIGRATION,
+                    ?transfer_id,
+                    ?nonce,
+                    "Nonce already uploaded to origin spend book, skipping"
+                );
+            }
+        }
+
+        let old_uploaded_spend_book_entries = dbtx
+            .get_value(&UploadedSpendBookEntriesKey { transfer_id })
+            .await
+            .unwrap_or(0);
+        let new_uploaded_spend_book_entries = old_uploaded_spend_book_entries
+            .checked_add(new_spend_book_entries)
+            .ok_or(ApiError::server_error(
+                "Spend book batch size overflow".to_owned(),
+            ))?;
+        if transfer_metadata.num_spend_book_entries < new_uploaded_spend_book_entries {
+            return Err(ApiError::bad_request(
+                "Uploaded spend book entries exceeds pre-committed size".to_owned(),
+            ));
+        }
+
+        dbtx.insert_entry(
+            &UploadedSpendBookEntriesKey { transfer_id },
+            &new_uploaded_spend_book_entries,
+        )
+        .await;
+
+        Ok(UploadSpendBookBatchResponse {
+            new_entries: new_spend_book_entries,
+            total_entries_uploaded: new_uploaded_spend_book_entries,
+        })
+    }
+
+    async fn check_spend_book_hash(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        transfer_id: TransferId,
+    ) -> Result<SpendBookHash, ApiError> {
+        let transfer_metadata = dbtx
+            .get_value(&TransferMetadataKey(transfer_id))
+            .await
+            .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
+        let uploaded_spend_book_entries = dbtx
+            .get_value(&UploadedSpendBookEntriesKey { transfer_id })
+            .await
+            .unwrap_or(0);
+
+        if uploaded_spend_book_entries != transfer_metadata.num_spend_book_entries {
+            return Err(ApiError::bad_request(format!(
+                "Uploaded spend book entries does not match pre-committed size (expected: {}; got: {})",
+                transfer_metadata.num_spend_book_entries, uploaded_spend_book_entries,
+            )));
+        }
+
+        let spend_book_hash = hash_spend_book(
+            dbtx.find_by_prefix(&OriginSpendBookTransferPrefix { transfer_id })
+                .await
+                .map(|(OriginSpendBookKey { nonce, .. }, ())| nonce),
+        )
+        .await;
+
+        if spend_book_hash != transfer_metadata.origin_spend_book_hash {
+            return Err(ApiError::bad_request(format!(
+                "Spend book hash does not match pre-committed hash (expected: {}; got: {})",
+                transfer_metadata.origin_spend_book_hash, spend_book_hash,
+            )));
+        }
+
+        Ok(spend_book_hash)
     }
 }
 
@@ -593,5 +775,34 @@ async fn get_next_transfer_id(dbtx: &mut DatabaseTransaction<'_>) -> TransferId 
     TransferId(max_id + 1)
 }
 
+async fn check_auth(
+    context: &mut ApiEndpointContext<'_>,
+    transfer_id: TransferId,
+    request: &impl Encodable,
+) -> Result<(), ApiError> {
+    let transfer_metadata = context
+        .dbtx()
+        .get_value(&TransferMetadataKey(transfer_id))
+        .await
+        .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
+    let creator_keys = transfer_metadata.creator_keys;
+
+    let auth = context.request_auth().ok_or(ApiError::unauthorized())?;
+    let signature: NaiveThresholdSignature =
+        auth.0.parse().map_err(|_| ApiError::unauthorized())?;
+
+    let request_hash = Message::from_digest_slice(request.consensus_hash_sha256().as_ref())
+        .expect("Hash has correct length");
+
+    if !signature.verify(request_hash, &creator_keys) {
+        return Err(ApiError::unauthorized());
+    }
+
+    Ok(())
+}
+
 // API endpoint paths
 const GET_TRANSFER_ID_ENDPOINT: &str = "get_transfer_id";
+const UPLOAD_KEY_SET_ENDPOINT: &str = "upload_key_set";
+const UPLOAD_SPEND_BOOK_BATCH_ENDPOINT: &str = "upload_spend_book_batch";
+const CHECK_SPEND_BOOK_HASH_ENDPOINT: &str = "check_spend_book_hash";

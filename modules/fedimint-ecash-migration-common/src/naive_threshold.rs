@@ -1,6 +1,9 @@
 //! Naive threshold signature scheme implementation using concatenated Schnorr
 //! signatures.
 
+use std::fmt::Display;
+use std::str::FromStr;
+
 use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1::schnorr::Signature;
 use secp256k1::{Message, PublicKey};
@@ -56,7 +59,13 @@ impl NaiveThresholdKey {
 }
 
 impl NaiveThresholdSignature {
+    /// Create a new naive threshold signature from a list of signatures.
+    ///
+    /// # Panics
+    /// Panics if the signatures are empty.
     pub fn new(signatures: Vec<Option<Signature>>) -> Self {
+        assert!(!signatures.is_empty(), "Signatures must not be empty");
+
         Self { signatures }
     }
 
@@ -89,5 +98,51 @@ impl NaiveThresholdSignature {
                     true
                 }
             })
+    }
+}
+
+impl FromStr for NaiveThresholdSignature {
+    type Err = secp256k1::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let signatures = s
+            .split(',')
+            .map(|s| {
+                if s.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(s.parse()?))
+                }
+            })
+            .collect::<Result<Vec<Option<Signature>>, Self::Err>>()?;
+        Ok(Self { signatures })
+    }
+}
+
+impl Display for NaiveThresholdSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[allow(clippy::ref_option)]
+        fn write_maybe_sig(
+            f: &mut std::fmt::Formatter<'_>,
+            maybe_sig: &Option<Signature>,
+        ) -> std::fmt::Result {
+            if let Some(sig) = maybe_sig {
+                write!(f, "{sig}")?;
+            }
+            Ok(())
+        }
+
+        let mut maybe_sig_iter = self.signatures.iter();
+
+        write_maybe_sig(
+            f,
+            maybe_sig_iter.next().expect("Signatures must not be empty"),
+        )?;
+        for maybe_sig in maybe_sig_iter {
+            write!(f, ",")?;
+            write_maybe_sig(f, maybe_sig)?;
+        }
+
+        Ok(())
     }
 }

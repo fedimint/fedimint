@@ -3135,6 +3135,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-mint-common",
  "fedimint-tbs",
+ "futures",
  "secp256k1",
  "serde",
  "thiserror 2.0.12",

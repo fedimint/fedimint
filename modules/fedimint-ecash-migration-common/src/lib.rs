@@ -4,13 +4,14 @@
 
 use std::fmt;
 
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{Hash, sha256};
 use config::EcashMigrationClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{Amount, plugin_types_trait_impl_common};
+use fedimint_core::{Amount, Tiered, plugin_types_trait_impl_common};
 use fedimint_mint_common::{Nonce, Note};
+use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tbs::AggregatePublicKey;
 use thiserror::Error;
@@ -68,11 +69,10 @@ impl fmt::Display for SpendBookHash {
     }
 }
 
-/// Threshold public keys for different tiers/denominations
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct TierKeys {
-    /// Threshold public keys for each tier/denomination
-    pub tiers: Vec<(Amount, AggregatePublicKey)>,
+impl fmt::Display for KeySetHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 /// Non-transaction items that will be submitted to consensus
@@ -168,52 +168,25 @@ pub enum EcashMigrationOutputError {
     UnknownOutputVariant(u64),
 }
 
-/// API: Request to create a new transfer
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateTransferRequest {
-    /// Secret for authenticating future operations
-    pub secret: String,
-    /// Pre-committed spend book hash
-    pub spend_book_hash: SpendBookHash,
-    /// Tier public keys for different denominations
-    pub tier_keys: TierKeys,
-}
-
-/// API: Response from creating a transfer
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateTransferResponse {
+/// API: Request to upload a key set
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
+pub struct UploadKeySetRequest {
     pub transfer_id: TransferId,
+    pub tier_keys: Tiered<AggregatePublicKey>,
 }
 
 /// API: Request to upload a batch of spend book entries
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 pub struct UploadSpendBookBatchRequest {
     pub transfer_id: TransferId,
-    /// HMAC of the secret for authentication
-    pub auth_hmac: String,
-    /// Batch of spent nonces with their amounts
-    pub entries: Vec<(Nonce, Amount)>,
+    pub entries: Vec<Nonce>,
 }
 
 /// API: Response from uploading spend book batch
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadSpendBookBatchResponse {
-    pub total_entries: u64,
-    pub total_amount: Amount,
-}
-
-/// API: Request to finalize spend book upload
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FinalizeUploadRequest {
-    pub transfer_id: TransferId,
-    pub auth_hmac: String,
-}
-
-/// API: Response from finalizing upload
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FinalizeUploadResponse {
-    pub spend_book_hash: SpendBookHash,
-    pub total_amount: Amount,
+    pub new_entries: u64,
+    pub total_entries_uploaded: u64,
 }
 
 /// API: Request to activate redemption
@@ -233,24 +206,11 @@ pub struct GetTransferStatusRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetTransferStatusResponse {
     pub is_active: bool,
+    pub spend_book_hash: SpendBookHash,
+    pub key_set_hash: KeySetHash,
     pub total_entries: u64,
     pub total_amount: Amount,
-    pub spend_book_hash: Option<SpendBookHash>,
-    pub redeemed_count: u64,
     pub redeemed_amount: Amount,
-}
-
-/// API: Request to get spend book hash
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetSpendBookHashRequest {
-    pub transfer_id: TransferId,
-}
-
-/// API: Response with spend book hash
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetSpendBookHashResponse {
-    pub spend_book_hash: SpendBookHash,
-    pub total_amount: Amount,
 }
 
 /// Contains the types defined above
@@ -360,4 +320,28 @@ impl fmt::Display for EcashMigrationConsensusItem {
             }
         }
     }
+}
+
+/// Hash an ordered spend book stream into a spend book hash
+///
+/// # Panics
+/// Panics if the spend book entries are not in order.
+pub async fn hash_spend_book(
+    mut spend_book_stream: impl Stream<Item = Nonce> + Unpin,
+) -> SpendBookHash {
+    let mut hasher = sha256::Hash::engine();
+
+    let mut prev_nonce = None;
+    while let Some(nonce) = spend_book_stream.next().await {
+        if let Some(prev_nonce) = prev_nonce {
+            assert!(prev_nonce < nonce, "Spend book entries are not in order");
+        }
+        prev_nonce = Some(nonce);
+
+        nonce
+            .consensus_encode(&mut hasher)
+            .expect("encoding to hasher can't fail");
+    }
+
+    SpendBookHash(sha256::Hash::from_engine(hasher))
 }

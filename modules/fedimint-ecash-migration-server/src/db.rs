@@ -12,13 +12,14 @@ use tbs::AggregatePublicKey;
 pub enum DbKeyPrefix {
     TransferMetadata = 0x01,
     OutPointTransferId = 0x02,
-    OriginSpendBook = 0x03,
-    LocalSpendBook = 0x04,
-    ActivationVote = 0x05,
-    ActivationRequest = 0x06,
-    DenominationKeys = 0x07,
-    DepositedAmount = 0x08,
-    WithdrawnAmount = 0x09,
+    UploadedSpendBookEntries = 0x03,
+    OriginSpendBook = 0x04,
+    LocalSpendBook = 0x05,
+    ActivationVote = 0x06,
+    ActivationRequest = 0x07,
+    DenominationKeys = 0x08,
+    DepositedAmount = 0x09,
+    WithdrawnAmount = 0x0a,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -78,6 +79,27 @@ pub struct OutPointTransferIdPrefix;
 impl_db_lookup!(
     key = OutPointTransferIdKey,
     query_prefix = OutPointTransferIdPrefix,
+);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
+/// Contains the number of spend book entries that have been uploaded for a
+/// transfer already. Used to prevent uploading more than were paid for.
+pub struct UploadedSpendBookEntriesKey {
+    pub transfer_id: TransferId,
+}
+
+impl_db_record!(
+    key = UploadedSpendBookEntriesKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::UploadedSpendBookEntries,
+);
+
+/// Prefix for querying all [`UploadedSpendBookEntries`] entries
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct UploadedSpendBookEntriesPrefix;
+impl_db_lookup!(
+    key = UploadedSpendBookEntriesKey,
+    query_prefix = UploadedSpendBookEntriesPrefix,
 );
 
 /// Key for [`OriginSpendBook`] entries. Each entry represents an already spent
