@@ -233,6 +233,9 @@ pub struct Gateway {
     /// The source of the Bitcoin blockchain data
     chain_source: ChainSource,
 
+    /// Client to get blockchain information
+    bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
+
     /// The default routing fees for new federations
     default_routing_fees: PaymentFee,
 
@@ -283,6 +286,7 @@ impl Gateway {
         gateway_state: GatewayState,
         chain_source: ChainSource,
         iroh_listen: SocketAddr,
+        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -305,6 +309,7 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
+            bitcoin_rpc,
         )
         .await
     }
@@ -388,7 +393,7 @@ impl Gateway {
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
-        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
+        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc.clone()));
 
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
@@ -406,6 +411,7 @@ impl Gateway {
             client_builder,
             GatewayState::Disconnected,
             chain_source,
+            dyn_bitcoin_rpc,
         )
         .await
     }
@@ -419,6 +425,7 @@ impl Gateway {
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
         chain_source: ChainSource,
+        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         // Apply database migrations before using the database to ensure old database
         // structures are readable.
@@ -453,6 +460,7 @@ impl Gateway {
             num_route_hints,
             network,
             chain_source,
+            bitcoin_rpc,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
             iroh_sk: Self::load_or_create_iroh_key(&gateway_db).await,
@@ -2178,8 +2186,14 @@ impl IAdminGateway for Gateway {
         gatewayd_version.to_string()
     }
 
-    fn get_chain_source(&self) -> ChainSource {
-        self.chain_source.clone()
+    async fn get_chain_source(&self) -> AdminResult<(u64, bool, ChainSource, Network)> {
+        let info = self.bitcoin_rpc.get_info().await?;
+        Ok((
+            info.0,
+            info.1,
+            self.chain_source.clone(),
+            self.network.clone(),
+        ))
     }
 }
 

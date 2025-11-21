@@ -16,6 +16,7 @@ use axum::routing::{get, post};
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
     ChainSource, ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
@@ -92,7 +93,7 @@ pub trait IAdminGateway {
 
     fn gatewayd_version(&self) -> String;
 
-    fn get_chain_source(&self) -> ChainSource;
+    async fn get_chain_source(&self) -> Result<(u64, bool, ChainSource, Network), Self::Error>;
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
@@ -188,7 +189,7 @@ where
 
         div class="row gy-4 mt-2" {
             div class="col-md-6" {
-                (bitcoin::render(&state.api))
+                (bitcoin::render(&state.api).await)
             }
             div class="col-md-6" {
                 (mnemonic::render(&state.api).await)

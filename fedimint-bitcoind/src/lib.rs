@@ -50,6 +50,8 @@ pub trait IBitcoindRpc: Debug + Send + Sync + 'static {
     /// Returns a proof that a tx is included in the bitcoin blockchain
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof>;
 
+    async fn get_info(&self) -> Result<(u64, bool)>;
+
     fn into_dyn(self) -> DynBitcoindRpc
     where
         Self: Sized,
@@ -132,5 +134,11 @@ impl IBitcoindRpc for EsploraClient {
             block_header: proof.header,
             merkle_proof: proof.txn,
         })
+    }
+
+    async fn get_info(&self) -> Result<(u64, bool)> {
+        let height = self.client.get_height().await?;
+        // esplora doesn't have a concept of "synced", it is just an indexer
+        Ok((height as u64, true))
     }
 }
