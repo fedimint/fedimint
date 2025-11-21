@@ -321,6 +321,23 @@ impl Client {
         &self.api_secret
     }
 
+    /// Returns the core API version that the federation supports
+    ///
+    /// This reads from the cached version stored during client initialization.
+    /// If no cache is available (e.g., during initial setup), returns a default
+    /// version (0, 0).
+    pub async fn core_api_version(&self) -> ApiVersion {
+        // Try to get from cache. If not available, return a conservative
+        // default. The cache should always be populated after successful client init.
+        self.db
+            .begin_transaction_nc()
+            .await
+            .get_value(&CachedApiVersionSetKey)
+            .await
+            .map(|cached: CachedApiVersionSet| cached.0.core)
+            .unwrap_or(ApiVersion { major: 0, minor: 0 })
+    }
+
     pub fn decoders(&self) -> &ModuleDecoderRegistry {
         &self.decoders
     }

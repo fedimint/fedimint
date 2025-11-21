@@ -58,6 +58,7 @@ pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
     ApiVersion { major: 0, minor: 1 };
 
+pub const VERSION_THAT_INTRODUCED_AWAIT_OUTPUTS_OUTCOMES: ApiVersion = ApiVersion::new(0, 8);
 pub type FederationResult<T> = Result<T, FederationError>;
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
