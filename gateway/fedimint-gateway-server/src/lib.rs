@@ -1143,32 +1143,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Handles an authenticated request for the gateway's mnemonic. This also
-    /// returns a vector of federations that are not using the mnemonic
-    /// backup strategy.
-    pub async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
-        let words = self
-            .mnemonic
-            .words()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>();
-        let all_federations = self
-            .federation_manager
-            .read()
-            .await
-            .get_all_federation_configs()
-            .await
-            .keys()
-            .copied()
-            .collect::<BTreeSet<_>>();
-        let legacy_federations = self.client_builder.legacy_federations(all_federations);
-        let mnemonic_response = MnemonicResponse {
-            mnemonic: words,
-            legacy_federations,
-        };
-        Ok(mnemonic_response)
-    }
-
     /// Generates an onchain address to fund the gateway's lightning node.
     pub async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
         let context = self.get_lightning_context().await?;
@@ -2167,6 +2141,32 @@ impl IAdminGateway for Gateway {
         }
 
         Ok(())
+    }
+
+    /// Handles an authenticated request for the gateway's mnemonic. This also
+    /// returns a vector of federations that are not using the mnemonic
+    /// backup strategy.
+    async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
+        let words = self
+            .mnemonic
+            .words()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>();
+        let all_federations = self
+            .federation_manager
+            .read()
+            .await
+            .get_all_federation_configs()
+            .await
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let legacy_federations = self.client_builder.legacy_federations(all_federations);
+        let mnemonic_response = MnemonicResponse {
+            mnemonic: words,
+            legacy_federations,
+        };
+        Ok(mnemonic_response)
     }
 
     fn get_password_hash(&self) -> String {

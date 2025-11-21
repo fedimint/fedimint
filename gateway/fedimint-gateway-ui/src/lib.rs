@@ -2,6 +2,7 @@ mod connect_fed;
 mod federation;
 mod general;
 mod lightning;
+mod mnemonic;
 mod payment_summary;
 
 use std::fmt::Display;
@@ -16,8 +17,8 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
-    ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, PaymentSummaryPayload,
-    PaymentSummaryResponse, SetFeesPayload,
+    ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -83,6 +84,8 @@ pub trait IAdminGateway {
     ) -> Result<FederationInfo, Self::Error>;
 
     async fn handle_set_fees_msg(&self, payload: SetFeesPayload) -> Result<(), Self::Error>;
+
+    async fn handle_mnemonic_msg(&self) -> Result<MnemonicResponse, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -177,6 +180,12 @@ where
             }
             div class="col-md-6" {
                 (payment_summary::render(&state.api).await)
+            }
+        }
+
+        div class="row gy-4 mt-2" {
+            div class="col-md-6" {
+                (mnemonic::render(&state.api).await)
             }
         }
 
