@@ -15,7 +15,8 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, GetInvoiceRequest,
-    GetInvoiceResponse, ListTransactionsResponse, OpenChannelRequest, SendOnchainRequest,
+    GetInvoiceResponse, LightningInfo, ListTransactionsResponse, OpenChannelRequest,
+    SendOnchainRequest,
 };
 use fedimint_ln_common::PrunedInvoice;
 pub use fedimint_ln_common::contracts::Preimage;
@@ -267,21 +268,24 @@ impl dyn ILnRpcClient {
 
     /// Retrieves the basic information about the Gateway's connected Lightning
     /// node.
-    pub async fn parsed_node_info(
-        &self,
-    ) -> std::result::Result<(PublicKey, String, Network, u32, bool), LightningRpcError> {
-        let GetNodeInfoResponse {
-            pub_key,
-            alias,
-            network,
-            block_height,
-            synced_to_chain,
-        } = self.info().await?;
-        let network =
-            Network::from_str(&network).map_err(|e| LightningRpcError::InvalidMetadata {
-                failure_reason: format!("Invalid network {network}: {e}"),
-            })?;
-        Ok((pub_key, alias, network, block_height, synced_to_chain))
+    pub async fn parsed_node_info(&self) -> LightningInfo {
+        if let Ok(info) = self.info().await {
+            if let Ok(network) =
+                Network::from_str(&info.network).map_err(|e| LightningRpcError::InvalidMetadata {
+                    failure_reason: format!("Invalid network {}: {e}", info.network),
+                })
+            {
+                return LightningInfo::Connected {
+                    public_key: info.pub_key,
+                    alias: info.alias,
+                    network,
+                    block_height: info.block_height as u64,
+                    synced_to_chain: info.synced_to_chain,
+                };
+            }
+        }
+
+        LightningInfo::NotConnected
     }
 
     /// Waits for the Lightning node to be synced to the Bitcoin blockchain.

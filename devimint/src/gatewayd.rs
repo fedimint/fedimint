@@ -34,7 +34,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::VERSION_0_9_0_ALPHA;
+use crate::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -288,10 +288,18 @@ impl Gatewayd {
 
     pub async fn lightning_pubkey(&self) -> Result<PublicKey> {
         let info = self.get_info().await?;
-        let lightning_pub_key = info["lightning_pub_key"]
-            .as_str()
-            .context("lightning_pub_key must be a string")?
-            .to_owned();
+        let lightning_pub_key = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
+            info["lightning_pub_key"]
+                .as_str()
+                .context("lightning_pub_key must be a string")?
+                .to_owned()
+        } else {
+            info["lightning_info"]["Connected"]["public_key"]
+                .as_str()
+                .context("lightning_pub_key must be a string")?
+                .to_owned()
+        };
+
         Ok(lightning_pub_key.parse()?)
     }
 
@@ -559,21 +567,32 @@ impl Gatewayd {
     pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
         poll("waiting for block height", || async {
             let info = self.get_info().await.map_err(ControlFlow::Continue)?;
-            let value = info.get("block_height");
-            if let Some(height) = value {
-                let block_height: Option<u32> = serde_json::from_value(height.clone())
-                    .context("Could not parse block height")
-                    .map_err(ControlFlow::Continue)?;
-                let Some(block_height) = block_height else {
-                    return Err(ControlFlow::Continue(anyhow!("Not synced any blocks yet")));
-                };
-                let synced = info["synced_to_chain"]
-                    .as_bool()
-                    .expect("Could not get synced_to_chain");
-                if block_height >= target_block_height as u32 && synced {
-                    return Ok(());
-                }
+
+            let height_value = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
+                info["block_height"].clone()
+            } else {
+                info["lightning_info"]["Connected"]["block_height"].clone()
+            };
+
+            let block_height: Option<u32> = serde_json::from_value(height_value)
+                .context("Could not parse block height")
+                .map_err(ControlFlow::Continue)?;
+            let Some(block_height) = block_height else {
+                return Err(ControlFlow::Continue(anyhow!("Not synced any blocks yet")));
+            };
+
+            let synced_value = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
+                info["synced_to_chain"].clone()
+            } else {
+                info["lightning_info"]["Connected"]["synced_to_chain"].clone()
+            };
+            let synced = synced_value
+                .as_bool()
+                .expect("Could not get synced_to_chain");
+            if block_height >= target_block_height as u32 && synced {
+                return Ok(());
             }
+
             Err(ControlFlow::Continue(anyhow!("Not synced to block")))
         })
         .await?;

@@ -16,7 +16,7 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_gateway_common::{ChainSource, LightningMode};
+use fedimint_gateway_common::{ChainSource, LightningInfo, LightningMode};
 use fedimint_gateway_server::Gateway;
 use fedimint_gateway_server::client::GatewayClientBuilder;
 use fedimint_gateway_server::config::DatabaseBackend;
@@ -236,10 +236,16 @@ impl Fixtures {
 
         let ln_client: Arc<dyn ILnRpcClient> = Arc::new(FakeLightningTest::new());
 
-        let (lightning_public_key, lightning_alias, lightning_network, _, _) = ln_client
-            .parsed_node_info()
-            .await
-            .expect("Could not get Lightning info");
+        let LightningInfo::Connected {
+            public_key: lightning_public_key,
+            alias: lightning_alias,
+            network: lightning_network,
+            block_height: _,
+            synced_to_chain: _,
+        } = ln_client.parsed_node_info().await
+        else {
+            panic!("Could not connect to Lightning node")
+        };
         let lightning_context = LightningContext {
             lnrpc: ln_client.clone(),
             lightning_public_key,
