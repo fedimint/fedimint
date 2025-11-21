@@ -3347,7 +3347,9 @@ dependencies = [
  "fedimint-gateway-common",
  "fedimint-ui-common",
  "maud",
+ "serde",
  "tracing",
+ "url",
 ]
 
 [[package]]
