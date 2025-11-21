@@ -434,7 +434,7 @@ fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::NodeAddr {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IConnection for Connection {
     async fn await_disconnection(&self) {
         self.closed().await;
@@ -475,7 +475,7 @@ impl IGuardianConnection for Connection {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IConnection for iroh_next::endpoint::Connection {
     async fn await_disconnection(&self) {
         self.closed().await;

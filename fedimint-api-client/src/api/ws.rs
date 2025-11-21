@@ -7,6 +7,7 @@ use fedimint_core::module::{ApiMethod, ApiRequestErased};
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_NET_WS;
 use jsonrpsee_core::client::ClientT;
 pub use jsonrpsee_core::client::Error as JsonRpcClientError;
@@ -133,7 +134,7 @@ impl Connector for WebsocketConnector {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IConnection for WsClient {
     async fn await_disconnection(&self) {
         self.on_disconnect().await;
@@ -158,7 +159,7 @@ impl IGuardianConnection for WsClient {
     }
 }
 
-#[async_trait]
+#[apply(async_trait_maybe_send!)]
 impl IConnection for Arc<WsClient> {
     async fn await_disconnection(&self) {
         self.on_disconnect().await;

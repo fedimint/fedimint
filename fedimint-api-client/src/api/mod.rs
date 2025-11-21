@@ -952,6 +952,10 @@ impl ConnectorRegistry {
         Ok(conn)
     }
 
+    /// Connect to a given `url` using matching [`Connector`] to a gateway
+    ///
+    /// This is the main function consumed by the downstream use for making
+    /// connection.
     pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
         let url = match self.connection_overrides.get(url) {
             Some(replacement) => {
@@ -1006,6 +1010,8 @@ pub trait Connector: Send + Sync + 'static + fmt::Debug {
     async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection>;
 }
 
+/// Generic connection trait shared between [`IGuardianConnection`] and
+/// [`IGatewayConnection`]
 #[apply(async_trait_maybe_send!)]
 pub trait IConnection: Debug + Send + Sync + 'static {
     fn is_connected(&self) -> bool;
@@ -1029,8 +1035,10 @@ pub trait IGuardianConnection: IConnection + Debug + Send + Sync + 'static {
     }
 }
 
+/// A connection from api client to a gateway (type erased)
 pub type DynGatewayConnection = Arc<dyn IGatewayConnection>;
 
+/// A connection from a client to a gateway
 #[apply(async_trait_maybe_send!)]
 pub trait IGatewayConnection: IConnection + Debug + Send + Sync + 'static {
     async fn request(
@@ -1049,6 +1057,97 @@ pub trait IGatewayConnection: IConnection + Debug + Send + Sync + 'static {
     }
 }
 
+#[derive(Debug)]
+pub struct ConnectionPool<T: IConnection + ?Sized> {
+    /// Available connectors which we can make connections
+    connectors: ConnectorRegistry,
+
+    /// Connection pool
+    ///
+    /// Every entry in this map will be created on demand and correspond to a
+    /// single outgoing connection to a certain URL that is in the process
+    /// of being established, or we already established.
+    #[allow(clippy::type_complexity)]
+    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState<T>>>>>,
+}
+
+impl<T: IConnection + ?Sized> Clone for ConnectionPool<T> {
+    fn clone(&self) -> Self {
+        Self {
+            connectors: self.connectors.clone(),
+            connections: self.connections.clone(),
+        }
+    }
+}
+
+impl<T: IConnection + ?Sized> ConnectionPool<T> {
+    pub fn new(connectors: ConnectorRegistry) -> Self {
+        Self {
+            connectors,
+            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub async fn get_or_create_connection<F, Fut>(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+        create_connection: F,
+    ) -> PeerResult<Arc<T>>
+    where
+        F: Fn(SafeUrl, Option<String>, ConnectorRegistry) -> Fut + Clone + Send + Sync + 'static,
+        Fut: Future<Output = PeerResult<Arc<T>>> + Send + 'static,
+    {
+        let mut pool_locked = self.connections.lock().await;
+
+        let pool_entry_arc = pool_locked
+            .entry(url.to_owned())
+                        .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and reset the whole entry.
+                //
+                // This resets the state (like connectivity backoff), which is what we want.
+                // Since the (`OnceCell`) was already initialized, it means connection was successfully
+                // before, and disconnected afterwards.
+                if let Some(existing_conn) = entry_arc.connection.get()
+                    && !existing_conn.is_connected(){
+                        trace!(target: LOG_CLIENT_NET_API, %url, "Existing connection is disconnected, removing from pool");
+                        *entry_arc = Arc::new(ConnectionState::new_reconnecting());
+                    }
+            })
+            .or_insert_with(|| Arc::new(ConnectionState::new_initial()))
+            .clone();
+
+        // Drop the pool lock so other connections can work in parallel
+        drop(pool_locked);
+
+        let conn = pool_entry_arc
+            .connection
+            // This serializes all the connection attempts. If one attempt to connect (including
+            // waiting for the reconnect backoff) succeeds, all waiting ones will use it. If it
+            // fails, any already pending/next will attempt it right afterwards.
+            // Nit: if multiple calls are trying to connect to the same host that is offline, it
+            // will take some of them multiples of maximum retry delay to actually return with
+            // an error. This should be fine in practice and hard to avoid without a lot of
+            // complexity.
+            .get_or_try_init(|| async {
+                let retry_delay = pool_entry_arc.pre_reconnect_delay();
+                fedimint_core::runtime::sleep(retry_delay).await;
+
+                trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
+                create_connection(
+                    url.clone(),
+                    api_secret.map(std::string::ToString::to_string),
+                    self.connectors.clone(),
+                )
+                .await
+            })
+            .await?;
+
+        trace!(target: LOG_CLIENT_NET_API, %url, "Connection ready");
+        Ok(conn.clone())
+    }
+}
+
 /// Federation API client
 ///
 /// The core underlying object used to make API requests to a federation.
@@ -1061,8 +1160,6 @@ pub trait IGatewayConnection: IConnection + Debug + Send + Sync + 'static {
 // in the future.
 #[derive(Clone, Debug)]
 pub struct FederationApi {
-    /// Available connectors which we can make connections
-    connectors: ConnectorRegistry,
     /// Map of known URLs to use to connect to peers
     peers: BTreeMap<PeerId, SafeUrl>,
     /// List of peer ids, redundant to avoid collecting all the time
@@ -1071,17 +1168,10 @@ pub struct FederationApi {
     admin_id: Option<PeerId>,
     /// Set when this API is used to communicate with a module
     module_id: Option<ModuleInstanceId>,
-
+    /// Api secret of the federation
     api_secret: Option<String>,
-
     /// Connection pool
-    ///
-    /// Every entry in this map will be created on demand and correspond to a
-    /// single outgoing connection to a certain URL that is in the process
-    /// of being established, or we already established.
-    #[allow(clippy::type_complexity)]
-    connections:
-        Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState<dyn IGuardianConnection>>>>>,
+    connection_pool: ConnectionPool<dyn IGuardianConnection>,
 }
 
 /// Inner part of [`ConnectionState`] preserving state between attempts to
@@ -1160,13 +1250,12 @@ impl FederationApi {
         api_secret: Option<&str>,
     ) -> Self {
         Self {
-            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             peers_keys: peers.keys().copied().collect(),
             peers,
             admin_id: admin_peer_id,
             module_id: None,
-            connectors,
             api_secret: api_secret.map(ToOwned::to_owned),
+            connection_pool: ConnectionPool::new(connectors),
         }
     }
 
@@ -1175,50 +1264,14 @@ impl FederationApi {
         url: &SafeUrl,
         api_secret: Option<&str>,
     ) -> PeerResult<DynGuaridianConnection> {
-        let mut pool_locked = self.connections.lock().await;
-
-        let pool_entry_arc = pool_locked
-            .entry(url.to_owned())
-                        .and_modify(|entry_arc| {
-                // Check if existing connection is disconnected and reset the whole entry.
-                //
-                // This resets the state (like connectivity backoff), which is what we want.
-                // Since the (`OnceCell`) was already initialized, it means connection was successfully
-                // before, and disconnected afterwards.
-                if let Some(existing_conn) = entry_arc.connection.get()
-                    && !existing_conn.is_connected(){
-                        trace!(target: LOG_CLIENT_NET_API, %url, "Existing connection is disconnected, removing from pool");
-                        *entry_arc = Arc::new(ConnectionState::new_reconnecting());
-                    }
-            })
-            .or_insert_with(|| Arc::new(ConnectionState::new_initial()))
-            .clone();
-
-        // Drop the pool lock so other connections can work in parallel
-        drop(pool_locked);
-
-        let conn = pool_entry_arc
-            .connection
-            // This serializes all the connection attempts. If one attempt to connect (including
-            // waiting for the reconnect backoff) succeeds, all waiting ones will use it. If it
-            // fails, any already pending/next will attempt it right afterwards.
-            // Nit: if multiple calls are trying to connect to the same host that is offline, it
-            // will take some of them multiples of maximum retry delay to actually return with
-            // an error. This should be fine in practice and hard to avoid without a lot of
-            // complexity.
-            .get_or_try_init(|| async {
-                let retry_delay = pool_entry_arc.pre_reconnect_delay();
-                fedimint_core::runtime::sleep(retry_delay).await;
-
-                trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
-                let conn = self.connectors.connect_guardian(url, api_secret).await?;
-
+        self.connection_pool
+            .get_or_create_connection(url, api_secret, |url, api_secret, connectors| async move {
+                let conn = connectors
+                    .connect_guardian(&url, api_secret.as_deref())
+                    .await?;
                 Ok(conn)
             })
-            .await?;
-
-        trace!(target: LOG_CLIENT_NET_API, %url, "Connection ready");
-        Ok(conn.clone())
+            .await
     }
 
     async fn request(
@@ -1260,12 +1313,11 @@ impl IRawFederationApi for FederationApi {
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         FederationApi {
             api_secret: self.api_secret.clone(),
-            connections: self.connections.clone(),
-            connectors: self.connectors.clone(),
             peers: self.peers.clone(),
             peers_keys: self.peers_keys.clone(),
             admin_id: self.admin_id,
             module_id: Some(id),
+            connection_pool: self.connection_pool.clone(),
         }
         .into()
     }
