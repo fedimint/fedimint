@@ -468,3 +468,9 @@ impl fmt::Display for ChainSource {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum BlockchainInfo {
+    Connected { block_height: u64, synced: bool },
+    NotConnected,
+}
