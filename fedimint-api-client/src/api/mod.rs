@@ -1084,7 +1084,7 @@ impl FederationApi {
                 // before, and disconnected afterwards.
                 if let Some(existing_conn) = entry_arc.connection.get()
                     && !existing_conn.is_connected(){
-                        trace!(target: LOG_NET_API, %url, "Existing connection is disconnected, removing from pool");
+                        trace!(target: LOG_CLIENT_NET_API, %url, "Existing connection is disconnected, removing from pool");
                         *entry_arc = Arc::new(ConnectionState::new_reconnecting());
                     }
             })
@@ -1107,13 +1107,14 @@ impl FederationApi {
                 let retry_delay = pool_entry_arc.pre_reconnect_delay();
                 fedimint_core::runtime::sleep(retry_delay).await;
 
+                trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
                 let conn = self.connectors.connect_guardian(url, api_secret).await?;
 
                 Ok(conn)
             })
             .await?;
 
-        trace!(target: LOG_NET_API, %url, "Using websocket connection");
+        trace!(target: LOG_CLIENT_NET_API, %url, "Connection ready");
         Ok(conn.clone())
     }
 

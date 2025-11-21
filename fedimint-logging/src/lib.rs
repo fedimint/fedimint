@@ -46,6 +46,7 @@ pub const LOG_MODULE_WALLET: &str = "fm::module::wallet";
 pub const LOG_MODULE_LN: &str = "fm::module::ln";
 pub const LOG_MODULE_LNV2: &str = "fm::module::lnv2";
 pub const LOG_CLIENT_REACTOR: &str = "fm::client::reactor";
+pub const LOG_CLIENT_NET: &str = "fm::client::net";
 pub const LOG_CLIENT_NET_API: &str = "fm::client::net::api";
 pub const LOG_CLIENT_BACKUP: &str = "fm::client::backup";
 pub const LOG_CLIENT_RECOVERY: &str = "fm::client::recovery";
