@@ -69,16 +69,16 @@ use fedimint_core::{
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
-    BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
-    ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
-    DepositAddressPayload, DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig,
-    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
-    GetInvoiceResponse, LeaveFedPayload, LightningMode, ListTransactionsPayload,
-    ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
-    PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
-    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
-    WithdrawPayload, WithdrawResponse,
+    BackupPayload, BlockchainInfo, ChainSource, CloseChannelsWithPeerRequest,
+    CloseChannelsWithPeerResponse, ConnectFedPayload, CreateInvoiceForOperatorPayload,
+    CreateOfferPayload, CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
+    FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
+    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningMode,
+    ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse, OpenChannelRequest,
+    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
+    PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
+    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -2186,14 +2186,23 @@ impl IAdminGateway for Gateway {
         gatewayd_version.to_string()
     }
 
-    async fn get_chain_source(&self) -> AdminResult<(u64, bool, ChainSource, Network)> {
-        let info = self.bitcoin_rpc.get_info().await?;
-        Ok((
-            info.0,
-            info.1,
-            self.chain_source.clone(),
-            self.network.clone(),
-        ))
+    async fn get_chain_source(&self) -> (BlockchainInfo, ChainSource, Network) {
+        if let Ok(info) = self.bitcoin_rpc.get_info().await {
+            (
+                BlockchainInfo::Connected {
+                    block_height: info.0,
+                    synced: info.1,
+                },
+                self.chain_source.clone(),
+                self.network.clone(),
+            )
+        } else {
+            (
+                BlockchainInfo::NotConnected,
+                self.chain_source.clone(),
+                self.network.clone(),
+            )
+        }
     }
 }
 
