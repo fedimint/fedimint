@@ -7,6 +7,7 @@ pub const AUTH_ENDPOINT: &str = "auth";
 
 #[deprecated(note = "https://github.com/fedimint/fedimint/issues/6671")]
 pub const AWAIT_OUTPUT_OUTCOME_ENDPOINT: &str = "await_output_outcome";
+pub const AWAIT_OUTPUTS_OUTCOMES_ENDPOINT: &str = "await_outputs_outcomes";
 pub const BACKUP_ENDPOINT: &str = "backup";
 pub const ADD_CONFIG_GEN_PEER_ENDPOINT: &str = "add_config_gen_peer";
 pub const BACKUP_STATISTICS_ENDPOINT: &str = "backup_statistics";
