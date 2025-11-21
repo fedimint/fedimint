@@ -2,7 +2,6 @@ use core::fmt;
 use std::any::Any;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
-use std::ops::Range;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::{ffi, marker, ops};
@@ -16,21 +15,20 @@ use fedimint_core::core::{
     OperationId,
 };
 use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
-use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit, ModuleCommon, ModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
-    Amount, OutPoint, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define,
-    maybe_add_send, maybe_add_send_sync,
+    Amount, OutPoint, PeerId, apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send,
+    maybe_add_send_sync,
 };
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT;
 use futures::Stream;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use self::init::ClientModuleInit;
@@ -1177,115 +1175,7 @@ impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModul
     }
 }
 
-/// A contiguous range of input/output indexes
-#[derive(Copy, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
-pub struct IdxRange {
-    start: u64,
-    end: u64,
-}
-
-impl IdxRange {
-    pub fn new_single(start: u64) -> Option<Self> {
-        start.checked_add(1).map(|end| Self { start, end })
-    }
-
-    pub fn start(self) -> u64 {
-        self.start
-    }
-
-    pub fn count(self) -> usize {
-        self.into_iter().count()
-    }
-
-    pub fn from_inclusive(range: ops::RangeInclusive<u64>) -> Option<Self> {
-        range.end().checked_add(1).map(|end| Self {
-            start: *range.start(),
-            end,
-        })
-    }
-}
-
-impl From<Range<u64>> for IdxRange {
-    fn from(Range { start, end }: Range<u64>) -> Self {
-        Self { start, end }
-    }
-}
-
-impl IntoIterator for IdxRange {
-    type Item = u64;
-
-    type IntoIter = ops::Range<u64>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        ops::Range {
-            start: self.start,
-            end: self.end,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq, Hash, Debug)]
-pub struct OutPointRange {
-    pub txid: TransactionId,
-    idx_range: IdxRange,
-}
-
-impl OutPointRange {
-    pub fn new(txid: TransactionId, idx_range: IdxRange) -> Self {
-        Self { txid, idx_range }
-    }
-
-    pub fn new_single(txid: TransactionId, idx: u64) -> Option<Self> {
-        IdxRange::new_single(idx).map(|idx_range| Self { txid, idx_range })
-    }
-
-    pub fn start_idx(self) -> u64 {
-        self.idx_range.start()
-    }
-
-    pub fn out_idx_iter(self) -> impl Iterator<Item = u64> {
-        self.idx_range.into_iter()
-    }
-
-    pub fn count(self) -> usize {
-        self.idx_range.count()
-    }
-}
-
-impl IntoIterator for OutPointRange {
-    type Item = OutPoint;
-
-    type IntoIter = OutPointRangeIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        OutPointRangeIter {
-            txid: self.txid,
-            inner: self.idx_range.into_iter(),
-        }
-    }
-}
-
-pub struct OutPointRangeIter {
-    txid: TransactionId,
-
-    inner: ops::Range<u64>,
-}
-
-impl OutPointRange {
-    pub fn txid(&self) -> TransactionId {
-        self.txid
-    }
-}
-
-impl Iterator for OutPointRangeIter {
-    type Item = OutPoint;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|idx| OutPoint {
-            txid: self.txid,
-            out_idx: idx,
-        })
-    }
-}
+// Re-export types from fedimint_core
+pub use fedimint_core::{IdxRange, OutPointRange, OutPointRangeIter};
 
 pub type StateGenerator<S> = Arc<maybe_add_send_sync!(dyn Fn(OutPointRange) -> Vec<S> + 'static)>;

@@ -114,4 +114,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
             )
             .await;
     }
+
+    async fn core_api_version(&self) -> fedimint_core::module::ApiVersion {
+        self.client.core_api_version().await
+    }
 }
