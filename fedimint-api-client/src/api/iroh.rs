@@ -332,6 +332,7 @@ impl IrohConnector {
             });
         }
     }
+
     async fn make_new_connection_stable(
         &self,
         node_id: NodeId,
@@ -339,20 +340,20 @@ impl IrohConnector {
     ) -> PeerResult<Connection> {
         trace!(target: LOG_NET_IROH, %node_id, "Creating new stable connection");
         let conn = match node_addr.clone() {
-                    Some(node_addr) => {
-                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                        let conn = self.stable
-                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                            .await;
+            Some(node_addr) => {
+                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                let conn = self.stable
+                    .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                    .await;
 
-                        #[cfg(not(target_family = "wasm"))]
-                        if conn.is_ok() {
-                            Self::spawn_connection_monitoring_stable(&self.stable, node_id);
-                        }
-                        conn
-                    }
-                    None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
-                }.map_err(PeerError::Connection)?;
+                #[cfg(not(target_family = "wasm"))]
+                if conn.is_ok() {
+                    Self::spawn_connection_monitoring_stable(&self.stable, node_id);
+                }
+                conn
+            }
+            None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
+        }.map_err(PeerError::Connection)?;
 
         Ok(conn)
     }
@@ -369,27 +370,27 @@ impl IrohConnector {
 
         trace!(target: LOG_NET_IROH, %node_id, "Creating new next connection");
         let conn = match node_addr.clone() {
-                    Some(node_addr) => {
-                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                        let node_addr = node_addr_stable_to_next(&node_addr);
-                        let conn = endpoint_next
-                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                            .await;
+            Some(node_addr) => {
+                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                let node_addr = node_addr_stable_to_next(&node_addr);
+                let conn = endpoint_next
+                    .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                    .await;
 
-                        #[cfg(not(target_family = "wasm"))]
-                        if conn.is_ok() {
-                            Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
-                        }
-
-                        conn
-                    }
-                    None => endpoint_next.connect(
-                        next_node_id,
-                        FEDIMINT_API_ALPN
-                    ).await,
+                #[cfg(not(target_family = "wasm"))]
+                if conn.is_ok() {
+                    Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
                 }
-                .map_err(Into::into)
-                .map_err(PeerError::Connection)?;
+
+                conn
+            }
+            None => endpoint_next.connect(
+                next_node_id,
+                FEDIMINT_API_ALPN
+            ).await,
+        }
+        .map_err(Into::into)
+        .map_err(PeerError::Connection)?;
 
         Ok(conn)
     }
