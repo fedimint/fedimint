@@ -1,6 +1,7 @@
 use axum::extract::State;
 use axum::response::Html;
-use fedimint_gateway_common::{ChannelInfo, GatewayInfo, LightningMode};
+use fedimint_core::bitcoin::Network;
+use fedimint_gateway_common::{ChannelInfo, GatewayInfo, LightningInfo, LightningMode};
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
@@ -13,6 +14,37 @@ where
 {
     // Try to load channels
     let channels_result = api.handle_list_channels_msg().await;
+
+    // Extract LightningInfo status
+    let (block_height, status_badge, network, alias, pubkey) = match &gateway_info.lightning_info {
+        LightningInfo::Connected {
+            network,
+            block_height,
+            synced_to_chain,
+            alias,
+            public_key,
+        } => {
+            let badge = if *synced_to_chain {
+                html! { span class="badge bg-success" { "🟢 Synced" } }
+            } else {
+                html! { span class="badge bg-warning" { "🟡 Syncing" } }
+            };
+            (
+                *block_height,
+                badge,
+                network.clone(),
+                Some(alias.clone()),
+                Some(public_key.clone()),
+            )
+        }
+        LightningInfo::NotConnected => (
+            0,
+            html! { span class="badge bg-danger" { "❌ Not Connected" } },
+            Network::Bitcoin,
+            None,
+            None,
+        ),
+    };
 
     html! {
         div class="card h-100" {
@@ -54,7 +86,7 @@ where
                         @match &gateway_info.lightning_mode {
                             LightningMode::Lnd { lnd_rpc_addr, lnd_tls_cert, lnd_macaroon } => {
                                 div id="node-type" class="alert alert-info" {
-                                    "Node Type: " strong { ("External LND") }
+                                    "Node Type: " strong { "External LND" }
                                 }
                                 table class="table table-sm mb-0" {
                                     tbody {
@@ -70,24 +102,36 @@ where
                                             th { "Macaroon" }
                                             td { (lnd_macaroon) }
                                         }
-                                        @if let Some(alias) = &gateway_info.lightning_alias {
+                                        tr {
+                                            th { "Network" }
+                                            td { (network) }
+                                        }
+                                        tr {
+                                            th { "Block Height" }
+                                            td { (block_height) }
+                                        }
+                                        tr {
+                                            th { "Status" }
+                                            td { (status_badge) }
+                                        }
+                                        @if let Some(a) = alias {
                                             tr {
                                                 th { "Lightning Alias" }
-                                                td { (alias) }
+                                                td { (a) }
                                             }
                                         }
-                                        @if let Some(pubkey) = &gateway_info.lightning_pub_key {
+                                        @if let Some(pk) = pubkey {
                                             tr {
                                                 th { "Lightning Public Key" }
-                                                td { (pubkey) }
+                                                td { (pk) }
                                             }
                                         }
                                     }
                                 }
                             }
-                            LightningMode::Ldk { lightning_port, alias: _ } => {
+                            LightningMode::Ldk { lightning_port, .. } => {
                                 div id="node-type" class="alert alert-info" {
-                                    "Node Type: " strong { ("Internal LDK") }
+                                    "Node Type: " strong { "Internal LDK" }
                                 }
                                 table class="table table-sm mb-0" {
                                     tbody {
@@ -95,22 +139,28 @@ where
                                             th { "Port" }
                                             td { (lightning_port) }
                                         }
-                                        @if let Some(alias) = &gateway_info.lightning_alias {
+                                        tr {
+                                            th { "Network" }
+                                            td { (network) }
+                                        }
+                                        tr {
+                                            th { "Block Height" }
+                                            td { (block_height) }
+                                        }
+                                        tr {
+                                            th { "Status" }
+                                            td { (status_badge) }
+                                        }
+                                        @if let Some(a) = alias {
                                             tr {
                                                 th { "Alias" }
-                                                td { (alias) }
+                                                td { (a) }
                                             }
                                         }
-                                        @if let Some(pubkey) = &gateway_info.lightning_pub_key {
+                                        @if let Some(pk) = pubkey {
                                             tr {
                                                 th { "Public Key" }
-                                                td { (pubkey) }
-                                            }
-                                            @if let Some(host) = gateway_info.api.host_str() {
-                                                tr {
-                                                    th { "Connection String" }
-                                                    td { (format!("{pubkey}@{host}:{lightning_port}")) }
-                                                }
+                                                td { (pk) }
                                             }
                                         }
                                     }
@@ -127,11 +177,8 @@ where
                         role="tabpanel"
                         aria-labelledby="channels-tab" {
 
-                        // header + refresh button aligned right
                         div class="d-flex justify-content-between align-items-center mb-2" {
                             div { strong { "Channels" } }
-                            // HTMX refresh button:
-                            // hx-get should point to the route we will create below
                             button class="btn btn-sm btn-outline-secondary"
                                 hx-get=(CHANNEL_FRAGMENT_ROUTE)
                                 hx-target="#channels-container"
@@ -140,7 +187,6 @@ where
                             { "Refresh" }
                         }
 
-                        // The initial fragment markup (from the channels_result we fetched above)
                         (channels_fragment_markup(channels_result))
                     }
                 }

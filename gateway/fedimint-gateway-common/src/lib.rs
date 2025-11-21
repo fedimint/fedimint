@@ -4,6 +4,7 @@ use std::time::{Duration, SystemTime};
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::sha256;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Address, Network};
 use clap::Subcommand;
 use envs::{
@@ -133,19 +134,9 @@ pub struct GatewayInfo {
     // TODO: Remove this alias once it no longer breaks backwards compatibility.
     #[serde(alias = "channels")]
     pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
-    pub lightning_pub_key: Option<String>,
-    pub lightning_alias: Option<String>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
-    pub network: Network,
-    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
-    // should be able to remove it once 0.4.0 is released.
-    #[serde(default)]
-    pub block_height: Option<u32>,
-    // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
-    // should be able to remove it once 0.4.0 is released.
-    #[serde(default)]
-    pub synced_to_chain: bool,
+    pub lightning_info: LightningInfo,
     pub api: SafeUrl,
     pub iroh_api: SafeUrl,
     pub lightning_mode: LightningMode,
@@ -472,5 +463,17 @@ impl fmt::Display for ChainSource {
 #[derive(Debug, Clone)]
 pub enum BlockchainInfo {
     Connected { block_height: u64, synced: bool },
+    NotConnected,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum LightningInfo {
+    Connected {
+        public_key: PublicKey,
+        alias: String,
+        network: Network,
+        block_height: u64,
+        synced_to_chain: bool,
+    },
     NotConnected,
 }

@@ -73,12 +73,13 @@ use fedimint_gateway_common::{
     CloseChannelsWithPeerResponse, ConnectFedPayload, CreateInvoiceForOperatorPayload,
     CreateOfferPayload, CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
     FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
-    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningMode,
-    ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse, OpenChannelRequest,
-    PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse, PaymentLogPayload,
-    PaymentLogResponse, PaymentStats, PaymentSummaryPayload, PaymentSummaryResponse,
-    ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
-    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawResponse,
+    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
+    LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
+    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
+    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
+    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest,
+    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
+    WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -593,25 +594,17 @@ impl Gateway {
         mut stream: RouteHtlcStream<'a>,
         ln_client: Arc<dyn ILnRpcClient>,
     ) -> ReceivePaymentStreamAction {
-        let (lightning_public_key, lightning_alias, lightning_network, synced_to_chain) =
-            match ln_client.parsed_node_info().await {
-                Ok((
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    _block_height,
-                    synced_to_chain,
-                )) => (
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    synced_to_chain,
-                ),
-                Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to retrieve Lightning info");
-                    return ReceivePaymentStreamAction::RetryAfterDelay;
-                }
-            };
+        let LightningInfo::Connected {
+            public_key: lightning_public_key,
+            alias: lightning_alias,
+            network: lightning_network,
+            block_height: _,
+            synced_to_chain,
+        } = ln_client.parsed_node_info().await
+        else {
+            warn!(target: LOG_GATEWAY, "Failed to retrieve Lightning info");
+            return ReceivePaymentStreamAction::RetryAfterDelay;
+        };
 
         assert!(
             self.network == lightning_network,
@@ -1798,13 +1791,9 @@ impl IAdminGateway for Gateway {
                 federations: vec![],
                 federation_fake_scids: None,
                 version_hash: fedimint_build_code_version_env!().to_string(),
-                lightning_pub_key: None,
-                lightning_alias: None,
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
-                network: self.network,
-                block_height: None,
-                synced_to_chain: false,
+                lightning_info: LightningInfo::NotConnected,
                 api: self.versioned_api.clone(),
                 iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                     .expect("could not parse iroh api"),
@@ -1830,19 +1819,15 @@ impl IAdminGateway for Gateway {
             })
             .collect();
 
-        let node_info = lightning_context.lnrpc.parsed_node_info().await?;
+        let lightning_info = lightning_context.lnrpc.parsed_node_info().await;
 
         Ok(GatewayInfo {
             federations,
             federation_fake_scids: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
-            lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
-            lightning_alias: Some(lightning_context.lightning_alias.clone()),
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
-            network: self.network,
-            block_height: Some(node_info.3),
-            synced_to_chain: node_info.4,
+            lightning_info,
             api: self.versioned_api.clone(),
             iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                 .expect("could not parse iroh api"),
