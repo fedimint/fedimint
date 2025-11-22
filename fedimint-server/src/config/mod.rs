@@ -592,9 +592,7 @@ impl ServerConfig {
             "Comparing connection codes checksum {checksum}..."
         );
 
-        connections
-            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
-            .await;
+        connections.send(Recipient::Everyone, P2PMessage::Checksum(checksum));
 
         for peer in params
             .peer_ids()
@@ -671,9 +669,7 @@ impl ServerConfig {
             "Comparing consensus config checksum {checksum}..."
         );
 
-        connections
-            .send(Recipient::Everyone, P2PMessage::Checksum(checksum))
-            .await;
+        connections.send(Recipient::Everyone, P2PMessage::Checksum(checksum));
 
         for peer in params
             .peer_ids()

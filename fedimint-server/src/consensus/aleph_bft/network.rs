@@ -1,9 +1,19 @@
+use async_channel::Sender;
 use bitcoin::hashes::{Hash, sha256};
+use fedimint_core::PeerId;
 use fedimint_core::config::P2PMessage;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
+use fedimint_core::module::SerdeModuleEncoding;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::secp256k1::schnorr;
+use fedimint_core::session_outcome::SignedSessionOutcome;
+use fedimint_core::util::FmtCompact as _;
+use fedimint_logging::LOG_CONSENSUS;
 use parity_scale_codec::{Decode, Encode, IoReader};
 
+use super::super::db::SignedSessionOutcomeKey;
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
 
@@ -27,11 +37,24 @@ pub type NetworkData = aleph_bft::NetworkData<
 
 pub struct Network {
     connections: DynP2PConnections<P2PMessage>,
+    signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
+    signatures_sender: Sender<(PeerId, schnorr::Signature)>,
+    db: Database,
 }
 
 impl Network {
-    pub fn new(connections: DynP2PConnections<P2PMessage>) -> Self {
-        Self { connections }
+    pub fn new(
+        connections: DynP2PConnections<P2PMessage>,
+        signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
+        signatures_sender: Sender<(PeerId, schnorr::Signature)>,
+        db: Database,
+    ) -> Self {
+        Self {
+            connections,
+            signed_outcomes_sender,
+            signatures_sender,
+            db,
+        }
     }
 }
 
@@ -47,18 +70,59 @@ impl aleph_bft::Network<NetworkData> for Network {
         };
 
         self.connections
-            .try_send(recipient, P2PMessage::Aleph(network_data.encode()));
+            .send(recipient, P2PMessage::Aleph(network_data.encode()));
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {
         loop {
-            if let P2PMessage::Aleph(bytes) = self.connections.receive().await?.1
-                && let Ok(network_data) = NetworkData::decode(&mut IoReader(bytes.as_slice()))
-            {
-                // in order to bound the RAM consumption of a session we have to bound an
-                // individual units size, hence the size of its attached unitdata in memory
-                if network_data.included_data().iter().all(UnitData::is_valid) {
-                    return Some(network_data);
+            let (peer_id, message) = self.connections.receive().await?;
+
+            match message {
+                P2PMessage::Aleph(bytes) => {
+                    if let Ok(network_data) = NetworkData::decode(&mut IoReader(bytes.as_slice())) {
+                        // in order to bound the RAM consumption of a session we have to bound an
+                        // individual units size, hence the size of its attached unitdata in memory
+                        if network_data.included_data().iter().all(UnitData::is_valid) {
+                            return Some(network_data);
+                        }
+                    }
+                }
+                P2PMessage::SessionSignature(signature) => {
+                    self.signatures_sender.try_send((peer_id, signature)).ok();
+                }
+                P2PMessage::SessionIndex(their_session) => {
+                    if let Some(outcome) = self
+                        .db
+                        .begin_transaction_nc()
+                        .await
+                        .get_value(&SignedSessionOutcomeKey(their_session))
+                        .await
+                    {
+                        self.connections.send(
+                            Recipient::Peer(peer_id),
+                            P2PMessage::SignedSessionOutcome(SerdeModuleEncoding::from(&outcome)),
+                        );
+                    }
+                }
+                P2PMessage::SignedSessionOutcome(encoded_outcome) => {
+                    match encoded_outcome.try_into_inner(&ModuleRegistry::default()) {
+                        Ok(outcome) => {
+                            self.signed_outcomes_sender
+                                .try_send((peer_id, outcome))
+                                .ok();
+                        }
+                        Err(err) => {
+                            tracing::error!(
+                                target: LOG_CONSENSUS,
+                                %peer_id,
+                                err = %err.fmt_compact(),
+                                "Failed to decode SignedSessionOutcome from peer"
+                            );
+                        }
+                    }
+                }
+                _ => {
+                    // Ignore other message types (Checksum, Dkg, Encodable)
                 }
             }
         }

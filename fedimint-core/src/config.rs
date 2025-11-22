@@ -27,8 +27,10 @@ use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
+    SerdeModuleEncoding,
 };
-use crate::{PeerId, maybe_add_send_sync};
+use crate::session_outcome::SignedSessionOutcome;
+use crate::{PeerId, maybe_add_send_sync, secp256k1};
 
 // TODO: make configurable
 /// This limits the RAM consumption of a AlephBFT Unit to roughly 50kB
@@ -849,6 +851,9 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
 pub enum P2PMessage {
     Aleph(Vec<u8>),
+    SessionSignature(secp256k1::schnorr::Signature),
+    SessionIndex(u64),
+    SignedSessionOutcome(SerdeModuleEncoding<SignedSessionOutcome>),
     Checksum(sha256::Hash),
     Dkg(DkgMessage),
     Encodable(Vec<u8>),

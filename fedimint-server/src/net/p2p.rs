@@ -134,25 +134,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
 
 #[async_trait]
 impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M> {
-    async fn send(&self, recipient: Recipient, message: M) {
-        match recipient {
-            Recipient::Everyone => {
-                for connection in self.connections.values() {
-                    connection.send(message.clone()).await;
-                }
-            }
-            Recipient::Peer(peer) => match self.connections.get(&peer) {
-                Some(connection) => {
-                    connection.send(message).await;
-                }
-                _ => {
-                    warn!(target: LOG_NET_PEER, "No connection for peer {peer}");
-                }
-            },
-        }
-    }
-
-    fn try_send(&self, recipient: Recipient, message: M) {
+    fn send(&self, recipient: Recipient, message: M) {
         match recipient {
             Recipient::Everyone => {
                 for connection in self.connections.values() {
@@ -204,8 +186,14 @@ impl<M: Send + 'static> P2PConnection<M> {
         connection_type_sender: watch::Sender<ConnectionType>,
         task_group: &TaskGroup,
     ) -> P2PConnection<M> {
-        let (outgoing_sender, outgoing_receiver) = bounded(1024);
-        let (incoming_sender, incoming_receiver) = bounded(1024);
+        // We use small message queues here to avoid outdated messages such as requests
+        // for signed session outcomes to queue up while a peer is disconnected. The
+        // consensus expects an unreliable networking layer and will resend lost
+        // messages accordingly. Furthermore, during the DKG there will never be more
+        // than two messages in those channels at once, due to its sequential
+        // nature there.
+        let (outgoing_sender, outgoing_receiver) = bounded(5);
+        let (incoming_sender, incoming_receiver) = bounded(5);
 
         let connector_clone = connector.clone();
         let connection_type_sender_clone = connection_type_sender.clone();
@@ -257,10 +245,6 @@ impl<M: Send + 'static> P2PConnection<M> {
             outgoing: outgoing_sender,
             incoming: incoming_receiver,
         }
-    }
-
-    async fn send(&self, message: M) {
-        self.outgoing.send(message).await.ok();
     }
 
     fn try_send(&self, message: M) {
@@ -343,7 +327,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                             .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "incoming"])
                             .inc();
 
-                         self.incoming_sender.send(message).await.ok()?;
+                         self.incoming_sender.try_send(message).ok();
                     },
                     Err(e) => return Some(self.disconnect(e)),
                 }
@@ -397,8 +381,9 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
                 Some(P2PConnectionSMState::Connected(connection.ok()?))
             },
+            // to prevent "reconnection ping-pongs", only the side with lower PeerId reconnects
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
-                // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
+
 
                 info!(target: LOG_NET_PEER, "Attempting to reconnect to peer");
 

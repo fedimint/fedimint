@@ -815,6 +815,24 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
     }
 }
 
+impl<T: Encodable + Decodable> Encodable for SerdeModuleEncoding<T> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        self.0.consensus_encode(writer)
+    }
+}
+
+impl<T: Encodable + Decodable> Decodable for SerdeModuleEncoding<T> {
+    fn consensus_decode_partial_from_finite_reader<R: std::io::Read>(
+        reader: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self(
+            Vec::<u8>::consensus_decode_partial_from_finite_reader(reader, modules)?,
+            PhantomData,
+        ))
+    }
+}
+
 impl<T> fmt::Debug for SerdeModuleEncodingBase64<T>
 where
     T: Encodable + Decodable,

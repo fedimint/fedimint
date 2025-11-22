@@ -4,7 +4,6 @@ use std::io::Write;
 use aleph_bft::Keychain as KeychainTrait;
 use bitcoin::hashes::Hash;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::session_outcome::SchnorrSignature;
 use fedimint_core::{NumPeersExt, PeerId, secp256k1};
 use secp256k1::hashes::sha256;
 use secp256k1::{Keypair, Message, PublicKey, schnorr};
@@ -50,6 +49,28 @@ impl Keychain {
 
         Message::from_digest(*hash.as_ref())
     }
+
+    pub fn sign_schnorr(&self, message: &[u8]) -> schnorr::Signature {
+        self.keypair.sign_schnorr(self.tagged_message(message))
+    }
+
+    pub fn verify_schnorr(
+        &self,
+        message: &[u8],
+        signature: &schnorr::Signature,
+        peer_id: PeerId,
+    ) -> bool {
+        match self.pks.get(&peer_id) {
+            Some(public_key) => secp256k1::SECP256K1
+                .verify_schnorr(
+                    signature,
+                    &self.tagged_message(message),
+                    &public_key.x_only_public_key().0,
+                )
+                .is_ok(),
+            None => false,
+        }
+    }
 }
 
 impl aleph_bft::Index for Keychain {
@@ -60,19 +81,14 @@ impl aleph_bft::Index for Keychain {
 
 #[async_trait::async_trait]
 impl aleph_bft::Keychain for Keychain {
-    type Signature = SchnorrSignature;
+    type Signature = [u8; 64];
 
     fn node_count(&self) -> aleph_bft::NodeCount {
         self.pks.len().into()
     }
 
     fn sign(&self, message: &[u8]) -> Self::Signature {
-        SchnorrSignature(
-            self.keypair
-                .sign_schnorr(self.tagged_message(message))
-                .as_ref()
-                .to_owned(),
-        )
+        self.sign_schnorr(message).serialize()
     }
 
     fn verify(
@@ -81,24 +97,15 @@ impl aleph_bft::Keychain for Keychain {
         signature: &Self::Signature,
         node_index: aleph_bft::NodeIndex,
     ) -> bool {
-        if let Some(public_key) = self.pks.get(&super::to_peer_id(node_index))
-            && let Ok(sig) = schnorr::Signature::from_slice(&signature.0)
-        {
-            return secp256k1::SECP256K1
-                .verify_schnorr(
-                    &sig,
-                    &self.tagged_message(message),
-                    &public_key.x_only_public_key().0,
-                )
-                .is_ok();
+        match schnorr::Signature::from_slice(signature) {
+            Ok(sig) => self.verify_schnorr(message, &sig, super::to_peer_id(node_index)),
+            Err(_) => false,
         }
-
-        false
     }
 }
 
 impl aleph_bft::MultiKeychain for Keychain {
-    type PartialMultisignature = aleph_bft::NodeMap<SchnorrSignature>;
+    type PartialMultisignature = aleph_bft::NodeMap<[u8; 64]>;
 
     fn bootstrap_multi(
         &self,
@@ -106,7 +113,9 @@ impl aleph_bft::MultiKeychain for Keychain {
         index: aleph_bft::NodeIndex,
     ) -> Self::PartialMultisignature {
         let mut partial = aleph_bft::NodeMap::with_size(self.pks.len().into());
-        partial.insert(index, signature.clone());
+
+        partial.insert(index, *signature);
+
         partial
     }
 

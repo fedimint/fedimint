@@ -103,7 +103,7 @@ where
 {
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
         Ok(bincode::deserialize_from(Cursor::new(
-            &self.read_to_end(1_000_000).await?,
+            &self.read_to_end(10_000_000).await?,
         ))?)
     }
 }
