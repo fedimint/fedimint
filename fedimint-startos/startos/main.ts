@@ -45,11 +45,7 @@ export const main = sdk.setupMain(async ({ effects, started }) => {
     ),
     exec: {
       env,
-      command: [
-        'sh',
-        '-c',
-        `find /nix/store -type f -name '*-fedimintd-container-entrypoint.sh' | head -n 1`,
-      ],
+      command: new sdk.UseEntrypoint(),
     },
     ready: {
       display: 'Web Interface',
