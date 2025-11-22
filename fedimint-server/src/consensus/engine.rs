@@ -27,6 +27,7 @@ use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
 use fedimint_core::{NumPeers, NumPeersExt, PeerId, timing};
+use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use rand::Rng;
@@ -67,6 +68,7 @@ pub struct ConsensusEngine {
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
     pub connections: DynP2PConnections<P2PMessage>,
+    pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
     pub task_group: TaskGroup,
@@ -99,6 +101,8 @@ impl ConsensusEngine {
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
         while !task_handle.is_shutting_down() {
+            self.check_bitcoin_rpc_connection_status().await;
+
             let session_index = self.get_finished_session_count().await;
 
             CONSENSUS_SESSION_COUNT.set(session_index as i64);
@@ -160,6 +164,8 @@ impl ConsensusEngine {
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
         while !task_handle.is_shutting_down() {
+            self.check_bitcoin_rpc_connection_status().await;
+
             let session_index = self.get_finished_session_count().await;
 
             CONSENSUS_SESSION_COUNT.set(session_index as i64);
@@ -189,6 +195,43 @@ impl ConsensusEngine {
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
 
         Ok(())
+    }
+
+    async fn check_bitcoin_rpc_connection_status(&self) {
+        // The bitcoin backend is the only external dependency of the consensus task. If
+        // we loose the connection to it the consensus task is left behind the aleph
+        // bft algorithm which continues to order new items regardless. Eventually this
+        // will lead to a panic in the consensus task and thereby triggering a
+        // restart of the server. Therefore we need to check the connection here in
+        // order to avoid a restart loop in which the consensus task is falling
+        // behind the aleph bft algorithm a little bit more with each iteration.
+        // The longer the bitcoin rpc connection is lost the higher the exponential
+        // delay of the aleph bft algorithm will be, which in turn increases the time
+        // to order the signatures for the current session after the session items
+        // were processed by the consensus task. This will cause the federation to still
+        // appear stuck for a while even though the original issue, e.g. a lost
+        // connection to the bitcoin backend, has been resolved, which is quite
+        // confusing for the guardians.
+        loop {
+            match self.bitcoin_rpc_connection.status() {
+                Some(status) => {
+                    if let Some(progress) = status.sync_progress {
+                        if progress >= 0.999 {
+                            break;
+                        }
+
+                        info!(target: LOG_CONSENSUS, "Waiting for bitcoin backend to sync... {progress:.1}%");
+                    } else {
+                        break;
+                    }
+                }
+                None => {
+                    info!(target: LOG_CONSENSUS, "Waiting to connect to bitcoin backend...");
+                }
+            }
+
+            sleep(Duration::from_secs(1)).await;
+        }
     }
 
     pub async fn run_session(
