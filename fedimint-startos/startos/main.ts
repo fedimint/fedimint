@@ -45,7 +45,7 @@ export const main = sdk.setupMain(async ({ effects, started }) => {
     ),
     exec: {
       env,
-      command: new sdk.UseEntrypoint(),
+      command: sdk.useEntrypoint(),
     },
     ready: {
       display: 'Web Interface',
