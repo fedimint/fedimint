@@ -876,6 +876,11 @@ impl ConnectorRegistry {
         url: &SafeUrl,
         api_secret: Option<&str>,
     ) -> PeerResult<DynGuaridianConnection> {
+        trace!(
+            target: LOG_NET,
+            %url,
+            "Connection requested"
+        );
         let url = match self.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
@@ -902,7 +907,7 @@ impl ConnectorRegistry {
         // Clone the init function to use in the async block
         let init_fn = connector_lazy.0.clone();
 
-        connector_lazy
+        let conn = connector_lazy
             .1
             .get_or_try_init(|| async move { init_fn().await })
             .await
@@ -914,6 +919,21 @@ impl ConnectorRegistry {
             })?
             .connect_guardian(url, api_secret)
             .await
+            .inspect_err(|err| {
+                trace!(
+                    target: LOG_NET,
+                    %url,
+                    err = %err.fmt_compact(),
+                    "Connection failed"
+                );
+            })?;
+
+        trace!(
+            target: LOG_NET,
+            %url,
+            "Connection returned"
+        );
+        Ok(conn)
     }
 }
 pub type DynConnector = Arc<dyn Connector>;
