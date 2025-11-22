@@ -1104,7 +1104,7 @@
 <a href=#1104 id=1104 data-nosnippet>1104</a>                // before, and disconnected afterwards.
 <a href=#1105 id=1105 data-nosnippet>1105</a>                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(existing_conn) = entry_arc.connection.get()
 <a href=#1106 id=1106 data-nosnippet>1106</a>                    &amp;&amp; !existing_conn.is_connected(){
-<a href=#1107 id=1107 data-nosnippet>1107</a>                        <span class="macro">trace!</span>(target: LOG_NET_API, %url, <span class="string">"Existing connection is disconnected, removing from pool"</span>);
+<a href=#1107 id=1107 data-nosnippet>1107</a>                        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, %url, <span class="string">"Existing connection is disconnected, removing from pool"</span>);
 <a href=#1108 id=1108 data-nosnippet>1108</a>                        <span class="kw-2">*</span>entry_arc = Arc::new(ConnectionState::new_reconnecting());
 <a href=#1109 id=1109 data-nosnippet>1109</a>                    }
 <a href=#1110 id=1110 data-nosnippet>1110</a>            })
@@ -1127,124 +1127,125 @@
 <a href=#1127 id=1127 data-nosnippet>1127</a>                <span class="kw">let </span>retry_delay = pool_entry_arc.pre_reconnect_delay();
 <a href=#1128 id=1128 data-nosnippet>1128</a>                fedimint_core::runtime::sleep(retry_delay).<span class="kw">await</span>;
 <a href=#1129 id=1129 data-nosnippet>1129</a>
-<a href=#1130 id=1130 data-nosnippet>1130</a>                <span class="kw">let </span>conn = <span class="self">self</span>.connectors.connect_guardian(url, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1131 id=1131 data-nosnippet>1131</a>
-<a href=#1132 id=1132 data-nosnippet>1132</a>                <span class="prelude-val">Ok</span>(conn)
-<a href=#1133 id=1133 data-nosnippet>1133</a>            })
-<a href=#1134 id=1134 data-nosnippet>1134</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1135 id=1135 data-nosnippet>1135</a>
-<a href=#1136 id=1136 data-nosnippet>1136</a>        <span class="macro">trace!</span>(target: LOG_NET_API, %url, <span class="string">"Using websocket connection"</span>);
-<a href=#1137 id=1137 data-nosnippet>1137</a>        <span class="prelude-val">Ok</span>(conn.clone())
-<a href=#1138 id=1138 data-nosnippet>1138</a>    }
-<a href=#1139 id=1139 data-nosnippet>1139</a>
-<a href=#1140 id=1140 data-nosnippet>1140</a>    <span class="kw">async fn </span>request(
-<a href=#1141 id=1141 data-nosnippet>1141</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1142 id=1142 data-nosnippet>1142</a>        peer: PeerId,
-<a href=#1143 id=1143 data-nosnippet>1143</a>        method: ApiMethod,
-<a href=#1144 id=1144 data-nosnippet>1144</a>        request: ApiRequestErased,
-<a href=#1145 id=1145 data-nosnippet>1145</a>    ) -&gt; PeerResult&lt;Value&gt; {
-<a href=#1146 id=1146 data-nosnippet>1146</a>        <span class="macro">trace!</span>(target: LOG_NET_API, %peer, %method, <span class="string">"Api request"</span>);
-<a href=#1147 id=1147 data-nosnippet>1147</a>        <span class="kw">let </span>url = <span class="self">self
-<a href=#1148 id=1148 data-nosnippet>1148</a>            </span>.peers
-<a href=#1149 id=1149 data-nosnippet>1149</a>            .get(<span class="kw-2">&amp;</span>peer)
-<a href=#1150 id=1150 data-nosnippet>1150</a>            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })<span class="question-mark">?</span>;
-<a href=#1151 id=1151 data-nosnippet>1151</a>        <span class="kw">let </span>conn = <span class="self">self
-<a href=#1152 id=1152 data-nosnippet>1152</a>            </span>.get_or_create_connection(url, <span class="self">self</span>.api_secret.as_deref())
-<a href=#1153 id=1153 data-nosnippet>1153</a>            .<span class="kw">await
-<a href=#1154 id=1154 data-nosnippet>1154</a>            </span>.context(<span class="string">"Failed to connect to peer"</span>)
-<a href=#1155 id=1155 data-nosnippet>1155</a>            .map_err(PeerError::Connection)<span class="question-mark">?</span>;
-<a href=#1156 id=1156 data-nosnippet>1156</a>        <span class="kw">let </span>res = conn.request(method.clone(), request).<span class="kw">await</span>;
-<a href=#1157 id=1157 data-nosnippet>1157</a>
-<a href=#1158 id=1158 data-nosnippet>1158</a>        <span class="macro">trace!</span>(target: LOG_NET_API, <span class="question-mark">?</span>method, res_ok = res.is_ok(), <span class="string">"Api response"</span>);
-<a href=#1159 id=1159 data-nosnippet>1159</a>
-<a href=#1160 id=1160 data-nosnippet>1160</a>        res
-<a href=#1161 id=1161 data-nosnippet>1161</a>    }
-<a href=#1162 id=1162 data-nosnippet>1162</a>}
-<a href=#1163 id=1163 data-nosnippet>1163</a>
-<a href=#1164 id=1164 data-nosnippet>1164</a><span class="kw">impl </span>IModuleFederationApi <span class="kw">for </span>FederationApi {}
-<a href=#1165 id=1165 data-nosnippet>1165</a>
-<a href=#1166 id=1166 data-nosnippet>1166</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#1167 id=1167 data-nosnippet>1167</a></span><span class="kw">impl </span>IRawFederationApi <span class="kw">for </span>FederationApi {
-<a href=#1168 id=1168 data-nosnippet>1168</a>    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
-<a href=#1169 id=1169 data-nosnippet>1169</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.peers_keys
-<a href=#1170 id=1170 data-nosnippet>1170</a>    }
-<a href=#1171 id=1171 data-nosnippet>1171</a>
-<a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
-<a href=#1173 id=1173 data-nosnippet>1173</a>        <span class="self">self</span>.admin_id
-<a href=#1174 id=1174 data-nosnippet>1174</a>    }
-<a href=#1175 id=1175 data-nosnippet>1175</a>
-<a href=#1176 id=1176 data-nosnippet>1176</a>    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
-<a href=#1177 id=1177 data-nosnippet>1177</a>        FederationApi {
-<a href=#1178 id=1178 data-nosnippet>1178</a>            api_secret: <span class="self">self</span>.api_secret.clone(),
-<a href=#1179 id=1179 data-nosnippet>1179</a>            connections: <span class="self">self</span>.connections.clone(),
-<a href=#1180 id=1180 data-nosnippet>1180</a>            connectors: <span class="self">self</span>.connectors.clone(),
-<a href=#1181 id=1181 data-nosnippet>1181</a>            peers: <span class="self">self</span>.peers.clone(),
-<a href=#1182 id=1182 data-nosnippet>1182</a>            peers_keys: <span class="self">self</span>.peers_keys.clone(),
-<a href=#1183 id=1183 data-nosnippet>1183</a>            admin_id: <span class="self">self</span>.admin_id,
-<a href=#1184 id=1184 data-nosnippet>1184</a>            module_id: <span class="prelude-val">Some</span>(id),
-<a href=#1185 id=1185 data-nosnippet>1185</a>        }
-<a href=#1186 id=1186 data-nosnippet>1186</a>        .into()
-<a href=#1187 id=1187 data-nosnippet>1187</a>    }
-<a href=#1188 id=1188 data-nosnippet>1188</a>
-<a href=#1189 id=1189 data-nosnippet>1189</a>    <span class="attr">#[instrument(
-<a href=#1190 id=1190 data-nosnippet>1190</a>        target = LOG_NET_API,
-<a href=#1191 id=1191 data-nosnippet>1191</a>        skip_all,
-<a href=#1192 id=1192 data-nosnippet>1192</a>        fields(
-<a href=#1193 id=1193 data-nosnippet>1193</a>            peer_id = %peer_id,
-<a href=#1194 id=1194 data-nosnippet>1194</a>            method = %method,
-<a href=#1195 id=1195 data-nosnippet>1195</a>            params = %params.params,
-<a href=#1196 id=1196 data-nosnippet>1196</a>        )
-<a href=#1197 id=1197 data-nosnippet>1197</a>    )]
-<a href=#1198 id=1198 data-nosnippet>1198</a>    </span><span class="kw">async fn </span>request_raw(
-<a href=#1199 id=1199 data-nosnippet>1199</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1200 id=1200 data-nosnippet>1200</a>        peer_id: PeerId,
-<a href=#1201 id=1201 data-nosnippet>1201</a>        method: <span class="kw-2">&amp;</span>str,
-<a href=#1202 id=1202 data-nosnippet>1202</a>        params: <span class="kw-2">&amp;</span>ApiRequestErased,
-<a href=#1203 id=1203 data-nosnippet>1203</a>    ) -&gt; PeerResult&lt;Value&gt; {
-<a href=#1204 id=1204 data-nosnippet>1204</a>        <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
-<a href=#1205 id=1205 data-nosnippet>1205</a>            <span class="prelude-val">Some</span>(module_id) =&gt; ApiMethod::Module(module_id, method.to_string()),
-<a href=#1206 id=1206 data-nosnippet>1206</a>            <span class="prelude-val">None </span>=&gt; ApiMethod::Core(method.to_string()),
-<a href=#1207 id=1207 data-nosnippet>1207</a>        };
-<a href=#1208 id=1208 data-nosnippet>1208</a>
-<a href=#1209 id=1209 data-nosnippet>1209</a>        <span class="self">self</span>.request(peer_id, method, params.clone()).<span class="kw">await
-<a href=#1210 id=1210 data-nosnippet>1210</a>    </span>}
-<a href=#1211 id=1211 data-nosnippet>1211</a>}
-<a href=#1212 id=1212 data-nosnippet>1212</a>
-<a href=#1213 id=1213 data-nosnippet>1213</a><span class="doccomment">/// The status of a server, including how it views its peers
-<a href=#1214 id=1214 data-nosnippet>1214</a></span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-<a href=#1215 id=1215 data-nosnippet>1215</a></span><span class="kw">pub struct </span>LegacyFederationStatus {
-<a href=#1216 id=1216 data-nosnippet>1216</a>    <span class="kw">pub </span>session_count: u64,
-<a href=#1217 id=1217 data-nosnippet>1217</a>    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, LegacyPeerStatus&gt;,
-<a href=#1218 id=1218 data-nosnippet>1218</a>    <span class="kw">pub </span>peers_online: u64,
-<a href=#1219 id=1219 data-nosnippet>1219</a>    <span class="kw">pub </span>peers_offline: u64,
-<a href=#1220 id=1220 data-nosnippet>1220</a>    <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
-<a href=#1221 id=1221 data-nosnippet>1221</a>    /// should generate an alert if this is not the case.
-<a href=#1222 id=1222 data-nosnippet>1222</a>    </span><span class="kw">pub </span>peers_flagged: u64,
-<a href=#1223 id=1223 data-nosnippet>1223</a>    <span class="kw">pub </span>scheduled_shutdown: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#1224 id=1224 data-nosnippet>1224</a>}
-<a href=#1225 id=1225 data-nosnippet>1225</a>
-<a href=#1226 id=1226 data-nosnippet>1226</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-<a href=#1227 id=1227 data-nosnippet>1227</a></span><span class="kw">pub struct </span>LegacyPeerStatus {
-<a href=#1228 id=1228 data-nosnippet>1228</a>    <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#1229 id=1229 data-nosnippet>1229</a>    <span class="kw">pub </span>connection_status: LegacyP2PConnectionStatus,
-<a href=#1230 id=1230 data-nosnippet>1230</a>    <span class="doccomment">/// Indicates that this peer needs attention from the operator since
-<a href=#1231 id=1231 data-nosnippet>1231</a>    /// it has not contributed to the consensus in a long time
-<a href=#1232 id=1232 data-nosnippet>1232</a>    </span><span class="kw">pub </span>flagged: bool,
-<a href=#1233 id=1233 data-nosnippet>1233</a>}
-<a href=#1234 id=1234 data-nosnippet>1234</a>
-<a href=#1235 id=1235 data-nosnippet>1235</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-<a href=#1236 id=1236 data-nosnippet>1236</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
-<a href=#1237 id=1237 data-nosnippet>1237</a></span><span class="kw">pub enum </span>LegacyP2PConnectionStatus {
-<a href=#1238 id=1238 data-nosnippet>1238</a>    <span class="attr">#[default]
-<a href=#1239 id=1239 data-nosnippet>1239</a>    </span>Disconnected,
-<a href=#1240 id=1240 data-nosnippet>1240</a>    Connected,
-<a href=#1241 id=1241 data-nosnippet>1241</a>}
-<a href=#1242 id=1242 data-nosnippet>1242</a>
-<a href=#1243 id=1243 data-nosnippet>1243</a><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-<a href=#1244 id=1244 data-nosnippet>1244</a></span><span class="kw">pub struct </span>StatusResponse {
-<a href=#1245 id=1245 data-nosnippet>1245</a>    <span class="kw">pub </span>server: ServerStatusLegacy,
-<a href=#1246 id=1246 data-nosnippet>1246</a>    <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;LegacyFederationStatus&gt;,
-<a href=#1247 id=1247 data-nosnippet>1247</a>}
-<a href=#1248 id=1248 data-nosnippet>1248</a>
-<a href=#1249 id=1249 data-nosnippet>1249</a><span class="attr">#[cfg(test)]
-<a href=#1250 id=1250 data-nosnippet>1250</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#1130 id=1130 data-nosnippet>1130</a>                <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, %url, <span class="string">"Attempting to create a new connection"</span>);
+<a href=#1131 id=1131 data-nosnippet>1131</a>                <span class="kw">let </span>conn = <span class="self">self</span>.connectors.connect_guardian(url, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1132 id=1132 data-nosnippet>1132</a>
+<a href=#1133 id=1133 data-nosnippet>1133</a>                <span class="prelude-val">Ok</span>(conn)
+<a href=#1134 id=1134 data-nosnippet>1134</a>            })
+<a href=#1135 id=1135 data-nosnippet>1135</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1136 id=1136 data-nosnippet>1136</a>
+<a href=#1137 id=1137 data-nosnippet>1137</a>        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, %url, <span class="string">"Connection ready"</span>);
+<a href=#1138 id=1138 data-nosnippet>1138</a>        <span class="prelude-val">Ok</span>(conn.clone())
+<a href=#1139 id=1139 data-nosnippet>1139</a>    }
+<a href=#1140 id=1140 data-nosnippet>1140</a>
+<a href=#1141 id=1141 data-nosnippet>1141</a>    <span class="kw">async fn </span>request(
+<a href=#1142 id=1142 data-nosnippet>1142</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1143 id=1143 data-nosnippet>1143</a>        peer: PeerId,
+<a href=#1144 id=1144 data-nosnippet>1144</a>        method: ApiMethod,
+<a href=#1145 id=1145 data-nosnippet>1145</a>        request: ApiRequestErased,
+<a href=#1146 id=1146 data-nosnippet>1146</a>    ) -&gt; PeerResult&lt;Value&gt; {
+<a href=#1147 id=1147 data-nosnippet>1147</a>        <span class="macro">trace!</span>(target: LOG_NET_API, %peer, %method, <span class="string">"Api request"</span>);
+<a href=#1148 id=1148 data-nosnippet>1148</a>        <span class="kw">let </span>url = <span class="self">self
+<a href=#1149 id=1149 data-nosnippet>1149</a>            </span>.peers
+<a href=#1150 id=1150 data-nosnippet>1150</a>            .get(<span class="kw-2">&amp;</span>peer)
+<a href=#1151 id=1151 data-nosnippet>1151</a>            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })<span class="question-mark">?</span>;
+<a href=#1152 id=1152 data-nosnippet>1152</a>        <span class="kw">let </span>conn = <span class="self">self
+<a href=#1153 id=1153 data-nosnippet>1153</a>            </span>.get_or_create_connection(url, <span class="self">self</span>.api_secret.as_deref())
+<a href=#1154 id=1154 data-nosnippet>1154</a>            .<span class="kw">await
+<a href=#1155 id=1155 data-nosnippet>1155</a>            </span>.context(<span class="string">"Failed to connect to peer"</span>)
+<a href=#1156 id=1156 data-nosnippet>1156</a>            .map_err(PeerError::Connection)<span class="question-mark">?</span>;
+<a href=#1157 id=1157 data-nosnippet>1157</a>        <span class="kw">let </span>res = conn.request(method.clone(), request).<span class="kw">await</span>;
+<a href=#1158 id=1158 data-nosnippet>1158</a>
+<a href=#1159 id=1159 data-nosnippet>1159</a>        <span class="macro">trace!</span>(target: LOG_NET_API, <span class="question-mark">?</span>method, res_ok = res.is_ok(), <span class="string">"Api response"</span>);
+<a href=#1160 id=1160 data-nosnippet>1160</a>
+<a href=#1161 id=1161 data-nosnippet>1161</a>        res
+<a href=#1162 id=1162 data-nosnippet>1162</a>    }
+<a href=#1163 id=1163 data-nosnippet>1163</a>}
+<a href=#1164 id=1164 data-nosnippet>1164</a>
+<a href=#1165 id=1165 data-nosnippet>1165</a><span class="kw">impl </span>IModuleFederationApi <span class="kw">for </span>FederationApi {}
+<a href=#1166 id=1166 data-nosnippet>1166</a>
+<a href=#1167 id=1167 data-nosnippet>1167</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#1168 id=1168 data-nosnippet>1168</a></span><span class="kw">impl </span>IRawFederationApi <span class="kw">for </span>FederationApi {
+<a href=#1169 id=1169 data-nosnippet>1169</a>    <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
+<a href=#1170 id=1170 data-nosnippet>1170</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.peers_keys
+<a href=#1171 id=1171 data-nosnippet>1171</a>    }
+<a href=#1172 id=1172 data-nosnippet>1172</a>
+<a href=#1173 id=1173 data-nosnippet>1173</a>    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
+<a href=#1174 id=1174 data-nosnippet>1174</a>        <span class="self">self</span>.admin_id
+<a href=#1175 id=1175 data-nosnippet>1175</a>    }
+<a href=#1176 id=1176 data-nosnippet>1176</a>
+<a href=#1177 id=1177 data-nosnippet>1177</a>    <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
+<a href=#1178 id=1178 data-nosnippet>1178</a>        FederationApi {
+<a href=#1179 id=1179 data-nosnippet>1179</a>            api_secret: <span class="self">self</span>.api_secret.clone(),
+<a href=#1180 id=1180 data-nosnippet>1180</a>            connections: <span class="self">self</span>.connections.clone(),
+<a href=#1181 id=1181 data-nosnippet>1181</a>            connectors: <span class="self">self</span>.connectors.clone(),
+<a href=#1182 id=1182 data-nosnippet>1182</a>            peers: <span class="self">self</span>.peers.clone(),
+<a href=#1183 id=1183 data-nosnippet>1183</a>            peers_keys: <span class="self">self</span>.peers_keys.clone(),
+<a href=#1184 id=1184 data-nosnippet>1184</a>            admin_id: <span class="self">self</span>.admin_id,
+<a href=#1185 id=1185 data-nosnippet>1185</a>            module_id: <span class="prelude-val">Some</span>(id),
+<a href=#1186 id=1186 data-nosnippet>1186</a>        }
+<a href=#1187 id=1187 data-nosnippet>1187</a>        .into()
+<a href=#1188 id=1188 data-nosnippet>1188</a>    }
+<a href=#1189 id=1189 data-nosnippet>1189</a>
+<a href=#1190 id=1190 data-nosnippet>1190</a>    <span class="attr">#[instrument(
+<a href=#1191 id=1191 data-nosnippet>1191</a>        target = LOG_NET_API,
+<a href=#1192 id=1192 data-nosnippet>1192</a>        skip_all,
+<a href=#1193 id=1193 data-nosnippet>1193</a>        fields(
+<a href=#1194 id=1194 data-nosnippet>1194</a>            peer_id = %peer_id,
+<a href=#1195 id=1195 data-nosnippet>1195</a>            method = %method,
+<a href=#1196 id=1196 data-nosnippet>1196</a>            params = %params.params,
+<a href=#1197 id=1197 data-nosnippet>1197</a>        )
+<a href=#1198 id=1198 data-nosnippet>1198</a>    )]
+<a href=#1199 id=1199 data-nosnippet>1199</a>    </span><span class="kw">async fn </span>request_raw(
+<a href=#1200 id=1200 data-nosnippet>1200</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1201 id=1201 data-nosnippet>1201</a>        peer_id: PeerId,
+<a href=#1202 id=1202 data-nosnippet>1202</a>        method: <span class="kw-2">&amp;</span>str,
+<a href=#1203 id=1203 data-nosnippet>1203</a>        params: <span class="kw-2">&amp;</span>ApiRequestErased,
+<a href=#1204 id=1204 data-nosnippet>1204</a>    ) -&gt; PeerResult&lt;Value&gt; {
+<a href=#1205 id=1205 data-nosnippet>1205</a>        <span class="kw">let </span>method = <span class="kw">match </span><span class="self">self</span>.module_id {
+<a href=#1206 id=1206 data-nosnippet>1206</a>            <span class="prelude-val">Some</span>(module_id) =&gt; ApiMethod::Module(module_id, method.to_string()),
+<a href=#1207 id=1207 data-nosnippet>1207</a>            <span class="prelude-val">None </span>=&gt; ApiMethod::Core(method.to_string()),
+<a href=#1208 id=1208 data-nosnippet>1208</a>        };
+<a href=#1209 id=1209 data-nosnippet>1209</a>
+<a href=#1210 id=1210 data-nosnippet>1210</a>        <span class="self">self</span>.request(peer_id, method, params.clone()).<span class="kw">await
+<a href=#1211 id=1211 data-nosnippet>1211</a>    </span>}
+<a href=#1212 id=1212 data-nosnippet>1212</a>}
+<a href=#1213 id=1213 data-nosnippet>1213</a>
+<a href=#1214 id=1214 data-nosnippet>1214</a><span class="doccomment">/// The status of a server, including how it views its peers
+<a href=#1215 id=1215 data-nosnippet>1215</a></span><span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+<a href=#1216 id=1216 data-nosnippet>1216</a></span><span class="kw">pub struct </span>LegacyFederationStatus {
+<a href=#1217 id=1217 data-nosnippet>1217</a>    <span class="kw">pub </span>session_count: u64,
+<a href=#1218 id=1218 data-nosnippet>1218</a>    <span class="kw">pub </span>status_by_peer: HashMap&lt;PeerId, LegacyPeerStatus&gt;,
+<a href=#1219 id=1219 data-nosnippet>1219</a>    <span class="kw">pub </span>peers_online: u64,
+<a href=#1220 id=1220 data-nosnippet>1220</a>    <span class="kw">pub </span>peers_offline: u64,
+<a href=#1221 id=1221 data-nosnippet>1221</a>    <span class="doccomment">/// This should always be 0 if everything is okay, so a monitoring tool
+<a href=#1222 id=1222 data-nosnippet>1222</a>    /// should generate an alert if this is not the case.
+<a href=#1223 id=1223 data-nosnippet>1223</a>    </span><span class="kw">pub </span>peers_flagged: u64,
+<a href=#1224 id=1224 data-nosnippet>1224</a>    <span class="kw">pub </span>scheduled_shutdown: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1225 id=1225 data-nosnippet>1225</a>}
+<a href=#1226 id=1226 data-nosnippet>1226</a>
+<a href=#1227 id=1227 data-nosnippet>1227</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#1228 id=1228 data-nosnippet>1228</a></span><span class="kw">pub struct </span>LegacyPeerStatus {
+<a href=#1229 id=1229 data-nosnippet>1229</a>    <span class="kw">pub </span>last_contribution: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#1230 id=1230 data-nosnippet>1230</a>    <span class="kw">pub </span>connection_status: LegacyP2PConnectionStatus,
+<a href=#1231 id=1231 data-nosnippet>1231</a>    <span class="doccomment">/// Indicates that this peer needs attention from the operator since
+<a href=#1232 id=1232 data-nosnippet>1232</a>    /// it has not contributed to the consensus in a long time
+<a href=#1233 id=1233 data-nosnippet>1233</a>    </span><span class="kw">pub </span>flagged: bool,
+<a href=#1234 id=1234 data-nosnippet>1234</a>}
+<a href=#1235 id=1235 data-nosnippet>1235</a>
+<a href=#1236 id=1236 data-nosnippet>1236</a><span class="attr">#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+<a href=#1237 id=1237 data-nosnippet>1237</a>#[serde(rename_all = <span class="string">"snake_case"</span>)]
+<a href=#1238 id=1238 data-nosnippet>1238</a></span><span class="kw">pub enum </span>LegacyP2PConnectionStatus {
+<a href=#1239 id=1239 data-nosnippet>1239</a>    <span class="attr">#[default]
+<a href=#1240 id=1240 data-nosnippet>1240</a>    </span>Disconnected,
+<a href=#1241 id=1241 data-nosnippet>1241</a>    Connected,
+<a href=#1242 id=1242 data-nosnippet>1242</a>}
+<a href=#1243 id=1243 data-nosnippet>1243</a>
+<a href=#1244 id=1244 data-nosnippet>1244</a><span class="attr">#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+<a href=#1245 id=1245 data-nosnippet>1245</a></span><span class="kw">pub struct </span>StatusResponse {
+<a href=#1246 id=1246 data-nosnippet>1246</a>    <span class="kw">pub </span>server: ServerStatusLegacy,
+<a href=#1247 id=1247 data-nosnippet>1247</a>    <span class="kw">pub </span>federation: <span class="prelude-ty">Option</span>&lt;LegacyFederationStatus&gt;,
+<a href=#1248 id=1248 data-nosnippet>1248</a>}
+<a href=#1249 id=1249 data-nosnippet>1249</a>
+<a href=#1250 id=1250 data-nosnippet>1250</a><span class="attr">#[cfg(test)]
+<a href=#1251 id=1251 data-nosnippet>1251</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
