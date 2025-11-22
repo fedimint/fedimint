@@ -45,7 +45,7 @@ export const main = sdk.setupMain(async ({ effects, started }) => {
     ),
     exec: {
       env,
-      command: sdk.useEntrypoint(),
+      command: ['fedimintd', '--data-dir', '/fedimintd/'],
     },
     ready: {
       display: 'Web Interface',
