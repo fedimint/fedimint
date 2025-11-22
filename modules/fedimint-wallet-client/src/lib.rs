@@ -16,6 +16,7 @@ pub mod client_db;
 /// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
 pub mod events;
+use events::SendPaymentEvent;
 /// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 mod pegin_monitor;
 mod withdraw;
@@ -1315,6 +1316,21 @@ impl WalletClientModule {
                     tx_builder,
                 )
                 .await?;
+
+            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+            self.client_ctx
+                .log_event(
+                    &mut dbtx,
+                    SendPaymentEvent {
+                        operation_id,
+                        amount: amount + fee.amount(),
+                        fee: fee.amount(),
+                    },
+                )
+                .await;
+
+            dbtx.commit_tx().await;
 
             Ok(operation_id)
         }
