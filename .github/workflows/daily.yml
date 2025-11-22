@@ -10,7 +10,7 @@ jobs:
   audit:
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run cargo audit
         run: |
           nix flake update advisory-db || nix flake lock --update-input advisory-db
@@ -21,7 +21,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@v16
         with:
