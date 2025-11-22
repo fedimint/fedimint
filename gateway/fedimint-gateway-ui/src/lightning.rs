@@ -32,9 +32,9 @@ where
             (
                 *block_height,
                 badge,
-                network.clone(),
+                *network,
                 Some(alias.clone()),
-                Some(public_key.clone()),
+                Some(*public_key),
             )
         }
         LightningInfo::NotConnected => (

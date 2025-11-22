@@ -2179,13 +2179,13 @@ impl IAdminGateway for Gateway {
                     synced: info.1,
                 },
                 self.chain_source.clone(),
-                self.network.clone(),
+                self.network,
             )
         } else {
             (
                 BlockchainInfo::NotConnected,
                 self.chain_source.clone(),
-                self.network.clone(),
+                self.network,
             )
         }
     }
