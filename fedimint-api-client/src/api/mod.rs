@@ -687,13 +687,21 @@ impl ConnectorRegistryBuilder {
             ),
         );
 
-        if self.http_enable {
-            let http_connector = JitTry::new_try(move || async move {
-                Ok(Arc::new(crate::api::http::HttpConnector::default()) as DynConnector)
-            });
-            inner.insert("https".into(), http_connector.clone());
-            inner.insert("http".into(), http_connector);
-        }
+        let builder_http = self.clone();
+        let http_connector_init = Arc::new(move || {
+            let builder = builder_http.clone();
+            Box::pin(async move { builder.build_http_connector() })
+                as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+        });
+
+        connectors_lazy.insert(
+            "http".into(),
+            (http_connector_init.clone(), OnceCell::new()),
+        );
+        connectors_lazy.insert(
+            "https".into(),
+            (http_connector_init.clone(), OnceCell::new()),
+        );
 
         Ok(ConnectorRegistry {
             connectors_lazy,
@@ -732,6 +740,14 @@ impl ConnectorRegistryBuilder {
             #[allow(unreachable_patterns)]
             _ => bail!("Tor requested, but not support not compiled in"),
         }
+    }
+
+    pub fn build_http_connector(&self) -> anyhow::Result<DynConnector> {
+        if !self.http_enable {
+            bail!("Http connector not enabled");
+        }
+
+        Ok(Arc::new(crate::api::http::HttpConnector::default()) as DynConnector)
     }
 
     pub fn iroh_pkarr_dht(self, enable: bool) -> Self {
