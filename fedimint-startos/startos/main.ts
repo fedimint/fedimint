@@ -19,10 +19,13 @@ export const main = sdk.setupMain(async ({ effects, started }) => {
   const depResult = await sdk.checkDependencies(effects)
   depResult.throwIfNotSatisfied()
 
-  const env: Record<string, string> =
-    store.backendType === 'bitcoind'
+  const env: Record<string, string> = {
+    FM_BIND_UI: '0.0.0.0:8175',
+    FM_ENABLE_IROH: 'true',
+    ...(store.backendType === 'bitcoind'
       ? { FM_BITCOIND_URL: 'http://bitcoind.embassy:8332' }
-      : { FM_ESPLORA_URL: store.url || '' }
+      : { FM_ESPLORA_URL: store.url || '' }),
+  }
 
   /**
    * ======================== Daemons ========================
