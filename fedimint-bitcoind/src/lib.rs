@@ -139,6 +139,6 @@ impl IBitcoindRpc for EsploraClient {
     async fn get_info(&self) -> Result<(u64, bool)> {
         let height = self.client.get_height().await?;
         // esplora doesn't have a concept of "synced", it is just an indexer
-        Ok((height as u64, true))
+        Ok((u64::from(height), true))
     }
 }

@@ -269,20 +269,19 @@ impl dyn ILnRpcClient {
     /// Retrieves the basic information about the Gateway's connected Lightning
     /// node.
     pub async fn parsed_node_info(&self) -> LightningInfo {
-        if let Ok(info) = self.info().await {
-            if let Ok(network) =
+        if let Ok(info) = self.info().await
+            && let Ok(network) =
                 Network::from_str(&info.network).map_err(|e| LightningRpcError::InvalidMetadata {
                     failure_reason: format!("Invalid network {}: {e}", info.network),
                 })
-            {
-                return LightningInfo::Connected {
-                    public_key: info.pub_key,
-                    alias: info.alias,
-                    network,
-                    block_height: info.block_height as u64,
-                    synced_to_chain: info.synced_to_chain,
-                };
-            }
+        {
+            return LightningInfo::Connected {
+                public_key: info.pub_key,
+                alias: info.alias,
+                network,
+                block_height: info.block_height as u64,
+                synced_to_chain: info.synced_to_chain,
+            };
         }
 
         LightningInfo::NotConnected
