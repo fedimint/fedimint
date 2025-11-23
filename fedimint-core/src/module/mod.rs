@@ -319,7 +319,26 @@ pub struct IrohApiRequest {
     pub request: ApiRequestErased,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayRequest {
+    /// REST API route for specifying which action to take
+    pub route: String,
+
+    /// Parameters for the request
+    pub params: Option<serde_json::Value>,
+
+    /// Password for authenticated requests to the gateway
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IrohGatewayResponse {
+    pub status: u16,
+    pub body: serde_json::Value,
+}
+
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
+pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
 // TODO: either nuke or turn all `api_secret: Option<String>` into `api_secret:
 // Option<ApiAuth>`

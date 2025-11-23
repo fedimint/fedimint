@@ -7,6 +7,7 @@ use fedimint_core::module::{ApiMethod, ApiRequestErased};
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_NET_WS;
 use jsonrpsee_core::client::ClientT;
 pub use jsonrpsee_core::client::Error as JsonRpcClientError;
@@ -21,7 +22,10 @@ use tracing::trace;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 
 use super::Connector;
-use crate::api::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
+use crate::api::{
+    DynGatewayConnection, DynGuaridianConnection, IConnection, IGuardianConnection, PeerError,
+    PeerResult,
+};
 
 #[derive(Debug, Clone)]
 pub struct WebsocketConnector {}
@@ -124,6 +128,21 @@ impl Connector for WebsocketConnector {
         let client = self.make_new_connection(url, api_secret).await?;
         Ok(client.into_dyn())
     }
+
+    async fn connect_gateway(&self, _url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+        Err(anyhow!("Unsupported transport method"))
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IConnection for WsClient {
+    async fn await_disconnection(&self) {
+        self.on_disconnect().await;
+    }
+
+    fn is_connected(&self) -> bool {
+        WsClient::is_connected(self)
+    }
 }
 
 #[async_trait]
@@ -138,7 +157,10 @@ impl IGuardianConnection for WsClient {
             .await
             .map_err(jsonrpc_error_to_peer_error)?)
     }
+}
 
+#[apply(async_trait_maybe_send!)]
+impl IConnection for Arc<WsClient> {
     async fn await_disconnection(&self) {
         self.on_disconnect().await;
     }
@@ -161,13 +183,6 @@ impl IGuardianConnection for Arc<WsClient> {
                 .await
                 .map_err(jsonrpc_error_to_peer_error)?,
         )
-    }
-
-    async fn await_disconnection(&self) {
-        self.on_disconnect().await;
-    }
-    fn is_connected(&self) -> bool {
-        WsClient::is_connected(self)
     }
 }
 

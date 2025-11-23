@@ -1298,7 +1298,6 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let gw_ldk_name = gw_ldk.gw_name.clone();
     let gw_ldk_port = gw_ldk.gw_port;
     let gw_lightning_port = gw_ldk.ldk_port;
-    let gw_ldk_iroh_port = gw_ldk.iroh_port;
     drop(gw_lnd);
     drop(gw_ldk);
 
@@ -1316,15 +1315,15 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
     let (new_gw_lnd, new_gw_ldk) = try_join!(
-        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
+        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()), 0),
         Gatewayd::new(
             process_mgr,
             LightningNode::Ldk {
                 name: gw_ldk_name,
                 gw_port: gw_ldk_port,
                 ldk_port: gw_lightning_port,
-                iroh_port: gw_ldk_iroh_port,
-            }
+            },
+            1,
         )
     )?;
 

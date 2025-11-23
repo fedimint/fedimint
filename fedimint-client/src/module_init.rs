@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -72,6 +72,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
+        connector_registry: ConnectorRegistry,
     ) -> anyhow::Result<DynClientModule>;
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn>;
@@ -173,6 +174,7 @@ where
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
+        connector_registry: ConnectorRegistry,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         let (module_db, global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
@@ -197,6 +199,7 @@ where
                     module_db,
                 ),
                 task_group,
+                connector_registry,
             },
         )
         .await?

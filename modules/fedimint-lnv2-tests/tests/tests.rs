@@ -32,7 +32,7 @@ fn fixtures() -> Fixtures {
 
     fixtures.with_module(
         LightningClientInit {
-            gateway_conn: Arc::new(MockGatewayConnection::default()),
+            gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
             custom_meta_fn: Arc::new(|| {
                 serde_json::json!({
                     "timestamp": chrono::Utc::now().timestamp(),

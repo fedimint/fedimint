@@ -37,7 +37,7 @@ impl GatewayClientBuilder {
         db_backend: DatabaseBackend,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            connectors: ConnectorRegistry::build_from_server_env()?.bind().await?,
+            connectors: ConnectorRegistry::build_from_client_env()?.bind().await?,
             work_dir,
             registry,
             db_backend,

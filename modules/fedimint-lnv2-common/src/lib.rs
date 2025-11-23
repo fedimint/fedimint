@@ -23,7 +23,7 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{OutPoint, extensible_associated_module_type, plugin_types_trait_impl_common};
-pub use fedimint_ln_common::client::GatewayRpcError;
+pub use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

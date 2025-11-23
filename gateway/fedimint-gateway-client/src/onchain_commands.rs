@@ -1,10 +1,12 @@
 use bitcoin::address::NetworkUnchecked;
 use clap::Subcommand;
 use fedimint_core::BitcoinAmountOrAll;
+use fedimint_core::util::SafeUrl;
 use fedimint_gateway_client::{get_ln_onchain_address, send_onchain};
 use fedimint_gateway_common::SendOnchainRequest;
+use fedimint_ln_common::client::GatewayApi;
 
-use crate::{GatewayRpcClient, print_response};
+use crate::print_response;
 
 #[derive(Subcommand)]
 pub enum OnchainCommands {
@@ -32,10 +34,12 @@ pub enum OnchainCommands {
 }
 
 impl OnchainCommands {
-    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
         match self {
             Self::Address => {
-                let response = get_ln_onchain_address(client).await?.assume_checked();
+                let response = get_ln_onchain_address(client, base_url)
+                    .await?
+                    .assume_checked();
                 println!("{response}");
             }
             Self::Send {
@@ -45,6 +49,7 @@ impl OnchainCommands {
             } => {
                 let response = send_onchain(
                     client,
+                    base_url,
                     SendOnchainRequest {
                         address,
                         amount,
