@@ -173,7 +173,7 @@ impl DevJitFed {
                 let lnd = lnd.get_try().await?.deref().clone();
                 debug!(target: LOG_DEVIMINT, "Starting lnd gateway...");
                 let start_time = fedimint_core::time::now();
-                let lnd_gw = Gatewayd::new(&process_mgr, LightningNode::Lnd(lnd)).await?;
+                let lnd_gw = Gatewayd::new(&process_mgr, LightningNode::Lnd(lnd), 0).await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started lnd gateway");
                 Ok(Arc::new(lnd_gw))
             }
@@ -207,8 +207,8 @@ impl DevJitFed {
                         name: "gatewayd-ldk-0".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK,
                         ldk_port: process_mgr.globals.FM_PORT_LDK,
-                        iroh_port: process_mgr.globals.FM_PORT_GW_LDK_IROH,
                     },
+                    1,
                 )
                 .await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started ldk gateway");
@@ -228,8 +228,8 @@ impl DevJitFed {
                         name: "gatewayd-ldk-1".to_string(),
                         gw_port: process_mgr.globals.FM_PORT_GW_LDK2,
                         ldk_port: process_mgr.globals.FM_PORT_LDK2,
-                        iroh_port: process_mgr.globals.FM_PORT_GW_LDK2_IROH,
                     },
+                    2,
                 )
                 .await?;
                 info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started ldk gateway 2");

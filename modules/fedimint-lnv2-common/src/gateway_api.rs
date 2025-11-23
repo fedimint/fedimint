@@ -3,12 +3,14 @@ use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::schnorr::Signature;
+use fedimint_api_client::api::PeerError;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
-use fedimint_ln_common::client::{GatewayRpcClient, GatewayRpcError};
+use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::{IncomingContract, OutgoingContract};
@@ -23,7 +25,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayRpcError>;
+    ) -> Result<Option<RoutingInfo>, PeerError>;
 
     async fn bolt11_invoice(
         &self,
@@ -33,7 +35,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
-    ) -> Result<Bolt11Invoice, GatewayRpcError>;
+    ) -> Result<Bolt11Invoice, PeerError>;
 
     async fn send_payment(
         &self,
@@ -43,11 +45,13 @@ pub trait GatewayConnection: std::fmt::Debug {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayRpcError>;
+    ) -> Result<Result<[u8; 32], Signature>, PeerError>;
 }
 
-#[derive(Debug)]
-pub struct RealGatewayConnection;
+#[derive(Debug, Clone)]
+pub struct RealGatewayConnection {
+    pub api: GatewayApi,
+}
 
 #[apply(async_trait_maybe_send!)]
 impl GatewayConnection for RealGatewayConnection {
@@ -55,11 +59,15 @@ impl GatewayConnection for RealGatewayConnection {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayRpcError> {
-        let client = GatewayRpcClient::new(gateway_api, None, None, None)
+    ) -> Result<Option<RoutingInfo>, PeerError> {
+        self.api
+            .request(
+                &gateway_api,
+                Method::POST,
+                ROUTING_INFO_ENDPOINT,
+                Some(federation_id),
+            )
             .await
-            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-        client.call_post(ROUTING_INFO_ENDPOINT, federation_id).await
     }
 
     async fn bolt11_invoice(
@@ -70,20 +78,19 @@ impl GatewayConnection for RealGatewayConnection {
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
-    ) -> Result<Bolt11Invoice, GatewayRpcError> {
-        let client = GatewayRpcClient::new(gateway_api, None, None, None)
-            .await
-            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-        client
-            .call_post(
+    ) -> Result<Bolt11Invoice, PeerError> {
+        self.api
+            .request(
+                &gateway_api,
+                Method::POST,
                 CREATE_BOLT11_INVOICE_ENDPOINT,
-                CreateBolt11InvoicePayload {
+                Some(CreateBolt11InvoicePayload {
                     federation_id,
                     contract,
                     amount,
                     description,
                     expiry_secs,
-                },
+                }),
             )
             .await
     }
@@ -96,20 +103,19 @@ impl GatewayConnection for RealGatewayConnection {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayRpcError> {
-        let client = GatewayRpcClient::new(gateway_api, None, None, None)
-            .await
-            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-        client
-            .call_post(
+    ) -> Result<Result<[u8; 32], Signature>, PeerError> {
+        self.api
+            .request(
+                &gateway_api,
+                Method::POST,
                 SEND_PAYMENT_ENDPOINT,
-                SendPaymentPayload {
+                Some(SendPaymentPayload {
                     federation_id,
                     outpoint,
                     contract,
                     invoice,
                     auth,
-                },
+                }),
             )
             .await
     }

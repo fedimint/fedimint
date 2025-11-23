@@ -2696,6 +2696,7 @@ dependencies = [
  "jsonrpsee-ws-client",
  "lru 0.13.0",
  "rand 0.8.5",
+ "reqwest 0.12.22",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -3200,6 +3201,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
+ "fedimint-api-client",
  "fedimint-build",
  "fedimint-core",
  "fedimint-eventlog",
@@ -3520,7 +3522,9 @@ name = "fedimint-ln-common"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bitcoin",
+ "fedimint-api-client",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-threshold-crypto",
@@ -3532,6 +3536,7 @@ dependencies = [
  "serde-big-array",
  "serde_json",
  "thiserror 2.0.12",
+ "tokio",
  "tracing",
 ]
 
@@ -3626,6 +3631,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitcoin",
+ "fedimint-api-client",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-tpe",
@@ -3673,6 +3679,7 @@ dependencies = [
  "chrono",
  "clap",
  "devimint",
+ "fedimint-api-client",
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",

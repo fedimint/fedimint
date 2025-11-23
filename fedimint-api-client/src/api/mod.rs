@@ -1,5 +1,6 @@
 mod error;
 pub mod global_api;
+pub mod http;
 pub mod iroh;
 pub mod net;
 #[cfg(all(feature = "tor", not(target_family = "wasm")))]
@@ -50,6 +51,7 @@ use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::OnceCell;
@@ -649,6 +651,9 @@ pub struct ConnectorRegistryBuilder {
     /// Enable Websocket API handling at all?
     ws_enable: bool,
     ws_force_tor: bool,
+
+    // Enable HTTP
+    http_enable: bool,
 }
 
 impl ConnectorRegistryBuilder {
@@ -680,6 +685,22 @@ impl ConnectorRegistryBuilder {
                 }),
                 OnceCell::new(),
             ),
+        );
+
+        let builder_http = self.clone();
+        let http_connector_init = Arc::new(move || {
+            let builder = builder_http.clone();
+            Box::pin(async move { builder.build_http_connector() })
+                as Pin<Box<dyn Future<Output = anyhow::Result<DynConnector>> + Send>>
+        });
+
+        connectors_lazy.insert(
+            "http".into(),
+            (http_connector_init.clone(), OnceCell::new()),
+        );
+        connectors_lazy.insert(
+            "https".into(),
+            (http_connector_init.clone(), OnceCell::new()),
         );
 
         Ok(ConnectorRegistry {
@@ -719,6 +740,14 @@ impl ConnectorRegistryBuilder {
             #[allow(unreachable_patterns)]
             _ => bail!("Tor requested, but not support not compiled in"),
         }
+    }
+
+    pub fn build_http_connector(&self) -> anyhow::Result<DynConnector> {
+        if !self.http_enable {
+            bail!("Http connector not enabled");
+        }
+
+        Ok(Arc::new(crate::api::http::HttpConnector::default()) as DynConnector)
     }
 
     pub fn iroh_pkarr_dht(self, enable: bool) -> Self {
@@ -811,6 +840,7 @@ impl ConnectorRegistry {
             iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
+            http_enable: true,
 
             connection_overrides: BTreeMap::default(),
         }
@@ -826,6 +856,7 @@ impl ConnectorRegistry {
             iroh_next: true,
             ws_enable: true,
             ws_force_tor: false,
+            http_enable: false,
 
             connection_overrides: BTreeMap::default(),
         }
@@ -841,6 +872,7 @@ impl ConnectorRegistry {
             iroh_next: false,
             ws_enable: true,
             ws_force_tor: false,
+            http_enable: true,
 
             connection_overrides: BTreeMap::default(),
         }
@@ -935,6 +967,51 @@ impl ConnectorRegistry {
         );
         Ok(conn)
     }
+
+    /// Connect to a given `url` using matching [`Connector`] to a gateway
+    ///
+    /// This is the main function consumed by the downstream use for making
+    /// connection.
+    pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+        let url = match self.connection_overrides.get(url) {
+            Some(replacement) => {
+                trace!(
+                    target: LOG_NET,
+                    original_url = %url,
+                    replacement_url = %replacement,
+                    "Using a connectivity override for connection"
+                );
+
+                replacement
+            }
+            None => url,
+        };
+
+        let connector_key = url.scheme();
+
+        let Some(connector_lazy) = self.connectors_lazy.get(connector_key) else {
+            return Err(anyhow!(
+                "Unsupported scheme: {}; missing endpoint handler",
+                url.scheme()
+            ));
+        };
+
+        // Clone the init function to use in the async block
+        let init_fn = connector_lazy.0.clone();
+
+        connector_lazy
+            .1
+            .get_or_try_init(|| async move { init_fn().await })
+            .await
+            .map_err(|e| {
+                PeerError::Transport(anyhow!(
+                    "Connector failed to initialize: {}",
+                    e.fmt_compact_anyhow()
+                ))
+            })?
+            .connect_gateway(url)
+            .await
+    }
 }
 pub type DynConnector = Arc<dyn Connector>;
 
@@ -945,6 +1022,17 @@ pub trait Connector: Send + Sync + 'static + fmt::Debug {
         url: &SafeUrl,
         api_secret: Option<&str>,
     ) -> PeerResult<DynGuaridianConnection>;
+
+    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection>;
+}
+
+/// Generic connection trait shared between [`IGuardianConnection`] and
+/// [`IGatewayConnection`]
+#[apply(async_trait_maybe_send!)]
+pub trait IConnection: Debug + Send + Sync + 'static {
+    fn is_connected(&self) -> bool;
+
+    async fn await_disconnection(&self);
 }
 
 /// A connection from api client to a federation guardian (type erased)
@@ -952,12 +1040,8 @@ pub type DynGuaridianConnection = Arc<dyn IGuardianConnection>;
 
 /// A connection from api client to a federation guardian
 #[async_trait]
-pub trait IGuardianConnection: Debug + Send + Sync + 'static {
+pub trait IGuardianConnection: IConnection + Debug + Send + Sync + 'static {
     async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value>;
-
-    fn is_connected(&self) -> bool;
-
-    async fn await_disconnection(&self);
 
     fn into_dyn(self) -> DynGuaridianConnection
     where
@@ -967,30 +1051,32 @@ pub trait IGuardianConnection: Debug + Send + Sync + 'static {
     }
 }
 
-/// Federation API client
-///
-/// The core underlying object used to make API requests to a federation.
-///
-/// It has an `connectors` handle to actually making outgoing connections
-/// to given URLs, and knows which peers there are and what URLs to connect to
-/// to reach them.
-// TODO: As it is currently it mixes a bit the role of connecting to "peers" with
-// general purpose outgoing connection. Not a big deal, but might need refactor
-// in the future.
-#[derive(Clone, Debug)]
-pub struct FederationApi {
+/// A connection from api client to a gateway (type erased)
+pub type DynGatewayConnection = Arc<dyn IGatewayConnection>;
+
+/// A connection from a client to a gateway
+#[apply(async_trait_maybe_send!)]
+pub trait IGatewayConnection: IConnection + Debug + Send + Sync + 'static {
+    async fn request(
+        &self,
+        password: Option<String>,
+        method: Method,
+        route: &str,
+        payload: Option<Value>,
+    ) -> PeerResult<Value>;
+
+    fn into_dyn(self) -> DynGatewayConnection
+    where
+        Self: Sized,
+    {
+        Arc::new(self)
+    }
+}
+
+#[derive(Debug)]
+pub struct ConnectionPool<T: IConnection + ?Sized> {
     /// Available connectors which we can make connections
     connectors: ConnectorRegistry,
-    /// Map of known URLs to use to connect to peers
-    peers: BTreeMap<PeerId, SafeUrl>,
-    /// List of peer ids, redundant to avoid collecting all the time
-    peers_keys: BTreeSet<PeerId>,
-    /// Our own [`PeerId`] to use when making admin apis
-    admin_id: Option<PeerId>,
-    /// Set when this API is used to communicate with a module
-    module_id: Option<ModuleInstanceId>,
-
-    api_secret: Option<String>,
 
     /// Connection pool
     ///
@@ -998,100 +1084,36 @@ pub struct FederationApi {
     /// single outgoing connection to a certain URL that is in the process
     /// of being established, or we already established.
     #[allow(clippy::type_complexity)]
-    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState>>>>,
+    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState<T>>>>>,
 }
 
-/// Inner part of [`ConnectionState`] preserving state between attempts to
-/// initialize [`ConnectionState::connection`]
-#[derive(Debug)]
-struct ConnectionStateInner {
-    fresh: bool,
-    backoff: FibonacciBackoff,
-}
-
-#[derive(Debug)]
-struct ConnectionState {
-    /// Connection we are trying to or already established
-    connection: tokio::sync::OnceCell<DynGuaridianConnection>,
-    /// State that technically is protected every time by
-    /// the serialization of `OnceCell::get_or_try_init`, but
-    /// for Rust purposes needs to be locked.
-    inner: std::sync::Mutex<ConnectionStateInner>,
-}
-
-impl ConnectionState {
-    /// Create a new connection state for a first time connection
-    fn new_initial() -> Self {
+impl<T: IConnection + ?Sized> Clone for ConnectionPool<T> {
+    fn clone(&self) -> Self {
         Self {
-            connection: OnceCell::new(),
-            inner: std::sync::Mutex::new(ConnectionStateInner {
-                fresh: true,
-                backoff: custom_backoff(
-                    // First time connections start quick
-                    Duration::from_millis(5),
-                    Duration::from_secs(30),
-                    None,
-                ),
-            }),
-        }
-    }
-
-    /// Create a new connection state for a connection that already failed, and
-    /// is being reset
-    fn new_reconnecting() -> Self {
-        Self {
-            connection: OnceCell::new(),
-            inner: std::sync::Mutex::new(ConnectionStateInner {
-                // set the attempts to 1, indicating that
-                fresh: false,
-                backoff: custom_backoff(
-                    // Connections after a disconnect start with some minimum delay
-                    Duration::from_millis(500),
-                    Duration::from_secs(30),
-                    None,
-                ),
-            }),
-        }
-    }
-
-    /// Record the fact that an attempt to connect is being made, and return
-    /// time the caller should wait.
-    fn pre_reconnect_delay(&self) -> Duration {
-        let mut backoff_locked = self.inner.lock().expect("Locking failed");
-        let fresh = backoff_locked.fresh;
-
-        backoff_locked.fresh = false;
-
-        if fresh {
-            Duration::default()
-        } else {
-            backoff_locked.backoff.next().expect("Keeps retrying")
+            connectors: self.connectors.clone(),
+            connections: self.connections.clone(),
         }
     }
 }
-impl FederationApi {
-    pub fn new(
-        connectors: ConnectorRegistry,
-        peers: BTreeMap<PeerId, SafeUrl>,
-        admin_peer_id: Option<PeerId>,
-        api_secret: Option<&str>,
-    ) -> Self {
+
+impl<T: IConnection + ?Sized> ConnectionPool<T> {
+    pub fn new(connectors: ConnectorRegistry) -> Self {
         Self {
-            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
-            peers_keys: peers.keys().copied().collect(),
-            peers,
-            admin_id: admin_peer_id,
-            module_id: None,
             connectors,
-            api_secret: api_secret.map(ToOwned::to_owned),
+            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
-    async fn get_or_create_connection(
+    pub async fn get_or_create_connection<F, Fut>(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection> {
+        create_connection: F,
+    ) -> PeerResult<Arc<T>>
+    where
+        F: Fn(SafeUrl, Option<String>, ConnectorRegistry) -> Fut + Clone + Send + Sync + 'static,
+        Fut: Future<Output = PeerResult<Arc<T>>> + Send + 'static,
+    {
         let mut pool_locked = self.connections.lock().await;
 
         let pool_entry_arc = pool_locked
@@ -1128,14 +1150,144 @@ impl FederationApi {
                 fedimint_core::runtime::sleep(retry_delay).await;
 
                 trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
-                let conn = self.connectors.connect_guardian(url, api_secret).await?;
-
-                Ok(conn)
+                create_connection(
+                    url.clone(),
+                    api_secret.map(std::string::ToString::to_string),
+                    self.connectors.clone(),
+                )
+                .await
             })
             .await?;
 
         trace!(target: LOG_CLIENT_NET_API, %url, "Connection ready");
         Ok(conn.clone())
+    }
+}
+
+/// Federation API client
+///
+/// The core underlying object used to make API requests to a federation.
+///
+/// It has an `connectors` handle to actually making outgoing connections
+/// to given URLs, and knows which peers there are and what URLs to connect to
+/// to reach them.
+// TODO: As it is currently it mixes a bit the role of connecting to "peers" with
+// general purpose outgoing connection. Not a big deal, but might need refactor
+// in the future.
+#[derive(Clone, Debug)]
+pub struct FederationApi {
+    /// Map of known URLs to use to connect to peers
+    peers: BTreeMap<PeerId, SafeUrl>,
+    /// List of peer ids, redundant to avoid collecting all the time
+    peers_keys: BTreeSet<PeerId>,
+    /// Our own [`PeerId`] to use when making admin apis
+    admin_id: Option<PeerId>,
+    /// Set when this API is used to communicate with a module
+    module_id: Option<ModuleInstanceId>,
+    /// Api secret of the federation
+    api_secret: Option<String>,
+    /// Connection pool
+    connection_pool: ConnectionPool<dyn IGuardianConnection>,
+}
+
+/// Inner part of [`ConnectionState`] preserving state between attempts to
+/// initialize [`ConnectionState::connection`]
+#[derive(Debug)]
+struct ConnectionStateInner {
+    fresh: bool,
+    backoff: FibonacciBackoff,
+}
+
+#[derive(Debug)]
+pub struct ConnectionState<T: ?Sized> {
+    /// Connection we are trying to or already established
+    pub connection: tokio::sync::OnceCell<Arc<T>>,
+    /// State that technically is protected every time by
+    /// the serialization of `OnceCell::get_or_try_init`, but
+    /// for Rust purposes needs to be locked.
+    inner: std::sync::Mutex<ConnectionStateInner>,
+}
+
+impl<T: ?Sized> ConnectionState<T> {
+    /// Create a new connection state for a first time connection
+    pub fn new_initial() -> Self {
+        Self {
+            connection: OnceCell::new(),
+            inner: std::sync::Mutex::new(ConnectionStateInner {
+                fresh: true,
+                backoff: custom_backoff(
+                    // First time connections start quick
+                    Duration::from_millis(5),
+                    Duration::from_secs(30),
+                    None,
+                ),
+            }),
+        }
+    }
+
+    /// Create a new connection state for a connection that already failed, and
+    /// is being reset
+    pub fn new_reconnecting() -> Self {
+        Self {
+            connection: OnceCell::new(),
+            inner: std::sync::Mutex::new(ConnectionStateInner {
+                // set the attempts to 1, indicating that
+                fresh: false,
+                backoff: custom_backoff(
+                    // Connections after a disconnect start with some minimum delay
+                    Duration::from_millis(500),
+                    Duration::from_secs(30),
+                    None,
+                ),
+            }),
+        }
+    }
+
+    /// Record the fact that an attempt to connect is being made, and return
+    /// time the caller should wait.
+    pub fn pre_reconnect_delay(&self) -> Duration {
+        let mut backoff_locked = self.inner.lock().expect("Locking failed");
+        let fresh = backoff_locked.fresh;
+
+        backoff_locked.fresh = false;
+
+        if fresh {
+            Duration::default()
+        } else {
+            backoff_locked.backoff.next().expect("Keeps retrying")
+        }
+    }
+}
+impl FederationApi {
+    pub fn new(
+        connectors: ConnectorRegistry,
+        peers: BTreeMap<PeerId, SafeUrl>,
+        admin_peer_id: Option<PeerId>,
+        api_secret: Option<&str>,
+    ) -> Self {
+        Self {
+            peers_keys: peers.keys().copied().collect(),
+            peers,
+            admin_id: admin_peer_id,
+            module_id: None,
+            api_secret: api_secret.map(ToOwned::to_owned),
+            connection_pool: ConnectionPool::new(connectors),
+        }
+    }
+
+    async fn get_or_create_connection(
+        &self,
+        url: &SafeUrl,
+        api_secret: Option<&str>,
+    ) -> PeerResult<DynGuaridianConnection> {
+        self.connection_pool
+            .get_or_create_connection(url, api_secret, |url, api_secret, connectors| async move {
+                let conn = connectors
+                    .connect_guardian(&url, api_secret.as_deref())
+                    .await?;
+                Ok(conn)
+            })
+            .await
     }
 
     async fn request(
@@ -1177,12 +1329,11 @@ impl IRawFederationApi for FederationApi {
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         FederationApi {
             api_secret: self.api_secret.clone(),
-            connections: self.connections.clone(),
-            connectors: self.connectors.clone(),
             peers: self.peers.clone(),
             peers_keys: self.peers_keys.clone(),
             admin_id: self.admin_id,
             module_id: Some(id),
+            connection_pool: self.connection_pool.clone(),
         }
         .into()
     }

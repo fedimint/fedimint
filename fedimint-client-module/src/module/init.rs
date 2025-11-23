@@ -2,7 +2,7 @@ pub mod recovery;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi, DynModuleApi};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{Database, DatabaseVersion};
@@ -36,6 +36,7 @@ where
     pub module_api: DynModuleApi,
     pub context: ClientContext<<C as ClientModuleInit>::Module>,
     pub task_group: TaskGroup,
+    pub connector_registry: ConnectorRegistry,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -100,6 +101,10 @@ where
 
     pub fn task_group(&self) -> &TaskGroup {
         &self.task_group
+    }
+
+    pub fn connector_registry(&self) -> &ConnectorRegistry {
+        &self.connector_registry
     }
 }
 

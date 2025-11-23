@@ -21,7 +21,9 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 bitcoin = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 iroh = { workspace = true }
@@ -33,6 +35,7 @@ serde-big-array = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

@@ -4,6 +4,7 @@ use clap::Subcommand;
 use fedimint_core::config::FederationId;
 use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::time::now;
+use fedimint_core::util::SafeUrl;
 use fedimint_eventlog::{EventKind, EventLogId};
 use fedimint_gateway_client::{
     connect_federation, get_balances, get_info, get_mnemonic, leave_federation, payment_log,
@@ -12,7 +13,7 @@ use fedimint_gateway_client::{
 use fedimint_gateway_common::{
     ConnectFedPayload, LeaveFedPayload, PaymentLogPayload, PaymentSummaryPayload,
 };
-use fedimint_ln_common::client::GatewayRpcClient;
+use fedimint_ln_common::client::GatewayApi;
 
 use crate::print_response;
 
@@ -79,17 +80,17 @@ pub enum GeneralCommands {
 
 impl GeneralCommands {
     #[allow(clippy::too_many_lines)]
-    pub async fn handle(self, client: &GatewayRpcClient) -> anyhow::Result<()> {
+    pub async fn handle(self, client: &GatewayApi, base_url: &SafeUrl) -> anyhow::Result<()> {
         match self {
             Self::VersionHash => {
                 println!("{}", fedimint_build_code_version_env!());
             }
             Self::Info => {
-                let response = get_info(client).await?;
+                let response = get_info(client, base_url).await?;
                 print_response(response);
             }
             Self::GetBalances => {
-                let response = get_balances(client).await?;
+                let response = get_balances(client, base_url).await?;
                 print_response(response);
             }
             Self::ConnectFed {
@@ -100,6 +101,7 @@ impl GeneralCommands {
             } => {
                 let response = connect_federation(
                     client,
+                    base_url,
                     ConnectFedPayload {
                         invite_code,
                         #[cfg(feature = "tor")]
@@ -114,15 +116,16 @@ impl GeneralCommands {
                 print_response(response);
             }
             Self::LeaveFed { federation_id } => {
-                let response = leave_federation(client, LeaveFedPayload { federation_id }).await?;
+                let response =
+                    leave_federation(client, base_url, LeaveFedPayload { federation_id }).await?;
                 print_response(response);
             }
             Self::Seed => {
-                let response = get_mnemonic(client).await?;
+                let response = get_mnemonic(client, base_url).await?;
                 print_response(response);
             }
             Self::Stop => {
-                stop(client).await?;
+                stop(client, base_url).await?;
             }
             Self::PaymentLog {
                 end_position,
@@ -132,6 +135,7 @@ impl GeneralCommands {
             } => {
                 let payment_log = payment_log(
                     client,
+                    base_url,
                     PaymentLogPayload {
                         end_position,
                         pagination_size,
@@ -165,6 +169,7 @@ impl GeneralCommands {
                 let start_millis = start.unwrap_or(one_day_ago_millis);
                 let payment_summary = payment_summary(
                     client,
+                    base_url,
                     PaymentSummaryPayload {
                         start_millis,
                         end_millis,
