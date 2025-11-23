@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["FederationNetOverrides","FederationsNetOverrides","FedimintdEndpoint","FedimintdPeerOverrides"]};
+window.SIDEBAR_ITEMS = {"struct":["FederationNetOverrides","FederationsNetOverrides","FedimintIrohEndpoint","FedimintdPeerOverrides","GatewaydNetOverrides"]};

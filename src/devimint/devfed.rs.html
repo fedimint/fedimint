@@ -173,7 +173,7 @@
 <a href=#173 id=173 data-nosnippet>173</a>                <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
 <a href=#174 id=174 data-nosnippet>174</a>                <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting lnd gateway..."</span>);
 <a href=#175 id=175 data-nosnippet>175</a>                <span class="kw">let </span>start_time = fedimint_core::time::now();
-<a href=#176 id=176 data-nosnippet>176</a>                <span class="kw">let </span>lnd_gw = Gatewayd::new(<span class="kw-2">&amp;</span>process_mgr, LightningNode::Lnd(lnd)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#176 id=176 data-nosnippet>176</a>                <span class="kw">let </span>lnd_gw = Gatewayd::new(<span class="kw-2">&amp;</span>process_mgr, LightningNode::Lnd(lnd), <span class="number">0</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#177 id=177 data-nosnippet>177</a>                <span class="macro">info!</span>(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()<span class="question-mark">?</span>.as_millis(), <span class="string">"Started lnd gateway"</span>);
 <a href=#178 id=178 data-nosnippet>178</a>                <span class="prelude-val">Ok</span>(Arc::new(lnd_gw))
 <a href=#179 id=179 data-nosnippet>179</a>            }
@@ -207,8 +207,8 @@
 <a href=#207 id=207 data-nosnippet>207</a>                        name: <span class="string">"gatewayd-ldk-0"</span>.to_string(),
 <a href=#208 id=208 data-nosnippet>208</a>                        gw_port: process_mgr.globals.FM_PORT_GW_LDK,
 <a href=#209 id=209 data-nosnippet>209</a>                        ldk_port: process_mgr.globals.FM_PORT_LDK,
-<a href=#210 id=210 data-nosnippet>210</a>                        iroh_port: process_mgr.globals.FM_PORT_GW_LDK_IROH,
-<a href=#211 id=211 data-nosnippet>211</a>                    },
+<a href=#210 id=210 data-nosnippet>210</a>                    },
+<a href=#211 id=211 data-nosnippet>211</a>                    <span class="number">1</span>,
 <a href=#212 id=212 data-nosnippet>212</a>                )
 <a href=#213 id=213 data-nosnippet>213</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#214 id=214 data-nosnippet>214</a>                <span class="macro">info!</span>(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()<span class="question-mark">?</span>.as_millis(), <span class="string">"Started ldk gateway"</span>);
@@ -228,8 +228,8 @@
 <a href=#228 id=228 data-nosnippet>228</a>                        name: <span class="string">"gatewayd-ldk-1"</span>.to_string(),
 <a href=#229 id=229 data-nosnippet>229</a>                        gw_port: process_mgr.globals.FM_PORT_GW_LDK2,
 <a href=#230 id=230 data-nosnippet>230</a>                        ldk_port: process_mgr.globals.FM_PORT_LDK2,
-<a href=#231 id=231 data-nosnippet>231</a>                        iroh_port: process_mgr.globals.FM_PORT_GW_LDK2_IROH,
-<a href=#232 id=232 data-nosnippet>232</a>                    },
+<a href=#231 id=231 data-nosnippet>231</a>                    },
+<a href=#232 id=232 data-nosnippet>232</a>                    <span class="number">2</span>,
 <a href=#233 id=233 data-nosnippet>233</a>                )
 <a href=#234 id=234 data-nosnippet>234</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#235 id=235 data-nosnippet>235</a>                <span class="macro">info!</span>(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()<span class="question-mark">?</span>.as_millis(), <span class="string">"Started ldk gateway 2"</span>);

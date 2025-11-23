@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayRpcError"],"struct":["GatewayRpcClient"],"type":["GatewayRpcResult"]};
+window.SIDEBAR_ITEMS = {"struct":["GatewayApi"]};

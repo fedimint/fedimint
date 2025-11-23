@@ -37,7 +37,7 @@
 <a href=#37 id=37 data-nosnippet>37</a>        db_backend: DatabaseBackend,
 <a href=#38 id=38 data-nosnippet>38</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
 <a href=#39 id=39 data-nosnippet>39</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#40 id=40 data-nosnippet>40</a>            connectors: ConnectorRegistry::build_from_server_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#40 id=40 data-nosnippet>40</a>            connectors: ConnectorRegistry::build_from_client_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>,
 <a href=#41 id=41 data-nosnippet>41</a>            work_dir,
 <a href=#42 id=42 data-nosnippet>42</a>            registry,
 <a href=#43 id=43 data-nosnippet>43</a>            db_backend,
