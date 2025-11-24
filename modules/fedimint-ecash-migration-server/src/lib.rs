@@ -22,7 +22,6 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::Message;
 use fedimint_core::{
     Amount, InPoint, NumPeers, OutPoint, PeerId, Tiered, apply, async_trait_maybe_send,
-    push_db_pair_items,
 };
 use fedimint_ecash_migration_common::config::{
     EcashMigrationClientConfig, EcashMigrationConfig, EcashMigrationConfigConsensus,
@@ -41,17 +40,14 @@ use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
-use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
 use tracing::warn;
 
 use crate::db::{
     ActivationRequestKey, ActivationRequestPrefix, ActivationVote, ActivationVoteKey,
-    ActivationVotePrefix, ActivationVoteTransferPrefix, DbKeyPrefix, DenominationKeyKey,
-    DenominationKeyKeyPrefix, DepositedAmountKey, DepositedAmountPrefix, LocalSpendBookKey,
-    LocalSpendBookPrefix, OriginSpendBookKey, OriginSpendBookPrefix, OriginSpendBookTransferPrefix,
-    OutPointTransferIdKey, OutPointTransferIdPrefix, TransferMetadata, TransferMetadataKey,
-    TransferMetadataKeyPrefix, UploadedSpendBookEntriesKey, UploadedSpendBookEntriesPrefix,
+    ActivationVoteTransferPrefix, DenominationKeyKey, DepositedAmountKey, DepositedAmountPrefix,
+    LocalSpendBookKey, OriginSpendBookKey, OriginSpendBookTransferPrefix, OutPointTransferIdKey,
+    TransferMetadata, TransferMetadataKey, TransferMetadataKeyPrefix, UploadedSpendBookEntriesKey,
     WithdrawnAmountKey, WithdrawnAmountPrefix,
 };
 
@@ -76,117 +72,7 @@ impl ModuleInit for EcashMigrationInit {
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
-        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
-        });
-
-        for table in filtered_prefixes {
-            match table {
-                DbKeyPrefix::TransferMetadata => {
-                    push_db_pair_items!(
-                        dbtx,
-                        TransferMetadataKeyPrefix,
-                        TransferMetadataKey,
-                        TransferMetadata,
-                        items,
-                        "Transfer Metadata"
-                    );
-                }
-                DbKeyPrefix::OutPointTransferId => {
-                    push_db_pair_items!(
-                        dbtx,
-                        OutPointTransferIdPrefix,
-                        OutPointTransferIdKey,
-                        TransferId,
-                        items,
-                        "Out Point Transfer ID"
-                    );
-                }
-                DbKeyPrefix::UploadedSpendBookEntries => {
-                    push_db_pair_items!(
-                        dbtx,
-                        UploadedSpendBookEntriesPrefix,
-                        UploadedSpendBookEntriesKey,
-                        u64,
-                        items,
-                        "Uploaded Spend Book Entries"
-                    );
-                }
-                DbKeyPrefix::OriginSpendBook => {
-                    push_db_pair_items!(
-                        dbtx,
-                        OriginSpendBookPrefix,
-                        OriginSpendBookKey,
-                        (),
-                        items,
-                        "Origin Spend Book"
-                    );
-                }
-                DbKeyPrefix::LocalSpendBook => {
-                    push_db_pair_items!(
-                        dbtx,
-                        LocalSpendBookPrefix,
-                        LocalSpendBookKey,
-                        Amount,
-                        items,
-                        "Local Spend Book"
-                    );
-                }
-                DbKeyPrefix::ActivationVote => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ActivationVotePrefix,
-                        ActivationVoteKey,
-                        ActivationVote,
-                        items,
-                        "Activation Vote"
-                    );
-                }
-                DbKeyPrefix::ActivationRequest => {
-                    push_db_pair_items!(
-                        dbtx,
-                        ActivationRequestPrefix,
-                        ActivationRequestKey,
-                        (),
-                        items,
-                        "Activation Request"
-                    );
-                }
-                DbKeyPrefix::DenominationKeys => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DenominationKeyKeyPrefix,
-                        DenominationKeyKey,
-                        AggregatePublicKey,
-                        items,
-                        "Denomination Keys"
-                    );
-                }
-                DbKeyPrefix::DepositedAmount => {
-                    push_db_pair_items!(
-                        dbtx,
-                        DepositedAmountPrefix,
-                        DepositedAmountKey,
-                        Amount,
-                        items,
-                        "Deposited Amount"
-                    );
-                }
-                DbKeyPrefix::WithdrawnAmount => {
-                    push_db_pair_items!(
-                        dbtx,
-                        WithdrawnAmountPrefix,
-                        WithdrawnAmountKey,
-                        Amount,
-                        items,
-                        "Withdrawn Amount"
-                    );
-                }
-            }
-        }
-
-        Box::new(items.into_iter())
+        db::dump_database(dbtx, prefix_names).await
     }
 }
 

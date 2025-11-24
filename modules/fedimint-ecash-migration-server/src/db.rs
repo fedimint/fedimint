@@ -1,9 +1,14 @@
+use std::collections::BTreeMap;
+
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{Amount, OutPoint, PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::{Amount, OutPoint, PeerId, impl_db_lookup, impl_db_record, push_db_pair_items};
 use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdKey;
 use fedimint_ecash_migration_common::{KeySetHash, SpendBookHash, TransferId};
 use fedimint_mint_common::Nonce;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use tbs::AggregatePublicKey;
 
@@ -298,3 +303,121 @@ impl_db_lookup!(
     key = WithdrawnAmountKey,
     query_prefix = WithdrawnAmountPrefix,
 );
+
+#[allow(clippy::too_many_lines)]
+pub(crate) async fn dump_database(
+    dbtx: &mut DatabaseTransaction<'_>,
+    prefix_names: Vec<String>,
+) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)>> {
+    let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+    let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+        prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+    });
+
+    for table in filtered_prefixes {
+        match table {
+            DbKeyPrefix::TransferMetadata => {
+                push_db_pair_items!(
+                    dbtx,
+                    TransferMetadataKeyPrefix,
+                    TransferMetadataKey,
+                    TransferMetadata,
+                    items,
+                    "Transfer Metadata"
+                );
+            }
+            DbKeyPrefix::OutPointTransferId => {
+                push_db_pair_items!(
+                    dbtx,
+                    OutPointTransferIdPrefix,
+                    OutPointTransferIdKey,
+                    TransferId,
+                    items,
+                    "Out Point Transfer ID"
+                );
+            }
+            DbKeyPrefix::UploadedSpendBookEntries => {
+                push_db_pair_items!(
+                    dbtx,
+                    UploadedSpendBookEntriesPrefix,
+                    UploadedSpendBookEntriesKey,
+                    u64,
+                    items,
+                    "Uploaded Spend Book Entries"
+                );
+            }
+            DbKeyPrefix::OriginSpendBook => {
+                push_db_pair_items!(
+                    dbtx,
+                    OriginSpendBookPrefix,
+                    OriginSpendBookKey,
+                    (),
+                    items,
+                    "Origin Spend Book"
+                );
+            }
+            DbKeyPrefix::LocalSpendBook => {
+                push_db_pair_items!(
+                    dbtx,
+                    LocalSpendBookPrefix,
+                    LocalSpendBookKey,
+                    Amount,
+                    items,
+                    "Local Spend Book"
+                );
+            }
+            DbKeyPrefix::ActivationVote => {
+                push_db_pair_items!(
+                    dbtx,
+                    ActivationVotePrefix,
+                    ActivationVoteKey,
+                    ActivationVote,
+                    items,
+                    "Activation Vote"
+                );
+            }
+            DbKeyPrefix::ActivationRequest => {
+                push_db_pair_items!(
+                    dbtx,
+                    ActivationRequestPrefix,
+                    ActivationRequestKey,
+                    (),
+                    items,
+                    "Activation Request"
+                );
+            }
+            DbKeyPrefix::DenominationKeys => {
+                push_db_pair_items!(
+                    dbtx,
+                    DenominationKeyKeyPrefix,
+                    DenominationKeyKey,
+                    AggregatePublicKey,
+                    items,
+                    "Denomination Keys"
+                );
+            }
+            DbKeyPrefix::DepositedAmount => {
+                push_db_pair_items!(
+                    dbtx,
+                    DepositedAmountPrefix,
+                    DepositedAmountKey,
+                    Amount,
+                    items,
+                    "Deposited Amount"
+                );
+            }
+            DbKeyPrefix::WithdrawnAmount => {
+                push_db_pair_items!(
+                    dbtx,
+                    WithdrawnAmountPrefix,
+                    WithdrawnAmountKey,
+                    Amount,
+                    items,
+                    "Withdrawn Amount"
+                );
+            }
+        }
+    }
+
+    Box::new(items.into_iter())
+}
