@@ -11,9 +11,13 @@ use std::path::PathBuf;
 use anyhow::Result;
 use bytes::Bytes;
 use clap::{Parser, Subcommand};
+use fedimint_client::ModuleInstanceId;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client_module::module::init::ClientModuleInit;
-use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
+use fedimint_core::db::{
+    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
+};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_ln_server::LightningInit;
@@ -22,6 +26,7 @@ use fedimint_meta_client::MetaClientInit;
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_client::MintClientInit;
 use fedimint_mint_server::MintInit;
+use fedimint_mint_server::db::NonceKeyPrefix;
 use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
 use fedimint_wallet_client::WalletClientInit;
 use fedimint_wallet_server::WalletInit;
@@ -89,6 +94,10 @@ enum DbCommand {
         modules: Option<String>,
         #[arg(long, required = false)]
         prefixes: Option<String>,
+    },
+    DumpSpendbook {
+        #[arg(long, default_value = "1")]
+        mint_instance_id: u16,
     },
 }
 
@@ -237,6 +246,17 @@ impl FedimintDBTool {
                 dbtx.raw_remove_by_prefix(prefix).await?;
                 dbtx.commit_tx().await;
             }
+            DbCommand::DumpSpendbook { mint_instance_id } => {
+                let rocksdb = open_db_ro(options).await;
+                let dbtx = rocksdb.begin_transaction_nc().await;
+                let (mut mint_dbtx, _) =
+                    dbtx.with_prefix_module_id(ModuleInstanceId::from(*mint_instance_id));
+
+                let mut prefix_stream = mint_dbtx.find_by_prefix(&NonceKeyPrefix).await;
+                while let Some((key, ())) = prefix_stream.next().await {
+                    println!("{}", key.consensus_encode_to_hex());
+                }
+            }
         }
 
         Ok(())
@@ -245,6 +265,13 @@ impl FedimintDBTool {
 
 async fn open_db(options: &Options) -> fedimint_core::db::Database {
     fedimint_rocksdb::RocksDb::open(&options.database_dir)
+        .await
+        .unwrap()
+        .into_database()
+}
+
+async fn open_db_ro(options: &Options) -> fedimint_core::db::Database {
+    fedimint_rocksdb::RocksDbReadOnly::open_read_only(&options.database_dir)
         .await
         .unwrap()
         .into_database()
