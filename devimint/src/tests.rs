@@ -2260,9 +2260,10 @@ pub async fn test_guardian_password_change(
 
     let client = fed.new_joined_client("config-change-test-client").await?;
 
+    let peer_id = 0;
     let data_dir: PathBuf = fed
         .vars
-        .get(&2)
+        .get(&peer_id)
         .expect("peer not found")
         .FM_DATA_DIR
         .clone();
@@ -2276,7 +2277,7 @@ pub async fn test_guardian_password_change(
     cmd!(
         client,
         "--our-id",
-        "2",
+        &peer_id.to_string(),
         "--password",
         "pass",
         "admin",
@@ -2287,22 +2288,25 @@ pub async fn test_guardian_password_change(
     .await
     .context("Failed to change guardian password")?;
 
-    info!(target: LOG_DEVIMINT, "Waiting for fedimintd 2 to be shut down");
-    timeout(Duration::from_secs(30), fed.await_server_terminated(2))
-        .await
-        .context("Fedimintd didn't shut down in time after password change")??;
+    info!(target: LOG_DEVIMINT, "Waiting for fedimintd to be shut down");
+    timeout(
+        Duration::from_secs(30),
+        fed.await_server_terminated(peer_id),
+    )
+    .await
+    .context("Fedimintd didn't shut down in time after password change")??;
 
-    info!(target: LOG_DEVIMINT, "Restarting fedimintd 2");
-    fed.start_server(process_mgr, 2).await?;
+    info!(target: LOG_DEVIMINT, "Restarting fedimintd");
+    fed.start_server(process_mgr, peer_id).await?;
 
-    info!(target: LOG_DEVIMINT, "Wait for fedimintd 2 to come online again");
-    fed.await_peer(2).await?;
+    info!(target: LOG_DEVIMINT, "Wait for fedimintd to come online again");
+    fed.await_peer(peer_id).await?;
 
     info!(target: LOG_DEVIMINT, "Testing password change worked");
     cmd!(
         client,
         "--our-id",
-        "2",
+        &peer_id.to_string(),
         "--password",
         "foobar",
         "admin",
