@@ -1334,7 +1334,7 @@ impl LightningClientModule {
             .await
     }
 
-    async fn request_lightning_address_invoice(
+    pub async fn request_lightning_address_invoice(
         &self,
         lightning_address: String,
         amount_msats: u64,
@@ -1343,13 +1343,9 @@ impl LightningClientModule {
         ensure!(amount_msats > 0, "Amount must be greater than zero");
 
         let lightning_address = lightning_address.trim().to_owned();
-        let lnurl = if lightning_address.to_lowercase().starts_with("lnurl") {
-            lnurl::lnurl::LnUrl::from_str(&lightning_address)?
-        } else {
-            lnurl::lightning_address::LightningAddress::from_str(&lightning_address)
-                .context("Invalid lightning address")?
-                .lnurl()
-        };
+        let lnurl = lnurl::lightning_address::LightningAddress::from_str(&lightning_address)
+            .context("Invalid lightning address")?
+            .lnurl();
 
         let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
         let response = async_client.make_request(&lnurl.url).await?;
@@ -1375,17 +1371,16 @@ impl LightningClientModule {
             );
         }
 
-        let invoice_response = async_client
+        let invoice = get_invoice(
+            &lightning_address,
+            Some(Amount::from_msats(amount_msats)),
+            comment.clone(),
+        )
+        .await?;
+
+        let success_action = async_client
             .get_invoice(&pay_response, amount_msats, None, comment.as_deref())
-            .await?;
-
-        let invoice = Bolt11Invoice::from_str(invoice_response.invoice())?;
-        ensure!(
-            invoice.amount_milli_satoshis() == Some(amount_msats),
-            "Requested amount does not match generated invoice",
-        );
-
-        let success_action = invoice_response
+            .await?
             .success_action()
             .map(lnurl::pay::SuccessAction::into_params);
 
