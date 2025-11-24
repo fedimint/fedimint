@@ -9,11 +9,10 @@ use config::EcashMigrationClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{Amount, Tiered, plugin_types_trait_impl_common};
+use fedimint_core::{Amount, plugin_types_trait_impl_common};
 use fedimint_mint_common::{Nonce, Note};
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use tbs::AggregatePublicKey;
 use thiserror::Error;
 
 use crate::naive_threshold::NaiveThresholdKey;
@@ -25,6 +24,9 @@ pub mod config;
 
 /// Naive threshold signatures scheme implementation
 pub mod naive_threshold;
+
+/// API types and endpoint constants
+pub mod api;
 
 /// Unique name for this module
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ecash-migration");
@@ -166,51 +168,6 @@ pub enum EcashMigrationOutputError {
     /// Unknown output variant
     #[error("Unknown output variant {0}")]
     UnknownOutputVariant(u64),
-}
-
-/// API: Request to upload a key set
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
-pub struct UploadKeySetRequest {
-    pub transfer_id: TransferId,
-    pub tier_keys: Tiered<AggregatePublicKey>,
-}
-
-/// API: Request to upload a batch of spend book entries
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
-pub struct UploadSpendBookBatchRequest {
-    pub transfer_id: TransferId,
-    pub entries: Vec<Nonce>,
-}
-
-/// API: Response from uploading spend book batch
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UploadSpendBookBatchResponse {
-    pub new_entries: u64,
-    pub total_entries_uploaded: u64,
-}
-
-/// API: Request to activate redemption
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RequestActivationRequest {
-    pub transfer_id: TransferId,
-    pub auth_hmac: String,
-}
-
-/// API: Request to get transfer status
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetTransferStatusRequest {
-    pub transfer_id: TransferId,
-}
-
-/// API: Response with transfer status
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetTransferStatusResponse {
-    pub is_active: bool,
-    pub spend_book_hash: SpendBookHash,
-    pub key_set_hash: KeySetHash,
-    pub total_entries: u64,
-    pub total_amount: Amount,
-    pub redeemed_amount: Amount,
 }
 
 /// Contains the types defined above

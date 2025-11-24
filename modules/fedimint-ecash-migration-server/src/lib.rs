@@ -23,6 +23,11 @@ use fedimint_core::secp256k1::Message;
 use fedimint_core::{
     Amount, InPoint, NumPeers, OutPoint, PeerId, Tiered, apply, async_trait_maybe_send,
 };
+use fedimint_ecash_migration_common::api::{
+    CHECK_SPEND_BOOK_HASH_ENDPOINT, GET_TRANSFER_ID_ENDPOINT, UPLOAD_KEY_SET_ENDPOINT,
+    UPLOAD_SPEND_BOOK_BATCH_ENDPOINT, UploadKeySetRequest, UploadSpendBookBatchRequest,
+    UploadSpendBookBatchResponse,
+};
 use fedimint_ecash_migration_common::config::{
     EcashMigrationClientConfig, EcashMigrationConfig, EcashMigrationConfigConsensus,
     EcashMigrationConfigPrivate, EcashMigrationGenParams, FeeConfig,
@@ -32,8 +37,7 @@ use fedimint_ecash_migration_common::{
     EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationInput,
     EcashMigrationInputError, EcashMigrationModuleTypes, EcashMigrationOutput,
     EcashMigrationOutputError, EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION,
-    SpendBookHash, TransferId, UploadKeySetRequest, UploadSpendBookBatchRequest,
-    UploadSpendBookBatchResponse, hash_spend_book,
+    SpendBookHash, TransferId, hash_spend_book,
 };
 use fedimint_mint_common::Nonce;
 use fedimint_server_core::config::PeerHandleOps;
@@ -686,9 +690,3 @@ async fn check_auth(
 
     Ok(())
 }
-
-// API endpoint paths
-const GET_TRANSFER_ID_ENDPOINT: &str = "get_transfer_id";
-const UPLOAD_KEY_SET_ENDPOINT: &str = "upload_key_set";
-const UPLOAD_SPEND_BOOK_BATCH_ENDPOINT: &str = "upload_spend_book_batch";
-const CHECK_SPEND_BOOK_HASH_ENDPOINT: &str = "check_spend_book_hash";
