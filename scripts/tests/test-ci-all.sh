@@ -436,8 +436,6 @@ PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 parallel_args+=(
   --halt-on-error 1
   --joblog "$joblog"
-  --noswap
-  --memfree 2G
 )
 
 >&2 echo "## Starting all tests in parallel..."
