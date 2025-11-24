@@ -460,13 +460,8 @@ impl fmt::Display for ChainSource {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum BlockchainInfo {
-    Connected { block_height: u64, synced: bool },
-    NotConnected,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum LightningInfo {
     Connected {
         public_key: PublicKey,

@@ -16,11 +16,12 @@ use axum::routing::{get, post};
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use fedimint_bitcoind::BlockchainInfo;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
-    BlockchainInfo, ChainSource, ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload,
-    MnemonicResponse, PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
+    ChainSource, ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -93,7 +94,7 @@ pub trait IAdminGateway {
 
     fn gatewayd_version(&self) -> String;
 
-    async fn get_chain_source(&self) -> (BlockchainInfo, ChainSource, Network);
+    async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network);
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {

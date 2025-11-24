@@ -1234,7 +1234,7 @@ pub async fn lightning_gw_reconnect_test(
         assert!(lightning_pub_key.is_none());
     } else {
         let not_connected = lightning_info["lightning_info"].clone();
-        assert!(not_connected.as_str().expect("ln info is not a string") == "NotConnected");
+        assert!(not_connected.as_str().expect("ln info is not a string") == "not_connected");
     }
 
     // Restart LND

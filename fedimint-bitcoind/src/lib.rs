@@ -21,6 +21,12 @@ use fedimint_core::{apply, async_trait_maybe_send};
 #[cfg(feature = "bitcoincore")]
 pub mod bitcoincore;
 
+#[derive(Debug, Clone)]
+pub struct BlockchainInfo {
+    pub block_height: u64,
+    pub synced: bool,
+}
+
 pub fn create_esplora_rpc(url: &SafeUrl) -> Result<DynBitcoindRpc> {
     let url = env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
         .ok()
@@ -50,7 +56,9 @@ pub trait IBitcoindRpc: Debug + Send + Sync + 'static {
     /// Returns a proof that a tx is included in the bitcoin blockchain
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof>;
 
-    async fn get_info(&self) -> Result<(u64, bool)>;
+    /// Returns `BlockchainInfo` which contains a subset of info about the chain
+    /// data source.
+    async fn get_info(&self) -> Result<BlockchainInfo>;
 
     fn into_dyn(self) -> DynBitcoindRpc
     where
@@ -136,9 +144,11 @@ impl IBitcoindRpc for EsploraClient {
         })
     }
 
-    async fn get_info(&self) -> Result<(u64, bool)> {
+    async fn get_info(&self) -> anyhow::Result<BlockchainInfo> {
         let height = self.client.get_height().await?;
-        // esplora doesn't have a concept of "synced", it is just an indexer
-        Ok((u64::from(height), true))
+        Ok(BlockchainInfo {
+            block_height: u64::from(height),
+            synced: true,
+        })
     }
 }

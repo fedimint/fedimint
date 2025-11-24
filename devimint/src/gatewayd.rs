@@ -294,7 +294,7 @@ impl Gatewayd {
                 .context("lightning_pub_key must be a string")?
                 .to_owned()
         } else {
-            info["lightning_info"]["Connected"]["public_key"]
+            info["lightning_info"]["connected"]["public_key"]
                 .as_str()
                 .context("lightning_pub_key must be a string")?
                 .to_owned()
@@ -571,7 +571,7 @@ impl Gatewayd {
             let height_value = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
                 info["block_height"].clone()
             } else {
-                info["lightning_info"]["Connected"]["block_height"].clone()
+                info["lightning_info"]["connected"]["block_height"].clone()
             };
 
             let block_height: Option<u32> = serde_json::from_value(height_value)
@@ -584,7 +584,7 @@ impl Gatewayd {
             let synced_value = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
                 info["synced_to_chain"].clone()
             } else {
-                info["lightning_info"]["Connected"]["synced_to_chain"].clone()
+                info["lightning_info"]["connected"]["synced_to_chain"].clone()
             };
             let synced = synced_value
                 .as_bool()

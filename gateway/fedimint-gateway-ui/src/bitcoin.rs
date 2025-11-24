@@ -1,4 +1,4 @@
-use fedimint_gateway_common::{BlockchainInfo, ChainSource};
+use fedimint_gateway_common::ChainSource;
 use maud::{Markup, html};
 
 use crate::DynGatewayApi;
@@ -11,18 +11,15 @@ where
 
     // Determine block height and synced status
     let (block_height, status_badge) = match blockchain_info {
-        BlockchainInfo::Connected {
-            block_height,
-            synced,
-        } => {
-            let badge = if synced {
+        Some(info) => {
+            let badge = if info.synced {
                 html! { span class="badge bg-success" { "🟢 Synced" } }
             } else {
                 html! { span class="badge bg-warning" { "🟡 Syncing" } }
             };
-            (block_height, badge)
+            (info.block_height, badge)
         }
-        BlockchainInfo::NotConnected => (
+        None => (
             0,
             html! { span class="badge bg-danger" { "❌ Not Connected" } },
         ),

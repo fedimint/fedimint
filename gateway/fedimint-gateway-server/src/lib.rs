@@ -47,7 +47,7 @@ use federation_manager::FederationManager;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_bitcoind::bitcoincore::BitcoindClient;
-use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
+use fedimint_bitcoind::{BlockchainInfo, EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
@@ -69,17 +69,16 @@ use fedimint_core::{
 };
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
-    BackupPayload, BlockchainInfo, ChainSource, CloseChannelsWithPeerRequest,
-    CloseChannelsWithPeerResponse, ConnectFedPayload, CreateInvoiceForOperatorPayload,
-    CreateOfferPayload, CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
-    FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
-    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
-    LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
-    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest,
-    SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
-    WithdrawResponse,
+    BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
+    ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
+    DepositAddressPayload, DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig,
+    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
+    GetInvoiceResponse, LeaveFedPayload, LightningInfo, LightningMode, ListTransactionsPayload,
+    ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
+    PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -2171,22 +2170,11 @@ impl IAdminGateway for Gateway {
         gatewayd_version.to_string()
     }
 
-    async fn get_chain_source(&self) -> (BlockchainInfo, ChainSource, Network) {
+    async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network) {
         if let Ok(info) = self.bitcoin_rpc.get_info().await {
-            (
-                BlockchainInfo::Connected {
-                    block_height: info.0,
-                    synced: info.1,
-                },
-                self.chain_source.clone(),
-                self.network,
-            )
+            (Some(info), self.chain_source.clone(), self.network)
         } else {
-            (
-                BlockchainInfo::NotConnected,
-                self.chain_source.clone(),
-                self.network,
-            )
+            (None, self.chain_source.clone(), self.network)
         }
     }
 }

@@ -14,7 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::IBitcoindRpc;
+use fedimint_bitcoind::{BlockchainInfo, IBitcoindRpc};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
@@ -313,11 +313,14 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
 
-    async fn get_info(&self) -> Result<(u64, bool)> {
+    async fn get_info(&self) -> Result<BlockchainInfo> {
         let inner = self.inner.read().unwrap();
         let count = inner.blocks.len() as u64;
         let synced = inner.pending.is_empty();
-        Ok((count - 1, synced))
+        Ok(BlockchainInfo {
+            block_height: count - 1,
+            synced,
+        })
     }
 }
 

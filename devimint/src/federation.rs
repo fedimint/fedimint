@@ -712,7 +712,7 @@ impl Federation {
                         .as_u64()
                         .expect("Could not parse block height")
                 } else {
-                    gw_info["lightning_info"]["Connected"]["block_height"]
+                    gw_info["lightning_info"]["connected"]["block_height"]
                         .as_u64()
                         .expect("Could not parse block height")
                 };
