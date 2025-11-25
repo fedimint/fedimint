@@ -3690,6 +3690,7 @@ dependencies = [
  "fedimint-lnv2-client",
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
+ "fedimint-logging",
  "fedimint-testing",
  "itertools 0.14.0",
  "lightning-invoice",
