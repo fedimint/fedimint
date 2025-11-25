@@ -301,7 +301,7 @@
 <a href=#301 id=301 data-nosnippet>301</a>    <span class="comment">// HACK: The `start-dkg` API call needs to have some time to finish
 <a href=#302 id=302 data-nosnippet>302</a>    // before we shut down api handling. There's no easy and good way to do
 <a href=#303 id=303 data-nosnippet>303</a>    // that other than just giving it some grace period.
-<a href=#304 id=304 data-nosnippet>304</a>    </span>sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
+<a href=#304 id=304 data-nosnippet>304</a>    </span>sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
 <a href=#305 id=305 data-nosnippet>305</a>
 <a href=#306 id=306 data-nosnippet>306</a>    api_handler
 <a href=#307 id=307 data-nosnippet>307</a>        .stop()
