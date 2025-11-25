@@ -1,6 +1,6 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
-use fedimint_api_client::api::PeerResult;
+use fedimint_connectors::ServerResult;
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
@@ -25,7 +25,7 @@ use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
 
-pub async fn get_info(client: &GatewayApi, base_url: &SafeUrl) -> PeerResult<GatewayInfo> {
+pub async fn get_info(client: &GatewayApi, base_url: &SafeUrl) -> ServerResult<GatewayInfo> {
     client
         .request::<(), GatewayInfo>(base_url, Method::GET, GATEWAY_INFO_ENDPOINT, None)
         .await
@@ -35,7 +35,7 @@ pub async fn get_config(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: ConfigPayload,
-) -> PeerResult<GatewayFedConfig> {
+) -> ServerResult<GatewayFedConfig> {
     client
         .request(
             base_url,
@@ -50,7 +50,7 @@ pub async fn get_deposit_address(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: DepositAddressPayload,
-) -> PeerResult<Address<NetworkUnchecked>> {
+) -> ServerResult<Address<NetworkUnchecked>> {
     client
         .request(base_url, Method::POST, ADDRESS_ENDPOINT, Some(payload))
         .await
@@ -60,7 +60,7 @@ pub async fn withdraw(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: WithdrawPayload,
-) -> PeerResult<WithdrawResponse> {
+) -> ServerResult<WithdrawResponse> {
     client
         .request(base_url, Method::POST, WITHDRAW_ENDPOINT, Some(payload))
         .await
@@ -70,7 +70,7 @@ pub async fn connect_federation(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: ConnectFedPayload,
-) -> PeerResult<FederationInfo> {
+) -> ServerResult<FederationInfo> {
     client
         .request(base_url, Method::POST, CONNECT_FED_ENDPOINT, Some(payload))
         .await
@@ -80,7 +80,7 @@ pub async fn leave_federation(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: LeaveFedPayload,
-) -> PeerResult<FederationInfo> {
+) -> ServerResult<FederationInfo> {
     client
         .request(base_url, Method::POST, LEAVE_FED_ENDPOINT, Some(payload))
         .await
@@ -90,7 +90,7 @@ pub async fn backup(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: BackupPayload,
-) -> PeerResult<()> {
+) -> ServerResult<()> {
     client
         .request(base_url, Method::POST, BACKUP_ENDPOINT, Some(payload))
         .await
@@ -100,7 +100,7 @@ pub async fn set_fees(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: SetFeesPayload,
-) -> PeerResult<()> {
+) -> ServerResult<()> {
     client
         .request(base_url, Method::POST, SET_FEES_ENDPOINT, Some(payload))
         .await
@@ -110,7 +110,7 @@ pub async fn create_invoice_for_self(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: CreateInvoiceForOperatorPayload,
-) -> PeerResult<Bolt11Invoice> {
+) -> ServerResult<Bolt11Invoice> {
     client
         .request(
             base_url,
@@ -125,7 +125,7 @@ pub async fn pay_invoice(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: PayInvoiceForOperatorPayload,
-) -> PeerResult<String> {
+) -> ServerResult<String> {
     client
         .request(
             base_url,
@@ -139,7 +139,7 @@ pub async fn pay_invoice(
 pub async fn get_ln_onchain_address(
     client: &GatewayApi,
     base_url: &SafeUrl,
-) -> PeerResult<Address<NetworkUnchecked>> {
+) -> ServerResult<Address<NetworkUnchecked>> {
     client
         .request::<(), Address<NetworkUnchecked>>(
             base_url,
@@ -154,7 +154,7 @@ pub async fn open_channel(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: OpenChannelRequest,
-) -> PeerResult<Txid> {
+) -> ServerResult<Txid> {
     client
         .request(base_url, Method::POST, OPEN_CHANNEL_ENDPOINT, Some(payload))
         .await
@@ -164,7 +164,7 @@ pub async fn close_channels_with_peer(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: CloseChannelsWithPeerRequest,
-) -> PeerResult<CloseChannelsWithPeerResponse> {
+) -> ServerResult<CloseChannelsWithPeerResponse> {
     client
         .request(
             base_url,
@@ -178,7 +178,7 @@ pub async fn close_channels_with_peer(
 pub async fn list_channels(
     client: &GatewayApi,
     base_url: &SafeUrl,
-) -> PeerResult<Vec<ChannelInfo>> {
+) -> ServerResult<Vec<ChannelInfo>> {
     client
         .request::<(), Vec<ChannelInfo>>(base_url, Method::GET, LIST_CHANNELS_ENDPOINT, None)
         .await
@@ -188,7 +188,7 @@ pub async fn send_onchain(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: SendOnchainRequest,
-) -> PeerResult<Txid> {
+) -> ServerResult<Txid> {
     client
         .request(base_url, Method::POST, SEND_ONCHAIN_ENDPOINT, Some(payload))
         .await
@@ -198,7 +198,7 @@ pub async fn recheck_address(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: DepositAddressRecheckPayload,
-) -> PeerResult<serde_json::Value> {
+) -> ServerResult<serde_json::Value> {
     client
         .request(
             base_url,
@@ -213,7 +213,7 @@ pub async fn spend_ecash(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: SpendEcashPayload,
-) -> PeerResult<SpendEcashResponse> {
+) -> ServerResult<SpendEcashResponse> {
     client
         .request(base_url, Method::POST, SPEND_ECASH_ENDPOINT, Some(payload))
         .await
@@ -223,7 +223,7 @@ pub async fn receive_ecash(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: ReceiveEcashPayload,
-) -> PeerResult<ReceiveEcashResponse> {
+) -> ServerResult<ReceiveEcashResponse> {
     client
         .request(
             base_url,
@@ -234,19 +234,25 @@ pub async fn receive_ecash(
         .await
 }
 
-pub async fn get_balances(client: &GatewayApi, base_url: &SafeUrl) -> PeerResult<GatewayBalances> {
+pub async fn get_balances(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+) -> ServerResult<GatewayBalances> {
     client
         .request::<(), GatewayBalances>(base_url, Method::GET, GET_BALANCES_ENDPOINT, None)
         .await
 }
 
-pub async fn get_mnemonic(client: &GatewayApi, base_url: &SafeUrl) -> PeerResult<MnemonicResponse> {
+pub async fn get_mnemonic(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+) -> ServerResult<MnemonicResponse> {
     client
         .request::<(), MnemonicResponse>(base_url, Method::GET, MNEMONIC_ENDPOINT, None)
         .await
 }
 
-pub async fn stop(client: &GatewayApi, base_url: &SafeUrl) -> PeerResult<()> {
+pub async fn stop(client: &GatewayApi, base_url: &SafeUrl) -> ServerResult<()> {
     client
         .request::<(), ()>(base_url, Method::GET, STOP_ENDPOINT, None)
         .await
@@ -256,7 +262,7 @@ pub async fn payment_log(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: PaymentLogPayload,
-) -> PeerResult<PaymentLogResponse> {
+) -> ServerResult<PaymentLogResponse> {
     client
         .request(base_url, Method::POST, PAYMENT_LOG_ENDPOINT, Some(payload))
         .await
@@ -266,7 +272,7 @@ pub async fn payment_summary(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: PaymentSummaryPayload,
-) -> PeerResult<PaymentSummaryResponse> {
+) -> ServerResult<PaymentSummaryResponse> {
     client
         .request(
             base_url,
@@ -281,7 +287,7 @@ pub async fn get_invoice(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: GetInvoiceRequest,
-) -> PeerResult<Option<GetInvoiceResponse>> {
+) -> ServerResult<Option<GetInvoiceResponse>> {
     client
         .request(base_url, Method::POST, GET_INVOICE_ENDPOINT, Some(payload))
         .await
@@ -291,7 +297,7 @@ pub async fn list_transactions(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: ListTransactionsPayload,
-) -> PeerResult<ListTransactionsResponse> {
+) -> ServerResult<ListTransactionsResponse> {
     client
         .request(
             base_url,
@@ -306,7 +312,7 @@ pub async fn create_offer(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: CreateOfferPayload,
-) -> PeerResult<CreateOfferResponse> {
+) -> ServerResult<CreateOfferResponse> {
     client
         .request(
             base_url,
@@ -321,7 +327,7 @@ pub async fn pay_offer(
     client: &GatewayApi,
     base_url: &SafeUrl,
     payload: PayOfferPayload,
-) -> PeerResult<PayOfferResponse> {
+) -> ServerResult<PayOfferResponse> {
     client
         .request(
             base_url,

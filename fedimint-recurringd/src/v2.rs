@@ -6,7 +6,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{self, PublicKey};
-use fedimint_api_client::api::ConnectorRegistry;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::Scalar;

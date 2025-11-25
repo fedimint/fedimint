@@ -6,9 +6,9 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
-use crate::api::{
-    DynGatewayConnection, DynGuaridianConnection, IConnection, IGatewayConnection, PeerError,
-    PeerResult,
+use crate::error::ServerError;
+use crate::{
+    DynGatewayConnection, DynGuaridianConnection, IConnection, IGatewayConnection, ServerResult,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -17,13 +17,13 @@ pub(crate) struct HttpConnector {
 }
 
 #[async_trait::async_trait]
-impl crate::api::Connector for HttpConnector {
+impl crate::Connector for HttpConnector {
     async fn connect_guardian(
         &self,
         _url: &SafeUrl,
         _api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection> {
-        Err(PeerError::InternalClientError(anyhow!(
+    ) -> ServerResult<DynGuaridianConnection> {
+        Err(ServerError::InternalClientError(anyhow!(
             "Unsupported transport mechanism"
         )))
     }
@@ -66,7 +66,7 @@ impl IGatewayConnection for HttpConnection {
         method: Method,
         route: &str,
         payload: Option<Value>,
-    ) -> PeerResult<Value> {
+    ) -> ServerResult<Value> {
         let url = self.base_url.join(route).expect("Invalid base url");
         let mut builder = self.client.request(method, url.clone().to_unsafe());
         if let Some(password) = password.clone() {
@@ -79,14 +79,14 @@ impl IGatewayConnection for HttpConnection {
         let response = builder
             .send()
             .await
-            .map_err(|e| PeerError::ServerError(e.into()))?;
+            .map_err(|e| ServerError::ServerError(e.into()))?;
 
         match response.status() {
             StatusCode::OK => Ok(response
                 .json::<Value>()
                 .await
-                .map_err(|e| PeerError::InvalidResponse(e.into()))?),
-            status => Err(PeerError::InvalidRequest(anyhow::anyhow!(
+                .map_err(|e| ServerError::InvalidResponse(e.into()))?),
+            status => Err(ServerError::InvalidRequest(anyhow::anyhow!(
                 "HTTP request returned unexpected status: {status}"
             ))),
         }

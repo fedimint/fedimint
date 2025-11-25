@@ -7,7 +7,9 @@
 
 use anyhow::{Context as _, bail};
 use api::net::ConnectorType;
-use api::{DynGlobalApi, FederationApiExt as _, PeerError};
+use api::{DynGlobalApi, FederationApiExt as _};
+use fedimint_connectors::ConnectorRegistry;
+use fedimint_connectors::error::ServerError;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
@@ -16,8 +18,6 @@ use fedimint_core::util::backoff_util;
 use fedimint_logging::LOG_CLIENT;
 use query::FilterMap;
 use tracing::debug;
-
-use crate::api::ConnectorRegistry;
 
 pub mod api;
 /// Client query system
@@ -75,7 +75,7 @@ impl ConnectorType {
         // TODO: use new download approach based on guardian PKs
         let query_strategy = FilterMap::new(move |cfg: ClientConfig| {
             if federation_id != cfg.global.calculate_federation_id() {
-                return Err(PeerError::ConditionFailed(anyhow::anyhow!(
+                return Err(ServerError::ConditionFailed(anyhow::anyhow!(
                     "FederationId in invite code does not match client config"
                 )));
             }

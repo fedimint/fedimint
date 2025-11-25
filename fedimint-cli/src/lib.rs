@@ -32,15 +32,14 @@ use envs::FM_USE_TOR_ENV;
 use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::ConnectorType;
-use fedimint_api_client::api::{
-    ConnectorRegistry, DynGlobalApi, FederationApiExt, FederationError,
-};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::module::init::ClientModuleInit;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc, RootSecret};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};

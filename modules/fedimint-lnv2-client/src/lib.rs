@@ -18,7 +18,7 @@ use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-use fedimint_api_client::api::{DynModuleApi, PeerError};
+use fedimint_api_client::api::{DynModuleApi, ServerError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -467,7 +467,7 @@ impl LightningClientModule {
         Err(SelectGatewayError::FailedToFetchRoutingInfo)
     }
 
-    async fn routing_info(&self, gateway: &SafeUrl) -> Result<Option<RoutingInfo>, PeerError> {
+    async fn routing_info(&self, gateway: &SafeUrl) -> Result<Option<RoutingInfo>, ServerError> {
         self.gateway_conn
             .routing_info(gateway.clone(), &self.federation_id)
             .await

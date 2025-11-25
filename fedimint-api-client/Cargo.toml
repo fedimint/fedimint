@@ -12,14 +12,7 @@ version = { workspace = true }
 development = ["tokio-test"]
 
 [features]
-tor = [
-    "dep:strum",
-    "dep:curve25519-dalek",
-    "dep:tor-rtcompat",
-    "arti-client/tokio",
-    "arti-client/rustls",
-    "arti-client/onion-service-client",
-]
+tor = ["fedimint-connectors/tor"]
 
 [lib]
 name = "fedimint_api_client"
@@ -29,53 +22,20 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-channel = { workspace = true }
 async-trait = { workspace = true }
-base64 = { workspace = true }
 bitcoin = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
-iroh = { workspace = true, default-features = false }
-iroh-base = { workspace = true, default-features = false, features = [
-    "ticket",
-] }
-iroh-next = { workspace = true, default-features = false }
 itertools = { workspace = true }
 jsonrpsee-core = { workspace = true }
-jsonrpsee-types = { workspace = true }
 lru = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-url = { workspace = true }
-z32 = { workspace = true }
-
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-arti-client = { workspace = true, optional = true }
-aws-lc-sys = { version = "0.30", features = ["bindgen"] }
-curve25519-dalek = { workspace = true, optional = true }
-iroh = { workspace = true, default-features = false, features = [
-    "discovery-pkarr-dht",
-] }
-iroh-next = { workspace = true, default-features = false, features = [
-    "discovery-pkarr-dht",
-] }
-jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
-rustls-pki-types = { workspace = true }
-strum = { workspace = true, optional = true }
-tokio-rustls = { version = "0.26.0", default-features = false, features = [
-    "logging",
-    "tls12",
-    "ring",
-] }
-tor-rtcompat = { workspace = true, optional = true }
-webpki-roots = { workspace = true }
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = { workspace = true }
 
 [lints]
 workspace = true

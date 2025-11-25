@@ -15,7 +15,7 @@ use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::{All, PublicKey};
 use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
-use fedimint_api_client::api::{ConnectorRegistry, DynModuleApi};
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::ClientHandleArc;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -28,6 +28,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{
     AddStateMachinesError, DynGlobalClientContext, sm_enum_variant_translation,
 };
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};

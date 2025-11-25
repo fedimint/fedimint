@@ -9,7 +9,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, put};
 use axum_auth::AuthBearer;
 use clap::Parser;
-use fedimint_api_client::api::ConnectorRegistry;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;

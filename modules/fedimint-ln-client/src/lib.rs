@@ -31,7 +31,7 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
     RecurringPaymentCodeKeyPrefix,
 };
-use fedimint_api_client::api::{DynModuleApi, PeerError};
+use fedimint_api_client::api::{DynModuleApi, ServerError};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -2331,7 +2331,7 @@ pub trait GatewayConnection: std::fmt::Debug {
     async fn verify_gateway_availability(
         &self,
         gateway: &LightningGateway,
-    ) -> Result<(), PeerError>;
+    ) -> Result<(), ServerError>;
 
     // Request the gateway to pay a BOLT11 invoice
     async fn pay_invoice(
@@ -2351,7 +2351,7 @@ impl GatewayConnection for RealGatewayConnection {
     async fn verify_gateway_availability(
         &self,
         gateway: &LightningGateway,
-    ) -> Result<(), PeerError> {
+    ) -> Result<(), ServerError> {
         self.api
             .request::<PublicKey, serde_json::Value>(
                 &gateway.api,
@@ -2394,7 +2394,7 @@ impl GatewayConnection for MockGatewayConnection {
     async fn verify_gateway_availability(
         &self,
         _gateway: &LightningGateway,
-    ) -> Result<(), PeerError> {
+    ) -> Result<(), ServerError> {
         Ok(())
     }
 

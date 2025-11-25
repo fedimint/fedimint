@@ -22,9 +22,9 @@ use tracing::trace;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 
 use super::Connector;
-use crate::api::{
-    DynGatewayConnection, DynGuaridianConnection, IConnection, IGuardianConnection, PeerError,
-    PeerResult,
+use crate::{
+    DynGatewayConnection, DynGuaridianConnection, IConnection, IGuardianConnection, ServerError,
+    ServerResult,
 };
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ impl WebsocketConnector {
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<Arc<WsClient>> {
+    ) -> ServerResult<Arc<WsClient>> {
         trace!(target: LOG_NET_WS, %url, "Creating new websocket connection");
 
         #[cfg(not(target_family = "wasm"))]
@@ -90,14 +90,14 @@ impl WebsocketConnector {
                 // `user:pass@...`
                 let mut url = url.clone();
                 url.set_username("fedimint")
-                    .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid username")))?;
+                    .map_err(|_| ServerError::InvalidEndpoint(anyhow!("invalid username")))?;
                 url.set_password(Some(&api_secret))
-                    .map_err(|_| PeerError::InvalidEndpoint(anyhow!("invalid secret")))?;
+                    .map_err(|_| ServerError::InvalidEndpoint(anyhow!("invalid secret")))?;
 
                 let client = client
                     .build(url.as_str())
                     .await
-                    .map_err(|err| PeerError::InternalClientError(err.into()))?;
+                    .map_err(|err| ServerError::InternalClientError(err.into()))?;
 
                 return Ok(Arc::new(client));
             }
@@ -106,7 +106,7 @@ impl WebsocketConnector {
         let client = client
             .build(url.as_str())
             .await
-            .map_err(|err| PeerError::InternalClientError(err.into()))?;
+            .map_err(|err| ServerError::InternalClientError(err.into()))?;
 
         Ok(Arc::new(client))
     }
@@ -124,7 +124,7 @@ impl Connector for WebsocketConnector {
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection> {
+    ) -> ServerResult<DynGuaridianConnection> {
         let client = self.make_new_connection(url, api_secret).await?;
         Ok(client.into_dyn())
     }
@@ -147,7 +147,7 @@ impl IConnection for WsClient {
 
 #[async_trait]
 impl IGuardianConnection for WsClient {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
         let method = match method {
             ApiMethod::Core(method) => method,
             ApiMethod::Module(module_id, method) => format!("module_{module_id}_{method}"),
@@ -172,7 +172,7 @@ impl IConnection for Arc<WsClient> {
 
 #[async_trait]
 impl IGuardianConnection for Arc<WsClient> {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
         let method = match method {
             ApiMethod::Core(method) => method,
             ApiMethod::Module(module_id, method) => format!("module_{module_id}_{method}"),
@@ -186,40 +186,40 @@ impl IGuardianConnection for Arc<WsClient> {
     }
 }
 
-fn jsonrpc_error_to_peer_error(jsonrpc_error: JsonRpcClientError) -> PeerError {
+fn jsonrpc_error_to_peer_error(jsonrpc_error: JsonRpcClientError) -> ServerError {
     match jsonrpc_error {
         JsonRpcClientError::Call(error_object) => {
             let error = anyhow!(error_object.message().to_owned());
             match ErrorCode::from(error_object.code()) {
                 ErrorCode::ParseError | ErrorCode::OversizedRequest | ErrorCode::InvalidRequest => {
-                    PeerError::InvalidRequest(error)
+                    ServerError::InvalidRequest(error)
                 }
-                ErrorCode::MethodNotFound => PeerError::InvalidRpcId(error),
-                ErrorCode::InvalidParams => PeerError::InvalidRequest(error),
+                ErrorCode::MethodNotFound => ServerError::InvalidRpcId(error),
+                ErrorCode::InvalidParams => ServerError::InvalidRequest(error),
                 ErrorCode::InternalError | ErrorCode::ServerIsBusy | ErrorCode::ServerError(_) => {
-                    PeerError::ServerError(error)
+                    ServerError::ServerError(error)
                 }
             }
         }
-        JsonRpcClientError::Transport(error) => PeerError::Transport(anyhow!(error)),
-        JsonRpcClientError::RestartNeeded(arc) => PeerError::Transport(anyhow!(arc)),
-        JsonRpcClientError::ParseError(error) => PeerError::InvalidResponse(anyhow!(error)),
+        JsonRpcClientError::Transport(error) => ServerError::Transport(anyhow!(error)),
+        JsonRpcClientError::RestartNeeded(arc) => ServerError::Transport(anyhow!(arc)),
+        JsonRpcClientError::ParseError(error) => ServerError::InvalidResponse(anyhow!(error)),
         JsonRpcClientError::InvalidSubscriptionId => {
-            PeerError::Transport(anyhow!("Invalid subscription id"))
+            ServerError::Transport(anyhow!("Invalid subscription id"))
         }
         JsonRpcClientError::InvalidRequestId(invalid_request_id) => {
-            PeerError::InvalidRequest(anyhow!(invalid_request_id))
+            ServerError::InvalidRequest(anyhow!(invalid_request_id))
         }
-        JsonRpcClientError::RequestTimeout => PeerError::Transport(anyhow!("Request timeout")),
-        JsonRpcClientError::Custom(e) => PeerError::Transport(anyhow!(e)),
+        JsonRpcClientError::RequestTimeout => ServerError::Transport(anyhow!("Request timeout")),
+        JsonRpcClientError::Custom(e) => ServerError::Transport(anyhow!(e)),
         JsonRpcClientError::HttpNotImplemented => {
-            PeerError::ServerError(anyhow!("Http not implemented"))
+            ServerError::ServerError(anyhow!("Http not implemented"))
         }
         JsonRpcClientError::EmptyBatchRequest(empty_batch_request) => {
-            PeerError::InvalidRequest(anyhow!(empty_batch_request))
+            ServerError::InvalidRequest(anyhow!(empty_batch_request))
         }
         JsonRpcClientError::RegisterMethod(register_method_error) => {
-            PeerError::InvalidResponse(anyhow!(register_method_error))
+            ServerError::InvalidResponse(anyhow!(register_method_error))
         }
     }
 }

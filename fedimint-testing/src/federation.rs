@@ -2,11 +2,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi, FederationApiExt};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientHandleArc, RootSecret};
 use fedimint_client_module::AdminCreds;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::PeerId;
 use fedimint_core::config::{ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::core::ModuleKind;

@@ -31,6 +31,7 @@ fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-gateway-server = { workspace = true }

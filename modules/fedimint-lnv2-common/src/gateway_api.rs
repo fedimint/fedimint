@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::secp256k1::schnorr::Signature;
-use fedimint_api_client::api::PeerError;
+use fedimint_connectors::error::ServerError;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
@@ -25,7 +25,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, PeerError>;
+    ) -> Result<Option<RoutingInfo>, ServerError>;
 
     async fn bolt11_invoice(
         &self,
@@ -35,7 +35,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
-    ) -> Result<Bolt11Invoice, PeerError>;
+    ) -> Result<Bolt11Invoice, ServerError>;
 
     async fn send_payment(
         &self,
@@ -45,7 +45,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, PeerError>;
+    ) -> Result<Result<[u8; 32], Signature>, ServerError>;
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +59,7 @@ impl GatewayConnection for RealGatewayConnection {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, PeerError> {
+    ) -> Result<Option<RoutingInfo>, ServerError> {
         self.api
             .request(
                 &gateway_api,
@@ -78,7 +78,7 @@ impl GatewayConnection for RealGatewayConnection {
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
-    ) -> Result<Bolt11Invoice, PeerError> {
+    ) -> Result<Bolt11Invoice, ServerError> {
         self.api
             .request(
                 &gateway_api,
@@ -103,7 +103,7 @@ impl GatewayConnection for RealGatewayConnection {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, PeerError> {
+    ) -> Result<Result<[u8; 32], Signature>, ServerError> {
         self.api
             .request(
                 &gateway_api,

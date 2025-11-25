@@ -30,8 +30,8 @@ use serde_json::Value;
 use tracing::{debug, trace, warn};
 use url::Url;
 
-use super::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
-use crate::api::{DynGatewayConnection, IConnection, IGatewayConnection};
+use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
+use crate::{DynGatewayConnection, IConnection, IGatewayConnection};
 
 #[derive(Clone)]
 pub(crate) struct IrohConnector {
@@ -229,26 +229,30 @@ impl IrohConnector {
 }
 
 #[async_trait::async_trait]
-impl crate::api::Connector for IrohConnector {
+impl crate::Connector for IrohConnector {
     async fn connect_guardian(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection> {
+    ) -> ServerResult<DynGuaridianConnection> {
         if api_secret.is_some() {
             // There seem to be no way to pass secret over current Iroh calling
             // convention
-            PeerError::Connection(anyhow::format_err!(
+            ServerError::Connection(anyhow::format_err!(
                 "Iroh api secrets currently not supported"
             ));
         }
-        let node_id = Self::node_id_from_url(url).map_err(|source| PeerError::InvalidPeerUrl {
-            source,
-            url: url.to_owned(),
-        })?;
+        let node_id =
+            Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
+                source,
+                url: url.to_owned(),
+            })?;
         let mut futures = FuturesUnordered::<
             Pin<
-                Box<dyn Future<Output = (PeerResult<DynGuaridianConnection>, &'static str)> + Send>,
+                Box<
+                    dyn Future<Output = (ServerResult<DynGuaridianConnection>, &'static str)>
+                        + Send,
+                >,
             >,
         >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
@@ -302,7 +306,7 @@ impl crate::api::Connector for IrohConnector {
         }
 
         Err(prev_err.unwrap_or_else(|| {
-            PeerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
+            ServerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
         }))
     }
 
@@ -364,7 +368,7 @@ impl IrohConnector {
         &self,
         node_id: NodeId,
         node_addr: Option<NodeAddr>,
-    ) -> PeerResult<Connection> {
+    ) -> ServerResult<Connection> {
         trace!(target: LOG_NET_IROH, %node_id, "Creating new stable connection");
         let conn = match node_addr.clone() {
             Some(node_addr) => {
@@ -380,7 +384,7 @@ impl IrohConnector {
                 conn
             }
             None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
-        }.map_err(PeerError::Connection)?;
+        }.map_err(ServerError::Connection)?;
 
         Ok(conn)
     }
@@ -390,7 +394,7 @@ impl IrohConnector {
         endpoint_next: &iroh_next::Endpoint,
         node_id: NodeId,
         node_addr: Option<NodeAddr>,
-    ) -> PeerResult<iroh_next::endpoint::Connection> {
+    ) -> ServerResult<iroh_next::endpoint::Connection> {
         let next_node_id = iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail");
 
         let endpoint_next = endpoint_next.clone();
@@ -417,7 +421,7 @@ impl IrohConnector {
             ).await,
         }
         .map_err(Into::into)
-        .map_err(PeerError::Connection)?;
+        .map_err(ServerError::Connection)?;
 
         Ok(conn)
     }
@@ -447,31 +451,32 @@ impl IConnection for Connection {
 
 #[async_trait]
 impl IGuardianConnection for Connection {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
 
         let (mut sink, mut stream) = self
             .open_bi()
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         sink.write_all(&json)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
             .read_to_end(1_000_000)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| PeerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
 
-        response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
     }
 }
 
@@ -488,31 +493,32 @@ impl IConnection for iroh_next::endpoint::Connection {
 
 #[async_trait]
 impl IGuardianConnection for iroh_next::endpoint::Connection {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
 
         let (mut sink, mut stream) = self
             .open_bi()
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         sink.write_all(&json)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
             .read_to_end(1_000_000)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| PeerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
 
-        response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
     }
 }
 
@@ -524,7 +530,7 @@ impl IGatewayConnection for Connection {
         _method: Method,
         route: &str,
         payload: Option<Value>,
-    ) -> PeerResult<Value> {
+    ) -> ServerResult<Value> {
         let iroh_request = IrohGatewayRequest {
             route: route.to_string(),
             params: payload,
@@ -535,26 +541,27 @@ impl IGatewayConnection for Connection {
         let (mut sink, mut stream) = self
             .open_bi()
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         sink.write_all(&json)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
             .read_to_end(1_000_000)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
-            .map_err(|e| PeerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
         match StatusCode::from_u16(response.status).map_err(|e| {
-            PeerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
+            ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
         })? {
             StatusCode::OK => Ok(response.body),
-            status => Err(PeerError::ServerError(anyhow::anyhow!(
+            status => Err(ServerError::ServerError(anyhow::anyhow!(
                 "Server returned status code: {}",
                 status
             ))),
