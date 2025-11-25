@@ -104,6 +104,12 @@ pub trait GatewayDbtxNcExt {
     /// Returns a `BTreeMap` that maps `FederationId` to its last backup time
     async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>>;
 
+    /// Returns the last backup time for a federation
+    async fn load_backup_record(
+        &mut self,
+        federation_id: FederationId,
+    ) -> Option<Option<SystemTime>>;
+
     /// Saves the last backup time of a federation
     async fn save_federation_backup_record(
         &mut self,
@@ -268,6 +274,13 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             .map(|(key, time): (FederationBackupKey, Option<SystemTime>)| (key.federation_id, time))
             .collect::<BTreeMap<FederationId, Option<SystemTime>>>()
             .await
+    }
+
+    async fn load_backup_record(
+        &mut self,
+        federation_id: FederationId,
+    ) -> Option<Option<SystemTime>> {
+        self.get_value(&FederationBackupKey { federation_id }).await
     }
 
     async fn save_federation_backup_record(

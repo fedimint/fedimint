@@ -214,12 +214,16 @@ impl FederationManager {
                 let config = dbtx.load_federation_config(federation_id).await.ok_or(FederationNotConnected {
                     federation_id_prefix: federation_id.to_prefix(),
                 })?;
+                let last_backup_time = dbtx.load_backup_record(federation_id).await.ok_or(FederationNotConnected {
+                    federation_id_prefix: federation_id.to_prefix(),
+                })?;
 
                 Ok(FederationInfo {
                     federation_id,
                     federation_name: self.federation_name(client).await,
                     balance_msat,
                     config,
+                    last_backup_time,
                 })
             })
             .await
@@ -254,12 +258,17 @@ impl FederationManager {
             };
 
             let config = dbtx.load_federation_config(*federation_id).await;
+            let last_backup_time = dbtx
+                .load_backup_record(*federation_id)
+                .await
+                .unwrap_or_default();
             if let Some(config) = config {
                 federation_infos.push(FederationInfo {
                     federation_id: *federation_id,
                     federation_name: self.federation_name(client.value()).await,
                     balance_msat,
                     config,
+                    last_backup_time,
                 });
             }
         }

@@ -2051,6 +2051,7 @@ impl IAdminGateway for Gateway {
                 Amount::default()
             }),
             config: federation_config.clone(),
+            last_backup_time: None,
         };
 
         Self::check_lnv1_federation_network(&client, self.network).await?;
