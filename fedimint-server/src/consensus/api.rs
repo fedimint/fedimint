@@ -513,8 +513,7 @@ impl ConsensusApi {
         reencrypt_private_config(&self.cfg_dir, &self.cfg.private, new_password)
             .map_err(|e| ApiError::server_error(format!("Failed to change password: {e}")))?;
 
-        info!(target: LOG_NET_API, "Successfully changed guardian password, shutting down to restart with new password");
-        self.task_group.shutdown();
+        info!(target: LOG_NET_API, "Successfully changed guardian password");
 
         Ok(())
     }
@@ -910,7 +909,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 6),
             async |fedimint: &ConsensusApi, context, new_password: String| -> () {
                 let auth = check_auth(context)?;
-                fedimint.change_guardian_password(&new_password, &auth)
+                fedimint.change_guardian_password(&new_password, &auth)?;
+                let task_group = fedimint.task_group.clone();
+                fedimint_core::runtime::spawn("shutdown after password change",  async move {
+                    info!(target: LOG_NET_API, "Will shutdown after password change");
+                    fedimint_core:: runtime::sleep(Duration::from_secs(1)).await;
+                    task_group.shutdown();
+                });
+                Ok(())
             }
         },
     ]
