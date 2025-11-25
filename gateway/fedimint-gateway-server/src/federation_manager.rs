@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::SystemTime;
 
 use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
-use fedimint_core::db::{DatabaseTransaction, NonCommittable};
+use fedimint_core::db::{Committable, DatabaseTransaction, NonCommittable};
 use fedimint_core::util::{FmtCompactAnyhow as _, Spanned};
 use fedimint_gateway_common::FederationInfo;
 use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
@@ -293,6 +294,29 @@ impl FederationManager {
             );
         }
         federations
+    }
+
+    pub async fn backup_federation(
+        &self,
+        federation_id: &FederationId,
+        dbtx: &mut DatabaseTransaction<'_, Committable>,
+        now: SystemTime,
+    ) {
+        if let Some(client) = self.client(&federation_id) {
+            let metadata: BTreeMap<String, String> = BTreeMap::new();
+            if client
+                .value()
+                .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(
+                    metadata,
+                ))
+                .await
+                .is_ok()
+            {
+                dbtx.save_federation_backup_record(federation_id.clone(), Some(now))
+                    .await;
+                info!(federation_id = %federation_id, "Successfully backed up federation");
+            }
+        }
     }
 
     // TODO(tvolk131): Set this value in the constructor.
