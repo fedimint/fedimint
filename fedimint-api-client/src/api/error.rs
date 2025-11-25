@@ -7,8 +7,6 @@ use fedimint_core::PeerId;
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_logging::LOG_CLIENT_NET_API;
-#[cfg(target_family = "wasm")]
-use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{error, trace, warn};

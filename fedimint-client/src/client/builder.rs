@@ -1167,9 +1167,9 @@ impl ClientPreview {
     /// # use fedimint_core::config::ClientConfig;
     /// # use fedimint_derive_secret::DerivableSecret;
     /// # use fedimint_client::{Client, ClientBuilder, RootSecret};
+    /// # use fedimint_connectors::ConnectorRegistry;
     /// # use fedimint_core::db::Database;
     /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
-    /// # use fedimint_api_client::api::ConnectorRegistry;
     /// #
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {

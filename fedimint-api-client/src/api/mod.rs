@@ -46,8 +46,6 @@ use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
-#[cfg(target_family = "wasm")]
-use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::OnceCell;

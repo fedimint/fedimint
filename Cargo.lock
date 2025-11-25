@@ -2859,8 +2859,8 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "fedimint-api-client",
  "fedimint-client-rpc",
+ "fedimint-connectors",
  "fedimint-core",
  "fedimint-cursed-redb",
  "js-sys",
