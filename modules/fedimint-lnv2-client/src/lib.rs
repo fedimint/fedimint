@@ -430,6 +430,29 @@ impl LightningClientModule {
         }
     }
 
+    pub async fn list_gateways(&self) -> Result<Vec<(SafeUrl, RoutingInfo)>, SelectGatewayError> {
+        let gateways = self
+            .module_api
+            .gateways()
+            .await
+            .map_err(|e| SelectGatewayError::FederationError(e.to_string()))?;
+
+        if gateways.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let futures = gateways.into_iter().map(|url| async move {
+            match self.routing_info(&url).await {
+                Ok(Some(info)) => Some((url, info)),
+                _ => None,
+            }
+        });
+
+        let results = futures::future::join_all(futures).await;
+
+        Ok(results.into_iter().flatten().collect())
+    }
+
     pub async fn select_gateway(
         &self,
         invoice: Option<Bolt11Invoice>,
