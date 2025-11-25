@@ -37,8 +37,8 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
-use crate::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA};
-use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed, poll_eq};
+use crate::version_constants::{VERSION_0_8_0_ALPHA, VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
+use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
 pub struct Stats {
     pub min: Duration,
@@ -1227,10 +1227,15 @@ pub async fn lightning_gw_reconnect_test(
     let ln_type = gw_lnd.ln.ln_type().to_string();
     gw_lnd.stop_lightning_node().await?;
     let lightning_info = info_cmd.out_json().await?;
-    let lightning_pub_key: Option<String> =
-        serde_json::from_value(lightning_info["lightning_pub_key"].clone())?;
+    if gw_lnd.gatewayd_version < *VERSION_0_10_0_ALPHA {
+        let lightning_pub_key: Option<String> =
+            serde_json::from_value(lightning_info["lightning_pub_key"].clone())?;
 
-    assert!(lightning_pub_key.is_none());
+        assert!(lightning_pub_key.is_none());
+    } else {
+        let not_connected = lightning_info["lightning_info"].clone();
+        assert!(not_connected.as_str().expect("ln info is not a string") == "not_connected");
+    }
 
     // Restart LND
     tracing::info!("Restarting LND...");
@@ -1385,18 +1390,11 @@ pub async fn do_try_create_and_pay_invoice(
     // automatically reconnects and can query the lightning node
     // info again.
     poll("Waiting for info to succeed after restart", || async {
-        let lightning_pub_key = cmd!(gw_lnd, "info")
-            .out_json()
+        gw_lnd
+            .lightning_pubkey()
             .await
-            .map_err(ControlFlow::Continue)?
-            .get("lightning_pub_key")
-            .map(|ln_pk| {
-                serde_json::from_value::<Option<String>>(ln_pk.clone())
-                    .expect("could not parse lightning_pub_key")
-            })
-            .expect("missing lightning_pub_key");
-
-        poll_eq!(lightning_pub_key.is_some(), true)
+            .map_err(ControlFlow::Continue)?;
+        Ok(())
     })
     .await?;
 

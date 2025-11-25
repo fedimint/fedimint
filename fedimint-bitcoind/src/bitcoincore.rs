@@ -11,7 +11,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_BITCOIND_CORE;
 use tracing::{debug, warn};
 
-use crate::{IBitcoindRpc, format_err};
+use crate::{BlockchainInfo, IBitcoindRpc, format_err};
 
 #[derive(Debug)]
 pub struct BitcoindClient {
@@ -144,5 +144,14 @@ impl IBitcoindRpc for BitcoindClient {
             &ModuleDecoderRegistry::default(),
         )
         .map_err(|error| format_err!("Could not decode tx: {}", error))
+    }
+
+    async fn get_info(&self) -> anyhow::Result<BlockchainInfo> {
+        let info = block_in_place(|| self.client.get_blockchain_info())
+            .map_err(|err| anyhow::anyhow!("Unable to get blockchain info {err}"))?;
+        Ok(BlockchainInfo {
+            block_height: info.blocks,
+            synced: !info.initial_block_download,
+        })
     }
 }

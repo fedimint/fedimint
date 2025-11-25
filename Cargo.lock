@@ -3345,6 +3345,7 @@ dependencies = [
  "axum 0.8.7",
  "axum-extra",
  "bcrypt",
+ "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-gateway-common",
  "fedimint-ui-common",

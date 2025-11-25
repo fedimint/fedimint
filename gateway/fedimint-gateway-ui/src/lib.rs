@@ -1,7 +1,9 @@
+mod bitcoin;
 mod connect_fed;
 mod federation;
 mod general;
 mod lightning;
+mod mnemonic;
 mod payment_summary;
 
 use std::fmt::Display;
@@ -14,10 +16,12 @@ use axum::routing::{get, post};
 use axum::{Form, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use fedimint_bitcoind::BlockchainInfo;
+use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
-    ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, PaymentSummaryPayload,
-    PaymentSummaryResponse, SetFeesPayload,
+    ChainSource, ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -84,9 +88,13 @@ pub trait IAdminGateway {
 
     async fn handle_set_fees_msg(&self, payload: SetFeesPayload) -> Result<(), Self::Error>;
 
+    async fn handle_mnemonic_msg(&self) -> Result<MnemonicResponse, Self::Error>;
+
     fn get_password_hash(&self) -> String;
 
     fn gatewayd_version(&self) -> String;
+
+    async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network);
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
@@ -177,6 +185,15 @@ where
             }
             div class="col-md-6" {
                 (payment_summary::render(&state.api).await)
+            }
+        }
+
+        div class="row gy-4 mt-2" {
+            div class="col-md-6" {
+                (bitcoin::render(&state.api).await)
+            }
+            div class="col-md-6" {
+                (mnemonic::render(&state.api).await)
             }
         }
 
