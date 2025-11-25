@@ -2884,6 +2884,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-connectors"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "arti-client",
+ "async-trait",
+ "base64 0.22.1",
+ "curve25519-dalek",
+ "fedimint-core",
+ "fedimint-logging",
+ "futures",
+ "iroh 0.35.0",
+ "iroh 0.90.0",
+ "iroh-base 0.35.0",
+ "jsonrpsee-core",
+ "jsonrpsee-types",
+ "jsonrpsee-wasm-client",
+ "jsonrpsee-ws-client",
+ "reqwest 0.12.22",
+ "serde_json",
+ "strum 0.27.1",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-rustls 0.26.2",
+ "tor-rtcompat",
+ "tracing",
+ "url",
+ "webpki-roots 1.0.2",
+ "z32",
+]
+
+[[package]]
 name = "fedimint-core"
 version = "0.10.0-alpha"
 dependencies = [
