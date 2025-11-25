@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 
 use axum::Form;
 use axum::extract::{Path, State};
@@ -39,6 +40,10 @@ pub fn render(fed: &FederationInfo) -> Markup {
         } else {
             "alert alert-success"
         };
+        @let last_backup_str = fed.last_backup_time
+            .map(time_ago)
+            .unwrap_or("Never".to_string());
+
 
         div class="row gy-4 mt-2" {
             div class="col-12" {
@@ -58,6 +63,10 @@ pub fn render(fed: &FederationInfo) -> Markup {
                         div id="balance" class=(balance_class) {
                             "Balance: " strong { (fed.balance_msat) }
                         }
+                        div class="alert alert-secondary py-1 px-2 small" {
+                            "Last Backup: " strong { (last_backup_str) }
+                        }
+
                         // READ-ONLY VERSION
                         div id={(format!("fees-view-{}", fed.federation_id))} {
                             table class="table table-sm mb-2" {
@@ -155,6 +164,22 @@ pub fn render(fed: &FederationInfo) -> Markup {
             }
         }
     )
+}
+
+fn time_ago(t: SystemTime) -> String {
+    let now = fedimint_core::time::now();
+    let diff = match now.duration_since(t) {
+        Ok(d) => d,
+        Err(_) => Duration::from_secs(0),
+    };
+
+    let secs = diff.as_secs();
+
+    match secs {
+        0..=59 => format!("{} seconds ago", secs),
+        60..=3599 => format!("{} minutes ago", secs / 60),
+        _ => format!("{} hours ago", secs / 3600),
+    }
 }
 
 pub async fn leave_federation_handler<E: Display>(

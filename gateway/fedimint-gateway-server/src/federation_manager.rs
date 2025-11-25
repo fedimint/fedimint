@@ -311,7 +311,7 @@ impl FederationManager {
         dbtx: &mut DatabaseTransaction<'_, Committable>,
         now: SystemTime,
     ) {
-        if let Some(client) = self.client(&federation_id) {
+        if let Some(client) = self.client(federation_id) {
             let metadata: BTreeMap<String, String> = BTreeMap::new();
             if client
                 .value()
@@ -321,7 +321,7 @@ impl FederationManager {
                 .await
                 .is_ok()
             {
-                dbtx.save_federation_backup_record(federation_id.clone(), Some(now))
+                dbtx.save_federation_backup_record(*federation_id, Some(now))
                     .await;
                 info!(federation_id = %federation_id, "Successfully backed up federation");
             }
