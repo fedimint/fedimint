@@ -657,6 +657,15 @@ impl IDashboardApi for ConsensusApi {
     async fn fedimintd_version(&self) -> String {
         self.code_version_str.clone()
     }
+
+    async fn change_password(
+        &self,
+        new_password: &str,
+        guardian_auth: &GuardianAuthToken,
+    ) -> Result<(), String> {
+        self.change_guardian_password(new_password, guardian_auth)
+            .map_err(|e| e.to_string())
+    }
 }
 
 pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {

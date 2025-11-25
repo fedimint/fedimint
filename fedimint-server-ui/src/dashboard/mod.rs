@@ -23,7 +23,8 @@ use {fedimint_lnv2_server, fedimint_meta_server, fedimint_wallet_server};
 
 use crate::dashboard::modules::{lnv2, meta, wallet};
 use crate::{
-    DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LoginInput, login_submit_response,
+    CHANGE_PASSWORD_ROUTE, DOWNLOAD_BACKUP_ROUTE, EXPLORER_IDX_ROUTE, EXPLORER_ROUTE, LoginInput,
+    login_submit_response,
 };
 
 // Dashboard login form handler
@@ -67,6 +68,85 @@ async fn download_backup(
         )
         .body(Body::from(backup.tar_archive_bytes))
         .expect("Failed to build response")
+}
+
+// Password change handler
+async fn change_password(
+    State(state): State<UiState<DynDashboardApi>>,
+    user_auth: UserAuth,
+    Form(input): Form<crate::PasswordChangeInput>,
+) -> impl IntoResponse {
+    let api_auth = state.api.auth().await;
+
+    // Verify current password
+    if api_auth.0 != input.current_password {
+        let content = html! {
+            div class="alert alert-danger" { "Current password is incorrect" }
+            div class="button-container" {
+                a href="/" class="btn btn-primary" { "Return to Dashboard" }
+            }
+        };
+        return Html(dashboard_layout(content, "Password Change Failed", None).into_string())
+            .into_response();
+    }
+
+    // Verify new password confirmation
+    if input.new_password != input.confirm_password {
+        let content = html! {
+            div class="alert alert-danger" { "New passwords do not match" }
+            div class="button-container" {
+                a href="/" class="btn btn-primary" { "Return to Dashboard" }
+            }
+        };
+        return Html(dashboard_layout(content, "Password Change Failed", None).into_string())
+            .into_response();
+    }
+
+    // Check that new password is not empty
+    if input.new_password.is_empty() {
+        let content = html! {
+            div class="alert alert-danger" { "New password cannot be empty" }
+            div class="button-container" {
+                a href="/" class="btn btn-primary" { "Return to Dashboard" }
+            }
+        };
+        return Html(dashboard_layout(content, "Password Change Failed", None).into_string())
+            .into_response();
+    }
+
+    // Call the API to change the password
+    match state
+        .api
+        .change_password(&input.new_password, &user_auth.guardian_auth_token)
+        .await
+    {
+        Ok(()) => {
+            let content = html! {
+                div class="alert alert-success" {
+                    "Password changed successfully! The server will restart now."
+                }
+                div class="alert alert-info" {
+                    "You will need to log in again with your new password once the server restarts."
+                }
+                div class="button-container" {
+                    a href="/login" class="btn btn-primary" { "Go to Login" }
+                }
+            };
+            Html(dashboard_layout(content, "Password Changed", None).into_string()).into_response()
+        }
+        Err(err) => {
+            let content = html! {
+                div class="alert alert-danger" {
+                    "Failed to change password: " (err)
+                }
+                div class="button-container" {
+                    a href="/" class="btn btn-primary" { "Return to Dashboard" }
+                }
+            };
+            Html(dashboard_layout(content, "Password Change Failed", None).into_string())
+                .into_response()
+        }
+    }
 }
 
 // Main dashboard view
@@ -172,6 +252,47 @@ async fn dashboard_view(
                 }
             }
         }
+
+        // Password Reset section
+        div class="row gy-4 mt-4" {
+            div class="col-12" {
+                div class="card" {
+                    div class="card-header bg-info text-white" {
+                        h5 class="mb-0" { "Change Guardian Password" }
+                    }
+                    div class="card-body" {
+                        form method="post" action="/change-password" {
+                            div class="row" {
+                                div class="col-lg-6 mb-3" {
+                                    div class="form-group mb-3" {
+                                        label for="current_password" class="form-label" { "Current Password" }
+                                        input type="password" class="form-control" id="current_password" name="current_password" placeholder="Enter current password" required;
+                                    }
+                                    div class="form-group mb-3" {
+                                        label for="new_password" class="form-label" { "New Password" }
+                                        input type="password" class="form-control" id="new_password" name="new_password" placeholder="Enter new password" required;
+                                    }
+                                    div class="form-group mb-3" {
+                                        label for="confirm_password" class="form-label" { "Confirm New Password" }
+                                        input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm new password" required;
+                                    }
+                                    button type="submit" class="btn btn-info btn-lg mt-2" {
+                                        "Change Password"
+                                    }
+                                }
+                                div class="col-lg-6" {
+                                    div class="alert alert-info mb-0" {
+                                        strong { "Important" }
+                                        br;
+                                        "After changing your password, you will need to log in again with the new password."
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     };
 
     Html(dashboard_layout(content, "Fedimint Guardian UI", Some(&fedimintd_version)).into_string())
@@ -185,6 +306,7 @@ pub fn router(api: DynDashboardApi) -> Router {
         .route(EXPLORER_ROUTE, get(consensus_explorer_view))
         .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
         .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
+        .route(CHANGE_PASSWORD_ROUTE, post(change_password))
         .with_static_routes();
 
     // routeradd LNv2 gateway routes if the module exists
