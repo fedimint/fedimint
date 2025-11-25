@@ -24,7 +24,8 @@ use fedimint_core::{
     Amount, InPoint, NumPeers, OutPoint, PeerId, Tiered, apply, async_trait_maybe_send,
 };
 use fedimint_ecash_migration_common::api::{
-    CHECK_SPEND_BOOK_HASH_ENDPOINT, GET_TRANSFER_ID_ENDPOINT, UPLOAD_KEY_SET_ENDPOINT,
+    CHECK_SPEND_BOOK_HASH_ENDPOINT, GET_TRANSFER_ID_ENDPOINT,
+    GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT, UPLOAD_KEY_SET_ENDPOINT,
     UPLOAD_SPEND_BOOK_BATCH_ENDPOINT, UploadKeySetRequest, UploadSpendBookBatchRequest,
     UploadSpendBookBatchResponse,
 };
@@ -463,6 +464,7 @@ impl ServerModule for EcashMigration {
                         .ok_or_else(|| ApiError::not_found("Transfer ID not found for out point".to_owned()))
                 }
             },
+            // Idempotent to allow retries for fault tolerance
             api_endpoint! {
                 UPLOAD_KEY_SET_ENDPOINT,
                 ApiVersion::new(0, 0),
@@ -478,6 +480,15 @@ impl ServerModule for EcashMigration {
                 async |module: &EcashMigration, context, request: UploadSpendBookBatchRequest| -> UploadSpendBookBatchResponse {
                     check_auth(context, request.transfer_id, &request).await?;
                     module.upload_spend_book_batch(&mut context.dbtx().into_nc(), request.transfer_id, request.entries)
+                        .await
+                }
+            },
+            // Used to resume aborted uploads
+            api_endpoint! {
+                GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &EcashMigration, context, request: TransferId| -> u64 {
+                    module.get_uploaded_spend_book_entries(&mut context.dbtx().into_nc(), request)
                         .await
                 }
             },
@@ -598,6 +609,18 @@ impl EcashMigration {
             new_entries: new_spend_book_entries,
             total_entries_uploaded: new_uploaded_spend_book_entries,
         })
+    }
+
+    async fn get_uploaded_spend_book_entries(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        transfer_id: TransferId,
+    ) -> Result<u64, ApiError> {
+        let uploaded_spend_book_entries = dbtx
+            .get_value(&UploadedSpendBookEntriesKey { transfer_id })
+            .await
+            .unwrap_or_default();
+        Ok(uploaded_spend_book_entries)
     }
 
     async fn check_spend_book_hash(

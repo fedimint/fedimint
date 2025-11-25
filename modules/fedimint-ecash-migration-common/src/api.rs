@@ -10,6 +10,7 @@ use crate::{KeySetHash, SpendBookHash, TransferId};
 pub const GET_TRANSFER_ID_ENDPOINT: &str = "get_transfer_id";
 pub const UPLOAD_KEY_SET_ENDPOINT: &str = "upload_key_set";
 pub const UPLOAD_SPEND_BOOK_BATCH_ENDPOINT: &str = "upload_spend_book_batch";
+pub const GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT: &str = "get_uploaded_spend_book_entries";
 pub const CHECK_SPEND_BOOK_HASH_ENDPOINT: &str = "check_spend_book_hash";
 
 /// API: Request to upload a key set
