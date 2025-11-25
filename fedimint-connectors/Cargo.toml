@@ -47,6 +47,7 @@ z32 = { workspace = true }
 arti-client = { workspace = true, optional = true }
 curve25519-dalek = { workspace = true, optional = true }
 jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
+rustls-pki-types = { workspace = true }
 strum = { workspace = true, optional = true }
 tokio-rustls = { version = "0.26.0", default-features = false, features = [
     "logging",

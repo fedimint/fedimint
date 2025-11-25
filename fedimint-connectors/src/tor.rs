@@ -13,7 +13,7 @@ use tokio_rustls::rustls::{ClientConfig as TlsClientConfig, RootCertStore};
 use tracing::debug;
 
 use super::{Connector, DynGuaridianConnection};
-use crate::api::{DynGatewayConnection, IGuardianConnection as _, PeerError};
+use crate::{DynGatewayConnection, IGuardianConnection as _, ServerError};
 
 #[derive(Clone)]
 pub struct TorConnector {
@@ -30,12 +30,12 @@ impl TorConnector {
     pub async fn bootstrap() -> anyhow::Result<Self> {
         use tracing::debug;
 
-        use crate::api::PeerError;
+        use crate::ServerError;
 
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)
             .await
-            .map_err(|err| PeerError::InternalClientError(err.into()))?
+            .map_err(|err| ServerError::InternalClientError(err.into()))?
             .isolated_client();
 
         debug!("Successfully created and bootstrapped the `TorClient`, for given `TorConfig`.");
@@ -51,15 +51,15 @@ impl Connector for TorConnector {
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> super::PeerResult<DynGuaridianConnection> {
+    ) -> super::ServerResult<DynGuaridianConnection> {
         let addr = (
             url.host_str()
-                .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Expected host str")))?,
+                .ok_or_else(|| ServerError::InvalidEndpoint(anyhow!("Expected host str")))?,
             url.port_or_known_default()
-                .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Expected port number")))?,
+                .ok_or_else(|| ServerError::InvalidEndpoint(anyhow!("Expected port number")))?,
         );
         let tor_addr = TorAddr::from(addr).map_err(|e| {
-            PeerError::InvalidEndpoint(anyhow!("Invalid endpoint addr: {addr:?}: {e:#}"))
+            ServerError::InvalidEndpoint(anyhow!("Invalid endpoint addr: {addr:?}: {e:#}"))
         })?;
 
         let tor_addr_clone = tor_addr.clone();
@@ -80,7 +80,7 @@ impl Connector for TorConnector {
                 .tor_client
                 .connect_with_prefs(tor_addr, &stream_prefs)
                 .await
-                .map_err(|e| PeerError::Connection(e.into()))?;
+                .map_err(|e| ServerError::Connection(e.into()))?;
 
             debug!(
                 ?tor_addr_clone,
@@ -92,7 +92,7 @@ impl Connector for TorConnector {
                 .tor_client
                 .connect(tor_addr)
                 .await
-                .map_err(|e| PeerError::Connection(e.into()))?;
+                .map_err(|e| ServerError::Connection(e.into()))?;
 
             debug!(
                 ?tor_addr_clone,
@@ -105,7 +105,7 @@ impl Connector for TorConnector {
             "wss" => true,
             "ws" => false,
             unexpected_scheme => {
-                return Err(PeerError::InvalidEndpoint(anyhow!(
+                return Err(ServerError::InvalidEndpoint(anyhow!(
                     "Unsupported scheme: {unexpected_scheme}"
                 )));
             }
@@ -150,7 +150,7 @@ impl Connector for TorConnector {
                 let client = ws_client_builder
                     .build_with_stream(url.as_str(), anonymized_stream)
                     .await
-                    .map_err(|e| PeerError::Connection(e.into()))?;
+                    .map_err(|e| ServerError::Connection(e.into()))?;
 
                 Ok(client.into_dyn())
             }
@@ -158,22 +158,22 @@ impl Connector for TorConnector {
                 let host = url
                     .host_str()
                     .map(ToOwned::to_owned)
-                    .ok_or_else(|| PeerError::InvalidEndpoint(anyhow!("Invalid host str")))?;
+                    .ok_or_else(|| ServerError::InvalidEndpoint(anyhow!("Invalid host str")))?;
 
                 // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
                 // if it's really needed.
                 let server_name = rustls_pki_types::ServerName::try_from(host)
-                    .map_err(|e| PeerError::InvalidEndpoint(e.into()))?;
+                    .map_err(|e| ServerError::InvalidEndpoint(e.into()))?;
 
                 let anonymized_tls_stream = tls_connector
                     .connect(server_name, anonymized_stream)
                     .await
-                    .map_err(|e| PeerError::Connection(e.into()))?;
+                    .map_err(|e| ServerError::Connection(e.into()))?;
 
                 let client = ws_client_builder
                     .build_with_stream(url.as_str(), anonymized_tls_stream)
                     .await
-                    .map_err(|e| PeerError::Connection(e.into()))?;
+                    .map_err(|e| ServerError::Connection(e.into()))?;
 
                 Ok(client.into_dyn())
             }

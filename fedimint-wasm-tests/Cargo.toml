@@ -16,8 +16,8 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 # currently unused, only to test compilation
 fedimint-cursed-redb = { workspace = true }

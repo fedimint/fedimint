@@ -20,8 +20,8 @@ use common::{
 };
 use devimint::cmd;
 use devimint::util::GatewayLndCli;
-use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_client::ClientHandleArc;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::Amount;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;

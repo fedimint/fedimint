@@ -3,7 +3,7 @@ use std::hash;
 
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{
-    FederationApiExt, PeerError, SerdeOutputOutcome, deserialize_outcome,
+    FederationApiExt, SerdeOutputOutcome, ServerError, deserialize_outcome,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client_module::DynGlobalClientContext;
@@ -218,7 +218,7 @@ impl MintOutputStatesCreated {
                             &module_decoder,
                             &tbs_pks,
                         )
-                        .map_err(PeerError::InvalidResponse)
+                        .map_err(ServerError::InvalidResponse)
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
@@ -405,7 +405,7 @@ impl MintOutputStatesCreatedMulti {
                                 &module_decoder,
                                 &tbs_pks,
                             )
-                            .map_err(PeerError::InvalidResponse)
+                            .map_err(ServerError::InvalidResponse)
                         },
                         api.all_peers().to_num_peers(),
                     ),
@@ -444,7 +444,7 @@ impl MintOutputStatesCreatedMulti {
                                             &module_decoder,
                                             &tbs_pks,
                                         )
-                                        .map_err(PeerError::InvalidResponse)
+                                        .map_err(ServerError::InvalidResponse)
                                     },
                                     api.all_peers().to_num_peers(),
                                 ),

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::string::ToString;
 
-use fedimint_api_client::api::{DynModuleApi, IRawFederationApi, PeerResult};
+use fedimint_api_client::api::{DynModuleApi, IRawFederationApi, ServerResult};
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::ApiRequestErased;
@@ -136,7 +136,7 @@ where
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> PeerResult<Value> {
+    ) -> ServerResult<Value> {
         self.log_event(ApiCallStarted {
             method: method.to_string(),
             peer_id,

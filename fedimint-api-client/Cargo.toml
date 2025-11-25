@@ -12,14 +12,7 @@ version = { workspace = true }
 development = ["tokio-test"]
 
 [features]
-tor = [
-    "dep:strum",
-    "dep:curve25519-dalek",
-    "dep:tor-rtcompat",
-    "arti-client/tokio",
-    "arti-client/rustls",
-    "arti-client/onion-service-client",
-]
+tor = ["fedimint-connectors/tor"]
 
 [lib]
 name = "fedimint_api_client"
@@ -31,6 +24,7 @@ async-channel = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bitcoin = { workspace = true }
+fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }

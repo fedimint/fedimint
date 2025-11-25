@@ -9,9 +9,10 @@ use std::{env, fs, iter};
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoincore_rpc::bitcoin::Network;
+use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::net::ConnectorType;
-use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 use fedimint_client_module::module::ClientModule;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;

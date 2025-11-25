@@ -9,7 +9,7 @@ mod onchain_commands;
 use clap::{CommandFactory, Parser, Subcommand};
 use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
-use fedimint_api_client::api::ConnectorRegistry;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::util::SafeUrl;
 use fedimint_ln_common::client::GatewayApi;
 use fedimint_logging::TracingSetup;

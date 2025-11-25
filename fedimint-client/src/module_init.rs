@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 
-use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
+use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -10,6 +10,7 @@ use fedimint_client_module::module::init::{
 use fedimint_client_module::module::recovery::{DynModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{ClientContext, DynClientModule, FinalClientIface};
 use fedimint_client_module::{ClientModule, ModuleInstanceId, ModuleKind};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{ClientModuleConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::Decoder;
 use fedimint_core::db::{Database, DatabaseVersion};

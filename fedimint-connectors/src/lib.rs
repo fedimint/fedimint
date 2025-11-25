@@ -1,6 +1,8 @@
 pub mod error;
 pub mod http;
 pub mod iroh;
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
+pub mod tor;
 pub mod ws;
 
 use std::collections::{BTreeMap, HashMap};
@@ -133,7 +135,7 @@ impl ConnectorRegistryBuilder {
         match self.ws_force_tor {
             #[cfg(all(feature = "tor", not(target_family = "wasm")))]
             true => {
-                use crate::api::tor::TorConnector;
+                use crate::tor::TorConnector;
 
                 Ok(Arc::new(TorConnector::bootstrap().await?) as DynConnector)
             }

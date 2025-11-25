@@ -5,11 +5,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_stream::try_stream;
-use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::ClientModule;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{ClientHandleArc, ClientPreview, RootSecret};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};

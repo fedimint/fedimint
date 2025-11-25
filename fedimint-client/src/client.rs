@@ -14,8 +14,7 @@ use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{
-    ApiVersionSet, ConnectorRegistry, DynGlobalApi, FederationApiExt as _, FederationResult,
-    IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
@@ -34,6 +33,7 @@ use fedimint_client_module::{
     AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
     ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
 };
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
@@ -868,7 +868,7 @@ impl Client {
         api: &DynGlobalApi,
     ) -> (
         PeerId,
-        Result<SupportedApiVersionsSummary, fedimint_api_client::api::PeerError>,
+        Result<SupportedApiVersionsSummary, fedimint_connectors::error::ServerError>,
     ) {
         runtime::sleep(delay).await;
         (

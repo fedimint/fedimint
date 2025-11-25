@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use anyhow::Context;
-use fedimint_api_client::api::{
-    ConnectionPool, ConnectorRegistry, DynGatewayConnection, IGatewayConnection, PeerError,
-    PeerResult,
+use fedimint_connectors::error::ServerError;
+use fedimint_connectors::{
+    ConnectionPool, ConnectorRegistry, DynGatewayConnection, IGatewayConnection, ServerResult,
 };
 use fedimint_core::util::SafeUrl;
 use reqwest::Method;
@@ -24,13 +24,13 @@ impl GatewayApi {
         }
     }
 
-    async fn get_or_create_connection(&self, url: &SafeUrl) -> PeerResult<DynGatewayConnection> {
+    async fn get_or_create_connection(&self, url: &SafeUrl) -> ServerResult<DynGatewayConnection> {
         self.connection_pool
             .get_or_create_connection(url, None, |url, _api_secret, connectors| async move {
                 let conn = connectors
                     .connect_gateway(&url)
                     .await
-                    .map_err(PeerError::Connection)?;
+                    .map_err(ServerError::Connection)?;
                 Ok(conn)
             })
             .await
@@ -42,18 +42,18 @@ impl GatewayApi {
         method: Method,
         route: &str,
         payload: Option<P>,
-    ) -> PeerResult<T> {
+    ) -> ServerResult<T> {
         let conn = self
             .get_or_create_connection(base_url)
             .await
             .context("Failed to connect to gateway")
-            .map_err(PeerError::Connection)?;
+            .map_err(ServerError::Connection)?;
         let payload = payload.map(|p| serde_json::to_value(p).expect("Could not serialize"));
         let res = conn
             .request(self.password.clone(), method, route, payload)
             .await?;
         let response = serde_json::from_value::<T>(res).map_err(|e| {
-            PeerError::InvalidResponse(anyhow::anyhow!("Received invalid response: {e}"))
+            ServerError::InvalidResponse(anyhow::anyhow!("Received invalid response: {e}"))
         })?;
         Ok(response)
     }
