@@ -286,6 +286,11 @@ async fn dashboard_view(
                                         br;
                                         "After changing your password, you will need to log in again with the new password."
                                     }
+                                    div class="alert alert-info mt-3" {
+                                        strong { "Just so you know" }
+                                        br;
+                                        "Fedimint instance will shut down and might require a manual restart (depending how it's run)"
+                                    }
                                 }
                             }
                         }
