@@ -21,6 +21,10 @@ tor = [
     "arti-client/onion-service-client",
 ]
 
+[lib]
+name = "fedimint_connectors"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -45,7 +49,14 @@ z32 = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 arti-client = { workspace = true, optional = true }
+aws-lc-sys = { version = "0.30", features = ["bindgen"] }
 curve25519-dalek = { workspace = true, optional = true }
+iroh = { workspace = true, default-features = false, features = [
+    "discovery-pkarr-dht",
+] }
+iroh-next = { workspace = true, default-features = false, features = [
+    "discovery-pkarr-dht",
+] }
 jsonrpsee-ws-client = { workspace = true, features = ["tls"] }
 rustls-pki-types = { workspace = true }
 strum = { workspace = true, optional = true }
