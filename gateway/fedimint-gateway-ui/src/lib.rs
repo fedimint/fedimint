@@ -39,7 +39,7 @@ use crate::lightning::{channels_fragment_handler, open_channel_handler};
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
 pub(crate) const OPEN_CHANNEL_ROUTE: &str = "/ui/channels/open";
-pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/channels/fragment";
+pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/ui/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
 pub(crate) const SET_FEES_ROUTE: &str = "/ui/federation/set-fees";
