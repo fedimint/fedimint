@@ -9,6 +9,7 @@ mod payment_summary;
 use std::fmt::Display;
 use std::sync::Arc;
 
+use ::bitcoin::Txid;
 use async_trait::async_trait;
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Redirect};
@@ -21,7 +22,7 @@ use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
     ChainSource, ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
-    PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
+    OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -89,6 +90,11 @@ pub trait IAdminGateway {
     async fn handle_set_fees_msg(&self, payload: SetFeesPayload) -> Result<(), Self::Error>;
 
     async fn handle_mnemonic_msg(&self) -> Result<MnemonicResponse, Self::Error>;
+
+    async fn handle_open_channel_msg(
+        &self,
+        payload: OpenChannelRequest,
+    ) -> Result<Txid, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
