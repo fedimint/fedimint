@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["OutputOutcomeError","PeerError"],"struct":["FederationError"]};
+window.SIDEBAR_ITEMS = {"enum":["OutputOutcomeError"],"struct":["FederationError"]};

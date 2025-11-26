@@ -18,7 +18,7 @@
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>bitcoin::hashes::{Hash, sha256};
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>bitcoin::secp256k1;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, PeerError};
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, ServerError};
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -467,7 +467,7 @@
 <a href=#467 id=467 data-nosnippet>467</a>        <span class="prelude-val">Err</span>(SelectGatewayError::FailedToFetchRoutingInfo)
 <a href=#468 id=468 data-nosnippet>468</a>    }
 <a href=#469 id=469 data-nosnippet>469</a>
-<a href=#470 id=470 data-nosnippet>470</a>    <span class="kw">async fn </span>routing_info(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>SafeUrl) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, PeerError&gt; {
+<a href=#470 id=470 data-nosnippet>470</a>    <span class="kw">async fn </span>routing_info(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>SafeUrl) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, ServerError&gt; {
 <a href=#471 id=471 data-nosnippet>471</a>        <span class="self">self</span>.gateway_conn
 <a href=#472 id=472 data-nosnippet>472</a>            .routing_info(gateway.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
 <a href=#473 id=473 data-nosnippet>473</a>            .<span class="kw">await

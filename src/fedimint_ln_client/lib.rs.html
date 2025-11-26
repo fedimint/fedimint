@@ -31,7 +31,7 @@
 <a href=#31 id=31 data-nosnippet>31</a>    DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 <a href=#32 id=32 data-nosnippet>32</a>    RecurringPaymentCodeKeyPrefix,
 <a href=#33 id=33 data-nosnippet>33</a>};
-<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, PeerError};
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>fedimint_api_client::api::{DynModuleApi, ServerError};
 <a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 <a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>fedimint_client_module::module::recovery::NoModuleBackup;
@@ -2331,7 +2331,7 @@
 <a href=#2331 id=2331 data-nosnippet>2331</a>    </span><span class="kw">async fn </span>verify_gateway_availability(
 <a href=#2332 id=2332 data-nosnippet>2332</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#2333 id=2333 data-nosnippet>2333</a>        gateway: <span class="kw-2">&amp;</span>LightningGateway,
-<a href=#2334 id=2334 data-nosnippet>2334</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), PeerError&gt;;
+<a href=#2334 id=2334 data-nosnippet>2334</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ServerError&gt;;
 <a href=#2335 id=2335 data-nosnippet>2335</a>
 <a href=#2336 id=2336 data-nosnippet>2336</a>    <span class="comment">// Request the gateway to pay a BOLT11 invoice
 <a href=#2337 id=2337 data-nosnippet>2337</a>    </span><span class="kw">async fn </span>pay_invoice(
@@ -2351,7 +2351,7 @@
 <a href=#2351 id=2351 data-nosnippet>2351</a>    <span class="kw">async fn </span>verify_gateway_availability(
 <a href=#2352 id=2352 data-nosnippet>2352</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#2353 id=2353 data-nosnippet>2353</a>        gateway: <span class="kw-2">&amp;</span>LightningGateway,
-<a href=#2354 id=2354 data-nosnippet>2354</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), PeerError&gt; {
+<a href=#2354 id=2354 data-nosnippet>2354</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ServerError&gt; {
 <a href=#2355 id=2355 data-nosnippet>2355</a>        <span class="self">self</span>.api
 <a href=#2356 id=2356 data-nosnippet>2356</a>            .request::&lt;PublicKey, serde_json::Value&gt;(
 <a href=#2357 id=2357 data-nosnippet>2357</a>                <span class="kw-2">&amp;</span>gateway.api,
@@ -2394,7 +2394,7 @@
 <a href=#2394 id=2394 data-nosnippet>2394</a>    <span class="kw">async fn </span>verify_gateway_availability(
 <a href=#2395 id=2395 data-nosnippet>2395</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#2396 id=2396 data-nosnippet>2396</a>        _gateway: <span class="kw-2">&amp;</span>LightningGateway,
-<a href=#2397 id=2397 data-nosnippet>2397</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), PeerError&gt; {
+<a href=#2397 id=2397 data-nosnippet>2397</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ServerError&gt; {
 <a href=#2398 id=2398 data-nosnippet>2398</a>        <span class="prelude-val">Ok</span>(())
 <a href=#2399 id=2399 data-nosnippet>2399</a>    }
 <a href=#2400 id=2400 data-nosnippet>2400</a>

@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>anyhow::anyhow;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoin::hashes::sha256::{<span class="self">self</span>, Hash <span class="kw">as </span>Sha256Hash};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_api_client::api::{
-<a href=#8 id=8 data-nosnippet>8</a>    FederationApiExt, FederationResult, IModuleFederationApi, PeerError,
+<a href=#8 id=8 data-nosnippet>8</a>    FederationApiExt, FederationResult, IModuleFederationApi, ServerError,
 <a href=#9 id=9 data-nosnippet>9</a>};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -214,7 +214,7 @@
 <a href=#214 id=214 data-nosnippet>214</a>                ),
 <a href=#215 id=215 data-nosnippet>215</a>            )
 <a href=#216 id=216 data-nosnippet>216</a>            .<span class="kw">await
-<a href=#217 id=217 data-nosnippet>217</a>            </span>.map_err(|e| PeerError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
+<a href=#217 id=217 data-nosnippet>217</a>            </span>.map_err(|e| ServerError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
 <a href=#218 id=218 data-nosnippet>218</a>            .and_then(identity)
 <a href=#219 id=219 data-nosnippet>219</a>            {
 <a href=#220 id=220 data-nosnippet>220</a>                responses.insert(<span class="kw-2">*</span>peer, response);
@@ -238,7 +238,7 @@
 <a href=#238 id=238 data-nosnippet>238</a>                ),
 <a href=#239 id=239 data-nosnippet>239</a>            )
 <a href=#240 id=240 data-nosnippet>240</a>            .<span class="kw">await
-<a href=#241 id=241 data-nosnippet>241</a>            </span>.map_err(|e| PeerError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
+<a href=#241 id=241 data-nosnippet>241</a>            </span>.map_err(|e| ServerError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Request timed out: {e}"</span>)))
 <a href=#242 id=242 data-nosnippet>242</a>            .and_then(identity)
 <a href=#243 id=243 data-nosnippet>243</a>            {
 <a href=#244 id=244 data-nosnippet>244</a>                <span class="kw">if </span>response {

@@ -7,7 +7,7 @@
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>anyhow::{Context <span class="kw">as _</span>, anyhow, bail};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>async_channel::Receiver;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerError};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, ServerError};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_api_client::query::FilterMap;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::config::P2PMessage;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
@@ -898,7 +898,7 @@
 <a href=#898 id=898 data-nosnippet>898</a>        <span class="kw">let </span>filter_map = <span class="kw">move </span>|response: SerdeModuleEncoding&lt;SignedSessionOutcome&gt;| {
 <a href=#899 id=899 data-nosnippet>899</a>            <span class="kw">let </span>signed_session_outcome = response
 <a href=#900 id=900 data-nosnippet>900</a>                .try_into_inner(<span class="kw-2">&amp;</span>decoders)
-<a href=#901 id=901 data-nosnippet>901</a>                .map_err(|x| PeerError::ResponseDeserialization(x.into()))<span class="question-mark">?</span>;
+<a href=#901 id=901 data-nosnippet>901</a>                .map_err(|x| ServerError::ResponseDeserialization(x.into()))<span class="question-mark">?</span>;
 <a href=#902 id=902 data-nosnippet>902</a>            <span class="kw">let </span>header = signed_session_outcome.session_outcome.header(index);
 <a href=#903 id=903 data-nosnippet>903</a>            <span class="kw">if </span>signed_session_outcome.signatures.len() == threshold
 <a href=#904 id=904 data-nosnippet>904</a>                &amp;&amp; signed_session_outcome
@@ -908,7 +908,7 @@
 <a href=#908 id=908 data-nosnippet>908</a>            {
 <a href=#909 id=909 data-nosnippet>909</a>                <span class="prelude-val">Ok</span>(signed_session_outcome)
 <a href=#910 id=910 data-nosnippet>910</a>            } <span class="kw">else </span>{
-<a href=#911 id=911 data-nosnippet>911</a>                <span class="prelude-val">Err</span>(PeerError::InvalidResponse(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>)))
+<a href=#911 id=911 data-nosnippet>911</a>                <span class="prelude-val">Err</span>(ServerError::InvalidResponse(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>)))
 <a href=#912 id=912 data-nosnippet>912</a>            }
 <a href=#913 id=913 data-nosnippet>913</a>        };
 <a href=#914 id=914 data-nosnippet>914</a>

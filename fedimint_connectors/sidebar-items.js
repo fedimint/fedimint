@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["error","http","iroh","tor","ws"],"struct":["ConnectionPool","ConnectionState","ConnectionStateInner","ConnectorRegistry","ConnectorRegistryBuilder"],"trait":["Connector","IConnection","IGatewayConnection","IGuardianConnection"],"type":["ConnectorInitFn","DynConnector","DynGatewayConnection","DynGuaridianConnection","ServerResult"]};

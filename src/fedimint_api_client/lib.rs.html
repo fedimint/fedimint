@@ -7,17 +7,17 @@
 <a href=#7 id=7 data-nosnippet>7</a>
 <a href=#8 id=8 data-nosnippet>8</a></span><span class="kw">use </span>anyhow::{Context <span class="kw">as _</span>, bail};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>api::net::ConnectorType;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>, PeerError};
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::invite_code::InviteCode;
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::module::ApiRequestErased;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::util::backoff_util;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>query::FilterMap;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>tracing::debug;
-<a href=#19 id=19 data-nosnippet>19</a>
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::api::ConnectorRegistry;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_connectors::ConnectorRegistry;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_connectors::error::ServerError;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::invite_code::InviteCode;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::util::backoff_util;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>query::FilterMap;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>tracing::debug;
 <a href=#21 id=21 data-nosnippet>21</a>
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">pub mod </span>api;
 <a href=#23 id=23 data-nosnippet>23</a><span class="doccomment">/// Client query system
@@ -75,7 +75,7 @@
 <a href=#75 id=75 data-nosnippet>75</a>        <span class="comment">// TODO: use new download approach based on guardian PKs
 <a href=#76 id=76 data-nosnippet>76</a>        </span><span class="kw">let </span>query_strategy = FilterMap::new(<span class="kw">move </span>|cfg: ClientConfig| {
 <a href=#77 id=77 data-nosnippet>77</a>            <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
-<a href=#78 id=78 data-nosnippet>78</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(PeerError::ConditionFailed(<span class="macro">anyhow::anyhow!</span>(
+<a href=#78 id=78 data-nosnippet>78</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(ServerError::ConditionFailed(<span class="macro">anyhow::anyhow!</span>(
 <a href=#79 id=79 data-nosnippet>79</a>                    <span class="string">"FederationId in invite code does not match client config"
 <a href=#80 id=80 data-nosnippet>80</a>                </span>)));
 <a href=#81 id=81 data-nosnippet>81</a>            }

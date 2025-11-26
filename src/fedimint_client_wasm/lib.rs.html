@@ -31,7 +31,7 @@
 <a href=#31 id=31 data-nosnippet>31</a>        <span class="comment">// Create the database directly
 <a href=#32 id=32 data-nosnippet>32</a>        </span><span class="kw">let </span>cursed_db = MemAndRedb::new(sync_handle).unwrap();
 <a href=#33 id=33 data-nosnippet>33</a>        <span class="kw">let </span>database = Database::new(cursed_db, Default::default());
-<a href=#34 id=34 data-nosnippet>34</a>        <span class="kw">let </span>connectors = fedimint_api_client::api::ConnectorRegistry::build_from_client_defaults()
+<a href=#34 id=34 data-nosnippet>34</a>        <span class="kw">let </span>connectors = fedimint_connectors::ConnectorRegistry::build_from_client_defaults()
 <a href=#35 id=35 data-nosnippet>35</a>            .bind()
 <a href=#36 id=36 data-nosnippet>36</a>            .<span class="kw">await
 <a href=#37 id=37 data-nosnippet>37</a>            </span>.unwrap();

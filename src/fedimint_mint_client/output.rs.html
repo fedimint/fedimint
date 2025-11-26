@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>anyhow::{anyhow, bail};
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_api_client::api::{
-<a href=#6 id=6 data-nosnippet>6</a>    FederationApiExt, PeerError, SerdeOutputOutcome, deserialize_outcome,
+<a href=#6 id=6 data-nosnippet>6</a>    FederationApiExt, SerdeOutputOutcome, ServerError, deserialize_outcome,
 <a href=#7 id=7 data-nosnippet>7</a>};
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_client_module::DynGlobalClientContext;
@@ -218,7 +218,7 @@
 <a href=#218 id=218 data-nosnippet>218</a>                            <span class="kw-2">&amp;</span>module_decoder,
 <a href=#219 id=219 data-nosnippet>219</a>                            <span class="kw-2">&amp;</span>tbs_pks,
 <a href=#220 id=220 data-nosnippet>220</a>                        )
-<a href=#221 id=221 data-nosnippet>221</a>                        .map_err(PeerError::InvalidResponse)
+<a href=#221 id=221 data-nosnippet>221</a>                        .map_err(ServerError::InvalidResponse)
 <a href=#222 id=222 data-nosnippet>222</a>                    },
 <a href=#223 id=223 data-nosnippet>223</a>                    global_context.api().all_peers().to_num_peers(),
 <a href=#224 id=224 data-nosnippet>224</a>                ),
@@ -405,7 +405,7 @@
 <a href=#405 id=405 data-nosnippet>405</a>                                <span class="kw-2">&amp;</span>module_decoder,
 <a href=#406 id=406 data-nosnippet>406</a>                                <span class="kw-2">&amp;</span>tbs_pks,
 <a href=#407 id=407 data-nosnippet>407</a>                            )
-<a href=#408 id=408 data-nosnippet>408</a>                            .map_err(PeerError::InvalidResponse)
+<a href=#408 id=408 data-nosnippet>408</a>                            .map_err(ServerError::InvalidResponse)
 <a href=#409 id=409 data-nosnippet>409</a>                        },
 <a href=#410 id=410 data-nosnippet>410</a>                        api.all_peers().to_num_peers(),
 <a href=#411 id=411 data-nosnippet>411</a>                    ),
@@ -444,7 +444,7 @@
 <a href=#444 id=444 data-nosnippet>444</a>                                            <span class="kw-2">&amp;</span>module_decoder,
 <a href=#445 id=445 data-nosnippet>445</a>                                            <span class="kw-2">&amp;</span>tbs_pks,
 <a href=#446 id=446 data-nosnippet>446</a>                                        )
-<a href=#447 id=447 data-nosnippet>447</a>                                        .map_err(PeerError::InvalidResponse)
+<a href=#447 id=447 data-nosnippet>447</a>                                        .map_err(ServerError::InvalidResponse)
 <a href=#448 id=448 data-nosnippet>448</a>                                    },
 <a href=#449 id=449 data-nosnippet>449</a>                                    api.all_peers().to_num_peers(),
 <a href=#450 id=450 data-nosnippet>450</a>                                ),
