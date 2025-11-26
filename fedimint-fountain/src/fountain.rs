@@ -159,7 +159,7 @@ impl EncodingMetadata {
     }
 }
 
-/// A fragment emitted by a fountain [`Encoder`].
+/// A fragment emitted by a fountain encoder.
 #[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
 pub struct Fragment {
     meta: EncodingMetadata,
