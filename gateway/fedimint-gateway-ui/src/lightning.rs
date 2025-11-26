@@ -1,12 +1,17 @@
+use std::fmt::Display;
+
+use axum::Form;
 use axum::extract::State;
-use axum::response::Html;
+use axum::response::{Html, IntoResponse};
 use fedimint_core::bitcoin::Network;
-use fedimint_gateway_common::{ChannelInfo, GatewayInfo, LightningInfo, LightningMode};
+use fedimint_gateway_common::{
+    ChannelInfo, GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest,
+};
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
-use crate::{CHANNEL_FRAGMENT_ROUTE, DynGatewayApi};
+use crate::{CHANNEL_FRAGMENT_ROUTE, DynGatewayApi, redirect_error, redirect_success};
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
 where
@@ -279,32 +284,31 @@ where
 
                         // Collapsible form
                         div id="open-channel-form" class="collapse mt-3" {
-                            div class="card card-body" {
+                            form hx-post="/ui/channels/open"
+                                hx-target="#channels-container"
+                                hx-swap="outerHTML"
+                                class="card card-body" {
+
                                 h5 class="card-title" { "Open New Channel" }
 
                                 div class="mb-2" {
                                     label class="form-label" { "Remote Node Public Key" }
-                                    input type="text" name="pubkey" class="form-control" placeholder="03abcd..." {}
+                                    input type="text" name="pubkey" class="form-control" placeholder="03abcd..." required {}
                                 }
 
                                 div class="mb-2" {
                                     label class="form-label" { "Host" }
-                                    input type="text" name="host" class="form-control" placeholder="1.2.3.4:9735" {}
+                                    input type="text" name="host" class="form-control" placeholder="1.2.3.4:9735" required {}
                                 }
 
                                 div class="mb-2" {
                                     label class="form-label" { "Channel Size (sats)" }
-                                    input type="number" name="size_sats" class="form-control" placeholder="1000000" {}
+                                    input type="number" name="channel_size_sats" class="form-control" placeholder="1000000" required {}
                                 }
 
-                                div class="mb-3" {
-                                    label class="form-label" { "Push Amount (sats)" }
-                                    input type="number" name="push_sats" class="form-control" placeholder="0" {}
-                                }
+                                input type="hidden" name="push_amount_sats" value="0" {}
 
-                                button class="btn btn-success" type="button" {
-                                    "Confirm Open"
-                                }
+                                button type="submit" class="btn btn-success" { "Confirm Open" }
                             }
                         }
                     }
@@ -325,4 +329,22 @@ where
 
     let markup = channels_fragment_markup(channels_result);
     Html(markup.into_string())
+}
+
+pub async fn open_channel_handler<E: Display + Send + Sync>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<OpenChannelRequest>,
+) -> Html<String> {
+    match state.api.handle_open_channel_msg(payload).await {
+        Ok(txid) => {
+            let channels_result = state.api.handle_list_channels_msg().await;
+            let markup = channels_fragment_markup(channels_result);
+            Html(markup.into_string())
+        }
+        Err(err) => {
+            let markup = channels_fragment_markup(Err(err));
+            Html(markup.into_string())
+        }
+    }
 }
