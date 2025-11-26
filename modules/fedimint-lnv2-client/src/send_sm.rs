@@ -19,6 +19,7 @@ use secp256k1::schnorr::Signature;
 use tracing::instrument;
 
 use crate::api::LightningFederationApi;
+use crate::events::{SendPaymentStatus, SendPaymentUpdateEvent};
 use crate::{LightningClientContext, LightningInvoice};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -55,6 +56,24 @@ pub enum SendSMState {
     Refunding(Vec<OutPoint>),
 }
 
+async fn send_update_event(
+    context: LightningClientContext,
+    dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    operation_id: OperationId,
+    status: SendPaymentStatus,
+) {
+    context
+        .client_ctx
+        .log_event(
+            &mut dbtx.module_tx(),
+            SendPaymentUpdateEvent {
+                operation_id,
+                status,
+            },
+        )
+        .await;
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that requests the lightning gateway to pay an invoice on
 /// behalf of a federation client.
@@ -78,14 +97,16 @@ impl State for SendStateMachine {
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
+        let c_pay = context.clone();
         let gc_pay = global_context.clone();
+        let c_preimage = context.clone();
         let gc_preimage = global_context.clone();
 
         match &self.state {
             SendSMState::Funding => {
                 vec![StateTransition::new(
                     Self::await_funding(global_context.clone(), self.common.outpoint.txid),
-                    |_, error, old_state| {
+                    move |_, error, old_state| {
                         Box::pin(async move { Self::transition_funding(error, &old_state) })
                     },
                 )]
@@ -104,6 +125,7 @@ impl State for SendStateMachine {
                         ),
                         move |dbtx, response, old_state| {
                             Box::pin(Self::transition_gateway_send_payment(
+                                c_pay.clone(),
                                 gc_pay.clone(),
                                 dbtx,
                                 response,
@@ -119,6 +141,7 @@ impl State for SendStateMachine {
                         ),
                         move |dbtx, preimage, old_state| {
                             Box::pin(Self::transition_preimage(
+                                c_preimage.clone(),
                                 dbtx,
                                 gc_preimage.clone(),
                                 old_state,
@@ -151,10 +174,10 @@ impl SendStateMachine {
         result: Result<(), String>,
         old_state: &SendStateMachine,
     ) -> SendStateMachine {
-        old_state.update(match result {
-            Ok(()) => SendSMState::Funded,
-            Err(error) => SendSMState::Rejected(error),
-        })
+        match result {
+            Ok(()) => old_state.update(SendSMState::Funded),
+            Err(error) => old_state.update(SendSMState::Rejected(error)),
+        }
     }
 
     #[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context))]
@@ -194,13 +217,24 @@ impl SendStateMachine {
     }
 
     async fn transition_gateway_send_payment(
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         gateway_response: Result<[u8; 32], Signature>,
         old_state: SendStateMachine,
     ) -> SendStateMachine {
         match gateway_response {
-            Ok(preimage) => old_state.update(SendSMState::Success(preimage)),
+            Ok(preimage) => {
+                send_update_event(
+                    context,
+                    dbtx,
+                    old_state.common.operation_id,
+                    SendPaymentStatus::Success(preimage),
+                )
+                .await;
+
+                old_state.update(SendSMState::Success(preimage))
+            }
             Err(signature) => {
                 let client_input = ClientInput::<LightningInput> {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
@@ -219,6 +253,14 @@ impl SendStateMachine {
                     )
                     .await
                     .expect("Cannot claim input, additional funding needed");
+
+                send_update_event(
+                    context,
+                    dbtx,
+                    old_state.common.operation_id,
+                    SendPaymentStatus::Refunded,
+                )
+                .await;
 
                 old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
             }
@@ -246,12 +288,21 @@ impl SendStateMachine {
     }
 
     async fn transition_preimage(
+        context: LightningClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
         old_state: SendStateMachine,
         preimage: Option<[u8; 32]>,
     ) -> SendStateMachine {
         if let Some(preimage) = preimage {
+            send_update_event(
+                context,
+                dbtx,
+                old_state.common.operation_id,
+                SendPaymentStatus::Success(preimage),
+            )
+            .await;
+
             return old_state.update(SendSMState::Success(preimage));
         }
 
@@ -268,6 +319,14 @@ impl SendStateMachine {
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed");
+
+        send_update_event(
+            context,
+            dbtx,
+            old_state.common.operation_id,
+            SendPaymentStatus::Refunded,
+        )
+        .await;
 
         old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
     }

@@ -13,7 +13,7 @@ use futures::future::pending;
 use tracing::warn;
 
 use crate::WalletClientContext;
-use crate::events::WithdrawRequest;
+use crate::events::{SendPaymentStatus, SendPaymentStatusEvent, WithdrawRequest};
 
 // TODO: track tx confirmations
 #[aquamarine::aquamarine]
@@ -117,9 +117,34 @@ async fn transition_withdraw_processed(
                 .client_ctx
                 .log_event(&mut dbtx.module_tx(), WithdrawRequest { txid })
                 .await;
+
+            client_ctx
+                .client_ctx
+                .log_event(
+                    &mut dbtx.module_tx(),
+                    SendPaymentStatusEvent {
+                        operation_id: old_state.operation_id,
+                        status: SendPaymentStatus::Success(txid),
+                    },
+                )
+                .await;
+
             WithdrawStates::Success(SuccessWithdrawState { txid })
         }
-        Err(error) => WithdrawStates::Aborted(AbortedWithdrawState { error }),
+        Err(error) => {
+            client_ctx
+                .client_ctx
+                .log_event(
+                    &mut dbtx.module_tx(),
+                    SendPaymentStatusEvent {
+                        operation_id: old_state.operation_id,
+                        status: SendPaymentStatus::Aborted,
+                    },
+                )
+                .await;
+
+            WithdrawStates::Aborted(AbortedWithdrawState { error })
+        }
     };
 
     WithdrawStateMachine {
