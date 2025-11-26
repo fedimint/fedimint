@@ -266,6 +266,48 @@ where
                             }
                         }
                     }
+
+                    div class="mt-3" {
+                        // Toggle button
+                        button id="open-channel-btn" class="btn btn-sm btn-primary"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#open-channel-form"
+                            aria-expanded="false"
+                            aria-controls="open-channel-form"
+                        { "Open Channel" }
+
+                        // Collapsible form
+                        div id="open-channel-form" class="collapse mt-3" {
+                            div class="card card-body" {
+                                h5 class="card-title" { "Open New Channel" }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Remote Node Public Key" }
+                                    input type="text" name="pubkey" class="form-control" placeholder="03abcd..." {}
+                                }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Host" }
+                                    input type="text" name="host" class="form-control" placeholder="1.2.3.4:9735" {}
+                                }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Channel Size (sats)" }
+                                    input type="number" name="size_sats" class="form-control" placeholder="1000000" {}
+                                }
+
+                                div class="mb-3" {
+                                    label class="form-label" { "Push Amount (sats)" }
+                                    input type="number" name="push_sats" class="form-control" placeholder="0" {}
+                                }
+
+                                button class="btn btn-success" type="button" {
+                                    "Confirm Open"
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
