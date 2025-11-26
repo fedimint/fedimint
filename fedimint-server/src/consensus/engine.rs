@@ -18,7 +18,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::net::peers::DynP2PConnections;
 use fedimint_core::runtime::spawn;
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
@@ -348,7 +348,7 @@ impl ConsensusEngine {
         timestamp_receiver: Receiver<Instant>,
         signed_outcomes_receiver: Receiver<(PeerId, SignedSessionOutcome)>,
         signatures_receiver: Receiver<(PeerId, schnorr::Signature)>,
-        connections: DynP2PConnections<P2PMessage>,
+        _connections: DynP2PConnections<P2PMessage>,
     ) -> Option<SignedSessionOutcome> {
         // It is guaranteed that aleph bft will always replay all previously processed
         // items from the current session from index zero
@@ -534,10 +534,11 @@ impl ConsensusEngine {
                     );
                 }
                 _ = index_broadcast_interval.tick() => {
-                    connections.send(
-                        Recipient::Peer(self.random_peer()),
-                        P2PMessage::SessionIndex(session_index),
-                    );
+                    // TODO: start sending the new messages in 0.11.0
+                    // connections.send(
+                    //     Recipient::Peer(self.random_peer()),
+                    //     P2PMessage::SessionIndex(session_index),
+                    // );
                 }
             }
         }
@@ -671,16 +672,18 @@ impl ConsensusEngine {
                     );
                 }
                 _ = signature_broadcast_interval.tick() => {
-                    connections.send(
-                        Recipient::Everyone,
-                        P2PMessage::SessionSignature(our_signature),
-                    );
+                    // TODO: start sending the new messages in 0.11.0
+                    // connections.send(
+                    //     Recipient::Everyone,
+                    //     P2PMessage::SessionSignature(our_signature),
+                    // );
                 }
                 _ = index_broadcast_interval.tick() => {
-                    connections.send(
-                        Recipient::Peer(self.random_peer()),
-                        P2PMessage::SessionIndex(session_index),
-                    );
+                    // TODO: start sending the new messages in 0.11.0
+                    // connections.send(
+                    //     Recipient::Peer(self.random_peer()),
+                    //     P2PMessage::SessionIndex(session_index),
+                    // );
                 }
             }
         }
@@ -698,6 +701,7 @@ impl ConsensusEngine {
     }
 
     /// Returns a random peer ID excluding ourselves
+    #[allow(unused)]
     fn random_peer(&self) -> PeerId {
         self.num_peers()
             .peer_ids()
