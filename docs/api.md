@@ -84,7 +84,7 @@ Use [github search to find more details about every API](https://github.com/sear
 ### P2P Connection Status Endpoint
 - **Endpoint**: `p2p_connection_status`
 - **Arguments**: None
-- **Returns**: `BTreeMap<PeerId, Option<Duration>>`
+- **Returns**: `BTreeMap<PeerId, Option<P2PConnectionStatus>>` where `P2PConnectionStatus` contains connection type and RTT
 - **Purpose**: Returns the connection status to other peers in the federation.
 
 ### Session Count Endpoint

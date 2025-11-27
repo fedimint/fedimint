@@ -50,7 +50,7 @@ use crate::consensus::engine::ConsensusEngine;
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, HasApiContext};
-use crate::net::p2p::{P2PConnectionTypeReceivers, P2PStatusReceivers};
+use crate::net::p2p::P2PStatusReceivers;
 use crate::{DashboardUiRouter, net, update_server_info_version_dbtx};
 
 /// How many txs can be stored in memory before blocking the API
@@ -61,7 +61,6 @@ pub async fn run(
     connectors: ConnectorRegistry,
     connections: DynP2PConnections<P2PMessage>,
     p2p_status_receivers: P2PStatusReceivers,
-    p2p_connection_type_receivers: P2PConnectionTypeReceivers,
     api_bind: SocketAddr,
     iroh_dns: Option<SafeUrl>,
     iroh_relays: Vec<SafeUrl>,
@@ -198,7 +197,6 @@ pub async fn run(
             &module_init_registry,
         ),
         p2p_status_receivers,
-        p2p_connection_type_receivers,
         ci_status_receivers,
         ord_latency_receiver,
         bitcoin_rpc_connection: bitcoin_rpc_connection.clone(),

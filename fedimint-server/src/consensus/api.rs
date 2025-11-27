@@ -30,10 +30,10 @@ use fedimint_core::endpoint_constants::{
     CHANGE_PASSWORD_ENDPOINT, CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT,
     CONSENSUS_ORD_LATENCY_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
-    P2P_CONNECTION_TYPE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -57,7 +57,9 @@ use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{OutPoint, OutPointRange, PeerId, TransactionId, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
-use fedimint_server_core::dashboard_ui::{ConnectionType, IDashboardApi, ServerBitcoinRpcStatus};
+use fedimint_server_core::dashboard_ui::{
+    IDashboardApi, P2PConnectionStatus, ServerBitcoinRpcStatus,
+};
 use fedimint_server_core::{DynServerModule, ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
 use tokio::sync::watch::{self, Receiver, Sender};
@@ -74,7 +76,7 @@ use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_d
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
-use crate::net::p2p::{P2PConnectionTypeReceivers, P2PStatusReceivers};
+use crate::net::p2p::P2PStatusReceivers;
 
 #[derive(Clone)]
 pub struct ConsensusApi {
@@ -95,7 +97,6 @@ pub struct ConsensusApi {
     pub shutdown_sender: Sender<Option<u64>>,
     pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
     pub p2p_status_receivers: P2PStatusReceivers,
-    pub p2p_connection_type_receivers: P2PConnectionTypeReceivers,
     pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
     pub supported_api_versions: SupportedApiVersionsSummary,
@@ -631,17 +632,10 @@ impl IDashboardApi for ConsensusApi {
         *self.ord_latency_receiver.borrow()
     }
 
-    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<Duration>> {
+    async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<P2PConnectionStatus>> {
         self.p2p_status_receivers
             .iter()
-            .map(|(peer, receiver)| (*peer, *receiver.borrow()))
-            .collect()
-    }
-
-    async fn p2p_connection_type_status(&self) -> BTreeMap<PeerId, ConnectionType> {
-        self.p2p_connection_type_receivers
-            .iter()
-            .map(|(peer, receiver)| (*peer, *receiver.borrow()))
+            .map(|(peer, receiver)| (*peer, receiver.borrow().clone()))
             .collect()
     }
 
@@ -807,20 +801,10 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             P2P_CONNECTION_STATUS_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<Duration>> {
+            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, Option<P2PConnectionStatus>> {
                 Ok(fedimint.p2p_status_receivers
                     .iter()
-                    .map(|(peer, receiver)| (*peer, *receiver.borrow()))
-                    .collect())
-            }
-        },
-        api_endpoint! {
-            P2P_CONNECTION_TYPE_ENDPOINT,
-            ApiVersion::new(0, 7),
-            async |fedimint: &ConsensusApi, _c, _v: ()| -> BTreeMap<PeerId, ConnectionType> {
-                Ok(fedimint.p2p_connection_type_receivers
-                    .iter()
-                    .map(|(peer, receiver)| (*peer, *receiver.borrow()))
+                    .map(|(peer, receiver)| (*peer, receiver.borrow().clone()))
                     .collect())
             }
         },

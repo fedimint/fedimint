@@ -179,9 +179,9 @@ where
         Ok((auth_peer, framed.into_dyn()))
     }
 
-    async fn connection_type(&self, _peer: PeerId) -> ConnectionType {
+    fn connection_type(&self, _peer: PeerId) -> Option<ConnectionType> {
         // TLS connections are always direct
-        ConnectionType::Direct
+        Some(ConnectionType::Direct)
     }
 }
 

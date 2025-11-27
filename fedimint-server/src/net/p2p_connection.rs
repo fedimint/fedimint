@@ -47,7 +47,7 @@ pub trait IP2PConnection<M>: Send + 'static {
     async fn receive(&mut self) -> anyhow::Result<DynIP2PFrame<M>>;
 
     /// Get the round-trip time of the connection.
-    fn rtt(&self) -> Duration;
+    fn rtt(&self) -> Option<Duration>;
 
     fn into_dyn(self) -> DynP2PConnection<M>
     where
@@ -98,8 +98,8 @@ where
         Ok(message)
     }
 
-    fn rtt(&self) -> Duration {
-        Duration::from_millis(0)
+    fn rtt(&self) -> Option<Duration> {
+        None
     }
 }
 
@@ -144,7 +144,7 @@ where
         Ok(self.accept_uni().await?.into_dyn())
     }
 
-    fn rtt(&self) -> Duration {
-        self.rtt()
+    fn rtt(&self) -> Option<Duration> {
+        Some(Connection::rtt(self))
     }
 }
