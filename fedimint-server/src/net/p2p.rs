@@ -20,7 +20,7 @@ use fedimint_server_core::dashboard_ui::ConnectionType;
 use futures::FutureExt;
 use futures::future::select_all;
 use tokio::sync::watch;
-use tracing::{Instrument, info, info_span, warn};
+use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::p2p_connection::DynP2PConnection;
@@ -171,8 +171,8 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for ReconnectP2PConnections<M
 
 #[derive(Clone)]
 struct P2PConnection<M> {
-    outgoing: Sender<M>,
-    incoming: Receiver<M>,
+    outgoing_sender: Sender<M>,
+    incoming_receiver: Receiver<M>,
 }
 
 impl<M: Send + 'static> P2PConnection<M> {
@@ -242,17 +242,19 @@ impl<M: Send + 'static> P2PConnection<M> {
         );
 
         P2PConnection {
-            outgoing: outgoing_sender,
-            incoming: incoming_receiver,
+            outgoing_sender,
+            incoming_receiver,
         }
     }
 
     fn try_send(&self, message: M) {
-        self.outgoing.try_send(message).ok();
+        if self.outgoing_sender.try_send(message).is_err() {
+            debug!(target: LOG_NET_PEER, "Outgoing message channel is full");
+        }
     }
 
     async fn receive(&self) -> Option<M> {
-        self.incoming.recv().await.ok()
+        self.incoming_receiver.recv().await.ok()
     }
 }
 
@@ -327,7 +329,9 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                             .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "incoming"])
                             .inc();
 
-                         self.incoming_sender.try_send(message).ok();
+                        if self.incoming_sender.try_send(message).is_err() {
+                            debug!(target: LOG_NET_PEER, "Incoming message channel is full");
+                        }
                     },
                     Err(e) => return Some(self.disconnect(e)),
                 }

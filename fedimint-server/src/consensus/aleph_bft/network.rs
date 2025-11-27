@@ -84,6 +84,12 @@ impl aleph_bft::Network<NetworkData> for Network {
                         // individual units size, hence the size of its attached unitdata in memory
                         if network_data.included_data().iter().all(UnitData::is_valid) {
                             return Some(network_data);
+                        } else {
+                            tracing::error!(
+                                target: LOG_CONSENSUS,
+                                %peer_id,
+                                "Received invalid unit data"
+                            );
                         }
                     }
                 }
@@ -116,13 +122,18 @@ impl aleph_bft::Network<NetworkData> for Network {
                                 target: LOG_CONSENSUS,
                                 %peer_id,
                                 err = %err.fmt_compact(),
-                                "Failed to decode SignedSessionOutcome from peer"
+                                "Failed to decode SignedSessionOutcome"
                             );
                         }
                     }
                 }
-                _ => {
-                    // Ignore other message types (Checksum, Dkg, Encodable)
+                message => {
+                    tracing::error!(
+                        target: LOG_CONSENSUS,
+                        %peer_id,
+                        ?message,
+                        "Received unexpected p2p message variant"
+                    );
                 }
             }
         }
