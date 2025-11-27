@@ -1881,6 +1881,11 @@ impl Client {
         self.log_event_added_transient_tx.subscribe()
     }
 
+    /// Get a receiver that signals when new events are added to the event log
+    pub fn log_event_added_rx(&self) -> watch::Receiver<()> {
+        self.log_event_added_rx.clone()
+    }
+
     pub fn iroh_enable_dht(&self) -> bool {
         self.iroh_enable_dht
     }

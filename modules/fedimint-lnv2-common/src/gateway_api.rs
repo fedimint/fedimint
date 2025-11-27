@@ -227,6 +227,10 @@ impl PaymentFee {
         Amount::from_msats(msats.saturating_sub(self.absolute_fee(msats)))
     }
 
+    pub fn fee(&self, msats: u64) -> Amount {
+        Amount::from_msats(self.absolute_fee(msats))
+    }
+
     fn absolute_fee(&self, msats: u64) -> u64 {
         msats
             .saturating_mul(self.parts_per_million)

@@ -8,6 +8,7 @@ mod api;
 #[cfg(feature = "cli")]
 mod cli;
 mod db;
+pub mod events;
 mod receive_sm;
 mod send_sm;
 
@@ -61,6 +62,7 @@ use tpe::{AggregateDecryptionKey, derive_agg_dk};
 use tracing::warn;
 
 use crate::api::LightningFederationApi;
+use crate::events::SendPaymentEvent;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
@@ -294,6 +296,7 @@ impl ClientModuleInit for LightningClientInit {
 pub struct LightningClientContext {
     federation_id: FederationId,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    pub(crate) client_ctx: ClientContext<LightningClientModule>,
 }
 
 impl Context for LightningClientContext {
@@ -326,6 +329,7 @@ impl ClientModule for LightningClientModule {
         LightningClientContext {
             federation_id: self.federation_id,
             gateway_conn: self.gateway_conn.clone(),
+            client_ctx: self.client_ctx.clone(),
         }
     }
 
@@ -489,6 +493,7 @@ impl LightningClientModule {
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
+    #[allow(clippy::too_many_lines)]
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
@@ -565,6 +570,7 @@ impl LightningClientModule {
             output: LightningOutput::V0(LightningOutputV0::Outgoing(contract.clone())),
             amounts: Amounts::new_bitcoin(contract.amount),
         };
+
         let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
             state_machines: Arc::new(move |range: OutPointRange| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
@@ -585,6 +591,7 @@ impl LightningClientModule {
             vec![client_output],
             vec![client_output_sm],
         ));
+
         let transaction = TransactionBuilder::new().with_outputs(client_output);
 
         self.client_ctx
@@ -604,6 +611,21 @@ impl LightningClientModule {
             )
             .await
             .map_err(|e| SendPaymentError::FinalizationError(e.to_string()))?;
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                SendPaymentEvent {
+                    operation_id,
+                    amount: send_fee.add_to(amount),
+                    fee: Some(send_fee.fee(amount)),
+                },
+            )
+            .await;
+
+        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
