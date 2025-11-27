@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["fountain"],"struct":["FountainDecoder","FountainEncoder"]};
+window.SIDEBAR_ITEMS = {"mod":["fountain"],"struct":["FountainDecoder","FountainEncoder","Fragment"]};
