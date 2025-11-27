@@ -12,6 +12,7 @@ use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_logging::LOG_CONSENSUS;
 use parity_scale_codec::{Decode, Encode, IoReader};
+use tracing::error;
 
 use super::super::db::SignedSessionOutcomeKey;
 use super::data_provider::UnitData;
@@ -79,16 +80,26 @@ impl aleph_bft::Network<NetworkData> for Network {
 
             match message {
                 P2PMessage::Aleph(bytes) => {
-                    if let Ok(network_data) = NetworkData::decode(&mut IoReader(bytes.as_slice())) {
-                        // in order to bound the RAM consumption of a session we have to bound an
-                        // individual units size, hence the size of its attached unitdata in memory
-                        if network_data.included_data().iter().all(UnitData::is_valid) {
-                            return Some(network_data);
-                        } else {
-                            tracing::error!(
+                    match NetworkData::decode(&mut IoReader(bytes.as_slice())) {
+                        Ok(network_data) => {
+                            // in order to bound the RAM consumption of a session we have to bound
+                            // the size of an individual unit in memory
+                            if network_data.included_data().iter().all(UnitData::is_valid) {
+                                return Some(network_data);
+                            }
+
+                            error!(
                                 target: LOG_CONSENSUS,
                                 %peer_id,
                                 "Received invalid unit data"
+                            );
+                        }
+                        Err(err) => {
+                            error!(
+                                target: LOG_CONSENSUS,
+                                %peer_id,
+                                err = %err.fmt_compact(),
+                                "Failed to decode Aleph BFT network data"
                             );
                         }
                     }
@@ -118,7 +129,7 @@ impl aleph_bft::Network<NetworkData> for Network {
                                 .ok();
                         }
                         Err(err) => {
-                            tracing::error!(
+                            error!(
                                 target: LOG_CONSENSUS,
                                 %peer_id,
                                 err = %err.fmt_compact(),
@@ -128,7 +139,7 @@ impl aleph_bft::Network<NetworkData> for Network {
                     }
                 }
                 message => {
-                    tracing::error!(
+                    error!(
                         target: LOG_CONSENSUS,
                         %peer_id,
                         ?message,
