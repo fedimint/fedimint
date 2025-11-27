@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["DepositConfirmed","WithdrawRequest"]};
+window.SIDEBAR_ITEMS = {"enum":["SendPaymentStatus"],"struct":["DepositConfirmed","ReceivePaymentEvent","SendPaymentEvent","SendPaymentStatusEvent","WithdrawRequest"]};

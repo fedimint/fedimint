@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["SendSMState"],"struct":["SendSMCommon","SendStateMachine"]};
+window.SIDEBAR_ITEMS = {"enum":["SendSMState"],"fn":["send_update_event"],"struct":["SendSMCommon","SendStateMachine"]};
