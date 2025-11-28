@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, PeerId, impl_db_lookup, impl_db_record, push_db_pair_items};
-use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdKey;
-use fedimint_ecash_migration_common::{KeySetHash, SpendBookHash, TransferId};
+use fedimint_ecash_migration_common::merkle::MerkleRoot;
+use fedimint_ecash_migration_common::{KeySetHash, TransferId};
 use fedimint_mint_common::Nonce;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -36,8 +36,9 @@ impl std::fmt::Display for DbKeyPrefix {
 /// Metadata about a liability transfer
 #[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
 pub struct TransferMetadata {
-    /// Pre-committed spend book hash (set at creation time)
-    pub origin_spend_book_hash: SpendBookHash,
+    /// Merkle root for verifiable chunk uploads
+    pub origin_spend_book_merkle_root: MerkleRoot<Nonce>,
+    /// Hash of the key set to be uploaded
     pub origin_key_set_hash: KeySetHash,
     /// Number of spend book entries in the origin spend book that will be
     /// uploaded.
@@ -45,8 +46,6 @@ pub struct TransferMetadata {
     /// The creator of the transfer is supposed to pay for this quota to limit
     /// denial of service risk, hence it's fixed upfront.
     pub num_spend_book_entries: u64,
-    /// Threshold public keys for the creator of the transfer
-    pub creator_keys: NaiveThresholdKey,
 }
 
 /// Key for [`TransferMetadata`] entries
@@ -77,7 +76,7 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::OutPointTransferId,
 );
 
-/// Prefix for querying all [`OutPointTransferId`] entries
+/// Prefix for querying all [`OutPointTransferIdKey`] entries
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct OutPointTransferIdPrefix;
 
@@ -99,7 +98,7 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::UploadedSpendBookEntries,
 );
 
-/// Prefix for querying all [`UploadedSpendBookEntries`] entries
+/// Prefix for querying all [`UploadedSpendBookEntriesKey`] entries
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct UploadedSpendBookEntriesPrefix;
 impl_db_lookup!(
@@ -107,8 +106,8 @@ impl_db_lookup!(
     query_prefix = UploadedSpendBookEntriesPrefix,
 );
 
-/// Key for [`OriginSpendBook`] entries. Each entry represents an already spent
-/// note in the origin federation that cannot be redeemed anymore.
+/// Key for [`OriginSpendBookKey`] entries. Each entry represents an already
+/// spent note in the origin federation that cannot be redeemed anymore.
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize)]
 pub struct OriginSpendBookKey {
     pub transfer_id: TransferId,
@@ -121,7 +120,7 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::OriginSpendBook,
 );
 
-/// Prefix for querying all [`OriginSpendBook`] entries for a transfer
+/// Prefix for querying all [`OriginSpendBookKey`] entries for a transfer
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct OriginSpendBookTransferPrefix {
     pub transfer_id: TransferId,
@@ -131,7 +130,7 @@ impl_db_lookup!(
     query_prefix = OriginSpendBookTransferPrefix,
 );
 
-/// Prefix for querying all [`OriginSpendBook`] entries
+/// Prefix for querying all [`OriginSpendBookKey`] entries
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct OriginSpendBookPrefix;
 impl_db_lookup!(
@@ -139,7 +138,7 @@ impl_db_lookup!(
     query_prefix = OriginSpendBookPrefix,
 );
 
-/// Key for [`LocalSpendBook`] entries. Each entry represents a note that has
+/// Key for [`LocalSpendBookKey`] entries. Each entry represents a note that has
 /// been redeemed othis federation.
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
 pub struct LocalSpendBookKey {
@@ -153,7 +152,7 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::LocalSpendBook,
 );
 
-/// Prefix for querying all [`LocalSpendBook`] entries for a transfer
+/// Prefix for querying all [`LocalSpendBookKey`] entries for a transfer
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct LocalSpendBookTransferPrefix {
     pub transfer_id: TransferId,
@@ -163,7 +162,7 @@ impl_db_lookup!(
     query_prefix = LocalSpendBookTransferPrefix,
 );
 
-/// Prefix for querying all [`LocalSpendBook`] entries
+/// Prefix for querying all [`LocalSpendBookKey`] entries
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct LocalSpendBookPrefix;
 impl_db_lookup!(key = LocalSpendBookKey, query_prefix = LocalSpendBookPrefix,);

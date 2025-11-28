@@ -53,6 +53,7 @@ use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, re
 use fedimint_core::{
     Amount, PeerId, TieredMulti, base32, fedimint_build_code_version_env, runtime,
 };
+use fedimint_ecash_migration_client::EcashMigrationClientInit;
 use fedimint_eventlog::{EventLogId, EventLogTrimableId};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{LOG_CLIENT, TracingSetup};
@@ -717,6 +718,7 @@ impl FedimintCli {
             .with_module(WalletClientInit::default())
             .with_module(MetaClientInit)
             .with_module(fedimint_lnv2_client::LightningClientInit::default())
+            .with_module(EcashMigrationClientInit)
     }
 
     pub async fn run(&mut self) {

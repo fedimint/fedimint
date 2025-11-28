@@ -4,14 +4,14 @@ use fedimint_mint_common::Nonce;
 use serde::{Deserialize, Serialize};
 use tbs::AggregatePublicKey;
 
-use crate::{KeySetHash, SpendBookHash, TransferId};
+use crate::merkle::{ChunkMerkleProof, MerkleRoot};
+use crate::{KeySetHash, TransferId};
 
 // API endpoint paths
 pub const GET_TRANSFER_ID_ENDPOINT: &str = "get_transfer_id";
 pub const UPLOAD_KEY_SET_ENDPOINT: &str = "upload_key_set";
 pub const UPLOAD_SPEND_BOOK_BATCH_ENDPOINT: &str = "upload_spend_book_batch";
 pub const GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT: &str = "get_uploaded_spend_book_entries";
-pub const REQUEST_ACTIVATION_ENDPOINT: &str = "request_activation";
 pub const GET_TRANSFER_STATUS_ENDPOINT: &str = "get_transfer_status";
 
 /// API: Request to upload a key set
@@ -21,25 +21,27 @@ pub struct UploadKeySetRequest {
     pub tier_keys: Tiered<AggregatePublicKey>,
 }
 
-/// API: Request to upload a batch of spend book entries
+/// API: Request to upload a chunk of spend book entries with Merkle proof.
+///
+/// Each nonce is hashed individually as a leaf in the Merkle tree. Chunks are
+/// power-of-2 sized groups of consecutive leaves. The server verifies that
+/// the chunk's subtree root belongs to the pre-committed Merkle root using
+/// the provided proof. The chunk entries are included within the proof.
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 pub struct UploadSpendBookBatchRequest {
+    /// The transfer to upload to
     pub transfer_id: TransferId,
-    pub entries: Vec<Nonce>,
+    /// Merkle proof containing the chunk and path to the root
+    pub merkle_proof: ChunkMerkleProof<Nonce>,
 }
 
 /// API: Response from uploading spend book batch
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UploadSpendBookBatchResponse {
+    /// Number of new entries uploaded (may be less if some were duplicates)
     pub new_entries: u64,
-    pub total_entries_uploaded: u64,
-}
-
-/// API: Request to activate redemption
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RequestActivationRequest {
-    pub transfer_id: TransferId,
-    pub auth_hmac: String,
+    /// Total number of spend book entries uploaded so far
+    pub total_uploaded: u64,
 }
 
 /// API: Request to get transfer status
@@ -52,7 +54,7 @@ pub struct GetTransferStatusRequest {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct GetTransferStatusResponse {
     pub is_active: bool,
-    pub spend_book_hash: SpendBookHash,
+    pub spend_book_merkle_root: MerkleRoot<Nonce>,
     pub key_set_hash: KeySetHash,
     pub total_entries: u64,
     pub total_amount: Amount,

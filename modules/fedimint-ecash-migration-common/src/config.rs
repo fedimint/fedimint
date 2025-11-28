@@ -38,7 +38,9 @@ pub struct EcashMigrationConfig {
 
 /// Contains all the configuration for the client
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
-pub struct EcashMigrationClientConfig;
+pub struct EcashMigrationClientConfig {
+    pub fee_config: FeeConfig,
+}
 
 /// Will be the same for every federation member
 #[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
@@ -48,7 +50,7 @@ pub struct EcashMigrationConfigConsensus {
 }
 
 /// Static fee config of the module
-#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct FeeConfig {
     /// Fee per uploaded origin spend book entry
     pub spend_book_entry_fee: Amount,

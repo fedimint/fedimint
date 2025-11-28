@@ -15,16 +15,15 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransacti
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiVersion, CORE_CONSENSUS_VERSION,
-    CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
-    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
+    Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions,
+    TransactionItemAmounts, api_endpoint,
 };
-use fedimint_core::secp256k1::Message;
 use fedimint_core::{
     Amount, InPoint, NumPeers, OutPoint, PeerId, Tiered, apply, async_trait_maybe_send,
 };
 use fedimint_ecash_migration_common::api::{
-    CHECK_SPEND_BOOK_HASH_ENDPOINT, GET_TRANSFER_ID_ENDPOINT, GET_TRANSFER_STATUS_ENDPOINT,
+    GET_TRANSFER_ID_ENDPOINT, GET_TRANSFER_STATUS_ENDPOINT,
     GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT, GetTransferStatusRequest, GetTransferStatusResponse,
     UPLOAD_KEY_SET_ENDPOINT, UPLOAD_SPEND_BOOK_BATCH_ENDPOINT, UploadKeySetRequest,
     UploadSpendBookBatchRequest, UploadSpendBookBatchResponse,
@@ -33,12 +32,12 @@ use fedimint_ecash_migration_common::config::{
     EcashMigrationClientConfig, EcashMigrationConfig, EcashMigrationConfigConsensus,
     EcashMigrationConfigPrivate, EcashMigrationGenParams, FeeConfig,
 };
-use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdSignature;
+use fedimint_ecash_migration_common::merkle::ChunkMerkleProof;
 use fedimint_ecash_migration_common::{
-    EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationInput,
-    EcashMigrationInputError, EcashMigrationModuleTypes, EcashMigrationOutput,
-    EcashMigrationOutputError, EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION,
-    SpendBookHash, TransferId, hash_spend_book,
+    EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationCreateTransferOutput,
+    EcashMigrationFundTransferOutput, EcashMigrationInput, EcashMigrationInputError,
+    EcashMigrationModuleTypes, EcashMigrationOutput, EcashMigrationOutputError,
+    EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION, TransferId,
 };
 use fedimint_mint_common::Nonce;
 use fedimint_server_core::config::PeerHandleOps;
@@ -46,14 +45,13 @@ use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
 use futures::StreamExt;
 use tbs::AggregatePublicKey;
-use tracing::warn;
 
 use crate::db::{
     ActivationRequestKey, ActivationRequestPrefix, ActivationVote, ActivationVoteKey,
-    ActivationVoteTransferPrefix, DenominationKeyKey, DepositedAmountKey, DepositedAmountPrefix,
-    LocalSpendBookKey, OriginSpendBookKey, OriginSpendBookTransferPrefix, OutPointTransferIdKey,
-    TransferMetadata, TransferMetadataKey, TransferMetadataKeyPrefix, UploadedSpendBookEntriesKey,
-    WithdrawnAmountKey, WithdrawnAmountPrefix,
+    ActivationVoteTransferPrefix, DenominationKeyKey, DenominationKeyKeyTransferPrefix,
+    DepositedAmountKey, DepositedAmountPrefix, LocalSpendBookKey, OriginSpendBookKey,
+    OutPointTransferIdKey, TransferMetadata, TransferMetadataKey, TransferMetadataKeyPrefix,
+    UploadedSpendBookEntriesKey, WithdrawnAmountKey, WithdrawnAmountPrefix,
 };
 
 pub mod db;
@@ -158,8 +156,10 @@ impl ServerModuleInit for EcashMigrationInit {
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<EcashMigrationClientConfig> {
-        let _config = EcashMigrationConfigConsensus::from_erased(config)?;
-        Ok(EcashMigrationClientConfig)
+        let config = EcashMigrationConfigConsensus::from_erased(config)?;
+        Ok(EcashMigrationClientConfig {
+            fee_config: config.fee_config,
+        })
     }
 
     fn validate_config(
@@ -244,7 +244,7 @@ impl ServerModule for EcashMigration {
 
         // Remove the activation request once we've seen our own vote so we stop
         // proposing our activation vote
-        if peer_id != self.own_peer_id {
+        if peer_id == self.own_peer_id {
             dbtx.remove_entry(&ActivationRequestKey { transfer_id })
                 .await;
         }
@@ -358,21 +358,19 @@ impl ServerModule for EcashMigration {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EcashMigrationOutputError> {
         match output {
-            EcashMigrationOutput::CreateTransfer {
-                spend_book_hash,
+            EcashMigrationOutput::CreateTransfer(EcashMigrationCreateTransferOutput {
                 spend_book_entries,
+                spend_book_merkle_root,
                 key_set_hash,
-                creator_keys,
-            } => {
+            }) => {
                 let transfer_id = get_next_transfer_id(dbtx).await;
 
                 dbtx.insert_entry(
                     &TransferMetadataKey(transfer_id),
                     &TransferMetadata {
-                        origin_spend_book_hash: *spend_book_hash,
+                        origin_spend_book_merkle_root: *spend_book_merkle_root,
                         origin_key_set_hash: *key_set_hash,
                         num_spend_book_entries: *spend_book_entries,
-                        creator_keys: creator_keys.clone(),
                     },
                 )
                 .await;
@@ -397,10 +395,10 @@ impl ServerModule for EcashMigration {
                     fees: Amounts::new_bitcoin(creation_fee),
                 })
             }
-            EcashMigrationOutput::FundTransfer {
+            EcashMigrationOutput::FundTransfer(EcashMigrationFundTransferOutput {
                 transfer_id,
                 amount,
-            } => {
+            }) => {
                 let transfer_balance = dbtx
                     .get_value(&DepositedAmountKey(*transfer_id))
                     .await
@@ -469,7 +467,6 @@ impl ServerModule for EcashMigration {
                 UPLOAD_KEY_SET_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &EcashMigration, context, request: UploadKeySetRequest| -> () {
-                    check_auth(context, request.transfer_id, &request).await?;
                     module.upload_key_set(&mut context.dbtx().into_nc(), request.transfer_id, request.tier_keys)
                         .await
                 }
@@ -478,9 +475,12 @@ impl ServerModule for EcashMigration {
                 UPLOAD_SPEND_BOOK_BATCH_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &EcashMigration, context, request: UploadSpendBookBatchRequest| -> UploadSpendBookBatchResponse {
-                    check_auth(context, request.transfer_id, &request).await?;
-                    module.upload_spend_book_batch(&mut context.dbtx().into_nc(), request.transfer_id, request.entries)
-                        .await
+                    module.upload_spend_book_batch(
+                        &mut context.dbtx().into_nc(),
+                        request.transfer_id,
+                        request.merkle_proof,
+                    )
+                    .await
                 }
             },
             // Used to resume aborted uploads
@@ -488,17 +488,8 @@ impl ServerModule for EcashMigration {
                 GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &EcashMigration, context, request: TransferId| -> u64 {
-                    module.get_uploaded_spend_book_entries(&mut context.dbtx().into_nc(), request)
-                        .await
-                }
-            },
-            api_endpoint! {
-                CHECK_SPEND_BOOK_HASH_ENDPOINT,
-                ApiVersion::new(0, 0),
-                async |module: &EcashMigration, context, request: TransferId| -> SpendBookHash {
-                    // TODO: check auth
-                    module.check_spend_book_hash(&mut context.dbtx().into_nc(), request)
-                        .await
+                    Ok(module.get_uploaded_spend_book_entries(&mut context.dbtx().into_nc(), request)
+                        .await)
                 }
             },
             api_endpoint! {
@@ -560,6 +551,9 @@ impl EcashMigration {
             }
         }
 
+        self.activate_transfer_if_ready(dbtx, transfer_id, &transfer_metadata)
+            .await;
+
         Ok(())
     }
 
@@ -567,106 +561,112 @@ impl EcashMigration {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         transfer_id: TransferId,
-        spend_book_batch: Vec<Nonce>,
+        merkle_proof: ChunkMerkleProof<Nonce>,
     ) -> Result<UploadSpendBookBatchResponse, ApiError> {
         let transfer_metadata = dbtx
             .get_value(&TransferMetadataKey(transfer_id))
             .await
             .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
 
-        let mut new_spend_book_entries = 0;
-        for nonce in spend_book_batch {
+        // Verify the Merkle proof against the pre-committed root
+        if !transfer_metadata
+            .origin_spend_book_merkle_root
+            .verify_chunk_merkle_proof(&merkle_proof)
+            .await
+        {
+            return Err(ApiError::bad_request(
+                "Merkle proof verification failed: chunk does not belong to committed tree"
+                    .to_owned(),
+            ));
+        }
+
+        // Proof verified, insert nonces into the spend book
+        let mut new_spend_book_entries = 0u64;
+        for nonce in merkle_proof.chunk() {
             if dbtx
-                .insert_entry(&OriginSpendBookKey { transfer_id, nonce }, &())
+                .insert_entry(
+                    &OriginSpendBookKey {
+                        transfer_id,
+                        nonce: *nonce,
+                    },
+                    &(),
+                )
                 .await
                 .is_none()
             {
                 new_spend_book_entries += 1;
-            } else {
-                warn!(
-                    target: LOG_MODULE_ECASH_MIGRATION,
-                    ?transfer_id,
-                    ?nonce,
-                    "Nonce already uploaded to origin spend book, skipping"
-                );
             }
         }
 
-        let old_uploaded_spend_book_entries = dbtx
+        // Update total uploaded entries count
+        let uploaded = dbtx
             .get_value(&UploadedSpendBookEntriesKey { transfer_id })
             .await
             .unwrap_or(0);
-        let new_uploaded_spend_book_entries = old_uploaded_spend_book_entries
-            .checked_add(new_spend_book_entries)
-            .ok_or(ApiError::server_error(
-                "Spend book batch size overflow".to_owned(),
-            ))?;
-        if transfer_metadata.num_spend_book_entries < new_uploaded_spend_book_entries {
-            return Err(ApiError::bad_request(
-                "Uploaded spend book entries exceeds pre-committed size".to_owned(),
-            ));
-        }
-
+        let total_uploaded = uploaded + new_spend_book_entries;
         dbtx.insert_entry(
             &UploadedSpendBookEntriesKey { transfer_id },
-            &new_uploaded_spend_book_entries,
+            &total_uploaded,
         )
         .await;
 
+        self.activate_transfer_if_ready(dbtx, transfer_id, &transfer_metadata)
+            .await;
+
         Ok(UploadSpendBookBatchResponse {
             new_entries: new_spend_book_entries,
-            total_entries_uploaded: new_uploaded_spend_book_entries,
+            total_uploaded,
         })
+    }
+
+    /// Try to activate a transfer if all conditions are met:
+    /// - All spend book entries have been uploaded
+    /// - Key set has been uploaded
+    ///
+    /// If conditions are met, inserts an activation request that will be
+    /// proposed in the next consensus round.
+    async fn activate_transfer_if_ready(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        transfer_id: TransferId,
+        transfer_metadata: &TransferMetadata,
+    ) {
+        // Check if all spend book entries are uploaded. Since each uploaded chunk is
+        // verified via the merkle root, there's no scenario where the number of
+        // uploaded entries is correct but the content is not.
+        let uploaded_spend_book_entries = dbtx
+            .get_value(&UploadedSpendBookEntriesKey { transfer_id })
+            .await
+            .unwrap_or(0);
+        if uploaded_spend_book_entries != transfer_metadata.num_spend_book_entries {
+            return;
+        }
+
+        // Check if key set is uploaded. If there's any keys this means the entire key
+        // set has been uploaded.
+        let has_keys = dbtx
+            .find_by_prefix(&DenominationKeyKeyTransferPrefix { transfer_id })
+            .await
+            .next()
+            .await
+            .is_some();
+        if !has_keys {
+            return;
+        }
+
+        // Insert the activation request
+        dbtx.insert_entry(&ActivationRequestKey { transfer_id }, &())
+            .await;
     }
 
     async fn get_uploaded_spend_book_entries(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         transfer_id: TransferId,
-    ) -> Result<u64, ApiError> {
-        let uploaded_spend_book_entries = dbtx
-            .get_value(&UploadedSpendBookEntriesKey { transfer_id })
+    ) -> u64 {
+        dbtx.get_value(&UploadedSpendBookEntriesKey { transfer_id })
             .await
-            .unwrap_or_default();
-        Ok(uploaded_spend_book_entries)
-    }
-
-    async fn check_spend_book_hash(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        transfer_id: TransferId,
-    ) -> Result<SpendBookHash, ApiError> {
-        let transfer_metadata = dbtx
-            .get_value(&TransferMetadataKey(transfer_id))
-            .await
-            .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
-        let uploaded_spend_book_entries = dbtx
-            .get_value(&UploadedSpendBookEntriesKey { transfer_id })
-            .await
-            .unwrap_or(0);
-
-        if uploaded_spend_book_entries != transfer_metadata.num_spend_book_entries {
-            return Err(ApiError::bad_request(format!(
-                "Uploaded spend book entries does not match pre-committed size (expected: {}; got: {})",
-                transfer_metadata.num_spend_book_entries, uploaded_spend_book_entries,
-            )));
-        }
-
-        let spend_book_hash = hash_spend_book(
-            dbtx.find_by_prefix(&OriginSpendBookTransferPrefix { transfer_id })
-                .await
-                .map(|(OriginSpendBookKey { nonce, .. }, ())| nonce),
-        )
-        .await;
-
-        if spend_book_hash != transfer_metadata.origin_spend_book_hash {
-            return Err(ApiError::bad_request(format!(
-                "Spend book hash does not match pre-committed hash (expected: {}; got: {})",
-                transfer_metadata.origin_spend_book_hash, spend_book_hash,
-            )));
-        }
-
-        Ok(spend_book_hash)
+            .unwrap_or(0)
     }
 
     async fn get_transfer_status(
@@ -726,30 +726,4 @@ async fn get_next_transfer_id(dbtx: &mut DatabaseTransaction<'_>) -> TransferId 
         .map_or(0, |(TransferMetadataKey(id), _)| id.0);
 
     TransferId(max_id + 1)
-}
-
-async fn check_auth(
-    context: &mut ApiEndpointContext<'_>,
-    transfer_id: TransferId,
-    request: &impl Encodable,
-) -> Result<(), ApiError> {
-    let transfer_metadata = context
-        .dbtx()
-        .get_value(&TransferMetadataKey(transfer_id))
-        .await
-        .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
-    let creator_keys = transfer_metadata.creator_keys;
-
-    let auth = context.request_auth().ok_or(ApiError::unauthorized())?;
-    let signature: NaiveThresholdSignature =
-        auth.0.parse().map_err(|_| ApiError::unauthorized())?;
-
-    let request_hash = Message::from_digest_slice(request.consensus_hash_sha256().as_ref())
-        .expect("Hash has correct length");
-
-    if !signature.verify(request_hash, &creator_keys) {
-        return Err(ApiError::unauthorized());
-    }
-
-    Ok(())
 }
