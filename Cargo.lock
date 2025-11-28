@@ -3114,16 +3114,26 @@ name = "fedimint-ecash-migration-client"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
+ "bitcoin_hashes 0.14.0",
+ "clap",
  "erased-serde",
  "fedimint-api-client",
  "fedimint-client-module",
  "fedimint-core",
+ "fedimint-derive-secret",
  "fedimint-ecash-migration-common",
+ "fedimint-mint-common",
+ "fedimint-tbs",
+ "futures",
+ "hex",
  "serde",
+ "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "thiserror 2.0.12",
+ "tokio",
 ]
 
 [[package]]

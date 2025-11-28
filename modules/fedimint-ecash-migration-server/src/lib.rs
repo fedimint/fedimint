@@ -35,10 +35,11 @@ use fedimint_ecash_migration_common::config::{
 };
 use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdSignature;
 use fedimint_ecash_migration_common::{
-    EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationInput,
-    EcashMigrationInputError, EcashMigrationModuleTypes, EcashMigrationOutput,
-    EcashMigrationOutputError, EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION,
-    SpendBookHash, TransferId, hash_spend_book,
+    EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationCreateTransferOutput,
+    EcashMigrationFundTransferOutput, EcashMigrationInput, EcashMigrationInputError,
+    EcashMigrationModuleTypes, EcashMigrationOutput, EcashMigrationOutputError,
+    EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION, SpendBookHash, TransferId,
+    hash_and_count_spend_book,
 };
 use fedimint_mint_common::Nonce;
 use fedimint_server_core::config::PeerHandleOps;
@@ -158,8 +159,10 @@ impl ServerModuleInit for EcashMigrationInit {
         &self,
         config: &ServerModuleConsensusConfig,
     ) -> anyhow::Result<EcashMigrationClientConfig> {
-        let _config = EcashMigrationConfigConsensus::from_erased(config)?;
-        Ok(EcashMigrationClientConfig)
+        let config = EcashMigrationConfigConsensus::from_erased(config)?;
+        Ok(EcashMigrationClientConfig {
+            fee_config: config.fee_config,
+        })
     }
 
     fn validate_config(
@@ -358,12 +361,12 @@ impl ServerModule for EcashMigration {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EcashMigrationOutputError> {
         match output {
-            EcashMigrationOutput::CreateTransfer {
+            EcashMigrationOutput::CreateTransfer(EcashMigrationCreateTransferOutput {
                 spend_book_hash,
                 spend_book_entries,
                 key_set_hash,
                 creator_keys,
-            } => {
+            }) => {
                 let transfer_id = get_next_transfer_id(dbtx).await;
 
                 dbtx.insert_entry(
@@ -397,10 +400,10 @@ impl ServerModule for EcashMigration {
                     fees: Amounts::new_bitcoin(creation_fee),
                 })
             }
-            EcashMigrationOutput::FundTransfer {
+            EcashMigrationOutput::FundTransfer(EcashMigrationFundTransferOutput {
                 transfer_id,
                 amount,
-            } => {
+            }) => {
                 let transfer_balance = dbtx
                     .get_value(&DepositedAmountKey(*transfer_id))
                     .await
@@ -644,12 +647,18 @@ impl EcashMigration {
             )));
         }
 
-        let spend_book_hash = hash_spend_book(
+        let (spend_book_hash, spend_book_entries) = hash_and_count_spend_book(
             dbtx.find_by_prefix(&OriginSpendBookTransferPrefix { transfer_id })
                 .await
                 .map(|(OriginSpendBookKey { nonce, .. }, ())| nonce),
         )
-        .await;
+        .await
+        .expect("Spend book entries are returned in order");
+
+        assert_eq!(
+            spend_book_entries, transfer_metadata.num_spend_book_entries,
+            "Inconsistency in DB: number of spend book entries and cached number mismatch"
+        );
 
         if spend_book_hash != transfer_metadata.origin_spend_book_hash {
             return Err(ApiError::bad_request(format!(

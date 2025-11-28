@@ -108,19 +108,25 @@ pub enum EcashMigrationInput {
 pub enum EcashMigrationOutput {
     /// Create a new transfer, this is a transaction output so that we can
     /// charge a fee for spend book size.
-    CreateTransfer {
-        spend_book_hash: SpendBookHash,
-        spend_book_entries: u64,
-        key_set_hash: KeySetHash,
-        creator_keys: NaiveThresholdKey,
-    },
+    CreateTransfer(EcashMigrationCreateTransferOutput),
     /// Add funding to an existing liability transfer.
-    FundTransfer {
-        transfer_id: TransferId,
-        amount: Amount,
-    },
+    FundTransfer(EcashMigrationFundTransferOutput),
     #[encodable_default]
     Default { variant: u64, bytes: Vec<u8> },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct EcashMigrationCreateTransferOutput {
+    pub spend_book_hash: SpendBookHash,
+    pub spend_book_entries: u64,
+    pub key_set_hash: KeySetHash,
+    pub creator_keys: NaiveThresholdKey,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct EcashMigrationFundTransferOutput {
+    pub transfer_id: TransferId,
+    pub amount: Amount,
 }
 
 /// Information needed by a client to update output funds
@@ -229,21 +235,21 @@ impl fmt::Display for EcashMigrationInput {
 impl fmt::Display for EcashMigrationOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EcashMigrationOutput::CreateTransfer {
+            EcashMigrationOutput::CreateTransfer(EcashMigrationCreateTransferOutput {
                 spend_book_hash,
                 spend_book_entries,
                 key_set_hash,
                 ..
-            } => {
+            }) => {
                 write!(
                     f,
                     "EcashMigrationOutput::CreateTransfer(spend_book_hash={spend_book_hash}, spend_book_entries={spend_book_entries}, key_set_hash={key_set_hash:?})"
                 )
             }
-            EcashMigrationOutput::FundTransfer {
+            EcashMigrationOutput::FundTransfer(EcashMigrationFundTransferOutput {
                 transfer_id,
                 amount,
-            } => {
+            }) => {
                 write!(
                     f,
                     "EcashMigrationOutput::FundTransfer(transfer={transfer_id}, amount={amount})"
@@ -281,24 +287,27 @@ impl fmt::Display for EcashMigrationConsensusItem {
 
 /// Hash an ordered spend book stream into a spend book hash
 ///
-/// # Panics
-/// Panics if the spend book entries are not in order.
-pub async fn hash_spend_book(
+/// # Errors
+/// - If the spend book entries are not in order.
+#[allow(clippy::missing_panics_doc)]
+pub async fn hash_and_count_spend_book(
     mut spend_book_stream: impl Stream<Item = Nonce> + Unpin,
-) -> SpendBookHash {
+) -> anyhow::Result<(SpendBookHash, u64)> {
+    let mut count = 0;
     let mut hasher = sha256::Hash::engine();
 
     let mut prev_nonce = None;
     while let Some(nonce) = spend_book_stream.next().await {
         if let Some(prev_nonce) = prev_nonce {
-            assert!(prev_nonce < nonce, "Spend book entries are not in order");
+            anyhow::ensure!(prev_nonce < nonce, "Spend book entries are not in order");
         }
         prev_nonce = Some(nonce);
 
         nonce
             .consensus_encode(&mut hasher)
             .expect("encoding to hasher can't fail");
+        count += 1;
     }
 
-    SpendBookHash(sha256::Hash::from_engine(hasher))
+    Ok((SpendBookHash(sha256::Hash::from_engine(hasher)), count))
 }

@@ -1,33 +1,51 @@
-use fedimint_client_module::DynGlobalClientContext;
+//! State machines for the ecash migration client module
+
+use fedimint_api_client::api::{DynModuleApi, FederationApiExt as _};
 use fedimint_client_module::sm::{DynState, State, StateTransition};
+use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::ApiRequestErased;
+use fedimint_core::{OutPoint, TransactionId};
+use fedimint_ecash_migration_common::TransferId;
+use fedimint_ecash_migration_common::api::GET_TRANSFER_ID_ENDPOINT;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::EcashMigrationClientContext;
 
-/// Tracks a transaction
+/// State machine for ecash migration operations
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub enum EcashMigrationStateMachine {}
+pub enum EcashMigrationStateMachine {
+    /// State machine for registering a transfer
+    RegisterTransfer(RegisterTransferStateMachine),
+}
 
 impl State for EcashMigrationStateMachine {
     type ModuleContext = EcashMigrationClientContext;
 
     fn transitions(
         &self,
-        _context: &Self::ModuleContext,
-        _global_context: &DynGlobalClientContext,
+        context: &Self::ModuleContext,
+        global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
-        unreachable!()
+        match self {
+            EcashMigrationStateMachine::RegisterTransfer(sm) => {
+                sm_enum_variant_translation!(
+                    sm.transitions(context, global_context),
+                    EcashMigrationStateMachine::RegisterTransfer
+                )
+            }
+        }
     }
 
     fn operation_id(&self) -> OperationId {
-        unreachable!()
+        match self {
+            EcashMigrationStateMachine::RegisterTransfer(sm) => sm.operation_id(),
+        }
     }
 }
 
-// TODO: Boiler-plate
 impl IntoDynInstance for EcashMigrationStateMachine {
     type DynType = DynState;
 
@@ -36,8 +54,160 @@ impl IntoDynInstance for EcashMigrationStateMachine {
     }
 }
 
+/// Common data for the register transfer state machine
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct RegisterTransferCommon {
+    pub operation_id: OperationId,
+    pub txid: TransactionId,
+    pub out_point: OutPoint,
+}
+
+/// State machine for registering a liability transfer
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct RegisterTransferStateMachine {
+    pub common: RegisterTransferCommon,
+    pub state: RegisterTransferStates,
+}
+
+impl RegisterTransferStateMachine {
+    fn operation_id(&self) -> OperationId {
+        self.common.operation_id
+    }
+
+    fn transitions(
+        &self,
+        context: &EcashMigrationClientContext,
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<Self>> {
+        match &self.state {
+            RegisterTransferStates::Created => {
+                Self::created_transitions(context, global_context, self.common.clone())
+            }
+            RegisterTransferStates::Aborted(_)
+            | RegisterTransferStates::Failed(_)
+            | RegisterTransferStates::Success(_) => vec![],
+        }
+    }
+
+    fn created_transitions(
+        context: &EcashMigrationClientContext,
+        global_context: &DynGlobalClientContext,
+        common: RegisterTransferCommon,
+    ) -> Vec<StateTransition<Self>> {
+        let global_ctx = global_context.clone();
+        let module_api = context.module_api.clone();
+
+        vec![
+            // Check if transaction was rejected
+            StateTransition::new(
+                Self::await_tx_rejected(global_context.clone(), common.txid),
+                |_dbtx, (), old_state| {
+                    Box::pin(async move { Self::transition_tx_rejected(old_state) })
+                },
+            ),
+            // Check for transaction acceptance and fetch transfer ID
+            StateTransition::new(
+                Self::await_tx_accepted_and_get_transfer_id(global_ctx, module_api, common),
+                |_dbtx, transfer_id, old_state| {
+                    Box::pin(async move { Self::transition_tx_accepted(transfer_id, old_state) })
+                },
+            ),
+        ]
+    }
+
+    async fn await_tx_rejected(global_context: DynGlobalClientContext, txid: TransactionId) {
+        if global_context.await_tx_accepted(txid).await.is_err() {
+            return;
+        }
+        std::future::pending::<()>().await;
+    }
+
+    fn transition_tx_rejected(old_state: Self) -> Self {
+        Self {
+            common: old_state.common,
+            state: RegisterTransferStates::Aborted(RegisterTransferAborted {
+                reason: "Transaction was rejected".to_string(),
+            }),
+        }
+    }
+
+    async fn await_tx_accepted_and_get_transfer_id(
+        global_context: DynGlobalClientContext,
+        module_api: DynModuleApi,
+        common: RegisterTransferCommon,
+    ) -> TransferId {
+        // Wait for transaction to be accepted (this retries until success or rejection)
+        // If rejected, the other transition will fire
+        if global_context.await_tx_accepted(common.txid).await.is_err() {
+            // Transaction was rejected, hang forever since the rejection
+            // transition will take precedence
+            std::future::pending::<()>().await;
+        }
+
+        // Fetch the transfer ID from the server
+        module_api
+            .request_current_consensus_retry(
+                GET_TRANSFER_ID_ENDPOINT.to_string(),
+                ApiRequestErased::new(common.out_point),
+            )
+            .await
+    }
+
+    fn transition_tx_accepted(transfer_id: TransferId, old_state: Self) -> Self {
+        Self {
+            common: old_state.common,
+            state: RegisterTransferStates::Success(RegisterTransferSuccess { transfer_id }),
+        }
+    }
+}
+
+/// States of the register transfer state machine
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum RegisterTransferStates {
+    /// Transfer creation transaction submitted, waiting for confirmation
+    Created,
+    /// Transfer creation transaction was rejected
+    Aborted(RegisterTransferAborted),
+    /// Transfer registration failed
+    Failed(RegisterTransferFailed),
+    /// Transfer successfully registered with the federation
+    Success(RegisterTransferSuccess),
+}
+
+/// Transfer creation was aborted
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct RegisterTransferAborted {
+    pub reason: String,
+}
+
+/// Transfer registration failed
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct RegisterTransferFailed {
+    pub error: String,
+}
+
+/// Transfer successfully registered
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct RegisterTransferSuccess {
+    pub transfer_id: TransferId,
+}
+
 #[derive(Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq)]
 pub enum EcashMigrationError {
     #[error("Ecash migration module had an internal error")]
     EcashMigrationInternalError,
+}
+
+/// State updates for register transfer operation that can be observed by
+/// clients
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum RegisterTransferState {
+    /// Transaction submitted, waiting for confirmation
+    Created,
+    /// Transaction accepted, fetching transfer ID
+    TxAccepted,
+    /// Transfer registration completed successfully
+    Success { transfer_id: TransferId },
+    /// Transfer registration failed
+    Failed { error: String },
 }
