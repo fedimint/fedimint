@@ -200,7 +200,7 @@ pub struct EventLogEntry {
     pub module: Option<(ModuleKind, ModuleInstanceId)>,
 
     /// Timestamp in microseconds after unix epoch
-    ts_usecs: u64,
+    pub ts_usecs: u64,
 
     /// Event-kind specific payload, typically encoded as a json string for
     /// flexibility.
@@ -353,6 +353,13 @@ pub trait DBTransactionEventLogExt {
         limit: u64,
     ) -> Vec<PersistedLogEntry>;
 
+    /// Read a part of the event log without converting to `PersistedLogEntry`.
+    async fn get_event_log_raw(
+        &mut self,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<(EventLogId, EventLogEntry)>;
+
     async fn get_event_log_trimable(
         &mut self,
         pos: Option<EventLogTrimableId>,
@@ -445,6 +452,18 @@ where
                 timestamp: v.ts_usecs,
                 value: serde_json::from_slice(&v.payload).unwrap_or_default(),
             })
+            .collect()
+            .await
+    }
+
+    async fn get_event_log_raw(
+        &mut self,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<(EventLogId, EventLogEntry)> {
+        let pos = pos.unwrap_or_default();
+        self.find_by_range(pos..pos.saturating_add(limit))
+            .await
             .collect()
             .await
     }

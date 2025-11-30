@@ -1876,6 +1876,27 @@ impl Client {
         dbtx.get_event_log_trimable(pos, limit).await
     }
 
+    pub async fn get_event_log_raw(
+        &self,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<(EventLogId, EventLogEntry)> {
+        self.get_event_log_raw_dbtx(&mut self.db.begin_transaction_nc().await, pos, limit)
+            .await
+    }
+
+    pub async fn get_event_log_raw_dbtx<Cap>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        pos: Option<EventLogId>,
+        limit: u64,
+    ) -> Vec<(EventLogId, EventLogEntry)>
+    where
+        Cap: Send,
+    {
+        dbtx.get_event_log_raw(pos, limit).await
+    }
+
     /// Register to receiver all new transient (unpersisted) events
     pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
         self.log_event_added_transient_tx.subscribe()
