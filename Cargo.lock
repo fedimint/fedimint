@@ -3181,6 +3181,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
+ "hex",
  "itertools 0.14.0",
  "serde",
  "serde_json",

@@ -66,7 +66,7 @@ pub async fn get_events_for_duration(
 
         match batch.first() {
             Some(first_event) => {
-                if first_event.timestamp < start_micros {
+                if first_event.as_raw().ts_usecs < start_micros {
                     // Found the "rough start" where we can read forward
                     break;
                 }
@@ -88,11 +88,11 @@ pub async fn get_events_for_duration(
         }
 
         for event in batch {
-            if event.timestamp < start_micros {
+            if event.as_raw().ts_usecs < start_micros {
                 continue;
             }
 
-            if event.timestamp >= end_micros {
+            if event.as_raw().ts_usecs >= end_micros {
                 return all_events;
             }
 
