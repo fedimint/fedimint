@@ -66,7 +66,7 @@
 <a href=#66 id=66 data-nosnippet>66</a>
 <a href=#67 id=67 data-nosnippet>67</a>        <span class="kw">match </span>batch.first() {
 <a href=#68 id=68 data-nosnippet>68</a>            <span class="prelude-val">Some</span>(first_event) =&gt; {
-<a href=#69 id=69 data-nosnippet>69</a>                <span class="kw">if </span>first_event.timestamp &lt; start_micros {
+<a href=#69 id=69 data-nosnippet>69</a>                <span class="kw">if </span>first_event.as_raw().ts_usecs &lt; start_micros {
 <a href=#70 id=70 data-nosnippet>70</a>                    <span class="comment">// Found the "rough start" where we can read forward
 <a href=#71 id=71 data-nosnippet>71</a>                    </span><span class="kw">break</span>;
 <a href=#72 id=72 data-nosnippet>72</a>                }
@@ -88,11 +88,11 @@
 <a href=#88 id=88 data-nosnippet>88</a>        }
 <a href=#89 id=89 data-nosnippet>89</a>
 <a href=#90 id=90 data-nosnippet>90</a>        <span class="kw">for </span>event <span class="kw">in </span>batch {
-<a href=#91 id=91 data-nosnippet>91</a>            <span class="kw">if </span>event.timestamp &lt; start_micros {
+<a href=#91 id=91 data-nosnippet>91</a>            <span class="kw">if </span>event.as_raw().ts_usecs &lt; start_micros {
 <a href=#92 id=92 data-nosnippet>92</a>                <span class="kw">continue</span>;
 <a href=#93 id=93 data-nosnippet>93</a>            }
 <a href=#94 id=94 data-nosnippet>94</a>
-<a href=#95 id=95 data-nosnippet>95</a>            <span class="kw">if </span>event.timestamp &gt;= end_micros {
+<a href=#95 id=95 data-nosnippet>95</a>            <span class="kw">if </span>event.as_raw().ts_usecs &gt;= end_micros {
 <a href=#96 id=96 data-nosnippet>96</a>                <span class="kw">return </span>all_events;
 <a href=#97 id=97 data-nosnippet>97</a>            }
 <a href=#98 id=98 data-nosnippet>98</a>

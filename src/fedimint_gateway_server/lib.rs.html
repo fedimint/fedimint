@@ -1391,7 +1391,7 @@
 <a href=#1391 id=1391 data-nosnippet>1391</a>            <span class="kw">let </span>batch = client.get_event_log(<span class="prelude-val">Some</span>(start_position), BATCH_SIZE).<span class="kw">await</span>;
 <a href=#1392 id=1392 data-nosnippet>1392</a>            <span class="kw">let </span><span class="kw-2">mut </span>filtered_batch = batch
 <a href=#1393 id=1393 data-nosnippet>1393</a>                .into_iter()
-<a href=#1394 id=1394 data-nosnippet>1394</a>                .filter(|e| e.event_id &lt;= end_position &amp;&amp; event_kinds.contains(<span class="kw-2">&amp;</span>e.event_kind))
+<a href=#1394 id=1394 data-nosnippet>1394</a>                .filter(|e| e.id() &lt;= end_position &amp;&amp; event_kinds.contains(<span class="kw-2">&amp;</span>e.as_raw().kind))
 <a href=#1395 id=1395 data-nosnippet>1395</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 <a href=#1396 id=1396 data-nosnippet>1396</a>            filtered_batch.reverse();
 <a href=#1397 id=1397 data-nosnippet>1397</a>            payment_log.extend(filtered_batch);
