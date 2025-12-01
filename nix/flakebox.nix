@@ -685,6 +685,10 @@ in
           export CARGO_DENY_COMPILATION=1
           export FM_TEST_CI_ALL_TIMES=${builtins.toString times}
           export FM_TEST_CI_ALL_DISABLE_ETA=1
+
+          if [ "$CARGO_PROFILE" = "ci" ]; then
+            export CI=true
+          fi
           if [ "${builtins.toString useIroh}" == "1" ]; then
             >&2 echo "Iroh enabled"
             export FM_ENABLE_IROH=true
