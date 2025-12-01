@@ -212,6 +212,26 @@ jobs:
                 -- \
           nix build -L .#wasm32-unknown.ci.wasmTest
 
+  check-packages-features:
+    name: "Check package features"
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 60
+    if: github.event_name == 'merge_group'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dpc/nix-installer-action@dpc/jj-vqymqvyntouw
+      - uses: cachix/cachix-action@v16
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+      - name: Check package features
+        run: |
+          nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
+          nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
+          nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
+          nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
+
   audit:
     if: github.repository == 'fedimint/fedimint'
     name: "Audit"
@@ -672,7 +692,7 @@ jobs:
 
   status:
     name: Status
-    needs: [lint, shell, build, cross, containers, pkgs]
+    needs: [lint, shell, build, cross, containers, pkgs, check-packages-features]
     if: ${{ always() }}
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -691,7 +711,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
-    needs: [ lint, build, shell, cross, containers, pkgs]
+    needs: [ lint, build, shell, cross, containers, pkgs, check-packages-features]
 
     steps:
     - name: Discord notifications on failure
