@@ -12,6 +12,7 @@
 //! potentially emitting events of its own, and atomically updating persisted
 //! event log position ("cursor") of events that were already processed.
 use std::borrow::Cow;
+use std::ops;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -229,7 +230,7 @@ pub struct EventLogEntry {
     pub payload: Vec<u8>,
 }
 
-/// Struct used for processing log entries after they have been persisted.
+/// An `EventLogEntry` that was already persisted (so has an id)
 #[derive(Debug, Clone)]
 pub struct PersistedLogEntry {
     id: EventLogId,
@@ -362,6 +363,15 @@ impl PersistedLogEntry {
         &self.inner
     }
 }
+
+impl ops::Deref for PersistedLogEntry {
+    type Target = EventLogEntry;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 impl_db_record!(
     key = UnordedEventLogId,
     value = UnorderedEventLogEntry,
