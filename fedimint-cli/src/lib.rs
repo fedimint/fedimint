@@ -287,6 +287,13 @@ impl Opts {
         self.iroh_enable_next.unwrap_or(true)
     }
 
+    fn use_tor(&self) -> bool {
+        #[cfg(feature = "tor")]
+        return self.use_tor;
+        #[cfg(not(feature = "tor"))]
+        false
+    }
+
     async fn admin_client(
         &self,
         peer_urls: &BTreeMap<PeerId, SafeUrl>,
@@ -313,7 +320,7 @@ impl Opts {
         ConnectorRegistry::build_from_client_defaults()
             .iroh_next(self.iroh_enable_next())
             .iroh_pkarr_dht(self.iroh_enable_dht())
-            .ws_force_tor(self.use_tor)
+            .ws_force_tor(self.use_tor())
             .bind()
             .await
     }
