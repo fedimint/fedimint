@@ -1391,7 +1391,7 @@ impl Gateway {
             let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
             let mut filtered_batch = batch
                 .into_iter()
-                .filter(|e| e.event_id <= end_position && event_kinds.contains(&e.event_kind))
+                .filter(|e| e.id() <= end_position && event_kinds.contains(&e.as_raw().kind))
                 .collect::<Vec<_>>();
             filtered_batch.reverse();
             payment_log.extend(filtered_batch);

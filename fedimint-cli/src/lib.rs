@@ -1323,15 +1323,17 @@ impl FedimintCli {
                     .await
                     .into_iter()
                     .map(|v| {
+                        let id = v.id();
+                        let v = v.as_raw();
                         let module_id = v.module.as_ref().map(|m| m.1);
-                        let module_kind = v.module.map(|m| m.0);
+                        let module_kind = v.module.as_ref().map(|m| m.0.clone());
                         serde_json::json!({
-                            "id": v.event_id,
-                            "kind": v.event_kind,
+                            "id": id,
+                            "kind": v.kind,
                             "module_kind": module_kind,
                             "module_id": module_id,
-                            "ts": v.timestamp,
-                            "payload": v.value
+                            "ts": v.ts_usecs,
+                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
                         })
                     })
                     .collect();
@@ -1351,15 +1353,17 @@ impl FedimintCli {
                     .await
                     .into_iter()
                     .map(|v| {
+                        let id = v.id();
+                        let v = v.as_raw();
                         let module_id = v.module.as_ref().map(|m| m.1);
-                        let module_kind = v.module.map(|m| m.0);
+                        let module_kind = v.module.as_ref().map(|m| m.0.clone());
                         serde_json::json!({
-                            "id": v.event_id,
-                            "kind": v.event_kind,
+                            "id": id,
+                            "kind": v.kind,
                             "module_kind": module_kind,
                             "module_id": module_id,
-                            "ts": v.timestamp,
-                            "payload": v.value
+                            "ts": v.ts_usecs,
+                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
                         })
                     })
                     .collect();
