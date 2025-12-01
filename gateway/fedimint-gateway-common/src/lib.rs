@@ -271,10 +271,10 @@ impl PaymentStats {
     /// Computes the payment statistics for the given structured payment events.
     pub fn compute(events: &StructuredPaymentEvents) -> Self {
         PaymentStats {
-            average_latency: get_average(&events.latencies).map(Duration::from_micros),
-            median_latency: get_median(&events.latencies).map(Duration::from_micros),
+            average_latency: get_average(&events.latencies_usecs).map(Duration::from_micros),
+            median_latency: get_median(&events.latencies_usecs).map(Duration::from_micros),
             total_fees: Amount::from_msats(events.fees.iter().map(|a| a.msats).sum()),
-            total_success: events.latencies.len(),
+            total_success: events.latencies_usecs.len(),
             total_failure: events.latencies_failure.len(),
         }
     }
