@@ -1161,20 +1161,6 @@ impl Gateway {
         })
     }
 
-    /// Instructs the Gateway's Lightning node to open a channel to a peer
-    /// specified by `pubkey`.
-    pub async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
-        info!(target: LOG_GATEWAY, pubkey = %payload.pubkey, host = %payload.host, amount = %payload.channel_size_sats, "Opening Lightning channel...");
-        let context = self.get_lightning_context().await?;
-        let res = context.lnrpc.open_channel(payload).await?;
-        info!(target: LOG_GATEWAY, txid = %res.funding_txid, "Initiated channel open");
-        Txid::from_str(&res.funding_txid).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: format!("Received invalid channel funding txid string {e}"),
-            })
-        })
-    }
-
     /// Instructs the Gateway's Lightning node to close all channels with a peer
     /// specified by `pubkey`.
     pub async fn handle_close_channels_with_peer_msg(
@@ -2159,6 +2145,20 @@ impl IAdminGateway for Gateway {
             legacy_federations,
         };
         Ok(mnemonic_response)
+    }
+
+    /// Instructs the Gateway's Lightning node to open a channel to a peer
+    /// specified by `pubkey`.
+    async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
+        info!(target: LOG_GATEWAY, pubkey = %payload.pubkey, host = %payload.host, amount = %payload.channel_size_sats, "Opening Lightning channel...");
+        let context = self.get_lightning_context().await?;
+        let res = context.lnrpc.open_channel(payload).await?;
+        info!(target: LOG_GATEWAY, txid = %res.funding_txid, "Initiated channel open");
+        Txid::from_str(&res.funding_txid).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: format!("Received invalid channel funding txid string {e}"),
+            })
+        })
     }
 
     fn get_password_hash(&self) -> String {

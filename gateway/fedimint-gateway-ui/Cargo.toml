@@ -17,6 +17,7 @@ async-trait = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 axum-extra = { workspace = true, features = ["cookie"] }
 bcrypt = { workspace = true }
+bitcoin = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }

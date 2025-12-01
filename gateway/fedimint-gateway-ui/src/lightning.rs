@@ -1,7 +1,12 @@
+use std::fmt::Display;
+
+use axum::Form;
 use axum::extract::State;
 use axum::response::Html;
 use fedimint_core::bitcoin::Network;
-use fedimint_gateway_common::{ChannelInfo, GatewayInfo, LightningInfo, LightningMode};
+use fedimint_gateway_common::{
+    ChannelInfo, GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest,
+};
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
@@ -187,7 +192,7 @@ where
                             { "Refresh" }
                         }
 
-                        (channels_fragment_markup(channels_result))
+                        (channels_fragment_markup(channels_result, None, None))
                     }
                 }
             }
@@ -197,7 +202,11 @@ where
 
 // channels_fragment_markup converts either the channels Vec or an error string
 // into a chunk of HTML (the thing HTMX will replace).
-pub fn channels_fragment_markup<E>(channels_result: Result<Vec<ChannelInfo>, E>) -> Markup
+pub fn channels_fragment_markup<E>(
+    channels_result: Result<Vec<ChannelInfo>, E>,
+    success_msg: Option<String>,
+    error_msg: Option<String>,
+) -> Markup
 where
     E: std::fmt::Display,
 {
@@ -211,6 +220,19 @@ where
                     }
                 }
                 Ok(channels) => {
+
+                    @if let Some(success) = success_msg {
+                        div class="alert alert-success mt-2 d-flex justify-content-between align-items-center" {
+                            span { (success) }
+                        }
+                    }
+
+                    @if let Some(error) = error_msg {
+                        div class="alert alert-danger mt-2 d-flex justify-content-between align-items-center" {
+                            span { (error) }
+                        }
+                    }
+
                     @if channels.is_empty() {
                         div class="alert alert-info" { "No channels found." }
                     } @else {
@@ -266,6 +288,47 @@ where
                             }
                         }
                     }
+
+                    div class="mt-3" {
+                        // Toggle button
+                        button id="open-channel-btn" class="btn btn-sm btn-primary"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#open-channel-form"
+                            aria-expanded="false"
+                            aria-controls="open-channel-form"
+                        { "Open Channel" }
+
+                        // Collapsible form
+                        div id="open-channel-form" class="collapse mt-3" {
+                            form hx-post="/ui/channels/open"
+                                hx-target="#channels-container"
+                                hx-swap="outerHTML"
+                                class="card card-body" {
+
+                                h5 class="card-title" { "Open New Channel" }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Remote Node Public Key" }
+                                    input type="text" name="pubkey" class="form-control" placeholder="03abcd..." required {}
+                                }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Host" }
+                                    input type="text" name="host" class="form-control" placeholder="1.2.3.4:9735" required {}
+                                }
+
+                                div class="mb-2" {
+                                    label class="form-label" { "Channel Size (sats)" }
+                                    input type="number" name="channel_size_sats" class="form-control" placeholder="1000000" required {}
+                                }
+
+                                input type="hidden" name="push_amount_sats" value="0" {}
+
+                                button type="submit" class="btn btn-success" { "Confirm Open" }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -281,6 +344,29 @@ where
 {
     let channels_result: Result<_, E> = state.api.handle_list_channels_msg().await;
 
-    let markup = channels_fragment_markup(channels_result);
+    let markup = channels_fragment_markup(channels_result, None, None);
     Html(markup.into_string())
+}
+
+pub async fn open_channel_handler<E: Display + Send + Sync>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<OpenChannelRequest>,
+) -> Html<String> {
+    match state.api.handle_open_channel_msg(payload).await {
+        Ok(txid) => {
+            let channels_result = state.api.handle_list_channels_msg().await;
+            let markup = channels_fragment_markup(
+                channels_result,
+                Some(format!("Successfully initiated channel open. TxId: {txid}")),
+                None,
+            );
+            Html(markup.into_string())
+        }
+        Err(err) => {
+            let channels_result = state.api.handle_list_channels_msg().await;
+            let markup = channels_fragment_markup(channels_result, None, Some(err.to_string()));
+            Html(markup.into_string())
+        }
+    }
 }
