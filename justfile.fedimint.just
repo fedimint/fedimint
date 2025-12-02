@@ -70,6 +70,13 @@ check-packages-features:
   # there are some features that require nightly
   nix shell github:nix-community/fenix#latest.toolchain -c cargo workspaces exec cargo check --all-features
 
+# like `check-packages-features` but using nix
+check-packages-features-using-nix:
+  nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
+  nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
+  nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
+  nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
+
 check-wasm *EXTRA_ARGS:
   #!/usr/bin/env bash
   env CARGO_BUILD_TARGET_DIR=${CARGO_BUILD_TARGET_DIR:-$(pwd)/target}/pkgs/check-wasm \
