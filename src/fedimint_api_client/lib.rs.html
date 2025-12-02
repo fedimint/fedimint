@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::util::backoff_util;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>query::FilterMap;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>tracing::debug;
 <a href=#21 id=21 data-nosnippet>21</a>
@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>        invite: <span class="kw-2">&amp;</span>InviteCode,
 <a href=#34 id=34 data-nosnippet>34</a>    ) -&gt; anyhow::Result&lt;(ClientConfig, DynGlobalApi)&gt; {
 <a href=#35 id=35 data-nosnippet>35</a>        <span class="macro">debug!</span>(
-<a href=#36 id=36 data-nosnippet>36</a>            target: LOG_CLIENT,
+<a href=#36 id=36 data-nosnippet>36</a>            target: LOG_CLIENT_NET,
 <a href=#37 id=37 data-nosnippet>37</a>            %invite,
 <a href=#38 id=38 data-nosnippet>38</a>            peers = <span class="question-mark">?</span>invite.peers(),
 <a href=#39 id=39 data-nosnippet>39</a>            <span class="string">"Downloading client config via invite code"
@@ -71,7 +71,7 @@
 <a href=#71 id=71 data-nosnippet>71</a>        federation_id: FederationId,
 <a href=#72 id=72 data-nosnippet>72</a>        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
 <a href=#73 id=73 data-nosnippet>73</a>    ) -&gt; anyhow::Result&lt;(ClientConfig, DynGlobalApi)&gt; {
-<a href=#74 id=74 data-nosnippet>74</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Downloading client config from peer"</span>);
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="macro">debug!</span>(target: LOG_CLIENT_NET, <span class="string">"Downloading client config from peer"</span>);
 <a href=#75 id=75 data-nosnippet>75</a>        <span class="comment">// TODO: use new download approach based on guardian PKs
 <a href=#76 id=76 data-nosnippet>76</a>        </span><span class="kw">let </span>query_strategy = FilterMap::new(<span class="kw">move </span>|cfg: ClientConfig| {
 <a href=#77 id=77 data-nosnippet>77</a>            <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
@@ -97,7 +97,7 @@
 <a href=#97 id=97 data-nosnippet>97</a>            .map(|(peer, url)| (peer, url.url))
 <a href=#98 id=98 data-nosnippet>98</a>            .collect();
 <a href=#99 id=99 data-nosnippet>99</a>
-<a href=#100 id=100 data-nosnippet>100</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Verifying client config with all peers"</span>);
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="macro">debug!</span>(target: LOG_CLIENT_NET, <span class="string">"Verifying client config with all peers"</span>);
 <a href=#101 id=101 data-nosnippet>101</a>
 <a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span>api_full = DynGlobalApi::new(endpoints.clone(), api_endpoints, api_secret.as_deref())<span class="question-mark">?</span>;
 <a href=#103 id=103 data-nosnippet>103</a>        <span class="kw">let </span>client_config = api_full

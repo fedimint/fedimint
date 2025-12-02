@@ -41,7 +41,7 @@
 <a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span>fedimint_core::{
 <a href=#42 id=42 data-nosnippet>42</a>    NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 <a href=#43 id=43 data-nosnippet>43</a>};
-<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>futures::stream::FuturesUnordered;
 <a href=#46 id=46 data-nosnippet>46</a><span class="kw">use </span>futures::{Future, StreamExt};
 <a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span>global_api::with_cache::GlobalFederationApiWithCache;
@@ -142,7 +142,7 @@
 <a href=#142 id=142 data-nosnippet>142</a>
 <a href=#143 id=143 data-nosnippet>143</a>    <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
 <a href=#144 id=144 data-nosnippet>144</a>    /// merge the responses.
-<a href=#145 id=145 data-nosnippet>145</a>    </span><span class="attr">#[instrument(target = LOG_NET_API, skip_all, fields(method=method))]
+<a href=#145 id=145 data-nosnippet>145</a>    </span><span class="attr">#[instrument(target = LOG_CLIENT_NET_API, skip_all, fields(method=method))]
 <a href=#146 id=146 data-nosnippet>146</a>    </span><span class="kw">async fn </span>request_with_strategy&lt;PR: DeserializeOwned, FR: Debug&gt;(
 <a href=#147 id=147 data-nosnippet>147</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#148 id=148 data-nosnippet>148</a>        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PR, FR&gt; + MaybeSend,
@@ -300,7 +300,7 @@
 <a href=#300 id=300 data-nosnippet>300</a>                }
 <a href=#301 id=301 data-nosnippet>301</a>                QueryStep::Success(response) =&gt; <span class="kw">return </span>response,
 <a href=#302 id=302 data-nosnippet>302</a>                QueryStep::Failure(e) =&gt; {
-<a href=#303 id=303 data-nosnippet>303</a>                    <span class="macro">warn!</span>(<span class="string">"Query strategy returned non-retryable failure for peer {peer}: {e}"</span>);
+<a href=#303 id=303 data-nosnippet>303</a>                    <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Query strategy returned non-retryable failure for peer {peer}: {e}"</span>);
 <a href=#304 id=304 data-nosnippet>304</a>                }
 <a href=#305 id=305 data-nosnippet>305</a>                QueryStep::Continue =&gt; {}
 <a href=#306 id=306 data-nosnippet>306</a>            }
@@ -746,7 +746,7 @@
 <a href=#746 id=746 data-nosnippet>746</a>        method: ApiMethod,
 <a href=#747 id=747 data-nosnippet>747</a>        request: ApiRequestErased,
 <a href=#748 id=748 data-nosnippet>748</a>    ) -&gt; ServerResult&lt;Value&gt; {
-<a href=#749 id=749 data-nosnippet>749</a>        <span class="macro">trace!</span>(target: LOG_NET_API, %peer, %method, <span class="string">"Api request"</span>);
+<a href=#749 id=749 data-nosnippet>749</a>        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, %peer, %method, <span class="string">"Api request"</span>);
 <a href=#750 id=750 data-nosnippet>750</a>        <span class="kw">let </span>url = <span class="self">self
 <a href=#751 id=751 data-nosnippet>751</a>            </span>.peers
 <a href=#752 id=752 data-nosnippet>752</a>            .get(<span class="kw-2">&amp;</span>peer)
@@ -758,7 +758,7 @@
 <a href=#758 id=758 data-nosnippet>758</a>            .map_err(ServerError::Connection)<span class="question-mark">?</span>;
 <a href=#759 id=759 data-nosnippet>759</a>        <span class="kw">let </span>res = conn.request(method.clone(), request).<span class="kw">await</span>;
 <a href=#760 id=760 data-nosnippet>760</a>
-<a href=#761 id=761 data-nosnippet>761</a>        <span class="macro">trace!</span>(target: LOG_NET_API, <span class="question-mark">?</span>method, res_ok = res.is_ok(), <span class="string">"Api response"</span>);
+<a href=#761 id=761 data-nosnippet>761</a>        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="question-mark">?</span>method, res_ok = res.is_ok(), <span class="string">"Api response"</span>);
 <a href=#762 id=762 data-nosnippet>762</a>
 <a href=#763 id=763 data-nosnippet>763</a>        res
 <a href=#764 id=764 data-nosnippet>764</a>    }
@@ -789,7 +789,7 @@
 <a href=#789 id=789 data-nosnippet>789</a>    }
 <a href=#790 id=790 data-nosnippet>790</a>
 <a href=#791 id=791 data-nosnippet>791</a>    <span class="attr">#[instrument(
-<a href=#792 id=792 data-nosnippet>792</a>        target = LOG_NET_API,
+<a href=#792 id=792 data-nosnippet>792</a>        target = LOG_CLIENT_NET_API,
 <a href=#793 id=793 data-nosnippet>793</a>        skip_all,
 <a href=#794 id=794 data-nosnippet>794</a>        fields(
 <a href=#795 id=795 data-nosnippet>795</a>            peer_id = %peer_id,
