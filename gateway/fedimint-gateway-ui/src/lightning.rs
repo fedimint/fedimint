@@ -240,6 +240,7 @@ where
                             thead {
                                 tr {
                                     th { "Remote PubKey" }
+                                    th { "Funding OutPoint" }
                                     th { "Size (sats)" }
                                     th { "Active" }
                                     th { "Liquidity" }
@@ -251,9 +252,15 @@ where
                                     @let size = ch.channel_size_sats.max(1);
                                     @let outbound_pct = (ch.outbound_liquidity_sats as f64 / size as f64) * 100.0;
                                     @let inbound_pct  = (ch.inbound_liquidity_sats  as f64 / size as f64) * 100.0;
+                                    @let funding_outpoint = if let Some(funding_outpoint) = ch.funding_outpoint {
+                                        funding_outpoint.to_string()
+                                    } else {
+                                        "".to_string()
+                                    };
 
                                     tr {
                                         td { (ch.remote_pubkey.to_string()) }
+                                        td { (funding_outpoint) }
                                         td { (ch.channel_size_sats) }
                                         td {
                                             @if ch.is_active {

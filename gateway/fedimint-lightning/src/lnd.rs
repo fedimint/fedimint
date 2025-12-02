@@ -5,6 +5,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::ensure;
 use async_trait::async_trait;
+use bitcoin::OutPoint;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{TaskGroup, sleep};
@@ -1323,6 +1324,8 @@ impl ILnRpcClient for GatewayLndClient {
                         let inbound_liquidity_sats =
                             remote_balance_sats.saturating_sub(remote_channel_reserve_sats);
 
+                        let funding_outpoint = OutPoint::from_str(&channel.channel_point).ok();
+
                         ChannelInfo {
                             remote_pubkey: PublicKey::from_str(&channel.remote_pubkey)
                                 .expect("Lightning node returned invalid remote channel pubkey"),
@@ -1330,6 +1333,7 @@ impl ILnRpcClient for GatewayLndClient {
                             outbound_liquidity_sats,
                             inbound_liquidity_sats,
                             is_active: channel.active,
+                            funding_outpoint,
                         }
                     })
                     .collect(),
