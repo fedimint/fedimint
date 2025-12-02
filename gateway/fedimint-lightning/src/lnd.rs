@@ -1260,26 +1260,48 @@ impl ILnRpcClient for GatewayLndClient {
                     }
                 })?;
 
-            client
-                .lightning()
-                .close_channel(CloseChannelRequest {
-                    channel_point: Some(ChannelPoint {
-                        funding_txid: Some(
-                            tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
-                                <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
-                                    .to_vec(),
+            if force {
+                client
+                    .lightning()
+                    .close_channel(CloseChannelRequest {
+                        channel_point: Some(ChannelPoint {
+                            funding_txid: Some(
+                                tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
+                                    <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
+                                        .to_vec(),
+                                ),
                             ),
-                        ),
-                        output_index: channel_point.vout,
-                    }),
-                    force,
-                    sat_per_vbyte: sats_per_vbyte as u64,
-                    ..Default::default()
-                })
-                .await
-                .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
-                    failure_reason: format!("Failed to close channel {e:?}"),
-                })?;
+                            output_index: channel_point.vout,
+                        }),
+                        force,
+                        ..Default::default()
+                    })
+                    .await
+                    .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                        failure_reason: format!("Failed to close channel {e:?}"),
+                    })?;
+            } else {
+                client
+                    .lightning()
+                    .close_channel(CloseChannelRequest {
+                        channel_point: Some(ChannelPoint {
+                            funding_txid: Some(
+                                tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
+                                    <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
+                                        .to_vec(),
+                                ),
+                            ),
+                            output_index: channel_point.vout,
+                        }),
+                        force,
+                        sat_per_vbyte: sats_per_vbyte,
+                        ..Default::default()
+                    })
+                    .await
+                    .map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                        failure_reason: format!("Failed to close channel {e:?}"),
+                    })?;
+            }
         }
 
         Ok(CloseChannelsWithPeerResponse {

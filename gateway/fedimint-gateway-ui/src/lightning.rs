@@ -324,10 +324,6 @@ where
                                                         name="pubkey"
                                                         value=(ch.remote_pubkey.to_string()) {}
 
-                                                    input type="hidden"
-                                                        name="force"
-                                                        value="false" {}
-
                                                     div class="form-check mb-3" {
                                                         input class="form-check-input"
                                                             type="checkbox"
