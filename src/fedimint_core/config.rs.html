@@ -852,47 +852,52 @@
 <a href=#852 id=852 data-nosnippet>852</a>    Checksum(sha256::Hash),
 <a href=#853 id=853 data-nosnippet>853</a>    Dkg(DkgMessage),
 <a href=#854 id=854 data-nosnippet>854</a>    Encodable(Vec&lt;u8&gt;),
-<a href=#855 id=855 data-nosnippet>855</a>}
-<a href=#856 id=856 data-nosnippet>856</a>
-<a href=#857 id=857 data-nosnippet>857</a><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
-<a href=#858 id=858 data-nosnippet>858</a></span><span class="kw">pub enum </span>DkgMessage {
-<a href=#859 id=859 data-nosnippet>859</a>    Hash(sha256::Hash),
-<a href=#860 id=860 data-nosnippet>860</a>    Commitment(Vec&lt;(G1Projective, G2Projective)&gt;),
-<a href=#861 id=861 data-nosnippet>861</a>    Share(Scalar),
-<a href=#862 id=862 data-nosnippet>862</a>}
-<a href=#863 id=863 data-nosnippet>863</a>
-<a href=#864 id=864 data-nosnippet>864</a><span class="comment">// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
-<a href=#865 id=865 data-nosnippet>865</a>// requirement
-<a href=#866 id=866 data-nosnippet>866</a></span><span class="kw">impl </span>Serialize <span class="kw">for </span>DkgMessage {
-<a href=#867 id=867 data-nosnippet>867</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-<a href=#868 id=868 data-nosnippet>868</a>    <span class="kw">where
-<a href=#869 id=869 data-nosnippet>869</a>        </span>S: Serializer,
-<a href=#870 id=870 data-nosnippet>870</a>    {
-<a href=#871 id=871 data-nosnippet>871</a>        <span class="self">self</span>.consensus_encode_to_hex().serialize(serializer)
-<a href=#872 id=872 data-nosnippet>872</a>    }
-<a href=#873 id=873 data-nosnippet>873</a>}
-<a href=#874 id=874 data-nosnippet>874</a>
-<a href=#875 id=875 data-nosnippet>875</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>DkgMessage {
-<a href=#876 id=876 data-nosnippet>876</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
-<a href=#877 id=877 data-nosnippet>877</a>    <span class="kw">where
-<a href=#878 id=878 data-nosnippet>878</a>        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
-<a href=#879 id=879 data-nosnippet>879</a>    {
-<a href=#880 id=880 data-nosnippet>880</a>        <span class="self">Self</span>::consensus_decode_hex(
-<a href=#881 id=881 data-nosnippet>881</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
-<a href=#882 id=882 data-nosnippet>882</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-<a href=#883 id=883 data-nosnippet>883</a>        )
-<a href=#884 id=884 data-nosnippet>884</a>        .map_err(serde::de::Error::custom)
-<a href=#885 id=885 data-nosnippet>885</a>    }
-<a href=#886 id=886 data-nosnippet>886</a>}
-<a href=#887 id=887 data-nosnippet>887</a>
-<a href=#888 id=888 data-nosnippet>888</a><span class="doccomment">/// Key under which the federation name can be sent to client in the `meta` part
-<a href=#889 id=889 data-nosnippet>889</a>/// of the config
-<a href=#890 id=890 data-nosnippet>890</a></span><span class="kw">pub const </span>META_FEDERATION_NAME_KEY: <span class="kw-2">&amp;</span>str = <span class="string">"federation_name"</span>;
-<a href=#891 id=891 data-nosnippet>891</a>
-<a href=#892 id=892 data-nosnippet>892</a><span class="kw">pub fn </span>load_from_file&lt;T: DeserializeOwned&gt;(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt; {
-<a href=#893 id=893 data-nosnippet>893</a>    <span class="kw">let </span>file = std::fs::File::open(path)<span class="question-mark">?</span>;
-<a href=#894 id=894 data-nosnippet>894</a>    <span class="prelude-val">Ok</span>(serde_json::from_reader(file)<span class="question-mark">?</span>)
-<a href=#895 id=895 data-nosnippet>895</a>}
+<a href=#855 id=855 data-nosnippet>855</a>    <span class="attr">#[encodable_default]
+<a href=#856 id=856 data-nosnippet>856</a>    </span>Default {
+<a href=#857 id=857 data-nosnippet>857</a>        variant: u64,
+<a href=#858 id=858 data-nosnippet>858</a>        bytes: Vec&lt;u8&gt;,
+<a href=#859 id=859 data-nosnippet>859</a>    },
+<a href=#860 id=860 data-nosnippet>860</a>}
+<a href=#861 id=861 data-nosnippet>861</a>
+<a href=#862 id=862 data-nosnippet>862</a><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
+<a href=#863 id=863 data-nosnippet>863</a></span><span class="kw">pub enum </span>DkgMessage {
+<a href=#864 id=864 data-nosnippet>864</a>    Hash(sha256::Hash),
+<a href=#865 id=865 data-nosnippet>865</a>    Commitment(Vec&lt;(G1Projective, G2Projective)&gt;),
+<a href=#866 id=866 data-nosnippet>866</a>    Share(Scalar),
+<a href=#867 id=867 data-nosnippet>867</a>}
+<a href=#868 id=868 data-nosnippet>868</a>
+<a href=#869 id=869 data-nosnippet>869</a><span class="comment">// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
+<a href=#870 id=870 data-nosnippet>870</a>// requirement
+<a href=#871 id=871 data-nosnippet>871</a></span><span class="kw">impl </span>Serialize <span class="kw">for </span>DkgMessage {
+<a href=#872 id=872 data-nosnippet>872</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#873 id=873 data-nosnippet>873</a>    <span class="kw">where
+<a href=#874 id=874 data-nosnippet>874</a>        </span>S: Serializer,
+<a href=#875 id=875 data-nosnippet>875</a>    {
+<a href=#876 id=876 data-nosnippet>876</a>        <span class="self">self</span>.consensus_encode_to_hex().serialize(serializer)
+<a href=#877 id=877 data-nosnippet>877</a>    }
+<a href=#878 id=878 data-nosnippet>878</a>}
+<a href=#879 id=879 data-nosnippet>879</a>
+<a href=#880 id=880 data-nosnippet>880</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>DkgMessage {
+<a href=#881 id=881 data-nosnippet>881</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+<a href=#882 id=882 data-nosnippet>882</a>    <span class="kw">where
+<a href=#883 id=883 data-nosnippet>883</a>        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#884 id=884 data-nosnippet>884</a>    {
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="self">Self</span>::consensus_decode_hex(
+<a href=#886 id=886 data-nosnippet>886</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
+<a href=#887 id=887 data-nosnippet>887</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+<a href=#888 id=888 data-nosnippet>888</a>        )
+<a href=#889 id=889 data-nosnippet>889</a>        .map_err(serde::de::Error::custom)
+<a href=#890 id=890 data-nosnippet>890</a>    }
+<a href=#891 id=891 data-nosnippet>891</a>}
+<a href=#892 id=892 data-nosnippet>892</a>
+<a href=#893 id=893 data-nosnippet>893</a><span class="doccomment">/// Key under which the federation name can be sent to client in the `meta` part
+<a href=#894 id=894 data-nosnippet>894</a>/// of the config
+<a href=#895 id=895 data-nosnippet>895</a></span><span class="kw">pub const </span>META_FEDERATION_NAME_KEY: <span class="kw-2">&amp;</span>str = <span class="string">"federation_name"</span>;
 <a href=#896 id=896 data-nosnippet>896</a>
-<a href=#897 id=897 data-nosnippet>897</a><span class="attr">#[cfg(test)]
-<a href=#898 id=898 data-nosnippet>898</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#897 id=897 data-nosnippet>897</a><span class="kw">pub fn </span>load_from_file&lt;T: DeserializeOwned&gt;(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt; {
+<a href=#898 id=898 data-nosnippet>898</a>    <span class="kw">let </span>file = std::fs::File::open(path)<span class="question-mark">?</span>;
+<a href=#899 id=899 data-nosnippet>899</a>    <span class="prelude-val">Ok</span>(serde_json::from_reader(file)<span class="question-mark">?</span>)
+<a href=#900 id=900 data-nosnippet>900</a>}
+<a href=#901 id=901 data-nosnippet>901</a>
+<a href=#902 id=902 data-nosnippet>902</a><span class="attr">#[cfg(test)]
+<a href=#903 id=903 data-nosnippet>903</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
