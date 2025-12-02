@@ -852,6 +852,11 @@ pub enum P2PMessage {
     Checksum(sha256::Hash),
     Dkg(DkgMessage),
     Encodable(Vec<u8>),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
