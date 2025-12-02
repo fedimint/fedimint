@@ -309,10 +309,13 @@ where
                                     tr class="collapse" id=(row_id) {
                                         td colspan="5" {
                                             div class="card card-body" {
-                                                form hx-post="/ui/channels/close"
+                                                form
+                                                    hx-post="/ui/channels/close"
                                                     hx-target="#channels-container"
-                                                    hx-swap="outerHTML" {
-
+                                                    hx-swap="outerHTML"
+                                                    hx-indicator="#close-spinner"
+                                                    hx-disabled-elt="button[type='submit']"
+                                                {
                                                     input type="hidden"
                                                         name="pubkey"
                                                         value=(ch.remote_pubkey.to_string()) {}
@@ -331,6 +334,12 @@ where
                                                             for=(format!("force-{}", ch.remote_pubkey)) {
                                                             "Force Close"
                                                         }
+                                                    }
+
+                                                    // SPINNER (hidden until request begins)
+                                                    div class="htmx-indicator mt-2" id="close-spinner" {
+                                                        div class="spinner-border spinner-border-sm text-danger" role="status" {}
+                                                        span { " Closing..." }
                                                     }
 
                                                     button type="submit"
