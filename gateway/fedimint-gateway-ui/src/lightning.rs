@@ -5,7 +5,8 @@ use axum::extract::State;
 use axum::response::Html;
 use fedimint_core::bitcoin::Network;
 use fedimint_gateway_common::{
-    ChannelInfo, GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, GatewayInfo, LightningInfo, LightningMode,
+    OpenChannelRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -244,10 +245,12 @@ where
                                     th { "Size (sats)" }
                                     th { "Active" }
                                     th { "Liquidity" }
+                                    th { "" }
                                 }
                             }
                             tbody {
                                 @for ch in channels {
+                                    @let row_id = format!("close-form-{}", ch.remote_pubkey);
                                     // precompute safely (no @let inline arithmetic)
                                     @let size = ch.channel_size_sats.max(1);
                                     @let outbound_pct = (ch.outbound_liquidity_sats as f64 / size as f64) * 100.0;
@@ -286,6 +289,53 @@ where
                                                     span {
                                                         span style="display:inline-block;width:10px;height:10px;background:#0d6efd;margin-right:4px;border-radius:2px;" {}
                                                         "Inbound"
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        td style="width: 70px" {
+                                            // X button toggles a per-row collapse
+                                            button class="btn btn-sm btn-outline-danger"
+                                                type="button"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target=(format!("#{row_id}"))
+                                                aria-expanded="false"
+                                                aria-controls=(row_id)
+                                            { "X" }
+                                        }
+                                    }
+
+                                    tr class="collapse" id=(row_id) {
+                                        td colspan="5" {
+                                            div class="card card-body" {
+                                                form hx-post="/ui/channels/close"
+                                                    hx-target="#channels-container"
+                                                    hx-swap="outerHTML" {
+
+                                                    input type="hidden"
+                                                        name="pubkey"
+                                                        value=(ch.remote_pubkey.to_string()) {}
+
+                                                    input type="hidden"
+                                                        name="force"
+                                                        value="false" {}
+
+                                                    div class="form-check mb-3" {
+                                                        input class="form-check-input"
+                                                            type="checkbox"
+                                                            name="force"
+                                                            value="true"
+                                                            id=(format!("force-{}", ch.remote_pubkey)) {}
+                                                        label class="form-check-label"
+                                                            for=(format!("force-{}", ch.remote_pubkey)) {
+                                                            "Force Close"
+                                                        }
+                                                    }
+
+                                                    button type="submit"
+                                                        class="btn btn-danger btn-sm" {
+                                                        "Confirm Close"
                                                     }
                                                 }
                                             }
@@ -366,6 +416,29 @@ pub async fn open_channel_handler<E: Display + Send + Sync>(
             let markup = channels_fragment_markup(
                 channels_result,
                 Some(format!("Successfully initiated channel open. TxId: {txid}")),
+                None,
+            );
+            Html(markup.into_string())
+        }
+        Err(err) => {
+            let channels_result = state.api.handle_list_channels_msg().await;
+            let markup = channels_fragment_markup(channels_result, None, Some(err.to_string()));
+            Html(markup.into_string())
+        }
+    }
+}
+
+pub async fn close_channel_handler<E: Display + Send + Sync>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<CloseChannelsWithPeerRequest>,
+) -> Html<String> {
+    match state.api.handle_close_channels_with_peer_msg(payload).await {
+        Ok(_) => {
+            let channels_result = state.api.handle_list_channels_msg().await;
+            let markup = channels_fragment_markup(
+                channels_result,
+                Some(format!("Successfully initiated channel close")),
                 None,
             );
             Html(markup.into_string())
