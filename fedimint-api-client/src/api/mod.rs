@@ -41,7 +41,7 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
-use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET_API};
+use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
@@ -142,7 +142,7 @@ pub trait FederationApiExt: IRawFederationApi {
 
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
-    #[instrument(target = LOG_NET_API, skip_all, fields(method=method))]
+    #[instrument(target = LOG_CLIENT_NET_API, skip_all, fields(method=method))]
     async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
@@ -300,7 +300,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 }
                 QueryStep::Success(response) => return response,
                 QueryStep::Failure(e) => {
-                    warn!("Query strategy returned non-retryable failure for peer {peer}: {e}");
+                    warn!(target: LOG_CLIENT_NET_API, "Query strategy returned non-retryable failure for peer {peer}: {e}");
                 }
                 QueryStep::Continue => {}
             }
@@ -746,7 +746,7 @@ impl FederationApi {
         method: ApiMethod,
         request: ApiRequestErased,
     ) -> ServerResult<Value> {
-        trace!(target: LOG_NET_API, %peer, %method, "Api request");
+        trace!(target: LOG_CLIENT_NET_API, %peer, %method, "Api request");
         let url = self
             .peers
             .get(&peer)
@@ -758,7 +758,7 @@ impl FederationApi {
             .map_err(ServerError::Connection)?;
         let res = conn.request(method.clone(), request).await;
 
-        trace!(target: LOG_NET_API, ?method, res_ok = res.is_ok(), "Api response");
+        trace!(target: LOG_CLIENT_NET_API, ?method, res_ok = res.is_ok(), "Api response");
 
         res
     }
@@ -789,7 +789,7 @@ impl IRawFederationApi for FederationApi {
     }
 
     #[instrument(
-        target = LOG_NET_API,
+        target = LOG_CLIENT_NET_API,
         skip_all,
         fields(
             peer_id = %peer_id,
