@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SUPPORTED_CORE_API_VERSIONS"],"fn":["client_decoders"],"mod":["builder","global_ctx","handle"],"struct":["Client","GetBalanceChangesRequest","GetOperationIdRequest","ListOperationsParams","PrimaryModuleCandidates"]};
+window.SIDEBAR_ITEMS = {"constant":["SUPPORTED_CORE_API_VERSIONS"],"fn":["client_decoders"],"mod":["builder","event_log","global_ctx","handle"],"struct":["Client","GetBalanceChangesRequest","GetOperationIdRequest","ListOperationsParams","PrimaryModuleCandidates"]};
