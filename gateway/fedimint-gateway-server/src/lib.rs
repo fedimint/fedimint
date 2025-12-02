@@ -523,6 +523,10 @@ impl Gateway {
         self.http_registration.id
     }
 
+    pub fn gateway_iroh_id(&self) -> PublicKey {
+        self.iroh_registration.id
+    }
+
     async fn get_state(&self) -> GatewayState {
         self.state.read().await.clone()
     }

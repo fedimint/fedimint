@@ -252,7 +252,9 @@ async fn test_select_available_gateway() -> anyhow::Result<()> {
     ln_module.update_gateway_cache().await?;
 
     let selected = ln_module.select_available_gateway(None, None).await?;
-    assert_eq!(selected.gateway_id, gw1.gateway_id());
+    assert!(
+        selected.gateway_id == gw1.gateway_id() || selected.gateway_id == gw1.gateway_iroh_id()
+    );
 
     let gw_info = ln_module.select_gateway(&gw1.gateway_id()).await.unwrap();
     let selected = ln_module
@@ -278,7 +280,12 @@ async fn test_select_available_gateway() -> anyhow::Result<()> {
         .select_available_gateway(None, Some(invoice))
         .await?;
 
-    assert!(selected.gateway_id == gw1.gateway_id() || selected.gateway_id == gw2.gateway_id());
+    assert!(
+        selected.gateway_id == gw1.gateway_id()
+            || selected.gateway_id == gw1.gateway_iroh_id()
+            || selected.gateway_id == gw2.gateway_id()
+            || selected.gateway_id == gw2.gateway_iroh_id()
+    );
 
     Ok(())
 }
