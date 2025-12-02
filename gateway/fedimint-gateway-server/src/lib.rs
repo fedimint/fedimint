@@ -1509,47 +1509,41 @@ impl Gateway {
                     let api = self.versioned_api.clone();
                     let gateway_id = self.gateway_id;
 
-                    register_task_group.spawn_cancellable_silent(
-                        "register federation",
-                        async move {
-                            let gateway_client = client_arc
-                                .get_first_module::<GatewayClientModule>()
-                                .expect("No GatewayClientModule exists");
-                            gateway_client
-                                .try_register_with_federation(
-                                    route_hints,
-                                    GW_ANNOUNCEMENT_TTL,
-                                    federation_config.lightning_fee.into(),
-                                    lightning_context,
-                                    api,
-                                    gateway_id,
-                                )
-                                .await;
-                        },
-                    );
+                    register_task_group.spawn_cancellable("register federation", async move {
+                        let gateway_client = client_arc
+                            .get_first_module::<GatewayClientModule>()
+                            .expect("No GatewayClientModule exists");
+                        gateway_client
+                            .try_register_with_federation(
+                                route_hints,
+                                GW_ANNOUNCEMENT_TTL,
+                                federation_config.lightning_fee.into(),
+                                lightning_context,
+                                api,
+                                gateway_id,
+                            )
+                            .await;
+                    });
 
                     let client_arc = client.clone().into_value();
                     let iroh_api = SafeUrl::from_str(&format!("iroh://{}", self.iroh_sk.public()))
                         .expect("Could not build iroh URL");
                     let iroh_gw_id = self.iroh_gw_id;
-                    register_task_group.spawn_cancellable_silent(
-                        "register federation iroh",
-                        async move {
-                            let gateway_client = client_arc
-                                .get_first_module::<GatewayClientModule>()
-                                .expect("No GatewayClientModule exists");
-                            gateway_client
-                                .try_register_with_federation(
-                                    route_hints_iroh,
-                                    GW_ANNOUNCEMENT_TTL,
-                                    federation_config.lightning_fee.into(),
-                                    lightning_context_iroh,
-                                    iroh_api,
-                                    iroh_gw_id,
-                                )
-                                .await;
-                        },
-                    );
+                    register_task_group.spawn_cancellable("register federation iroh", async move {
+                        let gateway_client = client_arc
+                            .get_first_module::<GatewayClientModule>()
+                            .expect("No GatewayClientModule exists");
+                        gateway_client
+                            .try_register_with_federation(
+                                route_hints_iroh,
+                                GW_ANNOUNCEMENT_TTL,
+                                federation_config.lightning_fee.into(),
+                                lightning_context_iroh,
+                                iroh_api,
+                                iroh_gw_id,
+                            )
+                            .await;
+                    });
                 }
             }
         }
@@ -2035,16 +2029,29 @@ impl IAdminGateway for Gateway {
         Self::check_lnv1_federation_network(&client, self.network).await?;
         Self::check_lnv2_federation_network(&client, self.network).await?;
         if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
-            client
-                .get_first_module::<GatewayClientModule>()?
+            let gw_module = client.get_first_module::<GatewayClientModule>()?;
+            gw_module
                 .try_register_with_federation(
                     // Route hints will be updated in the background
                     Vec::new(),
                     GW_ANNOUNCEMENT_TTL,
                     federation_config.lightning_fee.into(),
-                    lightning_context,
+                    lightning_context.clone(),
                     self.versioned_api.clone(),
                     self.gateway_id,
+                )
+                .await;
+
+            let iroh_api = SafeUrl::from_str(&format!("iroh://{}", self.iroh_sk.public()))
+                .expect("Could not build iroh URL");
+            gw_module
+                .try_register_with_federation(
+                    Vec::new(),
+                    GW_ANNOUNCEMENT_TTL,
+                    federation_config.lightning_fee.into(),
+                    lightning_context,
+                    iroh_api,
+                    self.iroh_gw_id,
                 )
                 .await;
         }

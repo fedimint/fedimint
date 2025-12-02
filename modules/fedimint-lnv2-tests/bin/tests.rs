@@ -744,18 +744,20 @@ async fn test_iroh_payment(
     gw_ldk: &Gatewayd,
 ) -> anyhow::Result<()> {
     info!("Testing iroh payment...");
-    add_gateway(&client, 0, &format!("iroh://{}", gw_lnd.node_id)).await?;
-    add_gateway(&client, 1, &format!("iroh://{}", gw_lnd.node_id)).await?;
-    add_gateway(&client, 2, &format!("iroh://{}", gw_lnd.node_id)).await?;
-    add_gateway(&client, 3, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    add_gateway(client, 0, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    add_gateway(client, 1, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    add_gateway(client, 2, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    add_gateway(client, 3, &format!("iroh://{}", gw_lnd.node_id)).await?;
 
+    // If the client is below v0.10.0, also add the HTTP address so that the client
+    // can fallback to using that, since the iroh gateway will fail.
     if util::FedimintCli::version_or_default().await < *VERSION_0_10_0_ALPHA
         || gw_lnd.gatewayd_version < *VERSION_0_10_0_ALPHA
     {
-        add_gateway(&client, 0, &gw_lnd.addr).await?;
-        add_gateway(&client, 1, &gw_lnd.addr).await?;
-        add_gateway(&client, 2, &gw_lnd.addr).await?;
-        add_gateway(&client, 3, &gw_lnd.addr).await?;
+        add_gateway(client, 0, &gw_lnd.addr).await?;
+        add_gateway(client, 1, &gw_lnd.addr).await?;
+        add_gateway(client, 2, &gw_lnd.addr).await?;
+        add_gateway(client, 3, &gw_lnd.addr).await?;
     }
 
     let invoice = gw_ldk.create_invoice(5_000_000).await?;
@@ -786,21 +788,21 @@ async fn test_iroh_payment(
     )?;
 
     gw_ldk.pay_invoice(invoice).await?;
-    await_receive_claimed(&client, receive_op).await?;
+    await_receive_claimed(client, receive_op).await?;
 
     if util::FedimintCli::version_or_default().await < *VERSION_0_10_0_ALPHA
         || gw_lnd.gatewayd_version < *VERSION_0_10_0_ALPHA
     {
-        remove_gateway(&client, 0, &gw_lnd.addr).await?;
-        remove_gateway(&client, 1, &gw_lnd.addr).await?;
-        remove_gateway(&client, 2, &gw_lnd.addr).await?;
-        remove_gateway(&client, 3, &gw_lnd.addr).await?;
+        remove_gateway(client, 0, &gw_lnd.addr).await?;
+        remove_gateway(client, 1, &gw_lnd.addr).await?;
+        remove_gateway(client, 2, &gw_lnd.addr).await?;
+        remove_gateway(client, 3, &gw_lnd.addr).await?;
     }
 
-    remove_gateway(&client, 0, &format!("iroh://{}", gw_lnd.node_id)).await?;
-    remove_gateway(&client, 1, &format!("iroh://{}", gw_lnd.node_id)).await?;
-    remove_gateway(&client, 2, &format!("iroh://{}", gw_lnd.node_id)).await?;
-    remove_gateway(&client, 3, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    remove_gateway(client, 0, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    remove_gateway(client, 1, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    remove_gateway(client, 2, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    remove_gateway(client, 3, &format!("iroh://{}", gw_lnd.node_id)).await?;
 
     Ok(())
 }
