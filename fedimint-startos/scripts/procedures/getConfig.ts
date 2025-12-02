@@ -50,13 +50,21 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
       }
     }
   },
-  "rust-log-level": {
-    type: "string",
-    name: "Rust Log Directives",
-    description: "Rust logging directives",
+  "advanced": {
+    type: "object",
+    name: "Advanced Settings",
+    description: "Optional configuration for debugging and development",
     nullable: false,
-    default: "info,jsonrpsee_core::client::async_client=off,hyper=off,h2=off,jsonrpsee_server=warn,jsonrpsee_server::transport=off,AlephBFT-=error,iroh=error",
-    pattern: ".*",
-    "pattern-description": "Any valid Rust log directive string"
+    spec: {
+      "rust-log-level": {
+        type: "string",
+        name: "Rust Log Directives",
+        description: "Rust logging directives (e.g., 'info,jsonrpsee_core=off'). Only modify if debugging.",
+        nullable: false,
+        default: "info,jsonrpsee_core::client::async_client=off,hyper=off,h2=off,jsonrpsee_server=warn,jsonrpsee_server::transport=off,AlephBFT=error,iron=error",
+        pattern: ".*",
+        "pattern-description": "Any valid Rust log directive string"
+      }
+    }
   }
 });
