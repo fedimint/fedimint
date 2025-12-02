@@ -335,7 +335,9 @@
                     pkgs.cargo-workspaces
 
                     # marked as broken on MacOS
-                    pkgs.cargo-llvm-cov
+                    (pkgs.cargo-llvm-cov.overrideAttrs (old: {
+                      doCheck = false;
+                    }))
                   ];
 
                 shellHook = ''
