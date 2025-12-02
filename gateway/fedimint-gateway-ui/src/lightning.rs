@@ -329,7 +329,12 @@ where
                                                             type="checkbox"
                                                             name="force"
                                                             value="true"
-                                                            id=(format!("force-{}", ch.remote_pubkey)) {}
+                                                            id=(format!("force-{}", ch.remote_pubkey))
+                                                            onchange=(format!(
+                                                                "const input = document.getElementById('sats-vb-{}'); \
+                                                                input.disabled = this.checked;",
+                                                                ch.remote_pubkey
+                                                            )) {}
                                                         label class="form-check-label"
                                                             for=(format!("force-{}", ch.remote_pubkey)) {
                                                             "Force Close"
@@ -340,7 +345,7 @@ where
                                                     // CONDITIONAL sats/vbyte input
                                                     // -------------------------------------------
                                                     @if is_lnd {
-                                                        div class="mb-3" {
+                                                        div class="mb-3" id=(format!("sats-vb-div-{}", ch.remote_pubkey)) {
                                                             label class="form-label" for=(format!("sats-vb-{}", ch.remote_pubkey)) {
                                                                 "Sats per vbyte"
                                                             }

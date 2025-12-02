@@ -316,6 +316,7 @@ pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,
     #[serde(default)]
     pub force: bool,
+    #[serde(default)]
     pub sats_per_vbyte: u64,
 }
 
