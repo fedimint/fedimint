@@ -135,6 +135,7 @@ pub struct GatewayInfo {
     #[serde(alias = "channels")]
     pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
     pub gateway_id: secp256k1::PublicKey,
+    pub iroh_gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
     pub lightning_info: LightningInfo,
     pub api: SafeUrl,

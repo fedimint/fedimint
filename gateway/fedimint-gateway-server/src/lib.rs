@@ -35,7 +35,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use anyhow::{Context, anyhow, ensure};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
-use bitcoin::{Address, Network, Txid};
+use bitcoin::{Address, Network, Txid, secp256k1};
 use clap::Parser;
 use client::GatewayClientBuilder;
 pub use config::GatewayParameters;
@@ -54,6 +54,7 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseTransaction, apply_migrations};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
@@ -254,6 +255,10 @@ pub struct Gateway {
     /// List of additional relays that can be used to establish a connection to
     /// the Iroh `Endpoint`
     iroh_relays: Vec<SafeUrl>,
+
+    /// A public key representing the identity of the gateway. Needs to be
+    /// different than `gateway_id`
+    iroh_gw_id: PublicKey,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -445,6 +450,14 @@ impl Gateway {
         let task_group = TaskGroup::new();
         task_group.install_kill_handler();
 
+        // Compute a gateway id, which is a secp256k1 key, from the `iroh_sk`, which is
+        // a ed25519 key
+        let iroh_sk = Self::load_or_create_iroh_key(&gateway_db).await;
+        let iroh_pk_hash = sha256::Hash::const_hash(iroh_sk.public().as_bytes());
+        let iroh_gw_id =
+            secp256k1::SecretKey::from_slice(iroh_pk_hash.consensus_encode_to_vec().as_slice())?
+                .public_key(secp256k1::SECP256K1);
+
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
             mnemonic: Self::load_or_generate_mnemonic(&gateway_db).await?,
@@ -467,6 +480,7 @@ impl Gateway {
             iroh_dns: gateway_parameters.iroh_dns,
             iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
+            iroh_gw_id,
         })
     }
 
@@ -1488,7 +1502,9 @@ impl Gateway {
                 if let Some(client) = fed_manager.client(federation_id) {
                     let client_arc = client.clone().into_value();
                     let route_hints = route_hints.clone();
+                    let route_hints_iroh = route_hints.clone();
                     let lightning_context = lightning_context.clone();
+                    let lightning_context_iroh = lightning_context.clone();
                     let federation_config = federation_config.clone();
                     let api = self.versioned_api.clone();
                     let gateway_id = self.gateway_id;
@@ -1507,6 +1523,29 @@ impl Gateway {
                                     lightning_context,
                                     api,
                                     gateway_id,
+                                )
+                                .await;
+                        },
+                    );
+
+                    let client_arc = client.clone().into_value();
+                    let iroh_api = SafeUrl::from_str(&format!("iroh://{}", self.iroh_sk.public()))
+                        .expect("Could not build iroh URL");
+                    let iroh_gw_id = self.iroh_gw_id;
+                    register_task_group.spawn_cancellable_silent(
+                        "register federation iroh",
+                        async move {
+                            let gateway_client = client_arc
+                                .get_first_module::<GatewayClientModule>()
+                                .expect("No GatewayClientModule exists");
+                            gateway_client
+                                .try_register_with_federation(
+                                    route_hints_iroh,
+                                    GW_ANNOUNCEMENT_TTL,
+                                    federation_config.lightning_fee.into(),
+                                    lightning_context_iroh,
+                                    iroh_api,
+                                    iroh_gw_id,
                                 )
                                 .await;
                         },
@@ -1777,6 +1816,7 @@ impl IAdminGateway for Gateway {
                 federation_fake_scids: None,
                 version_hash: fedimint_build_code_version_env!().to_string(),
                 gateway_id: self.gateway_id,
+                iroh_gateway_id: self.iroh_gw_id,
                 gateway_state: self.state.read().await.to_string(),
                 lightning_info: LightningInfo::NotConnected,
                 api: self.versioned_api.clone(),
@@ -1811,6 +1851,7 @@ impl IAdminGateway for Gateway {
             federation_fake_scids: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
             gateway_id: self.gateway_id,
+            iroh_gateway_id: self.iroh_gw_id,
             gateway_state: self.state.read().await.to_string(),
             lightning_info,
             api: self.versioned_api.clone(),
