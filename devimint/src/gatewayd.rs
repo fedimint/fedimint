@@ -48,6 +48,7 @@ pub struct Gatewayd {
     pub gw_port: u16,
     pub ldk_port: u16,
     pub gateway_id: String,
+    pub iroh_gw_id: Option<String>,
     pub iroh_port: u16,
     pub node_id: iroh_base::NodeId,
     pub gateway_index: usize,
@@ -137,7 +138,7 @@ impl Gatewayd {
             )
             .await?;
 
-        let gateway_id = poll(
+        let (gateway_id, iroh_gw_id) = poll(
             "waiting for gateway to be ready to respond to rpc",
             || async {
                 // Once the gateway id is available via RPC, the gateway is ready
@@ -157,7 +158,12 @@ impl Gatewayd {
                     .context("gateway_id must be a string")
                     .map_err(ControlFlow::Break)?
                     .to_owned();
-                Ok(gateway_id)
+                let iroh_gw_id = info.get("iroh_gateway_id").map(|i| {
+                    i.as_str()
+                        .expect("iroh_gateway_id must be a string")
+                        .to_owned()
+                });
+                Ok((gateway_id, iroh_gw_id))
             },
         )
         .await?;
@@ -177,6 +183,7 @@ impl Gatewayd {
             gw_port: port,
             ldk_port: lightning_node_port,
             gateway_id,
+            iroh_gw_id,
             iroh_port: iroh_endpoint.port(),
             node_id: iroh_endpoint.node_id(),
             gateway_index,
