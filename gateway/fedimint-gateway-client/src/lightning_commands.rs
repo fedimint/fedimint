@@ -59,6 +59,9 @@ pub enum LightningCommands {
 
         #[clap(long)]
         force: bool,
+
+        #[clap(long)]
+        sats_per_vbyte: u64,
     },
     /// List channels.
     ListChannels,
@@ -158,11 +161,19 @@ impl LightningCommands {
                 .await?;
                 println!("{funding_txid}");
             }
-            Self::CloseChannelsWithPeer { pubkey, force } => {
+            Self::CloseChannelsWithPeer {
+                pubkey,
+                force,
+                sats_per_vbyte,
+            } => {
                 let response = close_channels_with_peer(
                     client,
                     base_url,
-                    CloseChannelsWithPeerRequest { pubkey, force },
+                    CloseChannelsWithPeerRequest {
+                        pubkey,
+                        force,
+                        sats_per_vbyte,
+                    },
                 )
                 .await?;
                 print_response(response);

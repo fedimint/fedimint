@@ -315,6 +315,7 @@ pub struct SendOnchainRequest {
 pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,
     pub force: bool,
+    pub sats_per_vbyte: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

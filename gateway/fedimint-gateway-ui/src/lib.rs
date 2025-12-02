@@ -22,8 +22,8 @@ use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
-    FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelRequest,
-    PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
+    FederationInfo, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse,
+    OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -109,6 +109,8 @@ pub trait IAdminGateway {
     fn gatewayd_version(&self) -> String;
 
     async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network);
+
+    fn lightning_mode(&self) -> LightningMode;
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {

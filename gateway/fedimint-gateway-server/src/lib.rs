@@ -2233,6 +2233,10 @@ impl IAdminGateway for Gateway {
             (None, self.chain_source.clone(), self.network)
         }
     }
+
+    fn lightning_mode(&self) -> LightningMode {
+        self.lightning_mode.clone()
+    }
 }
 
 // LNv2 Gateway implementation

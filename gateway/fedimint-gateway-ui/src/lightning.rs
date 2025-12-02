@@ -52,6 +52,8 @@ where
         ),
     };
 
+    let is_lnd = matches!(api.lightning_mode(), LightningMode::Lnd { .. });
+
     html! {
         div class="card h-100" {
             div class="card-header dashboard-header" { "Lightning" }
@@ -193,7 +195,7 @@ where
                             { "Refresh" }
                         }
 
-                        (channels_fragment_markup(channels_result, None, None))
+                        (channels_fragment_markup(channels_result, None, None, is_lnd))
                     }
                 }
             }
@@ -207,6 +209,7 @@ pub fn channels_fragment_markup<E>(
     channels_result: Result<Vec<ChannelInfo>, E>,
     success_msg: Option<String>,
     error_msg: Option<String>,
+    is_lnd: bool,
 ) -> Markup
 where
     E: std::fmt::Display,
@@ -313,9 +316,10 @@ where
                                                     hx-post="/ui/channels/close"
                                                     hx-target="#channels-container"
                                                     hx-swap="outerHTML"
-                                                    hx-indicator="#close-spinner"
+                                                    hx-indicator=(format!("#close-spinner-{}", ch.remote_pubkey))
                                                     hx-disabled-elt="button[type='submit']"
                                                 {
+                                                    // always required
                                                     input type="hidden"
                                                         name="pubkey"
                                                         value=(ch.remote_pubkey.to_string()) {}
@@ -336,8 +340,38 @@ where
                                                         }
                                                     }
 
-                                                    // SPINNER (hidden until request begins)
-                                                    div class="htmx-indicator mt-2" id="close-spinner" {
+                                                    // -------------------------------------------
+                                                    // CONDITIONAL sats/vbyte input
+                                                    // -------------------------------------------
+                                                    @if is_lnd {
+                                                        div class="mb-3" {
+                                                            label class="form-label" for=(format!("sats-vb-{}", ch.remote_pubkey)) {
+                                                                "Sats per vbyte"
+                                                            }
+                                                            input
+                                                                type="number"
+                                                                min="1"
+                                                                step="1"
+                                                                class="form-control"
+                                                                id=(format!("sats-vb-{}", ch.remote_pubkey))
+                                                                name="sats_per_vbyte"
+                                                                required
+                                                                placeholder="Enter fee rate" {}
+
+                                                            small class="text-muted" {
+                                                                "Required for LND fee estimation"
+                                                            }
+                                                        }
+                                                    } @else {
+                                                        // LDK → auto-filled, hidden
+                                                        input type="hidden"
+                                                            name="sats_per_vbyte"
+                                                            value="1" {}
+                                                    }
+
+                                                    // spinner for this specific channel
+                                                    div class="htmx-indicator mt-2"
+                                                        id=(format!("close-spinner-{}", ch.remote_pubkey)) {
                                                         div class="spinner-border spinner-border-sm text-danger" role="status" {}
                                                         span { " Closing..." }
                                                     }
@@ -408,9 +442,10 @@ pub async fn channels_fragment_handler<E>(
 where
     E: std::fmt::Display,
 {
+    let is_lnd = matches!(state.api.lightning_mode(), LightningMode::Lnd { .. });
     let channels_result: Result<_, E> = state.api.handle_list_channels_msg().await;
 
-    let markup = channels_fragment_markup(channels_result, None, None);
+    let markup = channels_fragment_markup(channels_result, None, None, is_lnd);
     Html(markup.into_string())
 }
 
@@ -419,6 +454,7 @@ pub async fn open_channel_handler<E: Display + Send + Sync>(
     _auth: UserAuth,
     Form(payload): Form<OpenChannelRequest>,
 ) -> Html<String> {
+    let is_lnd = matches!(state.api.lightning_mode(), LightningMode::Lnd { .. });
     match state.api.handle_open_channel_msg(payload).await {
         Ok(txid) => {
             let channels_result = state.api.handle_list_channels_msg().await;
@@ -426,12 +462,14 @@ pub async fn open_channel_handler<E: Display + Send + Sync>(
                 channels_result,
                 Some(format!("Successfully initiated channel open. TxId: {txid}")),
                 None,
+                is_lnd,
             );
             Html(markup.into_string())
         }
         Err(err) => {
             let channels_result = state.api.handle_list_channels_msg().await;
-            let markup = channels_fragment_markup(channels_result, None, Some(err.to_string()));
+            let markup =
+                channels_fragment_markup(channels_result, None, Some(err.to_string()), is_lnd);
             Html(markup.into_string())
         }
     }
@@ -442,6 +480,7 @@ pub async fn close_channel_handler<E: Display + Send + Sync>(
     _auth: UserAuth,
     Form(payload): Form<CloseChannelsWithPeerRequest>,
 ) -> Html<String> {
+    let is_lnd = matches!(state.api.lightning_mode(), LightningMode::Lnd { .. });
     match state.api.handle_close_channels_with_peer_msg(payload).await {
         Ok(_) => {
             let channels_result = state.api.handle_list_channels_msg().await;
@@ -449,12 +488,14 @@ pub async fn close_channel_handler<E: Display + Send + Sync>(
                 channels_result,
                 Some(format!("Successfully initiated channel close")),
                 None,
+                is_lnd,
             );
             Html(markup.into_string())
         }
         Err(err) => {
             let channels_result = state.api.handle_list_channels_msg().await;
-            let markup = channels_fragment_markup(channels_result, None, Some(err.to_string()));
+            let markup =
+                channels_fragment_markup(channels_result, None, Some(err.to_string()), is_lnd);
             Html(markup.into_string())
         }
     }

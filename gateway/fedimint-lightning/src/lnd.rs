@@ -1228,7 +1228,11 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn close_channels_with_peer(
         &self,
-        CloseChannelsWithPeerRequest { pubkey, force }: CloseChannelsWithPeerRequest,
+        CloseChannelsWithPeerRequest {
+            pubkey,
+            force,
+            sats_per_vbyte,
+        }: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
@@ -1269,6 +1273,7 @@ impl ILnRpcClient for GatewayLndClient {
                         output_index: channel_point.vout,
                     }),
                     force,
+                    sat_per_vbyte: sats_per_vbyte as u64,
                     ..Default::default()
                 })
                 .await
