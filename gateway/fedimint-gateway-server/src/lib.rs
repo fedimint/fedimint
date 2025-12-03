@@ -2207,13 +2207,13 @@ impl IAdminGateway for Gateway {
         &self,
         payload: CloseChannelsWithPeerRequest,
     ) -> AdminResult<CloseChannelsWithPeerResponse> {
-        info!(remote_pubkey = %payload.pubkey, force = %payload.force, sats_per_vbyte = %payload.sats_per_vbyte, "Closing lightning channel...");
+        info!(target: LOG_GATEWAY, close_channel_request = %payload, "Closing lightning channel...");
         let context = self.get_lightning_context().await?;
         let response = context
             .lnrpc
             .close_channels_with_peer(payload.clone())
             .await?;
-        info!(remote_pubkey = %payload.pubkey, force = %payload.force, sats_per_vbyte = %payload.sats_per_vbyte, "Initiated channel closure");
+        info!(target: LOG_GATEWAY, close_channel_request = %payload, "Initiated channel closure");
         Ok(response)
     }
 

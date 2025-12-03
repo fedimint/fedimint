@@ -468,6 +468,14 @@ impl Gatewayd {
                 remote_pubkey,
                 "--force",
             )
+        } else if gateway_cli_version < *VERSION_0_10_0_ALPHA {
+            cmd!(
+                self,
+                "lightning",
+                "close-channels-with-peer",
+                "--pubkey",
+                remote_pubkey,
+            )
         } else {
             cmd!(
                 self,
@@ -475,6 +483,8 @@ impl Gatewayd {
                 "close-channels-with-peer",
                 "--pubkey",
                 remote_pubkey,
+                "--sats-per-vbyte",
+                "10",
             )
         };
 

@@ -1294,7 +1294,7 @@ impl ILnRpcClient for GatewayLndClient {
                             output_index: channel_point.vout,
                         }),
                         force,
-                        sat_per_vbyte: sats_per_vbyte,
+                        sat_per_vbyte: sats_per_vbyte.unwrap_or_default(),
                         ..Default::default()
                     })
                     .await

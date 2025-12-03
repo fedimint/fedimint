@@ -53,15 +53,18 @@ pub enum LightningCommands {
     /// Close all channels with a peer, claiming the funds to the lightning
     /// node's on-chain wallet.
     CloseChannelsWithPeer {
-        // The public key of the node to close channels with
+        /// The public key of the node to close channels with
         #[clap(long)]
         pubkey: bitcoin::secp256k1::PublicKey,
 
+        /// Flag to specify if the channel should be force closed
         #[clap(long)]
         force: bool,
 
-        #[clap(long)]
-        sats_per_vbyte: u64,
+        /// Fee rate to use when closing the channel (required unless --force is
+        /// set)
+        #[clap(long, required_unless_present = "force")]
+        sats_per_vbyte: Option<u64>,
     },
     /// List channels.
     ListChannels,

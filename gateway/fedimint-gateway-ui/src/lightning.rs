@@ -12,7 +12,7 @@ use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
-use crate::{CHANNEL_FRAGMENT_ROUTE, DynGatewayApi};
+use crate::{CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE};
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
 where
@@ -310,10 +310,10 @@ where
                                     }
 
                                     tr class="collapse" id=(row_id) {
-                                        td colspan="5" {
+                                        td colspan="6" {
                                             div class="card card-body" {
                                                 form
-                                                    hx-post="/ui/channels/close"
+                                                    hx-post=(CLOSE_CHANNEL_ROUTE)
                                                     hx-target="#channels-container"
                                                     hx-swap="outerHTML"
                                                     hx-indicator=(format!("#close-spinner-{}", ch.remote_pubkey))
@@ -402,7 +402,7 @@ where
 
                         // Collapsible form
                         div id="open-channel-form" class="collapse mt-3" {
-                            form hx-post="/ui/channels/open"
+                            form hx-post=(OPEN_CHANNEL_ROUTE)
                                 hx-target="#channels-container"
                                 hx-swap="outerHTML"
                                 class="card card-body" {
@@ -487,7 +487,7 @@ pub async fn close_channel_handler<E: Display + Send + Sync>(
             let channels_result = state.api.handle_list_channels_msg().await;
             let markup = channels_fragment_markup(
                 channels_result,
-                Some(format!("Successfully initiated channel close")),
+                Some("Successfully initiated channel close".to_string()),
                 None,
                 is_lnd,
             );
