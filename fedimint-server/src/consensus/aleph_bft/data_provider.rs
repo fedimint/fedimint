@@ -5,7 +5,7 @@ use fedimint_core::TransactionId;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::session_outcome::SchnorrSignature;
+use fedimint_core::secp256k1::schnorr;
 use tokio::sync::watch;
 
 use crate::LOG_CONSENSUS;
@@ -15,7 +15,7 @@ use crate::LOG_CONSENSUS;
 )]
 pub enum UnitData {
     Batch(Vec<u8>),
-    Signature(SchnorrSignature),
+    Signature([u8; 64]),
 }
 
 impl UnitData {
@@ -31,7 +31,7 @@ impl UnitData {
 
 pub struct DataProvider {
     mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-    signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
+    signature_receiver: watch::Receiver<Option<schnorr::Signature>>,
     submitted_transactions: BTreeSet<TransactionId>,
     leftover_item: Option<ConsensusItem>,
     timestamp_sender: async_channel::Sender<Instant>,
@@ -41,7 +41,7 @@ pub struct DataProvider {
 impl DataProvider {
     pub fn new(
         mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
-        signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
+        signature_receiver: watch::Receiver<Option<schnorr::Signature>>,
         timestamp_sender: async_channel::Sender<Instant>,
         is_recovery: bool,
     ) -> Self {
@@ -60,8 +60,8 @@ impl DataProvider {
 impl aleph_bft::DataProvider<UnitData> for DataProvider {
     async fn get_data(&mut self) -> Option<UnitData> {
         // we only attach our signature as no more items can be ordered in this session
-        if let Some(signature) = self.signature_receiver.borrow().clone() {
-            return Some(UnitData::Signature(signature));
+        if let Some(signature) = *self.signature_receiver.borrow() {
+            return Some(UnitData::Signature(signature.serialize()));
         }
 
         // the length of a vector is encoded in at most 9 bytes

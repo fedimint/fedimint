@@ -15,15 +15,7 @@ struct FakePeerConnections<M> {
 
 #[async_trait]
 impl<M: Clone + Send + 'static> IP2PConnections<M> for FakePeerConnections<M> {
-    async fn send(&self, recipient: Recipient, msg: M) {
-        assert_eq!(recipient, Recipient::Peer(self.peer));
-
-        // If the peer is gone, just pretend we are going to resend
-        // the msg eventually, even if it will never happen.
-        self.tx.send(msg).await.ok();
-    }
-
-    fn try_send(&self, recipient: Recipient, msg: M) {
+    fn send(&self, recipient: Recipient, msg: M) {
         assert_eq!(recipient, Recipient::Peer(self.peer));
 
         // If the peer is gone, just pretend we are going to resend

@@ -14,6 +14,10 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
+/// Maximum size of a p2p message in bytes. The largest message we expect to
+/// receive is a signed session outcome.
+const MAX_P2P_MESSAGE_SIZE: usize = 10_000_000;
+
 pub type DynP2PConnection<M> = Box<dyn IP2PConnection<M>>;
 
 pub type DynIP2PFrame<M> = Box<dyn IP2PFrame<M>>;
@@ -107,7 +111,7 @@ where
     M: Decodable + DeserializeOwned + Send + 'static,
 {
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
-        let bytes = self.read_to_end(1_000_000).await?;
+        let bytes = self.read_to_end(MAX_P2P_MESSAGE_SIZE).await?;
 
         if let Ok(message) = M::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default()) {
             return Ok(message);

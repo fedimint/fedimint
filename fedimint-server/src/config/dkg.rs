@@ -162,9 +162,7 @@ pub async fn run_dkg(
 ) -> anyhow::Result<(Vec<(G1Projective, G2Projective)>, Scalar)> {
     let mut dkg = Dkg::new(num_peers, identity);
 
-    connections
-        .send(Recipient::Everyone, P2PMessage::Dkg(dkg.initial_message()))
-        .await;
+    connections.send(Recipient::Everyone, P2PMessage::Dkg(dkg.initial_message()));
 
     loop {
         for peer in num_peers.peer_ids().filter(|p| *p != identity) {
@@ -180,15 +178,11 @@ pub async fn run_dkg(
 
             match dkg.step(peer, message)? {
                 DkgStep::Broadcast(message) => {
-                    connections
-                        .send(Recipient::Everyone, P2PMessage::Dkg(message))
-                        .await;
+                    connections.send(Recipient::Everyone, P2PMessage::Dkg(message));
                 }
                 DkgStep::Messages(messages) => {
                     for (peer, message) in messages {
-                        connections
-                            .send(Recipient::Peer(peer), P2PMessage::Dkg(message))
-                            .await;
+                        connections.send(Recipient::Peer(peer), P2PMessage::Dkg(message));
                     }
                 }
                 DkgStep::Result(result) => {
@@ -251,8 +245,7 @@ impl PeerHandleOps for PeerHandle<'_> {
         let mut peer_data: BTreeMap<PeerId, Vec<u8>> = BTreeMap::new();
 
         self.connections
-            .send(Recipient::Everyone, P2PMessage::Encodable(bytes.clone()))
-            .await;
+            .send(Recipient::Everyone, P2PMessage::Encodable(bytes.clone()));
 
         peer_data.insert(self.identity, bytes);
 
