@@ -316,7 +316,7 @@ impl fmt::Display for SendOnchainRequest {
         write!(
             f,
             "SendOnchainRequest {{ address: {}, amount: {}, fee_rate_sats_per_vbyte: {} }}",
-            self.address.assume_checked_ref().to_string(),
+            self.address.assume_checked_ref(),
             self.amount,
             self.fee_rate_sats_per_vbyte
         )

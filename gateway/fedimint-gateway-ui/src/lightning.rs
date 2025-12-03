@@ -201,7 +201,7 @@ where
                         aria-labelledby="wallet-tab" {
 
                         div class="d-flex justify-content-between align-items-center mb-2" {
-                            div { strong { "Balance" } }
+                            div { strong { "Wallet" } }
                             button class="btn btn-sm btn-outline-secondary"
                                 hx-get=(WALLET_FRAGMENT_ROUTE)
                                 hx-target="#wallet-container"
@@ -276,7 +276,7 @@ where
                         @let onchain = format!("{}", bitcoin::Amount::from_sat(bal.onchain_balance_sats));
 
                         span {
-                            "Wallet Balance: "
+                            "Balance: "
                             strong id="wallet-balance" { (onchain) }
                         }
                     }

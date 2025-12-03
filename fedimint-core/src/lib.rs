@@ -182,7 +182,7 @@ impl<'de> Deserialize<'de> for BitcoinAmountOrAll {
 
         struct Visitor;
 
-        impl<'de> serde::de::Visitor<'de> for Visitor {
+        impl serde::de::Visitor<'_> for Visitor {
             type Value = BitcoinAmountOrAll;
 
             fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -231,8 +231,8 @@ impl Serialize for BitcoinAmountOrAll {
         S: Serializer,
     {
         match self {
-            BitcoinAmountOrAll::All => serializer.serialize_str("all"),
-            BitcoinAmountOrAll::Amount(a) => serializer.serialize_u64(a.to_sat()),
+            Self::All => serializer.serialize_str("all"),
+            Self::Amount(a) => serializer.serialize_u64(a.to_sat()),
         }
     }
 }
