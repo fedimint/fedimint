@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::PublicKey;
-use bitcoin::{Address, Network};
+use bitcoin::{Address, Network, OutPoint};
 use clap::Subcommand;
 use envs::{
     FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
@@ -293,6 +293,7 @@ pub struct ChannelInfo {
     pub outbound_liquidity_sats: u64,
     pub inbound_liquidity_sats: u64,
     pub is_active: bool,
+    pub funding_outpoint: Option<OutPoint>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

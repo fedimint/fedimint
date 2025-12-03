@@ -550,6 +550,10 @@ impl Gatewayd {
                     .as_u64()
                     .context("inbound_liquidity_sats must be a u64")?;
                 let is_active = channel["is_active"].as_bool().unwrap_or(true);
+                let funding_outpoint = channel.get("funding_outpoint").map(|v| {
+                    serde_json::from_value::<bitcoin::OutPoint>(v.clone())
+                        .expect("Could not deserialize outpoint")
+                });
                 Ok(ChannelInfo {
                     remote_pubkey: remote_pubkey
                         .parse()
@@ -558,6 +562,7 @@ impl Gatewayd {
                     outbound_liquidity_sats,
                     inbound_liquidity_sats,
                     is_active,
+                    funding_outpoint,
                 })
             })
             .collect::<Result<Vec<ChannelInfo>>>()?;
