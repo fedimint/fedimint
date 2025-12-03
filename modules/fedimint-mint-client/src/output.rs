@@ -3,7 +3,8 @@ use std::hash;
 
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{
-    FederationApiExt, SerdeOutputOutcome, ServerError, deserialize_outcome,
+    FederationApiExt, SerdeOutputOutcome, ServerError,
+    VERSION_THAT_INTRODUCED_AWAIT_OUTPUTS_OUTCOMES, deserialize_outcome,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client_module::DynGlobalClientContext;
@@ -12,8 +13,10 @@ use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransi
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::AWAIT_OUTPUTS_OUTCOMES_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
+use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId, crit};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -400,13 +403,136 @@ impl MintOutputStatesCreatedMulti {
         issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
         tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
-        let mut ret = vec![];
-        // NOTE: We need a new api endpoint that can confirm multiple notes at once?
-        // --dpc
         let api = global_context.api();
+        let core_api_version = global_context.core_api_version().await;
+
+        // Use the new efficient batch endpoint if the server supports it
+        if VERSION_THAT_INTRODUCED_AWAIT_OUTPUTS_OUTCOMES <= core_api_version {
+            Self::await_outcome_ready_batch(api, common, module_decoder, issuance_requests, tbs_pks)
+                .await
+        } else {
+            // Fall back to the old sequential approach for older servers
+            Self::await_outcome_ready_legacy(
+                api,
+                common,
+                module_decoder,
+                issuance_requests,
+                tbs_pks,
+            )
+            .await
+        }
+    }
+
+    /// Efficient batch version using `AWAIT_OUTPUTS_OUTCOMES_ENDPOINT`
+    async fn await_outcome_ready_batch(
+        api: &fedimint_api_client::api::DynGlobalApi,
+        common: MintOutputCommon,
+        module_decoder: Decoder,
+        issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
+        tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
+        if issuance_requests.is_empty() {
+            return vec![];
+        }
+
+        // Use custom query strategy to collect and verify outcomes from all guardians
+        let issuance_requests_clone = issuance_requests.clone();
+        let verified_shares_per_output: BTreeMap<PeerId, Vec<Option<BlindedSignatureShare>>> = api
+            .request_with_strategy_retry(
+                FilterMapThreshold::new(
+                    move |peer, outcomes: Vec<Option<SerdeOutputOutcome>>| {
+                        // Verify the response has the expected length
+                        if outcomes.len() != common.out_point_range.count() {
+                            return Err(ServerError::InvalidResponse(anyhow::anyhow!(
+                                "Peer {peer} returned {} outcomes but expected {}",
+                                outcomes.len(),
+                                common.out_point_range.count()
+                            )));
+                        }
+
+                        // Verify each outcome and extract valid blind signature shares
+                        // If ANY share is invalid, reject the ENTIRE response from this guardian
+                        let mut verified_shares = Vec::with_capacity(outcomes.len());
+                        for (relative_idx, outcome_opt) in outcomes.into_iter().enumerate() {
+                            let out_idx = common.out_point_range.start_idx() + relative_idx as u64;
+
+                            // We should have an issuance request for every output in the range
+                            let (amount, issuance_request) = issuance_requests_clone
+                                .get(&out_idx)
+                                .expect("issuance_request must exist for every output in range");
+
+                            let share = if let Some(outcome) = outcome_opt {
+                                match verify_blind_share(
+                                    peer,
+                                    &outcome,
+                                    *amount,
+                                    issuance_request.blinded_message(),
+                                    &module_decoder,
+                                    &tbs_pks,
+                                ) {
+                                    Ok(share) => Some(share),
+                                    Err(err) => {
+                                        // Invalid share - reject entire response from this guardian
+                                        tracing::warn!(
+                                            target: LOG_CLIENT_MODULE_MINT,
+                                            %peer,
+                                            err = %err.fmt_compact_anyhow(),
+                                            out_point = %OutPoint { txid: common.txid(), out_idx},
+                                            "Invalid signature share from peer"
+                                        );
+                                        return Err(ServerError::InvalidResponse(err));
+                                    }
+                                }
+                            } else {
+                                None
+                            };
+
+                            verified_shares.push(share);
+                        }
+
+                        Ok(verified_shares)
+                    },
+                    api.all_peers().to_num_peers(),
+                ),
+                AWAIT_OUTPUTS_OUTCOMES_ENDPOINT.to_owned(),
+                ApiRequestErased::new(common.out_point_range),
+            )
+            .await;
+
+        // Reorganize from per-peer to per-output
+        let threshold = api.all_peers().to_num_peers().threshold();
+        let mut ret = vec![];
+
+        for (out_idx, (_amount, _issuance_request)) in issuance_requests {
+            let relative_idx = (out_idx - common.out_point_range.start_idx()) as usize;
+            let mut blinded_sig_shares = BTreeMap::new();
+
+            // Collect verified shares from all peers for this output
+            for (peer_id, shares) in &verified_shares_per_output {
+                if let Some(Some(share)) = shares.get(relative_idx) {
+                    blinded_sig_shares.insert(*peer_id, *share);
+                }
+            }
+
+            assert!(threshold <= blinded_sig_shares.len());
+            ret.push((out_idx, blinded_sig_shares));
+        }
+
+        ret
+    }
+
+    /// Legacy sequential version for backwards compatibility
+    async fn await_outcome_ready_legacy(
+        api: &fedimint_api_client::api::DynGlobalApi,
+        common: MintOutputCommon,
+        module_decoder: Decoder,
+        issuance_requests: BTreeMap<u64, (Amount, NoteIssuanceRequest)>,
+        tbs_pks: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+    ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
+        let mut ret = vec![];
         let mut issuance_requests_iter = issuance_requests.into_iter();
 
-        // Wait for the result of the first output only, to save of server side
+        // Wait for the result of the first output only, to save server side
         // resources
         if let Some((out_idx, (amount, issuance_request))) = issuance_requests_iter.next() {
             let module_decoder = module_decoder.clone();
@@ -414,8 +540,6 @@ impl MintOutputStatesCreatedMulti {
 
             let blinded_sig_share = api
                 .request_with_strategy_retry(
-                    // this query collects a threshold of 2f + 1 valid blind signature
-                    // shares
                     FilterMapThreshold::new(
                         move |peer, outcome| {
                             verify_blind_share(
@@ -440,7 +564,6 @@ impl MintOutputStatesCreatedMulti {
 
             ret.push((out_idx, blinded_sig_share));
         } else {
-            // no outputs, just return nothing
             return vec![];
         }
 
@@ -453,8 +576,6 @@ impl MintOutputStatesCreatedMulti {
                     async move {
                         let blinded_sig_share = api
                             .request_with_strategy_retry(
-                                // this query collects a threshold of 2f + 1 valid blind signature
-                                // shares
                                 FilterMapThreshold::new(
                                     move |peer, outcome| {
                                         verify_blind_share(

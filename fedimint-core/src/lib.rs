@@ -40,6 +40,7 @@ extern crate self as fedimint_core;
 
 use std::fmt::{self, Debug};
 use std::io::Error;
+use std::ops::{self, Range};
 use std::str::FromStr;
 
 pub use amount::*;
@@ -232,6 +233,113 @@ pub struct OutPoint {
 impl std::fmt::Display for OutPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.txid, self.out_idx)
+    }
+}
+
+/// A contiguous range of input/output indexes
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct IdxRange {
+    start: u64,
+    end: u64,
+}
+
+impl IdxRange {
+    pub fn new_single(start: u64) -> Option<Self> {
+        start.checked_add(1).map(|end| Self { start, end })
+    }
+
+    pub fn start(self) -> u64 {
+        self.start
+    }
+
+    pub fn count(self) -> usize {
+        self.into_iter().count()
+    }
+
+    pub fn from_inclusive(range: ops::RangeInclusive<u64>) -> Option<Self> {
+        range.end().checked_add(1).map(|end| Self {
+            start: *range.start(),
+            end,
+        })
+    }
+}
+
+impl From<Range<u64>> for IdxRange {
+    fn from(Range { start, end }: Range<u64>) -> Self {
+        Self { start, end }
+    }
+}
+
+impl IntoIterator for IdxRange {
+    type Item = u64;
+    type IntoIter = ops::Range<u64>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ops::Range {
+            start: self.start,
+            end: self.end,
+        }
+    }
+}
+
+/// Represents a range of output indices for a single transaction
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct OutPointRange {
+    pub txid: TransactionId,
+    idx_range: IdxRange,
+}
+
+impl OutPointRange {
+    pub fn new(txid: TransactionId, idx_range: IdxRange) -> Self {
+        Self { txid, idx_range }
+    }
+
+    pub fn new_single(txid: TransactionId, idx: u64) -> Option<Self> {
+        IdxRange::new_single(idx).map(|idx_range| Self { txid, idx_range })
+    }
+
+    pub fn start_idx(self) -> u64 {
+        self.idx_range.start()
+    }
+
+    pub fn out_idx_iter(self) -> impl Iterator<Item = u64> {
+        self.idx_range.into_iter()
+    }
+
+    pub fn count(self) -> usize {
+        self.idx_range.count()
+    }
+
+    pub fn txid(&self) -> TransactionId {
+        self.txid
+    }
+}
+
+impl IntoIterator for OutPointRange {
+    type Item = OutPoint;
+    type IntoIter = OutPointRangeIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OutPointRangeIter {
+            txid: self.txid,
+            inner: self.idx_range.into_iter(),
+        }
+    }
+}
+
+pub struct OutPointRangeIter {
+    txid: TransactionId,
+    inner: ops::Range<u64>,
+}
+
+impl Iterator for OutPointRangeIter {
+    type Item = OutPoint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|idx| OutPoint {
+            txid: self.txid,
+            out_idx: idx,
+        })
     }
 }
 
