@@ -314,7 +314,24 @@ pub struct SendOnchainRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,
+    #[serde(default)]
     pub force: bool,
+    pub sats_per_vbyte: Option<u64>,
+}
+
+impl fmt::Display for CloseChannelsWithPeerRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CloseChannelsWithPeerRequest {{ pubkey: {}, force: {}, sats_per_vbyte: {} }}",
+            self.pubkey,
+            self.force,
+            match self.sats_per_vbyte {
+                Some(sats) => sats.to_string(),
+                None => "None".to_string(),
+            }
+        )
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

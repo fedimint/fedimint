@@ -1209,17 +1209,6 @@ impl Gateway {
         })
     }
 
-    /// Instructs the Gateway's Lightning node to close all channels with a peer
-    /// specified by `pubkey`.
-    pub async fn handle_close_channels_with_peer_msg(
-        &self,
-        payload: CloseChannelsWithPeerRequest,
-    ) -> AdminResult<CloseChannelsWithPeerResponse> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.close_channels_with_peer(payload).await?;
-        Ok(response)
-    }
-
     /// Send funds from the gateway's lightning node on-chain wallet.
     pub async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
@@ -2212,6 +2201,22 @@ impl IAdminGateway for Gateway {
         })
     }
 
+    /// Instructs the Gateway's Lightning node to close all channels with a peer
+    /// specified by `pubkey`.
+    async fn handle_close_channels_with_peer_msg(
+        &self,
+        payload: CloseChannelsWithPeerRequest,
+    ) -> AdminResult<CloseChannelsWithPeerResponse> {
+        info!(target: LOG_GATEWAY, close_channel_request = %payload, "Closing lightning channel...");
+        let context = self.get_lightning_context().await?;
+        let response = context
+            .lnrpc
+            .close_channels_with_peer(payload.clone())
+            .await?;
+        info!(target: LOG_GATEWAY, close_channel_request = %payload, "Initiated channel closure");
+        Ok(response)
+    }
+
     fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
     }
@@ -2227,6 +2232,10 @@ impl IAdminGateway for Gateway {
         } else {
             (None, self.chain_source.clone(), self.network)
         }
+    }
+
+    fn lightning_mode(&self) -> LightningMode {
+        self.lightning_mode.clone()
     }
 }
 

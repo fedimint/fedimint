@@ -21,7 +21,8 @@ use fedimint_bitcoind::BlockchainInfo;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
-    ChainSource, ConnectFedPayload, FederationInfo, GatewayInfo, LeaveFedPayload, MnemonicResponse,
+    ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
+    FederationInfo, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse,
     OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -34,11 +35,12 @@ use maud::html;
 
 use crate::connect_fed::connect_federation_handler;
 use crate::federation::{leave_federation_handler, set_fees_handler};
-use crate::lightning::{channels_fragment_handler, open_channel_handler};
+use crate::lightning::{channels_fragment_handler, close_channel_handler, open_channel_handler};
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
 pub(crate) const OPEN_CHANNEL_ROUTE: &str = "/ui/channels/open";
+pub(crate) const CLOSE_CHANNEL_ROUTE: &str = "/ui/channels/close";
 pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/ui/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
@@ -97,11 +99,18 @@ pub trait IAdminGateway {
         payload: OpenChannelRequest,
     ) -> Result<Txid, Self::Error>;
 
+    async fn handle_close_channels_with_peer_msg(
+        &self,
+        payload: CloseChannelsWithPeerRequest,
+    ) -> Result<CloseChannelsWithPeerResponse, Self::Error>;
+
     fn get_password_hash(&self) -> String;
 
     fn gatewayd_version(&self) -> String;
 
     async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network);
+
+    fn lightning_mode(&self) -> LightningMode;
 }
 
 async fn login_form<E>(State(_state): State<UiState<DynGatewayApi<E>>>) -> impl IntoResponse {
@@ -230,6 +239,7 @@ pub fn router<E: Display + Send + Sync + 'static>(api: DynGatewayApi<E>) -> Rout
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
         .route(OPEN_CHANNEL_ROUTE, post(open_channel_handler))
+        .route(CLOSE_CHANNEL_ROUTE, post(close_channel_handler))
         .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
         .route(LEAVE_FEDERATION_ROUTE, post(leave_federation_handler))
         .route(CONNECT_FEDERATION_ROUTE, post(connect_federation_handler))
