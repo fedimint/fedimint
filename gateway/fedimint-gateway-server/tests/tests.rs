@@ -85,7 +85,7 @@ fn fixtures() -> Fixtures {
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
     let fixtures = fixtures.with_module(
         LightningClientInit {
-            gateway_conn: Arc::new(MockGatewayConnection),
+            gateway_conn: Some(Arc::new(MockGatewayConnection)),
         },
         LightningInit,
         ln_params,
@@ -1278,7 +1278,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
             .0
             .iter()
             .tuple_windows()
-            .all(|(e1, e2)| e1.timestamp > e2.timestamp)
+            .all(|(e1, e2)| e1.as_raw().ts_usecs > e2.as_raw().ts_usecs)
     );
 
     // Verify that we retrieve the rest of the events
@@ -1286,7 +1286,7 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
         .0
         .last()
         .expect("no transactions")
-        .event_id
+        .id()
         .saturating_sub(1);
 
     let transactions = gateway

@@ -3,7 +3,7 @@ use std::hash;
 
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{
-    FederationApiExt, PeerError, SerdeOutputOutcome, deserialize_outcome,
+    FederationApiExt, SerdeOutputOutcome, ServerError, deserialize_outcome,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client_module::DynGlobalClientContext;
@@ -29,7 +29,7 @@ use tbs::{
 use tracing::debug;
 
 use crate::client_db::NoteKey;
-use crate::event::NoteCreated;
+use crate::event::{NoteCreated, ReceivePaymentStatus, ReceivePaymentUpdateEvent};
 use crate::{MintClientContext, MintClientModule, SpendableNote};
 
 /// Child ID used to derive the spend key from a note's [`DerivableSecret`]
@@ -218,7 +218,7 @@ impl MintOutputStatesCreated {
                             &module_decoder,
                             &tbs_pks,
                         )
-                        .map_err(PeerError::InvalidResponse)
+                        .map_err(ServerError::InvalidResponse)
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
@@ -323,12 +323,19 @@ impl MintOutputStatesCreatedMulti {
     ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let tbs_pks = context.tbs_pks.clone();
         let client_ctx = context.client_ctx.clone();
+        let client_ctx_rejected = context.client_ctx.clone();
 
         vec![
             // Check if transaction was rejected
             StateTransition::new(
                 Self::await_tx_rejected(global_context.clone(), common),
-                |_dbtx, (), state| Box::pin(async move { Self::transition_tx_rejected(&state) }),
+                move |dbtx, (), state| {
+                    Box::pin(Self::transition_tx_rejected(
+                        client_ctx_rejected.clone(),
+                        dbtx,
+                        state,
+                    ))
+                },
             ),
             // Check for output outcome
             StateTransition::new(
@@ -363,8 +370,22 @@ impl MintOutputStatesCreatedMulti {
         std::future::pending::<()>().await;
     }
 
-    fn transition_tx_rejected(old_state: &MintOutputStateMachine) -> MintOutputStateMachine {
+    async fn transition_tx_rejected(
+        client_ctx: ClientContext<MintClientModule>,
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        old_state: MintOutputStateMachine,
+    ) -> MintOutputStateMachine {
         assert!(matches!(old_state.state, MintOutputStates::CreatedMulti(_)));
+
+        client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                ReceivePaymentUpdateEvent {
+                    operation_id: old_state.common.operation_id,
+                    status: ReceivePaymentStatus::Rejected,
+                },
+            )
+            .await;
 
         MintOutputStateMachine {
             common: old_state.common,
@@ -405,7 +426,7 @@ impl MintOutputStatesCreatedMulti {
                                 &module_decoder,
                                 &tbs_pks,
                             )
-                            .map_err(PeerError::InvalidResponse)
+                            .map_err(ServerError::InvalidResponse)
                         },
                         api.all_peers().to_num_peers(),
                     ),
@@ -444,7 +465,7 @@ impl MintOutputStatesCreatedMulti {
                                             &module_decoder,
                                             &tbs_pks,
                                         )
-                                        .map_err(PeerError::InvalidResponse)
+                                        .map_err(ServerError::InvalidResponse)
                                     },
                                     api.all_peers().to_num_peers(),
                                 ),
@@ -535,6 +556,17 @@ impl MintOutputStatesCreatedMulti {
                 crit!(target: LOG_CLIENT_MODULE_MINT, %note, "E-cash note was replaced in DB");
             }
         }
+
+        client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                ReceivePaymentUpdateEvent {
+                    operation_id: old_state.common.operation_id,
+                    status: ReceivePaymentStatus::Success,
+                },
+            )
+            .await;
+
         MintOutputStateMachine {
             common: old_state.common,
             state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {

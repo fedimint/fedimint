@@ -111,13 +111,14 @@ use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
 use crate::federation::{
     FEDIMINTD_METRICS_PORT_OFFSET, FEDIMINTD_UI_PORT_OFFSET, PORTS_PER_FEDIMINTD,
 };
+use crate::vars::net_overrides::GatewaydNetOverrides;
 
 pub fn utf8(path: &Path) -> &str {
     path.as_os_str().to_str().expect("must be valid utf8")
 }
 
 declare_vars! {
-    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16) =>
+    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16, num_gateways: usize, gw_base_port: u16) =>
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
 
@@ -152,14 +153,12 @@ declare_vars! {
         FM_PORT_GW_LND: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LDK: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK";
         FM_PORT_GW_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2";
-        FM_PORT_GW_LND_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LND_IROH";
-        FM_PORT_GW_LDK_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK_IROH";
-        FM_PORT_GW_LDK2_IROH: u16 = port_alloc(1)?; env: "FM_PORT_GW_LDK2_IROH";
         FM_PORT_FAUCET: u16 = 15243u16; env: "FM_PORT_FAUCET";
         FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
 
         FM_FEDERATION_BASE_PORT: u16 = federation_base_ports; env: "FM_FEDERATION_BASE_PORT";
         fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";
+        gatewayd_overrides: GatewaydNetOverrides = GatewaydNetOverrides::new(gw_base_port, num_gateways); env: "NOT_USED_FOR_ANYTHING";
 
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join("lnd")).await?; env: "FM_LND_DIR";
         FM_LDK_DIR: PathBuf = mkdir(FM_TEST_DIR.join("ldk")).await?; env: "FM_LDK_DIR";
@@ -234,12 +233,16 @@ impl Global {
                     .unwrap(),
             )?
         };
+        let num_gateways: usize = 3;
+        let gw_base_port = port_alloc(num_gateways as u16).unwrap();
         let this = Self::init(
             test_dir,
             num_feds,
             fed_size,
             offline_nodes,
             federations_base_port,
+            num_gateways,
+            gw_base_port,
         )
         .await?;
         Ok(this)

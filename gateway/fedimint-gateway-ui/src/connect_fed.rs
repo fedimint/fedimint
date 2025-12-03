@@ -2,13 +2,13 @@ use std::fmt::Display;
 
 use axum::Form;
 use axum::extract::State;
-use axum::response::{Html, IntoResponse, Redirect};
+use axum::response::IntoResponse;
 use fedimint_gateway_common::ConnectFedPayload;
+use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
-use fedimint_ui_common::{ROOT_ROUTE, UiState, dashboard_layout};
 use maud::{Markup, html};
 
-use crate::{CONNECT_FEDERATION_ROUTE, DynGatewayApi};
+use crate::{CONNECT_FEDERATION_ROUTE, DynGatewayApi, redirect_error, redirect_success};
 
 pub fn render() -> Markup {
     html!(
@@ -33,19 +33,15 @@ pub async fn connect_federation_handler<E: Display>(
     Form(payload): Form<ConnectFedPayload>,
 ) -> impl IntoResponse {
     match state.api.handle_connect_federation(payload).await {
-        Ok(_) => {
+        Ok(info) => {
             // Redirect back to dashboard on success
-            Redirect::to(ROOT_ROUTE).into_response()
+            redirect_success(format!(
+                "Successfully joined {}",
+                info.federation_name
+                    .unwrap_or("Unnamed Federation".to_string())
+            ))
+            .into_response()
         }
-        Err(err) => {
-            let content = html! {
-                div class="alert alert-danger mt-4" {
-                    strong { "Failed to connect federation: " }
-                    (err.to_string())
-                }
-            };
-            Html(dashboard_layout(content, "Connect Federation Error", None).into_string())
-                .into_response()
-        }
+        Err(err) => redirect_error(format!("Failed to join federation: {err}")).into_response(),
     }
 }

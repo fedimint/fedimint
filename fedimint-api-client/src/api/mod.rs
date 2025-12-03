@@ -1,12 +1,7 @@
 mod error;
 pub mod global_api;
-pub mod iroh;
 pub mod net;
-#[cfg(all(feature = "tor", not(target_family = "wasm")))]
-pub mod tor;
-pub mod ws;
 
-use core::fmt;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::future::pending;
@@ -15,11 +10,15 @@ use std::result;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, anyhow, bail};
-use async_trait::async_trait;
+use anyhow::{Context, anyhow};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
-pub use error::{FederationError, OutputOutcomeError, PeerError};
+pub use error::{FederationError, OutputOutcomeError};
+pub use fedimint_connectors::ServerResult;
+pub use fedimint_connectors::error::ServerError;
+use fedimint_connectors::{
+    ConnectionPool, ConnectorRegistry, DynGuaridianConnection, IGuardianConnection,
+};
 use fedimint_core::admin_client::{
     GuardianConfigBackup, PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus,
 };
@@ -27,7 +26,6 @@ use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{FM_WS_API_CONNECT_OVERRIDES_ENV, parse_kv_list_from_env};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -36,7 +34,6 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
-use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff, custom_backoff};
@@ -44,20 +41,16 @@ use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
-use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET, LOG_NET_API};
+use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
-#[cfg(target_family = "wasm")]
-use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::OnceCell;
 use tracing::{debug, instrument, trace, warn};
 
-use crate::api;
-use crate::api::ws::WebsocketConnector;
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion::new(0, 5);
@@ -65,7 +58,6 @@ pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2: ApiVersion = ApiVersion
 pub const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
     ApiVersion { major: 0, minor: 1 };
 
-pub type PeerResult<T> = Result<T, PeerError>;
 pub type FederationResult<T> = Result<T, FederationError>;
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
@@ -106,7 +98,7 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> PeerResult<Value>;
+    ) -> ServerResult<Value>;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -118,14 +110,15 @@ pub trait FederationApiExt: IRawFederationApi {
         method: String,
         params: ApiRequestErased,
         peer: PeerId,
-    ) -> PeerResult<Ret>
+    ) -> ServerResult<Ret>
     where
         Ret: DeserializeOwned,
     {
         self.request_raw(peer, &method, &params)
             .await
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
+                serde_json::from_value(v)
+                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
             })
     }
 
@@ -141,14 +134,15 @@ pub trait FederationApiExt: IRawFederationApi {
         self.request_raw(peer_id, &method, &params)
             .await
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
+                serde_json::from_value(v)
+                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
             })
             .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))
     }
 
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
-    #[instrument(target = LOG_NET_API, skip_all, fields(method=method))]
+    #[instrument(target = LOG_CLIENT_NET_API, skip_all, fields(method=method))]
     async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
@@ -306,7 +300,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 }
                 QueryStep::Success(response) => return response,
                 QueryStep::Failure(e) => {
-                    warn!("Query strategy returned non-retryable failure for peer {peer}: {e}");
+                    warn!(target: LOG_CLIENT_NET_API, "Query strategy returned non-retryable failure for peer {peer}: {e}");
                 }
                 QueryStep::Continue => {}
             }
@@ -574,7 +568,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn api_announcements(
         &self,
         guardian: PeerId,
-    ) -> PeerResult<BTreeMap<PeerId, SignedApiAnnouncement>>;
+    ) -> ServerResult<BTreeMap<PeerId, SignedApiAnnouncement>>;
 
     async fn sign_api_announcement(
         &self,
@@ -585,14 +579,14 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
 
     /// Returns the fedimintd version a peer is running
-    async fn fedimintd_version(&self, peer_id: PeerId) -> PeerResult<String>;
+    async fn fedimintd_version(&self, peer_id: PeerId) -> ServerResult<String>;
 
     /// Fetch the backup statistics from the federation (admin endpoint)
     async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics>;
 
     /// Get the invite code for the federation guardian.
     /// For instance, useful after DKG
-    async fn get_invite_code(&self, guardian: PeerId) -> PeerResult<InviteCode>;
+    async fn get_invite_code(&self, guardian: PeerId) -> ServerResult<InviteCode>;
 
     /// Change the password used to encrypt the configs and for guardian
     /// authentication
@@ -620,292 +614,6 @@ where
     })
 }
 
-/// Builder for [`ConnectorRegistry`]
-///
-/// See [`ConnectorRegistry::build_from_client_env`] and similar
-/// to create.
-#[allow(clippy::struct_excessive_bools)] // Shut up, Clippy
-pub struct ConnectorRegistryBuilder {
-    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
-
-    /// Enable Iroh endpoints at all?
-    iroh_enable: bool,
-    /// Override the Iroh DNS server to use
-    iroh_dns: Option<SafeUrl>,
-    /// Should start the "next/unstable" Iroh stack
-    iroh_next: bool,
-    /// Enable Pkarr DHT discovery
-    iroh_pkarr_dht: bool,
-
-    /// Enable Websocket API handling at all?
-    ws_enable: bool,
-    ws_force_tor: bool,
-}
-
-impl ConnectorRegistryBuilder {
-    #[allow(clippy::unused_async)] // Leave room for async in the future
-    pub async fn bind(self) -> anyhow::Result<ConnectorRegistry> {
-        let mut inner: BTreeMap<String, JitTryAnyhow<DynConnector>> = BTreeMap::new();
-
-        if self.iroh_enable {
-            let iroh_connector = JitTryAnyhow::new_try(move || async move {
-                Ok(Arc::new(
-                    api::iroh::IrohConnector::new(
-                        self.iroh_dns,
-                        self.iroh_pkarr_dht,
-                        self.iroh_next,
-                    )
-                    .await?,
-                ) as DynConnector)
-            });
-            inner.insert("iroh".to_string(), iroh_connector);
-        }
-
-        if self.ws_enable {
-            match self.ws_force_tor {
-                #[cfg(all(feature = "tor", not(target_family = "wasm")))]
-                true => {
-                    use crate::api::tor::TorConnector;
-
-                    let tor_connector = JitTry::new_try(move || async move {
-                        Ok(Arc::new(TorConnector::bootstrap().await?) as DynConnector)
-                    });
-                    inner.insert("wss".into(), tor_connector.clone());
-                    inner.insert("ws".into(), tor_connector);
-                }
-
-                false => {
-                    let websocket_connector = JitTry::new_try(move || async move {
-                        Ok(Arc::new(WebsocketConnector::new()) as DynConnector)
-                    });
-                    inner.insert("wss".into(), websocket_connector.clone());
-                    inner.insert("ws".into(), websocket_connector);
-                }
-                #[allow(unreachable_patterns)]
-                _ => bail!("Tor requested, but not support not compiled in"),
-            }
-        }
-
-        Ok(ConnectorRegistry {
-            connectors: inner,
-            connection_overrides: self.connection_overrides,
-        })
-    }
-
-    pub fn iroh_pkarr_dht(self, enable: bool) -> Self {
-        Self {
-            iroh_pkarr_dht: enable,
-            ..self
-        }
-    }
-
-    pub fn iroh_next(self, enable: bool) -> Self {
-        Self {
-            iroh_next: enable,
-            ..self
-        }
-    }
-
-    pub fn ws_force_tor(self, enable: bool) -> Self {
-        Self {
-            ws_force_tor: enable,
-            ..self
-        }
-    }
-
-    pub fn set_iroh_dns(self, url: SafeUrl) -> Self {
-        Self {
-            iroh_dns: Some(url),
-            ..self
-        }
-    }
-
-    /// Apply overrides from env variables
-    pub fn with_env_var_overrides(mut self) -> anyhow::Result<Self> {
-        // TODO: read rest of the env
-        for (k, v) in parse_kv_list_from_env::<_, SafeUrl>(FM_WS_API_CONNECT_OVERRIDES_ENV)? {
-            self = self.with_connection_override(k, v);
-        }
-
-        Ok(Self { ..self })
-    }
-    pub fn with_connection_override(
-        mut self,
-        original_url: SafeUrl,
-        replacement_url: SafeUrl,
-    ) -> Self {
-        self.connection_overrides
-            .insert(original_url, replacement_url);
-        self
-    }
-}
-
-/// A set of available connectivity protocols a client can use to make
-/// network API requests (typically to federation).
-///
-/// Maps from connection URL schema to [`Connector`] to use to connect to it.
-///
-/// See [`ConnectorRegistry::build_from_client_env`] and similar
-/// to create.
-///
-/// [`ConnectorRegistry::connect_guardian`] is the main entry point for making
-/// mixed-networking stack connection.
-///
-/// Responsibilities:
-#[derive(Clone, Debug)]
-pub struct ConnectorRegistry {
-    connectors: BTreeMap<String, JitTryAnyhow<DynConnector>>,
-
-    /// List of overrides to use when attempting to connect to given url
-    ///
-    /// This is useful for testing, or forcing non-default network
-    /// connectivity.
-    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
-}
-
-impl ConnectorRegistry {
-    /// Create a builder with recommended defaults intended for client-side
-    /// usage
-    ///
-    /// In particular mobile devices are considered.
-    pub fn build_from_client_defaults() -> ConnectorRegistryBuilder {
-        ConnectorRegistryBuilder {
-            iroh_enable: true,
-            iroh_dns: None,
-            iroh_pkarr_dht: false,
-            iroh_next: true,
-            ws_enable: true,
-            ws_force_tor: false,
-
-            connection_overrides: BTreeMap::default(),
-        }
-    }
-
-    /// Create a builder with recommended defaults intended for the server-side
-    /// usage
-    pub fn build_from_server_defaults() -> ConnectorRegistryBuilder {
-        ConnectorRegistryBuilder {
-            iroh_enable: true,
-            iroh_dns: None,
-            iroh_pkarr_dht: true,
-            iroh_next: true,
-            ws_enable: true,
-            ws_force_tor: false,
-
-            connection_overrides: BTreeMap::default(),
-        }
-    }
-
-    /// Create a builder with recommended defaults intended for testing
-    /// usage
-    pub fn build_from_testing_defaults() -> ConnectorRegistryBuilder {
-        ConnectorRegistryBuilder {
-            iroh_enable: true,
-            iroh_dns: None,
-            iroh_pkarr_dht: false,
-            iroh_next: false,
-            ws_enable: true,
-            ws_force_tor: false,
-
-            connection_overrides: BTreeMap::default(),
-        }
-    }
-
-    /// Like [`Self::build_from_client_defaults`] build will apply
-    /// environment-provided overrides.
-    pub fn build_from_client_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_client_defaults().with_env_var_overrides()?;
-        Ok(builder)
-    }
-
-    /// Like [`Self::build_from_server_defaults`] build will apply
-    /// environment-provided overrides.
-    pub fn build_from_server_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_server_defaults().with_env_var_overrides()?;
-        Ok(builder)
-    }
-
-    /// Like [`Self::build_from_testing_defaults`] build will apply
-    /// environment-provided overrides.
-    pub fn build_from_testing_env() -> anyhow::Result<ConnectorRegistryBuilder> {
-        let builder = Self::build_from_testing_defaults().with_env_var_overrides()?;
-        Ok(builder)
-    }
-
-    /// Connect to a given `url` using matching [`Connector`]
-    ///
-    /// This is the main function consumed by the downstream use for making
-    /// connection.
-    pub async fn connect_guardian(
-        &self,
-        url: &SafeUrl,
-        api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection> {
-        let url = match self.connection_overrides.get(url) {
-            Some(replacement) => {
-                trace!(
-                    target: LOG_NET,
-                    original_url = %url,
-                    replacement_url = %replacement,
-                    "Using a connectivity override for connection"
-                );
-
-                replacement
-            }
-            None => url,
-        };
-
-        let Some(connector) = self.connectors.get(url.scheme()) else {
-            return Err(PeerError::InvalidEndpoint(anyhow!(
-                "Unsupported scheme: {}; missing endpoint handler",
-                url.scheme()
-            )));
-        };
-
-        connector
-            .get_try()
-            .await
-            .map_err(|e| {
-                PeerError::Transport(anyhow!(
-                    "Connector failed to initialize: {}",
-                    e.fmt_compact()
-                ))
-            })?
-            .connect_guardian(url, api_secret)
-            .await
-    }
-}
-pub type DynConnector = Arc<dyn Connector>;
-
-#[async_trait]
-pub trait Connector: Send + Sync + 'static + fmt::Debug {
-    async fn connect_guardian(
-        &self,
-        url: &SafeUrl,
-        api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection>;
-}
-
-/// A connection from api client to a federation guardian (type erased)
-pub type DynGuaridianConnection = Arc<dyn IGuardianConnection>;
-
-/// A connection from api client to a federation guardian
-#[async_trait]
-pub trait IGuardianConnection: Debug + Send + Sync + 'static {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value>;
-
-    fn is_connected(&self) -> bool;
-
-    async fn await_disconnection(&self);
-
-    fn into_dyn(self) -> DynGuaridianConnection
-    where
-        Self: Sized,
-    {
-        Arc::new(self)
-    }
-}
-
 /// Federation API client
 ///
 /// The core underlying object used to make API requests to a federation.
@@ -918,8 +626,6 @@ pub trait IGuardianConnection: Debug + Send + Sync + 'static {
 // in the future.
 #[derive(Clone, Debug)]
 pub struct FederationApi {
-    /// Available connectors which we can make connections
-    connectors: ConnectorRegistry,
     /// Map of known URLs to use to connect to peers
     peers: BTreeMap<PeerId, SafeUrl>,
     /// List of peer ids, redundant to avoid collecting all the time
@@ -928,16 +634,10 @@ pub struct FederationApi {
     admin_id: Option<PeerId>,
     /// Set when this API is used to communicate with a module
     module_id: Option<ModuleInstanceId>,
-
+    /// Api secret of the federation
     api_secret: Option<String>,
-
     /// Connection pool
-    ///
-    /// Every entry in this map will be created on demand and correspond to a
-    /// single outgoing connection to a certain URL that is in the process
-    /// of being established, or we already established.
-    #[allow(clippy::type_complexity)]
-    connections: Arc<tokio::sync::Mutex<HashMap<SafeUrl, Arc<ConnectionState>>>>,
+    connection_pool: ConnectionPool<dyn IGuardianConnection>,
 }
 
 /// Inner part of [`ConnectionState`] preserving state between attempts to
@@ -949,18 +649,18 @@ struct ConnectionStateInner {
 }
 
 #[derive(Debug)]
-struct ConnectionState {
+pub struct ConnectionState<T: ?Sized> {
     /// Connection we are trying to or already established
-    connection: tokio::sync::OnceCell<DynGuaridianConnection>,
+    pub connection: tokio::sync::OnceCell<Arc<T>>,
     /// State that technically is protected every time by
     /// the serialization of `OnceCell::get_or_try_init`, but
     /// for Rust purposes needs to be locked.
     inner: std::sync::Mutex<ConnectionStateInner>,
 }
 
-impl ConnectionState {
+impl<T: ?Sized> ConnectionState<T> {
     /// Create a new connection state for a first time connection
-    fn new_initial() -> Self {
+    pub fn new_initial() -> Self {
         Self {
             connection: OnceCell::new(),
             inner: std::sync::Mutex::new(ConnectionStateInner {
@@ -977,7 +677,7 @@ impl ConnectionState {
 
     /// Create a new connection state for a connection that already failed, and
     /// is being reset
-    fn new_reconnecting() -> Self {
+    pub fn new_reconnecting() -> Self {
         Self {
             connection: OnceCell::new(),
             inner: std::sync::Mutex::new(ConnectionStateInner {
@@ -995,7 +695,7 @@ impl ConnectionState {
 
     /// Record the fact that an attempt to connect is being made, and return
     /// time the caller should wait.
-    fn pre_reconnect_delay(&self) -> Duration {
+    pub fn pre_reconnect_delay(&self) -> Duration {
         let mut backoff_locked = self.inner.lock().expect("Locking failed");
         let fresh = backoff_locked.fresh;
 
@@ -1016,13 +716,12 @@ impl FederationApi {
         api_secret: Option<&str>,
     ) -> Self {
         Self {
-            connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             peers_keys: peers.keys().copied().collect(),
             peers,
             admin_id: admin_peer_id,
             module_id: None,
-            connectors,
             api_secret: api_secret.map(ToOwned::to_owned),
+            connection_pool: ConnectionPool::new(connectors),
         }
     }
 
@@ -1030,50 +729,15 @@ impl FederationApi {
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection> {
-        let mut pool_locked = self.connections.lock().await;
-
-        let pool_entry_arc = pool_locked
-            .entry(url.to_owned())
-                        .and_modify(|entry_arc| {
-                // Check if existing connection is disconnected and reset the whole entry.
-                //
-                // This resets the state (like connectivity backoff), which is what we want.
-                // Since the (`OnceCell`) was already initialized, it means connection was successfully
-                // before, and disconnected afterwards.
-                if let Some(existing_conn) = entry_arc.connection.get()
-                    && !existing_conn.is_connected(){
-                        trace!(target: LOG_NET_API, %url, "Existing connection is disconnected, removing from pool");
-                        *entry_arc = Arc::new(ConnectionState::new_reconnecting());
-                    }
-            })
-            .or_insert_with(|| Arc::new(ConnectionState::new_initial()))
-            .clone();
-
-        // Drop the pool lock so other connections can work in parallel
-        drop(pool_locked);
-
-        let conn = pool_entry_arc
-            .connection
-            // This serializes all the connection attempts. If one attempt to connect (including
-            // waiting for the reconnect backoff) succeeds, all waiting ones will use it. If it
-            // fails, any already pending/next will attempt it right afterwards.
-            // Nit: if multiple calls are trying to connect to the same host that is offline, it
-            // will take some of them multiples of maximum retry delay to actually return with
-            // an error. This should be fine in practice and hard to avoid without a lot of
-            // complexity.
-            .get_or_try_init(|| async {
-                let retry_delay = pool_entry_arc.pre_reconnect_delay();
-                fedimint_core::runtime::sleep(retry_delay).await;
-
-                let conn = self.connectors.connect_guardian(url, api_secret).await?;
-
+    ) -> ServerResult<DynGuaridianConnection> {
+        self.connection_pool
+            .get_or_create_connection(url, api_secret, |url, api_secret, connectors| async move {
+                let conn = connectors
+                    .connect_guardian(&url, api_secret.as_deref())
+                    .await?;
                 Ok(conn)
             })
-            .await?;
-
-        trace!(target: LOG_NET_API, %url, "Using websocket connection");
-        Ok(conn.clone())
+            .await
     }
 
     async fn request(
@@ -1081,20 +745,20 @@ impl FederationApi {
         peer: PeerId,
         method: ApiMethod,
         request: ApiRequestErased,
-    ) -> PeerResult<Value> {
-        trace!(target: LOG_NET_API, %peer, %method, "Api request");
+    ) -> ServerResult<Value> {
+        trace!(target: LOG_CLIENT_NET_API, %peer, %method, "Api request");
         let url = self
             .peers
             .get(&peer)
-            .ok_or_else(|| PeerError::InvalidPeerId { peer_id: peer })?;
+            .ok_or_else(|| ServerError::InvalidPeerId { peer_id: peer })?;
         let conn = self
             .get_or_create_connection(url, self.api_secret.as_deref())
             .await
             .context("Failed to connect to peer")
-            .map_err(PeerError::Connection)?;
+            .map_err(ServerError::Connection)?;
         let res = conn.request(method.clone(), request).await;
 
-        trace!(target: LOG_NET_API, ?method, res_ok = res.is_ok(), "Api response");
+        trace!(target: LOG_CLIENT_NET_API, ?method, res_ok = res.is_ok(), "Api response");
 
         res
     }
@@ -1115,18 +779,17 @@ impl IRawFederationApi for FederationApi {
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         FederationApi {
             api_secret: self.api_secret.clone(),
-            connections: self.connections.clone(),
-            connectors: self.connectors.clone(),
             peers: self.peers.clone(),
             peers_keys: self.peers_keys.clone(),
             admin_id: self.admin_id,
             module_id: Some(id),
+            connection_pool: self.connection_pool.clone(),
         }
         .into()
     }
 
     #[instrument(
-        target = LOG_NET_API,
+        target = LOG_CLIENT_NET_API,
         skip_all,
         fields(
             peer_id = %peer_id,
@@ -1139,7 +802,7 @@ impl IRawFederationApi for FederationApi {
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> PeerResult<Value> {
+    ) -> ServerResult<Value> {
         let method = match self.module_id {
             Some(module_id) => ApiMethod::Module(module_id, method.to_string()),
             None => ApiMethod::Core(method.to_string()),

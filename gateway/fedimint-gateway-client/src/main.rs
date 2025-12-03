@@ -9,9 +9,9 @@ mod onchain_commands;
 use clap::{CommandFactory, Parser, Subcommand};
 use config_commands::ConfigCommands;
 use ecash_commands::EcashCommands;
-use fedimint_core::envs::FM_IROH_DNS_ENV;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::util::SafeUrl;
-use fedimint_ln_common::client::GatewayRpcClient;
+use fedimint_ln_common::client::GatewayApi;
 use fedimint_logging::TracingSetup;
 use general_commands::GeneralCommands;
 use lightning_commands::LightningCommands;
@@ -32,14 +32,6 @@ struct Cli {
     /// Password for authenticated requests to the gateway
     #[clap(long)]
     rpcpassword: Option<String>,
-
-    /// Optional URL of the Iroh DNS server
-    #[arg(long, env = FM_IROH_DNS_ENV)]
-    iroh_dns: Option<SafeUrl>,
-
-    /// Optional override URL for directly connecting to an Iroh endpoint
-    #[arg(long)]
-    connection_override: Option<SafeUrl>,
 }
 
 #[derive(Subcommand)]
@@ -80,21 +72,20 @@ async fn main() {
 
 async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    let client = GatewayRpcClient::new(
-        cli.address,
-        cli.rpcpassword,
-        cli.iroh_dns,
-        cli.connection_override,
-    )
-    .await?;
-    // TODO: Need to call with_connection_override
+    let connector_registry = ConnectorRegistry::build_from_client_defaults()
+        .with_env_var_overrides()?
+        .bind()
+        .await?;
+    let client = GatewayApi::new(cli.rpcpassword, connector_registry);
 
     match cli.command {
-        Commands::General(general_command) => general_command.handle(&client).await?,
-        Commands::Lightning(lightning_command) => lightning_command.handle(&client).await?,
-        Commands::Ecash(ecash_command) => ecash_command.handle(&client).await?,
-        Commands::Onchain(onchain_command) => onchain_command.handle(&client).await?,
-        Commands::Cfg(config_commands) => config_commands.handle(&client).await?,
+        Commands::General(general_command) => general_command.handle(&client, &cli.address).await?,
+        Commands::Lightning(lightning_command) => {
+            lightning_command.handle(&client, &cli.address).await?;
+        }
+        Commands::Ecash(ecash_command) => ecash_command.handle(&client, &cli.address).await?,
+        Commands::Onchain(onchain_command) => onchain_command.handle(&client, &cli.address).await?,
+        Commands::Cfg(config_commands) => config_commands.handle(&client, &cli.address).await?,
         Commands::Completion { shell } => {
             clap_complete::generate(
                 shell,

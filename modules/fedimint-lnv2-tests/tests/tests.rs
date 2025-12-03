@@ -20,8 +20,10 @@ use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, LightningInput, LightningInputV0, OutgoingWitness,
 };
 use fedimint_lnv2_server::LightningInit;
+use fedimint_logging::LOG_TEST;
 use fedimint_testing::fixtures::Fixtures;
 use serde_json::Value;
+use tracing::warn;
 
 use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
 
@@ -32,7 +34,7 @@ fn fixtures() -> Fixtures {
 
     fixtures.with_module(
         LightningClientInit {
-            gateway_conn: Arc::new(MockGatewayConnection::default()),
+            gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
             custom_meta_fn: Arc::new(|| {
                 serde_json::json!({
                     "timestamp": chrono::Utc::now().timestamp(),
@@ -141,6 +143,14 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
+    if Fixtures::is_real_test() {
+        warn!(
+            target: LOG_TEST,
+            "Skipping test as mining so many blocks is too slow in real bitcoind setup"
+        );
+        return Ok(());
+    }
+
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
     let client = fed.new_client().await;

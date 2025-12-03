@@ -3,12 +3,12 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use fedimint_api_client::api::ConnectorRegistry;
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ClientConfigKey;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientBuilder, RootSecret};
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -37,7 +37,7 @@ impl GatewayClientBuilder {
         db_backend: DatabaseBackend,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            connectors: ConnectorRegistry::build_from_server_env()?.bind().await?,
+            connectors: ConnectorRegistry::build_from_client_env()?.bind().await?,
             work_dir,
             registry,
             db_backend,

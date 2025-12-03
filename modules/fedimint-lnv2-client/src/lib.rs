@@ -8,6 +8,7 @@ mod api;
 #[cfg(feature = "cli")]
 mod cli;
 mod db;
+pub mod events;
 mod receive_sm;
 mod send_sm;
 
@@ -18,7 +19,7 @@ use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-use fedimint_api_client::api::DynModuleApi;
+use fedimint_api_client::api::{DynModuleApi, ServerError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -47,7 +48,7 @@ use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, GatewayRpcError, KIND, LightningCommonInit, LightningInvoice,
+    Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
     LightningModuleTypes, LightningOutput, LightningOutputV0, lnurl, tweak,
 };
 use futures::StreamExt;
@@ -61,6 +62,7 @@ use tpe::{AggregateDecryptionKey, derive_agg_dk};
 use tracing::warn;
 
 use crate::api::LightningFederationApi;
+use crate::events::SendPaymentEvent;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
@@ -213,7 +215,7 @@ pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
 
 #[derive(Clone)]
 pub struct LightningClientInit {
-    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    pub gateway_conn: Option<Arc<dyn GatewayConnection + Send + Sync>>,
     pub custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
 }
 
@@ -229,7 +231,7 @@ impl std::fmt::Debug for LightningClientInit {
 impl Default for LightningClientInit {
     fn default() -> Self {
         LightningClientInit {
-            gateway_conn: Arc::new(RealGatewayConnection),
+            gateway_conn: None,
             custom_meta_fn: Arc::new(|| Value::Null),
         }
     }
@@ -257,6 +259,12 @@ impl ClientModuleInit for LightningClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        let gateway_conn = if let Some(gateway_conn) = self.gateway_conn.clone() {
+            gateway_conn
+        } else {
+            let api = GatewayApi::new(None, args.connector_registry.clone());
+            Arc::new(RealGatewayConnection { api })
+        };
         Ok(LightningClientModule::new(
             *args.federation_id(),
             args.cfg().clone(),
@@ -264,7 +272,7 @@ impl ClientModuleInit for LightningClientInit {
             args.context(),
             args.module_api().clone(),
             args.module_root_secret(),
-            self.gateway_conn.clone(),
+            gateway_conn,
             self.custom_meta_fn.clone(),
             args.admin_auth().cloned(),
             args.task_group(),
@@ -288,6 +296,7 @@ impl ClientModuleInit for LightningClientInit {
 pub struct LightningClientContext {
     federation_id: FederationId,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    pub(crate) client_ctx: ClientContext<LightningClientModule>,
 }
 
 impl Context for LightningClientContext {
@@ -320,6 +329,7 @@ impl ClientModule for LightningClientModule {
         LightningClientContext {
             federation_id: self.federation_id,
             gateway_conn: self.gateway_conn.clone(),
+            client_ctx: self.client_ctx.clone(),
         }
     }
 
@@ -461,10 +471,7 @@ impl LightningClientModule {
         Err(SelectGatewayError::FailedToFetchRoutingInfo)
     }
 
-    async fn routing_info(
-        &self,
-        gateway: &SafeUrl,
-    ) -> Result<Option<RoutingInfo>, GatewayRpcError> {
+    async fn routing_info(&self, gateway: &SafeUrl) -> Result<Option<RoutingInfo>, ServerError> {
         self.gateway_conn
             .routing_info(gateway.clone(), &self.federation_id)
             .await
@@ -486,6 +493,7 @@ impl LightningClientModule {
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
+    #[allow(clippy::too_many_lines)]
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
@@ -520,7 +528,7 @@ impl LightningClientModule {
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
                     .await
-                    .map_err(SendPaymentError::GatewayConnectionError)?
+                    .map_err(|e| SendPaymentError::GatewayConnectionError(e.to_string()))?
                     .ok_or(SendPaymentError::UnknownFederation)?,
             ),
             None => self
@@ -562,6 +570,7 @@ impl LightningClientModule {
             output: LightningOutput::V0(LightningOutputV0::Outgoing(contract.clone())),
             amounts: Amounts::new_bitcoin(contract.amount),
         };
+
         let client_output_sm = ClientOutputSM::<LightningClientStateMachines> {
             state_machines: Arc::new(move |range: OutPointRange| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
@@ -582,6 +591,7 @@ impl LightningClientModule {
             vec![client_output],
             vec![client_output_sm],
         ));
+
         let transaction = TransactionBuilder::new().with_outputs(client_output);
 
         self.client_ctx
@@ -601,6 +611,21 @@ impl LightningClientModule {
             )
             .await
             .map_err(|e| SendPaymentError::FinalizationError(e.to_string()))?;
+
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+        self.client_ctx
+            .log_event(
+                &mut dbtx,
+                SendPaymentEvent {
+                    operation_id,
+                    amount: send_fee.add_to(amount),
+                    fee: Some(send_fee.fee(amount)),
+                },
+            )
+            .await;
+
+        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
@@ -792,7 +817,7 @@ impl LightningClientModule {
                 gateway.clone(),
                 self.routing_info(&gateway)
                     .await
-                    .map_err(ReceiveError::GatewayConnectionError)?
+                    .map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))?
                     .ok_or(ReceiveError::UnknownFederation)?,
             ),
             None => self
@@ -847,7 +872,7 @@ impl LightningClientModule {
                 expiry_secs,
             )
             .await
-            .map_err(ReceiveError::GatewayConnectionError)?;
+            .map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))?;
 
         if invoice.payment_hash() != &preimage.consensus_hash() {
             return Err(ReceiveError::InvalidInvoicePaymentHash);
@@ -1100,7 +1125,7 @@ pub enum SendPaymentError {
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(GatewayRpcError),
+    GatewayConnectionError(String),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee of exceeds the limit")]
@@ -1125,7 +1150,7 @@ pub enum ReceiveError {
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(GatewayRpcError),
+    GatewayConnectionError(String),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee exceeds the limit")]

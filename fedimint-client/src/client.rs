@@ -14,8 +14,7 @@ use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{
-    ApiVersionSet, ConnectorRegistry, DynGlobalApi, FederationApiExt as _, FederationResult,
-    IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
@@ -34,12 +33,13 @@ use fedimint_client_module::{
     AddStateMachinesResult, ClientModuleInstance, GetInviteCodeRequest, ModuleGlobalContextGen,
     ModuleRecoveryCompleted, TransactionUpdates, TxCreatedEvent,
 };
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseKey, DatabaseRecord, DatabaseTransaction,
+    AutocommitError, Database, DatabaseRecord, DatabaseTransaction,
     IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -65,8 +65,8 @@ use fedimint_core::{
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt as _, Event, EventKind, EventLogEntry, EventLogId, EventLogTrimableId,
-    EventPersistence, PersistedLogEntry,
+    DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventKind, EventLogEntry,
+    EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -80,6 +80,7 @@ use tracing::{debug, info, warn};
 use crate::ClientBuilder;
 use crate::api_announcements::{ApiAnnouncementPrefix, get_api_urls};
 use crate::backup::Metadata;
+use crate::client::event_log::DefaultApplicationEventLogKey;
 use crate::db::{
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChronologicalOperationLogKey,
     ClientConfigKey, ClientMetadataKey, ClientModuleRecovery, ClientModuleRecoveryState,
@@ -96,6 +97,7 @@ use crate::sm::executor::{
 };
 
 pub(crate) mod builder;
+pub(crate) mod event_log;
 pub(crate) mod global_ctx;
 pub(crate) mod handle;
 
@@ -868,7 +870,7 @@ impl Client {
         api: &DynGlobalApi,
     ) -> (
         PeerId,
-        Result<SupportedApiVersionsSummary, fedimint_api_client::api::PeerError>,
+        Result<SupportedApiVersionsSummary, fedimint_connectors::error::ServerError>,
     ) {
         runtime::sleep(delay).await;
         (
@@ -1798,38 +1800,101 @@ impl Client {
         .await;
     }
 
-    pub async fn handle_events<F, R, K>(&self, pos_key: &K, call_fn: F) -> anyhow::Result<()>
+    /// Built in event log (trimmable) tracker
+    ///
+    /// For the convenience of downstream applications, [`Client`] can store
+    /// internally event log position for the main application using/driving it.
+    ///
+    /// Note that this position is a singleton, so this tracker should not be
+    /// used for multiple purposes or applications, etc. at the same time.
+    ///
+    /// If the application has a need to follow log using multiple trackers, it
+    /// should implement own [`DynEventLogTrimableTracker`] and store its
+    /// persient data by itself.
+    pub fn built_in_application_event_log_tracker(&self) -> DynEventLogTrimableTracker {
+        struct BuiltInApplicationEventLogTracker;
+
+        #[apply(async_trait_maybe_send!)]
+        impl EventLogTrimableTracker for BuiltInApplicationEventLogTracker {
+            // Store position in the event log
+            async fn store(
+                &mut self,
+                dbtx: &mut DatabaseTransaction<NonCommittable>,
+                pos: EventLogTrimableId,
+            ) -> anyhow::Result<()> {
+                dbtx.insert_entry(&DefaultApplicationEventLogKey, &pos)
+                    .await;
+                Ok(())
+            }
+
+            /// Load the last previous stored position (or None if never stored)
+            async fn load(
+                &mut self,
+                dbtx: &mut DatabaseTransaction<NonCommittable>,
+            ) -> anyhow::Result<Option<EventLogTrimableId>> {
+                Ok(dbtx.get_value(&DefaultApplicationEventLogKey).await)
+            }
+        }
+        Box::new(BuiltInApplicationEventLogTracker)
+    }
+
+    /// Like [`Self::handle_events`] but for historical data.
+    ///
+    ///
+    /// This function can be used to process subset of events
+    /// that is infrequent and important enough to be persisted
+    /// forever. Most applications should prefer to use [`Self::handle_events`]
+    /// which emits *all* events.
+    pub async fn handle_historical_events<F, R>(
+        &self,
+        tracker: fedimint_eventlog::DynEventLogTracker,
+        handler_fn: F,
+    ) -> anyhow::Result<()>
     where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K: DatabaseRecord<Value = EventLogId>,
         F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
         R: Future<Output = anyhow::Result<()>>,
     {
         fedimint_eventlog::handle_events(
             self.db.clone(),
-            pos_key,
+            tracker,
             self.log_event_added_rx.clone(),
-            call_fn,
+            handler_fn,
         )
         .await
     }
 
-    pub async fn handle_trimable_events<F, R, K>(
+    /// Handle events emitted by the client
+    ///
+    /// This is a preferred method for reactive & asynchronous
+    /// processing of events emitted by the client.
+    ///
+    /// It needs a `tracker` that will persist the position in the log
+    /// as it is being handled. You can use the
+    /// [`Client::built_in_application_event_log_tracker`] if this call is
+    /// used for the single main application handling this instance of the
+    /// [`Client`]. Otherwise you should implement your own tracker.
+    ///
+    /// This handler will call `handle_fn` with ever event emitted by
+    /// [`Client`], including transient ones. The caller should atomically
+    /// handle each event it is interested in and ignore other ones.
+    ///
+    /// This method returns only when client is shutting down or on internal
+    /// error, so typically should be called in a background task dedicated
+    /// to handling events.
+    pub async fn handle_events<F, R>(
         &self,
-        pos_key: &K,
-        call_fn: F,
+        tracker: fedimint_eventlog::DynEventLogTrimableTracker,
+        handler_fn: F,
     ) -> anyhow::Result<()>
     where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K: DatabaseRecord<Value = EventLogTrimableId>,
         F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
         R: Future<Output = anyhow::Result<()>>,
     {
         fedimint_eventlog::handle_trimable_events(
             self.db.clone(),
-            pos_key,
+            tracker,
             self.log_event_added_rx.clone(),
-            call_fn,
+            handler_fn,
         )
         .await
     }
@@ -1879,6 +1944,11 @@ impl Client {
     /// Register to receiver all new transient (unpersisted) events
     pub fn get_event_log_transient_receiver(&self) -> broadcast::Receiver<EventLogEntry> {
         self.log_event_added_transient_tx.subscribe()
+    }
+
+    /// Get a receiver that signals when new events are added to the event log
+    pub fn log_event_added_rx(&self) -> watch::Receiver<()> {
+        self.log_event_added_rx.clone()
     }
 
     pub fn iroh_enable_dht(&self) -> bool {

@@ -28,6 +28,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{
     AddStateMachinesError, DynGlobalClientContext, sm_enum_variant_translation,
 };
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction};
@@ -58,6 +59,7 @@ use fedimint_ln_common::{
     LightningModuleTypes, LightningOutput, LightningOutputV0, RemoveGatewayRequest,
     create_gateway_remove_message,
 };
+use fedimint_lnv2_common::GatewayApi;
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::Keypair;
@@ -158,6 +160,7 @@ impl ClientModuleInit for GatewayClientInit {
             federation_index: self.federation_index,
             client_ctx: args.context(),
             lightning_manager: self.lightning_manager.clone(),
+            connector_registry: args.connector_registry.clone(),
         })
     }
 }
@@ -170,6 +173,7 @@ pub struct GatewayClientContext {
     notifier: ModuleNotifier<GatewayClientStateMachines>,
     pub client_ctx: ClientContext<GatewayClientModule>,
     pub lightning_manager: Arc<dyn IGatewayClientV1>,
+    pub connector_registry: ConnectorRegistry,
 }
 
 impl Context for GatewayClientContext {
@@ -178,10 +182,13 @@ impl Context for GatewayClientContext {
 
 impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {
+        let gateway_conn = RealGatewayConnection {
+            api: GatewayApi::new(None, ctx.connector_registry.clone()),
+        };
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
             redeem_key: ctx.redeem_key,
-            gateway_conn: Arc::new(RealGatewayConnection),
+            gateway_conn: Arc::new(gateway_conn),
         }
     }
 }
@@ -199,6 +206,7 @@ pub struct GatewayClientModule {
     module_api: DynModuleApi,
     client_ctx: ClientContext<Self>,
     pub lightning_manager: Arc<dyn IGatewayClientV1>,
+    connector_registry: ConnectorRegistry,
 }
 
 impl ClientModule for GatewayClientModule {
@@ -216,6 +224,7 @@ impl ClientModule for GatewayClientModule {
             notifier: self.notifier.clone(),
             client_ctx: self.client_ctx.clone(),
             lightning_manager: self.lightning_manager.clone(),
+            connector_registry: self.connector_registry.clone(),
         }
     }
 

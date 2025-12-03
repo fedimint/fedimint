@@ -22,7 +22,6 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
-use rand::rngs::OsRng;
 use semver::Version;
 use tracing::info;
 
@@ -35,7 +34,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, supports_lnv2};
 use crate::vars::utf8;
-use crate::version_constants::VERSION_0_9_0_ALPHA;
+use crate::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -51,34 +50,37 @@ pub struct Gatewayd {
     pub gateway_id: String,
     pub iroh_port: u16,
     pub node_id: iroh_base::NodeId,
+    pub gateway_index: usize,
 }
 
 impl Gatewayd {
-    pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
+    pub async fn new(
+        process_mgr: &ProcessManager,
+        ln: LightningNode,
+        gateway_index: usize,
+    ) -> Result<Self> {
         let ln_type = ln.ln_type();
-        let (gw_name, port, lightning_node_port, iroh_port) = match &ln {
+        let (gw_name, port, lightning_node_port) = match &ln {
             LightningNode::Lnd(_) => (
                 "gatewayd-lnd".to_string(),
                 process_mgr.globals.FM_PORT_GW_LND,
                 process_mgr.globals.FM_PORT_LND_LISTEN,
-                process_mgr.globals.FM_PORT_GW_LND_IROH,
             ),
             LightningNode::Ldk {
                 name,
                 gw_port,
                 ldk_port,
-                iroh_port,
-            } => (
-                name.to_owned(),
-                gw_port.to_owned(),
-                ldk_port.to_owned(),
-                iroh_port.to_owned(),
-            ),
+            } => (name.to_owned(), gw_port.to_owned(), ldk_port.to_owned()),
         };
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
         let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
-        let iroh_sk = iroh_base::SecretKey::generate(&mut OsRng);
+        let iroh_endpoint = process_mgr
+            .globals
+            .gatewayd_overrides
+            .gateway_iroh_endpoints
+            .get(gateway_index)
+            .expect("No gateway for index");
 
         let mut gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
@@ -93,11 +95,11 @@ impl Gatewayd {
             (FM_PORT_LDK_ENV.to_owned(), lightning_node_port.to_string()),
             (
                 FM_GATEWAY_IROH_LISTEN_ADDR_ENV.to_owned(),
-                format!("127.0.0.1:{iroh_port}"),
+                format!("127.0.0.1:{}", iroh_endpoint.port()),
             ),
             (
                 FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV.to_owned(),
-                iroh_sk.to_string(),
+                iroh_endpoint.secret_key(),
             ),
         ]);
 
@@ -175,8 +177,9 @@ impl Gatewayd {
             gw_port: port,
             ldk_port: lightning_node_port,
             gateway_id,
-            iroh_port,
-            node_id: iroh_sk.public(),
+            iroh_port: iroh_endpoint.port(),
+            node_id: iroh_endpoint.node_id(),
+            gateway_index,
         };
 
         Ok(gatewayd)
@@ -198,7 +201,6 @@ impl Gatewayd {
                 name: _,
                 gw_port: _,
                 ldk_port: _,
-                iroh_port: _,
             } => {
                 // This is not implemented because the LDK node lives in
                 // the gateway process and cannot be stopped independently.
@@ -231,7 +233,7 @@ impl Gatewayd {
         }
 
         let new_ln = ln;
-        let new_gw = Self::new(process_mgr, new_ln.clone()).await?;
+        let new_gw = Self::new(process_mgr, new_ln.clone(), self.gateway_index).await?;
         self.process = new_gw.process;
         self.set_lightning_node(new_ln);
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
@@ -278,8 +280,6 @@ impl Gatewayd {
             "--rpcpassword=theresnosecondbest",
             "--address",
             format!("iroh://{}", self.node_id),
-            "--connection-override",
-            format!("http://127.0.0.1:{}", self.iroh_port),
             "info",
         )
         .out_json()
@@ -288,10 +288,18 @@ impl Gatewayd {
 
     pub async fn lightning_pubkey(&self) -> Result<PublicKey> {
         let info = self.get_info().await?;
-        let lightning_pub_key = info["lightning_pub_key"]
-            .as_str()
-            .context("lightning_pub_key must be a string")?
-            .to_owned();
+        let lightning_pub_key = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
+            info["lightning_pub_key"]
+                .as_str()
+                .context("lightning_pub_key must be a string")?
+                .to_owned()
+        } else {
+            info["lightning_info"]["connected"]["public_key"]
+                .as_str()
+                .context("lightning_pub_key must be a string")?
+                .to_owned()
+        };
+
         Ok(lightning_pub_key.parse()?)
     }
 
@@ -559,21 +567,32 @@ impl Gatewayd {
     pub async fn wait_for_block_height(&self, target_block_height: u64) -> Result<()> {
         poll("waiting for block height", || async {
             let info = self.get_info().await.map_err(ControlFlow::Continue)?;
-            let value = info.get("block_height");
-            if let Some(height) = value {
-                let block_height: Option<u32> = serde_json::from_value(height.clone())
-                    .context("Could not parse block height")
-                    .map_err(ControlFlow::Continue)?;
-                let Some(block_height) = block_height else {
-                    return Err(ControlFlow::Continue(anyhow!("Not synced any blocks yet")));
-                };
-                let synced = info["synced_to_chain"]
-                    .as_bool()
-                    .expect("Could not get synced_to_chain");
-                if block_height >= target_block_height as u32 && synced {
-                    return Ok(());
-                }
+
+            let height_value = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
+                info["block_height"].clone()
+            } else {
+                info["lightning_info"]["connected"]["block_height"].clone()
+            };
+
+            let block_height: Option<u32> = serde_json::from_value(height_value)
+                .context("Could not parse block height")
+                .map_err(ControlFlow::Continue)?;
+            let Some(block_height) = block_height else {
+                return Err(ControlFlow::Continue(anyhow!("Not synced any blocks yet")));
+            };
+
+            let synced_value = if self.gatewayd_version < *VERSION_0_10_0_ALPHA {
+                info["synced_to_chain"].clone()
+            } else {
+                info["lightning_info"]["connected"]["synced_to_chain"].clone()
+            };
+            let synced = synced_value
+                .as_bool()
+                .expect("Could not get synced_to_chain");
+            if block_height >= target_block_height as u32 && synced {
+                return Ok(());
             }
+
             Err(ControlFlow::Continue(anyhow!("Not synced to block")))
         })
         .await?;

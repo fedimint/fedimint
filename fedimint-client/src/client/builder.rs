@@ -11,9 +11,7 @@ use fedimint_api_client::api::global_api::with_request_hook::{
     ApiRequestHook, RawFederationApiWithRequestHookExt as _,
 };
 use fedimint_api_client::api::net::ConnectorType;
-use fedimint_api_client::api::{
-    ApiVersionSet, ConnectorRegistry, DynGlobalApi, FederationApi, FederationApiExt as _,
-};
+use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, FederationApi, FederationApiExt as _};
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::ClientModuleInit;
@@ -26,6 +24,7 @@ use fedimint_client_module::transaction::{
     TRANSACTION_SUBMISSION_MODULE_INSTANCE, TxSubmissionContext, tx_submission_sm_decoder,
 };
 use fedimint_client_module::{AdminCreds, ModuleRecoveryStarted};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{ClientConfig, FederationId, ModuleInitRegistry};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
@@ -801,6 +800,7 @@ impl ClientBuilder {
                                 api.clone(),
                                 self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                                 task_group.clone(),
+                                connectors.clone(),
                             )
                             .await?;
 
@@ -1167,9 +1167,9 @@ impl ClientPreview {
     /// # use fedimint_core::config::ClientConfig;
     /// # use fedimint_derive_secret::DerivableSecret;
     /// # use fedimint_client::{Client, ClientBuilder, RootSecret};
+    /// # use fedimint_connectors::ConnectorRegistry;
     /// # use fedimint_core::db::Database;
     /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
-    /// # use fedimint_api_client::api::ConnectorRegistry;
     /// #
     /// # #[tokio::main]
     /// # async fn main() -> anyhow::Result<()> {

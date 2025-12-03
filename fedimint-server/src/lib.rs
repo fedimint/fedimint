@@ -33,7 +33,7 @@ use config::ServerConfig;
 use config::io::{PLAINTEXT_PASSWORD, read_server_config};
 pub use connection_limits::ConnectionLimits;
 use fedimint_aead::random_salt;
-use fedimint_api_client::api::ConnectorRegistry;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::epoch::ConsensusItem;
@@ -301,7 +301,7 @@ pub async fn run_config_gen(
     // HACK: The `start-dkg` API call needs to have some time to finish
     // before we shut down api handling. There's no easy and good way to do
     // that other than just giving it some grace period.
-    sleep(Duration::from_millis(10)).await;
+    sleep(Duration::from_millis(100)).await;
 
     api_handler
         .stop()

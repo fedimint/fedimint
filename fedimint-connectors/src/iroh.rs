@@ -11,10 +11,12 @@ use fedimint_core::envs::{
 };
 use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::module::{
-    ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, IrohApiRequest,
+    ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, FEDIMINT_GATEWAY_ALPN,
+    IrohApiRequest, IrohGatewayRequest, IrohGatewayResponse,
 };
 use fedimint_core::task::spawn;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
+use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::LOG_NET_IROH;
 use futures::Future;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -23,11 +25,13 @@ use iroh::endpoint::Connection;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey};
 use iroh_base::ticket::NodeTicket;
 use iroh_next::Watcher as _;
+use reqwest::{Method, StatusCode};
 use serde_json::Value;
 use tracing::{debug, trace, warn};
 use url::Url;
 
-use super::{DynGuaridianConnection, IGuardianConnection, PeerError, PeerResult};
+use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
+use crate::{DynGatewayConnection, IConnection, IGatewayConnection};
 
 #[derive(Clone)]
 pub(crate) struct IrohConnector {
@@ -61,9 +65,14 @@ impl IrohConnector {
         iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
         const FM_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_IROH_CONNECT_OVERRIDES";
+        const FM_GW_IROH_CONNECT_OVERRIDES_ENV: &str = "FM_GW_IROH_CONNECT_OVERRIDES";
         let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, iroh_enable_next).await?;
 
         for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_IROH_CONNECT_OVERRIDES_ENV)? {
+            s = s.with_connection_override(k, v.into());
+        }
+
+        for (k, v) in parse_kv_list_from_env::<_, NodeTicket>(FM_GW_IROH_CONNECT_OVERRIDES_ENV)? {
             s = s.with_connection_override(k, v.into());
         }
 
@@ -220,26 +229,30 @@ impl IrohConnector {
 }
 
 #[async_trait::async_trait]
-impl crate::api::Connector for IrohConnector {
+impl crate::Connector for IrohConnector {
     async fn connect_guardian(
         &self,
         url: &SafeUrl,
         api_secret: Option<&str>,
-    ) -> PeerResult<DynGuaridianConnection> {
+    ) -> ServerResult<DynGuaridianConnection> {
         if api_secret.is_some() {
             // There seem to be no way to pass secret over current Iroh calling
             // convention
-            PeerError::Connection(anyhow::format_err!(
+            ServerError::Connection(anyhow::format_err!(
                 "Iroh api secrets currently not supported"
             ));
         }
-        let node_id = Self::node_id_from_url(url).map_err(|source| PeerError::InvalidPeerUrl {
-            source,
-            url: url.to_owned(),
-        })?;
+        let node_id =
+            Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
+                source,
+                url: url.to_owned(),
+            })?;
         let mut futures = FuturesUnordered::<
             Pin<
-                Box<dyn Future<Output = (PeerResult<DynGuaridianConnection>, &'static str)> + Send>,
+                Box<
+                    dyn Future<Output = (ServerResult<DynGuaridianConnection>, &'static str)>
+                        + Send,
+                >,
             >,
         >::new();
         let connection_override = self.connection_overrides.get(&node_id).cloned();
@@ -293,8 +306,26 @@ impl crate::api::Connector for IrohConnector {
         }
 
         Err(prev_err.unwrap_or_else(|| {
-            PeerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
+            ServerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
         }))
+    }
+
+    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+        let node_id = Self::node_id_from_url(url)?;
+        if let Some(node_addr) = self.connection_overrides.get(&node_id).cloned() {
+            let conn = self
+                .stable
+                .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
+                .await?;
+
+            #[cfg(not(target_family = "wasm"))]
+            Self::spawn_connection_monitoring_stable(&self.stable, node_id);
+
+            Ok(IGatewayConnection::into_dyn(conn))
+        } else {
+            let conn = self.stable.connect(node_id, FEDIMINT_GATEWAY_ALPN).await?;
+            Ok(IGatewayConnection::into_dyn(conn))
+        }
     }
 }
 
@@ -332,27 +363,28 @@ impl IrohConnector {
             });
         }
     }
+
     async fn make_new_connection_stable(
         &self,
         node_id: NodeId,
         node_addr: Option<NodeAddr>,
-    ) -> PeerResult<Connection> {
+    ) -> ServerResult<Connection> {
         trace!(target: LOG_NET_IROH, %node_id, "Creating new stable connection");
         let conn = match node_addr.clone() {
-                    Some(node_addr) => {
-                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                        let conn = self.stable
-                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                            .await;
+            Some(node_addr) => {
+                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                let conn = self.stable
+                    .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                    .await;
 
-                        #[cfg(not(target_family = "wasm"))]
-                        if conn.is_ok() {
-                            Self::spawn_connection_monitoring_stable(&self.stable, node_id);
-                        }
-                        conn
-                    }
-                    None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
-                }.map_err(PeerError::Connection)?;
+                #[cfg(not(target_family = "wasm"))]
+                if conn.is_ok() {
+                    Self::spawn_connection_monitoring_stable(&self.stable, node_id);
+                }
+                conn
+            }
+            None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
+        }.map_err(ServerError::Connection)?;
 
         Ok(conn)
     }
@@ -362,34 +394,34 @@ impl IrohConnector {
         endpoint_next: &iroh_next::Endpoint,
         node_id: NodeId,
         node_addr: Option<NodeAddr>,
-    ) -> PeerResult<iroh_next::endpoint::Connection> {
+    ) -> ServerResult<iroh_next::endpoint::Connection> {
         let next_node_id = iroh_next::NodeId::from_bytes(node_id.as_bytes()).expect("Can't fail");
 
         let endpoint_next = endpoint_next.clone();
 
         trace!(target: LOG_NET_IROH, %node_id, "Creating new next connection");
         let conn = match node_addr.clone() {
-                    Some(node_addr) => {
-                        trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
-                        let node_addr = node_addr_stable_to_next(&node_addr);
-                        let conn = endpoint_next
-                            .connect(node_addr.clone(), FEDIMINT_API_ALPN)
-                            .await;
+            Some(node_addr) => {
+                trace!(target: LOG_NET_IROH, %node_id, "Using a connectivity override for connection");
+                let node_addr = node_addr_stable_to_next(&node_addr);
+                let conn = endpoint_next
+                    .connect(node_addr.clone(), FEDIMINT_API_ALPN)
+                    .await;
 
-                        #[cfg(not(target_family = "wasm"))]
-                        if conn.is_ok() {
-                            Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
-                        }
-
-                        conn
-                    }
-                    None => endpoint_next.connect(
-                        next_node_id,
-                        FEDIMINT_API_ALPN
-                    ).await,
+                #[cfg(not(target_family = "wasm"))]
+                if conn.is_ok() {
+                    Self::spawn_connection_monitoring_next(&endpoint_next, &node_addr);
                 }
-                .map_err(Into::into)
-                .map_err(PeerError::Connection)?;
+
+                conn
+            }
+            None => endpoint_next.connect(
+                next_node_id,
+                FEDIMINT_API_ALPN
+            ).await,
+        }
+        .map_err(Into::into)
+        .map_err(ServerError::Connection)?;
 
         Ok(conn)
     }
@@ -405,35 +437,51 @@ fn node_addr_stable_to_next(stable: &iroh::NodeAddr) -> iroh_next::NodeAddr {
         direct_addresses: stable.direct_addresses.clone(),
     }
 }
+
+#[apply(async_trait_maybe_send!)]
+impl IConnection for Connection {
+    async fn await_disconnection(&self) {
+        self.closed().await;
+    }
+
+    fn is_connected(&self) -> bool {
+        self.close_reason().is_none()
+    }
+}
+
 #[async_trait]
 impl IGuardianConnection for Connection {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
 
         let (mut sink, mut stream) = self
             .open_bi()
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         sink.write_all(&json)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
             .read_to_end(1_000_000)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| PeerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
 
-        response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
     }
+}
 
+#[apply(async_trait_maybe_send!)]
+impl IConnection for iroh_next::endpoint::Connection {
     async fn await_disconnection(&self) {
         self.closed().await;
     }
@@ -445,38 +493,78 @@ impl IGuardianConnection for Connection {
 
 #[async_trait]
 impl IGuardianConnection for iroh_next::endpoint::Connection {
-    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> PeerResult<Value> {
+    async fn request(&self, method: ApiMethod, request: ApiRequestErased) -> ServerResult<Value> {
         let json = serde_json::to_vec(&IrohApiRequest { method, request })
             .expect("Serialization to vec can't fail");
 
         let (mut sink, mut stream) = self
             .open_bi()
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         sink.write_all(&json)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
-        sink.finish().map_err(|e| PeerError::Transport(e.into()))?;
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = stream
             .read_to_end(1_000_000)
             .await
-            .map_err(|e| PeerError::Transport(e.into()))?;
+            .map_err(|e| ServerError::Transport(e.into()))?;
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| PeerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
 
-        response.map_err(|e| PeerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
     }
+}
 
-    async fn await_disconnection(&self) {
-        self.closed().await;
-    }
+#[apply(async_trait_maybe_send!)]
+impl IGatewayConnection for Connection {
+    async fn request(
+        &self,
+        password: Option<String>,
+        _method: Method,
+        route: &str,
+        payload: Option<Value>,
+    ) -> ServerResult<Value> {
+        let iroh_request = IrohGatewayRequest {
+            route: route.to_string(),
+            params: payload,
+            password,
+        };
+        let json = serde_json::to_vec(&iroh_request).expect("serialization cant fail");
 
-    fn is_connected(&self) -> bool {
-        self.close_reason().is_none()
+        let (mut sink, mut stream) = self
+            .open_bi()
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))?;
+
+        sink.write_all(&json)
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))?;
+
+        sink.finish()
+            .map_err(|e| ServerError::Transport(e.into()))?;
+
+        let response = stream
+            .read_to_end(1_000_000)
+            .await
+            .map_err(|e| ServerError::Transport(e.into()))?;
+
+        let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
+            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+        match StatusCode::from_u16(response.status).map_err(|e| {
+            ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
+        })? {
+            StatusCode::OK => Ok(response.body),
+            status => Err(ServerError::ServerError(anyhow::anyhow!(
+                "Server returned status code: {}",
+                status
+            ))),
+        }
     }
 }

@@ -17,11 +17,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, DatabaseKey, DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    NonCommittable,
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
@@ -49,6 +47,30 @@ const TRIMABLE_EVENTLOG_MIN_TS_AGE: u64 = 14 * 24 * 60 * 60 * 1_000_000;
 /// Maximum number of entries to trim in one operation
 const TRIMABLE_EVENTLOG_MAX_TRIMMED_EVENTS: usize = 100_000;
 
+/// Type of persistence the [`Event`] uses.
+///
+/// As a compromise between richness of events and amount of data to store
+/// Fedimint maintains two event logs in parallel:
+///
+/// * untrimable
+/// * trimable
+///
+/// Untrimable log will append only a subset of events that are infrequent,
+/// but important enough to be forever useful, e.g. for processing or debugging
+/// of historical events.
+///
+/// Trimable log will append all persistent events, but will over time remove
+/// the oldest ones. It will always retain enough events, that no log follower
+/// actively processing it should ever miss any event, but restarting processing
+/// from the start (index 0) can't be used for processing historical data.
+///
+/// Notably the positions in both logs are not interchangeable, so they use
+/// different types.
+///
+/// On top of it, some events are transient and are not persisted at all,
+/// and emitted only at runtime.
+///
+/// Consult [`Event::PERSISTENCE`] to know which event uses which persistence.
 pub enum EventPersistence {
     /// Not written anywhere, just broadcasted as notification at runtime
     Transient,
@@ -200,7 +222,7 @@ pub struct EventLogEntry {
     pub module: Option<(ModuleKind, ModuleInstanceId)>,
 
     /// Timestamp in microseconds after unix epoch
-    ts_usecs: u64,
+    pub ts_usecs: u64,
 
     /// Event-kind specific payload, typically encoded as a json string for
     /// flexibility.
@@ -208,15 +230,138 @@ pub struct EventLogEntry {
 }
 
 /// Struct used for processing log entries after they have been persisted.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct PersistedLogEntry {
-    pub event_id: EventLogId,
-    pub event_kind: EventKind,
-    pub module: Option<(ModuleKind, u16)>,
-    pub timestamp: u64,
-    pub value: serde_json::Value,
+    id: EventLogId,
+    inner: EventLogEntry,
 }
 
+impl Serialize for PersistedLogEntry {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut state = serializer.serialize_struct("PersistedLogEntry", 5)?;
+        state.serialize_field("id", &self.id)?;
+        state.serialize_field("kind", &self.inner.kind)?;
+        state.serialize_field("module", &self.inner.module)?;
+        state.serialize_field("ts_usecs", &self.inner.ts_usecs)?;
+
+        // Try to deserialize payload as JSON, fall back to hex encoding
+        let payload_value: serde_json::Value = serde_json::from_slice(&self.inner.payload)
+            .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&self.inner.payload)));
+        state.serialize_field("payload", &payload_value)?;
+
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PersistedLogEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "snake_case")]
+        enum Field {
+            Id,
+            Kind,
+            Module,
+            TsUsecs,
+            Payload,
+        }
+
+        struct PersistedLogEntryVisitor;
+
+        impl<'de> Visitor<'de> for PersistedLogEntryVisitor {
+            type Value = PersistedLogEntry;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct PersistedLogEntry")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<PersistedLogEntry, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut id = None;
+                let mut kind = None;
+                let mut module = None;
+                let mut ts_usecs = None;
+                let mut payload = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Id => {
+                            if id.is_some() {
+                                return Err(de::Error::duplicate_field("id"));
+                            }
+                            id = Some(map.next_value()?);
+                        }
+                        Field::Kind => {
+                            if kind.is_some() {
+                                return Err(de::Error::duplicate_field("kind"));
+                            }
+                            kind = Some(map.next_value()?);
+                        }
+                        Field::Module => {
+                            if module.is_some() {
+                                return Err(de::Error::duplicate_field("module"));
+                            }
+                            module = Some(map.next_value()?);
+                        }
+                        Field::TsUsecs => {
+                            if ts_usecs.is_some() {
+                                return Err(de::Error::duplicate_field("ts_usecs"));
+                            }
+                            ts_usecs = Some(map.next_value()?);
+                        }
+                        Field::Payload => {
+                            if payload.is_some() {
+                                return Err(de::Error::duplicate_field("payload"));
+                            }
+                            let value: serde_json::Value = map.next_value()?;
+                            payload = Some(serde_json::to_vec(&value).map_err(de::Error::custom)?);
+                        }
+                    }
+                }
+
+                let id = id.ok_or_else(|| de::Error::missing_field("id"))?;
+                let kind = kind.ok_or_else(|| de::Error::missing_field("kind"))?;
+                let module = module.ok_or_else(|| de::Error::missing_field("module"))?;
+                let ts_usecs = ts_usecs.ok_or_else(|| de::Error::missing_field("ts_usecs"))?;
+                let payload = payload.ok_or_else(|| de::Error::missing_field("payload"))?;
+
+                Ok(PersistedLogEntry {
+                    id,
+                    inner: EventLogEntry {
+                        kind,
+                        module,
+                        ts_usecs,
+                        payload,
+                    },
+                })
+            }
+        }
+
+        const FIELDS: &[&str] = &["id", "kind", "module", "ts_usecs", "payload"];
+        deserializer.deserialize_struct("PersistedLogEntry", FIELDS, PersistedLogEntryVisitor)
+    }
+}
+
+impl PersistedLogEntry {
+    pub fn id(&self) -> EventLogId {
+        self.id
+    }
+
+    pub fn as_raw(&self) -> &EventLogEntry {
+        &self.inner
+    }
+}
 impl_db_record!(
     key = UnordedEventLogId,
     value = UnorderedEventLogEntry,
@@ -438,13 +583,7 @@ where
         let pos = pos.unwrap_or_default();
         self.find_by_range(pos..pos.saturating_add(limit))
             .await
-            .map(|(k, v)| PersistedLogEntry {
-                event_id: k,
-                event_kind: v.kind,
-                module: v.module,
-                timestamp: v.ts_usecs,
-                value: serde_json::from_slice(&v.payload).unwrap_or_default(),
-            })
+            .map(|(k, v)| PersistedLogEntry { id: k, inner: v })
             .collect()
             .await
     }
@@ -457,13 +596,7 @@ where
         let pos = pos.unwrap_or_default();
         self.find_by_range(pos..pos.saturating_add(limit))
             .await
-            .map(|(k, v)| PersistedLogEntry {
-                event_id: k.0,
-                event_kind: v.kind,
-                module: v.module,
-                timestamp: v.ts_usecs,
-                value: serde_json::from_slice(&v.payload).unwrap_or_default(),
-            })
+            .map(|(k, v)| PersistedLogEntry { id: k.0, inner: v })
             .collect()
             .await
     }
@@ -596,23 +729,67 @@ pub async fn run_event_log_ordering_task(
     debug!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task finished");
 }
 
-pub async fn handle_events<F, R, K>(
+/// Persistent tracker of a position in the event log
+///
+/// During processing of event log the downstream consumer needs to
+/// keep track of which event were processed already. It needs to do it
+/// atomically and persist it so event in the presence of crashes no
+/// event is ever missed or processed twice.
+///
+/// This trait allows abstracting away where and how is such position stored,
+/// e.g. which key exactly is used, in what prefixed namespace etc.
+///
+/// ## Trimmable vs Non-Trimable log
+///
+/// See [`EventPersistence`]
+#[apply(async_trait_maybe_send!)]
+pub trait EventLogNonTrimableTracker {
+    // Store position in the event log
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogId,
+    ) -> anyhow::Result<()>;
+
+    /// Load the last previous stored position (or None if never stored)
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> anyhow::Result<Option<EventLogId>>;
+}
+pub type DynEventLogTracker = Box<dyn EventLogNonTrimableTracker>;
+
+/// Like [`EventLogNonTrimableTracker`] but for trimable event log
+#[apply(async_trait_maybe_send!)]
+pub trait EventLogTrimableTracker {
+    // Store position in the event log
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogTrimableId,
+    ) -> anyhow::Result<()>;
+
+    /// Load the last previous stored position (or None if never stored)
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> anyhow::Result<Option<EventLogTrimableId>>;
+}
+pub type DynEventLogTrimableTracker = Box<dyn EventLogTrimableTracker>;
+
+pub async fn handle_events<F, R>(
     db: Database,
-    pos_key: &K,
+    mut tracker: DynEventLogTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-    K: DatabaseRecord<Value = EventLogId>,
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
-    let mut next_key: EventLogId = db
-        .begin_transaction_nc()
-        .await
-        .get_value(pos_key)
-        .await
+    let mut next_key: EventLogId = tracker
+        .load(&mut db.begin_transaction_nc().await)
+        .await?
         .unwrap_or_default();
 
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
@@ -625,7 +802,8 @@ where
                 (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
 
                 next_key = next_key.next();
-                dbtx.insert_entry(pos_key, &next_key).await;
+
+                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
 
                 dbtx.commit_tx().await;
             }
@@ -638,25 +816,20 @@ where
     }
 }
 
-pub async fn handle_trimable_events<F, R, K>(
+pub async fn handle_trimable_events<F, R>(
     db: Database,
-    pos_key: &K,
+    mut tracker: DynEventLogTrimableTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
 ) -> anyhow::Result<()>
 where
-    K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-    K: DatabaseRecord<Value = EventLogTrimableId>,
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
     R: Future<Output = anyhow::Result<()>>,
 {
-    let mut next_key: EventLogTrimableId = db
-        .begin_transaction_nc()
-        .await
-        .get_value(pos_key)
-        .await
+    let mut next_key: EventLogTrimableId = tracker
+        .load(&mut db.begin_transaction_nc().await)
+        .await?
         .unwrap_or_default();
-
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling trimable events");
 
     loop {
@@ -667,7 +840,7 @@ where
                 (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
 
                 next_key = next_key.next();
-                dbtx.insert_entry(pos_key, &next_key).await;
+                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
 
                 dbtx.commit_tx().await;
             }
@@ -691,8 +864,8 @@ where
     I: IntoIterator<Item = &'a PersistedLogEntry> + 'a,
 {
     all_events.into_iter().filter(move |e| {
-        if let Some((m, _)) = &e.module {
-            e.event_kind == event_kind && *m == module_kind
+        if let Some((m, _)) = &e.inner.module {
+            e.inner.kind == event_kind && *m == module_kind
         } else {
             false
         }
@@ -709,6 +882,11 @@ where
 /// This function is intended for small data sets. If the data set relations
 /// grow, this function should implement a different join algorithm or be moved
 /// out of the gateway.
+///
+/// FIXME: This function eagerly stuff eagerly on a quadratic cartesian product
+/// of events is potentially a problem. We should delay deserialization as far
+/// as possible, so the filtering and matching on event types can remove as much
+/// work as possible.
 pub fn join_events<'a, L, R, Res>(
     events_l: &'a [&PersistedLogEntry],
     events_r: &'a [&PersistedLogEntry],
@@ -722,11 +900,11 @@ where
         .iter()
         .cartesian_product(events_r)
         .filter_map(move |(l, r)| {
-            if let Some(latency) = r.timestamp.checked_sub(l.timestamp) {
+            if let Some(latency) = r.inner.ts_usecs.checked_sub(l.inner.ts_usecs) {
                 let event_l: L =
-                    serde_json::from_value(l.value.clone()).expect("could not parse JSON");
+                    serde_json::from_slice(&l.inner.payload).expect("could not parse JSON");
                 let event_r: R =
-                    serde_json::from_value(r.value.clone()).expect("could not parse JSON");
+                    serde_json::from_slice(&r.inner.payload).expect("could not parse JSON");
                 predicate(event_l, event_r, latency)
             } else {
                 None

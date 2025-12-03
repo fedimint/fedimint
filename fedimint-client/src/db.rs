@@ -83,9 +83,17 @@ pub enum DbKeyPrefix {
     /// historical and future external use
     ExternalReservedEnd = 0xcf,
     /// 0xd0.. reserved for Fedimint internal use
+    // (see [`DbKeyPrefixInternalReserved`] for *internal* details)
     InternalReservedStart = 0xd0,
     /// Per-module instance data
     ModuleGlobalPrefix = 0xff,
+}
+
+#[repr(u8)]
+#[derive(Clone, EnumIter, Debug)]
+pub(crate) enum DbKeyPrefixInternalReserved {
+    /// [`crate::Client::built_in_application_event_log_tracker`]
+    DefaultApplicationEventLogPos = 0xd0,
 }
 
 pub(crate) async fn verify_client_db_integrity_dbtx(dbtx: &mut DatabaseTransaction<'_>) {

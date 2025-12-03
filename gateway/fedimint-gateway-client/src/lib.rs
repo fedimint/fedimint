@@ -1,5 +1,7 @@
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
+use fedimint_connectors::ServerResult;
+use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{
     ADDRESS_ENDPOINT, ADDRESS_RECHECK_ENDPOINT, BACKUP_ENDPOINT, BackupPayload,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
@@ -19,182 +21,319 @@ use fedimint_gateway_common::{
     SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT,
     WithdrawPayload, WithdrawResponse,
 };
-use fedimint_ln_common::client::{GatewayRpcClient, GatewayRpcResult};
+use fedimint_ln_common::Method;
+use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
 
-pub async fn get_info(client: &GatewayRpcClient) -> GatewayRpcResult<GatewayInfo> {
-    client.call_get(GATEWAY_INFO_ENDPOINT).await
+pub async fn get_info(client: &GatewayApi, base_url: &SafeUrl) -> ServerResult<GatewayInfo> {
+    client
+        .request::<(), GatewayInfo>(base_url, Method::GET, GATEWAY_INFO_ENDPOINT, None)
+        .await
 }
 
 pub async fn get_config(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: ConfigPayload,
-) -> GatewayRpcResult<GatewayFedConfig> {
-    client.call_post(CONFIGURATION_ENDPOINT, payload).await
+) -> ServerResult<GatewayFedConfig> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            CONFIGURATION_ENDPOINT,
+            Some(payload),
+        )
+        .await
 }
 
 pub async fn get_deposit_address(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: DepositAddressPayload,
-) -> GatewayRpcResult<Address<NetworkUnchecked>> {
-    client.call_post(ADDRESS_ENDPOINT, payload).await
+) -> ServerResult<Address<NetworkUnchecked>> {
+    client
+        .request(base_url, Method::POST, ADDRESS_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn withdraw(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: WithdrawPayload,
-) -> GatewayRpcResult<WithdrawResponse> {
-    client.call_post(WITHDRAW_ENDPOINT, payload).await
+) -> ServerResult<WithdrawResponse> {
+    client
+        .request(base_url, Method::POST, WITHDRAW_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn connect_federation(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: ConnectFedPayload,
-) -> GatewayRpcResult<FederationInfo> {
-    client.call_post(CONNECT_FED_ENDPOINT, payload).await
+) -> ServerResult<FederationInfo> {
+    client
+        .request(base_url, Method::POST, CONNECT_FED_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn leave_federation(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: LeaveFedPayload,
-) -> GatewayRpcResult<FederationInfo> {
-    client.call_post(LEAVE_FED_ENDPOINT, payload).await
+) -> ServerResult<FederationInfo> {
+    client
+        .request(base_url, Method::POST, LEAVE_FED_ENDPOINT, Some(payload))
+        .await
 }
 
-pub async fn backup(client: &GatewayRpcClient, payload: BackupPayload) -> GatewayRpcResult<()> {
-    client.call_post(BACKUP_ENDPOINT, payload).await
+pub async fn backup(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: BackupPayload,
+) -> ServerResult<()> {
+    client
+        .request(base_url, Method::POST, BACKUP_ENDPOINT, Some(payload))
+        .await
 }
 
-pub async fn set_fees(client: &GatewayRpcClient, payload: SetFeesPayload) -> GatewayRpcResult<()> {
-    client.call_post(SET_FEES_ENDPOINT, payload).await
+pub async fn set_fees(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: SetFeesPayload,
+) -> ServerResult<()> {
+    client
+        .request(base_url, Method::POST, SET_FEES_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn create_invoice_for_self(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: CreateInvoiceForOperatorPayload,
-) -> GatewayRpcResult<Bolt11Invoice> {
+) -> ServerResult<Bolt11Invoice> {
     client
-        .call_post(CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT, payload)
+        .request(
+            base_url,
+            Method::POST,
+            CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 
 pub async fn pay_invoice(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: PayInvoiceForOperatorPayload,
-) -> GatewayRpcResult<String> {
+) -> ServerResult<String> {
     client
-        .call_post(PAY_INVOICE_FOR_OPERATOR_ENDPOINT, payload)
+        .request(
+            base_url,
+            Method::POST,
+            PAY_INVOICE_FOR_OPERATOR_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 
 pub async fn get_ln_onchain_address(
-    client: &GatewayRpcClient,
-) -> GatewayRpcResult<Address<NetworkUnchecked>> {
-    client.call_get(GET_LN_ONCHAIN_ADDRESS_ENDPOINT).await
-}
-
-pub async fn open_channel(
-    client: &GatewayRpcClient,
-    payload: OpenChannelRequest,
-) -> GatewayRpcResult<Txid> {
-    client.call_post(OPEN_CHANNEL_ENDPOINT, payload).await
-}
-
-pub async fn close_channels_with_peer(
-    client: &GatewayRpcClient,
-    payload: CloseChannelsWithPeerRequest,
-) -> GatewayRpcResult<CloseChannelsWithPeerResponse> {
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+) -> ServerResult<Address<NetworkUnchecked>> {
     client
-        .call_post(CLOSE_CHANNELS_WITH_PEER_ENDPOINT, payload)
+        .request::<(), Address<NetworkUnchecked>>(
+            base_url,
+            Method::GET,
+            GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+            None,
+        )
         .await
 }
 
-pub async fn list_channels(client: &GatewayRpcClient) -> GatewayRpcResult<Vec<ChannelInfo>> {
-    client.call_get(LIST_CHANNELS_ENDPOINT).await
+pub async fn open_channel(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: OpenChannelRequest,
+) -> ServerResult<Txid> {
+    client
+        .request(base_url, Method::POST, OPEN_CHANNEL_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn close_channels_with_peer(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: CloseChannelsWithPeerRequest,
+) -> ServerResult<CloseChannelsWithPeerResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+            Some(payload),
+        )
+        .await
+}
+
+pub async fn list_channels(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+) -> ServerResult<Vec<ChannelInfo>> {
+    client
+        .request::<(), Vec<ChannelInfo>>(base_url, Method::GET, LIST_CHANNELS_ENDPOINT, None)
+        .await
 }
 
 pub async fn send_onchain(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: SendOnchainRequest,
-) -> GatewayRpcResult<Txid> {
-    client.call_post(SEND_ONCHAIN_ENDPOINT, payload).await
+) -> ServerResult<Txid> {
+    client
+        .request(base_url, Method::POST, SEND_ONCHAIN_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn recheck_address(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: DepositAddressRecheckPayload,
-) -> GatewayRpcResult<serde_json::Value> {
-    client.call_post(ADDRESS_RECHECK_ENDPOINT, payload).await
+) -> ServerResult<serde_json::Value> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            ADDRESS_RECHECK_ENDPOINT,
+            Some(payload),
+        )
+        .await
 }
 
 pub async fn spend_ecash(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: SpendEcashPayload,
-) -> GatewayRpcResult<SpendEcashResponse> {
-    client.call_post(SPEND_ECASH_ENDPOINT, payload).await
+) -> ServerResult<SpendEcashResponse> {
+    client
+        .request(base_url, Method::POST, SPEND_ECASH_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn receive_ecash(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: ReceiveEcashPayload,
-) -> GatewayRpcResult<ReceiveEcashResponse> {
-    client.call_post(RECEIVE_ECASH_ENDPOINT, payload).await
+) -> ServerResult<ReceiveEcashResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            RECEIVE_ECASH_ENDPOINT,
+            Some(payload),
+        )
+        .await
 }
 
-pub async fn get_balances(client: &GatewayRpcClient) -> GatewayRpcResult<GatewayBalances> {
-    client.call_get(GET_BALANCES_ENDPOINT).await
+pub async fn get_balances(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+) -> ServerResult<GatewayBalances> {
+    client
+        .request::<(), GatewayBalances>(base_url, Method::GET, GET_BALANCES_ENDPOINT, None)
+        .await
 }
 
-pub async fn get_mnemonic(client: &GatewayRpcClient) -> GatewayRpcResult<MnemonicResponse> {
-    client.call_get(MNEMONIC_ENDPOINT).await
+pub async fn get_mnemonic(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+) -> ServerResult<MnemonicResponse> {
+    client
+        .request::<(), MnemonicResponse>(base_url, Method::GET, MNEMONIC_ENDPOINT, None)
+        .await
 }
 
-pub async fn stop(client: &GatewayRpcClient) -> GatewayRpcResult<()> {
-    client.call_get(STOP_ENDPOINT).await
+pub async fn stop(client: &GatewayApi, base_url: &SafeUrl) -> ServerResult<()> {
+    client
+        .request::<(), ()>(base_url, Method::GET, STOP_ENDPOINT, None)
+        .await
 }
 
 pub async fn payment_log(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: PaymentLogPayload,
-) -> GatewayRpcResult<PaymentLogResponse> {
-    client.call_post(PAYMENT_LOG_ENDPOINT, payload).await
+) -> ServerResult<PaymentLogResponse> {
+    client
+        .request(base_url, Method::POST, PAYMENT_LOG_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn payment_summary(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: PaymentSummaryPayload,
-) -> GatewayRpcResult<PaymentSummaryResponse> {
-    client.call_post(PAYMENT_SUMMARY_ENDPOINT, payload).await
+) -> ServerResult<PaymentSummaryResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            PAYMENT_SUMMARY_ENDPOINT,
+            Some(payload),
+        )
+        .await
 }
 
 pub async fn get_invoice(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: GetInvoiceRequest,
-) -> GatewayRpcResult<Option<GetInvoiceResponse>> {
-    client.call_post(GET_INVOICE_ENDPOINT, payload).await
+) -> ServerResult<Option<GetInvoiceResponse>> {
+    client
+        .request(base_url, Method::POST, GET_INVOICE_ENDPOINT, Some(payload))
+        .await
 }
 
 pub async fn list_transactions(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: ListTransactionsPayload,
-) -> GatewayRpcResult<ListTransactionsResponse> {
-    client.call_post(LIST_TRANSACTIONS_ENDPOINT, payload).await
+) -> ServerResult<ListTransactionsResponse> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            LIST_TRANSACTIONS_ENDPOINT,
+            Some(payload),
+        )
+        .await
 }
 
 pub async fn create_offer(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: CreateOfferPayload,
-) -> GatewayRpcResult<CreateOfferResponse> {
+) -> ServerResult<CreateOfferResponse> {
     client
-        .call_post(CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT, payload)
+        .request(
+            base_url,
+            Method::POST,
+            CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 
 pub async fn pay_offer(
-    client: &GatewayRpcClient,
+    client: &GatewayApi,
+    base_url: &SafeUrl,
     payload: PayOfferPayload,
-) -> GatewayRpcResult<PayOfferResponse> {
+) -> ServerResult<PayOfferResponse> {
     client
-        .call_post(PAY_OFFER_FOR_OPERATOR_ENDPOINT, payload)
+        .request(
+            base_url,
+            Method::POST,
+            PAY_OFFER_FOR_OPERATOR_ENDPOINT,
+            Some(payload),
+        )
         .await
 }

@@ -47,7 +47,7 @@ use federation_manager::FederationManager;
 use fedimint_api_client::api::net::ConnectorType;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_bitcoind::bitcoincore::BitcoindClient;
-use fedimint_bitcoind::{EsploraClient, IBitcoindRpc};
+use fedimint_bitcoind::{BlockchainInfo, EsploraClient, IBitcoindRpc};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
@@ -73,7 +73,7 @@ use fedimint_gateway_common::{
     ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
     DepositAddressPayload, DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig,
     FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
-    GetInvoiceResponse, LeaveFedPayload, LightningMode, ListTransactionsPayload,
+    GetInvoiceResponse, LeaveFedPayload, LightningInfo, LightningMode, ListTransactionsPayload,
     ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
     PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
@@ -233,6 +233,9 @@ pub struct Gateway {
     /// The source of the Bitcoin blockchain data
     chain_source: ChainSource,
 
+    /// Client to get blockchain information
+    bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
+
     /// The default routing fees for new federations
     default_routing_fees: PaymentFee,
 
@@ -283,6 +286,7 @@ impl Gateway {
         gateway_state: GatewayState,
         chain_source: ChainSource,
         iroh_listen: SocketAddr,
+        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -305,6 +309,7 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
+            bitcoin_rpc,
         )
         .await
     }
@@ -388,7 +393,7 @@ impl Gateway {
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
-        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
+        registry.attach(WalletClientInit::new(dyn_bitcoin_rpc.clone()));
 
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
@@ -406,6 +411,7 @@ impl Gateway {
             client_builder,
             GatewayState::Disconnected,
             chain_source,
+            dyn_bitcoin_rpc,
         )
         .await
     }
@@ -419,6 +425,7 @@ impl Gateway {
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
         chain_source: ChainSource,
+        bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         // Apply database migrations before using the database to ensure old database
         // structures are readable.
@@ -453,6 +460,7 @@ impl Gateway {
             num_route_hints,
             network,
             chain_source,
+            bitcoin_rpc,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
             iroh_sk: Self::load_or_create_iroh_key(&gateway_db).await,
@@ -585,25 +593,17 @@ impl Gateway {
         mut stream: RouteHtlcStream<'a>,
         ln_client: Arc<dyn ILnRpcClient>,
     ) -> ReceivePaymentStreamAction {
-        let (lightning_public_key, lightning_alias, lightning_network, synced_to_chain) =
-            match ln_client.parsed_node_info().await {
-                Ok((
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    _block_height,
-                    synced_to_chain,
-                )) => (
-                    lightning_public_key,
-                    lightning_alias,
-                    lightning_network,
-                    synced_to_chain,
-                ),
-                Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to retrieve Lightning info");
-                    return ReceivePaymentStreamAction::RetryAfterDelay;
-                }
-            };
+        let LightningInfo::Connected {
+            public_key: lightning_public_key,
+            alias: lightning_alias,
+            network: lightning_network,
+            block_height: _,
+            synced_to_chain,
+        } = ln_client.parsed_node_info().await
+        else {
+            warn!(target: LOG_GATEWAY, "Failed to retrieve Lightning info");
+            return ReceivePaymentStreamAction::RetryAfterDelay;
+        };
 
         assert!(
             self.network == lightning_network,
@@ -1143,32 +1143,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Handles an authenticated request for the gateway's mnemonic. This also
-    /// returns a vector of federations that are not using the mnemonic
-    /// backup strategy.
-    pub async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
-        let words = self
-            .mnemonic
-            .words()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>();
-        let all_federations = self
-            .federation_manager
-            .read()
-            .await
-            .get_all_federation_configs()
-            .await
-            .keys()
-            .copied()
-            .collect::<BTreeSet<_>>();
-        let legacy_federations = self.client_builder.legacy_federations(all_federations);
-        let mnemonic_response = MnemonicResponse {
-            mnemonic: words,
-            legacy_federations,
-        };
-        Ok(mnemonic_response)
-    }
-
     /// Generates an onchain address to fund the gateway's lightning node.
     pub async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
         let context = self.get_lightning_context().await?;
@@ -1183,20 +1157,6 @@ impl Gateway {
         address.require_network(self.network).map_err(|e| {
             AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
                 failure_reason: e.to_string(),
-            })
-        })
-    }
-
-    /// Instructs the Gateway's Lightning node to open a channel to a peer
-    /// specified by `pubkey`.
-    pub async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
-        info!(target: LOG_GATEWAY, pubkey = %payload.pubkey, host = %payload.host, amount = %payload.channel_size_sats, "Opening Lightning channel...");
-        let context = self.get_lightning_context().await?;
-        let res = context.lnrpc.open_channel(payload).await?;
-        info!(target: LOG_GATEWAY, txid = %res.funding_txid, "Initiated channel open");
-        Txid::from_str(&res.funding_txid).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: format!("Received invalid channel funding txid string {e}"),
             })
         })
     }
@@ -1431,7 +1391,7 @@ impl Gateway {
             let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
             let mut filtered_batch = batch
                 .into_iter()
-                .filter(|e| e.event_id <= end_position && event_kinds.contains(&e.event_kind))
+                .filter(|e| e.id() <= end_position && event_kinds.contains(&e.as_raw().kind))
                 .collect::<Vec<_>>();
             filtered_batch.reverse();
             payment_log.extend(filtered_batch);
@@ -1816,13 +1776,9 @@ impl IAdminGateway for Gateway {
                 federations: vec![],
                 federation_fake_scids: None,
                 version_hash: fedimint_build_code_version_env!().to_string(),
-                lightning_pub_key: None,
-                lightning_alias: None,
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
-                network: self.network,
-                block_height: None,
-                synced_to_chain: false,
+                lightning_info: LightningInfo::NotConnected,
                 api: self.versioned_api.clone(),
                 iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                     .expect("could not parse iroh api"),
@@ -1848,19 +1804,15 @@ impl IAdminGateway for Gateway {
             })
             .collect();
 
-        let node_info = lightning_context.lnrpc.parsed_node_info().await?;
+        let lightning_info = lightning_context.lnrpc.parsed_node_info().await;
 
         Ok(GatewayInfo {
             federations,
             federation_fake_scids: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
-            lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
-            lightning_alias: Some(lightning_context.lightning_alias.clone()),
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
-            network: self.network,
-            block_height: Some(node_info.3),
-            synced_to_chain: node_info.4,
+            lightning_info,
             api: self.versioned_api.clone(),
             iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                 .expect("could not parse iroh api"),
@@ -2169,6 +2121,46 @@ impl IAdminGateway for Gateway {
         Ok(())
     }
 
+    /// Handles an authenticated request for the gateway's mnemonic. This also
+    /// returns a vector of federations that are not using the mnemonic
+    /// backup strategy.
+    async fn handle_mnemonic_msg(&self) -> AdminResult<MnemonicResponse> {
+        let words = self
+            .mnemonic
+            .words()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>();
+        let all_federations = self
+            .federation_manager
+            .read()
+            .await
+            .get_all_federation_configs()
+            .await
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let legacy_federations = self.client_builder.legacy_federations(all_federations);
+        let mnemonic_response = MnemonicResponse {
+            mnemonic: words,
+            legacy_federations,
+        };
+        Ok(mnemonic_response)
+    }
+
+    /// Instructs the Gateway's Lightning node to open a channel to a peer
+    /// specified by `pubkey`.
+    async fn handle_open_channel_msg(&self, payload: OpenChannelRequest) -> AdminResult<Txid> {
+        info!(target: LOG_GATEWAY, pubkey = %payload.pubkey, host = %payload.host, amount = %payload.channel_size_sats, "Opening Lightning channel...");
+        let context = self.get_lightning_context().await?;
+        let res = context.lnrpc.open_channel(payload).await?;
+        info!(target: LOG_GATEWAY, txid = %res.funding_txid, "Initiated channel open");
+        Txid::from_str(&res.funding_txid).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: format!("Received invalid channel funding txid string {e}"),
+            })
+        })
+    }
+
     fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
     }
@@ -2176,6 +2168,14 @@ impl IAdminGateway for Gateway {
     fn gatewayd_version(&self) -> String {
         let gatewayd_version = env!("CARGO_PKG_VERSION");
         gatewayd_version.to_string()
+    }
+
+    async fn get_chain_source(&self) -> (Option<BlockchainInfo>, ChainSource, Network) {
+        if let Ok(info) = self.bitcoin_rpc.get_info().await {
+            (Some(info), self.chain_source.clone(), self.network)
+        } else {
+            (None, self.chain_source.clone(), self.network)
+        }
     }
 }
 

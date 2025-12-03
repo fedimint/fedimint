@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, format_err};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
+use fedimint_connectors::ServerResult;
 use fedimint_core::admin_client::{
     GuardianConfigBackup, PeerServerParamsLegacy, SetLocalParamsRequest, SetupStatus,
 };
@@ -51,7 +52,7 @@ use tracing::{debug, trace};
 
 use super::super::{DynModuleApi, IGlobalFederationApi, IRawFederationApi, StatusResponse};
 use crate::api::{
-    FederationApiExt, FederationError, FederationResult, PeerResult,
+    FederationApiExt, FederationError, FederationResult,
     VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
 };
 use crate::query::FilterMapThreshold;
@@ -238,7 +239,7 @@ where
         peer_id: PeerId,
         method: &str,
         params: &ApiRequestErased,
-    ) -> PeerResult<Value> {
+    ) -> ServerResult<Value> {
         self.inner.request_raw(peer_id, method, params).await
     }
 }
@@ -539,7 +540,7 @@ where
     async fn api_announcements(
         &self,
         guardian: PeerId,
-    ) -> PeerResult<BTreeMap<PeerId, SignedApiAnnouncement>> {
+    ) -> ServerResult<BTreeMap<PeerId, SignedApiAnnouncement>> {
         self.request_single_peer(
             API_ANNOUNCEMENTS_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
@@ -575,7 +576,7 @@ where
         .await
     }
 
-    async fn fedimintd_version(&self, peer_id: PeerId) -> PeerResult<String> {
+    async fn fedimintd_version(&self, peer_id: PeerId) -> ServerResult<String> {
         self.request_single_peer(
             FEDIMINTD_VERSION_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
@@ -584,7 +585,7 @@ where
         .await
     }
 
-    async fn get_invite_code(&self, guardian: PeerId) -> PeerResult<InviteCode> {
+    async fn get_invite_code(&self, guardian: PeerId) -> ServerResult<InviteCode> {
         self.request_single_peer(
             INVITE_CODE_ENDPOINT.to_owned(),
             ApiRequestErased::default(),

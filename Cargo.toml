@@ -16,6 +16,7 @@ members = [
     "fedimint-client-module",
     "fedimint-client-rpc",
     "fedimint-client-wasm",
+    "fedimint-connectors",
     "fedimint-core",
     "fedimint-cursed-redb",
     "fedimint-db-locked",
@@ -172,6 +173,7 @@ fedimint-build = { path = "./fedimint-build", version = "=0.10.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.10.0-alpha" }
 fedimint-client-module = { path = "./fedimint-client-module", version = "=0.10.0-alpha" }
 fedimint-client-rpc = { path = "./fedimint-client-rpc", version = "=0.10.0-alpha" }
+fedimint-connectors = { path = "./fedimint-connectors", version = "=0.10.0-alpha" }
 fedimint-core = { path = "./fedimint-core", version = "=0.10.0-alpha" }
 fedimint-cursed-redb = { path = "./fedimint-cursed-redb", version = "=0.10.0-alpha" }
 fedimint-db-locked = { path = "./fedimint-db-locked", version = "=0.10.0-alpha" }
@@ -269,6 +271,7 @@ pin-project = "1.1.10"
 proc-macro2 = "1.0"
 prometheus = "0.14.0"
 prost = "0.13.5"
+qrcode = "0.14"
 quote = "1.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"

@@ -31,7 +31,7 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
     RecurringPaymentCodeKeyPrefix,
 };
-use fedimint_api_client::api::DynModuleApi;
+use fedimint_api_client::api::{DynModuleApi, ServerError};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -60,7 +60,7 @@ use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
-use fedimint_ln_common::client::{GatewayRpcClient, GatewayRpcError};
+use fedimint_ln_common::client::GatewayApi;
 use fedimint_ln_common::config::{FeeToAmount, LightningClientConfig};
 use fedimint_ln_common::contracts::incoming::{IncomingContract, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::{
@@ -89,6 +89,7 @@ use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::Notify;
@@ -297,17 +298,9 @@ mod deprecated_variant_hack {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LightningClientInit {
-    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
-}
-
-impl Default for LightningClientInit {
-    fn default() -> Self {
-        LightningClientInit {
-            gateway_conn: Arc::new(RealGatewayConnection),
-        }
-    }
+    pub gateway_conn: Option<Arc<dyn GatewayConnection + Send + Sync>>,
 }
 
 impl ModuleInit for LightningClientInit {
@@ -388,7 +381,13 @@ impl ClientModuleInit for LightningClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(LightningClientModule::new(args, self.gateway_conn.clone()))
+        let gateway_conn = if let Some(gateway_conn) = self.gateway_conn.clone() {
+            gateway_conn
+        } else {
+            let api = GatewayApi::new(None, args.connector_registry.clone());
+            Arc::new(RealGatewayConnection { api })
+        };
+        Ok(LightningClientModule::new(args, gateway_conn))
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
@@ -2332,7 +2331,7 @@ pub trait GatewayConnection: std::fmt::Debug {
     async fn verify_gateway_availability(
         &self,
         gateway: &LightningGateway,
-    ) -> Result<(), GatewayRpcError>;
+    ) -> Result<(), ServerError>;
 
     // Request the gateway to pay a BOLT11 invoice
     async fn pay_invoice(
@@ -2342,28 +2341,25 @@ pub trait GatewayConnection: std::fmt::Debug {
     ) -> Result<String, GatewayPayError>;
 }
 
-#[derive(Debug, Default)]
-pub struct RealGatewayConnection;
+#[derive(Debug)]
+pub struct RealGatewayConnection {
+    pub api: GatewayApi,
+}
 
 #[apply(async_trait_maybe_send!)]
 impl GatewayConnection for RealGatewayConnection {
     async fn verify_gateway_availability(
         &self,
         gateway: &LightningGateway,
-    ) -> Result<(), GatewayRpcError> {
-        let api = gateway.api.clone();
-        let client = GatewayRpcClient::new(api, None, None, None)
-            .await
-            .map_err(|e| GatewayRpcError::IrohError(e.to_string()))?;
-        let text_gateway_id: String = client.call_get(GET_GATEWAY_ID_ENDPOINT).await?;
-        let gateway_id = PublicKey::from_str(&text_gateway_id)
-            .map_err(|e| GatewayRpcError::RequestError(e.to_string()))?;
-        if gateway_id != gateway.gateway_id {
-            return Err(GatewayRpcError::RequestError(format!(
-                "Unexpected gateway id returned {gateway_id}"
-            )));
-        }
-
+    ) -> Result<(), ServerError> {
+        self.api
+            .request::<PublicKey, serde_json::Value>(
+                &gateway.api,
+                Method::GET,
+                GET_GATEWAY_ID_ENDPOINT,
+                None,
+            )
+            .await?;
         Ok(())
     }
 
@@ -2372,15 +2368,14 @@ impl GatewayConnection for RealGatewayConnection {
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
-        let api = gateway.api.clone();
-        let client = GatewayRpcClient::new(api, None, None, None)
-            .await
-            .map_err(|e| GatewayPayError::GatewayInternalError {
-                error_code: None,
-                error_message: e.to_string(),
-            })?;
-        let preimage: String = client
-            .call_post(PAY_INVOICE_ENDPOINT, payload)
+        let preimage: String = self
+            .api
+            .request(
+                &gateway.api,
+                Method::POST,
+                PAY_INVOICE_ENDPOINT,
+                Some(payload),
+            )
             .await
             .map_err(|e| GatewayPayError::GatewayInternalError {
                 error_code: None,
@@ -2399,7 +2394,7 @@ impl GatewayConnection for MockGatewayConnection {
     async fn verify_gateway_availability(
         &self,
         _gateway: &LightningGateway,
-    ) -> Result<(), GatewayRpcError> {
+    ) -> Result<(), ServerError> {
         Ok(())
     }
 

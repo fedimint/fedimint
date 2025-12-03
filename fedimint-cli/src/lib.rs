@@ -32,15 +32,14 @@ use envs::FM_USE_TOR_ENV;
 use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::ConnectorType;
-use fedimint_api_client::api::{
-    ConnectorRegistry, DynGlobalApi, FederationApiExt, FederationError,
-};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::module::init::ClientModuleInit;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc, RootSecret};
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
@@ -288,6 +287,13 @@ impl Opts {
         self.iroh_enable_next.unwrap_or(true)
     }
 
+    fn use_tor(&self) -> bool {
+        #[cfg(feature = "tor")]
+        return self.use_tor;
+        #[cfg(not(feature = "tor"))]
+        false
+    }
+
     async fn admin_client(
         &self,
         peer_urls: &BTreeMap<PeerId, SafeUrl>,
@@ -314,7 +320,7 @@ impl Opts {
         ConnectorRegistry::build_from_client_defaults()
             .iroh_next(self.iroh_enable_next())
             .iroh_pkarr_dht(self.iroh_enable_dht())
-            .ws_force_tor(self.use_tor)
+            .ws_force_tor(self.use_tor())
             .bind()
             .await
     }
@@ -645,6 +651,9 @@ Examples:
         #[arg(long, default_value = "10")]
         limit: u64,
     },
+    /// Test the built-in event handling and tracking by printing events to
+    /// console
+    TestEventLogHandling,
     /// Manually submit a fedimint transaction to guardians
     ///
     /// This can be useful to check why a transaction may have been rejected
@@ -1324,15 +1333,17 @@ impl FedimintCli {
                     .await
                     .into_iter()
                     .map(|v| {
+                        let id = v.id();
+                        let v = v.as_raw();
                         let module_id = v.module.as_ref().map(|m| m.1);
-                        let module_kind = v.module.map(|m| m.0);
+                        let module_kind = v.module.as_ref().map(|m| m.0.clone());
                         serde_json::json!({
-                            "id": v.event_id,
-                            "kind": v.event_kind,
+                            "id": id,
+                            "kind": v.kind,
                             "module_kind": module_kind,
                             "module_id": module_id,
-                            "ts": v.timestamp,
-                            "payload": v.value
+                            "ts": v.ts_usecs,
+                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
                         })
                     })
                     .collect();
@@ -1352,15 +1363,17 @@ impl FedimintCli {
                     .await
                     .into_iter()
                     .map(|v| {
+                        let id = v.id();
+                        let v = v.as_raw();
                         let module_id = v.module.as_ref().map(|m| m.1);
-                        let module_kind = v.module.map(|m| m.0);
+                        let module_kind = v.module.as_ref().map(|m| m.0.clone());
                         serde_json::json!({
-                            "id": v.event_id,
-                            "kind": v.event_kind,
+                            "id": id,
+                            "kind": v.kind,
                             "module_kind": module_kind,
                             "module_id": module_id,
-                            "ts": v.timestamp,
-                            "payload": v.value
+                            "ts": v.ts_usecs,
+                            "payload": serde_json::from_slice(&v.payload).unwrap_or_else(|_| hex::encode(&v.payload)),
                         })
                     })
                     .collect();
@@ -1383,6 +1396,26 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     serde_json::to_value(tx_outcome.0.map_err_cli()?).expect("Can be encoded"),
                 ))
+            }
+            Command::Dev(DevCmd::TestEventLogHandling) => {
+                let client = self.client_open(&cli).await?;
+
+                client
+                    .handle_events(
+                        client.built_in_application_event_log_tracker(),
+                        move |_dbtx, event| {
+                            Box::pin(async move {
+                                info!(target: LOG_CLIENT, "{event:?}");
+
+                                Ok(())
+                            })
+                        },
+                    )
+                    .await
+                    .map_err_cli()?;
+                unreachable!(
+                    "handle_events exits only if client shuts down, which we don't do here"
+                )
             }
             Command::Completion { shell } => {
                 let bin_path = PathBuf::from(

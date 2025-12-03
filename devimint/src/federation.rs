@@ -9,9 +9,10 @@ use std::{env, fs, iter};
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoincore_rpc::bitcoin::Network;
+use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::net::ConnectorType;
-use fedimint_api_client::api::{ConnectorRegistry, DynGlobalApi};
 use fedimint_client_module::module::ClientModule;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::admin_client::{ServerStatusLegacy, SetupStatus};
 use fedimint_core::config::{ClientConfig, ServerModuleConfigGenParamsRegistry, load_from_file};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
@@ -43,6 +44,7 @@ use super::util::{Command, ProcessHandle, ProcessManager, cmd};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{FedimintdCmd, poll, poll_simple, poll_with_timeout};
+use crate::version_constants::VERSION_0_10_0_ALPHA;
 use crate::{poll_almost_equal, poll_eq, vars};
 
 // TODO: Are we still using the 3rd port for anything?
@@ -705,9 +707,17 @@ impl Federation {
         try_join_all(gateways.into_iter().map(|gw| {
             poll("gateway pegin", || async {
                 let gw_info = gw.get_info().await.map_err(ControlFlow::Continue)?;
-                let block_height: u64 = gw_info["block_height"]
-                    .as_u64()
-                    .expect("Could not parse block height");
+
+                let block_height: u64 = if gw.gatewayd_version < *VERSION_0_10_0_ALPHA {
+                    gw_info["block_height"]
+                        .as_u64()
+                        .expect("Could not parse block height")
+                } else {
+                    gw_info["lightning_info"]["connected"]["block_height"]
+                        .as_u64()
+                        .expect("Could not parse block height")
+                };
+
                 if bitcoind_block_height != block_height {
                     return Err(std::ops::ControlFlow::Continue(anyhow::anyhow!(
                         "gateway block height is not synced"

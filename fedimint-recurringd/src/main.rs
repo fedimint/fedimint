@@ -9,7 +9,7 @@ use axum::response::IntoResponse;
 use axum::routing::{get, put};
 use axum_auth::AuthBearer;
 use clap::Parser;
-use fedimint_api_client::api::ConnectorRegistry;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
         });
 
     if let Some(encryption_key) = cli_opts.encryption_key {
-        app = app.merge(v2::router(cli_opts.api_address, encryption_key));
+        app = app.merge(v2::router(cli_opts.api_address, encryption_key).await?);
     }
 
     info!(api_address = %cli_opts.bind_address, "recurringd started");

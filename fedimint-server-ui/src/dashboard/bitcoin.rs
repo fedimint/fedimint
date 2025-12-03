@@ -34,9 +34,16 @@ pub fn render(url: SafeUrl, status: &Option<ServerBitcoinRpcStatus>) -> Markup {
                             }
                         }
                     }
+                    @if let Some(sync) = status.sync_progress {
+                        @if sync < 0.999 {
+                            div class="alert alert-warning mt-3 mb-0" {
+                                "The bitcoin backend is not fully synced yet. We need to wait for it to sync before we can participate in consensus."
+                            }
+                        }
+                    }
                 } @else {
-                    div class="alert alert-warning mb-0" {
-                        "Failed to connect to bitcoin backend"
+                    div class="alert alert-danger mb-0" {
+                        "Failed to connect to bitcoin backend. Please establish a connection in order to participate in consensus."
                     }
                 }
             }
