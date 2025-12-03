@@ -21,7 +21,10 @@ use fedimint_bitcoind::BlockchainInfo;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
-    ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload, FederationInfo, GatewayBalances, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse, OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SendOnchainRequest, SetFeesPayload
+    ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
+    FederationInfo, GatewayBalances, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse,
+    OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SendOnchainRequest,
+    SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -33,7 +36,9 @@ use maud::html;
 
 use crate::connect_fed::connect_federation_handler;
 use crate::federation::{leave_federation_handler, set_fees_handler};
-use crate::lightning::{channels_fragment_handler, close_channel_handler, open_channel_handler, send_onchain_handler};
+use crate::lightning::{
+    channels_fragment_handler, close_channel_handler, open_channel_handler, send_onchain_handler,
+};
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
