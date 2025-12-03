@@ -561,6 +561,7 @@ impl ClientModuleInit for MintClientInit {
             secp: Secp256k1::new(),
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
+            balance_update_sender: tokio::sync::watch::channel(()).0,
         })
     }
 
@@ -623,7 +624,6 @@ impl ClientModuleInit for MintClientInit {
 /// spend the e-cash note. Only the client that possesses the `DerivableSecret`
 /// can derive the correct spend key to spend the e-cash note. This ensures that
 /// only the owner of the e-cash note can spend it.
-#[derive(Debug)]
 pub struct MintClientModule {
     federation_id: FederationId,
     cfg: MintClientConfig,
@@ -631,11 +631,24 @@ pub struct MintClientModule {
     secp: Secp256k1<All>,
     notifier: ModuleNotifier<MintClientStateMachines>,
     pub client_ctx: ClientContext<Self>,
+    balance_update_sender: tokio::sync::watch::Sender<()>,
+}
+
+impl fmt::Debug for MintClientModule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MintClientModule")
+            .field("federation_id", &self.federation_id)
+            .field("cfg", &self.cfg)
+            .field("notifier", &self.notifier)
+            .field("client_ctx", &self.client_ctx)
+            .finish_non_exhaustive()
+    }
 }
 
 // TODO: wrap in Arc
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MintClientContext {
+    pub federation_id: FederationId,
     pub client_ctx: ClientContext<MintClientModule>,
     pub mint_decoder: Decoder,
     pub tbs_pks: Tiered<AggregatePublicKey>,
@@ -644,6 +657,16 @@ pub struct MintClientContext {
     // FIXME: putting a DB ref here is an antipattern, global context should become more powerful
     // but we need to consider it more carefully as its APIs will be harder to change.
     pub module_db: Database,
+    /// Notifies subscribers when the balance changes
+    pub balance_update_sender: tokio::sync::watch::Sender<()>,
+}
+
+impl fmt::Debug for MintClientContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MintClientContext")
+            .field("federation_id", &self.federation_id)
+            .finish_non_exhaustive()
+    }
 }
 
 impl MintClientContext {
@@ -670,12 +693,14 @@ impl ClientModule for MintClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         MintClientContext {
+            federation_id: self.federation_id,
             client_ctx: self.client_ctx.clone(),
             mint_decoder: self.decoder(),
             tbs_pks: self.cfg.tbs_pks.clone(),
             peer_tbs_pks: self.cfg.peer_tbs_pks.clone(),
             secret: self.secret.clone(),
             module_db: self.client_ctx.module_db().clone(),
+            balance_update_sender: self.balance_update_sender.clone(),
         }
     }
 
@@ -816,55 +841,9 @@ impl ClientModule for MintClientModule {
     }
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
-        Box::pin(
-            self.notifier
-                .subscribe_all_operations()
-                .filter_map(|state| async move {
-                    #[allow(deprecated)]
-                    match state {
-                        MintClientStateMachines::Output(MintOutputStateMachine {
-                            state: MintOutputStates::Succeeded(_),
-                            ..
-                        })
-                        | MintClientStateMachines::Input(MintInputStateMachine {
-                            state: MintInputStates::Created(_) | MintInputStates::CreatedBundle(_),
-                            ..
-                        })
-                        | MintClientStateMachines::OOB(MintOOBStateMachine {
-                            state: MintOOBStates::Created(_) | MintOOBStates::CreatedMulti(_),
-                            ..
-                        }) => Some(()),
-                        // The negative cases are enumerated explicitly to avoid missing new
-                        // variants that need to trigger balance updates
-                        MintClientStateMachines::Output(MintOutputStateMachine {
-                            state:
-                                MintOutputStates::Created(_)
-                                | MintOutputStates::CreatedMulti(_)
-                                | MintOutputStates::Failed(_)
-                                | MintOutputStates::Aborted(_),
-                            ..
-                        })
-                        | MintClientStateMachines::Input(MintInputStateMachine {
-                            state:
-                                MintInputStates::Error(_)
-                                | MintInputStates::Success(_)
-                                | MintInputStates::Refund(_)
-                                | MintInputStates::RefundedBundle(_)
-                                | MintInputStates::RefundedPerNote(_)
-                                | MintInputStates::RefundSuccess(_),
-                            ..
-                        })
-                        | MintClientStateMachines::OOB(MintOOBStateMachine {
-                            state:
-                                MintOOBStates::TimeoutRefund(_)
-                                | MintOOBStates::UserRefund(_)
-                                | MintOOBStates::UserRefundMulti(_),
-                            ..
-                        })
-                        | MintClientStateMachines::Restore(_) => None,
-                    }
-                }),
-        )
+        Box::pin(tokio_stream::wrappers::WatchStream::new(
+            self.balance_update_sender.subscribe(),
+        ))
     }
 
     async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
@@ -1038,6 +1017,9 @@ impl MintClientModule {
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as sufficient input to fund a tx");
             MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, amount, note).await;
         }
+
+        let sender = self.balance_update_sender.clone();
+        dbtx.on_commit(move || sender.send_replace(()));
 
         let inputs = self.create_input_from_notes(selected_notes)?;
 
@@ -1285,6 +1267,9 @@ impl MintClientModule {
             selected_notes_decoded.push((amount, spendable_note_decoded));
         }
 
+        let sender = self.balance_update_sender.clone();
+        dbtx.on_commit(move || sender.send_replace(()));
+
         self.create_input_from_notes(selected_notes_decoded.into_iter().collect())
     }
 
@@ -1347,6 +1332,9 @@ impl MintClientModule {
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as oob");
             MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, amount, note).await;
         }
+
+        let sender = self.balance_update_sender.clone();
+        dbtx.on_commit(move || sender.send_replace(()));
 
         let state_machines = vec![MintClientStateMachines::OOB(MintOOBStateMachine {
             operation_id,
@@ -1769,6 +1757,194 @@ impl MintClientModule {
                     anyhow!("Commit to DB failed: {last_error}")
                 }
             })
+    }
+
+    /// Send e-cash notes for the requested amount.
+    ///
+    /// When this method removes ecash notes from the local database it will do
+    /// so atomically with creating a `SendPaymentEvent` that contains the notes
+    /// in out of band serilaized from. Hence it is critical for the integrator
+    /// to display this event to ensure the user always has access to his funds.
+    ///
+    /// This method operates in two modes:
+    ///
+    /// 1. **Offline mode**: If exact notes are available in the wallet, they
+    ///    are spent immediately without contacting the federation. A
+    ///    `SendPaymentEvent` is emitted and the notes are returned.
+    ///
+    /// 2. **Online mode**: If exact notes are not available, the method
+    ///    contacts the federation to trigger a reissuance transaction to obtain
+    ///    the proper denominations. The method will block until the reissuance
+    ///    completes, at which point a `SendPaymentEvent` is emitted and the
+    ///    notes are returned.
+    ///
+    /// If the method enters online mode and is cancelled, e.g. the future is
+    /// dropped, before the reissue transaction is confirmed, any reissued notes
+    /// will be returned to the wallet and we do not emit a `SendPaymentEvent`.
+    ///
+    /// Before selection of the ecash notes the amount is rounded up to the
+    /// nearest multiple of 512 msat.
+    pub async fn send_oob_notes<M: Serialize + Send>(
+        &self,
+        amount: Amount,
+        extra_meta: M,
+    ) -> anyhow::Result<OOBNotes> {
+        // Round up to the nearest multiple of 512 msat
+        let amount = Amount::from_msats(amount.msats.div_ceil(512) * 512);
+
+        let extra_meta = serde_json::to_value(extra_meta)
+            .expect("MintClientModule::send_oob_notes extra_meta is serializable");
+
+        // Try to spend exact notes from our current balance
+        let oob_notes: Option<OOBNotes> = self
+            .client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let extra_meta = extra_meta.clone();
+                    Box::pin(async {
+                        self.try_spend_exact_notes_dbtx(
+                            dbtx,
+                            amount,
+                            self.federation_id,
+                            extra_meta,
+                        )
+                        .await
+                        .map(Ok::<OOBNotes, anyhow::Error>)
+                        .transpose()
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .expect("Failed to commit dbtx after 100 retries");
+
+        if let Some(oob_notes) = oob_notes {
+            return Ok(oob_notes);
+        }
+
+        // Verify we're online
+        self.client_ctx
+            .global_api()
+            .session_count()
+            .await
+            .context("Cannot reach federation to reissue notes")?;
+
+        let operation_id = OperationId::new_random();
+
+        // Create outputs for reissuance using the existing create_output function
+        let output_bundle = self
+            .create_output(
+                &mut self.client_ctx.module_db().begin_transaction_nc().await,
+                operation_id,
+                1, // notes_per_denomination
+                amount,
+            )
+            .await;
+
+        // Combine the output bundle state machines with the send state machine
+        let combined_bundle = ClientOutputBundle::new(
+            output_bundle.outputs().to_vec(),
+            output_bundle.sms().to_vec(),
+        );
+
+        let outputs = self.client_ctx.make_client_outputs(combined_bundle);
+
+        let em_clone = extra_meta.clone();
+
+        // Submit reissuance transaction with the state machines
+        let out_point_range = self
+            .client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                MintCommonInit::KIND.as_str(),
+                move |change_range: OutPointRange| MintOperationMeta {
+                    variant: MintOperationMetaVariant::Reissuance {
+                        legacy_out_point: None,
+                        txid: Some(change_range.txid()),
+                        out_point_indices: change_range
+                            .into_iter()
+                            .map(|out_point| out_point.out_idx)
+                            .collect(),
+                    },
+                    amount,
+                    extra_meta: em_clone.clone(),
+                },
+                TransactionBuilder::new().with_outputs(outputs),
+            )
+            .await
+            .context("Failed to submit reissuance transaction")?;
+
+        // Wait for outputs to be finalized
+        self.client_ctx
+            .await_primary_module_outputs(operation_id, out_point_range.into_iter().collect())
+            .await
+            .context("Failed to await output finalization")?;
+
+        // Recursively call send_oob_notes to try again with the reissued notes
+        Box::pin(self.send_oob_notes(amount, extra_meta)).await
+    }
+
+    /// Try to spend exact notes from the current balance.
+    /// Returns `Some(OOBNotes)` if exact notes are available, `None` otherwise.
+    async fn try_spend_exact_notes_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        amount: Amount,
+        federation_id: FederationId,
+        extra_meta: serde_json::Value,
+    ) -> Option<OOBNotes> {
+        let selected_notes = Self::select_notes(
+            dbtx,
+            &SelectNotesWithExactAmount,
+            amount,
+            FeeConsensus::zero(),
+        )
+        .await
+        .ok()?;
+
+        // Remove notes from our database
+        for (note_amount, note) in selected_notes.iter_items() {
+            MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, note_amount, note)
+                .await;
+        }
+
+        let sender = self.balance_update_sender.clone();
+        dbtx.on_commit(move || sender.send_replace(()));
+
+        let operation_id = spendable_notes_to_operation_id(&selected_notes);
+
+        let oob_notes = OOBNotes::new(federation_id.to_prefix(), selected_notes);
+
+        // Log the send operation with notes immediately available
+        self.client_ctx
+            .add_operation_log_entry_dbtx(
+                dbtx,
+                operation_id,
+                MintCommonInit::KIND.as_str(),
+                MintOperationMeta {
+                    variant: MintOperationMetaVariant::SpendOOB {
+                        requested_amount: amount,
+                        oob_notes: oob_notes.clone(),
+                    },
+                    amount: oob_notes.total_amount(),
+                    extra_meta,
+                },
+            )
+            .await;
+
+        self.client_ctx
+            .log_event(
+                dbtx,
+                SendPaymentEvent {
+                    operation_id,
+                    amount: oob_notes.total_amount(),
+                    oob_notes: oob_notes.to_string(),
+                },
+            )
+            .await;
+
+        Some(oob_notes)
     }
 
     /// Validate the given notes and return the total amount of the notes.
