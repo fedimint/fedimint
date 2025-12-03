@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":["IP2PConnection","IP2PFrame"],"type":["DynIP2PFrame","DynP2PConnection"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_P2P_MESSAGE_SIZE"],"trait":["IP2PConnection","IP2PFrame"],"type":["DynIP2PFrame","DynP2PConnection"]};

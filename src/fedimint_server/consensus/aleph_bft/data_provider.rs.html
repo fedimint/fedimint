@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::encoding::Encodable;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::session_outcome::SchnorrSignature;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::secp256k1::schnorr;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>tokio::sync::watch;
 <a href=#10 id=10 data-nosnippet>10</a>
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a>)]
 <a href=#16 id=16 data-nosnippet>16</a></span><span class="kw">pub enum </span>UnitData {
 <a href=#17 id=17 data-nosnippet>17</a>    Batch(Vec&lt;u8&gt;),
-<a href=#18 id=18 data-nosnippet>18</a>    Signature(SchnorrSignature),
+<a href=#18 id=18 data-nosnippet>18</a>    Signature([u8; <span class="number">64</span>]),
 <a href=#19 id=19 data-nosnippet>19</a>}
 <a href=#20 id=20 data-nosnippet>20</a>
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">impl </span>UnitData {
@@ -31,7 +31,7 @@
 <a href=#31 id=31 data-nosnippet>31</a>
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">pub struct </span>DataProvider {
 <a href=#33 id=33 data-nosnippet>33</a>    mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
-<a href=#34 id=34 data-nosnippet>34</a>    signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
+<a href=#34 id=34 data-nosnippet>34</a>    signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;schnorr::Signature&gt;&gt;,
 <a href=#35 id=35 data-nosnippet>35</a>    submitted_transactions: BTreeSet&lt;TransactionId&gt;,
 <a href=#36 id=36 data-nosnippet>36</a>    leftover_item: <span class="prelude-ty">Option</span>&lt;ConsensusItem&gt;,
 <a href=#37 id=37 data-nosnippet>37</a>    timestamp_sender: async_channel::Sender&lt;Instant&gt;,
@@ -41,7 +41,7 @@
 <a href=#41 id=41 data-nosnippet>41</a><span class="kw">impl </span>DataProvider {
 <a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">pub fn </span>new(
 <a href=#43 id=43 data-nosnippet>43</a>        mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
-<a href=#44 id=44 data-nosnippet>44</a>        signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
+<a href=#44 id=44 data-nosnippet>44</a>        signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;schnorr::Signature&gt;&gt;,
 <a href=#45 id=45 data-nosnippet>45</a>        timestamp_sender: async_channel::Sender&lt;Instant&gt;,
 <a href=#46 id=46 data-nosnippet>46</a>        is_recovery: bool,
 <a href=#47 id=47 data-nosnippet>47</a>    ) -&gt; <span class="self">Self </span>{
@@ -60,8 +60,8 @@
 <a href=#60 id=60 data-nosnippet>60</a></span><span class="kw">impl </span>aleph_bft::DataProvider&lt;UnitData&gt; <span class="kw">for </span>DataProvider {
 <a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">async fn </span>get_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;UnitData&gt; {
 <a href=#62 id=62 data-nosnippet>62</a>        <span class="comment">// we only attach our signature as no more items can be ordered in this session
-<a href=#63 id=63 data-nosnippet>63</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(signature) = <span class="self">self</span>.signature_receiver.borrow().clone() {
-<a href=#64 id=64 data-nosnippet>64</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Signature(signature));
+<a href=#63 id=63 data-nosnippet>63</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(signature) = <span class="kw-2">*</span><span class="self">self</span>.signature_receiver.borrow() {
+<a href=#64 id=64 data-nosnippet>64</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Signature(signature.serialize()));
 <a href=#65 id=65 data-nosnippet>65</a>        }
 <a href=#66 id=66 data-nosnippet>66</a>
 <a href=#67 id=67 data-nosnippet>67</a>        <span class="comment">// the length of a vector is encoded in at most 9 bytes

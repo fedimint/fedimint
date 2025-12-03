@@ -834,57 +834,75 @@
 <a href=#834 id=834 data-nosnippet>834</a>    }
 <a href=#835 id=835 data-nosnippet>835</a>}
 <a href=#836 id=836 data-nosnippet>836</a>
-<a href=#837 id=837 data-nosnippet>837</a><span class="kw">impl</span>&lt;T&gt; fmt::Debug <span class="kw">for </span>SerdeModuleEncodingBase64&lt;T&gt;
-<a href=#838 id=838 data-nosnippet>838</a><span class="kw">where
-<a href=#839 id=839 data-nosnippet>839</a>    </span>T: Encodable + Decodable,
-<a href=#840 id=840 data-nosnippet>840</a>{
-<a href=#841 id=841 data-nosnippet>841</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#842 id=842 data-nosnippet>842</a>        f.write_str(<span class="string">"SerdeModuleEncoding2("</span>)<span class="question-mark">?</span>;
-<a href=#843 id=843 data-nosnippet>843</a>        fmt::Debug::fmt(<span class="kw-2">&amp;</span>AbbreviateHexBytes(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>), f)<span class="question-mark">?</span>;
-<a href=#844 id=844 data-nosnippet>844</a>        f.write_str(<span class="string">")"</span>)<span class="question-mark">?</span>;
-<a href=#845 id=845 data-nosnippet>845</a>        <span class="prelude-val">Ok</span>(())
-<a href=#846 id=846 data-nosnippet>846</a>    }
-<a href=#847 id=847 data-nosnippet>847</a>}
-<a href=#848 id=848 data-nosnippet>848</a>
-<a href=#849 id=849 data-nosnippet>849</a><span class="kw">impl</span>&lt;T: Encodable + Decodable&gt; From&lt;<span class="kw-2">&amp;</span>T&gt; <span class="kw">for </span>SerdeModuleEncodingBase64&lt;T&gt; {
-<a href=#850 id=850 data-nosnippet>850</a>    <span class="kw">fn </span>from(value: <span class="kw-2">&amp;</span>T) -&gt; <span class="self">Self </span>{
-<a href=#851 id=851 data-nosnippet>851</a>        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
-<a href=#852 id=852 data-nosnippet>852</a>        fedimint_core::encoding::Encodable::consensus_encode(value, <span class="kw-2">&amp;mut </span>bytes)
-<a href=#853 id=853 data-nosnippet>853</a>            .expect(<span class="string">"Writing to buffer can never fail"</span>);
-<a href=#854 id=854 data-nosnippet>854</a>        <span class="self">Self</span>(bytes, PhantomData)
-<a href=#855 id=855 data-nosnippet>855</a>    }
-<a href=#856 id=856 data-nosnippet>856</a>}
-<a href=#857 id=857 data-nosnippet>857</a>
-<a href=#858 id=858 data-nosnippet>858</a><span class="kw">impl</span>&lt;T: Encodable + Decodable + <span class="lifetime">'static</span>&gt; SerdeModuleEncodingBase64&lt;T&gt; {
-<a href=#859 id=859 data-nosnippet>859</a>    <span class="kw">pub fn </span>try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt; {
-<a href=#860 id=860 data-nosnippet>860</a>        Decodable::consensus_decode_whole(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, modules)
-<a href=#861 id=861 data-nosnippet>861</a>    }
-<a href=#862 id=862 data-nosnippet>862</a>
-<a href=#863 id=863 data-nosnippet>863</a>    <span class="doccomment">/// In cases where we know exactly which module kind we expect but don't
-<a href=#864 id=864 data-nosnippet>864</a>    /// have access to all decoders this function can be used instead.
-<a href=#865 id=865 data-nosnippet>865</a>    ///
-<a href=#866 id=866 data-nosnippet>866</a>    /// Note that it just assumes the decoded module instance id to be valid
-<a href=#867 id=867 data-nosnippet>867</a>    /// since it cannot validate against the decoder registry. The lack of
-<a href=#868 id=868 data-nosnippet>868</a>    /// access to a decoder registry also makes decoding structs impossible that
-<a href=#869 id=869 data-nosnippet>869</a>    /// themselves contain module dyn-types (e.g. a module output containing a
-<a href=#870 id=870 data-nosnippet>870</a>    /// fedimint transaction).
-<a href=#871 id=871 data-nosnippet>871</a>    </span><span class="kw">pub fn </span>try_into_inner_known_module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, decoder: <span class="kw-2">&amp;</span>Decoder) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt; {
-<a href=#872 id=872 data-nosnippet>872</a>        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
-<a href=#873 id=873 data-nosnippet>873</a>        <span class="kw">let </span>module_instance = ModuleInstanceId::consensus_decode_partial(
-<a href=#874 id=874 data-nosnippet>874</a>            <span class="kw-2">&amp;mut </span>reader,
-<a href=#875 id=875 data-nosnippet>875</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-<a href=#876 id=876 data-nosnippet>876</a>        )<span class="question-mark">?</span>;
-<a href=#877 id=877 data-nosnippet>877</a>
-<a href=#878 id=878 data-nosnippet>878</a>        <span class="kw">let </span>total_len =
-<a href=#879 id=879 data-nosnippet>879</a>            u64::consensus_decode_partial(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
+<a href=#837 id=837 data-nosnippet>837</a><span class="kw">impl</span>&lt;T: Encodable + Decodable&gt; Encodable <span class="kw">for </span>SerdeModuleEncoding&lt;T&gt; {
+<a href=#838 id=838 data-nosnippet>838</a>    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+<a href=#839 id=839 data-nosnippet>839</a>        <span class="self">self</span>.<span class="number">0</span>.consensus_encode(writer)
+<a href=#840 id=840 data-nosnippet>840</a>    }
+<a href=#841 id=841 data-nosnippet>841</a>}
+<a href=#842 id=842 data-nosnippet>842</a>
+<a href=#843 id=843 data-nosnippet>843</a><span class="kw">impl</span>&lt;T: Encodable + Decodable&gt; Decodable <span class="kw">for </span>SerdeModuleEncoding&lt;T&gt; {
+<a href=#844 id=844 data-nosnippet>844</a>    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;R: std::io::Read&gt;(
+<a href=#845 id=845 data-nosnippet>845</a>        reader: <span class="kw-2">&amp;mut </span>R,
+<a href=#846 id=846 data-nosnippet>846</a>        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+<a href=#847 id=847 data-nosnippet>847</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+<a href=#848 id=848 data-nosnippet>848</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(
+<a href=#849 id=849 data-nosnippet>849</a>            Vec::&lt;u8&gt;::consensus_decode_partial_from_finite_reader(reader, modules)<span class="question-mark">?</span>,
+<a href=#850 id=850 data-nosnippet>850</a>            PhantomData,
+<a href=#851 id=851 data-nosnippet>851</a>        ))
+<a href=#852 id=852 data-nosnippet>852</a>    }
+<a href=#853 id=853 data-nosnippet>853</a>}
+<a href=#854 id=854 data-nosnippet>854</a>
+<a href=#855 id=855 data-nosnippet>855</a><span class="kw">impl</span>&lt;T&gt; fmt::Debug <span class="kw">for </span>SerdeModuleEncodingBase64&lt;T&gt;
+<a href=#856 id=856 data-nosnippet>856</a><span class="kw">where
+<a href=#857 id=857 data-nosnippet>857</a>    </span>T: Encodable + Decodable,
+<a href=#858 id=858 data-nosnippet>858</a>{
+<a href=#859 id=859 data-nosnippet>859</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#860 id=860 data-nosnippet>860</a>        f.write_str(<span class="string">"SerdeModuleEncoding2("</span>)<span class="question-mark">?</span>;
+<a href=#861 id=861 data-nosnippet>861</a>        fmt::Debug::fmt(<span class="kw-2">&amp;</span>AbbreviateHexBytes(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>), f)<span class="question-mark">?</span>;
+<a href=#862 id=862 data-nosnippet>862</a>        f.write_str(<span class="string">")"</span>)<span class="question-mark">?</span>;
+<a href=#863 id=863 data-nosnippet>863</a>        <span class="prelude-val">Ok</span>(())
+<a href=#864 id=864 data-nosnippet>864</a>    }
+<a href=#865 id=865 data-nosnippet>865</a>}
+<a href=#866 id=866 data-nosnippet>866</a>
+<a href=#867 id=867 data-nosnippet>867</a><span class="kw">impl</span>&lt;T: Encodable + Decodable&gt; From&lt;<span class="kw-2">&amp;</span>T&gt; <span class="kw">for </span>SerdeModuleEncodingBase64&lt;T&gt; {
+<a href=#868 id=868 data-nosnippet>868</a>    <span class="kw">fn </span>from(value: <span class="kw-2">&amp;</span>T) -&gt; <span class="self">Self </span>{
+<a href=#869 id=869 data-nosnippet>869</a>        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
+<a href=#870 id=870 data-nosnippet>870</a>        fedimint_core::encoding::Encodable::consensus_encode(value, <span class="kw-2">&amp;mut </span>bytes)
+<a href=#871 id=871 data-nosnippet>871</a>            .expect(<span class="string">"Writing to buffer can never fail"</span>);
+<a href=#872 id=872 data-nosnippet>872</a>        <span class="self">Self</span>(bytes, PhantomData)
+<a href=#873 id=873 data-nosnippet>873</a>    }
+<a href=#874 id=874 data-nosnippet>874</a>}
+<a href=#875 id=875 data-nosnippet>875</a>
+<a href=#876 id=876 data-nosnippet>876</a><span class="kw">impl</span>&lt;T: Encodable + Decodable + <span class="lifetime">'static</span>&gt; SerdeModuleEncodingBase64&lt;T&gt; {
+<a href=#877 id=877 data-nosnippet>877</a>    <span class="kw">pub fn </span>try_into_inner(<span class="kw-2">&amp;</span><span class="self">self</span>, modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt; {
+<a href=#878 id=878 data-nosnippet>878</a>        Decodable::consensus_decode_whole(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, modules)
+<a href=#879 id=879 data-nosnippet>879</a>    }
 <a href=#880 id=880 data-nosnippet>880</a>
-<a href=#881 id=881 data-nosnippet>881</a>        <span class="comment">// No recursive module decoding is supported since we give an empty decoder
-<a href=#882 id=882 data-nosnippet>882</a>        // registry to the decode function
-<a href=#883 id=883 data-nosnippet>883</a>        </span>decoder.decode_complete(
-<a href=#884 id=884 data-nosnippet>884</a>            <span class="kw-2">&amp;mut </span>reader,
-<a href=#885 id=885 data-nosnippet>885</a>            total_len,
-<a href=#886 id=886 data-nosnippet>886</a>            module_instance,
-<a href=#887 id=887 data-nosnippet>887</a>            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
-<a href=#888 id=888 data-nosnippet>888</a>        )
-<a href=#889 id=889 data-nosnippet>889</a>    }
-<a href=#890 id=890 data-nosnippet>890</a>}</code></pre></div></section></main></body></html>
+<a href=#881 id=881 data-nosnippet>881</a>    <span class="doccomment">/// In cases where we know exactly which module kind we expect but don't
+<a href=#882 id=882 data-nosnippet>882</a>    /// have access to all decoders this function can be used instead.
+<a href=#883 id=883 data-nosnippet>883</a>    ///
+<a href=#884 id=884 data-nosnippet>884</a>    /// Note that it just assumes the decoded module instance id to be valid
+<a href=#885 id=885 data-nosnippet>885</a>    /// since it cannot validate against the decoder registry. The lack of
+<a href=#886 id=886 data-nosnippet>886</a>    /// access to a decoder registry also makes decoding structs impossible that
+<a href=#887 id=887 data-nosnippet>887</a>    /// themselves contain module dyn-types (e.g. a module output containing a
+<a href=#888 id=888 data-nosnippet>888</a>    /// fedimint transaction).
+<a href=#889 id=889 data-nosnippet>889</a>    </span><span class="kw">pub fn </span>try_into_inner_known_module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, decoder: <span class="kw-2">&amp;</span>Decoder) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt; {
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="kw">let </span><span class="kw-2">mut </span>reader = std::io::Cursor::new(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
+<a href=#891 id=891 data-nosnippet>891</a>        <span class="kw">let </span>module_instance = ModuleInstanceId::consensus_decode_partial(
+<a href=#892 id=892 data-nosnippet>892</a>            <span class="kw-2">&amp;mut </span>reader,
+<a href=#893 id=893 data-nosnippet>893</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+<a href=#894 id=894 data-nosnippet>894</a>        )<span class="question-mark">?</span>;
+<a href=#895 id=895 data-nosnippet>895</a>
+<a href=#896 id=896 data-nosnippet>896</a>        <span class="kw">let </span>total_len =
+<a href=#897 id=897 data-nosnippet>897</a>            u64::consensus_decode_partial(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
+<a href=#898 id=898 data-nosnippet>898</a>
+<a href=#899 id=899 data-nosnippet>899</a>        <span class="comment">// No recursive module decoding is supported since we give an empty decoder
+<a href=#900 id=900 data-nosnippet>900</a>        // registry to the decode function
+<a href=#901 id=901 data-nosnippet>901</a>        </span>decoder.decode_complete(
+<a href=#902 id=902 data-nosnippet>902</a>            <span class="kw-2">&amp;mut </span>reader,
+<a href=#903 id=903 data-nosnippet>903</a>            total_len,
+<a href=#904 id=904 data-nosnippet>904</a>            module_instance,
+<a href=#905 id=905 data-nosnippet>905</a>            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
+<a href=#906 id=906 data-nosnippet>906</a>        )
+<a href=#907 id=907 data-nosnippet>907</a>    }
+<a href=#908 id=908 data-nosnippet>908</a>}</code></pre></div></section></main></body></html>
