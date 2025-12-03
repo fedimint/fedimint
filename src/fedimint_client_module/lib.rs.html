@@ -19,8 +19,8 @@
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::config::ClientConfig;
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">pub use </span>fedimint_core::core::{IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::db::Database;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::module::ApiAuth;
-<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiVersion};
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::{
@@ -212,264 +212,271 @@
 <a href=#212 id=212 data-nosnippet>212</a>    );
 <a href=#213 id=213 data-nosnippet>213</a>
 <a href=#214 id=214 data-nosnippet>214</a>    <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;TxSubmissionStatesSM&gt;;
-<a href=#215 id=215 data-nosnippet>215</a>}
-<a href=#216 id=216 data-nosnippet>216</a>
-<a href=#217 id=217 data-nosnippet>217</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">impl </span>IGlobalClientContext <span class="kw">for </span>() {
-<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynModuleApi {
-<a href=#220 id=220 data-nosnippet>220</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#221 id=221 data-nosnippet>221</a>    }
-<a href=#222 id=222 data-nosnippet>222</a>
-<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">async fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
-<a href=#224 id=224 data-nosnippet>224</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#225 id=225 data-nosnippet>225</a>    }
-<a href=#226 id=226 data-nosnippet>226</a>
-<a href=#227 id=227 data-nosnippet>227</a>    <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynGlobalApi {
-<a href=#228 id=228 data-nosnippet>228</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#229 id=229 data-nosnippet>229</a>    }
-<a href=#230 id=230 data-nosnippet>230</a>
-<a href=#231 id=231 data-nosnippet>231</a>    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
-<a href=#232 id=232 data-nosnippet>232</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#233 id=233 data-nosnippet>233</a>    }
-<a href=#234 id=234 data-nosnippet>234</a>
-<a href=#235 id=235 data-nosnippet>235</a>    <span class="kw">async fn </span>claim_inputs_dyn(
-<a href=#236 id=236 data-nosnippet>236</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#237 id=237 data-nosnippet>237</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#238 id=238 data-nosnippet>238</a>        _input: InstancelessDynClientInputBundle,
-<a href=#239 id=239 data-nosnippet>239</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
-<a href=#240 id=240 data-nosnippet>240</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#241 id=241 data-nosnippet>241</a>    }
-<a href=#242 id=242 data-nosnippet>242</a>
-<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">async fn </span>fund_output_dyn(
-<a href=#244 id=244 data-nosnippet>244</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#245 id=245 data-nosnippet>245</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#246 id=246 data-nosnippet>246</a>        _outputs: InstancelessDynClientOutputBundle,
-<a href=#247 id=247 data-nosnippet>247</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
-<a href=#248 id=248 data-nosnippet>248</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#249 id=249 data-nosnippet>249</a>    }
-<a href=#250 id=250 data-nosnippet>250</a>
-<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">async fn </span>add_state_machine_dyn(
-<a href=#252 id=252 data-nosnippet>252</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#253 id=253 data-nosnippet>253</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#254 id=254 data-nosnippet>254</a>        _sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
-<a href=#255 id=255 data-nosnippet>255</a>    ) -&gt; AddStateMachinesResult {
-<a href=#256 id=256 data-nosnippet>256</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#257 id=257 data-nosnippet>257</a>    }
-<a href=#258 id=258 data-nosnippet>258</a>
-<a href=#259 id=259 data-nosnippet>259</a>    <span class="kw">async fn </span>log_event_json(
-<a href=#260 id=260 data-nosnippet>260</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#261 id=261 data-nosnippet>261</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#262 id=262 data-nosnippet>262</a>        _kind: EventKind,
-<a href=#263 id=263 data-nosnippet>263</a>        _module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
-<a href=#264 id=264 data-nosnippet>264</a>        _payload: serde_json::Value,
-<a href=#265 id=265 data-nosnippet>265</a>        _persist: EventPersistence,
-<a href=#266 id=266 data-nosnippet>266</a>    ) {
-<a href=#267 id=267 data-nosnippet>267</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#268 id=268 data-nosnippet>268</a>    }
-<a href=#269 id=269 data-nosnippet>269</a>
-<a href=#270 id=270 data-nosnippet>270</a>    <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;TxSubmissionStatesSM&gt; {
-<a href=#271 id=271 data-nosnippet>271</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
-<a href=#272 id=272 data-nosnippet>272</a>    }
-<a href=#273 id=273 data-nosnippet>273</a>}
-<a href=#274 id=274 data-nosnippet>274</a>
-<a href=#275 id=275 data-nosnippet>275</a><span class="macro">dyn_newtype_define!</span> {
-<a href=#276 id=276 data-nosnippet>276</a>    <span class="doccomment">/// Global state and functionality provided to all state machines running in the
-<a href=#277 id=277 data-nosnippet>277</a>    /// client
-<a href=#278 id=278 data-nosnippet>278</a>    </span><span class="attr">#[derive(Clone)]
-<a href=#279 id=279 data-nosnippet>279</a>    </span><span class="kw">pub </span>DynGlobalClientContext(Arc&lt;IGlobalClientContext&gt;)
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a>    <span class="doccomment">/// Returns the core API version that the federation supports
+<a href=#217 id=217 data-nosnippet>217</a>    </span><span class="kw">async fn </span>core_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiVersion;
+<a href=#218 id=218 data-nosnippet>218</a>}
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#221 id=221 data-nosnippet>221</a></span><span class="kw">impl </span>IGlobalClientContext <span class="kw">for </span>() {
+<a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">fn </span>module_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; DynModuleApi {
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#224 id=224 data-nosnippet>224</a>    }
+<a href=#225 id=225 data-nosnippet>225</a>
+<a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">async fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#228 id=228 data-nosnippet>228</a>    }
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="kw">fn </span>api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DynGlobalApi {
+<a href=#231 id=231 data-nosnippet>231</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#232 id=232 data-nosnippet>232</a>    }
+<a href=#233 id=233 data-nosnippet>233</a>
+<a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">fn </span>decoders(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleDecoderRegistry {
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#236 id=236 data-nosnippet>236</a>    }
+<a href=#237 id=237 data-nosnippet>237</a>
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">async fn </span>claim_inputs_dyn(
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#240 id=240 data-nosnippet>240</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#241 id=241 data-nosnippet>241</a>        _input: InstancelessDynClientInputBundle,
+<a href=#242 id=242 data-nosnippet>242</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
+<a href=#243 id=243 data-nosnippet>243</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#244 id=244 data-nosnippet>244</a>    }
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">async fn </span>fund_output_dyn(
+<a href=#247 id=247 data-nosnippet>247</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#248 id=248 data-nosnippet>248</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#249 id=249 data-nosnippet>249</a>        _outputs: InstancelessDynClientOutputBundle,
+<a href=#250 id=250 data-nosnippet>250</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt; {
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#252 id=252 data-nosnippet>252</a>    }
+<a href=#253 id=253 data-nosnippet>253</a>
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="kw">async fn </span>add_state_machine_dyn(
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#256 id=256 data-nosnippet>256</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#257 id=257 data-nosnippet>257</a>        _sm: Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState)&gt;,
+<a href=#258 id=258 data-nosnippet>258</a>    ) -&gt; AddStateMachinesResult {
+<a href=#259 id=259 data-nosnippet>259</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#260 id=260 data-nosnippet>260</a>    }
+<a href=#261 id=261 data-nosnippet>261</a>
+<a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">async fn </span>log_event_json(
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#264 id=264 data-nosnippet>264</a>        _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#265 id=265 data-nosnippet>265</a>        _kind: EventKind,
+<a href=#266 id=266 data-nosnippet>266</a>        _module: <span class="prelude-ty">Option</span>&lt;(ModuleKind, ModuleInstanceId)&gt;,
+<a href=#267 id=267 data-nosnippet>267</a>        _payload: serde_json::Value,
+<a href=#268 id=268 data-nosnippet>268</a>        _persist: EventPersistence,
+<a href=#269 id=269 data-nosnippet>269</a>    ) {
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#271 id=271 data-nosnippet>271</a>    }
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>    <span class="kw">async fn </span>transaction_update_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;TxSubmissionStatesSM&gt; {
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#275 id=275 data-nosnippet>275</a>    }
+<a href=#276 id=276 data-nosnippet>276</a>
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="kw">async fn </span>core_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiVersion {
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
+<a href=#279 id=279 data-nosnippet>279</a>    }
 <a href=#280 id=280 data-nosnippet>280</a>}
 <a href=#281 id=281 data-nosnippet>281</a>
-<a href=#282 id=282 data-nosnippet>282</a><span class="kw">impl </span>DynGlobalClientContext {
-<a href=#283 id=283 data-nosnippet>283</a>    <span class="kw">pub fn </span>new_fake() -&gt; <span class="self">Self </span>{
-<a href=#284 id=284 data-nosnippet>284</a>        DynGlobalClientContext::from(())
-<a href=#285 id=285 data-nosnippet>285</a>    }
-<a href=#286 id=286 data-nosnippet>286</a>
-<a href=#287 id=287 data-nosnippet>287</a>    <span class="kw">pub async fn </span>await_tx_accepted(<span class="kw-2">&amp;</span><span class="self">self</span>, query_txid: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-<a href=#288 id=288 data-nosnippet>288</a>        <span class="self">self</span>.transaction_update_stream()
-<a href=#289 id=289 data-nosnippet>289</a>            .<span class="kw">await
-<a href=#290 id=290 data-nosnippet>290</a>            </span>.filter_map(|tx_update| {
-<a href=#291 id=291 data-nosnippet>291</a>                std::future::ready(<span class="kw">match </span>tx_update.state {
-<a href=#292 id=292 data-nosnippet>292</a>                    TxSubmissionStates::Accepted(txid) <span class="kw">if </span>txid == query_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
-<a href=#293 id=293 data-nosnippet>293</a>                    TxSubmissionStates::Rejected(txid, submit_error) <span class="kw">if </span>txid == query_txid =&gt; {
-<a href=#294 id=294 data-nosnippet>294</a>                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(submit_error))
-<a href=#295 id=295 data-nosnippet>295</a>                    }
-<a href=#296 id=296 data-nosnippet>296</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#297 id=297 data-nosnippet>297</a>                })
-<a href=#298 id=298 data-nosnippet>298</a>            })
-<a href=#299 id=299 data-nosnippet>299</a>            .next_or_pending()
-<a href=#300 id=300 data-nosnippet>300</a>            .<span class="kw">await
-<a href=#301 id=301 data-nosnippet>301</a>    </span>}
-<a href=#302 id=302 data-nosnippet>302</a>
-<a href=#303 id=303 data-nosnippet>303</a>    <span class="kw">pub async fn </span>claim_inputs&lt;I, S&gt;(
-<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#305 id=305 data-nosnippet>305</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#306 id=306 data-nosnippet>306</a>        inputs: ClientInputBundle&lt;I, S&gt;,
-<a href=#307 id=307 data-nosnippet>307</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
-<a href=#308 id=308 data-nosnippet>308</a>    <span class="kw">where
-<a href=#309 id=309 data-nosnippet>309</a>        </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-<a href=#310 id=310 data-nosnippet>310</a>        S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-<a href=#311 id=311 data-nosnippet>311</a>    {
-<a href=#312 id=312 data-nosnippet>312</a>        <span class="self">self</span>.claim_inputs_dyn(dbtx, inputs.into_instanceless())
-<a href=#313 id=313 data-nosnippet>313</a>            .<span class="kw">await
-<a href=#314 id=314 data-nosnippet>314</a>    </span>}
-<a href=#315 id=315 data-nosnippet>315</a>
-<a href=#316 id=316 data-nosnippet>316</a>    <span class="doccomment">/// Creates a transaction with the supplied output and funding added by the
-<a href=#317 id=317 data-nosnippet>317</a>    /// primary module if possible. If the primary module does not have the
-<a href=#318 id=318 data-nosnippet>318</a>    /// required funds this function fails.
-<a href=#319 id=319 data-nosnippet>319</a>    ///
-<a href=#320 id=320 data-nosnippet>320</a>    /// The transactions submission state machine as well as the state machines
-<a href=#321 id=321 data-nosnippet>321</a>    /// for the funding inputs are generated automatically. The caller is
-<a href=#322 id=322 data-nosnippet>322</a>    /// responsible for the output's state machines, should there be any
-<a href=#323 id=323 data-nosnippet>323</a>    /// required.
-<a href=#324 id=324 data-nosnippet>324</a>    </span><span class="kw">pub async fn </span>fund_output&lt;O, S&gt;(
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#326 id=326 data-nosnippet>326</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#327 id=327 data-nosnippet>327</a>        outputs: ClientOutputBundle&lt;O, S&gt;,
-<a href=#328 id=328 data-nosnippet>328</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
-<a href=#329 id=329 data-nosnippet>329</a>    <span class="kw">where
-<a href=#330 id=330 data-nosnippet>330</a>        </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-<a href=#331 id=331 data-nosnippet>331</a>        S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-<a href=#332 id=332 data-nosnippet>332</a>    {
-<a href=#333 id=333 data-nosnippet>333</a>        <span class="self">self</span>.fund_output_dyn(dbtx, outputs.into_instanceless())
-<a href=#334 id=334 data-nosnippet>334</a>            .<span class="kw">await
-<a href=#335 id=335 data-nosnippet>335</a>    </span>}
-<a href=#336 id=336 data-nosnippet>336</a>
-<a href=#337 id=337 data-nosnippet>337</a>    <span class="doccomment">/// Allows adding state machines from inside a transition to the executor.
-<a href=#338 id=338 data-nosnippet>338</a>    /// The added state machine belongs to the same module instance as the state
-<a href=#339 id=339 data-nosnippet>339</a>    /// machine from inside which it was spawned.
-<a href=#340 id=340 data-nosnippet>340</a>    </span><span class="kw">pub async fn </span>add_state_machine&lt;S&gt;(
-<a href=#341 id=341 data-nosnippet>341</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#342 id=342 data-nosnippet>342</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#343 id=343 data-nosnippet>343</a>        sm: S,
-<a href=#344 id=344 data-nosnippet>344</a>    ) -&gt; AddStateMachinesResult
-<a href=#345 id=345 data-nosnippet>345</a>    <span class="kw">where
-<a href=#346 id=346 data-nosnippet>346</a>        </span>S: State + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
-<a href=#347 id=347 data-nosnippet>347</a>    {
-<a href=#348 id=348 data-nosnippet>348</a>        <span class="self">self</span>.add_state_machine_dyn(dbtx, box_up_state(sm)).<span class="kw">await
-<a href=#349 id=349 data-nosnippet>349</a>    </span>}
-<a href=#350 id=350 data-nosnippet>350</a>
-<a href=#351 id=351 data-nosnippet>351</a>    <span class="kw">async fn </span>log_event&lt;E&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;, event: E)
+<a href=#282 id=282 data-nosnippet>282</a><span class="macro">dyn_newtype_define!</span> {
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="doccomment">/// Global state and functionality provided to all state machines running in the
+<a href=#284 id=284 data-nosnippet>284</a>    /// client
+<a href=#285 id=285 data-nosnippet>285</a>    </span><span class="attr">#[derive(Clone)]
+<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="kw">pub </span>DynGlobalClientContext(Arc&lt;IGlobalClientContext&gt;)
+<a href=#287 id=287 data-nosnippet>287</a>}
+<a href=#288 id=288 data-nosnippet>288</a>
+<a href=#289 id=289 data-nosnippet>289</a><span class="kw">impl </span>DynGlobalClientContext {
+<a href=#290 id=290 data-nosnippet>290</a>    <span class="kw">pub fn </span>new_fake() -&gt; <span class="self">Self </span>{
+<a href=#291 id=291 data-nosnippet>291</a>        DynGlobalClientContext::from(())
+<a href=#292 id=292 data-nosnippet>292</a>    }
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">pub async fn </span>await_tx_accepted(<span class="kw-2">&amp;</span><span class="self">self</span>, query_txid: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="self">self</span>.transaction_update_stream()
+<a href=#296 id=296 data-nosnippet>296</a>            .<span class="kw">await
+<a href=#297 id=297 data-nosnippet>297</a>            </span>.filter_map(|tx_update| {
+<a href=#298 id=298 data-nosnippet>298</a>                std::future::ready(<span class="kw">match </span>tx_update.state {
+<a href=#299 id=299 data-nosnippet>299</a>                    TxSubmissionStates::Accepted(txid) <span class="kw">if </span>txid == query_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
+<a href=#300 id=300 data-nosnippet>300</a>                    TxSubmissionStates::Rejected(txid, submit_error) <span class="kw">if </span>txid == query_txid =&gt; {
+<a href=#301 id=301 data-nosnippet>301</a>                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(submit_error))
+<a href=#302 id=302 data-nosnippet>302</a>                    }
+<a href=#303 id=303 data-nosnippet>303</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#304 id=304 data-nosnippet>304</a>                })
+<a href=#305 id=305 data-nosnippet>305</a>            })
+<a href=#306 id=306 data-nosnippet>306</a>            .next_or_pending()
+<a href=#307 id=307 data-nosnippet>307</a>            .<span class="kw">await
+<a href=#308 id=308 data-nosnippet>308</a>    </span>}
+<a href=#309 id=309 data-nosnippet>309</a>
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="kw">pub async fn </span>claim_inputs&lt;I, S&gt;(
+<a href=#311 id=311 data-nosnippet>311</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#312 id=312 data-nosnippet>312</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#313 id=313 data-nosnippet>313</a>        inputs: ClientInputBundle&lt;I, S&gt;,
+<a href=#314 id=314 data-nosnippet>314</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">where
+<a href=#316 id=316 data-nosnippet>316</a>        </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+<a href=#317 id=317 data-nosnippet>317</a>        S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+<a href=#318 id=318 data-nosnippet>318</a>    {
+<a href=#319 id=319 data-nosnippet>319</a>        <span class="self">self</span>.claim_inputs_dyn(dbtx, inputs.into_instanceless())
+<a href=#320 id=320 data-nosnippet>320</a>            .<span class="kw">await
+<a href=#321 id=321 data-nosnippet>321</a>    </span>}
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="doccomment">/// Creates a transaction with the supplied output and funding added by the
+<a href=#324 id=324 data-nosnippet>324</a>    /// primary module if possible. If the primary module does not have the
+<a href=#325 id=325 data-nosnippet>325</a>    /// required funds this function fails.
+<a href=#326 id=326 data-nosnippet>326</a>    ///
+<a href=#327 id=327 data-nosnippet>327</a>    /// The transactions submission state machine as well as the state machines
+<a href=#328 id=328 data-nosnippet>328</a>    /// for the funding inputs are generated automatically. The caller is
+<a href=#329 id=329 data-nosnippet>329</a>    /// responsible for the output's state machines, should there be any
+<a href=#330 id=330 data-nosnippet>330</a>    /// required.
+<a href=#331 id=331 data-nosnippet>331</a>    </span><span class="kw">pub async fn </span>fund_output&lt;O, S&gt;(
+<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#333 id=333 data-nosnippet>333</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#334 id=334 data-nosnippet>334</a>        outputs: ClientOutputBundle&lt;O, S&gt;,
+<a href=#335 id=335 data-nosnippet>335</a>    ) -&gt; anyhow::Result&lt;OutPointRange&gt;
+<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">where
+<a href=#337 id=337 data-nosnippet>337</a>        </span>O: IOutput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+<a href=#338 id=338 data-nosnippet>338</a>        S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
+<a href=#339 id=339 data-nosnippet>339</a>    {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="self">self</span>.fund_output_dyn(dbtx, outputs.into_instanceless())
+<a href=#341 id=341 data-nosnippet>341</a>            .<span class="kw">await
+<a href=#342 id=342 data-nosnippet>342</a>    </span>}
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="doccomment">/// Allows adding state machines from inside a transition to the executor.
+<a href=#345 id=345 data-nosnippet>345</a>    /// The added state machine belongs to the same module instance as the state
+<a href=#346 id=346 data-nosnippet>346</a>    /// machine from inside which it was spawned.
+<a href=#347 id=347 data-nosnippet>347</a>    </span><span class="kw">pub async fn </span>add_state_machine&lt;S&gt;(
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#349 id=349 data-nosnippet>349</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#350 id=350 data-nosnippet>350</a>        sm: S,
+<a href=#351 id=351 data-nosnippet>351</a>    ) -&gt; AddStateMachinesResult
 <a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">where
-<a href=#353 id=353 data-nosnippet>353</a>        </span>E: Event + Send,
+<a href=#353 id=353 data-nosnippet>353</a>        </span>S: State + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
 <a href=#354 id=354 data-nosnippet>354</a>    {
-<a href=#355 id=355 data-nosnippet>355</a>        <span class="self">self</span>.log_event_json(
-<a href=#356 id=356 data-nosnippet>356</a>            dbtx,
-<a href=#357 id=357 data-nosnippet>357</a>            E::KIND,
-<a href=#358 id=358 data-nosnippet>358</a>            E::MODULE.map(|m| (m, dbtx.module_id())),
-<a href=#359 id=359 data-nosnippet>359</a>            serde_json::to_value(<span class="kw-2">&amp;</span>event).expect(<span class="string">"Payload serialization can't fail"</span>),
-<a href=#360 id=360 data-nosnippet>360</a>            &lt;E <span class="kw">as </span>Event&gt;::PERSISTENCE,
-<a href=#361 id=361 data-nosnippet>361</a>        )
-<a href=#362 id=362 data-nosnippet>362</a>        .<span class="kw">await</span>;
-<a href=#363 id=363 data-nosnippet>363</a>    }
-<a href=#364 id=364 data-nosnippet>364</a>}
-<a href=#365 id=365 data-nosnippet>365</a>
-<a href=#366 id=366 data-nosnippet>366</a><span class="kw">fn </span>states_to_instanceless_dyn&lt;S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>&gt;(
-<a href=#367 id=367 data-nosnippet>367</a>    state_gen: StateGenerator&lt;S&gt;,
-<a href=#368 id=368 data-nosnippet>368</a>) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt; {
-<a href=#369 id=369 data-nosnippet>369</a>    Arc::new(<span class="kw">move </span>|out_point_range| {
-<a href=#370 id=370 data-nosnippet>370</a>        <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(out_point_range);
-<a href=#371 id=371 data-nosnippet>371</a>        states
-<a href=#372 id=372 data-nosnippet>372</a>            .into_iter()
-<a href=#373 id=373 data-nosnippet>373</a>            .map(|state| box_up_state(state))
-<a href=#374 id=374 data-nosnippet>374</a>            .collect()
-<a href=#375 id=375 data-nosnippet>375</a>    })
-<a href=#376 id=376 data-nosnippet>376</a>}
-<a href=#377 id=377 data-nosnippet>377</a>
-<a href=#378 id=378 data-nosnippet>378</a><span class="doccomment">/// Not sure why I couldn't just directly call `Box::new` ins
-<a href=#379 id=379 data-nosnippet>379</a>/// [`states_to_instanceless_dyn`], but this fixed it.
-<a href=#380 id=380 data-nosnippet>380</a></span><span class="kw">fn </span>box_up_state(state: <span class="kw">impl </span>IState + <span class="lifetime">'static</span>) -&gt; Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt; {
-<a href=#381 id=381 data-nosnippet>381</a>    Box::new(state)
-<a href=#382 id=382 data-nosnippet>382</a>}
-<a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a><span class="kw">impl</span>&lt;T&gt; From&lt;Arc&lt;T&gt;&gt; <span class="kw">for </span>DynGlobalClientContext
-<a href=#385 id=385 data-nosnippet>385</a><span class="kw">where
-<a href=#386 id=386 data-nosnippet>386</a>    </span>T: IGlobalClientContext,
-<a href=#387 id=387 data-nosnippet>387</a>{
-<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">fn </span>from(inner: Arc&lt;T&gt;) -&gt; <span class="self">Self </span>{
-<a href=#389 id=389 data-nosnippet>389</a>        DynGlobalClientContext { inner }
-<a href=#390 id=390 data-nosnippet>390</a>    }
-<a href=#391 id=391 data-nosnippet>391</a>}
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a><span class="kw">fn </span>states_add_instance(
-<a href=#394 id=394 data-nosnippet>394</a>    module_instance_id: ModuleInstanceId,
-<a href=#395 id=395 data-nosnippet>395</a>    state_gen: StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt;,
-<a href=#396 id=396 data-nosnippet>396</a>) -&gt; StateGenerator&lt;DynState&gt; {
-<a href=#397 id=397 data-nosnippet>397</a>    Arc::new(<span class="kw">move </span>|out_point_range| {
-<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">let </span>states = state_gen(out_point_range);
-<a href=#399 id=399 data-nosnippet>399</a>        Iterator::collect(
-<a href=#400 id=400 data-nosnippet>400</a>            states
-<a href=#401 id=401 data-nosnippet>401</a>                .into_iter()
-<a href=#402 id=402 data-nosnippet>402</a>                .map(|state| DynState::from_parts(module_instance_id, state)),
-<a href=#403 id=403 data-nosnippet>403</a>        )
-<a href=#404 id=404 data-nosnippet>404</a>    })
-<a href=#405 id=405 data-nosnippet>405</a>}
-<a href=#406 id=406 data-nosnippet>406</a>
-<a href=#407 id=407 data-nosnippet>407</a><span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen;
-<a href=#408 id=408 data-nosnippet>408</a>
-<a href=#409 id=409 data-nosnippet>409</a><span class="doccomment">/// Resources particular to a module instance
-<a href=#410 id=410 data-nosnippet>410</a></span><span class="kw">pub struct </span>ClientModuleInstance&lt;<span class="lifetime">'m</span>, M: ClientModule&gt; {
-<a href=#411 id=411 data-nosnippet>411</a>    <span class="doccomment">/// Instance id of the module
-<a href=#412 id=412 data-nosnippet>412</a>    </span><span class="kw">pub </span>id: ModuleInstanceId,
-<a href=#413 id=413 data-nosnippet>413</a>    <span class="doccomment">/// Module-specific DB
-<a href=#414 id=414 data-nosnippet>414</a>    </span><span class="kw">pub </span>db: Database,
-<a href=#415 id=415 data-nosnippet>415</a>    <span class="doccomment">/// Module-specific API
-<a href=#416 id=416 data-nosnippet>416</a>    </span><span class="kw">pub </span>api: DynModuleApi,
-<a href=#417 id=417 data-nosnippet>417</a>
-<a href=#418 id=418 data-nosnippet>418</a>    <span class="kw">pub </span>module: <span class="kw-2">&amp;</span><span class="lifetime">'m </span>M,
-<a href=#419 id=419 data-nosnippet>419</a>}
-<a href=#420 id=420 data-nosnippet>420</a>
-<a href=#421 id=421 data-nosnippet>421</a><span class="kw">impl</span>&lt;<span class="lifetime">'m</span>, M: ClientModule&gt; ClientModuleInstance&lt;<span class="lifetime">'m</span>, M&gt; {
-<a href=#422 id=422 data-nosnippet>422</a>    <span class="doccomment">/// Get a reference to the module
-<a href=#423 id=423 data-nosnippet>423</a>    </span><span class="kw">pub fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'m </span>M {
-<a href=#424 id=424 data-nosnippet>424</a>        <span class="self">self</span>.module
-<a href=#425 id=425 data-nosnippet>425</a>    }
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="self">self</span>.add_state_machine_dyn(dbtx, box_up_state(sm)).<span class="kw">await
+<a href=#356 id=356 data-nosnippet>356</a>    </span>}
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a>    <span class="kw">async fn </span>log_event&lt;E&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;, event: E)
+<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">where
+<a href=#360 id=360 data-nosnippet>360</a>        </span>E: Event + Send,
+<a href=#361 id=361 data-nosnippet>361</a>    {
+<a href=#362 id=362 data-nosnippet>362</a>        <span class="self">self</span>.log_event_json(
+<a href=#363 id=363 data-nosnippet>363</a>            dbtx,
+<a href=#364 id=364 data-nosnippet>364</a>            E::KIND,
+<a href=#365 id=365 data-nosnippet>365</a>            E::MODULE.map(|m| (m, dbtx.module_id())),
+<a href=#366 id=366 data-nosnippet>366</a>            serde_json::to_value(<span class="kw-2">&amp;</span>event).expect(<span class="string">"Payload serialization can't fail"</span>),
+<a href=#367 id=367 data-nosnippet>367</a>            &lt;E <span class="kw">as </span>Event&gt;::PERSISTENCE,
+<a href=#368 id=368 data-nosnippet>368</a>        )
+<a href=#369 id=369 data-nosnippet>369</a>        .<span class="kw">await</span>;
+<a href=#370 id=370 data-nosnippet>370</a>    }
+<a href=#371 id=371 data-nosnippet>371</a>}
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a><span class="kw">fn </span>states_to_instanceless_dyn&lt;S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>&gt;(
+<a href=#374 id=374 data-nosnippet>374</a>    state_gen: StateGenerator&lt;S&gt;,
+<a href=#375 id=375 data-nosnippet>375</a>) -&gt; StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt; {
+<a href=#376 id=376 data-nosnippet>376</a>    Arc::new(<span class="kw">move </span>|out_point_range| {
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>states: Vec&lt;S&gt; = state_gen(out_point_range);
+<a href=#378 id=378 data-nosnippet>378</a>        states
+<a href=#379 id=379 data-nosnippet>379</a>            .into_iter()
+<a href=#380 id=380 data-nosnippet>380</a>            .map(|state| box_up_state(state))
+<a href=#381 id=381 data-nosnippet>381</a>            .collect()
+<a href=#382 id=382 data-nosnippet>382</a>    })
+<a href=#383 id=383 data-nosnippet>383</a>}
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a><span class="doccomment">/// Not sure why I couldn't just directly call `Box::new` ins
+<a href=#386 id=386 data-nosnippet>386</a>/// [`states_to_instanceless_dyn`], but this fixed it.
+<a href=#387 id=387 data-nosnippet>387</a></span><span class="kw">fn </span>box_up_state(state: <span class="kw">impl </span>IState + <span class="lifetime">'static</span>) -&gt; Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt; {
+<a href=#388 id=388 data-nosnippet>388</a>    Box::new(state)
+<a href=#389 id=389 data-nosnippet>389</a>}
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a><span class="kw">impl</span>&lt;T&gt; From&lt;Arc&lt;T&gt;&gt; <span class="kw">for </span>DynGlobalClientContext
+<a href=#392 id=392 data-nosnippet>392</a><span class="kw">where
+<a href=#393 id=393 data-nosnippet>393</a>    </span>T: IGlobalClientContext,
+<a href=#394 id=394 data-nosnippet>394</a>{
+<a href=#395 id=395 data-nosnippet>395</a>    <span class="kw">fn </span>from(inner: Arc&lt;T&gt;) -&gt; <span class="self">Self </span>{
+<a href=#396 id=396 data-nosnippet>396</a>        DynGlobalClientContext { inner }
+<a href=#397 id=397 data-nosnippet>397</a>    }
+<a href=#398 id=398 data-nosnippet>398</a>}
+<a href=#399 id=399 data-nosnippet>399</a>
+<a href=#400 id=400 data-nosnippet>400</a><span class="kw">fn </span>states_add_instance(
+<a href=#401 id=401 data-nosnippet>401</a>    module_instance_id: ModuleInstanceId,
+<a href=#402 id=402 data-nosnippet>402</a>    state_gen: StateGenerator&lt;Box&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IState + <span class="lifetime">'static</span>)&gt;&gt;,
+<a href=#403 id=403 data-nosnippet>403</a>) -&gt; StateGenerator&lt;DynState&gt; {
+<a href=#404 id=404 data-nosnippet>404</a>    Arc::new(<span class="kw">move </span>|out_point_range| {
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">let </span>states = state_gen(out_point_range);
+<a href=#406 id=406 data-nosnippet>406</a>        Iterator::collect(
+<a href=#407 id=407 data-nosnippet>407</a>            states
+<a href=#408 id=408 data-nosnippet>408</a>                .into_iter()
+<a href=#409 id=409 data-nosnippet>409</a>                .map(|state| DynState::from_parts(module_instance_id, state)),
+<a href=#410 id=410 data-nosnippet>410</a>        )
+<a href=#411 id=411 data-nosnippet>411</a>    })
+<a href=#412 id=412 data-nosnippet>412</a>}
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a><span class="kw">pub type </span>ModuleGlobalContextGen = ContextGen;
+<a href=#415 id=415 data-nosnippet>415</a>
+<a href=#416 id=416 data-nosnippet>416</a><span class="doccomment">/// Resources particular to a module instance
+<a href=#417 id=417 data-nosnippet>417</a></span><span class="kw">pub struct </span>ClientModuleInstance&lt;<span class="lifetime">'m</span>, M: ClientModule&gt; {
+<a href=#418 id=418 data-nosnippet>418</a>    <span class="doccomment">/// Instance id of the module
+<a href=#419 id=419 data-nosnippet>419</a>    </span><span class="kw">pub </span>id: ModuleInstanceId,
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="doccomment">/// Module-specific DB
+<a href=#421 id=421 data-nosnippet>421</a>    </span><span class="kw">pub </span>db: Database,
+<a href=#422 id=422 data-nosnippet>422</a>    <span class="doccomment">/// Module-specific API
+<a href=#423 id=423 data-nosnippet>423</a>    </span><span class="kw">pub </span>api: DynModuleApi,
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">pub </span>module: <span class="kw-2">&amp;</span><span class="lifetime">'m </span>M,
 <a href=#426 id=426 data-nosnippet>426</a>}
 <a href=#427 id=427 data-nosnippet>427</a>
-<a href=#428 id=428 data-nosnippet>428</a><span class="kw">impl</span>&lt;M&gt; ops::Deref <span class="kw">for </span>ClientModuleInstance&lt;<span class="lifetime">'_</span>, M&gt;
-<a href=#429 id=429 data-nosnippet>429</a><span class="kw">where
-<a href=#430 id=430 data-nosnippet>430</a>    </span>M: ClientModule,
-<a href=#431 id=431 data-nosnippet>431</a>{
-<a href=#432 id=432 data-nosnippet>432</a>    <span class="kw">type </span>Target = M;
-<a href=#433 id=433 data-nosnippet>433</a>
-<a href=#434 id=434 data-nosnippet>434</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
-<a href=#435 id=435 data-nosnippet>435</a>        <span class="self">self</span>.module
-<a href=#436 id=436 data-nosnippet>436</a>    }
-<a href=#437 id=437 data-nosnippet>437</a>}
-<a href=#438 id=438 data-nosnippet>438</a><span class="attr">#[derive(Deserialize)]
-<a href=#439 id=439 data-nosnippet>439</a></span><span class="kw">pub struct </span>GetInviteCodeRequest {
-<a href=#440 id=440 data-nosnippet>440</a>    <span class="kw">pub </span>peer: PeerId,
-<a href=#441 id=441 data-nosnippet>441</a>}
-<a href=#442 id=442 data-nosnippet>442</a>
-<a href=#443 id=443 data-nosnippet>443</a><span class="kw">pub struct </span>TransactionUpdates {
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">pub </span>update_stream: BoxStream&lt;<span class="lifetime">'static</span>, TxSubmissionStatesSM&gt;,
-<a href=#445 id=445 data-nosnippet>445</a>}
-<a href=#446 id=446 data-nosnippet>446</a>
-<a href=#447 id=447 data-nosnippet>447</a><span class="kw">impl </span>TransactionUpdates {
-<a href=#448 id=448 data-nosnippet>448</a>    <span class="doccomment">/// Waits for the transaction to be accepted or rejected as part of the
-<a href=#449 id=449 data-nosnippet>449</a>    /// operation to which the `TransactionUpdates` object is subscribed.
-<a href=#450 id=450 data-nosnippet>450</a>    </span><span class="kw">pub async fn </span>await_tx_accepted(<span class="self">self</span>, await_txid: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, %await_txid, <span class="string">"Await tx accepted"</span>);
-<a href=#452 id=452 data-nosnippet>452</a>        <span class="self">self</span>.update_stream
-<a href=#453 id=453 data-nosnippet>453</a>            .filter_map(|tx_update| {
-<a href=#454 id=454 data-nosnippet>454</a>                std::future::ready(<span class="kw">match </span>tx_update.state {
-<a href=#455 id=455 data-nosnippet>455</a>                    TxSubmissionStates::Accepted(txid) <span class="kw">if </span>txid == await_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
-<a href=#456 id=456 data-nosnippet>456</a>                    TxSubmissionStates::Rejected(txid, submit_error) <span class="kw">if </span>txid == await_txid =&gt; {
-<a href=#457 id=457 data-nosnippet>457</a>                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(submit_error))
-<a href=#458 id=458 data-nosnippet>458</a>                    }
-<a href=#459 id=459 data-nosnippet>459</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#460 id=460 data-nosnippet>460</a>                })
-<a href=#461 id=461 data-nosnippet>461</a>            })
-<a href=#462 id=462 data-nosnippet>462</a>            .next_or_pending()
-<a href=#463 id=463 data-nosnippet>463</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#464 id=464 data-nosnippet>464</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, %await_txid, <span class="string">"Tx accepted"</span>);
-<a href=#465 id=465 data-nosnippet>465</a>        <span class="prelude-val">Ok</span>(())
-<a href=#466 id=466 data-nosnippet>466</a>    }
-<a href=#467 id=467 data-nosnippet>467</a>}
-<a href=#468 id=468 data-nosnippet>468</a>
-<a href=#469 id=469 data-nosnippet>469</a><span class="doccomment">/// Admin (guardian) identification and authentication
-<a href=#470 id=470 data-nosnippet>470</a></span><span class="kw">pub struct </span>AdminCreds {
-<a href=#471 id=471 data-nosnippet>471</a>    <span class="doccomment">/// Guardian's own `peer_id`
-<a href=#472 id=472 data-nosnippet>472</a>    </span><span class="kw">pub </span>peer_id: PeerId,
-<a href=#473 id=473 data-nosnippet>473</a>    <span class="doccomment">/// Authentication details
-<a href=#474 id=474 data-nosnippet>474</a>    </span><span class="kw">pub </span>auth: ApiAuth,
-<a href=#475 id=475 data-nosnippet>475</a>}</code></pre></div></section></main></body></html>
+<a href=#428 id=428 data-nosnippet>428</a><span class="kw">impl</span>&lt;<span class="lifetime">'m</span>, M: ClientModule&gt; ClientModuleInstance&lt;<span class="lifetime">'m</span>, M&gt; {
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="doccomment">/// Get a reference to the module
+<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="kw">pub fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'m </span>M {
+<a href=#431 id=431 data-nosnippet>431</a>        <span class="self">self</span>.module
+<a href=#432 id=432 data-nosnippet>432</a>    }
+<a href=#433 id=433 data-nosnippet>433</a>}
+<a href=#434 id=434 data-nosnippet>434</a>
+<a href=#435 id=435 data-nosnippet>435</a><span class="kw">impl</span>&lt;M&gt; ops::Deref <span class="kw">for </span>ClientModuleInstance&lt;<span class="lifetime">'_</span>, M&gt;
+<a href=#436 id=436 data-nosnippet>436</a><span class="kw">where
+<a href=#437 id=437 data-nosnippet>437</a>    </span>M: ClientModule,
+<a href=#438 id=438 data-nosnippet>438</a>{
+<a href=#439 id=439 data-nosnippet>439</a>    <span class="kw">type </span>Target = M;
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>    <span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target {
+<a href=#442 id=442 data-nosnippet>442</a>        <span class="self">self</span>.module
+<a href=#443 id=443 data-nosnippet>443</a>    }
+<a href=#444 id=444 data-nosnippet>444</a>}
+<a href=#445 id=445 data-nosnippet>445</a><span class="attr">#[derive(Deserialize)]
+<a href=#446 id=446 data-nosnippet>446</a></span><span class="kw">pub struct </span>GetInviteCodeRequest {
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">pub </span>peer: PeerId,
+<a href=#448 id=448 data-nosnippet>448</a>}
+<a href=#449 id=449 data-nosnippet>449</a>
+<a href=#450 id=450 data-nosnippet>450</a><span class="kw">pub struct </span>TransactionUpdates {
+<a href=#451 id=451 data-nosnippet>451</a>    <span class="kw">pub </span>update_stream: BoxStream&lt;<span class="lifetime">'static</span>, TxSubmissionStatesSM&gt;,
+<a href=#452 id=452 data-nosnippet>452</a>}
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a><span class="kw">impl </span>TransactionUpdates {
+<a href=#455 id=455 data-nosnippet>455</a>    <span class="doccomment">/// Waits for the transaction to be accepted or rejected as part of the
+<a href=#456 id=456 data-nosnippet>456</a>    /// operation to which the `TransactionUpdates` object is subscribed.
+<a href=#457 id=457 data-nosnippet>457</a>    </span><span class="kw">pub async fn </span>await_tx_accepted(<span class="self">self</span>, await_txid: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+<a href=#458 id=458 data-nosnippet>458</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, %await_txid, <span class="string">"Await tx accepted"</span>);
+<a href=#459 id=459 data-nosnippet>459</a>        <span class="self">self</span>.update_stream
+<a href=#460 id=460 data-nosnippet>460</a>            .filter_map(|tx_update| {
+<a href=#461 id=461 data-nosnippet>461</a>                std::future::ready(<span class="kw">match </span>tx_update.state {
+<a href=#462 id=462 data-nosnippet>462</a>                    TxSubmissionStates::Accepted(txid) <span class="kw">if </span>txid == await_txid =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(())),
+<a href=#463 id=463 data-nosnippet>463</a>                    TxSubmissionStates::Rejected(txid, submit_error) <span class="kw">if </span>txid == await_txid =&gt; {
+<a href=#464 id=464 data-nosnippet>464</a>                        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(submit_error))
+<a href=#465 id=465 data-nosnippet>465</a>                    }
+<a href=#466 id=466 data-nosnippet>466</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#467 id=467 data-nosnippet>467</a>                })
+<a href=#468 id=468 data-nosnippet>468</a>            })
+<a href=#469 id=469 data-nosnippet>469</a>            .next_or_pending()
+<a href=#470 id=470 data-nosnippet>470</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="macro">debug!</span>(target: LOG_CLIENT, %await_txid, <span class="string">"Tx accepted"</span>);
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="prelude-val">Ok</span>(())
+<a href=#473 id=473 data-nosnippet>473</a>    }
+<a href=#474 id=474 data-nosnippet>474</a>}
+<a href=#475 id=475 data-nosnippet>475</a>
+<a href=#476 id=476 data-nosnippet>476</a><span class="doccomment">/// Admin (guardian) identification and authentication
+<a href=#477 id=477 data-nosnippet>477</a></span><span class="kw">pub struct </span>AdminCreds {
+<a href=#478 id=478 data-nosnippet>478</a>    <span class="doccomment">/// Guardian's own `peer_id`
+<a href=#479 id=479 data-nosnippet>479</a>    </span><span class="kw">pub </span>peer_id: PeerId,
+<a href=#480 id=480 data-nosnippet>480</a>    <span class="doccomment">/// Authentication details
+<a href=#481 id=481 data-nosnippet>481</a>    </span><span class="kw">pub </span>auth: ApiAuth,
+<a href=#482 id=482 data-nosnippet>482</a>}</code></pre></div></section></main></body></html>
