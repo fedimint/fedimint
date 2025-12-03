@@ -14,7 +14,7 @@ use maud::{Markup, html};
 
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE,
-    WALLET_FRAGMENT_ROUTE,
+    SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -280,18 +280,13 @@ where
                     }
 
                     div class="mt-3" {
-                        button class="btn btn-success me-2"
+                        // Toggle Send Form button
+                        button class="btn btn-sm btn-outline-primary me-2"
                             type="button"
                             onclick="document.getElementById('send-form').classList.toggle('d-none');"
                         {
                             "Send Bitcoin"
                         }
-
-                        button class="btn btn-outline-primary"
-                            type="button"
-                            data-bs-toggle="modal"
-                            data-bs-target="#receiveModal"
-                        { "Receive" }
                     }
 
                     // ──────────────────────────────────────────
@@ -301,7 +296,7 @@ where
 
                         form
                             id="send-onchain-form"
-                            hx-post="/ui/wallet/send"
+                            hx-post=(SEND_ONCHAIN_ROUTE)
                             hx-target="#wallet-container"
                             hx-swap="outerHTML"
                         {
@@ -352,14 +347,13 @@ where
                             div class="mt-3" {
                                 button
                                     type="submit"
-                                    class="btn btn-danger"
+                                    class="btn btn-sm btn-primary"
                                 {
                                     "Confirm Send"
                                 }
                             }
                         }
                     }
-
                 }
             }
         }
