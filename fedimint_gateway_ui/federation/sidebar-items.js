@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["leave_federation_handler","render","scripts","set_fees_handler"]};
+window.SIDEBAR_ITEMS = {"fn":["leave_federation_handler","render","scripts","set_fees_handler","time_ago"]};
