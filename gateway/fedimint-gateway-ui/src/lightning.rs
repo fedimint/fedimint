@@ -2,17 +2,17 @@ use std::fmt::Display;
 
 use axum::Form;
 use axum::extract::State;
-use axum::response::Html;
+use axum::response::{Html, IntoResponse};
 use fedimint_core::bitcoin::Network;
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, GatewayInfo, LightningInfo, LightningMode,
-    OpenChannelRequest,
+    OpenChannelRequest, SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
-use crate::{CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE};
+use crate::{CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE, redirect_error, redirect_success};
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
 where
@@ -217,9 +217,10 @@ where
                                 div class="mt-3" {
                                     button class="btn btn-success me-2"
                                         type="button"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#sendModal"
-                                    { "Send" }
+                                        onclick="document.getElementById('send-form').classList.toggle('d-none');"
+                                    {
+                                        "Send Bitcoin"
+                                    }
 
                                     button class="btn btn-outline-primary"
                                         type="button"
@@ -227,6 +228,73 @@ where
                                         data-bs-target="#receiveModal"
                                     { "Receive" }
                                 }
+
+                                // ──────────────────────────────────────────
+                                //   Send Form (hidden until toggled)
+                                // ──────────────────────────────────────────
+                                div id="send-form" class="card card-body mt-3 d-none" {
+
+                                    form
+                                        id="send-onchain-form"
+                                        hx-post="/ui/wallet/send"
+                                        hx-target="#wallet-balance-banner"
+                                        hx-swap="outerHTML"
+                                    {
+                                        // Address
+                                        div class="mb-3" {
+                                            label class="form-label" for="address" { "Bitcoin Address" }
+                                            input
+                                                type="text"
+                                                class="form-control"
+                                                id="address"
+                                                name="address"
+                                                required;
+                                        }
+
+                                        // Amount + ALL button
+                                        div class="mb-3" {
+                                            label class="form-label" for="amount" { "Amount (sats)" }
+                                            div class="input-group" {
+                                                input
+                                                    type="text"
+                                                    class="form-control"
+                                                    id="amount"
+                                                    name="amount"
+                                                    placeholder="e.g. 10000 or all"
+                                                    required;
+
+                                                button
+                                                    class="btn btn-outline-secondary"
+                                                    type="button"
+                                                    onclick="document.getElementById('amount').value = 'all';"
+                                                { "All" }
+                                            }
+                                        }
+
+                                        // Fee Rate
+                                        div class="mb-3" {
+                                            label class="form-label" for="fee_rate" { "Sats per vbyte" }
+                                            input
+                                                type="number"
+                                                class="form-control"
+                                                id="fee_rate"
+                                                name="fee_rate_sats_per_vbyte"
+                                                min="1"
+                                                required;
+                                        }
+
+                                        // Confirm Send
+                                        div class="mt-3" {
+                                            button
+                                                type="submit"
+                                                class="btn btn-danger"
+                                            {
+                                                "Confirm Send"
+                                            }
+                                        }
+                                    }
+                                }
+
                             }
                         }
                     }
@@ -553,5 +621,16 @@ pub async fn close_channel_handler<E: Display + Send + Sync>(
                 channels_fragment_markup(channels_result, None, Some(err.to_string()), is_lnd);
             Html(markup.into_string())
         }
+    }
+}
+
+pub async fn send_onchain_handler<E: Display + Send + Sync>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<SendOnchainRequest>,
+) -> impl IntoResponse {
+    match state.api.handle_send_onchain_msg(payload).await {
+        Ok(txid) => redirect_success(format!("Sent transaction. Txid: {txid}")).into_response(),
+        Err(err) => redirect_error(format!("Could not send transaction: {err}")).into_response(),
     }
 }
