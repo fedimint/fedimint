@@ -1191,33 +1191,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Generates an onchain address to fund the gateway's lightning node.
-    pub async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.get_ln_onchain_address().await?;
-
-        let address = Address::from_str(&response.address).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: e.to_string(),
-            })
-        })?;
-
-        address.require_network(self.network).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: e.to_string(),
-            })
-        })
-    }
-
-    /// Send funds from the gateway's lightning node on-chain wallet.
-    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.send_onchain(payload).await?;
-        Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
-        })
-    }
-
     /// Trigger rechecking for deposits on an address
     pub async fn handle_recheck_address_msg(
         &self,
@@ -2227,6 +2200,24 @@ impl IAdminGateway for Gateway {
             })?;
         info!(onchain_request = %payload, txid = %txid, "Sent onchain transaction");
         Ok(txid)
+    }
+
+    /// Generates an onchain address to fund the gateway's lightning node.
+    async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.get_ln_onchain_address().await?;
+
+        let address = Address::from_str(&response.address).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })?;
+
+        address.require_network(self.network).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })
     }
 
     fn get_password_hash(&self) -> String {

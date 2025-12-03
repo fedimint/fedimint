@@ -9,7 +9,7 @@ mod payment_summary;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use ::bitcoin::Txid;
+use ::bitcoin::{Address, Txid};
 use async_trait::async_trait;
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Redirect};
@@ -37,8 +37,8 @@ use maud::html;
 use crate::connect_fed::connect_federation_handler;
 use crate::federation::{leave_federation_handler, set_fees_handler};
 use crate::lightning::{
-    channels_fragment_handler, close_channel_handler, open_channel_handler, send_onchain_handler,
-    wallet_fragment_handler,
+    channels_fragment_handler, close_channel_handler, generate_receive_address_handler,
+    open_channel_handler, send_onchain_handler, wallet_fragment_handler,
 };
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
@@ -51,6 +51,7 @@ pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
 pub(crate) const SET_FEES_ROUTE: &str = "/ui/federation/set-fees";
 pub(crate) const SEND_ONCHAIN_ROUTE: &str = "/ui/wallet/send";
 pub(crate) const WALLET_FRAGMENT_ROUTE: &str = "/ui/wallet/fragment";
+pub(crate) const LN_ONCHAIN_ADDRESS_ROUTE: &str = "/ui/wallet/receive";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -116,6 +117,8 @@ pub trait IAdminGateway {
         &self,
         payload: SendOnchainRequest,
     ) -> Result<Txid, Self::Error>;
+
+    async fn handle_get_ln_onchain_address_msg(&self) -> Result<Address, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -259,6 +262,10 @@ pub fn router<E: Display + Send + Sync + 'static>(api: DynGatewayApi<E>) -> Rout
         .route(CONNECT_FEDERATION_ROUTE, post(connect_federation_handler))
         .route(SET_FEES_ROUTE, post(set_fees_handler))
         .route(SEND_ONCHAIN_ROUTE, post(send_onchain_handler))
+        .route(
+            LN_ONCHAIN_ADDRESS_ROUTE,
+            get(generate_receive_address_handler),
+        )
         .with_static_routes();
 
     app.with_state(UiState::new(api))

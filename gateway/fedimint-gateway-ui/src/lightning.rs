@@ -13,8 +13,8 @@ use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
 use crate::{
-    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE,
-    SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
+    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE,
+    OPEN_CHANNEL_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -285,8 +285,15 @@ where
                             type="button"
                             onclick="document.getElementById('send-form').classList.toggle('d-none');"
                         {
-                            "Send Bitcoin"
+                            "Send"
                         }
+
+                        button class="btn btn-sm btn-outline-success"
+                            hx-get=(LN_ONCHAIN_ADDRESS_ROUTE)
+                            hx-target="#receive-address-container"
+                            hx-swap="outerHTML"
+                            type="button"
+                        { "Receive" }
                     }
 
                     // ──────────────────────────────────────────
@@ -354,6 +361,8 @@ where
                             }
                         }
                     }
+
+                    div id="receive-address-container" class="mt-3" {}
                 }
             }
         }
@@ -689,5 +698,40 @@ where
 {
     let balances_result = state.api.handle_get_balances_msg().await;
     let markup = wallet_fragment_markup(balances_result, None, None);
+    Html(markup.into_string())
+}
+
+pub async fn generate_receive_address_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let address_result = state.api.handle_get_ln_onchain_address_msg().await;
+
+    let markup = match address_result {
+        Ok(address) => {
+            html! {
+                div class="card card-body bg-light d-flex align-items-center" {
+                    span class="fw-bold me-2" { "Your Bitcoin Address:" }
+                    input type="text"
+                        readonly
+                        class="form-control form-control-sm"
+                        style="max-width:400px; display:inline-block;"
+                        value=(address)
+                        onclick="this.select();document.execCommand('copy');"
+                    {}
+                    small class="text-muted" { "Click to copy" }
+                }
+            }
+        }
+        Err(err) => {
+            html! {
+                div class="alert alert-danger" { "Failed to generate address: " (err) }
+            }
+        }
+    };
+
     Html(markup.into_string())
 }
