@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::time::SystemTime;
 
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::net::ConnectorType;
@@ -99,6 +100,22 @@ pub trait GatewayDbtxNcExt {
     /// Returns `iroh::SecretKey` and saves it to the database if it does not
     /// exist
     async fn load_or_create_iroh_key(&mut self) -> iroh::SecretKey;
+
+    /// Returns a `BTreeMap` that maps `FederationId` to its last backup time
+    async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>>;
+
+    /// Returns the last backup time for a federation
+    async fn load_backup_record(
+        &mut self,
+        federation_id: FederationId,
+    ) -> Option<Option<SystemTime>>;
+
+    /// Saves the last backup time of a federation
+    async fn save_federation_backup_record(
+        &mut self,
+        federation_id: FederationId,
+        backup_time: Option<SystemTime>,
+    );
 }
 
 impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
@@ -250,6 +267,30 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
             iroh_sk
         }
     }
+
+    async fn load_backup_records(&mut self) -> BTreeMap<FederationId, Option<SystemTime>> {
+        self.find_by_prefix(&FederationBackupPrefix)
+            .await
+            .map(|(key, time): (FederationBackupKey, Option<SystemTime>)| (key.federation_id, time))
+            .collect::<BTreeMap<FederationId, Option<SystemTime>>>()
+            .await
+    }
+
+    async fn load_backup_record(
+        &mut self,
+        federation_id: FederationId,
+    ) -> Option<Option<SystemTime>> {
+        self.get_value(&FederationBackupKey { federation_id }).await
+    }
+
+    async fn save_federation_backup_record(
+        &mut self,
+        federation_id: FederationId,
+        backup_time: Option<SystemTime>,
+    ) {
+        self.insert_entry(&FederationBackupKey { federation_id }, &backup_time)
+            .await;
+    }
 }
 
 #[repr(u8)]
@@ -262,6 +303,7 @@ enum DbKeyPrefix {
     RegisteredIncomingContract = 0x09,
     ClientDatabase = 0x10,
     Iroh = 0x11,
+    FederationBackup = 0x12,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -439,6 +481,25 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::Iroh
 );
 
+#[derive(Debug, Encodable, Decodable)]
+pub struct FederationBackupKey {
+    federation_id: FederationId,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct FederationBackupPrefix;
+
+impl_db_record!(
+    key = FederationBackupKey,
+    value = Option<SystemTime>,
+    db_prefix = DbKeyPrefix::FederationBackup,
+);
+
+impl_db_lookup!(
+    key = FederationBackupKey,
+    query_prefix = FederationBackupPrefix,
+);
+
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDbMigrationFn> {
     let mut migrations: BTreeMap<DatabaseVersion, GeneralDbMigrationFn> = BTreeMap::new();
     migrations.insert(
@@ -460,6 +521,10 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDb
     migrations.insert(
         DatabaseVersion(4),
         Box::new(|ctx| migrate_to_v5(ctx).boxed()),
+    );
+    migrations.insert(
+        DatabaseVersion(5),
+        Box::new(|ctx| migrate_to_v6(ctx).boxed()),
     );
     migrations
 }
@@ -634,6 +699,26 @@ async fn migrate_federation_configs(
         }
     }
 
+    Ok(())
+}
+
+async fn migrate_to_v6(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), anyhow::Error> {
+    let mut dbtx = ctx.dbtx();
+
+    let configs = dbtx
+        .find_by_prefix(&FederationConfigKeyPrefix)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+    for (fed_id, _) in configs {
+        dbtx.insert_new_entry(
+            &FederationBackupKey {
+                federation_id: fed_id.id,
+            },
+            &None,
+        )
+        .await;
+    }
     Ok(())
 }
 

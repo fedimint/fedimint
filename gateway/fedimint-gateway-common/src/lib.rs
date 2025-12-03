@@ -124,6 +124,7 @@ pub struct FederationInfo {
     pub federation_name: Option<String>,
     pub balance_msat: Amount,
     pub config: FederationConfig,
+    pub last_backup_time: Option<SystemTime>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
