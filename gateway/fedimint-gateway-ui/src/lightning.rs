@@ -53,6 +53,7 @@ where
     };
 
     let is_lnd = matches!(api.lightning_mode(), LightningMode::Lnd { .. });
+    let balances = api.handle_get_balances_msg().await;
 
     html! {
         div class="card h-100" {
@@ -69,6 +70,15 @@ where
                             type="button"
                             role="tab"
                         { "Connection Info" }
+                    }
+                    li class="nav-item" role="presentation" {
+                        button class="nav-link"
+                            id="wallet-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#wallet-tab-pane"
+                            type="button"
+                            role="tab"
+                        { "Wallet" }
                     }
                     li class="nav-item" role="presentation" {
                         button class="nav-link"
@@ -172,6 +182,50 @@ where
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+
+                    // ──────────────────────────────────────────
+                    //   TAB: WALLET
+                    // ──────────────────────────────────────────
+                    div class="tab-pane fade"
+                        id="wallet-tab-pane"
+                        role="tabpanel"
+                        aria-labelledby="wallet-tab" {
+
+                        @match balances {
+                            Err(err) => {
+                                // Error banner — no buttons below
+                                div class="alert alert-danger" {
+                                    "Failed to load wallet balance: " (err)
+                                }
+                            }
+                            Ok(bal) => {
+                                div id="wallet-balance-banner"
+                                    class="alert alert-info d-flex justify-content-between align-items-center" {
+
+                                    @let onchain = format!("{} sats", bal.onchain_balance_sats);
+
+                                    span {
+                                        "Wallet Balance: "
+                                        strong id="wallet-balance" { (onchain) }
+                                    }
+                                }
+
+                                div class="mt-3" {
+                                    button class="btn btn-success me-2"
+                                        type="button"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#sendModal"
+                                    { "Send" }
+
+                                    button class="btn btn-outline-primary"
+                                        type="button"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#receiveModal"
+                                    { "Receive" }
                                 }
                             }
                         }
