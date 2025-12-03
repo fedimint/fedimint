@@ -259,7 +259,7 @@ where
                 div id="wallet-balance-banner"
                     class="alert alert-info d-flex justify-content-between align-items-center" {
 
-                    @let onchain = format!("{} sats", bal.onchain_balance_sats);
+                    @let onchain = format!("{}", bitcoin::Amount::from_sat(bal.onchain_balance_sats));
 
                     span {
                         "Wallet Balance: "

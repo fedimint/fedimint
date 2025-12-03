@@ -2220,10 +2220,13 @@ impl IAdminGateway for Gateway {
     /// Send funds from the gateway's lightning node on-chain wallet.
     async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
         let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.send_onchain(payload).await?;
-        Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
-        })
+        let response = context.lnrpc.send_onchain(payload.clone()).await?;
+        let txid =
+            Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
+                failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
+            })?;
+        info!(onchain_request = %payload, txid = %txid, "Sent onchain transaction");
+        Ok(txid)
     }
 
     fn get_password_hash(&self) -> String {
