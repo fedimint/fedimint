@@ -979,19 +979,16 @@ in
       args = "--package fedimint-client --package fedimint-client-wasm --package fedimint-wasm-tests --no-default-features";
     };
 
-    cargoWorkspacesCheckDefaultFeatures = cargoWorkspacesCommand {
-      cmd = "cargo check";
-      pnameSuffix = "default-feats";
+    cargoWorkspacesCheckDefaultFeatures = cargoCheckCommand {
+      args = "--workspace";
     };
 
-    cargoWorkspacesCheckNoDefaultFeatures = cargoWorkspacesCommand {
-      cmd = "cargo check --no-default-features";
-      pnameSuffix = "no-default-feats";
-
+    cargoWorkspacesCheckNoDefaultFeatures = cargoCheckCommand {
+      args = "--workspace --no-default-features";
     };
-    cargoWorkspacesCheckAllFeatures = cargoWorkspacesCommand {
-      cmd = "cargo check --all-features";
-      pnameSuffix = "all-feats";
+
+    cargoWorkspacesCheckAllFeatures = cargoCheckCommand {
+      args = "--workspace --all-features";
     };
   }
 )

@@ -72,10 +72,10 @@ check-packages-features:
 
 # like `check-packages-features` but using nix
 check-packages-features-using-nix:
-  nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
-  nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
-  nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
-  nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
+  nix build -L --rebuild .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
+  nix build -L --rebuild .#ci.cargoWorkspacesCheckNoDefaultFeatures
+  nix build -L --rebuild .#nightly.ci.cargoWorkspacesCheckAllFeatures
+  nix build -L --rebuild .#ci.cargoWorkspacesCheckDefaultFeatures
 
 check-wasm *EXTRA_ARGS:
   #!/usr/bin/env bash
