@@ -12,7 +12,10 @@ use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use maud::{Markup, html};
 
-use crate::{CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE};
+use crate::{
+    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE,
+    WALLET_FRAGMENT_ROUTE,
+};
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
 where
@@ -195,9 +198,17 @@ where
                         role="tabpanel"
                         aria-labelledby="wallet-tab" {
 
-                        div id="wallet-container" {
-                            (wallet_fragment_markup(balances_result, None, None))
+                        div class="d-flex justify-content-between align-items-center mb-2" {
+                            div { strong { "Balance" } }
+                            button class="btn btn-sm btn-outline-secondary"
+                                hx-get=(WALLET_FRAGMENT_ROUTE)
+                                hx-target="#wallet-container"
+                                hx-swap="outerHTML"
+                                type="button"
+                            { "Refresh" }
                         }
+
+                        (wallet_fragment_markup(balances_result, None, None))
                     }
 
                     // ──────────────────────────────────────────
@@ -235,119 +246,121 @@ where
     E: std::fmt::Display,
 {
     html!(
-        @match balances_result {
-            Err(err) => {
-                // Error banner — no buttons below
-                div class="alert alert-danger" {
-                    "Failed to load wallet balance: " (err)
-                }
-            }
-            Ok(bal) => {
-
-                @if let Some(success) = success_msg {
-                    div class="alert alert-success mt-2 d-flex justify-content-between align-items-center" {
-                        span { (success) }
+        div id="wallet-container" {
+            @match balances_result {
+                Err(err) => {
+                    // Error banner — no buttons below
+                    div class="alert alert-danger" {
+                        "Failed to load wallet balance: " (err)
                     }
                 }
+                Ok(bal) => {
 
-                @if let Some(error) = error_msg {
-                    div class="alert alert-danger mt-2 d-flex justify-content-between align-items-center" {
-                        span { (error) }
-                    }
-                }
-
-                div id="wallet-balance-banner"
-                    class="alert alert-info d-flex justify-content-between align-items-center" {
-
-                    @let onchain = format!("{}", bitcoin::Amount::from_sat(bal.onchain_balance_sats));
-
-                    span {
-                        "Wallet Balance: "
-                        strong id="wallet-balance" { (onchain) }
-                    }
-                }
-
-                div class="mt-3" {
-                    button class="btn btn-success me-2"
-                        type="button"
-                        onclick="document.getElementById('send-form').classList.toggle('d-none');"
-                    {
-                        "Send Bitcoin"
+                    @if let Some(success) = success_msg {
+                        div class="alert alert-success mt-2 d-flex justify-content-between align-items-center" {
+                            span { (success) }
+                        }
                     }
 
-                    button class="btn btn-outline-primary"
-                        type="button"
-                        data-bs-toggle="modal"
-                        data-bs-target="#receiveModal"
-                    { "Receive" }
-                }
+                    @if let Some(error) = error_msg {
+                        div class="alert alert-danger mt-2 d-flex justify-content-between align-items-center" {
+                            span { (error) }
+                        }
+                    }
 
-                // ──────────────────────────────────────────
-                //   Send Form (hidden until toggled)
-                // ──────────────────────────────────────────
-                div id="send-form" class="card card-body mt-3 d-none" {
+                    div id="wallet-balance-banner"
+                        class="alert alert-info d-flex justify-content-between align-items-center" {
 
-                    form
-                        id="send-onchain-form"
-                        hx-post="/ui/wallet/send"
-                        hx-target="#wallet-container"
-                        hx-swap="outerHTML"
-                    {
-                        // Address
-                        div class="mb-3" {
-                            label class="form-label" for="address" { "Bitcoin Address" }
-                            input
-                                type="text"
-                                class="form-control"
-                                id="address"
-                                name="address"
-                                required;
+                        @let onchain = format!("{}", bitcoin::Amount::from_sat(bal.onchain_balance_sats));
+
+                        span {
+                            "Wallet Balance: "
+                            strong id="wallet-balance" { (onchain) }
+                        }
+                    }
+
+                    div class="mt-3" {
+                        button class="btn btn-success me-2"
+                            type="button"
+                            onclick="document.getElementById('send-form').classList.toggle('d-none');"
+                        {
+                            "Send Bitcoin"
                         }
 
-                        // Amount + ALL button
-                        div class="mb-3" {
-                            label class="form-label" for="amount" { "Amount (sats)" }
-                            div class="input-group" {
+                        button class="btn btn-outline-primary"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#receiveModal"
+                        { "Receive" }
+                    }
+
+                    // ──────────────────────────────────────────
+                    //   Send Form (hidden until toggled)
+                    // ──────────────────────────────────────────
+                    div id="send-form" class="card card-body mt-3 d-none" {
+
+                        form
+                            id="send-onchain-form"
+                            hx-post="/ui/wallet/send"
+                            hx-target="#wallet-container"
+                            hx-swap="outerHTML"
+                        {
+                            // Address
+                            div class="mb-3" {
+                                label class="form-label" for="address" { "Bitcoin Address" }
                                 input
                                     type="text"
                                     class="form-control"
-                                    id="amount"
-                                    name="amount"
-                                    placeholder="e.g. 10000 or all"
+                                    id="address"
+                                    name="address"
                                     required;
-
-                                button
-                                    class="btn btn-outline-secondary"
-                                    type="button"
-                                    onclick="document.getElementById('amount').value = 'all';"
-                                { "All" }
                             }
-                        }
 
-                        // Fee Rate
-                        div class="mb-3" {
-                            label class="form-label" for="fee_rate" { "Sats per vbyte" }
-                            input
-                                type="number"
-                                class="form-control"
-                                id="fee_rate"
-                                name="fee_rate_sats_per_vbyte"
-                                min="1"
-                                required;
-                        }
+                            // Amount + ALL button
+                            div class="mb-3" {
+                                label class="form-label" for="amount" { "Amount (sats)" }
+                                div class="input-group" {
+                                    input
+                                        type="text"
+                                        class="form-control"
+                                        id="amount"
+                                        name="amount"
+                                        placeholder="e.g. 10000 or all"
+                                        required;
 
-                        // Confirm Send
-                        div class="mt-3" {
-                            button
-                                type="submit"
-                                class="btn btn-danger"
-                            {
-                                "Confirm Send"
+                                    button
+                                        class="btn btn-outline-secondary"
+                                        type="button"
+                                        onclick="document.getElementById('amount').value = 'all';"
+                                    { "All" }
+                                }
+                            }
+
+                            // Fee Rate
+                            div class="mb-3" {
+                                label class="form-label" for="fee_rate" { "Sats per vbyte" }
+                                input
+                                    type="number"
+                                    class="form-control"
+                                    id="fee_rate"
+                                    name="fee_rate_sats_per_vbyte"
+                                    min="1"
+                                    required;
+                            }
+
+                            // Confirm Send
+                            div class="mt-3" {
+                                button
+                                    type="submit"
+                                    class="btn btn-danger"
+                                {
+                                    "Confirm Send"
+                                }
                             }
                         }
                     }
-                }
 
+                }
             }
         }
     )
@@ -670,5 +683,17 @@ pub async fn send_onchain_handler<E: Display + Send + Sync>(
         Err(err) => wallet_fragment_markup(balances, None, Some(err.to_string())),
     };
 
+    Html(markup.into_string())
+}
+
+pub async fn wallet_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let balances_result = state.api.handle_get_balances_msg().await;
+    let markup = wallet_fragment_markup(balances_result, None, None);
     Html(markup.into_string())
 }
