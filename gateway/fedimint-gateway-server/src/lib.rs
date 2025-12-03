@@ -1233,39 +1233,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Returns the ecash, lightning, and onchain balances for the gateway and
-    /// the gateway's lightning node.
-    pub async fn handle_get_balances_msg(&self) -> AdminResult<GatewayBalances> {
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
-        let federation_infos = self
-            .federation_manager
-            .read()
-            .await
-            .federation_info_all_federations(dbtx)
-            .await;
-
-        let ecash_balances: Vec<FederationBalanceInfo> = federation_infos
-            .iter()
-            .map(|federation_info| FederationBalanceInfo {
-                federation_id: federation_info.federation_id,
-                ecash_balance_msats: Amount {
-                    msats: federation_info.balance_msat.msats,
-                },
-            })
-            .collect();
-
-        let context = self.get_lightning_context().await?;
-        let lightning_node_balances = context.lnrpc.get_balances().await?;
-
-        Ok(GatewayBalances {
-            onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
-            lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
-            ecash_balances,
-            inbound_lightning_liquidity_msats: lightning_node_balances
-                .inbound_lightning_liquidity_msats,
-        })
-    }
-
     // Handles a request the spend the gateway's ecash for a given federation.
     pub async fn handle_spend_ecash_msg(
         &self,
@@ -2215,6 +2182,39 @@ impl IAdminGateway for Gateway {
             .await?;
         info!(target: LOG_GATEWAY, close_channel_request = %payload, "Initiated channel closure");
         Ok(response)
+    }
+
+    /// Returns the ecash, lightning, and onchain balances for the gateway and
+    /// the gateway's lightning node.
+    async fn handle_get_balances_msg(&self) -> AdminResult<GatewayBalances> {
+        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let federation_infos = self
+            .federation_manager
+            .read()
+            .await
+            .federation_info_all_federations(dbtx)
+            .await;
+
+        let ecash_balances: Vec<FederationBalanceInfo> = federation_infos
+            .iter()
+            .map(|federation_info| FederationBalanceInfo {
+                federation_id: federation_info.federation_id,
+                ecash_balance_msats: Amount {
+                    msats: federation_info.balance_msat.msats,
+                },
+            })
+            .collect();
+
+        let context = self.get_lightning_context().await?;
+        let lightning_node_balances = context.lnrpc.get_balances().await?;
+
+        Ok(GatewayBalances {
+            onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
+            lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
+            ecash_balances,
+            inbound_lightning_liquidity_msats: lightning_node_balances
+                .inbound_lightning_liquidity_msats,
+        })
     }
 
     fn get_password_hash(&self) -> String {

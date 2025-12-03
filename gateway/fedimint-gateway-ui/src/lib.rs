@@ -22,7 +22,7 @@ use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
-    FederationInfo, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse,
+    FederationInfo, GatewayBalances, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse,
     OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -103,6 +103,8 @@ pub trait IAdminGateway {
         &self,
         payload: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, Self::Error>;
+
+    async fn handle_get_balances_msg(&self) -> Result<GatewayBalances, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
