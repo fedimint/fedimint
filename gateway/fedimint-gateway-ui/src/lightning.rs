@@ -10,7 +10,9 @@ use fedimint_gateway_common::{
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
-use maud::{Markup, html};
+use maud::{Markup, PreEscaped, html};
+use qrcode::QrCode;
+use qrcode::render::svg;
 
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE,
@@ -715,17 +717,40 @@ where
 
     let markup = match address_result {
         Ok(address) => {
+            // Generate QR code SVG
+            let code =
+                QrCode::new(address.to_qr_uri().as_bytes()).expect("Failed to generate QR code");
+            let qr_svg = code.render::<svg::Color>().build();
+
             html! {
-                div class="card card-body bg-light d-flex align-items-center" {
-                    span class="fw-bold me-2" { "Deposit Address:" }
-                    input type="text"
-                        readonly
-                        class="form-control form-control-sm"
-                        style="max-width:400px; display:inline-block;"
-                        value=(address)
-                        onclick="this.select();document.execCommand('copy');"
-                    {}
-                    small class="text-muted" { "Click to copy" }
+                div class="card card-body bg-light d-flex flex-column align-items-center" {
+                    span class="fw-bold mb-3" { "Deposit Address:" }
+
+                    // Flex container: address on left, QR on right
+                    div class="d-flex flex-row align-items-center gap-3 flex-wrap" style="width: 100%;" {
+
+                        // Copyable input + text
+                        div class="d-flex flex-column flex-grow-1" style="min-width: 300px;" {
+                            input type="text"
+                                readonly
+                                class="form-control mb-2"
+                                style="text-align:left; font-family: monospace; font-size:1rem;"
+                                value=(address)
+                                onclick="this.select();document.execCommand('copy');"
+                            {}
+                            small class="text-muted" { "Click to copy" }
+                        }
+
+                        // QR code
+                        div class="border rounded p-2 bg-white d-flex justify-content-center align-items-center"
+                            style="width: 300px; height: 300px; min-width: 200px; min-height: 200px;"
+                        {
+                            (PreEscaped(format!(
+                                r#"<svg style="width: 100%; height: 100%; display: block;">{}</svg>"#,
+                                qr_svg.replace("width=", "data-width=").replace("height=", "data-height=")
+                            )))
+                        }
+                    }
                 }
             }
         }

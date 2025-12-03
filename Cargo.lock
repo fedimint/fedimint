@@ -3380,6 +3380,7 @@ dependencies = [
  "fedimint-gateway-common",
  "fedimint-ui-common",
  "maud",
+ "qrcode",
  "serde",
  "tracing",
  "url",
