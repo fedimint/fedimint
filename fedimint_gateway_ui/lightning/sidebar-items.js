@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["channels_fragment_handler","channels_fragment_markup","open_channel_handler","render"]};
+window.SIDEBAR_ITEMS = {"fn":["channels_fragment_handler","channels_fragment_markup","close_channel_handler","open_channel_handler","render"]};
