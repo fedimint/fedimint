@@ -112,7 +112,7 @@ impl ConnectorRegistryBuilder {
         );
 
         Ok(ConnectorRegistry {
-            connectors_lazy,
+            connectors_lazy: Arc::new(connectors_lazy),
             connection_overrides: self.connection_overrides,
         })
     }
@@ -217,7 +217,8 @@ impl ConnectorRegistryBuilder {
 /// Responsibilities:
 #[derive(Clone)]
 pub struct ConnectorRegistry {
-    connectors_lazy: BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>,
+    /// Wrapped in Arc so clones share the same OnceCell instances
+    connectors_lazy: Arc<BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>>,
     /// Connection URL overrides for testing/custom routing
     connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
 }
