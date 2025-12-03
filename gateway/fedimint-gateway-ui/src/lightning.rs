@@ -283,16 +283,19 @@ where
                         // Toggle Send Form button
                         button class="btn btn-sm btn-outline-primary me-2"
                             type="button"
-                            onclick="document.getElementById('send-form').classList.toggle('d-none');"
-                        {
-                            "Send"
-                        }
+                            onclick="
+                                document.getElementById('send-form').classList.toggle('d-none');
+                                document.getElementById('receive-address-container').innerHTML = '';
+                            "
+                        { "Send" }
+
 
                         button class="btn btn-sm btn-outline-success"
                             hx-get=(LN_ONCHAIN_ADDRESS_ROUTE)
                             hx-target="#receive-address-container"
                             hx-swap="outerHTML"
                             type="button"
+                            onclick="document.getElementById('send-form').classList.add('d-none');"
                         { "Receive" }
                     }
 
@@ -714,7 +717,7 @@ where
         Ok(address) => {
             html! {
                 div class="card card-body bg-light d-flex align-items-center" {
-                    span class="fw-bold me-2" { "Your Bitcoin Address:" }
+                    span class="fw-bold me-2" { "Deposit Address:" }
                     input type="text"
                         readonly
                         class="form-control form-control-sm"
