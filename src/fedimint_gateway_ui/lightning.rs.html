@@ -240,133 +240,140 @@
 <a href=#240 id=240 data-nosnippet>240</a>                            thead {
 <a href=#241 id=241 data-nosnippet>241</a>                                tr {
 <a href=#242 id=242 data-nosnippet>242</a>                                    th { <span class="string">"Remote PubKey" </span>}
-<a href=#243 id=243 data-nosnippet>243</a>                                    th { <span class="string">"Size (sats)" </span>}
-<a href=#244 id=244 data-nosnippet>244</a>                                    th { <span class="string">"Active" </span>}
-<a href=#245 id=245 data-nosnippet>245</a>                                    th { <span class="string">"Liquidity" </span>}
-<a href=#246 id=246 data-nosnippet>246</a>                                }
-<a href=#247 id=247 data-nosnippet>247</a>                            }
-<a href=#248 id=248 data-nosnippet>248</a>                            tbody {
-<a href=#249 id=249 data-nosnippet>249</a>                                @<span class="kw">for </span>ch <span class="kw">in </span>channels {
-<a href=#250 id=250 data-nosnippet>250</a>                                    <span class="comment">// precompute safely (no @let inline arithmetic)
-<a href=#251 id=251 data-nosnippet>251</a>                                    </span>@<span class="kw">let </span>size = ch.channel_size_sats.max(<span class="number">1</span>);
-<a href=#252 id=252 data-nosnippet>252</a>                                    @<span class="kw">let </span>outbound_pct = (ch.outbound_liquidity_sats <span class="kw">as </span>f64 / size <span class="kw">as </span>f64) * <span class="number">100.0</span>;
-<a href=#253 id=253 data-nosnippet>253</a>                                    @<span class="kw">let </span>inbound_pct  = (ch.inbound_liquidity_sats  <span class="kw">as </span>f64 / size <span class="kw">as </span>f64) * <span class="number">100.0</span>;
-<a href=#254 id=254 data-nosnippet>254</a>
-<a href=#255 id=255 data-nosnippet>255</a>                                    tr {
-<a href=#256 id=256 data-nosnippet>256</a>                                        td { (ch.remote_pubkey.to_string()) }
-<a href=#257 id=257 data-nosnippet>257</a>                                        td { (ch.channel_size_sats) }
-<a href=#258 id=258 data-nosnippet>258</a>                                        td {
-<a href=#259 id=259 data-nosnippet>259</a>                                            @<span class="kw">if </span>ch.is_active {
-<a href=#260 id=260 data-nosnippet>260</a>                                                span class=<span class="string">"badge bg-success" </span>{ <span class="string">"active" </span>}
-<a href=#261 id=261 data-nosnippet>261</a>                                            } @<span class="kw">else </span>{
-<a href=#262 id=262 data-nosnippet>262</a>                                                span class=<span class="string">"badge bg-secondary" </span>{ <span class="string">"inactive" </span>}
-<a href=#263 id=263 data-nosnippet>263</a>                                            }
-<a href=#264 id=264 data-nosnippet>264</a>                                        }
-<a href=#265 id=265 data-nosnippet>265</a>
-<a href=#266 id=266 data-nosnippet>266</a>                                        <span class="comment">// Liquidity bar: single horizontal bar split by two divs
-<a href=#267 id=267 data-nosnippet>267</a>                                        </span>td {
-<a href=#268 id=268 data-nosnippet>268</a>                                            div style=<span class="string">"width:240px;" </span>{
-<a href=#269 id=269 data-nosnippet>269</a>                                                div style=<span class="string">"display:flex;height:10px;width:100%;border-radius:3px;overflow:hidden" </span>{
-<a href=#270 id=270 data-nosnippet>270</a>                                                    div style=(<span class="macro">format!</span>(<span class="string">"background:#28a745;width:{:.2}%;"</span>, outbound_pct)) {}
-<a href=#271 id=271 data-nosnippet>271</a>                                                    div style=(<span class="macro">format!</span>(<span class="string">"background:#0d6efd;width:{:.2}%;"</span>, inbound_pct)) {}
-<a href=#272 id=272 data-nosnippet>272</a>                                                }
-<a href=#273 id=273 data-nosnippet>273</a>
-<a href=#274 id=274 data-nosnippet>274</a>                                                div style=<span class="string">"font-size:0.75rem;display:flex;justify-content:space-between;margin-top:3px;" </span>{
-<a href=#275 id=275 data-nosnippet>275</a>                                                    span {
-<a href=#276 id=276 data-nosnippet>276</a>                                                        span style=<span class="string">"display:inline-block;width:10px;height:10px;background:#28a745;margin-right:4px;border-radius:2px;" </span>{}
-<a href=#277 id=277 data-nosnippet>277</a>                                                        <span class="string">"Outbound"
-<a href=#278 id=278 data-nosnippet>278</a>                                                    </span>}
-<a href=#279 id=279 data-nosnippet>279</a>                                                    span {
-<a href=#280 id=280 data-nosnippet>280</a>                                                        span style=<span class="string">"display:inline-block;width:10px;height:10px;background:#0d6efd;margin-right:4px;border-radius:2px;" </span>{}
-<a href=#281 id=281 data-nosnippet>281</a>                                                        <span class="string">"Inbound"
-<a href=#282 id=282 data-nosnippet>282</a>                                                    </span>}
-<a href=#283 id=283 data-nosnippet>283</a>                                                }
-<a href=#284 id=284 data-nosnippet>284</a>                                            }
-<a href=#285 id=285 data-nosnippet>285</a>                                        }
-<a href=#286 id=286 data-nosnippet>286</a>                                    }
-<a href=#287 id=287 data-nosnippet>287</a>                                }
-<a href=#288 id=288 data-nosnippet>288</a>                            }
-<a href=#289 id=289 data-nosnippet>289</a>                        }
-<a href=#290 id=290 data-nosnippet>290</a>                    }
-<a href=#291 id=291 data-nosnippet>291</a>
-<a href=#292 id=292 data-nosnippet>292</a>                    div class=<span class="string">"mt-3" </span>{
-<a href=#293 id=293 data-nosnippet>293</a>                        <span class="comment">// Toggle button
-<a href=#294 id=294 data-nosnippet>294</a>                        </span>button id=<span class="string">"open-channel-btn" </span>class=<span class="string">"btn btn-sm btn-primary"
-<a href=#295 id=295 data-nosnippet>295</a>                            </span><span class="kw">type</span>=<span class="string">"button"
-<a href=#296 id=296 data-nosnippet>296</a>                            </span>data-bs-toggle=<span class="string">"collapse"
-<a href=#297 id=297 data-nosnippet>297</a>                            </span>data-bs-target=<span class="string">"#open-channel-form"
-<a href=#298 id=298 data-nosnippet>298</a>                            </span>aria-expanded=<span class="string">"false"
-<a href=#299 id=299 data-nosnippet>299</a>                            </span>aria-controls=<span class="string">"open-channel-form"
-<a href=#300 id=300 data-nosnippet>300</a>                        </span>{ <span class="string">"Open Channel" </span>}
-<a href=#301 id=301 data-nosnippet>301</a>
-<a href=#302 id=302 data-nosnippet>302</a>                        <span class="comment">// Collapsible form
-<a href=#303 id=303 data-nosnippet>303</a>                        </span>div id=<span class="string">"open-channel-form" </span>class=<span class="string">"collapse mt-3" </span>{
-<a href=#304 id=304 data-nosnippet>304</a>                            form hx-post=<span class="string">"/ui/channels/open"
-<a href=#305 id=305 data-nosnippet>305</a>                                </span>hx-target=<span class="string">"#channels-container"
-<a href=#306 id=306 data-nosnippet>306</a>                                </span>hx-swap=<span class="string">"outerHTML"
-<a href=#307 id=307 data-nosnippet>307</a>                                </span>class=<span class="string">"card card-body" </span>{
+<a href=#243 id=243 data-nosnippet>243</a>                                    th { <span class="string">"Funding OutPoint" </span>}
+<a href=#244 id=244 data-nosnippet>244</a>                                    th { <span class="string">"Size (sats)" </span>}
+<a href=#245 id=245 data-nosnippet>245</a>                                    th { <span class="string">"Active" </span>}
+<a href=#246 id=246 data-nosnippet>246</a>                                    th { <span class="string">"Liquidity" </span>}
+<a href=#247 id=247 data-nosnippet>247</a>                                }
+<a href=#248 id=248 data-nosnippet>248</a>                            }
+<a href=#249 id=249 data-nosnippet>249</a>                            tbody {
+<a href=#250 id=250 data-nosnippet>250</a>                                @<span class="kw">for </span>ch <span class="kw">in </span>channels {
+<a href=#251 id=251 data-nosnippet>251</a>                                    <span class="comment">// precompute safely (no @let inline arithmetic)
+<a href=#252 id=252 data-nosnippet>252</a>                                    </span>@<span class="kw">let </span>size = ch.channel_size_sats.max(<span class="number">1</span>);
+<a href=#253 id=253 data-nosnippet>253</a>                                    @<span class="kw">let </span>outbound_pct = (ch.outbound_liquidity_sats <span class="kw">as </span>f64 / size <span class="kw">as </span>f64) * <span class="number">100.0</span>;
+<a href=#254 id=254 data-nosnippet>254</a>                                    @<span class="kw">let </span>inbound_pct  = (ch.inbound_liquidity_sats  <span class="kw">as </span>f64 / size <span class="kw">as </span>f64) * <span class="number">100.0</span>;
+<a href=#255 id=255 data-nosnippet>255</a>                                    @<span class="kw">let </span>funding_outpoint = <span class="kw">if let </span><span class="prelude-val">Some</span>(funding_outpoint) = ch.funding_outpoint {
+<a href=#256 id=256 data-nosnippet>256</a>                                        funding_outpoint.to_string()
+<a href=#257 id=257 data-nosnippet>257</a>                                    } <span class="kw">else </span>{
+<a href=#258 id=258 data-nosnippet>258</a>                                        <span class="string">""</span>.to_string()
+<a href=#259 id=259 data-nosnippet>259</a>                                    };
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>                                    tr {
+<a href=#262 id=262 data-nosnippet>262</a>                                        td { (ch.remote_pubkey.to_string()) }
+<a href=#263 id=263 data-nosnippet>263</a>                                        td { (funding_outpoint) }
+<a href=#264 id=264 data-nosnippet>264</a>                                        td { (ch.channel_size_sats) }
+<a href=#265 id=265 data-nosnippet>265</a>                                        td {
+<a href=#266 id=266 data-nosnippet>266</a>                                            @<span class="kw">if </span>ch.is_active {
+<a href=#267 id=267 data-nosnippet>267</a>                                                span class=<span class="string">"badge bg-success" </span>{ <span class="string">"active" </span>}
+<a href=#268 id=268 data-nosnippet>268</a>                                            } @<span class="kw">else </span>{
+<a href=#269 id=269 data-nosnippet>269</a>                                                span class=<span class="string">"badge bg-secondary" </span>{ <span class="string">"inactive" </span>}
+<a href=#270 id=270 data-nosnippet>270</a>                                            }
+<a href=#271 id=271 data-nosnippet>271</a>                                        }
+<a href=#272 id=272 data-nosnippet>272</a>
+<a href=#273 id=273 data-nosnippet>273</a>                                        <span class="comment">// Liquidity bar: single horizontal bar split by two divs
+<a href=#274 id=274 data-nosnippet>274</a>                                        </span>td {
+<a href=#275 id=275 data-nosnippet>275</a>                                            div style=<span class="string">"width:240px;" </span>{
+<a href=#276 id=276 data-nosnippet>276</a>                                                div style=<span class="string">"display:flex;height:10px;width:100%;border-radius:3px;overflow:hidden" </span>{
+<a href=#277 id=277 data-nosnippet>277</a>                                                    div style=(<span class="macro">format!</span>(<span class="string">"background:#28a745;width:{:.2}%;"</span>, outbound_pct)) {}
+<a href=#278 id=278 data-nosnippet>278</a>                                                    div style=(<span class="macro">format!</span>(<span class="string">"background:#0d6efd;width:{:.2}%;"</span>, inbound_pct)) {}
+<a href=#279 id=279 data-nosnippet>279</a>                                                }
+<a href=#280 id=280 data-nosnippet>280</a>
+<a href=#281 id=281 data-nosnippet>281</a>                                                div style=<span class="string">"font-size:0.75rem;display:flex;justify-content:space-between;margin-top:3px;" </span>{
+<a href=#282 id=282 data-nosnippet>282</a>                                                    span {
+<a href=#283 id=283 data-nosnippet>283</a>                                                        span style=<span class="string">"display:inline-block;width:10px;height:10px;background:#28a745;margin-right:4px;border-radius:2px;" </span>{}
+<a href=#284 id=284 data-nosnippet>284</a>                                                        <span class="string">"Outbound"
+<a href=#285 id=285 data-nosnippet>285</a>                                                    </span>}
+<a href=#286 id=286 data-nosnippet>286</a>                                                    span {
+<a href=#287 id=287 data-nosnippet>287</a>                                                        span style=<span class="string">"display:inline-block;width:10px;height:10px;background:#0d6efd;margin-right:4px;border-radius:2px;" </span>{}
+<a href=#288 id=288 data-nosnippet>288</a>                                                        <span class="string">"Inbound"
+<a href=#289 id=289 data-nosnippet>289</a>                                                    </span>}
+<a href=#290 id=290 data-nosnippet>290</a>                                                }
+<a href=#291 id=291 data-nosnippet>291</a>                                            }
+<a href=#292 id=292 data-nosnippet>292</a>                                        }
+<a href=#293 id=293 data-nosnippet>293</a>                                    }
+<a href=#294 id=294 data-nosnippet>294</a>                                }
+<a href=#295 id=295 data-nosnippet>295</a>                            }
+<a href=#296 id=296 data-nosnippet>296</a>                        }
+<a href=#297 id=297 data-nosnippet>297</a>                    }
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a>                    div class=<span class="string">"mt-3" </span>{
+<a href=#300 id=300 data-nosnippet>300</a>                        <span class="comment">// Toggle button
+<a href=#301 id=301 data-nosnippet>301</a>                        </span>button id=<span class="string">"open-channel-btn" </span>class=<span class="string">"btn btn-sm btn-primary"
+<a href=#302 id=302 data-nosnippet>302</a>                            </span><span class="kw">type</span>=<span class="string">"button"
+<a href=#303 id=303 data-nosnippet>303</a>                            </span>data-bs-toggle=<span class="string">"collapse"
+<a href=#304 id=304 data-nosnippet>304</a>                            </span>data-bs-target=<span class="string">"#open-channel-form"
+<a href=#305 id=305 data-nosnippet>305</a>                            </span>aria-expanded=<span class="string">"false"
+<a href=#306 id=306 data-nosnippet>306</a>                            </span>aria-controls=<span class="string">"open-channel-form"
+<a href=#307 id=307 data-nosnippet>307</a>                        </span>{ <span class="string">"Open Channel" </span>}
 <a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a>                                h5 class=<span class="string">"card-title" </span>{ <span class="string">"Open New Channel" </span>}
-<a href=#310 id=310 data-nosnippet>310</a>
-<a href=#311 id=311 data-nosnippet>311</a>                                div class=<span class="string">"mb-2" </span>{
-<a href=#312 id=312 data-nosnippet>312</a>                                    label class=<span class="string">"form-label" </span>{ <span class="string">"Remote Node Public Key" </span>}
-<a href=#313 id=313 data-nosnippet>313</a>                                    input <span class="kw">type</span>=<span class="string">"text" </span>name=<span class="string">"pubkey" </span>class=<span class="string">"form-control" </span>placeholder=<span class="string">"03abcd..." </span>required {}
-<a href=#314 id=314 data-nosnippet>314</a>                                }
+<a href=#309 id=309 data-nosnippet>309</a>                        <span class="comment">// Collapsible form
+<a href=#310 id=310 data-nosnippet>310</a>                        </span>div id=<span class="string">"open-channel-form" </span>class=<span class="string">"collapse mt-3" </span>{
+<a href=#311 id=311 data-nosnippet>311</a>                            form hx-post=<span class="string">"/ui/channels/open"
+<a href=#312 id=312 data-nosnippet>312</a>                                </span>hx-target=<span class="string">"#channels-container"
+<a href=#313 id=313 data-nosnippet>313</a>                                </span>hx-swap=<span class="string">"outerHTML"
+<a href=#314 id=314 data-nosnippet>314</a>                                </span>class=<span class="string">"card card-body" </span>{
 <a href=#315 id=315 data-nosnippet>315</a>
-<a href=#316 id=316 data-nosnippet>316</a>                                div class=<span class="string">"mb-2" </span>{
-<a href=#317 id=317 data-nosnippet>317</a>                                    label class=<span class="string">"form-label" </span>{ <span class="string">"Host" </span>}
-<a href=#318 id=318 data-nosnippet>318</a>                                    input <span class="kw">type</span>=<span class="string">"text" </span>name=<span class="string">"host" </span>class=<span class="string">"form-control" </span>placeholder=<span class="string">"1.2.3.4:9735" </span>required {}
-<a href=#319 id=319 data-nosnippet>319</a>                                }
-<a href=#320 id=320 data-nosnippet>320</a>
-<a href=#321 id=321 data-nosnippet>321</a>                                div class=<span class="string">"mb-2" </span>{
-<a href=#322 id=322 data-nosnippet>322</a>                                    label class=<span class="string">"form-label" </span>{ <span class="string">"Channel Size (sats)" </span>}
-<a href=#323 id=323 data-nosnippet>323</a>                                    input <span class="kw">type</span>=<span class="string">"number" </span>name=<span class="string">"channel_size_sats" </span>class=<span class="string">"form-control" </span>placeholder=<span class="string">"1000000" </span>required {}
-<a href=#324 id=324 data-nosnippet>324</a>                                }
-<a href=#325 id=325 data-nosnippet>325</a>
-<a href=#326 id=326 data-nosnippet>326</a>                                input <span class="kw">type</span>=<span class="string">"hidden" </span>name=<span class="string">"push_amount_sats" </span>value=<span class="string">"0" </span>{}
+<a href=#316 id=316 data-nosnippet>316</a>                                h5 class=<span class="string">"card-title" </span>{ <span class="string">"Open New Channel" </span>}
+<a href=#317 id=317 data-nosnippet>317</a>
+<a href=#318 id=318 data-nosnippet>318</a>                                div class=<span class="string">"mb-2" </span>{
+<a href=#319 id=319 data-nosnippet>319</a>                                    label class=<span class="string">"form-label" </span>{ <span class="string">"Remote Node Public Key" </span>}
+<a href=#320 id=320 data-nosnippet>320</a>                                    input <span class="kw">type</span>=<span class="string">"text" </span>name=<span class="string">"pubkey" </span>class=<span class="string">"form-control" </span>placeholder=<span class="string">"03abcd..." </span>required {}
+<a href=#321 id=321 data-nosnippet>321</a>                                }
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>                                div class=<span class="string">"mb-2" </span>{
+<a href=#324 id=324 data-nosnippet>324</a>                                    label class=<span class="string">"form-label" </span>{ <span class="string">"Host" </span>}
+<a href=#325 id=325 data-nosnippet>325</a>                                    input <span class="kw">type</span>=<span class="string">"text" </span>name=<span class="string">"host" </span>class=<span class="string">"form-control" </span>placeholder=<span class="string">"1.2.3.4:9735" </span>required {}
+<a href=#326 id=326 data-nosnippet>326</a>                                }
 <a href=#327 id=327 data-nosnippet>327</a>
-<a href=#328 id=328 data-nosnippet>328</a>                                button <span class="kw">type</span>=<span class="string">"submit" </span>class=<span class="string">"btn btn-success" </span>{ <span class="string">"Confirm Open" </span>}
-<a href=#329 id=329 data-nosnippet>329</a>                            }
-<a href=#330 id=330 data-nosnippet>330</a>                        }
-<a href=#331 id=331 data-nosnippet>331</a>                    }
-<a href=#332 id=332 data-nosnippet>332</a>                }
-<a href=#333 id=333 data-nosnippet>333</a>            }
-<a href=#334 id=334 data-nosnippet>334</a>        }
-<a href=#335 id=335 data-nosnippet>335</a>    }
-<a href=#336 id=336 data-nosnippet>336</a>}
-<a href=#337 id=337 data-nosnippet>337</a>
-<a href=#338 id=338 data-nosnippet>338</a><span class="kw">pub async fn </span>channels_fragment_handler&lt;E&gt;(
-<a href=#339 id=339 data-nosnippet>339</a>    State(state): State&lt;UiState&lt;DynGatewayApi&lt;E&gt;&gt;&gt;,
-<a href=#340 id=340 data-nosnippet>340</a>    _auth: UserAuth,
-<a href=#341 id=341 data-nosnippet>341</a>) -&gt; Html&lt;String&gt;
-<a href=#342 id=342 data-nosnippet>342</a><span class="kw">where
-<a href=#343 id=343 data-nosnippet>343</a>    </span>E: std::fmt::Display,
-<a href=#344 id=344 data-nosnippet>344</a>{
-<a href=#345 id=345 data-nosnippet>345</a>    <span class="kw">let </span>channels_result: <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, E&gt; = state.api.handle_list_channels_msg().<span class="kw">await</span>;
-<a href=#346 id=346 data-nosnippet>346</a>
-<a href=#347 id=347 data-nosnippet>347</a>    <span class="kw">let </span>markup = channels_fragment_markup(channels_result, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
-<a href=#348 id=348 data-nosnippet>348</a>    Html(markup.into_string())
-<a href=#349 id=349 data-nosnippet>349</a>}
-<a href=#350 id=350 data-nosnippet>350</a>
-<a href=#351 id=351 data-nosnippet>351</a><span class="kw">pub async fn </span>open_channel_handler&lt;E: Display + Send + Sync&gt;(
-<a href=#352 id=352 data-nosnippet>352</a>    State(state): State&lt;UiState&lt;DynGatewayApi&lt;E&gt;&gt;&gt;,
-<a href=#353 id=353 data-nosnippet>353</a>    _auth: UserAuth,
-<a href=#354 id=354 data-nosnippet>354</a>    Form(payload): Form&lt;OpenChannelRequest&gt;,
-<a href=#355 id=355 data-nosnippet>355</a>) -&gt; Html&lt;String&gt; {
-<a href=#356 id=356 data-nosnippet>356</a>    <span class="kw">match </span>state.api.handle_open_channel_msg(payload).<span class="kw">await </span>{
-<a href=#357 id=357 data-nosnippet>357</a>        <span class="prelude-val">Ok</span>(txid) =&gt; {
-<a href=#358 id=358 data-nosnippet>358</a>            <span class="kw">let </span>channels_result = state.api.handle_list_channels_msg().<span class="kw">await</span>;
-<a href=#359 id=359 data-nosnippet>359</a>            <span class="kw">let </span>markup = channels_fragment_markup(
-<a href=#360 id=360 data-nosnippet>360</a>                channels_result,
-<a href=#361 id=361 data-nosnippet>361</a>                <span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"Successfully initiated channel open. TxId: {txid}"</span>)),
-<a href=#362 id=362 data-nosnippet>362</a>                <span class="prelude-val">None</span>,
-<a href=#363 id=363 data-nosnippet>363</a>            );
-<a href=#364 id=364 data-nosnippet>364</a>            Html(markup.into_string())
-<a href=#365 id=365 data-nosnippet>365</a>        }
-<a href=#366 id=366 data-nosnippet>366</a>        <span class="prelude-val">Err</span>(err) =&gt; {
-<a href=#367 id=367 data-nosnippet>367</a>            <span class="kw">let </span>channels_result = state.api.handle_list_channels_msg().<span class="kw">await</span>;
-<a href=#368 id=368 data-nosnippet>368</a>            <span class="kw">let </span>markup = channels_fragment_markup(channels_result, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(err.to_string()));
-<a href=#369 id=369 data-nosnippet>369</a>            Html(markup.into_string())
-<a href=#370 id=370 data-nosnippet>370</a>        }
-<a href=#371 id=371 data-nosnippet>371</a>    }
-<a href=#372 id=372 data-nosnippet>372</a>}</code></pre></div></section></main></body></html>
+<a href=#328 id=328 data-nosnippet>328</a>                                div class=<span class="string">"mb-2" </span>{
+<a href=#329 id=329 data-nosnippet>329</a>                                    label class=<span class="string">"form-label" </span>{ <span class="string">"Channel Size (sats)" </span>}
+<a href=#330 id=330 data-nosnippet>330</a>                                    input <span class="kw">type</span>=<span class="string">"number" </span>name=<span class="string">"channel_size_sats" </span>class=<span class="string">"form-control" </span>placeholder=<span class="string">"1000000" </span>required {}
+<a href=#331 id=331 data-nosnippet>331</a>                                }
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a>                                input <span class="kw">type</span>=<span class="string">"hidden" </span>name=<span class="string">"push_amount_sats" </span>value=<span class="string">"0" </span>{}
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>                                button <span class="kw">type</span>=<span class="string">"submit" </span>class=<span class="string">"btn btn-success" </span>{ <span class="string">"Confirm Open" </span>}
+<a href=#336 id=336 data-nosnippet>336</a>                            }
+<a href=#337 id=337 data-nosnippet>337</a>                        }
+<a href=#338 id=338 data-nosnippet>338</a>                    }
+<a href=#339 id=339 data-nosnippet>339</a>                }
+<a href=#340 id=340 data-nosnippet>340</a>            }
+<a href=#341 id=341 data-nosnippet>341</a>        }
+<a href=#342 id=342 data-nosnippet>342</a>    }
+<a href=#343 id=343 data-nosnippet>343</a>}
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a><span class="kw">pub async fn </span>channels_fragment_handler&lt;E&gt;(
+<a href=#346 id=346 data-nosnippet>346</a>    State(state): State&lt;UiState&lt;DynGatewayApi&lt;E&gt;&gt;&gt;,
+<a href=#347 id=347 data-nosnippet>347</a>    _auth: UserAuth,
+<a href=#348 id=348 data-nosnippet>348</a>) -&gt; Html&lt;String&gt;
+<a href=#349 id=349 data-nosnippet>349</a><span class="kw">where
+<a href=#350 id=350 data-nosnippet>350</a>    </span>E: std::fmt::Display,
+<a href=#351 id=351 data-nosnippet>351</a>{
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">let </span>channels_result: <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, E&gt; = state.api.handle_list_channels_msg().<span class="kw">await</span>;
+<a href=#353 id=353 data-nosnippet>353</a>
+<a href=#354 id=354 data-nosnippet>354</a>    <span class="kw">let </span>markup = channels_fragment_markup(channels_result, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
+<a href=#355 id=355 data-nosnippet>355</a>    Html(markup.into_string())
+<a href=#356 id=356 data-nosnippet>356</a>}
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a><span class="kw">pub async fn </span>open_channel_handler&lt;E: Display + Send + Sync&gt;(
+<a href=#359 id=359 data-nosnippet>359</a>    State(state): State&lt;UiState&lt;DynGatewayApi&lt;E&gt;&gt;&gt;,
+<a href=#360 id=360 data-nosnippet>360</a>    _auth: UserAuth,
+<a href=#361 id=361 data-nosnippet>361</a>    Form(payload): Form&lt;OpenChannelRequest&gt;,
+<a href=#362 id=362 data-nosnippet>362</a>) -&gt; Html&lt;String&gt; {
+<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">match </span>state.api.handle_open_channel_msg(payload).<span class="kw">await </span>{
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="prelude-val">Ok</span>(txid) =&gt; {
+<a href=#365 id=365 data-nosnippet>365</a>            <span class="kw">let </span>channels_result = state.api.handle_list_channels_msg().<span class="kw">await</span>;
+<a href=#366 id=366 data-nosnippet>366</a>            <span class="kw">let </span>markup = channels_fragment_markup(
+<a href=#367 id=367 data-nosnippet>367</a>                channels_result,
+<a href=#368 id=368 data-nosnippet>368</a>                <span class="prelude-val">Some</span>(<span class="macro">format!</span>(<span class="string">"Successfully initiated channel open. TxId: {txid}"</span>)),
+<a href=#369 id=369 data-nosnippet>369</a>                <span class="prelude-val">None</span>,
+<a href=#370 id=370 data-nosnippet>370</a>            );
+<a href=#371 id=371 data-nosnippet>371</a>            Html(markup.into_string())
+<a href=#372 id=372 data-nosnippet>372</a>        }
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#374 id=374 data-nosnippet>374</a>            <span class="kw">let </span>channels_result = state.api.handle_list_channels_msg().<span class="kw">await</span>;
+<a href=#375 id=375 data-nosnippet>375</a>            <span class="kw">let </span>markup = channels_fragment_markup(channels_result, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(err.to_string()));
+<a href=#376 id=376 data-nosnippet>376</a>            Html(markup.into_string())
+<a href=#377 id=377 data-nosnippet>377</a>        }
+<a href=#378 id=378 data-nosnippet>378</a>    }
+<a href=#379 id=379 data-nosnippet>379</a>}</code></pre></div></section></main></body></html>
