@@ -527,6 +527,13 @@ impl ClientModule for LightningClientModule {
                         "invoice": invoice,
                     });
                 }
+                "get_invoice" => {
+                    let req: GetInvoiceRequest = serde_json::from_value(payload)?;
+                    let invoice = get_invoice(&req.info, req.amount, req.lnurl_comment).await?;
+                    yield serde_json::json!({
+                        "invoice": invoice,
+                    });
+                }
                 "pay_bolt11_invoice" => {
                     let req: PayBolt11InvoiceRequest = serde_json::from_value(payload)?;
                     let outgoing_payment = self
@@ -621,6 +628,13 @@ struct CreateBolt11InvoiceRequest {
     expiry_time: Option<u64>,
     extra_meta: serde_json::Value,
     gateway: Option<LightningGateway>,
+}
+
+#[derive(Deserialize)]
+struct GetInvoiceRequest {
+    info: String,
+    amount: Option<Amount>,
+    lnurl_comment: Option<String>,
 }
 
 #[derive(Deserialize)]
