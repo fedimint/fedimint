@@ -21,7 +21,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET};
 use reqwest::Method;
 use serde_json::Value;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, broadcast};
 use tracing::trace;
 
 use crate::error::ServerError;
@@ -541,26 +541,58 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
         // Drop the pool lock so other connections can work in parallel
         drop(pool_locked);
 
+        let leader_tx = loop {
+            let mut leader_rx = {
+                let mut chan_locked = pool_entry_arc
+                    .merge_connection_attempts_chan
+                    .lock()
+                    .expect("locking error");
+
+                if chan_locked.is_closed() {
+                    let (leader_tx, leader_rx) = broadcast::channel(1);
+                    *chan_locked = leader_rx;
+                    // whoever was trying to connect last time is gone
+                    // we're out of this lame loop for followers
+                    break leader_tx;
+                }
+
+                // lets piggyback on the existing leader
+                chan_locked.resubscribe()
+            };
+
+            if let Ok(res) = leader_rx.recv().await {
+                match res {
+                    Ok(o) => return Ok(o),
+                    Err(err) => {
+                        return Err(ServerError::Connection(anyhow::format_err!("{}", err)));
+                    }
+                }
+            }
+        };
+
         let conn = pool_entry_arc
             .connection
-            // This serializes all the connection attempts. If one attempt to connect (including
-            // waiting for the reconnect backoff) succeeds, all waiting ones will use it. If it
-            // fails, any already pending/next will attempt it right afterwards.
-            // Nit: if multiple calls are trying to connect to the same host that is offline, it
-            // will take some of them multiples of maximum retry delay to actually return with
-            // an error. This should be fine in practice and hard to avoid without a lot of
-            // complexity.
             .get_or_try_init(|| async {
                 let retry_delay = pool_entry_arc.pre_reconnect_delay();
                 fedimint_core::runtime::sleep(retry_delay).await;
 
                 trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
-                create_connection(
+                let res = create_connection(
                     url.clone(),
                     api_secret.map(std::string::ToString::to_string),
                     self.connectors.clone(),
                 )
-                .await
+                .await;
+
+                // If any other task was also waiting to connect, send them the connection
+                // result
+                let _ = leader_tx.send(
+                    res.as_ref()
+                        .map(|o| o.clone())
+                        .map_err(|err| err.to_string()),
+                );
+
+                res
             })
             .await?;
 
@@ -581,6 +613,13 @@ struct ConnectionStateInner {
 pub struct ConnectionState<T: ?Sized> {
     /// Connection we are trying to or already established
     pub connection: tokio::sync::OnceCell<Arc<T>>,
+
+    /// When tasks attempt to connect at the same time,
+    /// this is the receiving end of the channel where
+    /// the "leader" sends a result.
+    merge_connection_attempts_chan:
+        std::sync::Mutex<broadcast::Receiver<std::result::Result<Arc<T>, String>>>,
+
     /// State that technically is protected every time by
     /// the serialization of `OnceCell::get_or_try_init`, but
     /// for Rust purposes needs to be locked.
@@ -601,6 +640,7 @@ impl<T: ?Sized> ConnectionState<T> {
                     None,
                 ),
             }),
+            merge_connection_attempts_chan: std::sync::Mutex::new(broadcast::channel(1).1),
         }
     }
 
@@ -619,6 +659,7 @@ impl<T: ?Sized> ConnectionState<T> {
                     None,
                 ),
             }),
+            merge_connection_attempts_chan: std::sync::Mutex::new(broadcast::channel(1).1),
         }
     }
 
