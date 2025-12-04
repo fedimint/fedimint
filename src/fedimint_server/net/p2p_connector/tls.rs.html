@@ -179,9 +179,9 @@
 <a href=#179 id=179 data-nosnippet>179</a>        <span class="prelude-val">Ok</span>((auth_peer, framed.into_dyn()))
 <a href=#180 id=180 data-nosnippet>180</a>    }
 <a href=#181 id=181 data-nosnippet>181</a>
-<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">async fn </span>connection_type(<span class="kw-2">&amp;</span><span class="self">self</span>, _peer: PeerId) -&gt; ConnectionType {
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">fn </span>connection_type(<span class="kw-2">&amp;</span><span class="self">self</span>, _peer: PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;ConnectionType&gt; {
 <a href=#183 id=183 data-nosnippet>183</a>        <span class="comment">// TLS connections are always direct
-<a href=#184 id=184 data-nosnippet>184</a>        </span>ConnectionType::Direct
+<a href=#184 id=184 data-nosnippet>184</a>        </span><span class="prelude-val">Some</span>(ConnectionType::Direct)
 <a href=#185 id=185 data-nosnippet>185</a>    }
 <a href=#186 id=186 data-nosnippet>186</a>}
 <a href=#187 id=187 data-nosnippet>187</a>

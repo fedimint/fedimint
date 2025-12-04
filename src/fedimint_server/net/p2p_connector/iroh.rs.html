@@ -148,29 +148,14 @@
 <a href=#148 id=148 data-nosnippet>148</a>        <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>auth_peer, connection.into_dyn()))
 <a href=#149 id=149 data-nosnippet>149</a>    }
 <a href=#150 id=150 data-nosnippet>150</a>
-<a href=#151 id=151 data-nosnippet>151</a>    <span class="kw">async fn </span>connection_type(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; ConnectionType {
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="kw">fn </span>connection_type(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;ConnectionType&gt; {
 <a href=#152 id=152 data-nosnippet>152</a>        <span class="kw">let </span>node_id = <span class="kw-2">*</span><span class="self">self</span>.node_ids.get(<span class="kw-2">&amp;</span>peer).expect(<span class="string">"No node id found for peer"</span>);
 <a href=#153 id=153 data-nosnippet>153</a>
-<a href=#154 id=154 data-nosnippet>154</a>        <span class="comment">// Try to get connection information from Iroh endpoint
-<a href=#155 id=155 data-nosnippet>155</a>        </span><span class="kw">let </span>conn_type_watcher = <span class="kw">if let </span><span class="prelude-val">Ok</span>(watcher) = <span class="self">self</span>.endpoint.conn_type(node_id) {
-<a href=#156 id=156 data-nosnippet>156</a>            watcher
-<a href=#157 id=157 data-nosnippet>157</a>        } <span class="kw">else </span>{
-<a href=#158 id=158 data-nosnippet>158</a>            <span class="comment">// If conn_type returns None, return Unknown
-<a href=#159 id=159 data-nosnippet>159</a>            </span><span class="kw">return </span>ConnectionType::Unknown;
-<a href=#160 id=160 data-nosnippet>160</a>        };
-<a href=#161 id=161 data-nosnippet>161</a>
-<a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span>conn_type = <span class="kw">if let </span><span class="prelude-val">Ok</span>(conn_type) = conn_type_watcher.get() {
-<a href=#163 id=163 data-nosnippet>163</a>            conn_type
-<a href=#164 id=164 data-nosnippet>164</a>        } <span class="kw">else </span>{
-<a href=#165 id=165 data-nosnippet>165</a>            <span class="comment">// If we can't get the connection type, return Unknown
-<a href=#166 id=166 data-nosnippet>166</a>            </span><span class="kw">return </span>ConnectionType::Unknown;
-<a href=#167 id=167 data-nosnippet>167</a>        };
-<a href=#168 id=168 data-nosnippet>168</a>
-<a href=#169 id=169 data-nosnippet>169</a>        <span class="kw">match </span>conn_type {
-<a href=#170 id=170 data-nosnippet>170</a>            iroh::endpoint::ConnectionType::Relay(<span class="kw">_</span>) =&gt; ConnectionType::Relay,
-<a href=#171 id=171 data-nosnippet>171</a>            iroh::endpoint::ConnectionType::Direct(<span class="kw">_</span>)
-<a href=#172 id=172 data-nosnippet>172</a>            | iroh::endpoint::ConnectionType::Mixed(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; ConnectionType::Direct, <span class="comment">/* Mixed connections include direct, so consider as Direct */
-<a href=#173 id=173 data-nosnippet>173</a>            </span>iroh::endpoint::ConnectionType::None =&gt; ConnectionType::Unknown,
-<a href=#174 id=174 data-nosnippet>174</a>        }
-<a href=#175 id=175 data-nosnippet>175</a>    }
-<a href=#176 id=176 data-nosnippet>176</a>}</code></pre></div></section></main></body></html>
+<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">match </span><span class="self">self</span>.endpoint.conn_type(node_id).ok()<span class="question-mark">?</span>.get().ok()<span class="question-mark">? </span>{
+<a href=#155 id=155 data-nosnippet>155</a>            iroh::endpoint::ConnectionType::None =&gt; <span class="prelude-val">None</span>,
+<a href=#156 id=156 data-nosnippet>156</a>            iroh::endpoint::ConnectionType::Direct(..) =&gt; <span class="prelude-val">Some</span>(ConnectionType::Direct),
+<a href=#157 id=157 data-nosnippet>157</a>            iroh::endpoint::ConnectionType::Relay(..) =&gt; <span class="prelude-val">Some</span>(ConnectionType::Relay),
+<a href=#158 id=158 data-nosnippet>158</a>            iroh::endpoint::ConnectionType::Mixed(..) =&gt; <span class="prelude-val">Some</span>(ConnectionType::Mixed),
+<a href=#159 id=159 data-nosnippet>159</a>        }
+<a href=#160 id=160 data-nosnippet>160</a>    }
+<a href=#161 id=161 data-nosnippet>161</a>}</code></pre></div></section></main></body></html>

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["P2PConnectionSMState"],"fn":["p2p_connection_type_channels","p2p_status_channels"],"struct":["P2PConnection","P2PConnectionSMCommon","P2PConnectionStateMachine","ReconnectP2PConnections"],"type":["P2PConnectionTypeReceivers","P2PConnectionTypeSenders","P2PStatusReceivers","P2PStatusSenders"]};
+window.SIDEBAR_ITEMS = {"enum":["P2PConnectionSMState"],"fn":["p2p_status_channels"],"struct":["P2PConnection","P2PConnectionSMCommon","P2PConnectionStateMachine","ReconnectP2PConnections"],"type":["P2PStatusReceivers","P2PStatusSenders"]};
