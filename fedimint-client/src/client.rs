@@ -198,6 +198,12 @@ impl Client {
         self.api.clone()
     }
 
+    /// Returns a stream that emits the current connection status of all peers
+    /// whenever any peer's status changes. Emits initial state immediately.
+    pub fn connection_status_stream(&self) -> impl Stream<Item = BTreeMap<PeerId, bool>> {
+        self.api.connection_status_stream()
+    }
+
     /// Get the [`TaskGroup`] that is tied to Client's lifetime.
     pub fn task_group(&self) -> &TaskGroup {
         &self.task_group
