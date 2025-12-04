@@ -59,5 +59,5 @@ pub fn fibonacci_max_one_hour() -> FibonacciBackoff {
 }
 
 pub fn api_networking_backoff() -> FibonacciBackoff {
-    custom_backoff(Duration::from_millis(250), Duration::from_secs(10), None)
+    custom_backoff(Duration::from_millis(250), Duration::from_secs(3), None)
 }
