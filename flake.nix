@@ -86,6 +86,13 @@
             (final: prev: {
               cargo-deluxe = cargo-deluxe.packages.${system}.default;
               cargo-udeps = nixpkgs-unstable.legacyPackages.${system}.cargo-udeps;
+
+              cargo-llvm-cov = (
+                # https://github.com/NixOS/nixpkgs/issues/467882
+                prev.cargo-llvm-cov.overrideAttrs (old: {
+                  doCheck = false;
+                })
+              );
             })
           ];
         };
@@ -334,9 +341,7 @@
                     pkgs.cargo-workspaces
 
                     # marked as broken on MacOS
-                    (pkgs.cargo-llvm-cov.overrideAttrs (old: {
-                      doCheck = false;
-                    }))
+                    pkgs.cargo-llvm-cov
                   ];
 
                 shellHook = ''
