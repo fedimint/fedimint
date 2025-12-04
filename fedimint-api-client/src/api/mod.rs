@@ -9,18 +9,14 @@ use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
-use bitcoin::hashes::sha256;
+use anyhow::anyhow;
+use async_stream::stream;
 use bitcoin::secp256k1;
 pub use error::{FederationError, OutputOutcomeError};
 pub use fedimint_connectors::ServerResult;
 pub use fedimint_connectors::error::ServerError;
-use fedimint_connectors::{
-    ConnectionPool, ConnectorRegistry, DynGuaridianConnection, IGuardianConnection,
-};
-use fedimint_core::admin_client::{
-    GuardianConfigBackup, PeerServerParamsLegacy, ServerStatusLegacy, SetupStatus,
-};
+use fedimint_connectors::{ConnectorRegistry, DynGuaridianConnection};
+use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
@@ -42,13 +38,14 @@ use fedimint_core::{
     util,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
-use futures::stream::FuturesUnordered;
+use futures::stream::{self, BoxStream, FuturesUnordered};
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::watch;
+use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -100,6 +97,10 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         method: &str,
         params: &ApiRequestErased,
     ) -> ServerResult<Value>;
+
+    /// Returns a stream that emits the current connection status of all peers
+    /// whenever any peer's status changes. Emits initial state immediately.
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>>;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -778,6 +779,33 @@ impl IRawFederationApi for FederationApi {
         self.connections
             .request(peer_id, method, params.clone())
             .await
+    }
+
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>> {
+        let receivers = self.connections.connections.clone();
+
+        stream! {
+            let streams = receivers
+                .iter()
+                .map(|(peer, rx)| WatchStream::new(rx.clone()).map(move |state| (*peer, state)));
+
+            let mut merged = stream::select_all(streams);
+
+            let mut status = BTreeMap::new();
+
+            for (peer, rx) in &receivers {
+                status.insert(*peer, matches!(*rx.borrow(), Some(PeerConnectionState::Connected(_))));
+            }
+
+            yield status.clone();
+
+            while let Some((peer, state)) = merged.next().await {
+                status.insert(peer, matches!(state, Some(PeerConnectionState::Connected(_))));
+
+                yield status.clone();
+            }
+        }
+        .boxed()
     }
 }
 
