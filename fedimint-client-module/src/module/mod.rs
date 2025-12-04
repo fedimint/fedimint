@@ -372,18 +372,6 @@ where
             .await
     }
 
-    pub async fn finalize_and_submit_transaction_dbtx(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        operation_id: OperationId,
-        tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
-        self.client
-            .get()
-            .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
-            .await
-    }
-
     pub async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {
         self.client.get().transaction_updates(operation_id).await
     }
