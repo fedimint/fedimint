@@ -8,7 +8,6 @@ use std::future::pending;
 use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, anyhow};
 use bitcoin::hashes::sha256;
@@ -36,7 +35,7 @@ use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
-use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff, custom_backoff};
+use fedimint_core::util::backoff_util::api_networking_backoff;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
@@ -48,7 +47,6 @@ use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::OnceCell;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -641,74 +639,6 @@ pub struct FederationApi {
     connection_pool: ConnectionPool<dyn IGuardianConnection>,
 }
 
-/// Inner part of [`ConnectionState`] preserving state between attempts to
-/// initialize [`ConnectionState::connection`]
-#[derive(Debug)]
-struct ConnectionStateInner {
-    fresh: bool,
-    backoff: FibonacciBackoff,
-}
-
-#[derive(Debug)]
-pub struct ConnectionState<T: ?Sized> {
-    /// Connection we are trying to or already established
-    pub connection: tokio::sync::OnceCell<Arc<T>>,
-    /// State that technically is protected every time by
-    /// the serialization of `OnceCell::get_or_try_init`, but
-    /// for Rust purposes needs to be locked.
-    inner: std::sync::Mutex<ConnectionStateInner>,
-}
-
-impl<T: ?Sized> ConnectionState<T> {
-    /// Create a new connection state for a first time connection
-    pub fn new_initial() -> Self {
-        Self {
-            connection: OnceCell::new(),
-            inner: std::sync::Mutex::new(ConnectionStateInner {
-                fresh: true,
-                backoff: custom_backoff(
-                    // First time connections start quick
-                    Duration::from_millis(5),
-                    Duration::from_secs(30),
-                    None,
-                ),
-            }),
-        }
-    }
-
-    /// Create a new connection state for a connection that already failed, and
-    /// is being reset
-    pub fn new_reconnecting() -> Self {
-        Self {
-            connection: OnceCell::new(),
-            inner: std::sync::Mutex::new(ConnectionStateInner {
-                // set the attempts to 1, indicating that
-                fresh: false,
-                backoff: custom_backoff(
-                    // Connections after a disconnect start with some minimum delay
-                    Duration::from_millis(500),
-                    Duration::from_secs(30),
-                    None,
-                ),
-            }),
-        }
-    }
-
-    /// Record the fact that an attempt to connect is being made, and return
-    /// time the caller should wait.
-    pub fn pre_reconnect_delay(&self) -> Duration {
-        let mut backoff_locked = self.inner.lock().expect("Locking failed");
-        let fresh = backoff_locked.fresh;
-
-        backoff_locked.fresh = false;
-
-        if fresh {
-            Duration::default()
-        } else {
-            backoff_locked.backoff.next().expect("Keeps retrying")
-        }
-    }
-}
 impl FederationApi {
     pub fn new(
         connectors: ConnectorRegistry,
