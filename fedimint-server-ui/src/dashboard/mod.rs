@@ -80,7 +80,6 @@ async fn dashboard_view(
     let fedimintd_version = state.api.fedimintd_version().await;
     let consensus_ord_latency = state.api.consensus_ord_latency().await;
     let p2p_connection_status = state.api.p2p_connection_status().await;
-    let p2p_connection_type_status = state.api.p2p_connection_type_status().await;
     let invite_code = state.api.federation_invite_code().await;
     let audit_summary = state.api.federation_audit().await;
     let bitcoin_rpc_url = state.api.bitcoin_rpc_url().await;
@@ -103,7 +102,7 @@ async fn dashboard_view(
             }
 
             div class="col-lg-6" {
-                (latency::render(consensus_ord_latency, &p2p_connection_status, &p2p_connection_type_status))
+                (latency::render(consensus_ord_latency, &p2p_connection_status))
             }
         }
 

@@ -27,7 +27,6 @@ pub const RECOVER_ENDPOINT: &str = "recover";
 pub const SETUP_STATUS_ENDPOINT: &str = "setup_status";
 pub const CONSENSUS_ORD_LATENCY_ENDPOINT: &str = "consensus_ord_latency";
 pub const P2P_CONNECTION_STATUS_ENDPOINT: &str = "p2p_connection_status";
-pub const P2P_CONNECTION_TYPE_ENDPOINT: &str = "p2p_connection_type";
 pub const START_DKG_ENDPOINT: &str = "start_dkg";
 pub const RUN_DKG_ENDPOINT: &str = "run_dkg";
 pub const RESET_SETUP_ENDPOINT: &str = "reset_setup";

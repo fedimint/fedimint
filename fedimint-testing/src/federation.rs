@@ -26,9 +26,7 @@ use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
-use fedimint_server::net::p2p::{
-    ReconnectP2PConnections, p2p_connection_type_channels, p2p_status_channels,
-};
+use fedimint_server::net::p2p::{ReconnectP2PConnections, p2p_status_channels};
 use fedimint_server::net::p2p_connector::{IP2PConnector, TlsTcpConnector};
 use fedimint_server::{ConnectionLimits, consensus};
 use fedimint_server_core::bitcoin_rpc::DynServerBitcoinRpc;
@@ -292,15 +290,12 @@ impl FederationTestBuilder {
             .into_dyn();
 
             let (p2p_status_senders, p2p_status_receivers) = p2p_status_channels(connector.peers());
-            let (p2p_connection_type_senders, p2p_connection_type_receivers) =
-                p2p_connection_type_channels(connector.peers());
 
             let connections = ReconnectP2PConnections::new(
                 cfg.local.identity,
                 connector,
                 &task_group,
                 p2p_status_senders,
-                p2p_connection_type_senders,
             )
             .into_dyn();
 
@@ -315,7 +310,6 @@ impl FederationTestBuilder {
                         .unwrap(),
                     connections,
                     p2p_status_receivers,
-                    p2p_connection_type_receivers,
                     api_bind,
                     None,
                     vec![],
