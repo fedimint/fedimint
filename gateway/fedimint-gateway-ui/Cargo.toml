@@ -23,6 +23,7 @@ fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ui-common = { workspace = true }
 maud = { workspace = true }
+qrcode = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 url = { workspace = true }

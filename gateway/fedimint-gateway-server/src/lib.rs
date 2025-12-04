@@ -1191,33 +1191,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Generates an onchain address to fund the gateway's lightning node.
-    pub async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.get_ln_onchain_address().await?;
-
-        let address = Address::from_str(&response.address).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: e.to_string(),
-            })
-        })?;
-
-        address.require_network(self.network).map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: e.to_string(),
-            })
-        })
-    }
-
-    /// Send funds from the gateway's lightning node on-chain wallet.
-    pub async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
-        let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.send_onchain(payload).await?;
-        Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
-        })
-    }
-
     /// Trigger rechecking for deposits on an address
     pub async fn handle_recheck_address_msg(
         &self,
@@ -1231,39 +1204,6 @@ impl Gateway {
             .recheck_pegin_address_by_address(payload.address)
             .await?;
         Ok(())
-    }
-
-    /// Returns the ecash, lightning, and onchain balances for the gateway and
-    /// the gateway's lightning node.
-    pub async fn handle_get_balances_msg(&self) -> AdminResult<GatewayBalances> {
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
-        let federation_infos = self
-            .federation_manager
-            .read()
-            .await
-            .federation_info_all_federations(dbtx)
-            .await;
-
-        let ecash_balances: Vec<FederationBalanceInfo> = federation_infos
-            .iter()
-            .map(|federation_info| FederationBalanceInfo {
-                federation_id: federation_info.federation_id,
-                ecash_balance_msats: Amount {
-                    msats: federation_info.balance_msat.msats,
-                },
-            })
-            .collect();
-
-        let context = self.get_lightning_context().await?;
-        let lightning_node_balances = context.lnrpc.get_balances().await?;
-
-        Ok(GatewayBalances {
-            onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
-            lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
-            ecash_balances,
-            inbound_lightning_liquidity_msats: lightning_node_balances
-                .inbound_lightning_liquidity_msats,
-        })
     }
 
     // Handles a request the spend the gateway's ecash for a given federation.
@@ -2215,6 +2155,69 @@ impl IAdminGateway for Gateway {
             .await?;
         info!(target: LOG_GATEWAY, close_channel_request = %payload, "Initiated channel closure");
         Ok(response)
+    }
+
+    /// Returns the ecash, lightning, and onchain balances for the gateway and
+    /// the gateway's lightning node.
+    async fn handle_get_balances_msg(&self) -> AdminResult<GatewayBalances> {
+        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let federation_infos = self
+            .federation_manager
+            .read()
+            .await
+            .federation_info_all_federations(dbtx)
+            .await;
+
+        let ecash_balances: Vec<FederationBalanceInfo> = federation_infos
+            .iter()
+            .map(|federation_info| FederationBalanceInfo {
+                federation_id: federation_info.federation_id,
+                ecash_balance_msats: Amount {
+                    msats: federation_info.balance_msat.msats,
+                },
+            })
+            .collect();
+
+        let context = self.get_lightning_context().await?;
+        let lightning_node_balances = context.lnrpc.get_balances().await?;
+
+        Ok(GatewayBalances {
+            onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
+            lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
+            ecash_balances,
+            inbound_lightning_liquidity_msats: lightning_node_balances
+                .inbound_lightning_liquidity_msats,
+        })
+    }
+
+    /// Send funds from the gateway's lightning node on-chain wallet.
+    async fn handle_send_onchain_msg(&self, payload: SendOnchainRequest) -> AdminResult<Txid> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.send_onchain(payload.clone()).await?;
+        let txid =
+            Txid::from_str(&response.txid).map_err(|e| AdminGatewayError::WithdrawError {
+                failure_reason: format!("Failed to parse withdrawal TXID: {e}"),
+            })?;
+        info!(onchain_request = %payload, txid = %txid, "Sent onchain transaction");
+        Ok(txid)
+    }
+
+    /// Generates an onchain address to fund the gateway's lightning node.
+    async fn handle_get_ln_onchain_address_msg(&self) -> AdminResult<Address> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.get_ln_onchain_address().await?;
+
+        let address = Address::from_str(&response.address).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })?;
+
+        address.require_network(self.network).map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })
     }
 
     fn get_password_hash(&self) -> String {

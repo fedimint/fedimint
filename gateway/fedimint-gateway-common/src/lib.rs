@@ -311,6 +311,18 @@ pub struct SendOnchainRequest {
     pub fee_rate_sats_per_vbyte: u64,
 }
 
+impl fmt::Display for SendOnchainRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SendOnchainRequest {{ address: {}, amount: {}, fee_rate_sats_per_vbyte: {} }}",
+            self.address.assume_checked_ref(),
+            self.amount,
+            self.fee_rate_sats_per_vbyte
+        )
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloseChannelsWithPeerRequest {
     pub pubkey: secp256k1::PublicKey,

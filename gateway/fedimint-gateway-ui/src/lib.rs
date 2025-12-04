@@ -9,7 +9,7 @@ mod payment_summary;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use ::bitcoin::Txid;
+use ::bitcoin::{Address, Txid};
 use async_trait::async_trait;
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Redirect};
@@ -22,8 +22,9 @@ use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
-    FederationInfo, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse,
-    OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SetFeesPayload,
+    FederationInfo, GatewayBalances, GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse,
+    OpenChannelRequest, PaymentSummaryPayload, PaymentSummaryResponse, SendOnchainRequest,
+    SetFeesPayload,
 };
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -35,7 +36,10 @@ use maud::html;
 
 use crate::connect_fed::connect_federation_handler;
 use crate::federation::{leave_federation_handler, set_fees_handler};
-use crate::lightning::{channels_fragment_handler, close_channel_handler, open_channel_handler};
+use crate::lightning::{
+    channels_fragment_handler, close_channel_handler, generate_receive_address_handler,
+    open_channel_handler, send_onchain_handler, wallet_fragment_handler,
+};
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
@@ -45,6 +49,9 @@ pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/ui/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
 pub(crate) const SET_FEES_ROUTE: &str = "/ui/federation/set-fees";
+pub(crate) const SEND_ONCHAIN_ROUTE: &str = "/ui/wallet/send";
+pub(crate) const WALLET_FRAGMENT_ROUTE: &str = "/ui/wallet/fragment";
+pub(crate) const LN_ONCHAIN_ADDRESS_ROUTE: &str = "/ui/wallet/receive";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -103,6 +110,15 @@ pub trait IAdminGateway {
         &self,
         payload: CloseChannelsWithPeerRequest,
     ) -> Result<CloseChannelsWithPeerResponse, Self::Error>;
+
+    async fn handle_get_balances_msg(&self) -> Result<GatewayBalances, Self::Error>;
+
+    async fn handle_send_onchain_msg(
+        &self,
+        payload: SendOnchainRequest,
+    ) -> Result<Txid, Self::Error>;
+
+    async fn handle_get_ln_onchain_address_msg(&self) -> Result<Address, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -241,9 +257,15 @@ pub fn router<E: Display + Send + Sync + 'static>(api: DynGatewayApi<E>) -> Rout
         .route(OPEN_CHANNEL_ROUTE, post(open_channel_handler))
         .route(CLOSE_CHANNEL_ROUTE, post(close_channel_handler))
         .route(CHANNEL_FRAGMENT_ROUTE, get(channels_fragment_handler))
+        .route(WALLET_FRAGMENT_ROUTE, get(wallet_fragment_handler))
         .route(LEAVE_FEDERATION_ROUTE, post(leave_federation_handler))
         .route(CONNECT_FEDERATION_ROUTE, post(connect_federation_handler))
         .route(SET_FEES_ROUTE, post(set_fees_handler))
+        .route(SEND_ONCHAIN_ROUTE, post(send_onchain_handler))
+        .route(
+            LN_ONCHAIN_ADDRESS_ROUTE,
+            get(generate_receive_address_handler),
+        )
         .with_static_routes();
 
     app.with_state(UiState::new(api))

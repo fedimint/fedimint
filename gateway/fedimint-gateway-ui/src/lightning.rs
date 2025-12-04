@@ -5,14 +5,19 @@ use axum::extract::State;
 use axum::response::Html;
 use fedimint_core::bitcoin::Network;
 use fedimint_gateway_common::{
-    ChannelInfo, CloseChannelsWithPeerRequest, GatewayInfo, LightningInfo, LightningMode,
-    OpenChannelRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, GatewayBalances, GatewayInfo, LightningInfo,
+    LightningMode, OpenChannelRequest, SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
-use maud::{Markup, html};
+use maud::{Markup, PreEscaped, html};
+use qrcode::QrCode;
+use qrcode::render::svg;
 
-use crate::{CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, OPEN_CHANNEL_ROUTE};
+use crate::{
+    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE,
+    OPEN_CHANNEL_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
+};
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
 where
@@ -53,6 +58,7 @@ where
     };
 
     let is_lnd = matches!(api.lightning_mode(), LightningMode::Lnd { .. });
+    let balances_result = api.handle_get_balances_msg().await;
 
     html! {
         div class="card h-100" {
@@ -69,6 +75,15 @@ where
                             type="button"
                             role="tab"
                         { "Connection Info" }
+                    }
+                    li class="nav-item" role="presentation" {
+                        button class="nav-link"
+                            id="wallet-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#wallet-tab-pane"
+                            type="button"
+                            role="tab"
+                        { "Wallet" }
                     }
                     li class="nav-item" role="presentation" {
                         button class="nav-link"
@@ -178,6 +193,27 @@ where
                     }
 
                     // ──────────────────────────────────────────
+                    //   TAB: WALLET
+                    // ──────────────────────────────────────────
+                    div class="tab-pane fade"
+                        id="wallet-tab-pane"
+                        role="tabpanel"
+                        aria-labelledby="wallet-tab" {
+
+                        div class="d-flex justify-content-between align-items-center mb-2" {
+                            div { strong { "Wallet" } }
+                            button class="btn btn-sm btn-outline-secondary"
+                                hx-get=(WALLET_FRAGMENT_ROUTE)
+                                hx-target="#wallet-container"
+                                hx-swap="outerHTML"
+                                type="button"
+                            { "Refresh" }
+                        }
+
+                        (wallet_fragment_markup(balances_result, None, None))
+                    }
+
+                    // ──────────────────────────────────────────
                     //   TAB: CHANNELS
                     // ──────────────────────────────────────────
                     div class="tab-pane fade"
@@ -201,6 +237,141 @@ where
             }
         }
     }
+}
+
+pub fn wallet_fragment_markup<E>(
+    balances_result: Result<GatewayBalances, E>,
+    success_msg: Option<String>,
+    error_msg: Option<String>,
+) -> Markup
+where
+    E: std::fmt::Display,
+{
+    html!(
+        div id="wallet-container" {
+            @match balances_result {
+                Err(err) => {
+                    // Error banner — no buttons below
+                    div class="alert alert-danger" {
+                        "Failed to load wallet balance: " (err)
+                    }
+                }
+                Ok(bal) => {
+
+                    @if let Some(success) = success_msg {
+                        div class="alert alert-success mt-2 d-flex justify-content-between align-items-center" {
+                            span { (success) }
+                        }
+                    }
+
+                    @if let Some(error) = error_msg {
+                        div class="alert alert-danger mt-2 d-flex justify-content-between align-items-center" {
+                            span { (error) }
+                        }
+                    }
+
+                    div id="wallet-balance-banner"
+                        class="alert alert-info d-flex justify-content-between align-items-center" {
+
+                        @let onchain = format!("{}", bitcoin::Amount::from_sat(bal.onchain_balance_sats));
+
+                        span {
+                            "Balance: "
+                            strong id="wallet-balance" { (onchain) }
+                        }
+                    }
+
+                    div class="mt-3" {
+                        // Toggle Send Form button
+                        button class="btn btn-sm btn-outline-primary me-2"
+                            type="button"
+                            onclick="
+                                document.getElementById('send-form').classList.toggle('d-none');
+                                document.getElementById('receive-address-container').innerHTML = '';
+                            "
+                        { "Send" }
+
+
+                        button class="btn btn-sm btn-outline-success"
+                            hx-get=(LN_ONCHAIN_ADDRESS_ROUTE)
+                            hx-target="#receive-address-container"
+                            hx-swap="outerHTML"
+                            type="button"
+                            onclick="document.getElementById('send-form').classList.add('d-none');"
+                        { "Receive" }
+                    }
+
+                    // ──────────────────────────────────────────
+                    //   Send Form (hidden until toggled)
+                    // ──────────────────────────────────────────
+                    div id="send-form" class="card card-body mt-3 d-none" {
+
+                        form
+                            id="send-onchain-form"
+                            hx-post=(SEND_ONCHAIN_ROUTE)
+                            hx-target="#wallet-container"
+                            hx-swap="outerHTML"
+                        {
+                            // Address
+                            div class="mb-3" {
+                                label class="form-label" for="address" { "Bitcoin Address" }
+                                input
+                                    type="text"
+                                    class="form-control"
+                                    id="address"
+                                    name="address"
+                                    required;
+                            }
+
+                            // Amount + ALL button
+                            div class="mb-3" {
+                                label class="form-label" for="amount" { "Amount (sats)" }
+                                div class="input-group" {
+                                    input
+                                        type="text"
+                                        class="form-control"
+                                        id="amount"
+                                        name="amount"
+                                        placeholder="e.g. 10000 or all"
+                                        required;
+
+                                    button
+                                        class="btn btn-outline-secondary"
+                                        type="button"
+                                        onclick="document.getElementById('amount').value = 'all';"
+                                    { "All" }
+                                }
+                            }
+
+                            // Fee Rate
+                            div class="mb-3" {
+                                label class="form-label" for="fee_rate" { "Sats per vbyte" }
+                                input
+                                    type="number"
+                                    class="form-control"
+                                    id="fee_rate"
+                                    name="fee_rate_sats_per_vbyte"
+                                    min="1"
+                                    required;
+                            }
+
+                            // Confirm Send
+                            div class="mt-3" {
+                                button
+                                    type="submit"
+                                    class="btn btn-sm btn-primary"
+                                {
+                                    "Confirm Send"
+                                }
+                            }
+                        }
+                    }
+
+                    div id="receive-address-container" class="mt-3" {}
+                }
+            }
+        }
+    )
 }
 
 // channels_fragment_markup converts either the channels Vec or an error string
@@ -500,4 +671,95 @@ pub async fn close_channel_handler<E: Display + Send + Sync>(
             Html(markup.into_string())
         }
     }
+}
+
+pub async fn send_onchain_handler<E: Display + Send + Sync>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<SendOnchainRequest>,
+) -> Html<String> {
+    let result = state.api.handle_send_onchain_msg(payload).await;
+
+    let balances = state.api.handle_get_balances_msg().await;
+
+    let markup = match result {
+        Ok(txid) => wallet_fragment_markup(
+            balances,
+            Some(format!("Send transaction. TxId: {txid}")),
+            None,
+        ),
+        Err(err) => wallet_fragment_markup(balances, None, Some(err.to_string())),
+    };
+
+    Html(markup.into_string())
+}
+
+pub async fn wallet_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let balances_result = state.api.handle_get_balances_msg().await;
+    let markup = wallet_fragment_markup(balances_result, None, None);
+    Html(markup.into_string())
+}
+
+pub async fn generate_receive_address_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let address_result = state.api.handle_get_ln_onchain_address_msg().await;
+
+    let markup = match address_result {
+        Ok(address) => {
+            // Generate QR code SVG
+            let code =
+                QrCode::new(address.to_qr_uri().as_bytes()).expect("Failed to generate QR code");
+            let qr_svg = code.render::<svg::Color>().build();
+
+            html! {
+                div class="card card-body bg-light d-flex flex-column align-items-center" {
+                    span class="fw-bold mb-3" { "Deposit Address:" }
+
+                    // Flex container: address on left, QR on right
+                    div class="d-flex flex-row align-items-center gap-3 flex-wrap" style="width: 100%;" {
+
+                        // Copyable input + text
+                        div class="d-flex flex-column flex-grow-1" style="min-width: 300px;" {
+                            input type="text"
+                                readonly
+                                class="form-control mb-2"
+                                style="text-align:left; font-family: monospace; font-size:1rem;"
+                                value=(address)
+                                onclick="this.select();document.execCommand('copy');"
+                            {}
+                            small class="text-muted" { "Click to copy" }
+                        }
+
+                        // QR code
+                        div class="border rounded p-2 bg-white d-flex justify-content-center align-items-center"
+                            style="width: 300px; height: 300px; min-width: 200px; min-height: 200px;"
+                        {
+                            (PreEscaped(format!(
+                                r#"<svg style="width: 100%; height: 100%; display: block;">{}</svg>"#,
+                                qr_svg.replace("width=", "data-width=").replace("height=", "data-height=")
+                            )))
+                        }
+                    }
+                }
+            }
+        }
+        Err(err) => {
+            html! {
+                div class="alert alert-danger" { "Failed to generate address: " (err) }
+            }
+        }
+    };
+
+    Html(markup.into_string())
 }
