@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use fedimint_core::Amount;
-use fedimint_core::core::{ModuleKind, OperationId};
+use fedimint_core::core::ModuleKind;
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_mint_common::{KIND, Nonce};
 use serde::{Deserialize, Serialize};
@@ -68,20 +68,5 @@ pub struct OOBNotesReissued {
 impl Event for OOBNotesReissued {
     const MODULE: Option<ModuleKind> = Some(KIND);
     const KIND: EventKind = EventKind::from_static("oob-notes-reissued");
-    const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
-}
-
-/// Event that is emitted when ecash is reissued as part of a recovery process
-#[derive(Serialize, Deserialize)]
-pub struct RecoveryReissuanceStarted {
-    /// The amount of ecash that was recovered and is being reissued
-    pub amount: Amount,
-    /// The operation id of the recovery process
-    pub operation_id: OperationId,
-}
-
-impl Event for RecoveryReissuanceStarted {
-    const MODULE: Option<ModuleKind> = Some(KIND);
-    const KIND: EventKind = EventKind::from_static("recovered-notes-reissued");
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
