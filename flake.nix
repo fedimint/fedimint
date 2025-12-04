@@ -1,8 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      # TODO: nixos-25.11, which should be soon(TM)
-      url = "github:nixos/nixpkgs/nixos-unstable";
+      url = "github:nixos/nixpkgs/nixos-25.11";
     };
     nixpkgs-unstable = {
       url = "github:nixos/nixpkgs/nixos-unstable";
@@ -335,7 +334,9 @@
                     pkgs.cargo-workspaces
 
                     # marked as broken on MacOS
-                    pkgs.cargo-llvm-cov
+                    (pkgs.cargo-llvm-cov.overrideAttrs (old: {
+                      doCheck = false;
+                    }))
                   ];
 
                 shellHook = ''
