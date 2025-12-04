@@ -61,6 +61,18 @@ where
     let balances_result = api.handle_get_balances_msg().await;
 
     html! {
+        script {
+            (PreEscaped(r#"
+            function copyToClipboard(input) {
+                input.select();
+                document.execCommand('copy');
+                const hint = input.nextElementSibling;
+                hint.textContent = 'Copied!';
+                setTimeout(() => hint.textContent = 'Click to copy', 2000);
+            }
+            "#))
+        }
+
         div class="card h-100" {
             div class="card-header dashboard-header" { "Lightning" }
             div class="card-body" {
@@ -736,7 +748,7 @@ where
                                 class="form-control mb-2"
                                 style="text-align:left; font-family: monospace; font-size:1rem;"
                                 value=(address)
-                                onclick="this.select();document.execCommand('copy');"
+                                onclick="copyToClipboard(this)"
                             {}
                             small class="text-muted" { "Click to copy" }
                         }

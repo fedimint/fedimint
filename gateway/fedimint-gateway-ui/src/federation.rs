@@ -23,17 +23,27 @@ use crate::{
 pub fn scripts() -> Markup {
     html!(
         script {
-            "function toggleFeesEdit(id) { \
-                const view = document.getElementById('fees-view-' + id); \
-                const edit = document.getElementById('fees-edit-' + id); \
-                if (view.style.display === 'none') { \
-                    view.style.display = 'block'; \
-                    edit.style.display = 'none'; \
-                } else { \
-                    view.style.display = 'none'; \
-                    edit.style.display = 'block'; \
-                } \
-            }"
+            (PreEscaped(r#"
+            function toggleFeesEdit(id) {
+                const viewDiv = document.getElementById('fees-view-' + id);
+                const editDiv = document.getElementById('fees-edit-' + id);
+                if (viewDiv.style.display === 'none') {
+                    viewDiv.style.display = '';
+                    editDiv.style.display = 'none';
+                } else {
+                    viewDiv.style.display = 'none';
+                    editDiv.style.display = '';
+                }
+            }
+
+            function copyToClipboard(input) {
+                input.select();
+                document.execCommand('copy');
+                const hint = input.nextElementSibling;
+                hint.textContent = 'Copied!';
+                setTimeout(() => hint.textContent = 'Click to copy', 2000);
+            }
+            "#))
         }
     )
 }
@@ -311,7 +321,7 @@ pub async fn deposit_address_handler<E: Display>(
                                 class="form-control mb-2"
                                 style="text-align:left; font-family: monospace; font-size:1rem;"
                                 value=(address)
-                                onclick="this.select();document.execCommand('copy');"
+                                onclick="copyToClipboard(this)"
                             {}
                             small class="text-muted" { "Click to copy" }
                         }
