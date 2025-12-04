@@ -271,10 +271,10 @@
 <a href=#271 id=271 data-nosnippet>271</a>    <span class="doccomment">/// Computes the payment statistics for the given structured payment events.
 <a href=#272 id=272 data-nosnippet>272</a>    </span><span class="kw">pub fn </span>compute(events: <span class="kw-2">&amp;</span>StructuredPaymentEvents) -&gt; <span class="self">Self </span>{
 <a href=#273 id=273 data-nosnippet>273</a>        PaymentStats {
-<a href=#274 id=274 data-nosnippet>274</a>            average_latency: get_average(<span class="kw-2">&amp;</span>events.latencies).map(Duration::from_micros),
-<a href=#275 id=275 data-nosnippet>275</a>            median_latency: get_median(<span class="kw-2">&amp;</span>events.latencies).map(Duration::from_micros),
+<a href=#274 id=274 data-nosnippet>274</a>            average_latency: get_average(<span class="kw-2">&amp;</span>events.latencies_usecs).map(Duration::from_micros),
+<a href=#275 id=275 data-nosnippet>275</a>            median_latency: get_median(<span class="kw-2">&amp;</span>events.latencies_usecs).map(Duration::from_micros),
 <a href=#276 id=276 data-nosnippet>276</a>            total_fees: Amount::from_msats(events.fees.iter().map(|a| a.msats).sum()),
-<a href=#277 id=277 data-nosnippet>277</a>            total_success: events.latencies.len(),
+<a href=#277 id=277 data-nosnippet>277</a>            total_success: events.latencies_usecs.len(),
 <a href=#278 id=278 data-nosnippet>278</a>            total_failure: events.latencies_failure.len(),
 <a href=#279 id=279 data-nosnippet>279</a>        }
 <a href=#280 id=280 data-nosnippet>280</a>    }
