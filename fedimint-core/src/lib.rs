@@ -88,7 +88,6 @@ pub mod epoch;
 pub mod fmt_utils;
 /// Federation invite code
 pub mod invite_code;
-pub mod iroh_prod;
 pub mod log;
 /// Common macros
 #[macro_use]

@@ -7,14 +7,11 @@ use iroh::discovery::pkarr::{PkarrPublisher, PkarrResolver};
 use iroh::{Endpoint, RelayMode, RelayNode, RelayUrl, SecretKey};
 use iroh_relay::RelayQuicConfig;
 use tracing::{info, warn};
-use url::Url;
 
 use crate::envs::{
     FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
-    FM_IROH_PKARR_RESOLVER_ENABLE_ENV, FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set,
-    is_env_var_set_opt,
+    FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set, is_env_var_set_opt,
 };
-use crate::iroh_prod::{FM_IROH_DNS_FEDIMINT_PROD, FM_IROH_RELAYS_FEDIMINT_PROD};
 
 pub async fn build_iroh_endpoint(
     secret_key: SecretKey,
@@ -23,34 +20,8 @@ pub async fn build_iroh_endpoint(
     iroh_relays: Vec<SafeUrl>,
     alpn: &[u8],
 ) -> Result<Endpoint, anyhow::Error> {
-    let iroh_dns_servers: Vec<_> = iroh_dns.clone().map_or_else(
-        || {
-            FM_IROH_DNS_FEDIMINT_PROD
-                .into_iter()
-                .map(|dns| dns.parse().expect("Can't fail"))
-                .collect()
-        },
-        |iroh_dns| vec![iroh_dns.to_unsafe()],
-    );
-
-    let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
-        warn!(
-            target: LOG_NET_IROH,
-            "Iroh relays are disabled"
-        );
-        RelayMode::Disabled
-    } else if iroh_relays.is_empty() {
-        RelayMode::Custom(
-            FM_IROH_RELAYS_FEDIMINT_PROD
-                .into_iter()
-                .map(|url| RelayNode {
-                    url: RelayUrl::from(Url::parse(url).expect("Hardcoded, can't fail")),
-                    stun_only: false,
-                    stun_port: DEFAULT_STUN_PORT,
-                    quic: Some(RelayQuicConfig::default()),
-                })
-                .collect(),
-        )
+    let relay_mode = if iroh_relays.is_empty() {
+        RelayMode::Default
     } else {
         RelayMode::Custom(
             iroh_relays
@@ -67,7 +38,7 @@ pub async fn build_iroh_endpoint(
 
     let mut builder = Endpoint::builder();
 
-    for iroh_dns in iroh_dns_servers {
+    if let Some(iroh_dns) = iroh_dns.map(SafeUrl::to_unsafe) {
         if is_env_var_set_opt(FM_IROH_PKARR_PUBLISHER_ENABLE_ENV).unwrap_or(true) {
             builder = builder.add_discovery({
                 let iroh_dns = iroh_dns.clone();
