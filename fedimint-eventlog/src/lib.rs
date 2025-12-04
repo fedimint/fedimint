@@ -12,8 +12,10 @@
 //! potentially emitting events of its own, and atomically updating persisted
 //! event log position ("cursor") of events that were already processed.
 use std::borrow::Cow;
+use std::ops;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
@@ -229,7 +231,25 @@ pub struct EventLogEntry {
     pub payload: Vec<u8>,
 }
 
-/// Struct used for processing log entries after they have been persisted.
+impl EventLogEntry {
+    pub fn module_kind(&self) -> Option<&ModuleKind> {
+        self.module.as_ref().map(|m| &m.0)
+    }
+
+    pub fn module_id(&self) -> Option<ModuleInstanceId> {
+        self.module.as_ref().map(|m| m.1)
+    }
+
+    /// Get the event payload as typed value
+    pub fn to_event<E>(&self) -> Option<E>
+    where
+        E: Event,
+    {
+        serde_json::from_slice(&self.payload).ok()
+    }
+}
+
+/// An `EventLogEntry` that was already persisted (so has an id)
 #[derive(Debug, Clone)]
 pub struct PersistedLogEntry {
     id: EventLogId,
@@ -362,6 +382,15 @@ impl PersistedLogEntry {
         &self.inner
     }
 }
+
+impl ops::Deref for PersistedLogEntry {
+    type Target = EventLogEntry;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 impl_db_record!(
     key = UnordedEventLogId,
     value = UnorderedEventLogEntry,
@@ -882,15 +911,11 @@ where
 /// This function is intended for small data sets. If the data set relations
 /// grow, this function should implement a different join algorithm or be moved
 /// out of the gateway.
-///
-/// FIXME: This function eagerly stuff eagerly on a quadratic cartesian product
-/// of events is potentially a problem. We should delay deserialization as far
-/// as possible, so the filtering and matching on event types can remove as much
-/// work as possible.
 pub fn join_events<'a, L, R, Res>(
     events_l: &'a [&PersistedLogEntry],
     events_r: &'a [&PersistedLogEntry],
-    predicate: impl Fn(L, R, u64) -> Option<Res> + 'a,
+    max_time_distance: Option<Duration>,
+    predicate: impl Fn(L, R, Duration) -> Option<Res> + 'a,
 ) -> impl Iterator<Item = Res> + 'a
 where
     L: Event,
@@ -900,12 +925,16 @@ where
         .iter()
         .cartesian_product(events_r)
         .filter_map(move |(l, r)| {
-            if let Some(latency) = r.inner.ts_usecs.checked_sub(l.inner.ts_usecs) {
-                let event_l: L =
-                    serde_json::from_slice(&l.inner.payload).expect("could not parse JSON");
-                let event_r: R =
-                    serde_json::from_slice(&r.inner.payload).expect("could not parse JSON");
-                predicate(event_l, event_r, latency)
+            if L::MODULE.as_ref() == l.as_raw().module_kind()
+                && L::KIND == l.as_raw().kind
+                && R::MODULE.as_ref() == r.as_raw().module_kind()
+                && R::KIND == r.as_raw().kind
+                && let Some(latency_usecs) = r.inner.ts_usecs.checked_sub(l.inner.ts_usecs)
+                && max_time_distance.is_none_or(|max| u128::from(latency_usecs) <= max.as_millis())
+                && let Some(l) = l.as_raw().to_event()
+                && let Some(r) = r.as_raw().to_event()
+            {
+                predicate(l, r, Duration::from_millis(latency_usecs))
             } else {
                 None
             }
@@ -916,7 +945,7 @@ where
 /// payments.
 #[derive(Debug, Default)]
 pub struct StructuredPaymentEvents {
-    pub latencies: Vec<u64>,
+    pub latencies_usecs: Vec<u64>,
     pub fees: Vec<Amount>,
     pub latencies_failure: Vec<u64>,
 }
@@ -927,7 +956,7 @@ impl StructuredPaymentEvents {
         failure_stats: Vec<u64>,
     ) -> StructuredPaymentEvents {
         let mut events = StructuredPaymentEvents {
-            latencies: success_stats.iter().map(|(l, _)| *l).collect(),
+            latencies_usecs: success_stats.iter().map(|(l, _)| *l).collect(),
             fees: success_stats.iter().map(|(_, f)| *f).collect(),
             latencies_failure: failure_stats,
         };
@@ -938,7 +967,7 @@ impl StructuredPaymentEvents {
     /// Combines this `StructuredPaymentEvents` with the `other`
     /// `StructuredPaymentEvents` by appending all of the internal vectors.
     pub fn combine(&mut self, other: &mut StructuredPaymentEvents) {
-        self.latencies.append(&mut other.latencies);
+        self.latencies_usecs.append(&mut other.latencies_usecs);
         self.fees.append(&mut other.fees);
         self.latencies_failure.append(&mut other.latencies_failure);
         self.sort();
@@ -947,7 +976,7 @@ impl StructuredPaymentEvents {
     /// Sorts this `StructuredPaymentEvents` by sorting all of the internal
     /// vectors.
     fn sort(&mut self) {
-        self.latencies.sort_unstable();
+        self.latencies_usecs.sort_unstable();
         self.fees.sort_unstable();
         self.latencies_failure.sort_unstable();
     }
