@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use fedimint_connectors::ServerResult;
@@ -6,6 +6,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{PeerId, apply, async_trait_maybe_send, maybe_add_send_sync};
+use futures::stream::BoxStream;
 use serde_json::Value;
 
 use super::super::{DynModuleApi, IRawFederationApi};
@@ -84,5 +85,9 @@ impl IRawFederationApi for RawFederationApiWithRequestHook {
         params: &ApiRequestErased,
     ) -> ServerResult<Value> {
         self.inner.request_raw(peer_id, method, params).await
+    }
+
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>> {
+        self.inner.connection_status_stream()
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::string::ToString;
 
 use fedimint_api_client::api::{DynModuleApi, IRawFederationApi, ServerResult};
@@ -7,6 +7,7 @@ use fedimint_core::db::{Database, DatabaseTransaction};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{PeerId, apply, async_trait_maybe_send};
+use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::watch;
@@ -162,5 +163,9 @@ where
         .await;
 
         res
+    }
+
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>> {
+        self.inner.connection_status_stream()
     }
 }

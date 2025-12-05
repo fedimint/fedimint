@@ -2684,6 +2684,7 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "async-channel",
+ "async-stream",
  "async-trait",
  "bitcoin",
  "fedimint-connectors",
@@ -2698,6 +2699,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 
