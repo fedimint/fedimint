@@ -75,7 +75,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
             .get_first_module::<LightningClientModule>()?
             .send(invoice.clone(), Some(gateway_api.clone()), Value::Null)
             .await,
-        Err(SendPaymentError::PendingPreviousPayment(operation_id)),
+        Err(SendPaymentError::PaymentInProgress(operation_id)),
     );
 
     let mut sub = client
@@ -96,7 +96,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
             .get_first_module::<LightningClientModule>()?
             .send(invoice, Some(gateway_api), Value::Null)
             .await,
-        Err(SendPaymentError::SuccessfulPreviousPayment(operation_id)),
+        Err(SendPaymentError::InvoiceAlreadyPaid(operation_id)),
     );
 
     Ok(())
