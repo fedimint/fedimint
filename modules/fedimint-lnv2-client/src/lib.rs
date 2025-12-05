@@ -442,10 +442,10 @@ impl LightningClientModule {
             .module_api
             .gateways()
             .await
-            .map_err(|e| SelectGatewayError::FederationError(e.to_string()))?;
+            .map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))?;
 
         if gateways.is_empty() {
-            return Err(SelectGatewayError::NoVettedGateways);
+            return Err(SelectGatewayError::NoGatewaysAvailable);
         }
 
         if let Some(invoice) = invoice
@@ -468,7 +468,7 @@ impl LightningClientModule {
             }
         }
 
-        Err(SelectGatewayError::FailedToFetchRoutingInfo)
+        Err(SelectGatewayError::GatewaysUnresponsive)
     }
 
     async fn routing_info(&self, gateway: &SafeUrl) -> Result<Option<RoutingInfo>, ServerError> {
@@ -528,30 +528,30 @@ impl LightningClientModule {
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
                     .await
-                    .map_err(|e| SendPaymentError::GatewayConnectionError(e.to_string()))?
-                    .ok_or(SendPaymentError::UnknownFederation)?,
+                    .map_err(|e| SendPaymentError::FailedToConnectToGateway(e.to_string()))?
+                    .ok_or(SendPaymentError::FederationNotSupported)?,
             ),
             None => self
                 .select_gateway(Some(invoice.clone()))
                 .await
-                .map_err(SendPaymentError::FailedToSelectGateway)?,
+                .map_err(SendPaymentError::SelectGateway)?,
         };
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
         if !send_fee.le(&PaymentFee::SEND_FEE_LIMIT) {
-            return Err(SendPaymentError::PaymentFeeExceedsLimit);
+            return Err(SendPaymentError::GatewayFeeExceedsLimit);
         }
 
         if EXPIRATION_DELTA_LIMIT < expiration_delta {
-            return Err(SendPaymentError::ExpirationDeltaExceedsLimit);
+            return Err(SendPaymentError::GatewayExpirationExceedsLimit);
         }
 
         let consensus_block_count = self
             .module_api
             .consensus_block_count()
             .await
-            .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
+            .map_err(|e| SendPaymentError::FailedToRequestBlockCount(e.to_string()))?;
 
         let contract = OutgoingContract {
             payment_image: PaymentImage::Hash(*invoice.payment_hash()),
@@ -610,7 +610,7 @@ impl LightningClientModule {
                 transaction,
             )
             .await
-            .map_err(|e| SendPaymentError::FinalizationError(e.to_string()))?;
+            .map_err(|e| SendPaymentError::FailedToFundPayment(e.to_string()))?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -642,7 +642,7 @@ impl LightningClientModule {
             }
 
             if self.client_ctx.has_active_states(operation_id).await {
-                return Err(SendPaymentError::PendingPreviousPayment(operation_id));
+                return Err(SendPaymentError::PaymentInProgress(operation_id));
             }
 
             let mut stream = self
@@ -655,7 +655,7 @@ impl LightningClientModule {
             // so by definition a final state has to have been assumed already.
             while let Some(state) = stream.next().await {
                 if let SendOperationState::Success(_) = state {
-                    return Err(SendPaymentError::SuccessfulPreviousPayment(operation_id));
+                    return Err(SendPaymentError::InvoiceAlreadyPaid(operation_id));
                 }
             }
         }
@@ -817,17 +817,17 @@ impl LightningClientModule {
                 gateway.clone(),
                 self.routing_info(&gateway)
                     .await
-                    .map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))?
-                    .ok_or(ReceiveError::UnknownFederation)?,
+                    .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?
+                    .ok_or(ReceiveError::FederationNotSupported)?,
             ),
             None => self
                 .select_gateway(None)
                 .await
-                .map_err(ReceiveError::FailedToSelectGateway)?,
+                .map_err(ReceiveError::SelectGateway)?,
         };
 
         if !routing_info.receive_fee.le(&PaymentFee::RECEIVE_FEE_LIMIT) {
-            return Err(ReceiveError::PaymentFeeExceedsLimit);
+            return Err(ReceiveError::GatewayFeeExceedsLimit);
         }
 
         let contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
@@ -835,7 +835,7 @@ impl LightningClientModule {
         // The dust limit ensures that the incoming contract can be claimed without
         // additional funds as the contracts amount is sufficient to cover the fees
         if contract_amount < Amount::from_sats(5) {
-            return Err(ReceiveError::DustAmount);
+            return Err(ReceiveError::AmountTooSmall);
         }
 
         let expiration = duration_since_epoch()
@@ -872,14 +872,14 @@ impl LightningClientModule {
                 expiry_secs,
             )
             .await
-            .map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))?;
+            .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?;
 
         if invoice.payment_hash() != &preimage.consensus_hash() {
-            return Err(ReceiveError::InvalidInvoicePaymentHash);
+            return Err(ReceiveError::InvalidInvoice);
         }
 
         if invoice.amount_milli_satoshis() != Some(amount.msats) {
-            return Err(ReceiveError::InvalidInvoiceAmount);
+            return Err(ReceiveError::IncorrectInvoiceAmount);
         }
 
         Ok((gateway, contract, invoice))
@@ -1020,7 +1020,7 @@ impl LightningClientModule {
         &self,
         recurringd: SafeUrl,
         gateway: Option<SafeUrl>,
-    ) -> Result<String, RegisterLnurlError> {
+    ) -> Result<String, GenerateLnurlError> {
         let gateways = if let Some(gateway) = gateway {
             vec![gateway]
         } else {
@@ -1028,10 +1028,10 @@ impl LightningClientModule {
                 .module_api
                 .gateways()
                 .await
-                .map_err(|e| RegisterLnurlError::FederationError(e.to_string()))?;
+                .map_err(|e| GenerateLnurlError::FailedToRequestGateways(e.to_string()))?;
 
             if gateways.is_empty() {
-                return Err(RegisterLnurlError::NoVettedGateways);
+                return Err(GenerateLnurlError::NoGatewaysAvailable);
             }
 
             gateways
@@ -1045,7 +1045,7 @@ impl LightningClientModule {
             gateways,
         )
         .await
-        .map_err(|e| RegisterLnurlError::RegistrationError(e.to_string()))?;
+        .map_err(|e| GenerateLnurlError::FailedToRequestLnurl(e.to_string()))?;
 
         Ok(lnurl)
     }
@@ -1104,41 +1104,39 @@ impl LightningClientModule {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum SelectGatewayError {
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
-    #[error("The federation has no vetted gateways")]
-    NoVettedGateways,
-    #[error("All vetted gateways failed to respond on request of the routing info")]
-    FailedToFetchRoutingInfo,
+    #[error("Failed to request gateways")]
+    FailedToRequestGateways(String),
+    #[error("No gateways are available")]
+    NoGatewaysAvailable,
+    #[error("All gateways failed to respond")]
+    GatewaysUnresponsive,
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum SendPaymentError {
-    #[error("The invoice has not amount")]
+    #[error("Invoice is missing an amount")]
     InvoiceMissingAmount,
-    #[error("The invoice has expired")]
+    #[error("Invoice has expired")]
     InvoiceExpired,
-    #[error("A previous payment for the same invoice is still pending: {}", .0.fmt_full())]
-    PendingPreviousPayment(OperationId),
-    #[error("A previous payment for the same invoice was successful: {}", .0.fmt_full())]
-    SuccessfulPreviousPayment(OperationId),
-    #[error("Failed to select gateway: {0}")]
-    FailedToSelectGateway(SelectGatewayError),
-    #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(String),
-    #[error("The gateway does not support our federation")]
-    UnknownFederation,
-    #[error("The gateways fee of exceeds the limit")]
-    PaymentFeeExceedsLimit,
-    #[error("The gateways expiration delta of exceeds the limit")]
-    ExpirationDeltaExceedsLimit,
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
-    #[error("We failed to finalize the funding transaction")]
-    FinalizationError(String),
-    #[error(
-        "The invoice was for the wrong currency. Invoice currency={invoice_currency} Federation Currency={federation_currency}"
-    )]
+    #[error("A payment for this invoice is already in progress")]
+    PaymentInProgress(OperationId),
+    #[error("This invoice has already been paid")]
+    InvoiceAlreadyPaid(OperationId),
+    #[error(transparent)]
+    SelectGateway(SelectGatewayError),
+    #[error("Failed to connect to gateway")]
+    FailedToConnectToGateway(String),
+    #[error("Gateway does not support this federation")]
+    FederationNotSupported,
+    #[error("Gateway fee exceeds the allowed limit")]
+    GatewayFeeExceedsLimit,
+    #[error("Gateway expiration time exceeds the allowed limit")]
+    GatewayExpirationExceedsLimit,
+    #[error("Failed to request block count")]
+    FailedToRequestBlockCount(String),
+    #[error("Failed to fund the payment")]
+    FailedToFundPayment(String),
+    #[error("Invoice is for a different currency")]
     WrongCurrency {
         invoice_currency: Currency,
         federation_currency: Currency,
@@ -1147,30 +1145,30 @@ pub enum SendPaymentError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum ReceiveError {
-    #[error("Failed to select gateway: {0}")]
-    FailedToSelectGateway(SelectGatewayError),
-    #[error("Gateway connection error: {0}")]
-    GatewayConnectionError(String),
-    #[error("The gateway does not support our federation")]
-    UnknownFederation,
-    #[error("The gateways fee exceeds the limit")]
-    PaymentFeeExceedsLimit,
-    #[error("The total fees required to complete this payment exceed its amount")]
-    DustAmount,
-    #[error("The invoice's payment hash is incorrect")]
-    InvalidInvoicePaymentHash,
-    #[error("The invoice's amount is incorrect")]
-    InvalidInvoiceAmount,
+    #[error(transparent)]
+    SelectGateway(SelectGatewayError),
+    #[error("Failed to connect to gateway")]
+    FailedToConnectToGateway(String),
+    #[error("Gateway does not support this federation")]
+    FederationNotSupported,
+    #[error("Gateway fee exceeds the allowed limit")]
+    GatewayFeeExceedsLimit,
+    #[error("Amount is too small to cover fees")]
+    AmountTooSmall,
+    #[error("Gateway returned an invalid invoice")]
+    InvalidInvoice,
+    #[error("Gateway returned an invoice with incorrect amount")]
+    IncorrectInvoiceAmount,
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
-pub enum RegisterLnurlError {
-    #[error("The federation has no vetted gateways")]
-    NoVettedGateways,
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
-    #[error("Failed to register lnurl: {0}")]
-    RegistrationError(String),
+pub enum GenerateLnurlError {
+    #[error("No gateways are available")]
+    NoGatewaysAvailable,
+    #[error("Failed to request gateways")]
+    FailedToRequestGateways(String),
+    #[error("Failed to request LNURL")]
+    FailedToRequestLnurl(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
