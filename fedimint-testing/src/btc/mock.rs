@@ -21,6 +21,9 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, Feerate};
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
+use fedimint_walletv2_common::esplora_api::{
+    AddressUnspentTxOut, AddressUnspentTxOutStatus, IEsploraConnection,
+};
 use rand::rngs::OsRng;
 use tracing::debug;
 
@@ -38,7 +41,7 @@ struct FakeBitcoinTestInner {
     /// Simulates the merkle tree proofs
     proofs: BTreeMap<Txid, TxOutProof>,
     /// Simulates the script history
-    scripts: BTreeMap<ScriptBuf, Vec<Transaction>>,
+    scripts: BTreeMap<ScriptBuf, Vec<(Transaction, u64)>>,
     /// Tracks the block height a transaction was included
     txid_to_block_height: BTreeMap<Txid, usize>,
 }
@@ -195,18 +198,26 @@ impl BitcoinTest for FakeBitcoinTest {
             ref mut txid_to_block_height,
             ..
         } = *inner;
+        let block_height = blocks.len() as u64;
         FakeBitcoinTest::mine_block(addresses, blocks, pending, txid_to_block_height);
         let block_header = inner.blocks.last().unwrap().header;
         let proof = TxOutProof {
             block_header,
             merkle_proof,
         };
+
         inner
             .proofs
             .insert(transaction.compute_txid(), proof.clone());
-        inner
-            .scripts
-            .insert(address.script_pubkey(), vec![transaction.clone()]);
+
+        if let Some(txs) = inner.scripts.get_mut(&address.script_pubkey()) {
+            txs.push((transaction.clone(), block_height));
+        } else {
+            inner.scripts.insert(
+                address.script_pubkey(),
+                vec![(transaction.clone(), block_height)],
+            );
+        }
 
         (proof, transaction)
     }
@@ -304,7 +315,11 @@ impl IBitcoindRpc for FakeBitcoinTest {
         script: &bitcoin::ScriptBuf,
     ) -> Result<Vec<bitcoin::Transaction>> {
         let inner = self.inner.read().unwrap();
-        Ok(inner.scripts.get(script).cloned().unwrap_or_default())
+        Ok(inner
+            .scripts
+            .get(script)
+            .map(|txs| txs.iter().map(|(tx, _)| tx.clone()).collect())
+            .unwrap_or_default())
     }
 
     async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<TxOutProof> {
@@ -402,5 +417,47 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
 
     async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
         Ok(None)
+    }
+}
+
+#[async_trait]
+impl IEsploraConnection for FakeBitcoinTest {
+    async fn get_address_utxo(
+        &self,
+        _esplora: SafeUrl,
+        address: Address,
+    ) -> anyhow::Result<Vec<AddressUnspentTxOut>> {
+        let inner = self.inner.read().unwrap();
+
+        Ok(inner
+            .scripts
+            .get(&address.script_pubkey())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .flat_map(|(transaction, block_height)| {
+                let script_pubkey = address.script_pubkey();
+                let txid = transaction.compute_txid();
+
+                transaction
+                    .output
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(move |(vout, tx_out)| {
+                        if tx_out.script_pubkey == script_pubkey {
+                            Some(AddressUnspentTxOut {
+                                value: tx_out.value.to_sat(),
+                                status: AddressUnspentTxOutStatus {
+                                    block_height: Some(block_height),
+                                },
+                                txid,
+                                vout: vout as u32,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect())
     }
 }
