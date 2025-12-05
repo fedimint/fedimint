@@ -1090,25 +1090,13 @@ impl ConsensusEngine {
             }
         };
 
-        let mut backoff = fedimint_core::util::backoff_util::api_networking_backoff();
-        loop {
-            let result = federation_api
-                .request_with_strategy(
-                    FilterMap::new(filter_map.clone()),
-                    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
-                    ApiRequestErased::new(index),
-                )
-                .await;
-
-            match result {
-                Ok(signed_session_outcome) => return signed_session_outcome,
-                Err(error) => {
-                    error.report_if_unusual("Requesting Session Outcome");
-                }
-            }
-
-            sleep(backoff.next().expect("infinite retries")).await;
-        }
+        federation_api
+            .request_with_strategy_retry(
+                FilterMap::new(filter_map.clone()),
+                AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
+                ApiRequestErased::new(index),
+            )
+            .await
     }
 
     /// Returns the number of sessions already saved in the database. This count
