@@ -261,7 +261,9 @@ jobs:
           nix build -L .#ci.cargoDeny
 
   cross:
-    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
+    # we run it in the MQ, not in PR itself, because other than Nix/nixpkgs/toolchain
+    # changes, it is unlikely to be broken by normal dev work
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group')
     name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.toolchain }}"
     needs: [lint, shell]
 
