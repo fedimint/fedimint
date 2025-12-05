@@ -309,7 +309,7 @@ jobs:
           nix build -L .#${{ matrix.toolchain }}.ci.fedimint-client-wasm
 
   containers:
-    if: github.repository == 'fedimint/fedimint'
+    if: github.repository == 'fedimint/fedimint' && (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/'))
     name: "Containers"
     strategy:
       matrix:
@@ -396,7 +396,7 @@ jobs:
           nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${GITHUB_REF_NAME}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   manifest:
-    if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/'))
+    if: github.repository == 'fedimint/fedimint' && (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/'))
     name: "Create Multi-arch Manifests"
     needs: containers
     runs-on: [self-hosted, linux, x64]
