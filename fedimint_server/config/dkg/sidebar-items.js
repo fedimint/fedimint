@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DkgStep"],"fn":["eval_poly_scalar","run_dkg"],"struct":["Dkg"]};
+window.SIDEBAR_ITEMS = {};

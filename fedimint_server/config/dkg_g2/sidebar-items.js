@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DkgStepG2"],"fn":["eval_poly_scalar","run_dkg_g2"],"struct":["DkgG2"]};
