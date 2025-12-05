@@ -28,6 +28,7 @@ concurrency:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   self-care:
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
     name: Flake self-check
     runs-on: [self-hosted, linux, x64]
     steps:
@@ -40,6 +41,7 @@ jobs:
           nixpkgs-keys: nixpkgs
 
   lint:
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
     name: "Lint"
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
@@ -70,7 +72,7 @@ jobs:
         run: nix eval --system aarch64-darwin .#workspaceBuild
 
   shell:
-    if: github.repository == 'fedimint/fedimint'
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
     strategy:
       matrix:
         host:
@@ -107,7 +109,7 @@ jobs:
         run: nix develop -L -c true
 
   build:
-    if: github.repository == 'fedimint/fedimint'
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
     strategy:
       matrix:
         host:
@@ -233,7 +235,7 @@ jobs:
           nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
 
   audit:
-    if: github.repository == 'fedimint/fedimint'
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
     name: "Audit"
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
@@ -259,6 +261,9 @@ jobs:
           nix build -L .#ci.cargoDeny
 
   cross:
+    # we run it in the MQ, not in PR itself, because other than Nix/nixpkgs/toolchain
+    # changes, it is unlikely to be broken by normal dev work
+    if: github.repository == 'fedimint/fedimint' && (github.event_name == 'merge_group')
     name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.toolchain }}"
     needs: [lint, shell]
 
@@ -306,7 +311,7 @@ jobs:
           nix build -L .#${{ matrix.toolchain }}.ci.fedimint-client-wasm
 
   containers:
-    if: github.repository == 'fedimint/fedimint'
+    if: github.repository == 'fedimint/fedimint' && (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/'))
     name: "Containers"
     strategy:
       matrix:
@@ -393,7 +398,7 @@ jobs:
           nix_tag=${{ env.container_tag }} && hub_tag="${{ matrix.container.image }}:${GITHUB_REF_NAME}-${{ matrix.platform.arch }}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
 
   manifest:
-    if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/'))
+    if: github.repository == 'fedimint/fedimint' && (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/'))
     name: "Create Multi-arch Manifests"
     needs: containers
     runs-on: [self-hosted, linux, x64]
@@ -465,7 +470,7 @@ jobs:
           done
 
   pkgs:
-    if: github.repository == 'fedimint/fedimint' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
+    if: github.repository == 'fedimint/fedimint' && (startsWith(github.ref, 'refs/heads/releases') || github.ref_type == 'tag')
     name: "Release packages: ${{ matrix.build.flake-output }} on ${{ matrix.platform.name }}"
 
     strategy:
