@@ -2219,6 +2219,12 @@ impl IAdminGateway for Gateway {
             })
         })
     }
+    async fn handle_deposit_address_msg(
+        &self,
+        payload: DepositAddressPayload,
+    ) -> AdminResult<Address> {
+        self.handle_address_msg(payload).await
+    }
 
     fn get_password_hash(&self) -> String {
         self.bcrypt_password_hash.to_string()
