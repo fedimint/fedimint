@@ -442,10 +442,10 @@
 <a href=#442 id=442 data-nosnippet>442</a>            </span>.module_api
 <a href=#443 id=443 data-nosnippet>443</a>            .gateways()
 <a href=#444 id=444 data-nosnippet>444</a>            .<span class="kw">await
-<a href=#445 id=445 data-nosnippet>445</a>            </span>.map_err(|e| SelectGatewayError::FederationError(e.to_string()))<span class="question-mark">?</span>;
+<a href=#445 id=445 data-nosnippet>445</a>            </span>.map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))<span class="question-mark">?</span>;
 <a href=#446 id=446 data-nosnippet>446</a>
 <a href=#447 id=447 data-nosnippet>447</a>        <span class="kw">if </span>gateways.is_empty() {
-<a href=#448 id=448 data-nosnippet>448</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(SelectGatewayError::NoVettedGateways);
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(SelectGatewayError::NoGatewaysAvailable);
 <a href=#449 id=449 data-nosnippet>449</a>        }
 <a href=#450 id=450 data-nosnippet>450</a>
 <a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(invoice) = invoice
@@ -468,7 +468,7 @@
 <a href=#468 id=468 data-nosnippet>468</a>            }
 <a href=#469 id=469 data-nosnippet>469</a>        }
 <a href=#470 id=470 data-nosnippet>470</a>
-<a href=#471 id=471 data-nosnippet>471</a>        <span class="prelude-val">Err</span>(SelectGatewayError::FailedToFetchRoutingInfo)
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="prelude-val">Err</span>(SelectGatewayError::GatewaysUnresponsive)
 <a href=#472 id=472 data-nosnippet>472</a>    }
 <a href=#473 id=473 data-nosnippet>473</a>
 <a href=#474 id=474 data-nosnippet>474</a>    <span class="kw">async fn </span>routing_info(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>SafeUrl) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, ServerError&gt; {
@@ -528,30 +528,30 @@
 <a href=#528 id=528 data-nosnippet>528</a>                gateway_api.clone(),
 <a href=#529 id=529 data-nosnippet>529</a>                <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway_api)
 <a href=#530 id=530 data-nosnippet>530</a>                    .<span class="kw">await
-<a href=#531 id=531 data-nosnippet>531</a>                    </span>.map_err(|e| SendPaymentError::GatewayConnectionError(e.to_string()))<span class="question-mark">?
-<a href=#532 id=532 data-nosnippet>532</a>                    </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>,
+<a href=#531 id=531 data-nosnippet>531</a>                    </span>.map_err(|e| SendPaymentError::FailedToConnectToGateway(e.to_string()))<span class="question-mark">?
+<a href=#532 id=532 data-nosnippet>532</a>                    </span>.ok_or(SendPaymentError::FederationNotSupported)<span class="question-mark">?</span>,
 <a href=#533 id=533 data-nosnippet>533</a>            ),
 <a href=#534 id=534 data-nosnippet>534</a>            <span class="prelude-val">None </span>=&gt; <span class="self">self
 <a href=#535 id=535 data-nosnippet>535</a>                </span>.select_gateway(<span class="prelude-val">Some</span>(invoice.clone()))
 <a href=#536 id=536 data-nosnippet>536</a>                .<span class="kw">await
-<a href=#537 id=537 data-nosnippet>537</a>                </span>.map_err(SendPaymentError::FailedToSelectGateway)<span class="question-mark">?</span>,
+<a href=#537 id=537 data-nosnippet>537</a>                </span>.map_err(SendPaymentError::SelectGateway)<span class="question-mark">?</span>,
 <a href=#538 id=538 data-nosnippet>538</a>        };
 <a href=#539 id=539 data-nosnippet>539</a>
 <a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>(send_fee, expiration_delta) = routing_info.send_parameters(<span class="kw-2">&amp;</span>invoice);
 <a href=#541 id=541 data-nosnippet>541</a>
 <a href=#542 id=542 data-nosnippet>542</a>        <span class="kw">if </span>!send_fee.le(<span class="kw-2">&amp;</span>PaymentFee::SEND_FEE_LIMIT) {
-<a href=#543 id=543 data-nosnippet>543</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentFeeExceedsLimit);
+<a href=#543 id=543 data-nosnippet>543</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::GatewayFeeExceedsLimit);
 <a href=#544 id=544 data-nosnippet>544</a>        }
 <a href=#545 id=545 data-nosnippet>545</a>
 <a href=#546 id=546 data-nosnippet>546</a>        <span class="kw">if </span>EXPIRATION_DELTA_LIMIT &lt; expiration_delta {
-<a href=#547 id=547 data-nosnippet>547</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::ExpirationDeltaExceedsLimit);
+<a href=#547 id=547 data-nosnippet>547</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::GatewayExpirationExceedsLimit);
 <a href=#548 id=548 data-nosnippet>548</a>        }
 <a href=#549 id=549 data-nosnippet>549</a>
 <a href=#550 id=550 data-nosnippet>550</a>        <span class="kw">let </span>consensus_block_count = <span class="self">self
 <a href=#551 id=551 data-nosnippet>551</a>            </span>.module_api
 <a href=#552 id=552 data-nosnippet>552</a>            .consensus_block_count()
 <a href=#553 id=553 data-nosnippet>553</a>            .<span class="kw">await
-<a href=#554 id=554 data-nosnippet>554</a>            </span>.map_err(|e| SendPaymentError::FederationError(e.to_string()))<span class="question-mark">?</span>;
+<a href=#554 id=554 data-nosnippet>554</a>            </span>.map_err(|e| SendPaymentError::FailedToRequestBlockCount(e.to_string()))<span class="question-mark">?</span>;
 <a href=#555 id=555 data-nosnippet>555</a>
 <a href=#556 id=556 data-nosnippet>556</a>        <span class="kw">let </span>contract = OutgoingContract {
 <a href=#557 id=557 data-nosnippet>557</a>            payment_image: PaymentImage::Hash(<span class="kw-2">*</span>invoice.payment_hash()),
@@ -610,7 +610,7 @@
 <a href=#610 id=610 data-nosnippet>610</a>                transaction,
 <a href=#611 id=611 data-nosnippet>611</a>            )
 <a href=#612 id=612 data-nosnippet>612</a>            .<span class="kw">await
-<a href=#613 id=613 data-nosnippet>613</a>            </span>.map_err(|e| SendPaymentError::FinalizationError(e.to_string()))<span class="question-mark">?</span>;
+<a href=#613 id=613 data-nosnippet>613</a>            </span>.map_err(|e| SendPaymentError::FailedToFundPayment(e.to_string()))<span class="question-mark">?</span>;
 <a href=#614 id=614 data-nosnippet>614</a>
 <a href=#615 id=615 data-nosnippet>615</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
 <a href=#616 id=616 data-nosnippet>616</a>
@@ -642,7 +642,7 @@
 <a href=#642 id=642 data-nosnippet>642</a>            }
 <a href=#643 id=643 data-nosnippet>643</a>
 <a href=#644 id=644 data-nosnippet>644</a>            <span class="kw">if </span><span class="self">self</span>.client_ctx.has_active_states(operation_id).<span class="kw">await </span>{
-<a href=#645 id=645 data-nosnippet>645</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PendingPreviousPayment(operation_id));
+<a href=#645 id=645 data-nosnippet>645</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentInProgress(operation_id));
 <a href=#646 id=646 data-nosnippet>646</a>            }
 <a href=#647 id=647 data-nosnippet>647</a>
 <a href=#648 id=648 data-nosnippet>648</a>            <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self
@@ -655,7 +655,7 @@
 <a href=#655 id=655 data-nosnippet>655</a>            // so by definition a final state has to have been assumed already.
 <a href=#656 id=656 data-nosnippet>656</a>            </span><span class="kw">while let </span><span class="prelude-val">Some</span>(state) = stream.next().<span class="kw">await </span>{
 <a href=#657 id=657 data-nosnippet>657</a>                <span class="kw">if let </span>SendOperationState::Success(<span class="kw">_</span>) = state {
-<a href=#658 id=658 data-nosnippet>658</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::SuccessfulPreviousPayment(operation_id));
+<a href=#658 id=658 data-nosnippet>658</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InvoiceAlreadyPaid(operation_id));
 <a href=#659 id=659 data-nosnippet>659</a>                }
 <a href=#660 id=660 data-nosnippet>660</a>            }
 <a href=#661 id=661 data-nosnippet>661</a>        }
@@ -817,17 +817,17 @@
 <a href=#817 id=817 data-nosnippet>817</a>                gateway.clone(),
 <a href=#818 id=818 data-nosnippet>818</a>                <span class="self">self</span>.routing_info(<span class="kw-2">&amp;</span>gateway)
 <a href=#819 id=819 data-nosnippet>819</a>                    .<span class="kw">await
-<a href=#820 id=820 data-nosnippet>820</a>                    </span>.map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))<span class="question-mark">?
-<a href=#821 id=821 data-nosnippet>821</a>                    </span>.ok_or(ReceiveError::UnknownFederation)<span class="question-mark">?</span>,
+<a href=#820 id=820 data-nosnippet>820</a>                    </span>.map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))<span class="question-mark">?
+<a href=#821 id=821 data-nosnippet>821</a>                    </span>.ok_or(ReceiveError::FederationNotSupported)<span class="question-mark">?</span>,
 <a href=#822 id=822 data-nosnippet>822</a>            ),
 <a href=#823 id=823 data-nosnippet>823</a>            <span class="prelude-val">None </span>=&gt; <span class="self">self
 <a href=#824 id=824 data-nosnippet>824</a>                </span>.select_gateway(<span class="prelude-val">None</span>)
 <a href=#825 id=825 data-nosnippet>825</a>                .<span class="kw">await
-<a href=#826 id=826 data-nosnippet>826</a>                </span>.map_err(ReceiveError::FailedToSelectGateway)<span class="question-mark">?</span>,
+<a href=#826 id=826 data-nosnippet>826</a>                </span>.map_err(ReceiveError::SelectGateway)<span class="question-mark">?</span>,
 <a href=#827 id=827 data-nosnippet>827</a>        };
 <a href=#828 id=828 data-nosnippet>828</a>
 <a href=#829 id=829 data-nosnippet>829</a>        <span class="kw">if </span>!routing_info.receive_fee.le(<span class="kw-2">&amp;</span>PaymentFee::RECEIVE_FEE_LIMIT) {
-<a href=#830 id=830 data-nosnippet>830</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::PaymentFeeExceedsLimit);
+<a href=#830 id=830 data-nosnippet>830</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::GatewayFeeExceedsLimit);
 <a href=#831 id=831 data-nosnippet>831</a>        }
 <a href=#832 id=832 data-nosnippet>832</a>
 <a href=#833 id=833 data-nosnippet>833</a>        <span class="kw">let </span>contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
@@ -835,7 +835,7 @@
 <a href=#835 id=835 data-nosnippet>835</a>        <span class="comment">// The dust limit ensures that the incoming contract can be claimed without
 <a href=#836 id=836 data-nosnippet>836</a>        // additional funds as the contracts amount is sufficient to cover the fees
 <a href=#837 id=837 data-nosnippet>837</a>        </span><span class="kw">if </span>contract_amount &lt; Amount::from_sats(<span class="number">5</span>) {
-<a href=#838 id=838 data-nosnippet>838</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::DustAmount);
+<a href=#838 id=838 data-nosnippet>838</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::AmountTooSmall);
 <a href=#839 id=839 data-nosnippet>839</a>        }
 <a href=#840 id=840 data-nosnippet>840</a>
 <a href=#841 id=841 data-nosnippet>841</a>        <span class="kw">let </span>expiration = duration_since_epoch()
@@ -872,14 +872,14 @@
 <a href=#872 id=872 data-nosnippet>872</a>                expiry_secs,
 <a href=#873 id=873 data-nosnippet>873</a>            )
 <a href=#874 id=874 data-nosnippet>874</a>            .<span class="kw">await
-<a href=#875 id=875 data-nosnippet>875</a>            </span>.map_err(|e| ReceiveError::GatewayConnectionError(e.to_string()))<span class="question-mark">?</span>;
+<a href=#875 id=875 data-nosnippet>875</a>            </span>.map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))<span class="question-mark">?</span>;
 <a href=#876 id=876 data-nosnippet>876</a>
 <a href=#877 id=877 data-nosnippet>877</a>        <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>preimage.consensus_hash() {
-<a href=#878 id=878 data-nosnippet>878</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidInvoicePaymentHash);
+<a href=#878 id=878 data-nosnippet>878</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidInvoice);
 <a href=#879 id=879 data-nosnippet>879</a>        }
 <a href=#880 id=880 data-nosnippet>880</a>
 <a href=#881 id=881 data-nosnippet>881</a>        <span class="kw">if </span>invoice.amount_milli_satoshis() != <span class="prelude-val">Some</span>(amount.msats) {
-<a href=#882 id=882 data-nosnippet>882</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvalidInvoiceAmount);
+<a href=#882 id=882 data-nosnippet>882</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::IncorrectInvoiceAmount);
 <a href=#883 id=883 data-nosnippet>883</a>        }
 <a href=#884 id=884 data-nosnippet>884</a>
 <a href=#885 id=885 data-nosnippet>885</a>        <span class="prelude-val">Ok</span>((gateway, contract, invoice))
@@ -1020,7 +1020,7 @@
 <a href=#1020 id=1020 data-nosnippet>1020</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#1021 id=1021 data-nosnippet>1021</a>        recurringd: SafeUrl,
 <a href=#1022 id=1022 data-nosnippet>1022</a>        gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-<a href=#1023 id=1023 data-nosnippet>1023</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, RegisterLnurlError&gt; {
+<a href=#1023 id=1023 data-nosnippet>1023</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GenerateLnurlError&gt; {
 <a href=#1024 id=1024 data-nosnippet>1024</a>        <span class="kw">let </span>gateways = <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = gateway {
 <a href=#1025 id=1025 data-nosnippet>1025</a>            <span class="macro">vec!</span>[gateway]
 <a href=#1026 id=1026 data-nosnippet>1026</a>        } <span class="kw">else </span>{
@@ -1028,10 +1028,10 @@
 <a href=#1028 id=1028 data-nosnippet>1028</a>                </span>.module_api
 <a href=#1029 id=1029 data-nosnippet>1029</a>                .gateways()
 <a href=#1030 id=1030 data-nosnippet>1030</a>                .<span class="kw">await
-<a href=#1031 id=1031 data-nosnippet>1031</a>                </span>.map_err(|e| RegisterLnurlError::FederationError(e.to_string()))<span class="question-mark">?</span>;
+<a href=#1031 id=1031 data-nosnippet>1031</a>                </span>.map_err(|e| GenerateLnurlError::FailedToRequestGateways(e.to_string()))<span class="question-mark">?</span>;
 <a href=#1032 id=1032 data-nosnippet>1032</a>
 <a href=#1033 id=1033 data-nosnippet>1033</a>            <span class="kw">if </span>gateways.is_empty() {
-<a href=#1034 id=1034 data-nosnippet>1034</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(RegisterLnurlError::NoVettedGateways);
+<a href=#1034 id=1034 data-nosnippet>1034</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(GenerateLnurlError::NoGatewaysAvailable);
 <a href=#1035 id=1035 data-nosnippet>1035</a>            }
 <a href=#1036 id=1036 data-nosnippet>1036</a>
 <a href=#1037 id=1037 data-nosnippet>1037</a>            gateways
@@ -1045,7 +1045,7 @@
 <a href=#1045 id=1045 data-nosnippet>1045</a>            gateways,
 <a href=#1046 id=1046 data-nosnippet>1046</a>        )
 <a href=#1047 id=1047 data-nosnippet>1047</a>        .<span class="kw">await
-<a href=#1048 id=1048 data-nosnippet>1048</a>        </span>.map_err(|e| RegisterLnurlError::RegistrationError(e.to_string()))<span class="question-mark">?</span>;
+<a href=#1048 id=1048 data-nosnippet>1048</a>        </span>.map_err(|e| GenerateLnurlError::FailedToRequestLnurl(e.to_string()))<span class="question-mark">?</span>;
 <a href=#1049 id=1049 data-nosnippet>1049</a>
 <a href=#1050 id=1050 data-nosnippet>1050</a>        <span class="prelude-val">Ok</span>(lnurl)
 <a href=#1051 id=1051 data-nosnippet>1051</a>    }
@@ -1104,117 +1104,115 @@
 <a href=#1104 id=1104 data-nosnippet>1104</a>
 <a href=#1105 id=1105 data-nosnippet>1105</a><span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
 <a href=#1106 id=1106 data-nosnippet>1106</a></span><span class="kw">pub enum </span>SelectGatewayError {
-<a href=#1107 id=1107 data-nosnippet>1107</a>    <span class="attr">#[error(<span class="string">"Federation returned an error: {0}"</span>)]
-<a href=#1108 id=1108 data-nosnippet>1108</a>    </span>FederationError(String),
-<a href=#1109 id=1109 data-nosnippet>1109</a>    <span class="attr">#[error(<span class="string">"The federation has no vetted gateways"</span>)]
-<a href=#1110 id=1110 data-nosnippet>1110</a>    </span>NoVettedGateways,
-<a href=#1111 id=1111 data-nosnippet>1111</a>    <span class="attr">#[error(<span class="string">"All vetted gateways failed to respond on request of the routing info"</span>)]
-<a href=#1112 id=1112 data-nosnippet>1112</a>    </span>FailedToFetchRoutingInfo,
+<a href=#1107 id=1107 data-nosnippet>1107</a>    <span class="attr">#[error(<span class="string">"Failed to request gateways"</span>)]
+<a href=#1108 id=1108 data-nosnippet>1108</a>    </span>FailedToRequestGateways(String),
+<a href=#1109 id=1109 data-nosnippet>1109</a>    <span class="attr">#[error(<span class="string">"No gateways are available"</span>)]
+<a href=#1110 id=1110 data-nosnippet>1110</a>    </span>NoGatewaysAvailable,
+<a href=#1111 id=1111 data-nosnippet>1111</a>    <span class="attr">#[error(<span class="string">"All gateways failed to respond"</span>)]
+<a href=#1112 id=1112 data-nosnippet>1112</a>    </span>GatewaysUnresponsive,
 <a href=#1113 id=1113 data-nosnippet>1113</a>}
 <a href=#1114 id=1114 data-nosnippet>1114</a>
 <a href=#1115 id=1115 data-nosnippet>1115</a><span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
 <a href=#1116 id=1116 data-nosnippet>1116</a></span><span class="kw">pub enum </span>SendPaymentError {
-<a href=#1117 id=1117 data-nosnippet>1117</a>    <span class="attr">#[error(<span class="string">"The invoice has not amount"</span>)]
+<a href=#1117 id=1117 data-nosnippet>1117</a>    <span class="attr">#[error(<span class="string">"Invoice is missing an amount"</span>)]
 <a href=#1118 id=1118 data-nosnippet>1118</a>    </span>InvoiceMissingAmount,
-<a href=#1119 id=1119 data-nosnippet>1119</a>    <span class="attr">#[error(<span class="string">"The invoice has expired"</span>)]
+<a href=#1119 id=1119 data-nosnippet>1119</a>    <span class="attr">#[error(<span class="string">"Invoice has expired"</span>)]
 <a href=#1120 id=1120 data-nosnippet>1120</a>    </span>InvoiceExpired,
-<a href=#1121 id=1121 data-nosnippet>1121</a>    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice is still pending: {}"</span>, .<span class="number">0</span>.fmt_full())]
-<a href=#1122 id=1122 data-nosnippet>1122</a>    </span>PendingPreviousPayment(OperationId),
-<a href=#1123 id=1123 data-nosnippet>1123</a>    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice was successful: {}"</span>, .<span class="number">0</span>.fmt_full())]
-<a href=#1124 id=1124 data-nosnippet>1124</a>    </span>SuccessfulPreviousPayment(OperationId),
-<a href=#1125 id=1125 data-nosnippet>1125</a>    <span class="attr">#[error(<span class="string">"Failed to select gateway: {0}"</span>)]
-<a href=#1126 id=1126 data-nosnippet>1126</a>    </span>FailedToSelectGateway(SelectGatewayError),
-<a href=#1127 id=1127 data-nosnippet>1127</a>    <span class="attr">#[error(<span class="string">"Gateway connection error: {0}"</span>)]
-<a href=#1128 id=1128 data-nosnippet>1128</a>    </span>GatewayConnectionError(String),
-<a href=#1129 id=1129 data-nosnippet>1129</a>    <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]
-<a href=#1130 id=1130 data-nosnippet>1130</a>    </span>UnknownFederation,
-<a href=#1131 id=1131 data-nosnippet>1131</a>    <span class="attr">#[error(<span class="string">"The gateways fee of exceeds the limit"</span>)]
-<a href=#1132 id=1132 data-nosnippet>1132</a>    </span>PaymentFeeExceedsLimit,
-<a href=#1133 id=1133 data-nosnippet>1133</a>    <span class="attr">#[error(<span class="string">"The gateways expiration delta of exceeds the limit"</span>)]
-<a href=#1134 id=1134 data-nosnippet>1134</a>    </span>ExpirationDeltaExceedsLimit,
-<a href=#1135 id=1135 data-nosnippet>1135</a>    <span class="attr">#[error(<span class="string">"Federation returned an error: {0}"</span>)]
-<a href=#1136 id=1136 data-nosnippet>1136</a>    </span>FederationError(String),
-<a href=#1137 id=1137 data-nosnippet>1137</a>    <span class="attr">#[error(<span class="string">"We failed to finalize the funding transaction"</span>)]
-<a href=#1138 id=1138 data-nosnippet>1138</a>    </span>FinalizationError(String),
-<a href=#1139 id=1139 data-nosnippet>1139</a>    <span class="attr">#[error(
-<a href=#1140 id=1140 data-nosnippet>1140</a>        <span class="string">"The invoice was for the wrong currency. Invoice currency={invoice_currency} Federation Currency={federation_currency}"
-<a href=#1141 id=1141 data-nosnippet>1141</a>    </span>)]
-<a href=#1142 id=1142 data-nosnippet>1142</a>    </span>WrongCurrency {
-<a href=#1143 id=1143 data-nosnippet>1143</a>        invoice_currency: Currency,
-<a href=#1144 id=1144 data-nosnippet>1144</a>        federation_currency: Currency,
-<a href=#1145 id=1145 data-nosnippet>1145</a>    },
-<a href=#1146 id=1146 data-nosnippet>1146</a>}
-<a href=#1147 id=1147 data-nosnippet>1147</a>
-<a href=#1148 id=1148 data-nosnippet>1148</a><span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
-<a href=#1149 id=1149 data-nosnippet>1149</a></span><span class="kw">pub enum </span>ReceiveError {
-<a href=#1150 id=1150 data-nosnippet>1150</a>    <span class="attr">#[error(<span class="string">"Failed to select gateway: {0}"</span>)]
-<a href=#1151 id=1151 data-nosnippet>1151</a>    </span>FailedToSelectGateway(SelectGatewayError),
-<a href=#1152 id=1152 data-nosnippet>1152</a>    <span class="attr">#[error(<span class="string">"Gateway connection error: {0}"</span>)]
-<a href=#1153 id=1153 data-nosnippet>1153</a>    </span>GatewayConnectionError(String),
-<a href=#1154 id=1154 data-nosnippet>1154</a>    <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]
-<a href=#1155 id=1155 data-nosnippet>1155</a>    </span>UnknownFederation,
-<a href=#1156 id=1156 data-nosnippet>1156</a>    <span class="attr">#[error(<span class="string">"The gateways fee exceeds the limit"</span>)]
-<a href=#1157 id=1157 data-nosnippet>1157</a>    </span>PaymentFeeExceedsLimit,
-<a href=#1158 id=1158 data-nosnippet>1158</a>    <span class="attr">#[error(<span class="string">"The total fees required to complete this payment exceed its amount"</span>)]
-<a href=#1159 id=1159 data-nosnippet>1159</a>    </span>DustAmount,
-<a href=#1160 id=1160 data-nosnippet>1160</a>    <span class="attr">#[error(<span class="string">"The invoice's payment hash is incorrect"</span>)]
-<a href=#1161 id=1161 data-nosnippet>1161</a>    </span>InvalidInvoicePaymentHash,
-<a href=#1162 id=1162 data-nosnippet>1162</a>    <span class="attr">#[error(<span class="string">"The invoice's amount is incorrect"</span>)]
-<a href=#1163 id=1163 data-nosnippet>1163</a>    </span>InvalidInvoiceAmount,
-<a href=#1164 id=1164 data-nosnippet>1164</a>}
-<a href=#1165 id=1165 data-nosnippet>1165</a>
-<a href=#1166 id=1166 data-nosnippet>1166</a><span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
-<a href=#1167 id=1167 data-nosnippet>1167</a></span><span class="kw">pub enum </span>RegisterLnurlError {
-<a href=#1168 id=1168 data-nosnippet>1168</a>    <span class="attr">#[error(<span class="string">"The federation has no vetted gateways"</span>)]
-<a href=#1169 id=1169 data-nosnippet>1169</a>    </span>NoVettedGateways,
-<a href=#1170 id=1170 data-nosnippet>1170</a>    <span class="attr">#[error(<span class="string">"Federation returned an error: {0}"</span>)]
-<a href=#1171 id=1171 data-nosnippet>1171</a>    </span>FederationError(String),
-<a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="attr">#[error(<span class="string">"Failed to register lnurl: {0}"</span>)]
-<a href=#1173 id=1173 data-nosnippet>1173</a>    </span>RegistrationError(String),
-<a href=#1174 id=1174 data-nosnippet>1174</a>}
-<a href=#1175 id=1175 data-nosnippet>1175</a>
-<a href=#1176 id=1176 data-nosnippet>1176</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-<a href=#1177 id=1177 data-nosnippet>1177</a></span><span class="kw">pub enum </span>LightningClientStateMachines {
-<a href=#1178 id=1178 data-nosnippet>1178</a>    Send(SendStateMachine),
-<a href=#1179 id=1179 data-nosnippet>1179</a>    Receive(ReceiveStateMachine),
-<a href=#1180 id=1180 data-nosnippet>1180</a>}
-<a href=#1181 id=1181 data-nosnippet>1181</a>
-<a href=#1182 id=1182 data-nosnippet>1182</a><span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>LightningClientStateMachines {
-<a href=#1183 id=1183 data-nosnippet>1183</a>    <span class="kw">type </span>DynType = DynState;
-<a href=#1184 id=1184 data-nosnippet>1184</a>
-<a href=#1185 id=1185 data-nosnippet>1185</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
-<a href=#1186 id=1186 data-nosnippet>1186</a>        DynState::from_typed(instance_id, <span class="self">self</span>)
-<a href=#1187 id=1187 data-nosnippet>1187</a>    }
-<a href=#1188 id=1188 data-nosnippet>1188</a>}
-<a href=#1189 id=1189 data-nosnippet>1189</a>
-<a href=#1190 id=1190 data-nosnippet>1190</a><span class="kw">impl </span>State <span class="kw">for </span>LightningClientStateMachines {
-<a href=#1191 id=1191 data-nosnippet>1191</a>    <span class="kw">type </span>ModuleContext = LightningClientContext;
-<a href=#1192 id=1192 data-nosnippet>1192</a>
-<a href=#1193 id=1193 data-nosnippet>1193</a>    <span class="kw">fn </span>transitions(
-<a href=#1194 id=1194 data-nosnippet>1194</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#1195 id=1195 data-nosnippet>1195</a>        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-<a href=#1196 id=1196 data-nosnippet>1196</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-<a href=#1197 id=1197 data-nosnippet>1197</a>    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
-<a href=#1198 id=1198 data-nosnippet>1198</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#1199 id=1199 data-nosnippet>1199</a>            LightningClientStateMachines::Send(state) =&gt; {
-<a href=#1200 id=1200 data-nosnippet>1200</a>                <span class="macro">sm_enum_variant_translation!</span>(
-<a href=#1201 id=1201 data-nosnippet>1201</a>                    state.transitions(context, global_context),
-<a href=#1202 id=1202 data-nosnippet>1202</a>                    LightningClientStateMachines::Send
-<a href=#1203 id=1203 data-nosnippet>1203</a>                )
-<a href=#1204 id=1204 data-nosnippet>1204</a>            }
-<a href=#1205 id=1205 data-nosnippet>1205</a>            LightningClientStateMachines::Receive(state) =&gt; {
-<a href=#1206 id=1206 data-nosnippet>1206</a>                <span class="macro">sm_enum_variant_translation!</span>(
-<a href=#1207 id=1207 data-nosnippet>1207</a>                    state.transitions(context, global_context),
-<a href=#1208 id=1208 data-nosnippet>1208</a>                    LightningClientStateMachines::Receive
-<a href=#1209 id=1209 data-nosnippet>1209</a>                )
-<a href=#1210 id=1210 data-nosnippet>1210</a>            }
-<a href=#1211 id=1211 data-nosnippet>1211</a>        }
-<a href=#1212 id=1212 data-nosnippet>1212</a>    }
-<a href=#1213 id=1213 data-nosnippet>1213</a>
-<a href=#1214 id=1214 data-nosnippet>1214</a>    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
-<a href=#1215 id=1215 data-nosnippet>1215</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#1216 id=1216 data-nosnippet>1216</a>            LightningClientStateMachines::Send(state) =&gt; state.operation_id(),
-<a href=#1217 id=1217 data-nosnippet>1217</a>            LightningClientStateMachines::Receive(state) =&gt; state.operation_id(),
-<a href=#1218 id=1218 data-nosnippet>1218</a>        }
-<a href=#1219 id=1219 data-nosnippet>1219</a>    }
-<a href=#1220 id=1220 data-nosnippet>1220</a>}</code></pre></div></section></main></body></html>
+<a href=#1121 id=1121 data-nosnippet>1121</a>    <span class="attr">#[error(<span class="string">"A payment for this invoice is already in progress"</span>)]
+<a href=#1122 id=1122 data-nosnippet>1122</a>    </span>PaymentInProgress(OperationId),
+<a href=#1123 id=1123 data-nosnippet>1123</a>    <span class="attr">#[error(<span class="string">"This invoice has already been paid"</span>)]
+<a href=#1124 id=1124 data-nosnippet>1124</a>    </span>InvoiceAlreadyPaid(OperationId),
+<a href=#1125 id=1125 data-nosnippet>1125</a>    <span class="attr">#[error(transparent)]
+<a href=#1126 id=1126 data-nosnippet>1126</a>    </span>SelectGateway(SelectGatewayError),
+<a href=#1127 id=1127 data-nosnippet>1127</a>    <span class="attr">#[error(<span class="string">"Failed to connect to gateway"</span>)]
+<a href=#1128 id=1128 data-nosnippet>1128</a>    </span>FailedToConnectToGateway(String),
+<a href=#1129 id=1129 data-nosnippet>1129</a>    <span class="attr">#[error(<span class="string">"Gateway does not support this federation"</span>)]
+<a href=#1130 id=1130 data-nosnippet>1130</a>    </span>FederationNotSupported,
+<a href=#1131 id=1131 data-nosnippet>1131</a>    <span class="attr">#[error(<span class="string">"Gateway fee exceeds the allowed limit"</span>)]
+<a href=#1132 id=1132 data-nosnippet>1132</a>    </span>GatewayFeeExceedsLimit,
+<a href=#1133 id=1133 data-nosnippet>1133</a>    <span class="attr">#[error(<span class="string">"Gateway expiration time exceeds the allowed limit"</span>)]
+<a href=#1134 id=1134 data-nosnippet>1134</a>    </span>GatewayExpirationExceedsLimit,
+<a href=#1135 id=1135 data-nosnippet>1135</a>    <span class="attr">#[error(<span class="string">"Failed to request block count"</span>)]
+<a href=#1136 id=1136 data-nosnippet>1136</a>    </span>FailedToRequestBlockCount(String),
+<a href=#1137 id=1137 data-nosnippet>1137</a>    <span class="attr">#[error(<span class="string">"Failed to fund the payment"</span>)]
+<a href=#1138 id=1138 data-nosnippet>1138</a>    </span>FailedToFundPayment(String),
+<a href=#1139 id=1139 data-nosnippet>1139</a>    <span class="attr">#[error(<span class="string">"Invoice is for a different currency"</span>)]
+<a href=#1140 id=1140 data-nosnippet>1140</a>    </span>WrongCurrency {
+<a href=#1141 id=1141 data-nosnippet>1141</a>        invoice_currency: Currency,
+<a href=#1142 id=1142 data-nosnippet>1142</a>        federation_currency: Currency,
+<a href=#1143 id=1143 data-nosnippet>1143</a>    },
+<a href=#1144 id=1144 data-nosnippet>1144</a>}
+<a href=#1145 id=1145 data-nosnippet>1145</a>
+<a href=#1146 id=1146 data-nosnippet>1146</a><span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
+<a href=#1147 id=1147 data-nosnippet>1147</a></span><span class="kw">pub enum </span>ReceiveError {
+<a href=#1148 id=1148 data-nosnippet>1148</a>    <span class="attr">#[error(transparent)]
+<a href=#1149 id=1149 data-nosnippet>1149</a>    </span>SelectGateway(SelectGatewayError),
+<a href=#1150 id=1150 data-nosnippet>1150</a>    <span class="attr">#[error(<span class="string">"Failed to connect to gateway"</span>)]
+<a href=#1151 id=1151 data-nosnippet>1151</a>    </span>FailedToConnectToGateway(String),
+<a href=#1152 id=1152 data-nosnippet>1152</a>    <span class="attr">#[error(<span class="string">"Gateway does not support this federation"</span>)]
+<a href=#1153 id=1153 data-nosnippet>1153</a>    </span>FederationNotSupported,
+<a href=#1154 id=1154 data-nosnippet>1154</a>    <span class="attr">#[error(<span class="string">"Gateway fee exceeds the allowed limit"</span>)]
+<a href=#1155 id=1155 data-nosnippet>1155</a>    </span>GatewayFeeExceedsLimit,
+<a href=#1156 id=1156 data-nosnippet>1156</a>    <span class="attr">#[error(<span class="string">"Amount is too small to cover fees"</span>)]
+<a href=#1157 id=1157 data-nosnippet>1157</a>    </span>AmountTooSmall,
+<a href=#1158 id=1158 data-nosnippet>1158</a>    <span class="attr">#[error(<span class="string">"Gateway returned an invalid invoice"</span>)]
+<a href=#1159 id=1159 data-nosnippet>1159</a>    </span>InvalidInvoice,
+<a href=#1160 id=1160 data-nosnippet>1160</a>    <span class="attr">#[error(<span class="string">"Gateway returned an invoice with incorrect amount"</span>)]
+<a href=#1161 id=1161 data-nosnippet>1161</a>    </span>IncorrectInvoiceAmount,
+<a href=#1162 id=1162 data-nosnippet>1162</a>}
+<a href=#1163 id=1163 data-nosnippet>1163</a>
+<a href=#1164 id=1164 data-nosnippet>1164</a><span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
+<a href=#1165 id=1165 data-nosnippet>1165</a></span><span class="kw">pub enum </span>GenerateLnurlError {
+<a href=#1166 id=1166 data-nosnippet>1166</a>    <span class="attr">#[error(<span class="string">"No gateways are available"</span>)]
+<a href=#1167 id=1167 data-nosnippet>1167</a>    </span>NoGatewaysAvailable,
+<a href=#1168 id=1168 data-nosnippet>1168</a>    <span class="attr">#[error(<span class="string">"Failed to request gateways"</span>)]
+<a href=#1169 id=1169 data-nosnippet>1169</a>    </span>FailedToRequestGateways(String),
+<a href=#1170 id=1170 data-nosnippet>1170</a>    <span class="attr">#[error(<span class="string">"Failed to request LNURL"</span>)]
+<a href=#1171 id=1171 data-nosnippet>1171</a>    </span>FailedToRequestLnurl(String),
+<a href=#1172 id=1172 data-nosnippet>1172</a>}
+<a href=#1173 id=1173 data-nosnippet>1173</a>
+<a href=#1174 id=1174 data-nosnippet>1174</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<a href=#1175 id=1175 data-nosnippet>1175</a></span><span class="kw">pub enum </span>LightningClientStateMachines {
+<a href=#1176 id=1176 data-nosnippet>1176</a>    Send(SendStateMachine),
+<a href=#1177 id=1177 data-nosnippet>1177</a>    Receive(ReceiveStateMachine),
+<a href=#1178 id=1178 data-nosnippet>1178</a>}
+<a href=#1179 id=1179 data-nosnippet>1179</a>
+<a href=#1180 id=1180 data-nosnippet>1180</a><span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>LightningClientStateMachines {
+<a href=#1181 id=1181 data-nosnippet>1181</a>    <span class="kw">type </span>DynType = DynState;
+<a href=#1182 id=1182 data-nosnippet>1182</a>
+<a href=#1183 id=1183 data-nosnippet>1183</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+<a href=#1184 id=1184 data-nosnippet>1184</a>        DynState::from_typed(instance_id, <span class="self">self</span>)
+<a href=#1185 id=1185 data-nosnippet>1185</a>    }
+<a href=#1186 id=1186 data-nosnippet>1186</a>}
+<a href=#1187 id=1187 data-nosnippet>1187</a>
+<a href=#1188 id=1188 data-nosnippet>1188</a><span class="kw">impl </span>State <span class="kw">for </span>LightningClientStateMachines {
+<a href=#1189 id=1189 data-nosnippet>1189</a>    <span class="kw">type </span>ModuleContext = LightningClientContext;
+<a href=#1190 id=1190 data-nosnippet>1190</a>
+<a href=#1191 id=1191 data-nosnippet>1191</a>    <span class="kw">fn </span>transitions(
+<a href=#1192 id=1192 data-nosnippet>1192</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#1193 id=1193 data-nosnippet>1193</a>        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
+<a href=#1194 id=1194 data-nosnippet>1194</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+<a href=#1195 id=1195 data-nosnippet>1195</a>    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+<a href=#1196 id=1196 data-nosnippet>1196</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1197 id=1197 data-nosnippet>1197</a>            LightningClientStateMachines::Send(state) =&gt; {
+<a href=#1198 id=1198 data-nosnippet>1198</a>                <span class="macro">sm_enum_variant_translation!</span>(
+<a href=#1199 id=1199 data-nosnippet>1199</a>                    state.transitions(context, global_context),
+<a href=#1200 id=1200 data-nosnippet>1200</a>                    LightningClientStateMachines::Send
+<a href=#1201 id=1201 data-nosnippet>1201</a>                )
+<a href=#1202 id=1202 data-nosnippet>1202</a>            }
+<a href=#1203 id=1203 data-nosnippet>1203</a>            LightningClientStateMachines::Receive(state) =&gt; {
+<a href=#1204 id=1204 data-nosnippet>1204</a>                <span class="macro">sm_enum_variant_translation!</span>(
+<a href=#1205 id=1205 data-nosnippet>1205</a>                    state.transitions(context, global_context),
+<a href=#1206 id=1206 data-nosnippet>1206</a>                    LightningClientStateMachines::Receive
+<a href=#1207 id=1207 data-nosnippet>1207</a>                )
+<a href=#1208 id=1208 data-nosnippet>1208</a>            }
+<a href=#1209 id=1209 data-nosnippet>1209</a>        }
+<a href=#1210 id=1210 data-nosnippet>1210</a>    }
+<a href=#1211 id=1211 data-nosnippet>1211</a>
+<a href=#1212 id=1212 data-nosnippet>1212</a>    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
+<a href=#1213 id=1213 data-nosnippet>1213</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1214 id=1214 data-nosnippet>1214</a>            LightningClientStateMachines::Send(state) =&gt; state.operation_id(),
+<a href=#1215 id=1215 data-nosnippet>1215</a>            LightningClientStateMachines::Receive(state) =&gt; state.operation_id(),
+<a href=#1216 id=1216 data-nosnippet>1216</a>        }
+<a href=#1217 id=1217 data-nosnippet>1217</a>    }
+<a href=#1218 id=1218 data-nosnippet>1218</a>}</code></pre></div></section></main></body></html>
