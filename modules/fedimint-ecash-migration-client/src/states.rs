@@ -83,9 +83,7 @@ impl RegisterTransferStateMachine {
             RegisterTransferStates::Created => {
                 Self::created_transitions(context, global_context, self.common.clone())
             }
-            RegisterTransferStates::Aborted(_)
-            | RegisterTransferStates::Failed(_)
-            | RegisterTransferStates::Success(_) => vec![],
+            RegisterTransferStates::Aborted(_) | RegisterTransferStates::Success(_) => vec![],
         }
     }
 
@@ -168,8 +166,6 @@ pub enum RegisterTransferStates {
     Created,
     /// Transfer creation transaction was rejected
     Aborted(RegisterTransferAborted),
-    /// Transfer registration failed
-    Failed(RegisterTransferFailed),
     /// Transfer successfully registered with the federation
     Success(RegisterTransferSuccess),
 }

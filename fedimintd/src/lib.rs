@@ -27,6 +27,8 @@ use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
 use fedimint_core::{default_esplora_server, timing};
+use fedimint_ecash_migration_common::config::EcashMigrationGenParams;
+use fedimint_ecash_migration_server::EcashMigrationInit;
 use fedimint_ln_common::config::{
     LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
 };
@@ -496,6 +498,12 @@ pub fn default_modules(
         server_gens.attach(MetaInit);
         server_gen_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams::default());
     }
+
+    server_gens.attach(EcashMigrationInit);
+    server_gen_params.attach_config_gen_params(
+        EcashMigrationInit::kind(),
+        EcashMigrationGenParams::default(),
+    );
 
     if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
         server_gens.attach(UnknownInit);

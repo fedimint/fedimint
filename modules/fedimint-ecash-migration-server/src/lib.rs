@@ -247,7 +247,7 @@ impl ServerModule for EcashMigration {
 
         // Remove the activation request once we've seen our own vote so we stop
         // proposing our activation vote
-        if peer_id != self.own_peer_id {
+        if peer_id == self.own_peer_id {
             dbtx.remove_entry(&ActivationRequestKey { transfer_id })
                 .await;
         }

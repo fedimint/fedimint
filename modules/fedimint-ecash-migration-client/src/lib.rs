@@ -15,14 +15,15 @@ use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArg
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
-use fedimint_client_module::sm::Context;
+use fedimint_client_module::sm::{Context, ModuleNotifier};
 use fedimint_client_module::transaction::{ClientOutput, ClientOutputBundle, TransactionBuilder};
+use fedimint_core::config::{JsonClientConfig, JsonWithKind};
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{
-    AmountUnit, Amounts, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{All, Secp256k1};
 use fedimint_core::{Amount, OutPoint, Tiered, apply, async_trait_maybe_send};
@@ -32,11 +33,11 @@ use fedimint_ecash_migration_common::config::EcashMigrationClientConfig;
 use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdKey;
 use fedimint_ecash_migration_common::{
     EcashMigrationCommonInit, EcashMigrationCreateTransferOutput, EcashMigrationModuleTypes,
-    EcashMigrationOutput, KeySetHash, SpendBookHash, TransferId, hash_and_count_spend_book,
+    EcashMigrationOutput, KeySetHash, SpendBookHash, hash_and_count_spend_book,
 };
-use fedimint_mint_common::Nonce;
 use fedimint_mint_common::config::MintClientConfig;
-use futures::Stream;
+use fedimint_mint_common::{MintCommonInit, Nonce};
+use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use states::{
     EcashMigrationStateMachine, RegisterTransferCommon, RegisterTransferState,
@@ -66,6 +67,8 @@ pub struct EcashMigrationClientModule {
     module_secret: DerivableSecret,
     /// Module API client
     module_api: DynModuleApi,
+    /// Allows the module to subscribe to its own state machine changes
+    notifier: ModuleNotifier<EcashMigrationStateMachine>,
 }
 
 /// Data needed by the state machine
@@ -98,17 +101,38 @@ impl ClientModule for EcashMigrationClientModule {
     fn input_fee(
         &self,
         _amount: &Amounts,
-        _input: &<Self::Common as ModuleCommon>::Input,
+        input: &<Self::Common as ModuleCommon>::Input,
     ) -> Option<Amounts> {
-        unreachable!()
+        let fee_btc = match input {
+            fedimint_ecash_migration_common::EcashMigrationInput::RedeemOriginEcash { .. } => {
+                self.cfg.fee_config.transfer_redeem_fee
+            }
+            fedimint_ecash_migration_common::EcashMigrationInput::Default { .. } => {
+                unreachable!("We never produce default inputs")
+            }
+        };
+
+        Some(Amounts::new_bitcoin(fee_btc))
     }
 
     fn output_fee(
         &self,
         _amount: &Amounts,
-        _output: &<Self::Common as ModuleCommon>::Output,
+        output: &<Self::Common as ModuleCommon>::Output,
     ) -> Option<Amounts> {
-        unreachable!()
+        let fee_btc = match output {
+            EcashMigrationOutput::CreateTransfer(ecash_migration_create_transfer_output) => self
+                .cfg
+                .fee_config
+                .creation_fee(ecash_migration_create_transfer_output.spend_book_entries)
+                .expect("Can't overflow unless fee is unreasonable or spend book is ginormous"),
+            EcashMigrationOutput::FundTransfer(_) => self.cfg.fee_config.transfer_funding_fee,
+            EcashMigrationOutput::Default { .. } => {
+                unreachable!("We never produce default outputs")
+            }
+        };
+
+        Some(Amounts::new_bitcoin(fee_btc))
     }
 
     async fn get_balance(&self, _dbtx: &mut DatabaseTransaction<'_>, _unit: AmountUnit) -> Amount {
@@ -154,8 +178,23 @@ pub async fn read_origin_keyset(
             )
         })?;
 
-    let origin_mint_config: MintClientConfig = serde_json::from_str(&origin_config_json)
+    let origin_client_config: JsonClientConfig = serde_json::from_str(&origin_config_json)
         .with_context(|| {
+            format!(
+                "Failed to parse origin config as ClientConfig: {}",
+                origin_config_path.display()
+            )
+        })?;
+
+    let origin_mint_config_json: JsonWithKind = origin_client_config
+        .modules
+        .values()
+        .find(|module_config| module_config.kind() == &MintCommonInit::KIND)
+        .context("Mint module not found in origin config")?
+        .clone();
+
+    let origin_mint_config: MintClientConfig =
+        serde_json::from_value(origin_mint_config_json.value().clone()).with_context(|| {
             format!(
                 "Failed to parse origin config as MintClientConfig: {}",
                 origin_config_path.display()
@@ -356,7 +395,17 @@ impl EcashMigrationClientModule {
         let meta = operation.meta::<RegisterTransferOperationMeta>();
         let out_point = meta.out_point;
         let client_ctx = self.client_ctx.clone();
-        let module_api = self.module_api.clone();
+
+        let mut sm_updates = client_ctx
+            .self_ref()
+            .notifier
+            .subscribe(operation_id)
+            .await
+            .map(|state| match state {
+                EcashMigrationStateMachine::RegisterTransfer(register_transfer_state_machine) => {
+                    register_transfer_state_machine.state
+                }
+            });
 
         Ok(self
             .client_ctx
@@ -382,19 +431,23 @@ impl EcashMigrationClientModule {
                         }
                     }
 
-                    // Fetch the transfer ID from the server
-                    use fedimint_api_client::api::FederationApiExt as _;
-                    use fedimint_core::module::ApiRequestErased;
-                    use fedimint_ecash_migration_common::api::GET_TRANSFER_ID_ENDPOINT;
+                    // Await state machine to transition to success
+                    while let Some(state) = sm_updates.next().await {
+                        match state {
+                            RegisterTransferStates::Created => {}
+                            RegisterTransferStates::Aborted(register_transfer_aborted) => {
+                                // Technically this should never happen since we check for transaction rejection first
+                                yield RegisterTransferState::Failed { error: register_transfer_aborted.reason };
+                                return;
+                            }
+                            RegisterTransferStates::Success(register_transfer_success) => {
+                                yield RegisterTransferState::Success { transfer_id: register_transfer_success.transfer_id };
+                                return;
+                            }
+                        }
+                    }
 
-                    let transfer_id: TransferId = module_api
-                        .request_current_consensus_retry(
-                            GET_TRANSFER_ID_ENDPOINT.to_string(),
-                            ApiRequestErased::new(out_point),
-                        )
-                        .await;
-
-                    yield RegisterTransferState::Success { transfer_id };
+                    unreachable!("State machine update stream ended unexpectedly");
                 }
             }))
     }
@@ -454,6 +507,7 @@ impl ClientModuleInit for EcashMigrationClientInit {
             db: args.db().clone(),
             module_secret: args.module_root_secret().clone(),
             module_api: args.module_api().clone(),
+            notifier: args.notifier().clone(),
         })
     }
 
