@@ -1,0 +1,33 @@
+sequenceDiagram
+    participant OF as Origin Federation
+    participant TP as Trusted Party
+    participant DF as Destination Federation
+    participant Users as Origin Federation Users
+
+    Note over OF,DF: Ecash transfer protocol
+    Note over TP: Requires sophisticated<br/>Operator
+
+    rect rgb(255, 200, 200)
+        Note over OF,DF: Initialization
+        OF->>OF: Stop Federation
+        OF->>TP: Spend Book, Public Key Set,<br/>Backing Bitcoin
+        TP->>DF: Start Liability Transfer<br/>(send Pub Key Set)
+        DF->>TP: Transfer ID
+    end
+
+    rect rgb(255, 240, 200)
+        Note over OF,DF: Preparation
+        TP->>DF: Upload Spend Book part 1
+        TP->>DF: Upload Spend Book part 2
+        TP->>DF: ...
+        TP->>DF: Upload Spend Book part n
+        TP->>DF: Deposit Backing Bitcoin to be<br/>redeemed by users
+        TP->>DF: Activate Redemption
+    end
+
+    rect rgb(200, 220, 255)
+        Note over OF,DF: Redemption
+        TP->>Users: Inform Origin Federation users of<br/>Destination Federation
+        Users->>DF: Join Federation
+        Note over Users,DF: Origin Federation ecash ↔<br/>Destination Federation ecash
+    endWe are

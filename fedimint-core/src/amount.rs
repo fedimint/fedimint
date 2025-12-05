@@ -82,10 +82,17 @@ impl Amount {
         }
     }
 
+    #[deprecated(since = "0.10.0", note = "use `checked_mul` instead")]
     pub fn mul_u64(self, other: u64) -> Self {
         Self {
             msats: self.msats * other,
         }
+    }
+
+    pub fn checked_mul(self, other: u64) -> Option<Self> {
+        Some(Self {
+            msats: self.msats.checked_mul(other)?,
+        })
     }
 
     /// Returns an error if the amount is more precise than satoshis (i.e. if it
