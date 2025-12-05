@@ -1090,38 +1090,26 @@
 <a href=#1090 id=1090 data-nosnippet>1090</a>            }
 <a href=#1091 id=1091 data-nosnippet>1091</a>        };
 <a href=#1092 id=1092 data-nosnippet>1092</a>
-<a href=#1093 id=1093 data-nosnippet>1093</a>        <span class="kw">let </span><span class="kw-2">mut </span>backoff = fedimint_core::util::backoff_util::api_networking_backoff();
-<a href=#1094 id=1094 data-nosnippet>1094</a>        <span class="kw">loop </span>{
-<a href=#1095 id=1095 data-nosnippet>1095</a>            <span class="kw">let </span>result = federation_api
-<a href=#1096 id=1096 data-nosnippet>1096</a>                .request_with_strategy(
-<a href=#1097 id=1097 data-nosnippet>1097</a>                    FilterMap::new(filter_map.clone()),
-<a href=#1098 id=1098 data-nosnippet>1098</a>                    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
-<a href=#1099 id=1099 data-nosnippet>1099</a>                    ApiRequestErased::new(index),
-<a href=#1100 id=1100 data-nosnippet>1100</a>                )
-<a href=#1101 id=1101 data-nosnippet>1101</a>                .<span class="kw">await</span>;
-<a href=#1102 id=1102 data-nosnippet>1102</a>
-<a href=#1103 id=1103 data-nosnippet>1103</a>            <span class="kw">match </span>result {
-<a href=#1104 id=1104 data-nosnippet>1104</a>                <span class="prelude-val">Ok</span>(signed_session_outcome) =&gt; <span class="kw">return </span>signed_session_outcome,
-<a href=#1105 id=1105 data-nosnippet>1105</a>                <span class="prelude-val">Err</span>(error) =&gt; {
-<a href=#1106 id=1106 data-nosnippet>1106</a>                    error.report_if_unusual(<span class="string">"Requesting Session Outcome"</span>);
-<a href=#1107 id=1107 data-nosnippet>1107</a>                }
-<a href=#1108 id=1108 data-nosnippet>1108</a>            }
-<a href=#1109 id=1109 data-nosnippet>1109</a>
-<a href=#1110 id=1110 data-nosnippet>1110</a>            sleep(backoff.next().expect(<span class="string">"infinite retries"</span>)).<span class="kw">await</span>;
-<a href=#1111 id=1111 data-nosnippet>1111</a>        }
-<a href=#1112 id=1112 data-nosnippet>1112</a>    }
-<a href=#1113 id=1113 data-nosnippet>1113</a>
-<a href=#1114 id=1114 data-nosnippet>1114</a>    <span class="doccomment">/// Returns the number of sessions already saved in the database. This count
-<a href=#1115 id=1115 data-nosnippet>1115</a>    /// **does not** include the currently running session.
-<a href=#1116 id=1116 data-nosnippet>1116</a>    </span><span class="kw">async fn </span>get_finished_session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-<a href=#1117 id=1117 data-nosnippet>1117</a>        get_finished_session_count_static(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>).<span class="kw">await
-<a href=#1118 id=1118 data-nosnippet>1118</a>    </span>}
-<a href=#1119 id=1119 data-nosnippet>1119</a>}
-<a href=#1120 id=1120 data-nosnippet>1120</a>
-<a href=#1121 id=1121 data-nosnippet>1121</a><span class="kw">pub async fn </span>get_finished_session_count_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
-<a href=#1122 id=1122 data-nosnippet>1122</a>    dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
-<a href=#1123 id=1123 data-nosnippet>1123</a>        .<span class="kw">await
-<a href=#1124 id=1124 data-nosnippet>1124</a>        </span>.next()
-<a href=#1125 id=1125 data-nosnippet>1125</a>        .<span class="kw">await
-<a href=#1126 id=1126 data-nosnippet>1126</a>        </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0.0</span>) + <span class="number">1</span>)
-<a href=#1127 id=1127 data-nosnippet>1127</a>}</code></pre></div></section></main></body></html>
+<a href=#1093 id=1093 data-nosnippet>1093</a>        federation_api
+<a href=#1094 id=1094 data-nosnippet>1094</a>            .request_with_strategy_retry(
+<a href=#1095 id=1095 data-nosnippet>1095</a>                FilterMap::new(filter_map.clone()),
+<a href=#1096 id=1096 data-nosnippet>1096</a>                AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
+<a href=#1097 id=1097 data-nosnippet>1097</a>                ApiRequestErased::new(index),
+<a href=#1098 id=1098 data-nosnippet>1098</a>            )
+<a href=#1099 id=1099 data-nosnippet>1099</a>            .<span class="kw">await
+<a href=#1100 id=1100 data-nosnippet>1100</a>    </span>}
+<a href=#1101 id=1101 data-nosnippet>1101</a>
+<a href=#1102 id=1102 data-nosnippet>1102</a>    <span class="doccomment">/// Returns the number of sessions already saved in the database. This count
+<a href=#1103 id=1103 data-nosnippet>1103</a>    /// **does not** include the currently running session.
+<a href=#1104 id=1104 data-nosnippet>1104</a>    </span><span class="kw">async fn </span>get_finished_session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#1105 id=1105 data-nosnippet>1105</a>        get_finished_session_count_static(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>).<span class="kw">await
+<a href=#1106 id=1106 data-nosnippet>1106</a>    </span>}
+<a href=#1107 id=1107 data-nosnippet>1107</a>}
+<a href=#1108 id=1108 data-nosnippet>1108</a>
+<a href=#1109 id=1109 data-nosnippet>1109</a><span class="kw">pub async fn </span>get_finished_session_count_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
+<a href=#1110 id=1110 data-nosnippet>1110</a>    dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
+<a href=#1111 id=1111 data-nosnippet>1111</a>        .<span class="kw">await
+<a href=#1112 id=1112 data-nosnippet>1112</a>        </span>.next()
+<a href=#1113 id=1113 data-nosnippet>1113</a>        .<span class="kw">await
+<a href=#1114 id=1114 data-nosnippet>1114</a>        </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0.0</span>) + <span class="number">1</span>)
+<a href=#1115 id=1115 data-nosnippet>1115</a>}</code></pre></div></section></main></body></html>
