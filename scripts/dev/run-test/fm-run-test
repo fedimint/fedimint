@@ -10,7 +10,18 @@ if [ -z "$test_name" ]; then
     exit 1
 fi
 
-version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS)}"
+if [ -z "${FM_ENABLE_IROH:-}" ]; then
+    # We want to test both network stacks (ws&iroh), but
+    # don't want to run the tests twice, so we just randomize
+    # which one is used per high-level CI test.
+    if (( $((RANDOM % 2)) == 0 )); then
+        export FM_ENABLE_IROH=true
+    else
+        export FM_ENABLE_IROH=false
+    fi
+fi
+
+version_str="${FM_RUN_TEST_VERSIONS:+ ($FM_RUN_TEST_VERSIONS, iroh: $FM_ENABLE_IROH)}"
 test_out_path="$(mktemp --tmpdir fm-XXXXX)"
 time_out_path="$(mktemp --tmpdir fm-XXXXX)"
 time_fmt='%e\t%M\t%w\t%c'

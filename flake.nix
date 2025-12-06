@@ -368,8 +368,8 @@
                       export TMPDIR="/tmp"
                   fi
 
-                  if [ "$(ulimit -Sn)" -lt "1024" ]; then
-                      >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 1024' to avoid problems running tests"
+                  if [ "$(ulimit -Sn)" -lt "32000" ]; then
+                      >&2 echo "⚠️  ulimit too small. Run 'ulimit -Sn 32000' to avoid problems running tests"
                   fi
 
                   if [ -z "$(git config --global merge.ours.driver)" ]; then
