@@ -968,8 +968,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
             if fed.members.len() != initial_announcements.len() {
                 bail!(
-                    "Not all announcements ready: {}",
-                    initial_announcements.len()
+                    "Not all announcements ready; got: {}, expected: {}",
+                    initial_announcements.len(),
+                    fed.members.len()
                 )
             }
 
