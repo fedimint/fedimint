@@ -1142,7 +1142,19 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Wait { seconds }) => {
-                let _client = self.client_open(&cli).await?;
+                let client = self.client_open(&cli).await?;
+                // Since most callers are `wait`ing for something to happen,
+                // let's trigger a network call, so any background threads
+                // waiting for it starts doing their job.
+                client
+                    .task_group()
+                    .spawn_cancellable("fedimint-cli dev wait: init networking", {
+                        let client = client.clone();
+                        async move {
+                            let _ = client.api().session_count().await;
+                        }
+                    });
+
                 if let Some(secs) = seconds {
                     runtime::sleep(Duration::from_secs_f32(secs)).await;
                 } else {

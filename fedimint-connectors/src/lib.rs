@@ -21,7 +21,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET};
 use reqwest::Method;
 use serde_json::Value;
-use tokio::sync::{OnceCell, broadcast};
+use tokio::sync::{OnceCell, SetOnce, broadcast};
 use tracing::trace;
 
 use crate::error::ServerError;
@@ -115,6 +115,7 @@ impl ConnectorRegistryBuilder {
             inner: ConnectorRegistryInner {
                 connectors_lazy,
                 connection_overrides: self.connection_overrides,
+                initialized: SetOnce::new(),
             }
             .into(),
         })
@@ -212,6 +213,11 @@ struct ConnectorRegistryInner {
     connectors_lazy: BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>,
     /// Connection URL overrides for testing/custom routing
     connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
+    /// Set on first connection attempt
+    ///
+    /// This is used for functionality that wants to avoid making
+    /// network connections if nothing else did network request.
+    initialized: tokio::sync::SetOnce<()>,
 }
 
 /// A set of available connectivity protocols a client can use to make
@@ -312,6 +318,11 @@ impl ConnectorRegistry {
         Ok(builder)
     }
 
+    /// Wait until some connections have been made
+    pub async fn wait_for_initialized_connections(&self) {
+        self.inner.initialized.wait().await;
+    }
+
     /// Connect to a given `url` using matching [`Connector`]
     ///
     /// This is the main function consumed by the downstream use for making
@@ -324,8 +335,10 @@ impl ConnectorRegistry {
         trace!(
             target: LOG_NET,
             %url,
-            "Connection requested"
+            "Connection requested to guardian"
         );
+        let _ = self.inner.initialized.set(());
+
         let url = match self.inner.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
@@ -386,6 +399,13 @@ impl ConnectorRegistry {
     /// This is the main function consumed by the downstream use for making
     /// connection.
     pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+        trace!(
+            target: LOG_NET,
+            %url,
+            "Connection requested to gateway"
+        );
+        let _ = self.inner.initialized.set(());
+
         let url = match self.inner.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
@@ -412,7 +432,7 @@ impl ConnectorRegistry {
         // Clone the init function to use in the async block
         let init_fn = connector_lazy.0.clone();
 
-        connector_lazy
+        let conn = connector_lazy
             .1
             .get_or_try_init(|| async move { init_fn().await })
             .await
@@ -423,7 +443,9 @@ impl ConnectorRegistry {
                 ))
             })?
             .connect_gateway(url)
-            .await
+            .await?;
+
+        Ok(conn)
     }
 }
 pub type DynConnector = Arc<dyn Connector>;

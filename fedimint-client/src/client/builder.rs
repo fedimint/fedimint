@@ -612,6 +612,7 @@ impl ClientBuilder {
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
             &config,
             &self.module_inits,
+            connectors.clone(),
             &api,
             &db,
             &task_group,
@@ -913,20 +914,38 @@ impl ClientBuilder {
                 }
             });
 
-        client_inner.task_group.spawn_cancellable(
-            "update-api-announcements",
-            run_api_announcement_refresh_task(client_inner.clone()),
-        );
+        client_inner
+            .task_group
+            .spawn_cancellable("update-api-announcements", {
+                let client_inner = client_inner.clone();
+                async move {
+                    client_inner
+                        .connectors
+                        .wait_for_initialized_connections()
+                        .await;
+                    run_api_announcement_refresh_task(client_inner.clone()).await
+                }
+            });
 
-        client_inner.task_group.spawn_cancellable(
-            "event log ordering task",
-            run_event_log_ordering_task(
-                db.clone(),
-                log_ordering_wakeup_rx,
-                log_event_added_tx,
-                log_event_added_transient_tx,
-            ),
-        );
+        client_inner
+            .task_group
+            .spawn_cancellable("event log ordering task", {
+                let client_inner = client_inner.clone();
+                async move {
+                    client_inner
+                        .connectors
+                        .wait_for_initialized_connections()
+                        .await;
+
+                    run_event_log_ordering_task(
+                        db.clone(),
+                        log_ordering_wakeup_rx,
+                        log_event_added_tx,
+                        log_event_added_transient_tx,
+                    )
+                    .await
+                }
+            });
         let client_iface = std::sync::Arc::<Client>::downgrade(&client_inner);
 
         let client_arc = ClientHandle::new(client_inner);
