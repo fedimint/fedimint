@@ -112,8 +112,11 @@ impl ConnectorRegistryBuilder {
         );
 
         Ok(ConnectorRegistry {
-            connectors_lazy: Arc::new(connectors_lazy),
-            connection_overrides: self.connection_overrides,
+            inner: ConnectorRegistryInner {
+                connectors_lazy,
+                connection_overrides: self.connection_overrides,
+            }
+            .into(),
         })
     }
 
@@ -203,6 +206,14 @@ impl ConnectorRegistryBuilder {
     }
 }
 
+/// Actual data shared between copies of [`ConnectorRegistry`] handle
+struct ConnectorRegistryInner {
+    /// Lazily initialized [`Connector`]s per protocol supported
+    connectors_lazy: BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>,
+    /// Connection URL overrides for testing/custom routing
+    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
+}
+
 /// A set of available connectivity protocols a client can use to make
 /// network API requests (typically to federation).
 ///
@@ -217,17 +228,14 @@ impl ConnectorRegistryBuilder {
 /// Responsibilities:
 #[derive(Clone)]
 pub struct ConnectorRegistry {
-    /// Wrapped in Arc so clones share the same OnceCell instances
-    connectors_lazy: Arc<BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>>,
-    /// Connection URL overrides for testing/custom routing
-    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
+    inner: Arc<ConnectorRegistryInner>,
 }
 
 impl fmt::Debug for ConnectorRegistry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ConnectorRegistry")
-            .field("connectors_lazy", &self.connectors_lazy.len())
-            .field("connection_overrides", &self.connection_overrides)
+            .field("connectors_lazy", &self.inner.connectors_lazy.len())
+            .field("connection_overrides", &self.inner.connection_overrides)
             .finish()
     }
 }
@@ -318,7 +326,7 @@ impl ConnectorRegistry {
             %url,
             "Connection requested"
         );
-        let url = match self.connection_overrides.get(url) {
+        let url = match self.inner.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
                     target: LOG_NET,
@@ -334,7 +342,7 @@ impl ConnectorRegistry {
 
         let connector_key = url.scheme();
 
-        let Some(connector_lazy) = self.connectors_lazy.get(connector_key) else {
+        let Some(connector_lazy) = self.inner.connectors_lazy.get(connector_key) else {
             return Err(ServerError::InvalidEndpoint(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
@@ -378,7 +386,7 @@ impl ConnectorRegistry {
     /// This is the main function consumed by the downstream use for making
     /// connection.
     pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
-        let url = match self.connection_overrides.get(url) {
+        let url = match self.inner.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
                     target: LOG_NET,
@@ -394,7 +402,7 @@ impl ConnectorRegistry {
 
         let connector_key = url.scheme();
 
-        let Some(connector_lazy) = self.connectors_lazy.get(connector_key) else {
+        let Some(connector_lazy) = self.inner.connectors_lazy.get(connector_key) else {
             return Err(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
