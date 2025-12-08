@@ -966,7 +966,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
                 )
                 .expect("failed to parse API announcements");
 
-            if fed.members.len() != initial_announcements.len() {
+            if initial_announcements.len() < fed.members.len() {
                 bail!(
                     "Not all announcements ready: {}",
                     initial_announcements.len()
