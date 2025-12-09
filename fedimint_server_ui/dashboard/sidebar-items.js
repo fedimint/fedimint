@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dashboard_view","download_backup","login_form","login_submit","router"],"mod":["audit","bitcoin","consensus_explorer","general","invite","latency","modules"]};
+window.SIDEBAR_ITEMS = {"fn":["change_password","dashboard_view","download_backup","login_form","login_submit","router"],"mod":["audit","bitcoin","consensus_explorer","general","invite","latency","modules"]};
