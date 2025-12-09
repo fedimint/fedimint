@@ -6,6 +6,7 @@ use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use fedimint_core::module::ApiAuth;
 use fedimint_ui_common::{LoginInput, common_head, login_layout};
 use maud::html;
+use serde::Deserialize;
 
 pub(crate) const LOG_UI: &str = "fm::ui";
 
@@ -13,6 +14,14 @@ pub(crate) const LOG_UI: &str = "fm::ui";
 pub const EXPLORER_IDX_ROUTE: &str = "/explorer";
 pub const EXPLORER_ROUTE: &str = "/explorer/{session_idx}";
 pub const DOWNLOAD_BACKUP_ROUTE: &str = "/download-backup";
+pub const CHANGE_PASSWORD_ROUTE: &str = "/change-password";
+
+#[derive(Debug, Deserialize)]
+pub struct PasswordChangeInput {
+    pub current_password: String,
+    pub new_password: String,
+    pub confirm_password: String,
+}
 
 pub(crate) fn login_submit_response(
     auth: ApiAuth,
