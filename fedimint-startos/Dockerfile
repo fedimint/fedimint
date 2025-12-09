@@ -11,7 +11,7 @@ RUN case "$TARGETARCH" in \
     chmod +x /tmp/yq
 
 # Stage 2: Main image
-FROM fedimint/fedimintd:v0.9.0
+FROM fedimint/fedimintd:v0.9.1
 
 # Copy yq from downloader stage
 COPY --from=downloader /tmp/yq /usr/local/bin/yq
