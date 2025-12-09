@@ -575,7 +575,7 @@ async fn get_balances(
 async fn get_gateway_id(
     Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
-    Ok(Json(json!(gateway.gateway_id)))
+    Ok(Json(json!(gateway.http_gateway_id().await)))
 }
 
 #[instrument(target = LOG_GATEWAY, skip_all, err)]

@@ -255,7 +255,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                 invoice,
                 &user_client,
                 &gateway_client,
-                &gateway.gateway_id(),
+                &gateway.http_gateway_id().await,
             )
             .await?;
 
@@ -279,7 +279,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             assert_eq!(user_client.get_balance_for_btc().await?, sats(1000));
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
-            let gateway_id = gateway.gateway_id();
+            let gateway_id = gateway.http_gateway_id().await;
             let mut lightning_gateway = user_lightning_module
                 .select_gateway(&gateway_id)
                 .await
@@ -359,7 +359,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway_id();
+            let gateway_id = gateway.http_gateway_id().await;
             let gateway_client = gateway.select_client(fed.id()).await.unwrap().into_value();
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>().unwrap();
@@ -438,7 +438,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway_id();
+            let gateway_id = gateway.http_gateway_id().await;
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for user client
             let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
@@ -499,7 +499,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway_id = gateway.gateway_id();
+        let gateway_id = gateway.http_gateway_id().await;
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
@@ -598,7 +598,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway_id = gateway.gateway_id();
+        let gateway_id = gateway.http_gateway_id().await;
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // User client creates invoice in federation
         let ln_module = user_client.get_first_module::<LightningClientModule>()?;
@@ -764,7 +764,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway_id();
+            let gateway_id = gateway.http_gateway_id().await;
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             let invoice = other_lightning_client
                 .invoice(sats(1000), 1.into())
@@ -833,7 +833,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
     multi_federation_test(|gateway, fed1, fed2, _| async move {
-        let gateway_id = gateway.gateway_id();
+        let gateway_id = gateway.http_gateway_id().await;
         let id1 = fed1.invite_code().federation_id();
         let id2 = fed2.invite_code().federation_id();
 
@@ -897,8 +897,13 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
 
         // A client pays invoice in federation 1
         let gateway_client = gateway.select_client(id1).await?.into_value();
-        gateway_pay_valid_invoice(invoice, &client1, &gateway_client, &gateway.gateway_id())
-            .await?;
+        gateway_pay_valid_invoice(
+            invoice,
+            &client1,
+            &gateway_client,
+            &gateway.http_gateway_id().await,
+        )
+        .await?;
 
         // A client receives cash via swap in federation 2
         assert_eq!(receive_sub.ok().await?, LnReceiveState::Created);

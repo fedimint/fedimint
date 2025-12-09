@@ -148,35 +148,37 @@ pub async fn start_iroh_endpoint(
     task_group: TaskGroup,
     handlers: Arc<Handlers>,
 ) -> anyhow::Result<()> {
-    info!("Building Iroh Endpoint...");
-    let iroh_endpoint = build_iroh_endpoint(
-        gateway.iroh_sk.clone(),
-        gateway.iroh_listen,
-        gateway.iroh_dns.clone(),
-        gateway.iroh_relays.clone(),
-        FEDIMINT_GATEWAY_ALPN,
-    )
-    .await?;
-    let gw_clone = gateway.clone();
-    let tg_clone = task_group.clone();
-    let handlers_clone = handlers.clone();
-    info!("Spawning accept loop...");
-    task_group.spawn("Gateway Iroh", |_| async move {
-        while let Some(incoming) = iroh_endpoint.accept().await {
-            info!("Accepted new connection. Spawning handler...");
-            tg_clone.spawn_cancellable_silent(
-                "handle endpoint accept",
-                handle_incoming_iroh_request(
-                    incoming,
-                    gw_clone.clone(),
-                    handlers_clone.clone(),
-                    tg_clone.clone(),
-                ),
-            );
-        }
-    });
+    if let Some(iroh_listen) = gateway.iroh_listen {
+        info!("Building Iroh Endpoint...");
+        let iroh_endpoint = build_iroh_endpoint(
+            gateway.iroh_sk.clone(),
+            iroh_listen,
+            gateway.iroh_dns.clone(),
+            gateway.iroh_relays.clone(),
+            FEDIMINT_GATEWAY_ALPN,
+        )
+        .await?;
+        let gw_clone = gateway.clone();
+        let tg_clone = task_group.clone();
+        let handlers_clone = handlers.clone();
+        info!("Spawning accept loop...");
+        task_group.spawn("Gateway Iroh", |_| async move {
+            while let Some(incoming) = iroh_endpoint.accept().await {
+                info!("Accepted new connection. Spawning handler...");
+                tg_clone.spawn_cancellable_silent(
+                    "handle endpoint accept",
+                    handle_incoming_iroh_request(
+                        incoming,
+                        gw_clone.clone(),
+                        handlers_clone.clone(),
+                        tg_clone.clone(),
+                    ),
+                );
+            }
+        });
 
-    info!(target: LOG_GATEWAY, "Successfully started iroh endpoint");
+        info!(target: LOG_GATEWAY, "Successfully started iroh endpoint");
+    }
 
     Ok(())
 }

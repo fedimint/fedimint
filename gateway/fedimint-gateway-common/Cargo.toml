@@ -16,6 +16,7 @@ name = "fedimint_gateway_common"
 path = "src/lib.rs"
 
 [dependencies]
+anyhow = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
 fedimint-api-client = { workspace = true }

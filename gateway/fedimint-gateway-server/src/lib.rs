@@ -35,7 +35,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use anyhow::{Context, anyhow, ensure};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
-use bitcoin::{Address, Network, Txid};
+use bitcoin::{Address, Network, Txid, secp256k1};
 use clap::Parser;
 use client::GatewayClientBuilder;
 pub use config::GatewayParameters;
@@ -77,8 +77,8 @@ use fedimint_gateway_common::{
     ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
     PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
-    WithdrawPayload, WithdrawResponse,
+    RegisteredProtocol, SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse,
+    V1_API_ENDPOINT, WithdrawPayload, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -180,6 +180,27 @@ impl Display for GatewayState {
     }
 }
 
+/// Helper struct for storing the registration parameters for LNv1 for each
+/// network protocol.
+#[derive(Debug, Clone)]
+struct Registration {
+    /// The url to advertise in the registration that clients can use to connect
+    endpoint_url: SafeUrl,
+
+    /// Keypair that was used to register the gateway registration
+    keypair: secp256k1::Keypair,
+}
+
+impl Registration {
+    pub async fn new(db: &Database, endpoint_url: SafeUrl, protocol: RegisteredProtocol) -> Self {
+        let keypair = Gateway::load_or_create_gateway_keypair(db, protocol).await;
+        Self {
+            endpoint_url,
+            keypair,
+        }
+    }
+}
+
 /// The action to take after handling a payment stream.
 enum ReceivePaymentStreamAction {
     RetryAfterDelay,
@@ -206,13 +227,6 @@ pub struct Gateway {
 
     /// Database for Gateway metadata.
     gateway_db: Database,
-
-    /// A public key representing the identity of the gateway. Private key is
-    /// not used.
-    gateway_id: PublicKey,
-
-    /// The Gateway's API URL.
-    versioned_api: SafeUrl,
 
     /// The socket the gateway listens on.
     listen: SocketAddr,
@@ -246,7 +260,7 @@ pub struct Gateway {
     iroh_sk: iroh::SecretKey,
 
     /// The socket that the gateway listens on for the Iroh `Endpoint`
-    iroh_listen: SocketAddr,
+    iroh_listen: Option<SocketAddr>,
 
     /// Optional DNS server used for discovery of the Iroh `Endpoint`
     iroh_dns: Option<SafeUrl>,
@@ -254,6 +268,10 @@ pub struct Gateway {
     /// List of additional relays that can be used to establish a connection to
     /// the Iroh `Endpoint`
     iroh_relays: Vec<SafeUrl>,
+
+    /// A map of the network protocols the gateway supports to the data needed
+    /// for registering with a federation.
+    registrations: BTreeMap<RegisteredProtocol, Registration>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -263,9 +281,8 @@ impl std::fmt::Debug for Gateway {
             .field("state", &self.state)
             .field("client_builder", &self.client_builder)
             .field("gateway_db", &self.gateway_db)
-            .field("gateway_id", &self.gateway_id)
-            .field("versioned_api", &self.versioned_api)
             .field("listen", &self.listen)
+            .field("registrations", &self.registrations)
             .finish_non_exhaustive()
     }
 }
@@ -285,7 +302,7 @@ impl Gateway {
         gateway_db: Database,
         gateway_state: GatewayState,
         chain_source: ChainSource,
-        iroh_listen: SocketAddr,
+        iroh_listen: Option<SocketAddr>,
         bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
@@ -295,7 +312,7 @@ impl Gateway {
             lightning_mode,
             GatewayParameters {
                 listen,
-                versioned_api,
+                versioned_api: Some(versioned_api),
                 bcrypt_password_hash,
                 network,
                 num_route_hints,
@@ -363,12 +380,28 @@ impl Gateway {
             }
         };
 
-        let gateway_id = Self::load_or_create_gateway_id(&gateway_db).await;
+        // Apply database migrations before using the database to ensure old database
+        // structures are readable.
+        apply_migrations(
+            &gateway_db,
+            (),
+            "gatewayd".to_string(),
+            get_gatewayd_database_migrations(),
+            None,
+            None,
+        )
+        .await?;
+
+        // For legacy reasons, we use the http id for the unique identifier of the
+        // bitcoind watch-only wallet
+        let http_id = Self::load_or_create_gateway_keypair(&gateway_db, RegisteredProtocol::Http)
+            .await
+            .public_key();
         let (dyn_bitcoin_rpc, chain_source) =
             match (opts.bitcoind_url.as_ref(), opts.esplora_url.as_ref()) {
                 (Some(_), None) => {
                     let (client, chain_source) =
-                        Self::get_bitcoind_client(&opts, gateway_parameters.network, &gateway_id)?;
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network, &http_id)?;
                     (client.into_dyn(), chain_source)
                 }
                 (None, Some(url)) => {
@@ -383,7 +416,7 @@ impl Gateway {
                 (Some(_), Some(_)) => {
                     // Use bitcoind by default if both are set
                     let (client, chain_source) =
-                        Self::get_bitcoind_client(&opts, gateway_parameters.network, &gateway_id)?;
+                        Self::get_bitcoind_client(&opts, gateway_parameters.network, &http_id)?;
                     (client.into_dyn(), chain_source)
                 }
                 _ => unreachable!("ArgGroup already enforced XOR relation"),
@@ -427,23 +460,28 @@ impl Gateway {
         chain_source: ChainSource,
         bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
-        // Apply database migrations before using the database to ensure old database
-        // structures are readable.
-        apply_migrations(
-            &gateway_db,
-            (),
-            "gatewayd".to_string(),
-            get_gatewayd_database_migrations(),
-            None,
-            None,
-        )
-        .await?;
-
         let num_route_hints = gateway_parameters.num_route_hints;
         let network = gateway_parameters.network;
 
         let task_group = TaskGroup::new();
         task_group.install_kill_handler();
+
+        let mut registrations = BTreeMap::new();
+        if let Some(http_url) = gateway_parameters.versioned_api {
+            registrations.insert(
+                RegisteredProtocol::Http,
+                Registration::new(&gateway_db, http_url, RegisteredProtocol::Http).await,
+            );
+        }
+
+        let iroh_sk = Self::load_or_create_iroh_key(&gateway_db).await;
+        if gateway_parameters.iroh_listen.is_some() {
+            let endpoint_url = SafeUrl::parse(&format!("iroh://{}", iroh_sk.public()))?;
+            registrations.insert(
+                RegisteredProtocol::Iroh,
+                Registration::new(&gateway_db, endpoint_url, RegisteredProtocol::Iroh).await,
+            );
+        }
 
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
@@ -451,9 +489,7 @@ impl Gateway {
             lightning_mode,
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
-            gateway_id: Self::load_or_create_gateway_id(&gateway_db).await,
             gateway_db: gateway_db.clone(),
-            versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
             task_group,
             bcrypt_password_hash: Arc::new(gateway_parameters.bcrypt_password_hash),
@@ -463,19 +499,22 @@ impl Gateway {
             bitcoin_rpc,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
-            iroh_sk: Self::load_or_create_iroh_key(&gateway_db).await,
+            iroh_sk,
             iroh_dns: gateway_parameters.iroh_dns,
             iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
+            registrations,
         })
     }
 
-    /// Returns a `PublicKey` that uniquely identifies the Gateway.
-    async fn load_or_create_gateway_id(gateway_db: &Database) -> PublicKey {
+    async fn load_or_create_gateway_keypair(
+        gateway_db: &Database,
+        protocol: RegisteredProtocol,
+    ) -> secp256k1::Keypair {
         let mut dbtx = gateway_db.begin_transaction().await;
-        let keypair = dbtx.load_or_create_gateway_keypair().await;
+        let keypair = dbtx.load_or_create_gateway_keypair(protocol).await;
         dbtx.commit_tx().await;
-        keypair.public_key()
+        keypair
     }
 
     /// Returns `iroh::SecretKey` and saves it to the database if it does not
@@ -487,12 +526,10 @@ impl Gateway {
         iroh_sk
     }
 
-    pub fn gateway_id(&self) -> PublicKey {
-        self.gateway_id
-    }
-
-    pub fn versioned_api(&self) -> &SafeUrl {
-        &self.versioned_api
+    pub async fn http_gateway_id(&self) -> PublicKey {
+        Self::load_or_create_gateway_keypair(&self.gateway_db, RegisteredProtocol::Http)
+            .await
+            .public_key()
     }
 
     async fn get_state(&self) -> GatewayState {
@@ -1467,8 +1504,8 @@ impl Gateway {
                     let route_hints = route_hints.clone();
                     let lightning_context = lightning_context.clone();
                     let federation_config = federation_config.clone();
-                    let api = self.versioned_api.clone();
-                    let gateway_id = self.gateway_id;
+                    let registrations =
+                        self.registrations.clone().into_values().collect::<Vec<_>>();
 
                     register_task_group.spawn_cancellable_silent(
                         "register federation",
@@ -1476,16 +1513,19 @@ impl Gateway {
                             let gateway_client = client_arc
                                 .get_first_module::<GatewayClientModule>()
                                 .expect("No GatewayClientModule exists");
-                            gateway_client
-                                .try_register_with_federation(
-                                    route_hints,
-                                    GW_ANNOUNCEMENT_TTL,
-                                    federation_config.lightning_fee.into(),
-                                    lightning_context,
-                                    api,
-                                    gateway_id,
-                                )
-                                .await;
+
+                            for registration in registrations {
+                                gateway_client
+                                    .try_register_with_federation(
+                                        route_hints.clone(),
+                                        GW_ANNOUNCEMENT_TTL,
+                                        federation_config.lightning_fee.into(),
+                                        lightning_context.clone(),
+                                        registration.endpoint_url,
+                                        registration.keypair.public_key(),
+                                    )
+                                    .await;
+                            }
                         },
                     );
                 }
@@ -1696,14 +1736,13 @@ impl Gateway {
     /// and requests to remove the registration record.
     pub async fn unannounce_from_all_federations(&self) {
         if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
-            let mut dbtx = self.gateway_db.begin_transaction_nc().await;
-            let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
-
-            self.federation_manager
-                .read()
-                .await
-                .unannounce_from_all_federations(gateway_keypair)
-                .await;
+            for registration in self.registrations.values() {
+                self.federation_manager
+                    .read()
+                    .await
+                    .unannounce_from_all_federations(registration.keypair)
+                    .await;
+            }
         }
     }
 
@@ -1753,13 +1792,16 @@ impl IAdminGateway for Gateway {
                 federations: vec![],
                 federation_fake_scids: None,
                 version_hash: fedimint_build_code_version_env!().to_string(),
-                gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
                 lightning_info: LightningInfo::NotConnected,
-                api: self.versioned_api.clone(),
                 iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                     .expect("could not parse iroh api"),
                 lightning_mode: self.lightning_mode.clone(),
+                registrations: self
+                    .registrations
+                    .iter()
+                    .map(|(k, v)| (k.clone(), (v.endpoint_url.clone(), v.keypair.public_key())))
+                    .collect(),
             });
         };
 
@@ -1787,13 +1829,16 @@ impl IAdminGateway for Gateway {
             federations,
             federation_fake_scids: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
-            gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
             lightning_info,
-            api: self.versioned_api.clone(),
             iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
                 .expect("could not parse iroh api"),
             lightning_mode: self.lightning_mode.clone(),
+            registrations: self
+                .registrations
+                .iter()
+                .map(|(k, v)| (k.clone(), (v.endpoint_url.clone(), v.keypair.public_key())))
+                .collect(),
         })
     }
 
@@ -1863,7 +1908,11 @@ impl IAdminGateway for Gateway {
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
         let federation_info = federation_manager
-            .leave_federation(payload.federation_id, &mut dbtx.to_ref_nc())
+            .leave_federation(
+                payload.federation_id,
+                &mut dbtx.to_ref_nc(),
+                self.registrations.values().collect(),
+            )
             .await?;
 
         dbtx.remove_federation_config(payload.federation_id).await;
@@ -1972,18 +2021,20 @@ impl IAdminGateway for Gateway {
         Self::check_lnv1_federation_network(&client, self.network).await?;
         Self::check_lnv2_federation_network(&client, self.network).await?;
         if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
-            client
-                .get_first_module::<GatewayClientModule>()?
-                .try_register_with_federation(
-                    // Route hints will be updated in the background
-                    Vec::new(),
-                    GW_ANNOUNCEMENT_TTL,
-                    federation_config.lightning_fee.into(),
-                    lightning_context,
-                    self.versioned_api.clone(),
-                    self.gateway_id,
-                )
-                .await;
+            for registration in self.registrations.values() {
+                client
+                    .get_first_module::<GatewayClientModule>()?
+                    .try_register_with_federation(
+                        // Route hints will be updated in the background
+                        Vec::new(),
+                        GW_ANNOUNCEMENT_TTL,
+                        federation_config.lightning_fee.into(),
+                        lightning_context.clone(),
+                        registration.endpoint_url.clone(),
+                        registration.keypair.public_key(),
+                    )
+                    .await;
+            }
         }
 
         // no need to enter span earlier, because connect-fed has a span

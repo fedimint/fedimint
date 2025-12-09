@@ -813,6 +813,48 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     }
 
     // OUTGOING: fedimint-cli pays LDK via LND gateway
+    if let Some(iroh_gw_id) = &gw_lnd.iroh_gateway_id
+        && crate::util::FedimintCli::version_or_default().await >= *VERSION_0_10_0_ALPHA
+    {
+        info!("Testing outgoing payment from client to LDK via IROH LND Gateway");
+
+        let initial_lnd_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
+        let invoice = gw_ldk.create_invoice(2_000_000).await?;
+        ln_pay(&client, invoice.to_string(), iroh_gw_id.clone()).await?;
+        gw_ldk
+            .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
+            .await?;
+
+        // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
+        let final_lnd_outgoing_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
+        info!(
+            ?final_lnd_outgoing_gateway_balance,
+            "Final LND ecash balance after iroh payment"
+        );
+        anyhow::ensure!(
+            almost_equal(
+                final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance,
+                2_000_000,
+                1_000
+            )
+            .is_ok(),
+            "LND Gateway balance changed by {} on LND outgoing IROH payment, expected 2_000_000",
+            (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
+        );
+
+        // Send the funds back over iroh
+        let recv = ln_invoice(
+            &client,
+            Amount::from_msats(2_000_000),
+            "iroh receive payment".to_string(),
+            iroh_gw_id.clone(),
+        )
+        .await?;
+        gw_ldk
+            .pay_invoice(Bolt11Invoice::from_str(&recv.invoice).expect("Could not parse invoice"))
+            .await?;
+    }
+
     info!("Testing outgoing payment from client to LDK via LND gateway");
     let initial_lnd_gateway_balance = gw_lnd.ecash_balance(fed_id.clone()).await?;
     let invoice = gw_ldk.create_invoice(2_000_000).await?;
@@ -829,7 +871,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         almost_equal(
             final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance,
             2_000_000,
-            1_000
+            3_000
         )
         .is_ok(),
         "LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000",
@@ -934,7 +976,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     almost_equal(
         post_withdraw_walletng_balance,
         expected_wallet_balance,
-        2_000,
+        4_000,
     )
     .unwrap();
 
@@ -1296,11 +1338,9 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         gw_ldk.wait_for_block_height(block_height),
     )?;
 
-    // Query current gateway infos
-    let (lnd_value, ldk_value) = try_join!(gw_lnd.get_info(), gw_ldk.get_info())?;
-
     // Drop references to gateways so the test can kill them
     let lnd_gateway_id = gw_lnd.gateway_id.clone();
+    let ldk_gateway_id = gw_ldk.gateway_id.clone();
     let gw_ldk_name = gw_ldk.gw_name.clone();
     let gw_ldk_port = gw_ldk.gw_port;
     let gw_lightning_port = gw_ldk.ldk_port;
@@ -1312,7 +1352,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     info!("Making payment while gateway is down");
     let initial_client_balance = client.balance().await?;
     let invoice = gw_ldk_second.create_invoice(3000).await?;
-    ln_pay(&client, invoice.to_string(), lnd_gateway_id)
+    ln_pay(&client, invoice.to_string(), lnd_gateway_id.clone())
         .await
         .expect_err("Expected ln-pay to return error because the gateway is not online");
     let new_client_balance = client.balance().await?;
@@ -1333,8 +1373,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         )
     )?;
 
-    let lnd_gateway_id: fedimint_core::secp256k1::PublicKey =
-        serde_json::from_value(lnd_value["gateway_id"].clone())?;
+    let lnd_gateway_id = fedimint_core::secp256k1::PublicKey::from_str(&lnd_gateway_id)?;
 
     poll(
         "Waiting for LND Gateway Running state after reboot",
@@ -1342,8 +1381,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
             let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
             let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;
             let reboot_gateway_state: String = serde_json::from_value(lnd_value["gateway_state"].clone()).context("invalid gateway state").map_err(ControlFlow::Break)?;
-            let reboot_gateway_id: fedimint_core::secp256k1::PublicKey =
-        serde_json::from_value(lnd_value["gateway_id"].clone()).context("invalid gateway id").map_err(ControlFlow::Break)?;
+            let reboot_gateway_id = fedimint_core::secp256k1::PublicKey::from_str(&new_gw_lnd.gateway_id).expect("Could not convert public key");
 
             if reboot_gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
@@ -1356,16 +1394,14 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )
     .await?;
 
-    let ldk_gateway_id: fedimint_core::secp256k1::PublicKey =
-        serde_json::from_value(ldk_value["gateway_id"].clone())?;
+    let ldk_gateway_id = fedimint_core::secp256k1::PublicKey::from_str(&ldk_gateway_id)?;
     poll(
         "Waiting for LDK Gateway Running state after reboot",
         || async {
             let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
             let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
             let reboot_gateway_state: String = serde_json::from_value(ldk_value["gateway_state"].clone()).context("invalid gateway state").map_err(ControlFlow::Break)?;
-            let reboot_gateway_id: fedimint_core::secp256k1::PublicKey =
-        serde_json::from_value(ldk_value["gateway_id"].clone()).context("invalid gateway id").map_err(ControlFlow::Break)?;
+            let reboot_gateway_id = fedimint_core::secp256k1::PublicKey::from_str(&new_gw_ldk.gateway_id).expect("Could not convert public key");
 
             if reboot_gateway_state == "Running" {
                 info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");

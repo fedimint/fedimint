@@ -879,7 +879,17 @@ impl Federation {
             .context("invalid output")
             .map_err(ControlFlow::Break)?
             .len();
-            poll_eq!(num_gateways, 1)
+
+            // After version v0.10.0, the LND gateway will register twice. Once for the HTTP
+            // server, and once for the iroh endpoint.
+            let expected_gateways =
+                if crate::util::Gatewayd::version_or_default().await < *VERSION_0_10_0_ALPHA {
+                    1
+                } else {
+                    2
+                };
+
+            poll_eq!(num_gateways, expected_gateways)
         })
         .await?;
         debug!(target: LOG_DEVIMINT,

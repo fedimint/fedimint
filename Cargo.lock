@@ -3350,6 +3350,7 @@ dependencies = [
 name = "fedimint-gateway-common"
 version = "0.10.0-alpha"
 dependencies = [
+ "anyhow",
  "bitcoin",
  "clap",
  "fedimint-api-client",

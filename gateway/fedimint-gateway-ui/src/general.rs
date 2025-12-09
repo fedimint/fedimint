@@ -4,25 +4,49 @@ use maud::{Markup, html};
 pub fn render(gateway_info: &GatewayInfo) -> Markup {
     html!(
         div class="card h-100" {
-            div class="card-header dashboard-header" { "Gateway Information" }
+            div class="card-header dashboard-header" { "Gateway Network Information" }
+
             div class="card-body" {
+
                 div id="status" class="alert alert-info" {
                     "Status: " strong { (gateway_info.gateway_state.clone()) }
                 }
 
-                table class="table table-sm mb-0" {
-                    tbody {
-                        tr {
-                            th { "Gateway ID" }
-                            td { (gateway_info.gateway_id.to_string()) }
+                @if gateway_info.registrations.is_empty() {
+                    div class="alert alert-secondary" {
+                        "No registrations found."
+                    }
+                } @else {
+                    table class="table table-sm" {
+                        thead {
+                            tr {
+                                th { "Protocol" }
+                                th { "Details" }
+                            }
                         }
-                        tr {
-                            th { "API Endpoint" }
-                            td { (gateway_info.api.to_string()) }
-                        }
-                        tr {
-                            th { "Iroh API" }
-                            td { (gateway_info.iroh_api.to_string()) }
+                        tbody {
+                            @for (protocol, (url, pubkey)) in &gateway_info.registrations {
+                                tr {
+                                    td class="align-middle fw-bold" {
+                                        (format!("{:?}", protocol))
+                                    }
+
+                                    td {
+                                        table class="table table-borderless table-sm mb-0" {
+                                            tbody {
+                                                tr {
+                                                    td class="fw-semibold pe-2" { "URL:" }
+                                                    td { (url.to_string()) }
+                                                }
+                                                tr {
+                                                    td class="fw-semibold pe-2" { "ID:" }
+                                                    td { (pubkey.to_string()) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

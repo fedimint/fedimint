@@ -61,7 +61,7 @@ pub struct GatewayOpts {
 
     /// Public URL from which the webserver API is reachable
     #[arg(long = "api-addr", env = envs::FM_GATEWAY_API_ADDR_ENV)]
-    api_addr: SafeUrl,
+    api_addr: Option<SafeUrl>,
 
     /// Gateway webserver authentication bcrypt password hash
     #[arg(long = "bcrypt-password-hash", env = envs::FM_GATEWAY_BCRYPT_PASSWORD_HASH_ENV)]
@@ -111,7 +111,7 @@ pub struct GatewayOpts {
 
     /// Gateway iroh listen address
     #[arg(long = "iroh-listen", env = envs::FM_GATEWAY_IROH_LISTEN_ADDR_ENV)]
-    iroh_listen: SocketAddr,
+    iroh_listen: Option<SocketAddr>,
 
     /// Optional URL of the Iroh DNS server
     #[arg(long, env = FM_IROH_DNS_ENV)]
@@ -126,13 +126,11 @@ impl GatewayOpts {
     /// Converts the command line parameters into a helper struct the Gateway
     /// uses to store runtime parameters.
     pub fn to_gateway_parameters(&self) -> anyhow::Result<GatewayParameters> {
-        let versioned_api = self.api_addr.join(V1_API_ENDPOINT).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to version gateway API address: {api_addr:?}, error: {e:?}",
-                api_addr = self.api_addr,
-            )
-        })?;
-
+        let versioned_api = self.api_addr.clone().map(|api_addr| {
+            api_addr
+                .join(V1_API_ENDPOINT)
+                .expect("Could not join v1 api_addr")
+        });
         let bcrypt_password_hash = bcrypt::HashParts::from_str(&self.bcrypt_password_hash)?;
 
         Ok(GatewayParameters {
@@ -159,13 +157,13 @@ impl GatewayOpts {
 #[derive(Debug)]
 pub struct GatewayParameters {
     pub listen: SocketAddr,
-    pub versioned_api: SafeUrl,
+    pub versioned_api: Option<SafeUrl>,
     pub bcrypt_password_hash: bcrypt::HashParts,
     pub network: Network,
     pub num_route_hints: u32,
     pub default_routing_fees: PaymentFee,
     pub default_transaction_fees: PaymentFee,
-    pub iroh_listen: SocketAddr,
+    pub iroh_listen: Option<SocketAddr>,
     pub iroh_dns: Option<SafeUrl>,
     pub iroh_relays: Vec<SafeUrl>,
 }
