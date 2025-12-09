@@ -3479,6 +3479,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-gateway-common",
+ "fedimint-ln-common",
  "fedimint-ui-common",
  "lightning-invoice",
  "maud",

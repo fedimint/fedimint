@@ -6,7 +6,8 @@ use axum::response::Html;
 use fedimint_core::bitcoin::Network;
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GatewayBalances,
-    GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest, SendOnchainRequest,
+    GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest, PayInvoiceForOperatorPayload,
+    SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -16,8 +17,8 @@ use qrcode::render::svg;
 
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_BOLT11_INVOICE_ROUTE, DynGatewayApi,
-    LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE, PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE,
-    WALLET_FRAGMENT_ROUTE,
+    LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE, PAY_BOLT11_INVOICE_ROUTE,
+    PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -329,13 +330,43 @@ where
                     div class="mt-3" {
                         button class="btn btn-sm btn-outline-primary me-2"
                             type="button"
-                            onclick="document.getElementById('receive-form').classList.add('d-none');"
+                            onclick="
+                                document.getElementById('receive-form').classList.add('d-none');
+                                document.getElementById('pay-invoice-form').classList.toggle('d-none');
+                            "
                         { "Send" }
 
                         button class="btn btn-sm btn-outline-success"
                             type="button"
-                            onclick="document.getElementById('receive-form').classList.toggle('d-none');"
+                            onclick="
+                                document.getElementById('pay-invoice-form').classList.add('d-none');
+                                document.getElementById('receive-form').classList.toggle('d-none');
+                            "
                         { "Receive" }
+                    }
+
+                    // Send form
+                    div id="pay-invoice-form" class="card card-body mt-3 d-none" {
+                        form
+                            id="pay-ln-invoice-form"
+                            hx-post=(PAY_BOLT11_INVOICE_ROUTE)
+                            hx-target="#payments-container"
+                            hw-swap="outerHTML"
+                        {
+                            div class="mb-3" {
+                                label class="form-label" for="invoice" { "Bolt11 Invoice" }
+                                input type="text"
+                                    class="form-control"
+                                    id="invoice"
+                                    name="invoice"
+                                    required;
+                            }
+
+                            button
+                                type="submit"
+                                class="btn btn-success btn-sm"
+                            { "Pay Invoice" }
+                        }
                     }
 
                     // Receive form
@@ -977,6 +1008,39 @@ where
                 None,
                 None,
                 Some(format!("Failed to create invoice: {e}")),
+            );
+            Html(markup.into_string())
+        }
+    }
+}
+
+pub async fn pay_bolt11_invoice_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<PayInvoiceForOperatorPayload>,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let send_result = state.api.handle_pay_invoice_for_operator_msg(payload).await;
+    let balances_result = state.api.handle_get_balances_msg().await;
+
+    match send_result {
+        Ok(preimage) => {
+            let markup = payments_fragment_markup(
+                &balances_result,
+                None,
+                Some(format!("Successfully paid invoice. Preimage: {preimage}")),
+                None,
+            );
+            Html(markup.into_string())
+        }
+        Err(e) => {
+            let markup = payments_fragment_markup(
+                &balances_result,
+                None,
+                None,
+                Some(format!("Failed to pay invoice: {e}")),
             );
             Html(markup.into_string())
         }

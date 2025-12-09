@@ -1036,37 +1036,6 @@ impl Gateway {
         })
     }
 
-    /// Requests the gateway to pay an outgoing LN invoice using its own funds.
-    /// Returns the payment hash's preimage on success.
-    async fn handle_pay_invoice_for_operator_msg(
-        &self,
-        payload: PayInvoiceForOperatorPayload,
-    ) -> AdminResult<Preimage> {
-        // Those are the ldk defaults
-        const BASE_FEE: u64 = 50;
-        const FEE_DENOMINATOR: u64 = 100;
-        const MAX_DELAY: u64 = 1008;
-
-        let GatewayState::Running { lightning_context } = self.get_state().await else {
-            return Err(AdminGatewayError::Lightning(
-                LightningRpcError::FailedToConnect,
-            ));
-        };
-
-        let max_fee = BASE_FEE
-            + payload
-                .invoice
-                .amount_milli_satoshis()
-                .context("Invoice is missing amount")?
-                .saturating_div(FEE_DENOMINATOR);
-
-        let res = lightning_context
-            .lnrpc
-            .pay(payload.invoice, MAX_DELAY, Amount::from_msats(max_fee))
-            .await?;
-        Ok(res.preimage)
-    }
-
     /// Requests the gateway to pay an outgoing LN invoice on behalf of a
     /// Fedimint client. Returns the payment hash's preimage on success.
     async fn handle_pay_invoice_msg(
@@ -2225,6 +2194,37 @@ impl IAdminGateway for Gateway {
                 failure_reason: e.to_string(),
             })
         })
+    }
+
+    /// Requests the gateway to pay an outgoing LN invoice using its own funds.
+    /// Returns the payment hash's preimage on success.
+    async fn handle_pay_invoice_for_operator_msg(
+        &self,
+        payload: PayInvoiceForOperatorPayload,
+    ) -> AdminResult<Preimage> {
+        // Those are the ldk defaults
+        const BASE_FEE: u64 = 50;
+        const FEE_DENOMINATOR: u64 = 100;
+        const MAX_DELAY: u64 = 1008;
+
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Err(AdminGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
+            ));
+        };
+
+        let max_fee = BASE_FEE
+            + payload
+                .invoice
+                .amount_milli_satoshis()
+                .context("Invoice is missing amount")?
+                .saturating_div(FEE_DENOMINATOR);
+
+        let res = lightning_context
+            .lnrpc
+            .pay(payload.invoice, MAX_DELAY, Amount::from_msats(max_fee))
+            .await?;
+        Ok(res.preimage)
     }
 
     fn get_password_hash(&self) -> String {

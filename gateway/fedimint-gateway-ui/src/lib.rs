@@ -24,8 +24,10 @@ use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse, OpenChannelRequest,
-    PaymentSummaryPayload, PaymentSummaryResponse, SendOnchainRequest, SetFeesPayload,
+    PayInvoiceForOperatorPayload, PaymentSummaryPayload, PaymentSummaryResponse,
+    SendOnchainRequest, SetFeesPayload,
 };
+use fedimint_ln_common::contracts::Preimage;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{
@@ -39,8 +41,8 @@ use crate::connect_fed::connect_federation_handler;
 use crate::federation::{deposit_address_handler, leave_federation_handler, set_fees_handler};
 use crate::lightning::{
     channels_fragment_handler, close_channel_handler, create_bolt11_invoice_handler,
-    generate_receive_address_handler, open_channel_handler, payments_fragment_handler,
-    send_onchain_handler, wallet_fragment_handler,
+    generate_receive_address_handler, open_channel_handler, pay_bolt11_invoice_handler,
+    payments_fragment_handler, send_onchain_handler, wallet_fragment_handler,
 };
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
@@ -57,6 +59,7 @@ pub(crate) const LN_ONCHAIN_ADDRESS_ROUTE: &str = "/ui/wallet/receive";
 pub(crate) const DEPOSIT_ADDRESS_ROUTE: &str = "/ui/federations/deposit-address";
 pub(crate) const PAYMENTS_FRAGMENT_ROUTE: &str = "/ui/payments/fragment";
 pub(crate) const CREATE_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/receive/bolt11";
+pub(crate) const PAY_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/send/bolt11";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -134,6 +137,11 @@ pub trait IAdminGateway {
         &self,
         payload: CreateInvoiceForOperatorPayload,
     ) -> Result<Bolt11Invoice, Self::Error>;
+
+    async fn handle_pay_invoice_for_operator_msg(
+        &self,
+        payload: PayInvoiceForOperatorPayload,
+    ) -> Result<Preimage, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
@@ -287,6 +295,7 @@ pub fn router<E: Display + Send + Sync + 'static>(api: DynGatewayApi<E>) -> Rout
             CREATE_BOLT11_INVOICE_ROUTE,
             post(create_bolt11_invoice_handler),
         )
+        .route(PAY_BOLT11_INVOICE_ROUTE, post(pay_bolt11_invoice_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))
