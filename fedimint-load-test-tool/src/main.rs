@@ -20,6 +20,7 @@ use common::{
 };
 use devimint::cmd;
 use devimint::util::GatewayLndCli;
+use devimint::version_constants::VERSION_0_10_0_ALPHA;
 use fedimint_client::ClientHandleArc;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::Amount;
@@ -1335,9 +1336,19 @@ async fn get_gateway_id(generate_invoice_with: LnInvoiceGeneration) -> anyhow::R
             cmd!(GatewayLndCli, "info").out_json().await
         }
     }?;
-    let gateway_id = gateway_json["gateway_id"]
-        .as_str()
-        .context("Missing gateway_id field")?;
 
-    Ok(gateway_id.into())
+    let gatewayd_version = devimint::util::Gatewayd::version_or_default().await;
+    let gateway_id = if gatewayd_version < *VERSION_0_10_0_ALPHA {
+        gateway_json["gateway_id"]
+            .as_str()
+            .context("gateway_id must be a string")?
+            .to_owned()
+    } else {
+        gateway_json["registrations"]["http"][1]
+            .as_str()
+            .context("gateway id must be a string")?
+            .to_owned()
+    };
+
+    Ok(gateway_id)
 }

@@ -5,7 +5,7 @@ use bitcoin::hashes::sha256;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::util::almost_equal;
-use devimint::version_constants::VERSION_0_9_0_ALPHA;
+use devimint::version_constants::{VERSION_0_9_0_ALPHA, VERSION_0_10_0_ALPHA};
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
@@ -329,17 +329,19 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         test_fees(fed_id, &client, gw_lnd, gw_ldk, 1_000_000 - 1_000 - 100).await?;
     }
 
+    test_iroh_payment(&client, gw_lnd, gw_ldk).await?;
+
     info!("Testing payment summary...");
 
     let lnd_payment_summary = gw_lnd.payment_summary().await?;
 
     assert_eq!(
         lnd_payment_summary.outgoing.total_success,
-        4 + lnv1_swap + lnv2_swap
+        5 + lnv1_swap + lnv2_swap
     );
     assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
     // LNv1 does not count swaps as incoming payments
-    assert_eq!(lnd_payment_summary.incoming.total_success, 3 + lnv1_swap);
+    assert_eq!(lnd_payment_summary.incoming.total_success, 4 + lnv1_swap);
     assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
 
     assert!(lnd_payment_summary.outgoing.median_latency.is_some());
@@ -734,4 +736,73 @@ async fn fetch_invoice(lnurl: String, amount_msat: u64) -> anyhow::Result<(Bolt1
     );
 
     Ok((response.pr, response.verify))
+}
+
+async fn test_iroh_payment(
+    client: &Client,
+    gw_lnd: &Gatewayd,
+    gw_ldk: &Gatewayd,
+) -> anyhow::Result<()> {
+    info!("Testing iroh payment...");
+    add_gateway(client, 0, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    add_gateway(client, 1, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    add_gateway(client, 2, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    add_gateway(client, 3, &format!("iroh://{}", gw_lnd.node_id)).await?;
+
+    // If the client is below v0.10.0, also add the HTTP address so that the client
+    // can fallback to using that, since the iroh gateway will fail.
+    if util::FedimintCli::version_or_default().await < *VERSION_0_10_0_ALPHA
+        || gw_lnd.gatewayd_version < *VERSION_0_10_0_ALPHA
+    {
+        add_gateway(client, 0, &gw_lnd.addr).await?;
+        add_gateway(client, 1, &gw_lnd.addr).await?;
+        add_gateway(client, 2, &gw_lnd.addr).await?;
+        add_gateway(client, 3, &gw_lnd.addr).await?;
+    }
+
+    let invoice = gw_ldk.create_invoice(5_000_000).await?;
+
+    let send_op = serde_json::from_value::<OperationId>(
+        cmd!(client, "module", "lnv2", "send", invoice,)
+            .out_json()
+            .await?,
+    )?;
+
+    assert_eq!(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "await-send",
+            serde_json::to_string(&send_op)?.substring(1, 65)
+        )
+        .out_json()
+        .await?,
+        serde_json::to_value(FinalSendOperationState::Success).expect("JSON serialization failed"),
+    );
+
+    let (invoice, receive_op) = serde_json::from_value::<(Bolt11Invoice, OperationId)>(
+        cmd!(client, "module", "lnv2", "receive", "5000000",)
+            .out_json()
+            .await?,
+    )?;
+
+    gw_ldk.pay_invoice(invoice).await?;
+    await_receive_claimed(client, receive_op).await?;
+
+    if util::FedimintCli::version_or_default().await < *VERSION_0_10_0_ALPHA
+        || gw_lnd.gatewayd_version < *VERSION_0_10_0_ALPHA
+    {
+        remove_gateway(client, 0, &gw_lnd.addr).await?;
+        remove_gateway(client, 1, &gw_lnd.addr).await?;
+        remove_gateway(client, 2, &gw_lnd.addr).await?;
+        remove_gateway(client, 3, &gw_lnd.addr).await?;
+    }
+
+    remove_gateway(client, 0, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    remove_gateway(client, 1, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    remove_gateway(client, 2, &format!("iroh://{}", gw_lnd.node_id)).await?;
+    remove_gateway(client, 3, &format!("iroh://{}", gw_lnd.node_id)).await?;
+
+    Ok(())
 }

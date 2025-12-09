@@ -256,7 +256,6 @@ impl Fixtures {
         // Module tests do not use the webserver, so any port is ok
         let listen: SocketAddr = "127.0.0.1:9000".parse().unwrap();
         let address: SafeUrl = format!("http://{listen}").parse().unwrap();
-        let iroh_listen: SocketAddr = "127.0.0.1:9001".parse().unwrap();
 
         let esplora_server_url = SafeUrl::parse(&format!(
             "http://127.0.0.1:{}",
@@ -293,7 +292,7 @@ impl Fixtures {
             // gateway that it is connected to the mock Lightning node.
             fedimint_gateway_server::GatewayState::Running { lightning_context },
             esplora_chain_source,
-            Some(iroh_listen),
+            None,
             bitcoin_rpc,
         )
         .await

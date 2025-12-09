@@ -48,6 +48,7 @@ pub struct Gatewayd {
     pub gw_port: u16,
     pub ldk_port: u16,
     pub gateway_id: String,
+    pub iroh_gateway_id: Option<String>,
     pub iroh_port: u16,
     pub node_id: iroh_base::NodeId,
     pub gateway_index: usize,
@@ -137,7 +138,7 @@ impl Gatewayd {
             )
             .await?;
 
-        let gateway_id = poll(
+        let (gateway_id, iroh_gateway_id) = poll(
             "waiting for gateway to be ready to respond to rpc",
             || async {
                 // Once the gateway id is available via RPC, the gateway is ready
@@ -152,21 +153,28 @@ impl Gatewayd {
                 .out_json()
                 .await
                 .map_err(ControlFlow::Continue)?;
-                let gateway_id = if gatewayd_version < *VERSION_0_10_0_ALPHA {
-                    info["gateway_id"]
+                let (gateway_id, iroh_gateway_id) = if gatewayd_version < *VERSION_0_10_0_ALPHA {
+                    let gateway_id = info["gateway_id"]
                         .as_str()
                         .context("gateway_id must be a string")
                         .map_err(ControlFlow::Break)?
-                        .to_owned()
+                        .to_owned();
+                    (gateway_id, None)
                 } else {
-                    info["registrations"]["http"][1]
+                    let gateway_id = info["registrations"]["http"][1]
                         .as_str()
                         .context("gateway id must be a string")
                         .map_err(ControlFlow::Break)?
-                        .to_owned()
+                        .to_owned();
+                    let iroh_gateway_id = info["registrations"]["iroh"][1]
+                        .as_str()
+                        .context("gateway id must be a string")
+                        .map_err(ControlFlow::Break)?
+                        .to_owned();
+                    (gateway_id, Some(iroh_gateway_id))
                 };
 
-                Ok(gateway_id)
+                Ok((gateway_id, iroh_gateway_id))
             },
         )
         .await?;
@@ -186,6 +194,7 @@ impl Gatewayd {
             gw_port: port,
             ldk_port: lightning_node_port,
             gateway_id,
+            iroh_gateway_id,
             iroh_port: iroh_endpoint.port(),
             node_id: iroh_endpoint.node_id(),
             gateway_index,

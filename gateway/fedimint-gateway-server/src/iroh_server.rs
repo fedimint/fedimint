@@ -148,8 +148,8 @@ pub async fn start_iroh_endpoint(
     task_group: TaskGroup,
     handlers: Arc<Handlers>,
 ) -> anyhow::Result<()> {
-    info!("Building Iroh Endpoint...");
     if let Some(iroh_listen) = gateway.iroh_listen {
+        info!("Building Iroh Endpoint...");
         let iroh_endpoint = build_iroh_endpoint(
             gateway.iroh_sk.clone(),
             iroh_listen,
