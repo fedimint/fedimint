@@ -364,6 +364,7 @@ where
                         type="datetime-local"
                         id="start-secs"
                         name="start_secs"
+                        step="1"
                         value=(start_dt);
                 }
 
@@ -375,13 +376,37 @@ where
                         type="datetime-local"
                         id="end-secs"
                         name="end_secs"
+                        step="1"
                         value=(end_dt);
                 }
 
                 // Refresh Button
                 div class="col-auto align-self-end" {
                     button class="btn btn-outline-secondary" type="submit" { "Refresh" }
+                    button class="btn btn-outline-secondary me-2" type="button"
+                        id="last-day-btn"
+                    { "Last Day" }
                 }
+            }
+
+            script {
+                (PreEscaped(r#"
+                document.getElementById('last-day-btn').addEventListener('click', () => {
+                    const now = new Date();
+                    const endInput = document.getElementById('end-secs');
+                    const startInput = document.getElementById('start-secs');
+
+                    const pad = n => n.toString().padStart(2, '0');
+
+                    const formatUTC = d =>
+                        `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+
+                    endInput.value = formatUTC(now);
+
+                    const start = new Date(now.getTime() - 24*60*60*1000); // 24 hours ago UTC
+                    startInput.value = formatUTC(start);
+                });
+                "#))
             }
 
             // ────────────────────────────────
