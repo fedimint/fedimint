@@ -293,7 +293,7 @@ impl Fixtures {
             // gateway that it is connected to the mock Lightning node.
             fedimint_gateway_server::GatewayState::Running { lightning_context },
             esplora_chain_source,
-            iroh_listen,
+            Some(iroh_listen),
             bitcoin_rpc,
         )
         .await

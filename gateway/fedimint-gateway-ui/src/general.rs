@@ -21,16 +21,30 @@ pub fn render(gateway_info: &GatewayInfo) -> Markup {
                         thead {
                             tr {
                                 th { "Protocol" }
-                                th { "Endpoint" }
-                                th { "ID" }
+                                th { "Details" }
                             }
                         }
                         tbody {
                             @for (protocol, (url, pubkey)) in &gateway_info.registrations {
                                 tr {
-                                    td { (format!("{:?}", protocol)) }
-                                    td { (url.to_string()) }
-                                    td { (pubkey.to_string()) }
+                                    td class="align-middle fw-bold" {
+                                        (format!("{:?}", protocol))
+                                    }
+
+                                    td {
+                                        table class="table table-borderless table-sm mb-0" {
+                                            tbody {
+                                                tr {
+                                                    td class="fw-semibold pe-2" { "URL:" }
+                                                    td { (url.to_string()) }
+                                                }
+                                                tr {
+                                                    td class="fw-semibold pe-2" { "ID:" }
+                                                    td { (pubkey.to_string()) }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

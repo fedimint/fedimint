@@ -111,7 +111,7 @@ pub struct GatewayOpts {
 
     /// Gateway iroh listen address
     #[arg(long = "iroh-listen", env = envs::FM_GATEWAY_IROH_LISTEN_ADDR_ENV)]
-    iroh_listen: SocketAddr,
+    iroh_listen: Option<SocketAddr>,
 
     /// Optional URL of the Iroh DNS server
     #[arg(long, env = FM_IROH_DNS_ENV)]
@@ -163,7 +163,7 @@ pub struct GatewayParameters {
     pub num_route_hints: u32,
     pub default_routing_fees: PaymentFee,
     pub default_transaction_fees: PaymentFee,
-    pub iroh_listen: SocketAddr,
+    pub iroh_listen: Option<SocketAddr>,
     pub iroh_dns: Option<SafeUrl>,
     pub iroh_relays: Vec<SafeUrl>,
 }

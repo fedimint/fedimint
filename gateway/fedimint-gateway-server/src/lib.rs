@@ -260,7 +260,7 @@ pub struct Gateway {
     iroh_sk: iroh::SecretKey,
 
     /// The socket that the gateway listens on for the Iroh `Endpoint`
-    iroh_listen: SocketAddr,
+    iroh_listen: Option<SocketAddr>,
 
     /// Optional DNS server used for discovery of the Iroh `Endpoint`
     iroh_dns: Option<SafeUrl>,
@@ -302,7 +302,7 @@ impl Gateway {
         gateway_db: Database,
         gateway_state: GatewayState,
         chain_source: ChainSource,
-        iroh_listen: SocketAddr,
+        iroh_listen: Option<SocketAddr>,
         bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
@@ -474,6 +474,15 @@ impl Gateway {
             );
         }
 
+        let iroh_sk = Self::load_or_create_iroh_key(&gateway_db).await;
+        if gateway_parameters.iroh_listen.is_some() {
+            let endpoint_url = SafeUrl::parse(&format!("iroh://{}", iroh_sk.public()))?;
+            registrations.insert(
+                RegisteredProtocol::Iroh,
+                Registration::new(&gateway_db, endpoint_url, RegisteredProtocol::Iroh).await,
+            );
+        }
+
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
             mnemonic: Self::load_or_generate_mnemonic(&gateway_db).await?,
@@ -490,7 +499,7 @@ impl Gateway {
             bitcoin_rpc,
             default_routing_fees: gateway_parameters.default_routing_fees,
             default_transaction_fees: gateway_parameters.default_transaction_fees,
-            iroh_sk: Self::load_or_create_iroh_key(&gateway_db).await,
+            iroh_sk,
             iroh_dns: gateway_parameters.iroh_dns,
             iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
