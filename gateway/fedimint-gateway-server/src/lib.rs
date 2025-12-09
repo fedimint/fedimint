@@ -380,6 +380,18 @@ impl Gateway {
             }
         };
 
+        // Apply database migrations before using the database to ensure old database
+        // structures are readable.
+        apply_migrations(
+            &gateway_db,
+            (),
+            "gatewayd".to_string(),
+            get_gatewayd_database_migrations(),
+            None,
+            None,
+        )
+        .await?;
+
         // For legacy reasons, we use the http id for the unique identifier of the
         // bitcoind watch-only wallet
         let http_id = Self::load_or_create_gateway_keypair(&gateway_db, RegisteredProtocol::Http)
@@ -448,18 +460,6 @@ impl Gateway {
         chain_source: ChainSource,
         bitcoin_rpc: Arc<dyn IBitcoindRpc + Send + Sync>,
     ) -> anyhow::Result<Gateway> {
-        // Apply database migrations before using the database to ensure old database
-        // structures are readable.
-        apply_migrations(
-            &gateway_db,
-            (),
-            "gatewayd".to_string(),
-            get_gatewayd_database_migrations(),
-            None,
-            None,
-        )
-        .await?;
-
         let num_route_hints = gateway_parameters.num_route_hints;
         let network = gateway_parameters.network;
 

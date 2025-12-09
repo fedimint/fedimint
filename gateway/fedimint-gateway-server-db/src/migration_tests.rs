@@ -157,7 +157,9 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
         // Insert a record into the isolated db (doesn't matter what it is)
         isolated_dbtx
             .insert_new_entry(
-                &GatewayPublicKeyV0,
+                &GatewayPublicKey {
+                    protocol: RegisteredProtocol::Http,
+                },
                 &Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()),
             )
             .await;
