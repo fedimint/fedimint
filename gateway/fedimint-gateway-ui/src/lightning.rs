@@ -5,8 +5,8 @@ use axum::extract::State;
 use axum::response::Html;
 use fedimint_core::bitcoin::Network;
 use fedimint_gateway_common::{
-    ChannelInfo, CloseChannelsWithPeerRequest, GatewayBalances, GatewayInfo, LightningInfo,
-    LightningMode, OpenChannelRequest, SendOnchainRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GatewayBalances,
+    GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest, SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -15,8 +15,9 @@ use qrcode::QrCode;
 use qrcode::render::svg;
 
 use crate::{
-    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE,
-    OPEN_CHANNEL_ROUTE, PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
+    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_BOLT11_INVOICE_ROUTE, DynGatewayApi,
+    LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE, PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE,
+    WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -273,7 +274,7 @@ where
                             { "Refresh" }
                         }
 
-                        (payments_fragment_markup(&balances_result, None, None))
+                        (payments_fragment_markup(&balances_result, None, None, None))
                     }
                 }
             }
@@ -283,6 +284,7 @@ where
 
 pub fn payments_fragment_markup<E>(
     balances_result: &Result<GatewayBalances, E>,
+    created_invoice: Option<String>,
     success_msg: Option<String>,
     error_msg: Option<String>,
 ) -> Markup
@@ -323,19 +325,89 @@ where
                         }
                     }
 
+                    // Buttons
                     div class="mt-3" {
-                        // Toggle Send Form button
                         button class="btn btn-sm btn-outline-primary me-2"
                             type="button"
+                            onclick="document.getElementById('receive-form').classList.add('d-none');"
                         { "Send" }
-
 
                         button class="btn btn-sm btn-outline-success"
                             type="button"
+                            onclick="document.getElementById('receive-form').classList.toggle('d-none');"
                         { "Receive" }
                     }
 
-                    div id="receive-invoice-container" class="mt-3" {}
+                    // Receive form
+                    div id="receive-form" class={
+                        @if created_invoice.is_some() { "card card-body mt-3 d-none" }
+                        @else { "card card-body mt-3 d-none" }
+                    } {
+                        form
+                            id="create-ln-invoice-form"
+                            hx-post=(CREATE_BOLT11_INVOICE_ROUTE)
+                            hx-target="#payments-container"
+                            hx-swap="outerHTML"
+                        {
+                            div class="mb-3" {
+                                label class="form-label" for="amount_msats" { "Amount (msats)" }
+                                input type="number"
+                                    class="form-control"
+                                    id="amount_msats"
+                                    name="amount_msats"
+                                    min="1"
+                                    required;
+                            }
+
+                            button
+                                type="submit"
+                                class="btn btn-success btn-sm"
+                            { "Create Bolt11 Invoice" }
+                        }
+                    }
+
+                    // ──────────────────────────────────────────
+                    //  SHOW CREATED INVOICE
+                    // ──────────────────────────────────────────
+                    @if let Some(invoice) = created_invoice {
+
+                        @let code =
+                            QrCode::new(&invoice).expect("Failed to generate QR code");
+                        @let qr_svg = code.render::<svg::Color>().build();
+
+                        div class="card card-body mt-4" {
+
+                            div class="card card-body bg-light d-flex flex-column align-items-center" {
+                                span class="fw-bold mb-3" { "Bolt11 Invoice:" }
+
+                                // Flex container: address on left, QR on right
+                                div class="d-flex flex-row align-items-center gap-3 flex-wrap" style="width: 100%;" {
+
+                                    // Copyable input + text
+                                    div class="d-flex flex-column flex-grow-1" style="min-width: 300px;" {
+                                        input type="text"
+                                            readonly
+                                            class="form-control mb-2"
+                                            style="text-align:left; font-family: monospace; font-size:1rem;"
+                                            value=(invoice)
+                                            onclick="copyToClipboard(this)"
+                                        {}
+                                        small class="text-muted" { "Click to copy" }
+                                    }
+
+                                    // QR code
+                                    div class="border rounded p-2 bg-white d-flex justify-content-center align-items-center"
+                                        style="width: 300px; height: 300px; min-width: 200px; min-height: 200px;"
+                                    {
+                                        (PreEscaped(format!(
+                                            r#"<svg style="width: 100%; height: 100%; display: block;">{}</svg>"#,
+                                            qr_svg.replace("width=", "data-width=").replace("height=", "data-height=")
+                                        )))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -865,4 +937,48 @@ where
     };
 
     Html(markup.into_string())
+}
+
+pub async fn payments_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let balances_result = state.api.handle_get_balances_msg().await;
+    let markup = payments_fragment_markup(&balances_result, None, None, None);
+    Html(markup.into_string())
+}
+
+pub async fn create_bolt11_invoice_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<CreateInvoiceForOperatorPayload>,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let invoice_result = state
+        .api
+        .handle_create_invoice_for_operator_msg(payload)
+        .await;
+    let balances_result = state.api.handle_get_balances_msg().await;
+
+    match invoice_result {
+        Ok(invoice) => {
+            let markup =
+                payments_fragment_markup(&balances_result, Some(invoice.to_string()), None, None);
+            Html(markup.into_string())
+        }
+        Err(e) => {
+            let markup = payments_fragment_markup(
+                &balances_result,
+                None,
+                None,
+                Some(format!("Failed to create invoice: {e}")),
+            );
+            Html(markup.into_string())
+        }
+    }
 }

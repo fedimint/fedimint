@@ -3480,6 +3480,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-gateway-common",
  "fedimint-ui-common",
+ "lightning-invoice",
  "maud",
  "qrcode",
  "serde",

@@ -22,6 +22,7 @@ fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ui-common = { workspace = true }
+lightning-invoice = { workspace = true }
 maud = { workspace = true }
 qrcode = { workspace = true }
 serde = { workspace = true }

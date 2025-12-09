@@ -1036,38 +1036,6 @@ impl Gateway {
         })
     }
 
-    /// Creates an invoice that is directly payable to the gateway's lightning
-    /// node.
-    async fn handle_create_invoice_for_operator_msg(
-        &self,
-        payload: CreateInvoiceForOperatorPayload,
-    ) -> AdminResult<Bolt11Invoice> {
-        let GatewayState::Running { lightning_context } = self.get_state().await else {
-            return Err(AdminGatewayError::Lightning(
-                LightningRpcError::FailedToConnect,
-            ));
-        };
-
-        Bolt11Invoice::from_str(
-            &lightning_context
-                .lnrpc
-                .create_invoice(CreateInvoiceRequest {
-                    payment_hash: None, /* Empty payment hash indicates an invoice payable
-                                         * directly to the gateway. */
-                    amount_msat: payload.amount_msats,
-                    expiry_secs: payload.expiry_secs.unwrap_or(3600),
-                    description: payload.description.map(InvoiceDescription::Direct),
-                })
-                .await?
-                .invoice,
-        )
-        .map_err(|e| {
-            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
-                failure_reason: e.to_string(),
-            })
-        })
-    }
-
     /// Requests the gateway to pay an outgoing LN invoice using its own funds.
     /// Returns the payment hash's preimage on success.
     async fn handle_pay_invoice_for_operator_msg(
@@ -2219,11 +2187,44 @@ impl IAdminGateway for Gateway {
             })
         })
     }
+
     async fn handle_deposit_address_msg(
         &self,
         payload: DepositAddressPayload,
     ) -> AdminResult<Address> {
         self.handle_address_msg(payload).await
+    }
+
+    /// Creates an invoice that is directly payable to the gateway's lightning
+    /// node.
+    async fn handle_create_invoice_for_operator_msg(
+        &self,
+        payload: CreateInvoiceForOperatorPayload,
+    ) -> AdminResult<Bolt11Invoice> {
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Err(AdminGatewayError::Lightning(
+                LightningRpcError::FailedToConnect,
+            ));
+        };
+
+        Bolt11Invoice::from_str(
+            &lightning_context
+                .lnrpc
+                .create_invoice(CreateInvoiceRequest {
+                    payment_hash: None, /* Empty payment hash indicates an invoice payable
+                                         * directly to the gateway. */
+                    amount_msat: payload.amount_msats,
+                    expiry_secs: payload.expiry_secs.unwrap_or(3600),
+                    description: payload.description.map(InvoiceDescription::Direct),
+                })
+                .await?
+                .invoice,
+        )
+        .map_err(|e| {
+            AdminGatewayError::Lightning(LightningRpcError::InvalidMetadata {
+                failure_reason: e.to_string(),
+            })
+        })
     }
 
     fn get_password_hash(&self) -> String {
