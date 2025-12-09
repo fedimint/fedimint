@@ -10,7 +10,7 @@ use fedimint_core::time::now;
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GatewayBalances,
     GatewayInfo, LightningInfo, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
-    OpenChannelRequest, PayInvoiceForOperatorPayload, SendOnchainRequest,
+    OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentStatus, SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -426,25 +426,35 @@ where
                     } @else {
                         ul class="list-group mt-3" {
                             @for tx in &transactions.transactions {
-                                li class="list-group-item transaction-item" {
-                                    div class="d-flex justify-content-between" {
-                                        // Left column
+                                li class="list-group-item p-2 mb-1 transaction-item"
+                                    style="border-radius: 0.5rem; transition: background-color 0.2s;"
+                                {
+                                    // Hover effect using inline style (or add a CSS class)
+                                    div style="display: flex; justify-content: space-between; align-items: center;" {
+                                        // Left: kind + direction + status
                                         div {
-                                            div {
-                                                b { (format!("{:?}", tx.payment_kind)) }
+                                            div style="font-weight: bold; font-size: 0.9rem;" {
+                                                (format!("{:?}", tx.payment_kind))
                                                 " — "
                                                 span { (format!("{:?}", tx.direction)) }
                                             }
-                                            div class="text-muted small" {
-                                                (format!("{:?}", tx.status))
+
+                                            div style="font-size: 0.75rem; margin-top: 2px;" {
+                                                @let status_badge = match tx.status {
+                                                    PaymentStatus::Pending => html! { span class="badge bg-warning" { "⏳ Pending" } },
+                                                    PaymentStatus::Succeeded => html! { span class="badge bg-success" { "✅ Succeeded" } },
+                                                    PaymentStatus::Failed => html! { span class="badge bg-danger" { "❌ Failed" } },
+                                                };
+                                                (status_badge)
                                             }
                                         }
-                                        // Right column
-                                        div class="text-end" {
-                                            div {
+
+                                        // Right: amount + timestamp
+                                        div style="text-align: right;" {
+                                            div style="font-weight: bold; font-size: 0.9rem;" {
                                                 (format!("{} sats", tx.amount.msats / 1000))
                                             }
-                                            div class="text-muted small" {
+                                            div style="font-size: 0.7rem; color: #6c757d;" {
                                                 @let timestamp = chrono::NaiveDateTime::from_timestamp_opt(
                                                     tx.timestamp_secs as i64,
                                                     0
@@ -454,16 +464,26 @@ where
                                         }
                                     }
 
+                                    // Optional hash/preimage, bottom row
                                     @if let Some(hash) = &tx.payment_hash {
-                                        div class="mt-2 text-muted small" {
+                                        div style="font-family: monospace; font-size: 0.7rem; color: #6c757d; margin-top: 2px;" {
                                             "Hash: " (hash.to_string())
                                         }
                                     }
 
                                     @if let Some(preimage) = &tx.preimage {
-                                        div class="mt-1 text-muted small" {
+                                        div style="font-family: monospace; font-size: 0.7rem; color: #6c757d; margin-top: 1px;" {
                                             "Preimage: " (preimage)
                                         }
+                                    }
+
+                                    // Hover effect using inline JS (or move to CSS)
+                                    script {
+                                        (PreEscaped(r#"
+                                        const li = document.currentScript.parentElement;
+                                        li.addEventListener('mouseenter', () => li.style.backgroundColor = '#f8f9fa');
+                                        li.addEventListener('mouseleave', () => li.style.backgroundColor = 'white');
+                                        "#))
                                     }
                                 }
                             }
