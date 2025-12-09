@@ -1017,7 +1017,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             }
 
             // Give the client some time to fetch updates
-            cmd!(client, "dev", "wait", "3").run().await?;
+            cmd!(client, "dev", "wait", "1").run().await?;
 
             if !initial_announcements
                 .values()

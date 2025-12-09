@@ -313,7 +313,7 @@ thiserror = "2.0.12"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tikv-jemallocator = "0.5"
 time = "0.3.41"
-tokio = "1.46.1"
+tokio = "1.48.0"
 tokio-rustls = { version = "0.26.0", features = ["aws_lc_rs"] }
 tokio-stream = "0.1.17"
 tokio-test = "0.4.4"

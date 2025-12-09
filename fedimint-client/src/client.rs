@@ -1154,6 +1154,7 @@ impl Client {
         Self::load_and_refresh_common_api_version_static(
             &self.config().await,
             &self.module_inits,
+            self.connectors.clone(),
             &self.api,
             &self.db,
             &self.task_group,
@@ -1169,6 +1170,7 @@ impl Client {
     async fn load_and_refresh_common_api_version_static(
         config: &ClientConfig,
         module_init: &ClientModuleInitRegistry,
+        connectors: ConnectorRegistry,
         api: &DynGlobalApi,
         db: &Database,
         task_group: &TaskGroup,
@@ -1193,10 +1195,8 @@ impl Client {
             task_group
                 .clone()
                 .spawn_cancellable("refresh_common_api_version_static", async move {
-                    // Delay making any network connections, just in case this is a short-running
-                    // invocation of the client (e.g. `fedimint-cli info`), so the attempt probably
-                    // won't succeed anyway.
-                    sleep(Duration::from_secs(1)).await;
+                    connectors.wait_for_initialized_connections().await;
+
                     if let Err(error) = Self::refresh_common_api_version_static(
                         &config,
                         &client_module_init,

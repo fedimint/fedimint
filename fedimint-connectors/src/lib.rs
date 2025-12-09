@@ -21,7 +21,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET};
 use reqwest::Method;
 use serde_json::Value;
-use tokio::sync::{OnceCell, broadcast};
+use tokio::sync::{OnceCell, SetOnce, broadcast};
 use tracing::trace;
 
 use crate::error::ServerError;
@@ -112,8 +112,12 @@ impl ConnectorRegistryBuilder {
         );
 
         Ok(ConnectorRegistry {
-            connectors_lazy: Arc::new(connectors_lazy),
-            connection_overrides: self.connection_overrides,
+            inner: ConnectorRegistryInner {
+                connectors_lazy,
+                connection_overrides: self.connection_overrides,
+                initialized: SetOnce::new(),
+            }
+            .into(),
         })
     }
 
@@ -203,6 +207,19 @@ impl ConnectorRegistryBuilder {
     }
 }
 
+/// Actual data shared between copies of [`ConnectorRegistry`] handle
+struct ConnectorRegistryInner {
+    /// Lazily initialized [`Connector`]s per protocol supported
+    connectors_lazy: BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>,
+    /// Connection URL overrides for testing/custom routing
+    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
+    /// Set on first connection attempt
+    ///
+    /// This is used for functionality that wants to avoid making
+    /// network connections if nothing else did network request.
+    initialized: tokio::sync::SetOnce<()>,
+}
+
 /// A set of available connectivity protocols a client can use to make
 /// network API requests (typically to federation).
 ///
@@ -217,17 +234,14 @@ impl ConnectorRegistryBuilder {
 /// Responsibilities:
 #[derive(Clone)]
 pub struct ConnectorRegistry {
-    /// Wrapped in Arc so clones share the same OnceCell instances
-    connectors_lazy: Arc<BTreeMap<String, (ConnectorInitFn, OnceCell<DynConnector>)>>,
-    /// Connection URL overrides for testing/custom routing
-    connection_overrides: BTreeMap<SafeUrl, SafeUrl>,
+    inner: Arc<ConnectorRegistryInner>,
 }
 
 impl fmt::Debug for ConnectorRegistry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ConnectorRegistry")
-            .field("connectors_lazy", &self.connectors_lazy.len())
-            .field("connection_overrides", &self.connection_overrides)
+            .field("connectors_lazy", &self.inner.connectors_lazy.len())
+            .field("connection_overrides", &self.inner.connection_overrides)
             .finish()
     }
 }
@@ -304,6 +318,11 @@ impl ConnectorRegistry {
         Ok(builder)
     }
 
+    /// Wait until some connections have been made
+    pub async fn wait_for_initialized_connections(&self) {
+        self.inner.initialized.wait().await;
+    }
+
     /// Connect to a given `url` using matching [`Connector`]
     ///
     /// This is the main function consumed by the downstream use for making
@@ -316,9 +335,11 @@ impl ConnectorRegistry {
         trace!(
             target: LOG_NET,
             %url,
-            "Connection requested"
+            "Connection requested to guardian"
         );
-        let url = match self.connection_overrides.get(url) {
+        let _ = self.inner.initialized.set(());
+
+        let url = match self.inner.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
                     target: LOG_NET,
@@ -334,7 +355,7 @@ impl ConnectorRegistry {
 
         let connector_key = url.scheme();
 
-        let Some(connector_lazy) = self.connectors_lazy.get(connector_key) else {
+        let Some(connector_lazy) = self.inner.connectors_lazy.get(connector_key) else {
             return Err(ServerError::InvalidEndpoint(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
@@ -378,7 +399,14 @@ impl ConnectorRegistry {
     /// This is the main function consumed by the downstream use for making
     /// connection.
     pub async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
-        let url = match self.connection_overrides.get(url) {
+        trace!(
+            target: LOG_NET,
+            %url,
+            "Connection requested to gateway"
+        );
+        let _ = self.inner.initialized.set(());
+
+        let url = match self.inner.connection_overrides.get(url) {
             Some(replacement) => {
                 trace!(
                     target: LOG_NET,
@@ -394,7 +422,7 @@ impl ConnectorRegistry {
 
         let connector_key = url.scheme();
 
-        let Some(connector_lazy) = self.connectors_lazy.get(connector_key) else {
+        let Some(connector_lazy) = self.inner.connectors_lazy.get(connector_key) else {
             return Err(anyhow!(
                 "Unsupported scheme: {}; missing endpoint handler",
                 url.scheme()
@@ -404,7 +432,7 @@ impl ConnectorRegistry {
         // Clone the init function to use in the async block
         let init_fn = connector_lazy.0.clone();
 
-        connector_lazy
+        let conn = connector_lazy
             .1
             .get_or_try_init(|| async move { init_fn().await })
             .await
@@ -415,7 +443,9 @@ impl ConnectorRegistry {
                 ))
             })?
             .connect_gateway(url)
-            .await
+            .await?;
+
+        Ok(conn)
     }
 }
 pub type DynConnector = Arc<dyn Connector>;
