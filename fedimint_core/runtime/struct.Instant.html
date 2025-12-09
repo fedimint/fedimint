@@ -33,37 +33,29 @@ None if that instant is later than this one.</p>
 <h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time::{Duration, Instant, sleep};
 
-<span class="attr">#[tokio::main]
-</span><span class="kw">async fn </span>main() {
-    <span class="kw">let </span>now = Instant::now();
-    sleep(Duration::new(<span class="number">1</span>, <span class="number">0</span>)).<span class="kw">await</span>;
-    <span class="kw">let </span>new_now = Instant::now();
-    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, new_now.checked_duration_since(now));
-    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, now.checked_duration_since(new_now)); <span class="comment">// None
-</span>}</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.saturating_duration_since" class="method"><h4 class="code-header">pub fn <a href="#method.saturating_duration_since" class="fn">saturating_duration_since</a>(&amp;self, earlier: <a class="struct" href="struct.Instant.html" title="struct fedimint_core::runtime::Instant">Instant</a>) -&gt; <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a></h4></section></summary><div class="docblock"><p>Returns the amount of time elapsed from another instant to this one, or
+<span class="kw">let </span>now = Instant::now();
+sleep(Duration::new(<span class="number">1</span>, <span class="number">0</span>)).<span class="kw">await</span>;
+<span class="kw">let </span>new_now = Instant::now();
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, new_now.checked_duration_since(now));
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, now.checked_duration_since(new_now)); <span class="comment">// None</span></code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.saturating_duration_since" class="method"><h4 class="code-header">pub fn <a href="#method.saturating_duration_since" class="fn">saturating_duration_since</a>(&amp;self, earlier: <a class="struct" href="struct.Instant.html" title="struct fedimint_core::runtime::Instant">Instant</a>) -&gt; <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a></h4></section></summary><div class="docblock"><p>Returns the amount of time elapsed from another instant to this one, or
 zero duration if that instant is later than this one.</p>
 <h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time::{Duration, Instant, sleep};
 
-<span class="attr">#[tokio::main]
-</span><span class="kw">async fn </span>main() {
-    <span class="kw">let </span>now = Instant::now();
-    sleep(Duration::new(<span class="number">1</span>, <span class="number">0</span>)).<span class="kw">await</span>;
-    <span class="kw">let </span>new_now = Instant::now();
-    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, new_now.saturating_duration_since(now));
-    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, now.saturating_duration_since(new_now)); <span class="comment">// 0ns
+<span class="kw">let </span>now = Instant::now();
+sleep(Duration::new(<span class="number">1</span>, <span class="number">0</span>)).<span class="kw">await</span>;
+<span class="kw">let </span>new_now = Instant::now();
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, new_now.saturating_duration_since(now));
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, now.saturating_duration_since(new_now)); <span class="comment">// 0ns
 </span>}</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.elapsed" class="method"><h4 class="code-header">pub fn <a href="#method.elapsed" class="fn">elapsed</a>(&amp;self) -&gt; <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a></h4></section></summary><div class="docblock"><p>Returns the amount of time elapsed since this instant was created,
 or zero duration if this instant is in the future.</p>
 <h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time::{Duration, Instant, sleep};
 
-<span class="attr">#[tokio::main]
-</span><span class="kw">async fn </span>main() {
-    <span class="kw">let </span>instant = Instant::now();
-    <span class="kw">let </span>three_secs = Duration::from_secs(<span class="number">3</span>);
-    sleep(three_secs).<span class="kw">await</span>;
-    <span class="macro">assert!</span>(instant.elapsed() &gt;= three_secs);
-}</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.checked_add" class="method"><h4 class="code-header">pub fn <a href="#method.checked_add" class="fn">checked_add</a>(&amp;self, duration: <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Instant.html" title="struct fedimint_core::runtime::Instant">Instant</a>&gt;</h4></section></summary><div class="docblock"><p>Returns <code>Some(t)</code> where <code>t</code> is the time <code>self + duration</code> if <code>t</code> can be
+<span class="kw">let </span>instant = Instant::now();
+<span class="kw">let </span>three_secs = Duration::from_secs(<span class="number">3</span>);
+sleep(three_secs).<span class="kw">await</span>;
+<span class="macro">assert!</span>(instant.elapsed() &gt;= three_secs);</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.checked_add" class="method"><h4 class="code-header">pub fn <a href="#method.checked_add" class="fn">checked_add</a>(&amp;self, duration: <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Instant.html" title="struct fedimint_core::runtime::Instant">Instant</a>&gt;</h4></section></summary><div class="docblock"><p>Returns <code>Some(t)</code> where <code>t</code> is the time <code>self + duration</code> if <code>t</code> can be
 represented as <code>Instant</code> (which means it’s inside the bounds of the
 underlying data structure), <code>None</code> otherwise.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.checked_sub" class="method"><h4 class="code-header">pub fn <a href="#method.checked_sub" class="fn">checked_sub</a>(&amp;self, duration: <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="struct.Instant.html" title="struct fedimint_core::runtime::Instant">Instant</a>&gt;</h4></section></summary><div class="docblock"><p>Returns <code>Some(t)</code> where <code>t</code> is the time <code>self - duration</code> if <code>t</code> can be

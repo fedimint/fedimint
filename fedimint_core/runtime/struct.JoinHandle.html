@@ -55,16 +55,13 @@ to be double chained to extract the returned value:</p>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
 <span class="kw">use </span>std::io;
 
-<span class="attr">#[tokio::main]
-</span><span class="kw">async fn </span>main() -&gt; io::Result&lt;()&gt; {
-    <span class="kw">let </span>join_handle: task::JoinHandle&lt;<span class="prelude-ty">Result</span>&lt;i32, io::Error&gt;&gt; = tokio::spawn(<span class="kw">async </span>{
-        <span class="prelude-val">Ok</span>(<span class="number">5 </span>+ <span class="number">3</span>)
-    });
+<span class="kw">let </span>join_handle: task::JoinHandle&lt;<span class="prelude-ty">Result</span>&lt;i32, io::Error&gt;&gt; = tokio::spawn(<span class="kw">async </span>{
+    <span class="prelude-val">Ok</span>(<span class="number">5 </span>+ <span class="number">3</span>)
+});
 
-    <span class="kw">let </span>result = join_handle.<span class="kw">await</span><span class="question-mark">??</span>;
-    <span class="macro">assert_eq!</span>(result, <span class="number">8</span>);
-    <span class="prelude-val">Ok</span>(())
-}</code></pre></div>
+<span class="kw">let </span>result = join_handle.<span class="kw">await</span><span class="question-mark">??</span>;
+<span class="macro">assert_eq!</span>(result, <span class="number">8</span>);
+<span class="prelude-val">Ok</span>(())</code></pre></div>
 <p>If the task panics, the error is a <a href="struct.JoinError.html" title="struct fedimint_core::runtime::JoinError"><code>JoinError</code></a> that contains the panic:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
@@ -80,8 +77,7 @@ to be double chained to extract the returned value:</p>
     <span class="kw">let </span>err = join_handle.<span class="kw">await</span>.unwrap_err();
     <span class="macro">assert!</span>(err.is_panic());
     <span class="prelude-val">Ok</span>(())
-}
-</code></pre></div>
+}</code></pre></div>
 <p>Child being detached and outliving its parent:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::task;
