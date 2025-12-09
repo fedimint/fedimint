@@ -135,12 +135,11 @@ pub struct GatewayInfo {
     // TODO: Remove this alias once it no longer breaks backwards compatibility.
     #[serde(alias = "channels")]
     pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
-    pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
     pub lightning_info: LightningInfo,
-    pub api: SafeUrl,
     pub iroh_api: SafeUrl,
     pub lightning_mode: LightningMode,
+    pub registrations: BTreeMap<RegisteredProtocol, (SafeUrl, secp256k1::PublicKey)>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -502,4 +501,13 @@ pub enum LightningInfo {
         synced_to_chain: bool,
     },
     NotConnected,
+}
+
+#[derive(
+    Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Encodable, Decodable, Serialize, Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RegisteredProtocol {
+    Http,
+    Iroh,
 }

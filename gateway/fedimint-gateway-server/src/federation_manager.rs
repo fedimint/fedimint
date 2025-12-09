@@ -15,8 +15,8 @@ use fedimint_gwv2_client::GatewayClientModuleV2;
 use fedimint_logging::LOG_GATEWAY;
 use tracing::{info, warn};
 
-use crate::AdminResult;
 use crate::error::{AdminGatewayError, FederationNotConnected};
+use crate::{AdminResult, Registration};
 
 /// The first index that the gateway will assign to a federation.
 /// Note: This starts at 1 because LNv1 uses the `federation_index` as an SCID.
@@ -60,13 +60,14 @@ impl FederationManager {
         &mut self,
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        registrations: Vec<&Registration>,
     ) -> AdminResult<FederationInfo> {
         let federation_info = self.federation_info(federation_id, dbtx).await?;
 
-        let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
-
-        self.unannounce_from_federation(federation_id, gateway_keypair)
-            .await;
+        for registration in registrations {
+            self.unannounce_from_federation(federation_id, registration.keypair)
+                .await;
+        }
 
         self.remove_client(federation_id).await?;
 

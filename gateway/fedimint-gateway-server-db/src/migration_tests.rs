@@ -7,6 +7,7 @@ use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::SafeUrl;
+use fedimint_gateway_common::RegisteredProtocol;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::TracingSetup;
 use fedimint_testing::db::{
@@ -23,6 +24,7 @@ use super::{
     PreimageAuthentication, PreimageAuthenticationPrefix, StreamExt,
     get_gatewayd_database_migrations, migrate_federation_configs, secp256k1, sha256,
 };
+use crate::GatewayPublicKeyV0;
 
 async fn create_gatewayd_db_data(db: Database) {
     let mut dbtx = db.begin_transaction().await;
@@ -49,7 +51,7 @@ async fn create_gatewayd_db_data(db: Database) {
     let context = secp256k1::Secp256k1::new();
     let (secret, _) = context.generate_keypair(&mut OsRng);
     let key_pair = secp256k1::Keypair::from_secret_key(&context, &secret);
-    dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
+    dbtx.insert_new_entry(&GatewayPublicKeyV0, &key_pair).await;
 
     let gateway_configuration = GatewayConfigurationV0 {
         password: "EXAMPLE".to_string(),
@@ -108,7 +110,11 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         info!("Validated FederationConfig");
                     }
                     DbKeyPrefix::GatewayPublicKey => {
-                        let gateway_id = dbtx.get_value(&GatewayPublicKey).await;
+                        let gateway_id = dbtx
+                            .get_value(&GatewayPublicKey {
+                                protocol: RegisteredProtocol::Http,
+                            })
+                            .await;
                         ensure!(
                             gateway_id.is_some(),
                             "validate_migrations was not able to read GatewayPublicKey"
@@ -151,7 +157,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
         // Insert a record into the isolated db (doesn't matter what it is)
         isolated_dbtx
             .insert_new_entry(
-                &GatewayPublicKey,
+                &GatewayPublicKeyV0,
                 &Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()),
             )
             .await;
@@ -226,11 +232,25 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     // Verify that the client databases migrated successfully.
     let isolated_db = db.get_client_database(&conflicting_fed_id);
     let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
-    assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
+    assert!(
+        isolated_dbtx
+            .get_value(&GatewayPublicKey {
+                protocol: RegisteredProtocol::Http
+            })
+            .await
+            .is_some()
+    );
 
     let isolated_db = db.get_client_database(&nonconflicting_fed_id);
     let mut isolated_dbtx = isolated_db.begin_transaction_nc().await;
-    assert!(isolated_dbtx.get_value(&GatewayPublicKey).await.is_some());
+    assert!(
+        isolated_dbtx
+            .get_value(&GatewayPublicKey {
+                protocol: RegisteredProtocol::Http
+            })
+            .await
+            .is_some()
+    );
 
     Ok(())
 }

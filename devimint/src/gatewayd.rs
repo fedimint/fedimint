@@ -152,11 +152,20 @@ impl Gatewayd {
                 .out_json()
                 .await
                 .map_err(ControlFlow::Continue)?;
-                let gateway_id = info["gateway_id"]
-                    .as_str()
-                    .context("gateway_id must be a string")
-                    .map_err(ControlFlow::Break)?
-                    .to_owned();
+                let gateway_id = if gatewayd_version < *VERSION_0_10_0_ALPHA {
+                    info["gateway_id"]
+                        .as_str()
+                        .context("gateway_id must be a string")
+                        .map_err(ControlFlow::Break)?
+                        .to_owned()
+                } else {
+                    info["registrations"]["http"][1]
+                        .as_str()
+                        .context("gateway id must be a string")
+                        .map_err(ControlFlow::Break)?
+                        .to_owned()
+                };
+
                 Ok(gateway_id)
             },
         )
