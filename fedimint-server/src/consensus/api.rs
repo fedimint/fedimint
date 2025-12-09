@@ -661,8 +661,13 @@ impl IDashboardApi for ConsensusApi {
     async fn change_password(
         &self,
         new_password: &str,
+        current_password: &str,
         guardian_auth: &GuardianAuthToken,
     ) -> Result<(), String> {
+        let auth = &self.auth().await.0;
+        if auth != current_password {
+            return Err("Current password is incorrect".into());
+        }
         self.change_guardian_password(new_password, guardian_auth)
             .map_err(|e| e.to_string())
     }

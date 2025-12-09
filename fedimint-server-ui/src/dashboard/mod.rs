@@ -117,7 +117,11 @@ async fn change_password(
     // Call the API to change the password
     match state
         .api
-        .change_password(&input.new_password, &user_auth.guardian_auth_token)
+        .change_password(
+            &input.new_password,
+            &input.current_password,
+            &user_auth.guardian_auth_token,
+        )
         .await
     {
         Ok(()) => {

@@ -89,6 +89,7 @@ pub trait IDashboardApi {
     async fn change_password(
         &self,
         new_password: &str,
+        current_password: &str,
         guardian_auth: &GuardianAuthToken,
     ) -> Result<(), String>;
 
