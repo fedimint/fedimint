@@ -5,8 +5,9 @@ use axum::extract::State;
 use axum::response::Html;
 use fedimint_core::bitcoin::Network;
 use fedimint_gateway_common::{
-    ChannelInfo, CloseChannelsWithPeerRequest, GatewayBalances, GatewayInfo, LightningInfo,
-    LightningMode, OpenChannelRequest, SendOnchainRequest,
+    ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GatewayBalances,
+    GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest, PayInvoiceForOperatorPayload,
+    SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -15,8 +16,9 @@ use qrcode::QrCode;
 use qrcode::render::svg;
 
 use crate::{
-    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE,
-    OPEN_CHANNEL_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
+    CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_BOLT11_INVOICE_ROUTE, DynGatewayApi,
+    LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE, PAY_BOLT11_INVOICE_ROUTE,
+    PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -105,6 +107,15 @@ where
                             type="button"
                             role="tab"
                         { "Channels" }
+                    }
+                    li class="nav-item" role="presentation" {
+                        button class="nav-link"
+                            id="payments-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#payments-tab-pane"
+                            type="button"
+                            role="tab"
+                        { "Payments" }
                     }
                 }
 
@@ -222,7 +233,7 @@ where
                             { "Refresh" }
                         }
 
-                        (wallet_fragment_markup(balances_result, None, None))
+                        (wallet_fragment_markup(&balances_result, None, None))
                     }
 
                     // ──────────────────────────────────────────
@@ -245,14 +256,197 @@ where
 
                         (channels_fragment_markup(channels_result, None, None, is_lnd))
                     }
+
+                    // ──────────────────────────────────────────
+                    //   TAB: PAYMENTS
+                    // ──────────────────────────────────────────
+                    div class="tab-pane fade"
+                        id="payments-tab-pane"
+                        role="tabpanel"
+                        aria-labelledby="payments-tab" {
+
+                        div class="d-flex justify-content-between align-items-center mb-2" {
+                            div { strong { "Payments" } }
+                            button class="btn btn-sm btn-outline-secondary"
+                                hx-get=(PAYMENTS_FRAGMENT_ROUTE)
+                                hx-target="#payments-container"
+                                hx-swap="outerHTML"
+                                type="button"
+                            { "Refresh" }
+                        }
+
+                        (payments_fragment_markup(&balances_result, None, None, None))
+                    }
                 }
             }
         }
     }
 }
 
+pub fn payments_fragment_markup<E>(
+    balances_result: &Result<GatewayBalances, E>,
+    created_invoice: Option<String>,
+    success_msg: Option<String>,
+    error_msg: Option<String>,
+) -> Markup
+where
+    E: std::fmt::Display,
+{
+    html!(
+        div id="payments-container" {
+            @match balances_result {
+                Err(err) => {
+                    // Error banner — no buttons below
+                    div class="alert alert-danger" {
+                        "Failed to load lightning balance: " (err)
+                    }
+                }
+                Ok(bal) => {
+
+                    @if let Some(success) = success_msg {
+                        div class="alert alert-success mt-2 d-flex justify-content-between align-items-center" {
+                            span { (success) }
+                        }
+                    }
+
+                    @if let Some(error) = error_msg {
+                        div class="alert alert-danger mt-2 d-flex justify-content-between align-items-center" {
+                            span { (error) }
+                        }
+                    }
+
+                    div id="lightning-balance-banner"
+                        class="alert alert-info d-flex justify-content-between align-items-center" {
+
+                        @let lightning_balance = format!("{}", fedimint_core::Amount::from_msats(bal.lightning_balance_msats));
+
+                        span {
+                            "Lightning Balance: "
+                            strong id="lightning-balance" { (lightning_balance) }
+                        }
+                    }
+
+                    // Buttons
+                    div class="mt-3" {
+                        button class="btn btn-sm btn-outline-primary me-2"
+                            type="button"
+                            onclick="
+                                document.getElementById('receive-form').classList.add('d-none');
+                                document.getElementById('pay-invoice-form').classList.toggle('d-none');
+                            "
+                        { "Send" }
+
+                        button class="btn btn-sm btn-outline-success"
+                            type="button"
+                            onclick="
+                                document.getElementById('pay-invoice-form').classList.add('d-none');
+                                document.getElementById('receive-form').classList.toggle('d-none');
+                            "
+                        { "Receive" }
+                    }
+
+                    // Send form
+                    div id="pay-invoice-form" class="card card-body mt-3 d-none" {
+                        form
+                            id="pay-ln-invoice-form"
+                            hx-post=(PAY_BOLT11_INVOICE_ROUTE)
+                            hx-target="#payments-container"
+                            hw-swap="outerHTML"
+                        {
+                            div class="mb-3" {
+                                label class="form-label" for="invoice" { "Bolt11 Invoice" }
+                                input type="text"
+                                    class="form-control"
+                                    id="invoice"
+                                    name="invoice"
+                                    required;
+                            }
+
+                            button
+                                type="submit"
+                                class="btn btn-success btn-sm"
+                            { "Pay Invoice" }
+                        }
+                    }
+
+                    // Receive form
+                    div id="receive-form" class={
+                        @if created_invoice.is_some() { "card card-body mt-3 d-none" }
+                        @else { "card card-body mt-3 d-none" }
+                    } {
+                        form
+                            id="create-ln-invoice-form"
+                            hx-post=(CREATE_BOLT11_INVOICE_ROUTE)
+                            hx-target="#payments-container"
+                            hx-swap="outerHTML"
+                        {
+                            div class="mb-3" {
+                                label class="form-label" for="amount_msats" { "Amount (msats)" }
+                                input type="number"
+                                    class="form-control"
+                                    id="amount_msats"
+                                    name="amount_msats"
+                                    min="1"
+                                    required;
+                            }
+
+                            button
+                                type="submit"
+                                class="btn btn-success btn-sm"
+                            { "Create Bolt11 Invoice" }
+                        }
+                    }
+
+                    // ──────────────────────────────────────────
+                    //  SHOW CREATED INVOICE
+                    // ──────────────────────────────────────────
+                    @if let Some(invoice) = created_invoice {
+
+                        @let code =
+                            QrCode::new(&invoice).expect("Failed to generate QR code");
+                        @let qr_svg = code.render::<svg::Color>().build();
+
+                        div class="card card-body mt-4" {
+
+                            div class="card card-body bg-light d-flex flex-column align-items-center" {
+                                span class="fw-bold mb-3" { "Bolt11 Invoice:" }
+
+                                // Flex container: address on left, QR on right
+                                div class="d-flex flex-row align-items-center gap-3 flex-wrap" style="width: 100%;" {
+
+                                    // Copyable input + text
+                                    div class="d-flex flex-column flex-grow-1" style="min-width: 300px;" {
+                                        input type="text"
+                                            readonly
+                                            class="form-control mb-2"
+                                            style="text-align:left; font-family: monospace; font-size:1rem;"
+                                            value=(invoice)
+                                            onclick="copyToClipboard(this)"
+                                        {}
+                                        small class="text-muted" { "Click to copy" }
+                                    }
+
+                                    // QR code
+                                    div class="border rounded p-2 bg-white d-flex justify-content-center align-items-center"
+                                        style="width: 300px; height: 300px; min-width: 200px; min-height: 200px;"
+                                    {
+                                        (PreEscaped(format!(
+                                            r#"<svg style="width: 100%; height: 100%; display: block;">{}</svg>"#,
+                                            qr_svg.replace("width=", "data-width=").replace("height=", "data-height=")
+                                        )))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
 pub fn wallet_fragment_markup<E>(
-    balances_result: Result<GatewayBalances, E>,
+    balances_result: &Result<GatewayBalances, E>,
     success_msg: Option<String>,
     error_msg: Option<String>,
 ) -> Markup
@@ -696,11 +890,11 @@ pub async fn send_onchain_handler<E: Display + Send + Sync>(
 
     let markup = match result {
         Ok(txid) => wallet_fragment_markup(
-            balances,
+            &balances,
             Some(format!("Send transaction. TxId: {txid}")),
             None,
         ),
-        Err(err) => wallet_fragment_markup(balances, None, Some(err.to_string())),
+        Err(err) => wallet_fragment_markup(&balances, None, Some(err.to_string())),
     };
 
     Html(markup.into_string())
@@ -714,7 +908,7 @@ where
     E: std::fmt::Display,
 {
     let balances_result = state.api.handle_get_balances_msg().await;
-    let markup = wallet_fragment_markup(balances_result, None, None);
+    let markup = wallet_fragment_markup(&balances_result, None, None);
     Html(markup.into_string())
 }
 
@@ -774,4 +968,81 @@ where
     };
 
     Html(markup.into_string())
+}
+
+pub async fn payments_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let balances_result = state.api.handle_get_balances_msg().await;
+    let markup = payments_fragment_markup(&balances_result, None, None, None);
+    Html(markup.into_string())
+}
+
+pub async fn create_bolt11_invoice_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<CreateInvoiceForOperatorPayload>,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let invoice_result = state
+        .api
+        .handle_create_invoice_for_operator_msg(payload)
+        .await;
+    let balances_result = state.api.handle_get_balances_msg().await;
+
+    match invoice_result {
+        Ok(invoice) => {
+            let markup =
+                payments_fragment_markup(&balances_result, Some(invoice.to_string()), None, None);
+            Html(markup.into_string())
+        }
+        Err(e) => {
+            let markup = payments_fragment_markup(
+                &balances_result,
+                None,
+                None,
+                Some(format!("Failed to create invoice: {e}")),
+            );
+            Html(markup.into_string())
+        }
+    }
+}
+
+pub async fn pay_bolt11_invoice_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<PayInvoiceForOperatorPayload>,
+) -> Html<String>
+where
+    E: std::fmt::Display,
+{
+    let send_result = state.api.handle_pay_invoice_for_operator_msg(payload).await;
+    let balances_result = state.api.handle_get_balances_msg().await;
+
+    match send_result {
+        Ok(preimage) => {
+            let markup = payments_fragment_markup(
+                &balances_result,
+                None,
+                Some(format!("Successfully paid invoice. Preimage: {preimage}")),
+                None,
+            );
+            Html(markup.into_string())
+        }
+        Err(e) => {
+            let markup = payments_fragment_markup(
+                &balances_result,
+                None,
+                None,
+                Some(format!("Failed to pay invoice: {e}")),
+            );
+            Html(markup.into_string())
+        }
+    }
 }
