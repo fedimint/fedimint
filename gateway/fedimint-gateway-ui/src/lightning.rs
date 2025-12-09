@@ -1,8 +1,9 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::time::{Duration, UNIX_EPOCH};
 
 use axum::Form;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::Html;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::time::now;
@@ -20,7 +21,8 @@ use qrcode::render::svg;
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_BOLT11_INVOICE_ROUTE, DynGatewayApi,
     LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE, PAY_BOLT11_INVOICE_ROUTE,
-    PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
+    PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, TRANSACTIONS_FRAGMENT_ROUTE,
+    WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -316,7 +318,7 @@ where
                         role="tabpanel"
                         aria-labelledby="transactions-tab" {
 
-                        (transactions_fragment_markup(&transactions_result))
+                        (transactions_fragment_markup(&transactions_result, start_secs, end_secs))
                     }
                 }
             }
@@ -326,12 +328,65 @@ where
 
 pub fn transactions_fragment_markup<E>(
     transactions_result: &Result<ListTransactionsResponse, E>,
+    start_secs: u64,
+    end_secs: u64,
 ) -> Markup
 where
     E: std::fmt::Display,
 {
+    // Convert timestamps to datetime-local formatted strings
+    let start_dt = chrono::NaiveDateTime::from_timestamp_opt(start_secs as i64, 0)
+        .unwrap_or_default()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+
+    let end_dt = chrono::NaiveDateTime::from_timestamp_opt(end_secs as i64, 0)
+        .unwrap_or_default()
+        .format("%Y-%m-%dT%H:%M")
+        .to_string();
+
     html!(
         div id="transactions-container" {
+
+            // ────────────────────────────────
+            //   Date Range Form
+            // ────────────────────────────────
+            form class="row g-3 mb-3"
+                hx-get=(TRANSACTIONS_FRAGMENT_ROUTE)
+                hx-target="#transactions-container"
+                hx-swap="outerHTML"
+            {
+                // Start
+                div class="col-auto" {
+                    label class="form-label" for="start-secs" { "Start" }
+                    input
+                        class="form-control"
+                        type="datetime-local"
+                        id="start-secs"
+                        name="start_secs"
+                        value=(start_dt);
+                }
+
+                // End
+                div class="col-auto" {
+                    label class="form-label" for="end-secs" { "End" }
+                    input
+                        class="form-control"
+                        type="datetime-local"
+                        id="end-secs"
+                        name="end_secs"
+                        value=(end_dt);
+                }
+
+                // Refresh Button
+                div class="col-auto align-self-end" {
+                    button class="btn btn-outline-secondary" type="submit" { "Refresh" }
+                }
+            }
+
+            // ────────────────────────────────
+            //   Transaction List
+            // ────────────────────────────────
             @match transactions_result {
                 Err(err) => {
                     div class="alert alert-danger" {
@@ -348,7 +403,7 @@ where
                             @for tx in &transactions.transactions {
                                 li class="list-group-item transaction-item" {
                                     div class="d-flex justify-content-between" {
-                                        // Left column (kind + status)
+                                        // Left column
                                         div {
                                             div {
                                                 b { (format!("{:?}", tx.payment_kind)) }
@@ -359,8 +414,7 @@ where
                                                 (format!("{:?}", tx.status))
                                             }
                                         }
-
-                                        // Right column (amount + timestamp)
+                                        // Right column
                                         div class="text-end" {
                                             div {
                                                 (format!("{} sats", tx.amount.msats / 1000))
@@ -375,7 +429,6 @@ where
                                         }
                                     }
 
-                                    // Optional hash/preimage
                                     @if let Some(hash) = &tx.payment_hash {
                                         div class="mt-2 text-muted small" {
                                             "Hash: " (hash.to_string())
@@ -1159,4 +1212,47 @@ where
             Html(markup.into_string())
         }
     }
+}
+
+pub async fn transactions_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Query(params): Query<HashMap<String, String>>,
+) -> Html<String>
+where
+    E: std::fmt::Display + std::fmt::Debug,
+{
+    let now = fedimint_core::time::now();
+    let end_secs = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    let start_secs = now
+        .checked_sub(std::time::Duration::from_secs(60 * 60 * 24))
+        .unwrap_or(now)
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    let parse = |key: &str| -> Option<u64> {
+        params.get(key).and_then(|s| {
+            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M")
+                .ok()
+                .map(|dt| dt.timestamp() as u64)
+        })
+    };
+
+    let start_secs = parse("start_secs").unwrap_or(start_secs);
+    let end_secs = parse("end_secs").unwrap_or(end_secs);
+
+    let transactions_result = state
+        .api
+        .handle_list_transactions_msg(ListTransactionsPayload {
+            start_secs,
+            end_secs,
+        })
+        .await;
+
+    Html(transactions_fragment_markup(&transactions_result, start_secs, end_secs).into_string())
 }

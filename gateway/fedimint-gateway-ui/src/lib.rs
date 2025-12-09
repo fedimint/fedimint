@@ -42,7 +42,8 @@ use crate::federation::{deposit_address_handler, leave_federation_handler, set_f
 use crate::lightning::{
     channels_fragment_handler, close_channel_handler, create_bolt11_invoice_handler,
     generate_receive_address_handler, open_channel_handler, pay_bolt11_invoice_handler,
-    payments_fragment_handler, send_onchain_handler, wallet_fragment_handler,
+    payments_fragment_handler, send_onchain_handler, transactions_fragment_handler,
+    wallet_fragment_handler,
 };
 
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
@@ -60,6 +61,7 @@ pub(crate) const DEPOSIT_ADDRESS_ROUTE: &str = "/ui/federations/deposit-address"
 pub(crate) const PAYMENTS_FRAGMENT_ROUTE: &str = "/ui/payments/fragment";
 pub(crate) const CREATE_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/receive/bolt11";
 pub(crate) const PAY_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/send/bolt11";
+pub(crate) const TRANSACTIONS_FRAGMENT_ROUTE: &str = "/ui/transactions/fragment";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -278,7 +280,9 @@ where
         .into_response()
 }
 
-pub fn router<E: Display + Send + Sync + 'static>(api: DynGatewayApi<E>) -> Router {
+pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
+    api: DynGatewayApi<E>,
+) -> Router {
     let app = Router::new()
         .route(ROOT_ROUTE, get(dashboard_view))
         .route(LOGIN_ROUTE, get(login_form).post(login_submit))
@@ -301,6 +305,10 @@ pub fn router<E: Display + Send + Sync + 'static>(api: DynGatewayApi<E>) -> Rout
             post(create_bolt11_invoice_handler),
         )
         .route(PAY_BOLT11_INVOICE_ROUTE, post(pay_bolt11_invoice_handler))
+        .route(
+            TRANSACTIONS_FRAGMENT_ROUTE,
+            get(transactions_fragment_handler),
+        )
         .with_static_routes();
 
     app.with_state(UiState::new(api))
