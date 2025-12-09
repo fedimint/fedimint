@@ -5,6 +5,8 @@ use std::time::{Duration, UNIX_EPOCH};
 use axum::Form;
 use axum::extract::{Query, State};
 use axum::response::Html;
+use chrono::offset::LocalResult;
+use chrono::{TimeZone, Utc};
 use fedimint_core::bitcoin::Network;
 use fedimint_core::time::now;
 use fedimint_gateway_common::{
@@ -335,15 +337,15 @@ where
     E: std::fmt::Display,
 {
     // Convert timestamps to datetime-local formatted strings
-    let start_dt = chrono::NaiveDateTime::from_timestamp_opt(start_secs as i64, 0)
-        .unwrap_or_default()
-        .format("%Y-%m-%dT%H:%M")
-        .to_string();
+    let start_dt = match Utc.timestamp_opt(start_secs as i64, 0) {
+        LocalResult::Single(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        _ => "1970-01-01T00:00:00".to_string(),
+    };
 
-    let end_dt = chrono::NaiveDateTime::from_timestamp_opt(end_secs as i64, 0)
-        .unwrap_or_default()
-        .format("%Y-%m-%dT%H:%M")
-        .to_string();
+    let end_dt = match Utc.timestamp_opt(end_secs as i64, 0) {
+        LocalResult::Single(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        _ => "1970-01-01T00:00:00".to_string(),
+    };
 
     html!(
         div id="transactions-container" {
@@ -455,10 +457,10 @@ where
                                                 (format!("{} sats", tx.amount.msats / 1000))
                                             }
                                             div style="font-size: 0.7rem; color: #6c757d;" {
-                                                @let timestamp = chrono::NaiveDateTime::from_timestamp_opt(
-                                                    tx.timestamp_secs as i64,
-                                                    0
-                                                ).unwrap_or_default();
+                                                @let timestamp = match Utc.timestamp_opt(tx.timestamp_secs as i64, 0) {
+                                                    LocalResult::Single(dt) => dt,
+                                                    _ => Utc.timestamp_opt(0, 0).unwrap(),
+                                                };
                                                 (timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
                                             }
                                         }
@@ -1282,9 +1284,12 @@ where
 
     let parse = |key: &str| -> Option<u64> {
         params.get(key).and_then(|s| {
-            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M")
+            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
                 .ok()
-                .map(|dt| dt.timestamp() as u64)
+                .map(|dt| {
+                    let dt_utc: chrono::DateTime<Utc> = Utc.from_utc_datetime(&dt);
+                    dt_utc.timestamp() as u64
+                })
         })
     };
 
