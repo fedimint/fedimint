@@ -575,7 +575,7 @@
 <a href=#575 id=575 data-nosnippet>575</a></span><span class="kw">async fn </span>get_gateway_id(
 <a href=#576 id=576 data-nosnippet>576</a>    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 <a href=#577 id=577 data-nosnippet>577</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Json&lt;serde_json::Value&gt;, GatewayError&gt; {
-<a href=#578 id=578 data-nosnippet>578</a>    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.gateway_id)))
+<a href=#578 id=578 data-nosnippet>578</a>    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.http_gateway_id().<span class="kw">await</span>)))
 <a href=#579 id=579 data-nosnippet>579</a>}
 <a href=#580 id=580 data-nosnippet>580</a>
 <a href=#581 id=581 data-nosnippet>581</a><span class="attr">#[instrument(target = LOG_GATEWAY, skip_all, err)]

@@ -61,7 +61,7 @@
 <a href=#61 id=61 data-nosnippet>61</a>
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="doccomment">/// Public URL from which the webserver API is reachable
 <a href=#63 id=63 data-nosnippet>63</a>    </span><span class="attr">#[arg(long = <span class="string">"api-addr"</span>, env = envs::FM_GATEWAY_API_ADDR_ENV)]
-<a href=#64 id=64 data-nosnippet>64</a>    </span>api_addr: SafeUrl,
+<a href=#64 id=64 data-nosnippet>64</a>    </span>api_addr: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
 <a href=#65 id=65 data-nosnippet>65</a>
 <a href=#66 id=66 data-nosnippet>66</a>    <span class="doccomment">/// Gateway webserver authentication bcrypt password hash
 <a href=#67 id=67 data-nosnippet>67</a>    </span><span class="attr">#[arg(long = <span class="string">"bcrypt-password-hash"</span>, env = envs::FM_GATEWAY_BCRYPT_PASSWORD_HASH_ENV)]
@@ -111,7 +111,7 @@
 <a href=#111 id=111 data-nosnippet>111</a>
 <a href=#112 id=112 data-nosnippet>112</a>    <span class="doccomment">/// Gateway iroh listen address
 <a href=#113 id=113 data-nosnippet>113</a>    </span><span class="attr">#[arg(long = <span class="string">"iroh-listen"</span>, env = envs::FM_GATEWAY_IROH_LISTEN_ADDR_ENV)]
-<a href=#114 id=114 data-nosnippet>114</a>    </span>iroh_listen: SocketAddr,
+<a href=#114 id=114 data-nosnippet>114</a>    </span>iroh_listen: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
 <a href=#115 id=115 data-nosnippet>115</a>
 <a href=#116 id=116 data-nosnippet>116</a>    <span class="doccomment">/// Optional URL of the Iroh DNS server
 <a href=#117 id=117 data-nosnippet>117</a>    </span><span class="attr">#[arg(long, env = FM_IROH_DNS_ENV)]
@@ -126,46 +126,44 @@
 <a href=#126 id=126 data-nosnippet>126</a>    <span class="doccomment">/// Converts the command line parameters into a helper struct the Gateway
 <a href=#127 id=127 data-nosnippet>127</a>    /// uses to store runtime parameters.
 <a href=#128 id=128 data-nosnippet>128</a>    </span><span class="kw">pub fn </span>to_gateway_parameters(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GatewayParameters&gt; {
-<a href=#129 id=129 data-nosnippet>129</a>        <span class="kw">let </span>versioned_api = <span class="self">self</span>.api_addr.join(V1_API_ENDPOINT).map_err(|e| {
-<a href=#130 id=130 data-nosnippet>130</a>            <span class="macro">anyhow::anyhow!</span>(
-<a href=#131 id=131 data-nosnippet>131</a>                <span class="string">"Failed to version gateway API address: {api_addr:?}, error: {e:?}"</span>,
-<a href=#132 id=132 data-nosnippet>132</a>                api_addr = <span class="self">self</span>.api_addr,
-<a href=#133 id=133 data-nosnippet>133</a>            )
-<a href=#134 id=134 data-nosnippet>134</a>        })<span class="question-mark">?</span>;
+<a href=#129 id=129 data-nosnippet>129</a>        <span class="kw">let </span>versioned_api = <span class="self">self</span>.api_addr.clone().map(|api_addr| {
+<a href=#130 id=130 data-nosnippet>130</a>            api_addr
+<a href=#131 id=131 data-nosnippet>131</a>                .join(V1_API_ENDPOINT)
+<a href=#132 id=132 data-nosnippet>132</a>                .expect(<span class="string">"Could not join v1 api_addr"</span>)
+<a href=#133 id=133 data-nosnippet>133</a>        });
+<a href=#134 id=134 data-nosnippet>134</a>        <span class="kw">let </span>bcrypt_password_hash = bcrypt::HashParts::from_str(<span class="kw-2">&amp;</span><span class="self">self</span>.bcrypt_password_hash)<span class="question-mark">?</span>;
 <a href=#135 id=135 data-nosnippet>135</a>
-<a href=#136 id=136 data-nosnippet>136</a>        <span class="kw">let </span>bcrypt_password_hash = bcrypt::HashParts::from_str(<span class="kw-2">&amp;</span><span class="self">self</span>.bcrypt_password_hash)<span class="question-mark">?</span>;
-<a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>        <span class="prelude-val">Ok</span>(GatewayParameters {
-<a href=#139 id=139 data-nosnippet>139</a>            listen: <span class="self">self</span>.listen,
-<a href=#140 id=140 data-nosnippet>140</a>            versioned_api,
-<a href=#141 id=141 data-nosnippet>141</a>            bcrypt_password_hash,
-<a href=#142 id=142 data-nosnippet>142</a>            network: <span class="self">self</span>.network,
-<a href=#143 id=143 data-nosnippet>143</a>            num_route_hints: <span class="self">self</span>.num_route_hints,
-<a href=#144 id=144 data-nosnippet>144</a>            default_routing_fees: <span class="self">self</span>.default_routing_fees,
-<a href=#145 id=145 data-nosnippet>145</a>            default_transaction_fees: <span class="self">self</span>.default_transaction_fees,
-<a href=#146 id=146 data-nosnippet>146</a>            iroh_listen: <span class="self">self</span>.iroh_listen,
-<a href=#147 id=147 data-nosnippet>147</a>            iroh_dns: <span class="self">self</span>.iroh_dns.clone(),
-<a href=#148 id=148 data-nosnippet>148</a>            iroh_relays: <span class="self">self</span>.iroh_relays.clone(),
-<a href=#149 id=149 data-nosnippet>149</a>        })
-<a href=#150 id=150 data-nosnippet>150</a>    }
-<a href=#151 id=151 data-nosnippet>151</a>}
-<a href=#152 id=152 data-nosnippet>152</a>
-<a href=#153 id=153 data-nosnippet>153</a><span class="doccomment">/// `GatewayParameters` is a helper struct that can be derived from
-<a href=#154 id=154 data-nosnippet>154</a>/// `GatewayOpts` that holds the CLI or environment variables that are specified
-<a href=#155 id=155 data-nosnippet>155</a>/// by the user.
-<a href=#156 id=156 data-nosnippet>156</a>///
-<a href=#157 id=157 data-nosnippet>157</a>/// If `GatewayConfiguration is set in the database, that takes precedence and
-<a href=#158 id=158 data-nosnippet>158</a>/// the optional parameters will have no affect.
-<a href=#159 id=159 data-nosnippet>159</a></span><span class="attr">#[derive(Debug)]
-<a href=#160 id=160 data-nosnippet>160</a></span><span class="kw">pub struct </span>GatewayParameters {
-<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">pub </span>listen: SocketAddr,
-<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">pub </span>versioned_api: SafeUrl,
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">pub </span>bcrypt_password_hash: bcrypt::HashParts,
-<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">pub </span>network: Network,
-<a href=#165 id=165 data-nosnippet>165</a>    <span class="kw">pub </span>num_route_hints: u32,
-<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">pub </span>default_routing_fees: PaymentFee,
-<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">pub </span>default_transaction_fees: PaymentFee,
-<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">pub </span>iroh_listen: SocketAddr,
-<a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">pub </span>iroh_dns: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
-<a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">pub </span>iroh_relays: Vec&lt;SafeUrl&gt;,
-<a href=#171 id=171 data-nosnippet>171</a>}</code></pre></div></section></main></body></html>
+<a href=#136 id=136 data-nosnippet>136</a>        <span class="prelude-val">Ok</span>(GatewayParameters {
+<a href=#137 id=137 data-nosnippet>137</a>            listen: <span class="self">self</span>.listen,
+<a href=#138 id=138 data-nosnippet>138</a>            versioned_api,
+<a href=#139 id=139 data-nosnippet>139</a>            bcrypt_password_hash,
+<a href=#140 id=140 data-nosnippet>140</a>            network: <span class="self">self</span>.network,
+<a href=#141 id=141 data-nosnippet>141</a>            num_route_hints: <span class="self">self</span>.num_route_hints,
+<a href=#142 id=142 data-nosnippet>142</a>            default_routing_fees: <span class="self">self</span>.default_routing_fees,
+<a href=#143 id=143 data-nosnippet>143</a>            default_transaction_fees: <span class="self">self</span>.default_transaction_fees,
+<a href=#144 id=144 data-nosnippet>144</a>            iroh_listen: <span class="self">self</span>.iroh_listen,
+<a href=#145 id=145 data-nosnippet>145</a>            iroh_dns: <span class="self">self</span>.iroh_dns.clone(),
+<a href=#146 id=146 data-nosnippet>146</a>            iroh_relays: <span class="self">self</span>.iroh_relays.clone(),
+<a href=#147 id=147 data-nosnippet>147</a>        })
+<a href=#148 id=148 data-nosnippet>148</a>    }
+<a href=#149 id=149 data-nosnippet>149</a>}
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a><span class="doccomment">/// `GatewayParameters` is a helper struct that can be derived from
+<a href=#152 id=152 data-nosnippet>152</a>/// `GatewayOpts` that holds the CLI or environment variables that are specified
+<a href=#153 id=153 data-nosnippet>153</a>/// by the user.
+<a href=#154 id=154 data-nosnippet>154</a>///
+<a href=#155 id=155 data-nosnippet>155</a>/// If `GatewayConfiguration is set in the database, that takes precedence and
+<a href=#156 id=156 data-nosnippet>156</a>/// the optional parameters will have no affect.
+<a href=#157 id=157 data-nosnippet>157</a></span><span class="attr">#[derive(Debug)]
+<a href=#158 id=158 data-nosnippet>158</a></span><span class="kw">pub struct </span>GatewayParameters {
+<a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">pub </span>listen: SocketAddr,
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">pub </span>versioned_api: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">pub </span>bcrypt_password_hash: bcrypt::HashParts,
+<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">pub </span>network: Network,
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">pub </span>num_route_hints: u32,
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">pub </span>default_routing_fees: PaymentFee,
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="kw">pub </span>default_transaction_fees: PaymentFee,
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">pub </span>iroh_listen: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+<a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">pub </span>iroh_dns: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">pub </span>iroh_relays: Vec&lt;SafeUrl&gt;,
+<a href=#169 id=169 data-nosnippet>169</a>}</code></pre></div></section></main></body></html>
