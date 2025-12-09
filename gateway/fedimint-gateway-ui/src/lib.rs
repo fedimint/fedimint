@@ -53,6 +53,7 @@ pub(crate) const SEND_ONCHAIN_ROUTE: &str = "/ui/wallet/send";
 pub(crate) const WALLET_FRAGMENT_ROUTE: &str = "/ui/wallet/fragment";
 pub(crate) const LN_ONCHAIN_ADDRESS_ROUTE: &str = "/ui/wallet/receive";
 pub(crate) const DEPOSIT_ADDRESS_ROUTE: &str = "/ui/federations/deposit-address";
+pub(crate) const PAYMENTS_FRAGMENT_ROUTE: &str = "/ui/payments/fragment";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {

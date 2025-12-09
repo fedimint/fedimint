@@ -16,7 +16,7 @@ use qrcode::render::svg;
 
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, DynGatewayApi, LN_ONCHAIN_ADDRESS_ROUTE,
-    OPEN_CHANNEL_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
+    OPEN_CHANNEL_ROUTE, PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -105,6 +105,15 @@ where
                             type="button"
                             role="tab"
                         { "Channels" }
+                    }
+                    li class="nav-item" role="presentation" {
+                        button class="nav-link"
+                            id="payments-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#payments-tab-pane"
+                            type="button"
+                            role="tab"
+                        { "Payments" }
                     }
                 }
 
@@ -222,7 +231,7 @@ where
                             { "Refresh" }
                         }
 
-                        (wallet_fragment_markup(balances_result, None, None))
+                        (wallet_fragment_markup(&balances_result, None, None))
                     }
 
                     // ──────────────────────────────────────────
@@ -245,14 +254,96 @@ where
 
                         (channels_fragment_markup(channels_result, None, None, is_lnd))
                     }
+
+                    // ──────────────────────────────────────────
+                    //   TAB: PAYMENTS
+                    // ──────────────────────────────────────────
+                    div class="tab-pane fade"
+                        id="payments-tab-pane"
+                        role="tabpanel"
+                        aria-labelledby="payments-tab" {
+
+                        div class="d-flex justify-content-between align-items-center mb-2" {
+                            div { strong { "Payments" } }
+                            button class="btn btn-sm btn-outline-secondary"
+                                hx-get=(PAYMENTS_FRAGMENT_ROUTE)
+                                hx-target="#payments-container"
+                                hx-swap="outerHTML"
+                                type="button"
+                            { "Refresh" }
+                        }
+
+                        (payments_fragment_markup(&balances_result, None, None))
+                    }
                 }
             }
         }
     }
 }
 
+pub fn payments_fragment_markup<E>(
+    balances_result: &Result<GatewayBalances, E>,
+    success_msg: Option<String>,
+    error_msg: Option<String>,
+) -> Markup
+where
+    E: std::fmt::Display,
+{
+    html!(
+        div id="payments-container" {
+            @match balances_result {
+                Err(err) => {
+                    // Error banner — no buttons below
+                    div class="alert alert-danger" {
+                        "Failed to load lightning balance: " (err)
+                    }
+                }
+                Ok(bal) => {
+
+                    @if let Some(success) = success_msg {
+                        div class="alert alert-success mt-2 d-flex justify-content-between align-items-center" {
+                            span { (success) }
+                        }
+                    }
+
+                    @if let Some(error) = error_msg {
+                        div class="alert alert-danger mt-2 d-flex justify-content-between align-items-center" {
+                            span { (error) }
+                        }
+                    }
+
+                    div id="lightning-balance-banner"
+                        class="alert alert-info d-flex justify-content-between align-items-center" {
+
+                        @let lightning_balance = format!("{}", fedimint_core::Amount::from_msats(bal.lightning_balance_msats));
+
+                        span {
+                            "Lightning Balance: "
+                            strong id="lightning-balance" { (lightning_balance) }
+                        }
+                    }
+
+                    div class="mt-3" {
+                        // Toggle Send Form button
+                        button class="btn btn-sm btn-outline-primary me-2"
+                            type="button"
+                        { "Send" }
+
+
+                        button class="btn btn-sm btn-outline-success"
+                            type="button"
+                        { "Receive" }
+                    }
+
+                    div id="receive-invoice-container" class="mt-3" {}
+                }
+            }
+        }
+    )
+}
+
 pub fn wallet_fragment_markup<E>(
-    balances_result: Result<GatewayBalances, E>,
+    balances_result: &Result<GatewayBalances, E>,
     success_msg: Option<String>,
     error_msg: Option<String>,
 ) -> Markup
@@ -696,11 +787,11 @@ pub async fn send_onchain_handler<E: Display + Send + Sync>(
 
     let markup = match result {
         Ok(txid) => wallet_fragment_markup(
-            balances,
+            &balances,
             Some(format!("Send transaction. TxId: {txid}")),
             None,
         ),
-        Err(err) => wallet_fragment_markup(balances, None, Some(err.to_string())),
+        Err(err) => wallet_fragment_markup(&balances, None, Some(err.to_string())),
     };
 
     Html(markup.into_string())
@@ -714,7 +805,7 @@ where
     E: std::fmt::Display,
 {
     let balances_result = state.api.handle_get_balances_msg().await;
-    let markup = wallet_fragment_markup(balances_result, None, None);
+    let markup = wallet_fragment_markup(&balances_result, None, None);
     Html(markup.into_string())
 }
 

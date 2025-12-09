@@ -212,7 +212,7 @@ pub struct ReceiveEcashResponse {
     pub amount: Amount,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GatewayBalances {
     pub onchain_balance_sats: u64,
     pub lightning_balance_msats: u64,
@@ -220,7 +220,7 @@ pub struct GatewayBalances {
     pub inbound_lightning_liquidity_msats: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct FederationBalanceInfo {
     pub federation_id: FederationId,
     pub ecash_balance_msats: Amount,
