@@ -1,13 +1,15 @@
 use std::fmt::Display;
+use std::time::{Duration, UNIX_EPOCH};
 
 use axum::Form;
 use axum::extract::State;
 use axum::response::Html;
 use fedimint_core::bitcoin::Network;
+use fedimint_core::time::now;
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GatewayBalances,
-    GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest, PayInvoiceForOperatorPayload,
-    SendOnchainRequest,
+    GatewayInfo, LightningInfo, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
+    OpenChannelRequest, PayInvoiceForOperatorPayload, SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -61,6 +63,25 @@ where
 
     let is_lnd = matches!(api.lightning_mode(), LightningMode::Lnd { .. });
     let balances_result = api.handle_get_balances_msg().await;
+    let now = now();
+    let start = now
+        .checked_sub(Duration::from_secs(60 * 60 * 24))
+        .expect("Cannot be negative");
+    let start_secs = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Cannot be before epoch")
+        .as_secs();
+    let end = now;
+    let end_secs = end
+        .duration_since(UNIX_EPOCH)
+        .expect("Cannot be before epoch")
+        .as_secs();
+    let transactions_result = api
+        .handle_list_transactions_msg(ListTransactionsPayload {
+            start_secs,
+            end_secs,
+        })
+        .await;
 
     html! {
         script {
@@ -116,6 +137,15 @@ where
                             type="button"
                             role="tab"
                         { "Payments" }
+                    }
+                    li class="nav-item" role="presentation" {
+                        button class="nav-link"
+                            id="transactions-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#transactions-tab-pane"
+                            type="button"
+                            role="tab"
+                        { "Transactions" }
                     }
                 }
 
@@ -277,10 +307,94 @@ where
 
                         (payments_fragment_markup(&balances_result, None, None, None))
                     }
+
+                    // ──────────────────────────────────────────
+                    //   TAB: TRANSACTIONS
+                    // ──────────────────────────────────────────
+                    div class="tab-pane fade"
+                        id="transactions-tab-pane"
+                        role="tabpanel"
+                        aria-labelledby="transactions-tab" {
+
+                        (transactions_fragment_markup(&transactions_result))
+                    }
                 }
             }
         }
     }
+}
+
+pub fn transactions_fragment_markup<E>(
+    transactions_result: &Result<ListTransactionsResponse, E>,
+) -> Markup
+where
+    E: std::fmt::Display,
+{
+    html!(
+        div id="transactions-container" {
+            @match transactions_result {
+                Err(err) => {
+                    div class="alert alert-danger" {
+                        "Failed to load lightning transactions: " (err)
+                    }
+                }
+                Ok(transactions) => {
+                    @if transactions.transactions.is_empty() {
+                        div class="alert alert-info mt-3" {
+                            "No transactions found in this time range."
+                        }
+                    } @else {
+                        ul class="list-group mt-3" {
+                            @for tx in &transactions.transactions {
+                                li class="list-group-item transaction-item" {
+                                    div class="d-flex justify-content-between" {
+                                        // Left column (kind + status)
+                                        div {
+                                            div {
+                                                b { (format!("{:?}", tx.payment_kind)) }
+                                                " — "
+                                                span { (format!("{:?}", tx.direction)) }
+                                            }
+                                            div class="text-muted small" {
+                                                (format!("{:?}", tx.status))
+                                            }
+                                        }
+
+                                        // Right column (amount + timestamp)
+                                        div class="text-end" {
+                                            div {
+                                                (format!("{} sats", tx.amount.msats / 1000))
+                                            }
+                                            div class="text-muted small" {
+                                                @let timestamp = chrono::NaiveDateTime::from_timestamp_opt(
+                                                    tx.timestamp_secs as i64,
+                                                    0
+                                                ).unwrap_or_default();
+                                                (timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
+                                            }
+                                        }
+                                    }
+
+                                    // Optional hash/preimage
+                                    @if let Some(hash) = &tx.payment_hash {
+                                        div class="mt-2 text-muted small" {
+                                            "Hash: " (hash.to_string())
+                                        }
+                                    }
+
+                                    @if let Some(preimage) = &tx.preimage {
+                                        div class="mt-1 text-muted small" {
+                                            "Preimage: " (preimage)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 pub fn payments_fragment_markup<E>(

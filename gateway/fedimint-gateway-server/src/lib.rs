@@ -1372,18 +1372,6 @@ impl Gateway {
         Ok(invoice)
     }
 
-    pub async fn handle_list_transactions_msg(
-        &self,
-        payload: ListTransactionsPayload,
-    ) -> AdminResult<ListTransactionsResponse> {
-        let lightning_context = self.get_lightning_context().await?;
-        let response = lightning_context
-            .lnrpc
-            .list_transactions(payload.start_secs, payload.end_secs)
-            .await?;
-        Ok(response)
-    }
-
     /// Creates a BOLT12 offer using the gateway's lightning node
     pub async fn handle_create_offer_for_operator_msg(
         &self,
@@ -2276,6 +2264,19 @@ impl IAdminGateway for Gateway {
             .pay(payload.invoice, MAX_DELAY, Amount::from_msats(max_fee))
             .await?;
         Ok(res.preimage)
+    }
+
+    /// Lists the transactions that the lightning node has made.
+    async fn handle_list_transactions_msg(
+        &self,
+        payload: ListTransactionsPayload,
+    ) -> AdminResult<ListTransactionsResponse> {
+        let lightning_context = self.get_lightning_context().await?;
+        let response = lightning_context
+            .lnrpc
+            .list_transactions(payload.start_secs, payload.end_secs)
+            .await?;
+        Ok(response)
     }
 
     fn get_password_hash(&self) -> String {

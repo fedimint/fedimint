@@ -23,9 +23,9 @@ use fedimint_core::secp256k1::serde::Deserialize;
 use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
-    GatewayInfo, LeaveFedPayload, LightningMode, MnemonicResponse, OpenChannelRequest,
-    PayInvoiceForOperatorPayload, PaymentSummaryPayload, PaymentSummaryResponse,
-    SendOnchainRequest, SetFeesPayload,
+    GatewayInfo, LeaveFedPayload, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
+    MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentSummaryPayload,
+    PaymentSummaryResponse, SendOnchainRequest, SetFeesPayload,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -142,6 +142,11 @@ pub trait IAdminGateway {
         &self,
         payload: PayInvoiceForOperatorPayload,
     ) -> Result<Preimage, Self::Error>;
+
+    async fn handle_list_transactions_msg(
+        &self,
+        payload: ListTransactionsPayload,
+    ) -> Result<ListTransactionsResponse, Self::Error>;
 
     fn get_password_hash(&self) -> String;
 
