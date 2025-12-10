@@ -860,21 +860,6 @@ impl FedimintCli {
         .run()
         .await
     }
-
-    pub async fn start_consensus(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
-        cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "start-consensus"
-        )
-        .run()
-        .await
-    }
 }
 
 pub struct LoadTestTool;
