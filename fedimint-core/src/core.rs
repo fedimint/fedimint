@@ -155,12 +155,6 @@ pub type ModuleInstanceId = u16;
 /// Special IDs we use for global dkg
 pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
 
-// Note: needs to be in alphabetical order of ModuleKind of each module,
-// as this is the ordering we currently hardcoded.
-// Should be used only for pre-modularization code we still have  left
-pub const LEGACY_HARDCODED_INSTANCE_ID_MINT: ModuleInstanceId = 1;
-pub const LEGACY_HARDCODED_INSTANCE_ID_WALLET: ModuleInstanceId = 2;
-
 /// A type of a module
 ///
 /// This is a short string that identifies type of a module.

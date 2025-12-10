@@ -349,7 +349,7 @@ pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<Tiered
                 .db()
                 .begin_transaction_nc()
                 .await
-                .to_ref_with_prefix_module_id(1)
+                .to_ref_with_prefix_module_id(mint_client.id)
                 .0,
         )
         .await;

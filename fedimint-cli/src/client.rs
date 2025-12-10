@@ -624,6 +624,9 @@ pub async fn handle_command(
 
 async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
     let mint_client = client.get_first_module::<MintClientModule>()?;
+    let mint_module_id = client
+        .get_first_instance(&fedimint_mint_client::KIND)
+        .context("Mint module not found")?;
     let wallet_client = client.get_first_module::<WalletClientModule>()?;
     let summary = mint_client
         .get_note_counts_by_denomination(
@@ -631,7 +634,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
                 .db()
                 .begin_transaction_nc()
                 .await
-                .to_ref_with_prefix_module_id(1)
+                .to_ref_with_prefix_module_id(mint_module_id)
                 .0,
         )
         .await;

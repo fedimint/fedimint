@@ -1162,7 +1162,7 @@ mod fedimint_migration_tests {
         secp256k1,
     };
     use fedimint_client::module_init::DynClientModuleInit;
-    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+    use fedimint_core::core::ModuleInstanceId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
         IDatabaseTransactionOpsCoreTyped,
@@ -1199,6 +1199,11 @@ mod fedimint_migration_tests {
     use tracing::info;
 
     use crate::WalletInit;
+
+    /// Legacy wallet module instance ID used in old federations.
+    /// This constant is only used for migration testing of old database
+    /// formats.
+    const LEGACY_WALLET_MODULE_INSTANCE_ID: ModuleInstanceId = 2;
 
     /// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -1390,7 +1395,7 @@ mod fedimint_migration_tests {
         let mut dbtx = db.begin_transaction().await;
 
         dbtx.insert_new_entry(
-            &DatabaseVersionKey(LEGACY_HARDCODED_INSTANCE_ID_WALLET),
+            &DatabaseVersionKey(LEGACY_WALLET_MODULE_INSTANCE_ID),
             &DatabaseVersion(1),
         )
         .await;

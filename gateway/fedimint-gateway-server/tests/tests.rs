@@ -1144,9 +1144,15 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     fed1.connect_gateway(&gateway).await;
     fed2.connect_gateway(&gateway).await;
     let client1 = gateway.select_client(fed1.id()).await?.into_value();
+    let lnv2_module_id = client1
+        .get_first_instance(&fedimint_lnv2_common::KIND)
+        .expect("lnv2 module not found");
     let mut dbtx = client1.db().begin_transaction().await;
     for _ in 0..10 {
-        let mut fed1_module_dbtx = dbtx.to_ref_with_prefix_module_id(3).0.into_nc();
+        let mut fed1_module_dbtx = dbtx
+            .to_ref_with_prefix_module_id(lnv2_module_id)
+            .0
+            .into_nc();
         let fed1_lnv2 = client1.get_first_module::<GatewayClientModuleV2>()?;
         let outgoing_payment_event = OutgoingPaymentStarted {
             outgoing_contract: OutgoingContract {
@@ -1183,10 +1189,16 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     dbtx.commit_tx().await;
 
     let client2 = gateway.select_client(fed2.id()).await?.into_value();
+    let lnv2_module_id2 = client2
+        .get_first_instance(&fedimint_lnv2_common::KIND)
+        .expect("lnv2 module not found");
     let mut dbtx = client2.db().begin_transaction().await;
     {
         let fed2_lnv2 = client2.get_first_module::<GatewayClientModuleV2>()?;
-        let mut fed2_module_dbtx = dbtx.to_ref_with_prefix_module_id(3).0.into_nc();
+        let mut fed2_module_dbtx = dbtx
+            .to_ref_with_prefix_module_id(lnv2_module_id2)
+            .0
+            .into_nc();
 
         let contract = IncomingContract::new(
             fed2_lnv2.cfg.tpe_agg_pk,

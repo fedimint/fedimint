@@ -191,11 +191,12 @@ impl Fixtures {
     /// Creates a new Gateway that can be used for module tests.
     pub async fn new_gateway(&self) -> Gateway {
         let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
-        let module_kinds: Vec<_> = self
-            .servers
+        // Use server_gens.iter() to match the alphabetical order used by the server
+        // when assigning module instance IDs (BTreeMap iteration order)
+        let module_kinds: Vec<_> = server_gens
             .iter()
             .enumerate()
-            .map(|(id, server)| (id as ModuleInstanceId, server.module_kind()))
+            .map(|(id, (kind, _))| (id as ModuleInstanceId, kind.clone()))
             .collect();
         let decoders = server_gens
             .available_decoders(module_kinds.iter().map(|(id, kind)| (*id, kind)))

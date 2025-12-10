@@ -6,12 +6,12 @@ mod key;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use bitcoin::OutPoint;
 use bitcoin::network::Network;
 use bitcoin::secp256k1::{PublicKey, SECP256K1, SecretKey};
 use clap::{ArgGroup, Parser, Subcommand};
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fedimint_build_code_version_env;
@@ -22,6 +22,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_logging::TracingSetup;
 use fedimint_rocksdb::RocksDbReadOnly;
+use fedimint_server::config::ServerConfig;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::consensus::db::SignedSessionOutcomePrefix;
 use fedimint_server::core::ServerModule;
@@ -104,6 +105,22 @@ fn tweak_parser(hex: &str) -> anyhow::Result<[u8; 33]> {
         .map_err(|_| anyhow!("tweaks have to be 33 bytes long"))
 }
 
+/// Get the wallet module instance ID from a server config by looking up the
+/// module kind
+fn get_wallet_module_id(cfg: &ServerConfig) -> anyhow::Result<ModuleInstanceId> {
+    cfg.consensus
+        .modules
+        .iter()
+        .find_map(|(id, module_cfg)| {
+            if module_cfg.kind == WalletCommonInit::KIND {
+                Some(*id)
+            } else {
+                None
+            }
+        })
+        .context("Wallet module not found in config")
+}
+
 async fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database {
     Database::new(
         RocksDbReadOnly::open_read_only(path)
@@ -121,23 +138,35 @@ async fn main() -> anyhow::Result<()> {
 
     let opts: RecoveryTool = RecoveryTool::parse();
 
-    let (base_descriptor, base_key, network) = if let Some(config) = opts.config {
+    let (base_descriptor, base_key, network, wallet_module_id) = if let Some(config) = opts.config {
         let cfg = read_server_config(&opts.password, &config).expect("Could not read config file");
+        let wallet_module_id =
+            get_wallet_module_id(&cfg).expect("Wallet module not found in config");
         let wallet_cfg: WalletConfig = cfg
-            .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .get_module_config_typed(wallet_module_id)
             .expect("Malformed wallet config");
         let base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
         let base_key = wallet_cfg.private.peg_in_key;
         let network = wallet_cfg.consensus.network.0;
 
-        (base_descriptor, base_key, network)
+        (base_descriptor, base_key, network, wallet_module_id)
     } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {
-        (descriptor, key, opts.network)
+        // When using descriptor directly without config, we don't have a known wallet
+        // module ID. Use 0 as a placeholder since it's only used for DB
+        // prefix/decoder matching which isn't needed with direct descriptor usage.
+        (descriptor, key, opts.network, 0)
     } else {
         panic!("Either config or descriptor need to be provided by clap");
     };
 
-    process_and_print_tweak_source(&opts.strategy, &base_descriptor, &base_key, network).await;
+    process_and_print_tweak_source(
+        &opts.strategy,
+        &base_descriptor,
+        &base_key,
+        network,
+        wallet_module_id,
+    )
+    .await;
 
     Ok(())
 }
@@ -147,6 +176,7 @@ async fn process_and_print_tweak_source(
     base_descriptor: &Descriptor<CompressedPublicKey>,
     base_key: &SecretKey,
     network: Network,
+    wallet_module_id: ModuleInstanceId,
 ) {
     match tweak_source {
         TweakSource::Direct { tweak } => {
@@ -162,8 +192,7 @@ async fn process_and_print_tweak_source(
             let db = if *legacy {
                 db
             } else {
-                db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
-                    .0
+                db.with_prefix_module_id(wallet_module_id).0
             };
 
             let utxos: Vec<ImportableWallet> = db
@@ -187,9 +216,8 @@ async fn process_and_print_tweak_source(
                 .expect("Could not encode to stdout");
         }
         TweakSource::Epochs { db } => {
-            // FIXME: read config to figure out instance ids
             let decoders = ModuleDecoderRegistry::from_iter([(
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                wallet_module_id,
                 WalletCommonInit::KIND,
                 <Wallet as ServerModule>::decoder(),
             )])
@@ -222,8 +250,10 @@ async fn process_and_print_tweak_source(
 
                         // Get all user-submitted tweaks and number of peg-out transactions in
                         // session
-                        let (mut peg_in_tweaks, peg_out_count) =
-                            input_tweaks_and_peg_out_count(transaction_cis.into_iter());
+                        let (mut peg_in_tweaks, peg_out_count) = input_tweaks_and_peg_out_count(
+                            transaction_cis.into_iter(),
+                            wallet_module_id,
+                        );
 
                         for _ in 0..peg_out_count {
                             info!("Found change output, adding tweak {change_tweak_idx} to list");
@@ -251,18 +281,19 @@ async fn process_and_print_tweak_source(
 
 fn input_tweaks_and_peg_out_count(
     transactions: impl Iterator<Item = Transaction>,
+    wallet_module_id: ModuleInstanceId,
 ) -> (BTreeSet<[u8; 33]>, u64) {
     let mut peg_out_count = 0;
     let tweaks = transactions
         .flat_map(|tx| {
             tx.outputs.iter().for_each(|output| {
-                if output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                if output.module_instance_id() == wallet_module_id {
                     peg_out_count += 1;
                 }
             });
 
             tx.inputs.into_iter().filter_map(|input| {
-                if input.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                if input.module_instance_id() != wallet_module_id {
                     return None;
                 }
 
