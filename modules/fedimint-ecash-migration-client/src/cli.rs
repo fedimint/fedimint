@@ -106,6 +106,22 @@ enum Opts {
         /// The operation ID returned when the fund transfer was started.
         operation_id: OperationId,
     },
+
+    /// Request activation of a transfer.
+    ///
+    /// This signals to all federation peers that the transfer is ready to be
+    /// activated. Once all peers have voted (which happens automatically in
+    /// the next consensus round), the transfer becomes active and origin
+    /// ecash can be redeemed.
+    ///
+    /// Prerequisites:
+    /// - The keyset must have been uploaded (upload-keyset)
+    /// - The spend book must have been fully uploaded (upload-spend-book)
+    RequestActivation {
+        /// The transfer ID to activate.
+        #[arg(long)]
+        transfer_id: TransferId,
+    },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -137,6 +153,7 @@ pub(crate) async fn handle_cli_command(
             amount,
         } => fund_transfer(module, transfer_id, amount).await,
         Opts::AwaitFundTransfer { operation_id } => await_fund_transfer(module, operation_id).await,
+        Opts::RequestActivation { transfer_id } => request_activation(module, transfer_id).await,
     }
 }
 
@@ -280,5 +297,20 @@ async fn await_fund_transfer(
         "operation_id": operation_id,
         "transfer_id": transfer_id,
         "amount_msat": amount.msats,
+    }))
+}
+
+async fn request_activation(
+    module: &EcashMigrationClientModule,
+    transfer_id: TransferId,
+) -> anyhow::Result<serde_json::Value> {
+    module
+        .request_activation(transfer_id)
+        .await
+        .context("Failed to request activation")?;
+
+    Ok(serde_json::json!({
+        "transfer_id": transfer_id,
+        "status": "activation_requested",
     }))
 }

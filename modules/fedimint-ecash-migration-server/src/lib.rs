@@ -25,9 +25,9 @@ use fedimint_core::{
 };
 use fedimint_ecash_migration_common::api::{
     CHECK_SPEND_BOOK_HASH_ENDPOINT, GET_TRANSFER_ID_ENDPOINT,
-    GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT, UPLOAD_KEY_SET_ENDPOINT,
-    UPLOAD_SPEND_BOOK_BATCH_ENDPOINT, UploadKeySetRequest, UploadSpendBookBatchRequest,
-    UploadSpendBookBatchResponse,
+    GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT, REQUEST_ACTIVATION_ENDPOINT,
+    RequestActivationRequest, UPLOAD_KEY_SET_ENDPOINT, UPLOAD_SPEND_BOOK_BATCH_ENDPOINT,
+    UploadKeySetRequest, UploadSpendBookBatchRequest, UploadSpendBookBatchResponse,
 };
 use fedimint_ecash_migration_common::config::{
     EcashMigrationClientConfig, EcashMigrationConfig, EcashMigrationConfigConsensus,
@@ -38,7 +38,7 @@ use fedimint_ecash_migration_common::{
     EcashMigrationCommonInit, EcashMigrationConsensusItem, EcashMigrationCreateTransferOutput,
     EcashMigrationFundTransferOutput, EcashMigrationInput, EcashMigrationInputError,
     EcashMigrationModuleTypes, EcashMigrationOutput, EcashMigrationOutputError,
-    EcashMigrationOutputOutcome, MODULE_CONSENSUS_VERSION, SpendBookHash, TransferId,
+    EcashMigrationOutputOutcome, KeySetHash, MODULE_CONSENSUS_VERSION, SpendBookHash, TransferId,
     hash_and_count_spend_book,
 };
 use fedimint_mint_common::Nonce;
@@ -51,10 +51,11 @@ use tracing::warn;
 
 use crate::db::{
     ActivationRequestKey, ActivationRequestPrefix, ActivationVote, ActivationVoteKey,
-    ActivationVoteTransferPrefix, DenominationKeyKey, DepositedAmountKey, DepositedAmountPrefix,
-    LocalSpendBookKey, OriginSpendBookKey, OriginSpendBookTransferPrefix, OutPointTransferIdKey,
-    TransferMetadata, TransferMetadataKey, TransferMetadataKeyPrefix, UploadedSpendBookEntriesKey,
-    WithdrawnAmountKey, WithdrawnAmountPrefix,
+    ActivationVoteTransferPrefix, DenominationKeyKey, DenominationKeyKeyTransferPrefix,
+    DepositedAmountKey, DepositedAmountPrefix, LocalSpendBookKey, OriginSpendBookKey,
+    OriginSpendBookTransferPrefix, OutPointTransferIdKey, TransferMetadata, TransferMetadataKey,
+    TransferMetadataKeyPrefix, UploadedSpendBookEntriesKey, WithdrawnAmountKey,
+    WithdrawnAmountPrefix,
 };
 
 pub mod db;
@@ -502,6 +503,15 @@ impl ServerModule for EcashMigration {
                         .await
                 }
             },
+            api_endpoint! {
+                REQUEST_ACTIVATION_ENDPOINT,
+                ApiVersion::new(0, 0),
+                async |module: &EcashMigration, context, request: RequestActivationRequest| -> () {
+                    // TODO: remove in final version
+                    module.request_activation(&mut context.dbtx().into_nc(), request.transfer_id)
+                        .await
+                }
+            },
         ]
     }
 }
@@ -666,6 +676,77 @@ impl EcashMigration {
         }
 
         Ok(spend_book_hash)
+    }
+
+    /// Request activation of a transfer. This inserts an activation request
+    /// that will be proposed in the next consensus round. Once all peers have
+    /// voted, the transfer becomes active and ecash can be redeemed.
+    async fn request_activation(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        transfer_id: TransferId,
+    ) -> Result<(), ApiError> {
+        let transfer_metadata = dbtx
+            .get_value(&TransferMetadataKey(transfer_id))
+            .await
+            .ok_or(ApiError::not_found("Transfer not found".to_owned()))?;
+
+        // Check that all spend book entries have been uploaded
+        let uploaded_spend_book_entries = dbtx
+            .get_value(&UploadedSpendBookEntriesKey { transfer_id })
+            .await
+            .unwrap_or(0);
+        if uploaded_spend_book_entries != transfer_metadata.num_spend_book_entries {
+            return Err(ApiError::bad_request(format!(
+                "Spend book not fully uploaded (expected: {}; got: {})",
+                transfer_metadata.num_spend_book_entries, uploaded_spend_book_entries,
+            )));
+        }
+
+        // Verify spend book hash
+        let (spend_book_hash, _) = hash_and_count_spend_book(
+            dbtx.find_by_prefix(&OriginSpendBookTransferPrefix { transfer_id })
+                .await
+                .map(|(OriginSpendBookKey { nonce, .. }, ())| nonce),
+        )
+        .await
+        .expect("Spend book entries are returned in order");
+
+        if spend_book_hash != transfer_metadata.origin_spend_book_hash {
+            return Err(ApiError::bad_request(format!(
+                "Spend book hash does not match pre-committed hash (expected: {}; got: {})",
+                transfer_metadata.origin_spend_book_hash, spend_book_hash,
+            )));
+        }
+
+        // Collect and verify keyset hash
+        let uploaded_keys: BTreeMap<Amount, AggregatePublicKey> = dbtx
+            .find_by_prefix(&DenominationKeyKeyTransferPrefix { transfer_id })
+            .await
+            .map(|(DenominationKeyKey { amount, .. }, public_key)| (amount, public_key))
+            .collect()
+            .await;
+
+        if uploaded_keys.is_empty() {
+            return Err(ApiError::bad_request(
+                "Keyset not uploaded for transfer".to_owned(),
+            ));
+        }
+
+        let uploaded_keys: Tiered<AggregatePublicKey> = uploaded_keys.into_iter().collect();
+        let key_set_hash = KeySetHash(uploaded_keys.consensus_hash_sha256());
+        if key_set_hash != transfer_metadata.origin_key_set_hash {
+            return Err(ApiError::bad_request(format!(
+                "Keyset hash does not match pre-committed hash (expected: {}; got: {})",
+                transfer_metadata.origin_key_set_hash, key_set_hash,
+            )));
+        }
+
+        // Insert the activation request (idempotent)
+        dbtx.insert_entry(&ActivationRequestKey { transfer_id }, &())
+            .await;
+
+        Ok(())
     }
 }
 

@@ -12,6 +12,7 @@ pub const UPLOAD_KEY_SET_ENDPOINT: &str = "upload_key_set";
 pub const UPLOAD_SPEND_BOOK_BATCH_ENDPOINT: &str = "upload_spend_book_batch";
 pub const GET_UPLOADED_SPEND_BOOK_ENTRIES_ENDPOINT: &str = "get_uploaded_spend_book_entries";
 pub const CHECK_SPEND_BOOK_HASH_ENDPOINT: &str = "check_spend_book_hash";
+pub const REQUEST_ACTIVATION_ENDPOINT: &str = "request_activation";
 
 /// API: Request to upload a key set
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
@@ -35,10 +36,9 @@ pub struct UploadSpendBookBatchResponse {
 }
 
 /// API: Request to activate redemption
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 pub struct RequestActivationRequest {
     pub transfer_id: TransferId,
-    pub auth_hmac: String,
 }
 
 /// API: Request to get transfer status

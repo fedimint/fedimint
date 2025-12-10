@@ -33,8 +33,9 @@ use fedimint_core::{Amount, OutPoint, Tiered, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_ecash_migration_common as common;
 use fedimint_ecash_migration_common::api::{
-    UPLOAD_KEY_SET_ENDPOINT, UPLOAD_SPEND_BOOK_BATCH_ENDPOINT, UploadKeySetRequest,
-    UploadSpendBookBatchRequest, UploadSpendBookBatchResponse,
+    REQUEST_ACTIVATION_ENDPOINT, RequestActivationRequest, UPLOAD_KEY_SET_ENDPOINT,
+    UPLOAD_SPEND_BOOK_BATCH_ENDPOINT, UploadKeySetRequest, UploadSpendBookBatchRequest,
+    UploadSpendBookBatchResponse,
 };
 use fedimint_ecash_migration_common::config::EcashMigrationClientConfig;
 use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdKey;
@@ -810,6 +811,63 @@ impl EcashMigrationClientModule {
             total_uploaded,
             batches_uploaded,
         })
+    }
+
+    /// Request activation of a transfer.
+    ///
+    /// This signals to all federation peers that the transfer is ready to be
+    /// activated. Once all peers have voted, the transfer becomes active and
+    /// origin ecash can be redeemed.
+    ///
+    /// Prerequisites:
+    /// - The keyset must have been uploaded
+    /// - The spend book must have been fully uploaded
+    ///
+    /// # Errors
+    /// - If any prerequisite is not met
+    /// - If the request fails on any peer
+    pub async fn request_activation(&self, transfer_id: TransferId) -> anyhow::Result<()> {
+        use fedimint_api_client::api::FederationApiExt as _;
+        use fedimint_core::module::ApiRequestErased;
+
+        let request = RequestActivationRequest { transfer_id };
+
+        // Send activation request to all peers
+        let params = ApiRequestErased::new(request);
+        let results = futures::future::join_all(self.module_api.all_peers().iter().map(|&peer| {
+            let params = params.clone();
+            async move {
+                (
+                    peer,
+                    self.module_api
+                        .request_single_peer::<()>(
+                            REQUEST_ACTIVATION_ENDPOINT.to_string(),
+                            params,
+                            peer,
+                        )
+                        .await,
+                )
+            }
+        }))
+        .await;
+
+        // Check for errors
+        let errors: Vec<_> = results
+            .into_iter()
+            .filter_map(|(peer, result)| result.err().map(|e| (peer, e)))
+            .collect();
+
+        if !errors.is_empty() {
+            anyhow::bail!(
+                "Failed to request activation from peers: {:?}",
+                errors
+                    .into_iter()
+                    .map(|(p, e)| format!("{p}: {e}"))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        Ok(())
     }
 }
 
