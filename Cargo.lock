@@ -3477,6 +3477,7 @@ dependencies = [
  "axum-extra",
  "bcrypt",
  "bitcoin",
+ "chrono",
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-gateway-common",

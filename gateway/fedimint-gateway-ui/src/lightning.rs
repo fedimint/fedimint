@@ -1,13 +1,18 @@
+use std::collections::HashMap;
 use std::fmt::Display;
+use std::time::{Duration, UNIX_EPOCH};
 
 use axum::Form;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::Html;
+use chrono::offset::LocalResult;
+use chrono::{TimeZone, Utc};
 use fedimint_core::bitcoin::Network;
+use fedimint_core::time::now;
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CreateInvoiceForOperatorPayload, GatewayBalances,
-    GatewayInfo, LightningInfo, LightningMode, OpenChannelRequest, PayInvoiceForOperatorPayload,
-    SendOnchainRequest,
+    GatewayInfo, LightningInfo, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
+    OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentStatus, SendOnchainRequest,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -18,7 +23,8 @@ use qrcode::render::svg;
 use crate::{
     CHANNEL_FRAGMENT_ROUTE, CLOSE_CHANNEL_ROUTE, CREATE_BOLT11_INVOICE_ROUTE, DynGatewayApi,
     LN_ONCHAIN_ADDRESS_ROUTE, OPEN_CHANNEL_ROUTE, PAY_BOLT11_INVOICE_ROUTE,
-    PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, WALLET_FRAGMENT_ROUTE,
+    PAYMENTS_FRAGMENT_ROUTE, SEND_ONCHAIN_ROUTE, TRANSACTIONS_FRAGMENT_ROUTE,
+    WALLET_FRAGMENT_ROUTE,
 };
 
 pub async fn render<E>(gateway_info: &GatewayInfo, api: &DynGatewayApi<E>) -> Markup
@@ -61,6 +67,25 @@ where
 
     let is_lnd = matches!(api.lightning_mode(), LightningMode::Lnd { .. });
     let balances_result = api.handle_get_balances_msg().await;
+    let now = now();
+    let start = now
+        .checked_sub(Duration::from_secs(60 * 60 * 24))
+        .expect("Cannot be negative");
+    let start_secs = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Cannot be before epoch")
+        .as_secs();
+    let end = now;
+    let end_secs = end
+        .duration_since(UNIX_EPOCH)
+        .expect("Cannot be before epoch")
+        .as_secs();
+    let transactions_result = api
+        .handle_list_transactions_msg(ListTransactionsPayload {
+            start_secs,
+            end_secs,
+        })
+        .await;
 
     html! {
         script {
@@ -76,7 +101,7 @@ where
         }
 
         div class="card h-100" {
-            div class="card-header dashboard-header" { "Lightning" }
+            div class="card-header dashboard-header" { "Lightning Node" }
             div class="card-body" {
 
                 // --- TABS ---
@@ -116,6 +141,15 @@ where
                             type="button"
                             role="tab"
                         { "Payments" }
+                    }
+                    li class="nav-item" role="presentation" {
+                        button class="nav-link"
+                            id="transactions-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#transactions-tab-pane"
+                            type="button"
+                            role="tab"
+                        { "Transactions" }
                     }
                 }
 
@@ -277,10 +311,190 @@ where
 
                         (payments_fragment_markup(&balances_result, None, None, None))
                     }
+
+                    // ──────────────────────────────────────────
+                    //   TAB: TRANSACTIONS
+                    // ──────────────────────────────────────────
+                    div class="tab-pane fade"
+                        id="transactions-tab-pane"
+                        role="tabpanel"
+                        aria-labelledby="transactions-tab" {
+
+                        (transactions_fragment_markup(&transactions_result, start_secs, end_secs))
+                    }
                 }
             }
         }
     }
+}
+
+pub fn transactions_fragment_markup<E>(
+    transactions_result: &Result<ListTransactionsResponse, E>,
+    start_secs: u64,
+    end_secs: u64,
+) -> Markup
+where
+    E: std::fmt::Display,
+{
+    // Convert timestamps to datetime-local formatted strings
+    let start_dt = match Utc.timestamp_opt(start_secs as i64, 0) {
+        LocalResult::Single(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        _ => "1970-01-01T00:00:00".to_string(),
+    };
+
+    let end_dt = match Utc.timestamp_opt(end_secs as i64, 0) {
+        LocalResult::Single(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        _ => "1970-01-01T00:00:00".to_string(),
+    };
+
+    html!(
+        div id="transactions-container" {
+
+            // ────────────────────────────────
+            //   Date Range Form
+            // ────────────────────────────────
+            form class="row g-3 mb-3"
+                hx-get=(TRANSACTIONS_FRAGMENT_ROUTE)
+                hx-target="#transactions-container"
+                hx-swap="outerHTML"
+            {
+                // Start
+                div class="col-auto" {
+                    label class="form-label" for="start-secs" { "Start" }
+                    input
+                        class="form-control"
+                        type="datetime-local"
+                        id="start-secs"
+                        name="start_secs"
+                        step="1"
+                        value=(start_dt);
+                }
+
+                // End
+                div class="col-auto" {
+                    label class="form-label" for="end-secs" { "End" }
+                    input
+                        class="form-control"
+                        type="datetime-local"
+                        id="end-secs"
+                        name="end_secs"
+                        step="1"
+                        value=(end_dt);
+                }
+
+                // Refresh Button
+                div class="col-auto align-self-end" {
+                    button class="btn btn-outline-secondary" type="submit" { "Refresh" }
+                    button class="btn btn-outline-secondary me-2" type="button"
+                        id="last-day-btn"
+                    { "Last Day" }
+                }
+            }
+
+            script {
+                (PreEscaped(r#"
+                document.getElementById('last-day-btn').addEventListener('click', () => {
+                    const now = new Date();
+                    const endInput = document.getElementById('end-secs');
+                    const startInput = document.getElementById('start-secs');
+
+                    const pad = n => n.toString().padStart(2, '0');
+
+                    const formatUTC = d =>
+                        `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+
+                    endInput.value = formatUTC(now);
+
+                    const start = new Date(now.getTime() - 24*60*60*1000); // 24 hours ago UTC
+                    startInput.value = formatUTC(start);
+                });
+                "#))
+            }
+
+            // ────────────────────────────────
+            //   Transaction List
+            // ────────────────────────────────
+            @match transactions_result {
+                Err(err) => {
+                    div class="alert alert-danger" {
+                        "Failed to load lightning transactions: " (err)
+                    }
+                }
+                Ok(transactions) => {
+                    @if transactions.transactions.is_empty() {
+                        div class="alert alert-info mt-3" {
+                            "No transactions found in this time range."
+                        }
+                    } @else {
+                        ul class="list-group mt-3" {
+                            @for tx in &transactions.transactions {
+                                li class="list-group-item p-2 mb-1 transaction-item"
+                                    style="border-radius: 0.5rem; transition: background-color 0.2s;"
+                                {
+                                    // Hover effect using inline style (or add a CSS class)
+                                    div style="display: flex; justify-content: space-between; align-items: center;" {
+                                        // Left: kind + direction + status
+                                        div {
+                                            div style="font-weight: bold; font-size: 0.9rem;" {
+                                                (format!("{:?}", tx.payment_kind))
+                                                " — "
+                                                span { (format!("{:?}", tx.direction)) }
+                                            }
+
+                                            div style="font-size: 0.75rem; margin-top: 2px;" {
+                                                @let status_badge = match tx.status {
+                                                    PaymentStatus::Pending => html! { span class="badge bg-warning" { "⏳ Pending" } },
+                                                    PaymentStatus::Succeeded => html! { span class="badge bg-success" { "✅ Succeeded" } },
+                                                    PaymentStatus::Failed => html! { span class="badge bg-danger" { "❌ Failed" } },
+                                                };
+                                                (status_badge)
+                                            }
+                                        }
+
+                                        // Right: amount + timestamp
+                                        div style="text-align: right;" {
+                                            div style="font-weight: bold; font-size: 0.9rem;" {
+                                                (format!("{} sats", tx.amount.msats / 1000))
+                                            }
+                                            div style="font-size: 0.7rem; color: #6c757d;" {
+                                                @let timestamp = match Utc.timestamp_opt(tx.timestamp_secs as i64, 0) {
+                                                    LocalResult::Single(dt) => dt,
+                                                    _ => Utc.timestamp_opt(0, 0).unwrap(),
+                                                };
+                                                (timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
+                                            }
+                                        }
+                                    }
+
+                                    // Optional hash/preimage, bottom row
+                                    @if let Some(hash) = &tx.payment_hash {
+                                        div style="font-family: monospace; font-size: 0.7rem; color: #6c757d; margin-top: 2px;" {
+                                            "Hash: " (hash.to_string())
+                                        }
+                                    }
+
+                                    @if let Some(preimage) = &tx.preimage {
+                                        div style="font-family: monospace; font-size: 0.7rem; color: #6c757d; margin-top: 1px;" {
+                                            "Preimage: " (preimage)
+                                        }
+                                    }
+
+                                    // Hover effect using inline JS (or move to CSS)
+                                    script {
+                                        (PreEscaped(r#"
+                                        const li = document.currentScript.parentElement;
+                                        li.addEventListener('mouseenter', () => li.style.backgroundColor = '#f8f9fa');
+                                        li.addEventListener('mouseleave', () => li.style.backgroundColor = 'white');
+                                        "#))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 pub fn payments_fragment_markup<E>(
@@ -1045,4 +1259,50 @@ where
             Html(markup.into_string())
         }
     }
+}
+
+pub async fn transactions_fragment_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Query(params): Query<HashMap<String, String>>,
+) -> Html<String>
+where
+    E: std::fmt::Display + std::fmt::Debug,
+{
+    let now = fedimint_core::time::now();
+    let end_secs = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    let start_secs = now
+        .checked_sub(std::time::Duration::from_secs(60 * 60 * 24))
+        .unwrap_or(now)
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    let parse = |key: &str| -> Option<u64> {
+        params.get(key).and_then(|s| {
+            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+                .ok()
+                .map(|dt| {
+                    let dt_utc: chrono::DateTime<Utc> = Utc.from_utc_datetime(&dt);
+                    dt_utc.timestamp() as u64
+                })
+        })
+    };
+
+    let start_secs = parse("start_secs").unwrap_or(start_secs);
+    let end_secs = parse("end_secs").unwrap_or(end_secs);
+
+    let transactions_result = state
+        .api
+        .handle_list_transactions_msg(ListTransactionsPayload {
+            start_secs,
+            end_secs,
+        })
+        .await;
+
+    Html(transactions_fragment_markup(&transactions_result, start_secs, end_secs).into_string())
 }
