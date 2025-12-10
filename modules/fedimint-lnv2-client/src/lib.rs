@@ -19,7 +19,7 @@ use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-use fedimint_api_client::api::{DynModuleApi, ServerError};
+use fedimint_api_client::api::{DynModuleApi, FederationError, ServerError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -40,7 +40,7 @@ use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
@@ -471,7 +471,24 @@ impl LightningClientModule {
         Err(SelectGatewayError::GatewaysUnresponsive)
     }
 
-    async fn routing_info(&self, gateway: &SafeUrl) -> Result<Option<RoutingInfo>, ServerError> {
+    pub async fn list_gateways(
+        &self,
+        peer: Option<PeerId>,
+    ) -> Result<Vec<SafeUrl>, FederationError> {
+        if let Some(peer) = peer {
+            self.module_api
+                .gateways_from_peer(peer)
+                .await
+                .map_err(|err| FederationError::new_one_peer(peer, "gateways_from_peer", peer, err))
+        } else {
+            self.module_api.gateways().await
+        }
+    }
+
+    pub async fn routing_info(
+        &self,
+        gateway: &SafeUrl,
+    ) -> Result<Option<RoutingInfo>, ServerError> {
         self.gateway_conn
             .routing_info(gateway.clone(), &self.federation_id)
             .await
