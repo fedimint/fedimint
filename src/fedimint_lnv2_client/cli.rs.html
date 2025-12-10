@@ -113,32 +113,29 @@
 <a href=#113 id=113 data-nosnippet>113</a>            <span class="attr">#[allow(clippy::unit_arg)]
 <a href=#114 id=114 data-nosnippet>114</a>            </span>GatewaysOpts::Map =&gt; json(lightning.update_gateway_map().<span class="kw">await</span>),
 <a href=#115 id=115 data-nosnippet>115</a>            GatewaysOpts::Select { invoice } =&gt; json(lightning.select_gateway(invoice).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>),
-<a href=#116 id=116 data-nosnippet>116</a>            GatewaysOpts::List { peer } =&gt; <span class="kw">match </span>peer {
-<a href=#117 id=117 data-nosnippet>117</a>                <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
-<a href=#118 id=118 data-nosnippet>118</a>                <span class="prelude-val">None </span>=&gt; json(lightning.module_api.gateways().<span class="kw">await</span><span class="question-mark">?</span>),
-<a href=#119 id=119 data-nosnippet>119</a>            },
-<a href=#120 id=120 data-nosnippet>120</a>            GatewaysOpts::Add { gateway } =&gt; {
-<a href=#121 id=121 data-nosnippet>121</a>                <span class="kw">let </span>auth = lightning
-<a href=#122 id=122 data-nosnippet>122</a>                    .admin_auth
-<a href=#123 id=123 data-nosnippet>123</a>                    .clone()
-<a href=#124 id=124 data-nosnippet>124</a>                    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
-<a href=#125 id=125 data-nosnippet>125</a>
-<a href=#126 id=126 data-nosnippet>126</a>                json(lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
-<a href=#127 id=127 data-nosnippet>127</a>            }
-<a href=#128 id=128 data-nosnippet>128</a>            GatewaysOpts::Remove { gateway } =&gt; {
-<a href=#129 id=129 data-nosnippet>129</a>                <span class="kw">let </span>auth = lightning
-<a href=#130 id=130 data-nosnippet>130</a>                    .admin_auth
-<a href=#131 id=131 data-nosnippet>131</a>                    .clone()
-<a href=#132 id=132 data-nosnippet>132</a>                    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
-<a href=#133 id=133 data-nosnippet>133</a>
-<a href=#134 id=134 data-nosnippet>134</a>                json(lightning.module_api.remove_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
-<a href=#135 id=135 data-nosnippet>135</a>            }
-<a href=#136 id=136 data-nosnippet>136</a>        },
-<a href=#137 id=137 data-nosnippet>137</a>    };
+<a href=#116 id=116 data-nosnippet>116</a>            GatewaysOpts::List { peer } =&gt; json(lightning.list_gateways(peer).<span class="kw">await</span><span class="question-mark">?</span>),
+<a href=#117 id=117 data-nosnippet>117</a>            GatewaysOpts::Add { gateway } =&gt; {
+<a href=#118 id=118 data-nosnippet>118</a>                <span class="kw">let </span>auth = lightning
+<a href=#119 id=119 data-nosnippet>119</a>                    .admin_auth
+<a href=#120 id=120 data-nosnippet>120</a>                    .clone()
+<a href=#121 id=121 data-nosnippet>121</a>                    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
+<a href=#122 id=122 data-nosnippet>122</a>
+<a href=#123 id=123 data-nosnippet>123</a>                json(lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
+<a href=#124 id=124 data-nosnippet>124</a>            }
+<a href=#125 id=125 data-nosnippet>125</a>            GatewaysOpts::Remove { gateway } =&gt; {
+<a href=#126 id=126 data-nosnippet>126</a>                <span class="kw">let </span>auth = lightning
+<a href=#127 id=127 data-nosnippet>127</a>                    .admin_auth
+<a href=#128 id=128 data-nosnippet>128</a>                    .clone()
+<a href=#129 id=129 data-nosnippet>129</a>                    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
+<a href=#130 id=130 data-nosnippet>130</a>
+<a href=#131 id=131 data-nosnippet>131</a>                json(lightning.module_api.remove_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
+<a href=#132 id=132 data-nosnippet>132</a>            }
+<a href=#133 id=133 data-nosnippet>133</a>        },
+<a href=#134 id=134 data-nosnippet>134</a>    };
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="prelude-val">Ok</span>(value)
+<a href=#137 id=137 data-nosnippet>137</a>}
 <a href=#138 id=138 data-nosnippet>138</a>
-<a href=#139 id=139 data-nosnippet>139</a>    <span class="prelude-val">Ok</span>(value)
-<a href=#140 id=140 data-nosnippet>140</a>}
-<a href=#141 id=141 data-nosnippet>141</a>
-<a href=#142 id=142 data-nosnippet>142</a><span class="kw">fn </span>json&lt;T: Serialize&gt;(value: T) -&gt; Value {
-<a href=#143 id=143 data-nosnippet>143</a>    serde_json::to_value(value).expect(<span class="string">"JSON serialization failed"</span>)
-<a href=#144 id=144 data-nosnippet>144</a>}</code></pre></div></section></main></body></html>
+<a href=#139 id=139 data-nosnippet>139</a><span class="kw">fn </span>json&lt;T: Serialize&gt;(value: T) -&gt; Value {
+<a href=#140 id=140 data-nosnippet>140</a>    serde_json::to_value(value).expect(<span class="string">"JSON serialization failed"</span>)
+<a href=#141 id=141 data-nosnippet>141</a>}</code></pre></div></section></main></body></html>
