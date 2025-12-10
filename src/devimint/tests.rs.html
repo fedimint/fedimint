@@ -1008,7 +1008,7 @@
 <a href=#1008 id=1008 data-nosnippet>1008</a>                )
 <a href=#1009 id=1009 data-nosnippet>1009</a>                .expect(<span class="string">"failed to parse API announcements"</span>);
 <a href=#1010 id=1010 data-nosnippet>1010</a>
-<a href=#1011 id=1011 data-nosnippet>1011</a>            <span class="kw">if </span>fed.members.len() != initial_announcements.len() {
+<a href=#1011 id=1011 data-nosnippet>1011</a>            <span class="kw">if </span>initial_announcements.len() &lt; fed.members.len() {
 <a href=#1012 id=1012 data-nosnippet>1012</a>                <span class="macro">bail!</span>(
 <a href=#1013 id=1013 data-nosnippet>1013</a>                    <span class="string">"Not all announcements ready; got: {}, expected: {}"</span>,
 <a href=#1014 id=1014 data-nosnippet>1014</a>                    initial_announcements.len(),
