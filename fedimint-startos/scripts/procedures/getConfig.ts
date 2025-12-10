@@ -1,3 +1,4 @@
+import { DEFAULT_RUST_LOG } from "../constants.ts";
 import { types as T, compat } from "../deps.ts";
 
 export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
@@ -47,6 +48,23 @@ export const getConfig: T.ExpectedExports.getConfig = compat.getConfig({
           pattern: "^https?://.*",
           "pattern-description": "Must be a valid HTTP(S) URL"
         }
+      }
+    }
+  },
+  "advanced": {
+    type: "object",
+    name: "Advanced Settings",
+    description: "Optional configuration for debugging and development",
+    nullable: false,
+    spec: {
+      "rust-log-level": {
+        type: "string",
+        name: "Rust Log Directives",
+        description: "Rust logging directives (e.g., 'info,fm=debug'). Only modify if debugging.",
+        nullable: false,
+        default: DEFAULT_RUST_LOG,
+        pattern: ".*",
+        "pattern-description": "Any valid Rust log directive string"
       }
     }
   }
