@@ -20,6 +20,7 @@ use axum_extra::extract::cookie::{Cookie, SameSite};
 use fedimint_bitcoind::BlockchainInfo;
 use fedimint_core::bitcoin::Network;
 use fedimint_core::secp256k1::serde::Deserialize;
+use fedimint_core::task::TaskGroup;
 use fedimint_gateway_common::{
     ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectFedPayload,
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
@@ -62,6 +63,7 @@ pub(crate) const PAYMENTS_FRAGMENT_ROUTE: &str = "/ui/payments/fragment";
 pub(crate) const CREATE_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/receive/bolt11";
 pub(crate) const PAY_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/send/bolt11";
 pub(crate) const TRANSACTIONS_FRAGMENT_ROUTE: &str = "/ui/transactions/fragment";
+pub(crate) const STOP_GATEWAY_ROUTE: &str = "/ui/stop";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -149,6 +151,10 @@ pub trait IAdminGateway {
         &self,
         payload: ListTransactionsPayload,
     ) -> Result<ListTransactionsResponse, Self::Error>;
+
+    async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> Result<(), Self::Error>;
+
+    fn get_task_group(&self) -> TaskGroup;
 
     fn get_password_hash(&self) -> String;
 
@@ -241,6 +247,18 @@ where
             }
         }
 
+        div class="row mt-4" {
+            div class="col-md-12 text-end" {
+                form action=(STOP_GATEWAY_ROUTE) method="post" {
+                    button class="btn btn-outline-danger" type="submit"
+                        onclick="return confirm('Are you sure you want to safely stop the gateway? The gateway will wait for outstanding payments and then shutdown.');"
+                    {
+                        "Safely Stop Gateway"
+                    }
+                }
+            }
+        }
+
         div class="row gy-4" {
             div class="col-md-6" {
                 (general::render(&gateway_info))
@@ -280,6 +298,23 @@ where
         .into_response()
 }
 
+async fn stop_gateway_handler<E>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+) -> impl IntoResponse
+where
+    E: std::fmt::Display,
+{
+    match state
+        .api
+        .handle_shutdown_msg(state.api.get_task_group())
+        .await
+    {
+        Ok(_) => redirect_success("Gateway is safely shutting down...".to_string()).into_response(),
+        Err(err) => redirect_error(format!("Failed to stop gateway: {err}")).into_response(),
+    }
+}
+
 pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
     api: DynGatewayApi<E>,
 ) -> Router {
@@ -309,6 +344,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
             TRANSACTIONS_FRAGMENT_ROUTE,
             get(transactions_fragment_handler),
         )
+        .route(STOP_GATEWAY_ROUTE, post(stop_gateway_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))

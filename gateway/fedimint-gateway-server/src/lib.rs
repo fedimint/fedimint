@@ -1278,30 +1278,6 @@ impl Gateway {
         Ok(ReceiveEcashResponse { amount })
     }
 
-    /// Instructs the gateway to shutdown, but only after all incoming payments
-    /// have been handlded.
-    pub async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
-        // Take the write lock on the state so that no additional payments are processed
-        let mut state_guard = self.state.write().await;
-        if let GatewayState::Running { lightning_context } = state_guard.clone() {
-            *state_guard = GatewayState::ShuttingDown { lightning_context };
-
-            self.federation_manager
-                .read()
-                .await
-                .wait_for_incoming_payments()
-                .await?;
-        }
-
-        let tg = task_group.clone();
-        tg.spawn("Kill Gateway", |_task_handle| async {
-            if let Err(err) = task_group.shutdown_join_all(Duration::from_secs(180)).await {
-                warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Error shutting down gateway");
-            }
-        });
-        Ok(())
-    }
-
     /// Queries the client log for payment events and returns to the user.
     pub async fn handle_payment_log_msg(
         &self,
@@ -2273,6 +2249,34 @@ impl IAdminGateway for Gateway {
             .list_transactions(payload.start_secs, payload.end_secs)
             .await?;
         Ok(response)
+    }
+
+    /// Instructs the gateway to shutdown, but only after all incoming payments
+    /// have been handled.
+    async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
+        // Take the write lock on the state so that no additional payments are processed
+        let mut state_guard = self.state.write().await;
+        if let GatewayState::Running { lightning_context } = state_guard.clone() {
+            *state_guard = GatewayState::ShuttingDown { lightning_context };
+
+            self.federation_manager
+                .read()
+                .await
+                .wait_for_incoming_payments()
+                .await?;
+        }
+
+        let tg = task_group.clone();
+        tg.spawn("Kill Gateway", |_task_handle| async {
+            if let Err(err) = task_group.shutdown_join_all(Duration::from_secs(180)).await {
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Error shutting down gateway");
+            }
+        });
+        Ok(())
+    }
+
+    fn get_task_group(&self) -> TaskGroup {
+        self.task_group.clone()
     }
 
     fn get_password_hash(&self) -> String {
