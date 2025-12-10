@@ -1143,13 +1143,10 @@ fn build_wallet_server_configs(
         &WalletInit,
         &peers,
         &fedimint_core::config::ConfigGenModuleParams::from_typed(WalletGenParams {
-            local: fedimint_core::config::EmptyGenParams {},
-            consensus: fedimint_wallet_common::config::WalletGenParamsConsensus {
-                network: bitcoin::Network::Regtest,
-                finality_delay: 10,
-                client_default_bitcoin_rpc: bitcoin_rpc.clone(),
-                fee_consensus: Default::default(),
-            },
+            network: bitcoin::Network::Regtest,
+            finality_delay: 10,
+            client_default_bitcoin_rpc: bitcoin_rpc.clone(),
+            fee_consensus: Default::default(),
         })?,
         false,
     );

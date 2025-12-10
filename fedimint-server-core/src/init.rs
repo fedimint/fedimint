@@ -8,8 +8,8 @@ use std::{any, marker};
 
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_core::config::{
-    ClientModuleConfig, CommonModuleInitRegistry, ConfigGenModuleParams, ModuleInitParams,
-    ModuleInitRegistry, ServerModuleConfig, ServerModuleConsensusConfig,
+    ClientModuleConfig, CommonModuleInitRegistry, ConfigGenModuleParams, ModuleInitRegistry,
+    ServerModuleConfig, ServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
@@ -152,7 +152,7 @@ where
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModuleInit: ModuleInit + Sized {
     type Module: ServerModule + Send + Sync;
-    type Params: ModuleInitParams;
+    type Params: serde::de::DeserializeOwned;
 
     /// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].

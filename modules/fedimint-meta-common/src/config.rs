@@ -6,28 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::MetaCommonInit;
 
 /// Parameters necessary to generate this module's configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MetaGenParams {
-    pub local: MetaGenParamsLocal,
-    pub consensus: MetaGenParamsConsensus,
-}
-
-/// Local parameters for config generation
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MetaGenParamsLocal;
-
-/// Consensus parameters for config generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MetaGenParamsConsensus;
-
-impl Default for MetaGenParams {
-    fn default() -> Self {
-        Self {
-            local: MetaGenParamsLocal,
-            consensus: MetaGenParamsConsensus,
-        }
-    }
-}
+pub struct MetaGenParams;
 
 /// Contains all the configuration for the server
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -55,9 +35,6 @@ pub struct MetaConfigPrivate;
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     MetaCommonInit,
-    MetaGenParams,
-    MetaGenParamsLocal,
-    MetaGenParamsConsensus,
     MetaConfig,
     MetaConfigPrivate,
     MetaConfigConsensus,

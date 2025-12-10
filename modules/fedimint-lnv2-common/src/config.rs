@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 pub use bitcoin::Network;
-use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -14,27 +13,18 @@ use crate::LightningCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParams {
-    pub local: EmptyGenParams,
-    pub consensus: LightningGenParamsConsensus,
+    pub fee_consensus: Option<FeeConsensus>,
+    pub network: Network,
 }
 
 impl LightningGenParams {
     #[allow(clippy::missing_panics_doc)]
     pub fn regtest() -> Self {
         Self {
-            local: EmptyGenParams {},
-            consensus: LightningGenParamsConsensus {
-                fee_consensus: Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
-                network: Network::Regtest,
-            },
+            fee_consensus: Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
+            network: Network::Regtest,
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsConsensus {
-    pub fee_consensus: Option<FeeConsensus>,
-    pub network: Network,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,9 +68,6 @@ impl std::fmt::Display for LightningClientConfig {
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     LightningCommonInit,
-    LightningGenParams,
-    EmptyGenParams,
-    LightningGenParamsConsensus,
     LightningConfig,
     LightningConfigPrivate,
     LightningConfigConsensus,

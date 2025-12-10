@@ -246,7 +246,7 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
-                            network: NetworkLegacyEncodingWrapper(params.consensus.network),
+                            network: NetworkLegacyEncodingWrapper(params.network),
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -272,7 +272,7 @@ impl ServerModuleInit for LightningInit {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: PublicKeySet::from(Commitment::from(polynomial)),
                 fee_consensus: FeeConsensus::default(),
-                network: NetworkLegacyEncodingWrapper(params.consensus.network),
+                network: NetworkLegacyEncodingWrapper(params.network),
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: SerdeSecret(SecretKeyShare::from_mut(&mut sks)),
@@ -1231,7 +1231,7 @@ mod tests {
     use assert_matches::assert_matches;
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
-    use fedimint_core::config::{ConfigGenModuleParams, EmptyGenParams};
+    use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
@@ -1243,8 +1243,7 @@ mod tests {
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, Feerate, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{
-        LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
-        Network,
+        LightningClientConfig, LightningConfig, LightningGenParams, Network,
     };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,
@@ -1315,10 +1314,7 @@ mod tests {
             &LightningInit,
             &peers,
             &ConfigGenModuleParams::from_typed(LightningGenParams {
-                local: EmptyGenParams {},
-                consensus: LightningGenParamsConsensus {
-                    network: Network::Regtest,
-                },
+                network: Network::Regtest,
             })
             .expect("valid config params"),
             false, // disable_base_fees

@@ -1,7 +1,5 @@
 use assert_matches::assert_matches;
-use fedimint_core::config::{
-    ClientModuleConfig, ConfigGenModuleParams, EmptyGenParams, ServerModuleConfig,
-};
+use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::ModuleConsensusVersion;
@@ -12,7 +10,6 @@ use fedimint_mint_common::{MintInput, Nonce, Note};
 use fedimint_server_core::{ServerModule, ServerModuleInit};
 use tbs::blind_message;
 
-use crate::common::config::MintGenParamsConsensus;
 use crate::{Mint, MintConfig, MintConfigConsensus, MintConfigPrivate, MintGenParams, MintInit};
 
 const MINTS: u16 = 5;
@@ -21,13 +18,10 @@ fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
     let peers = (0..MINTS).map(PeerId::from).collect::<Vec<_>>();
     let mint_cfg = MintInit.trusted_dealer_gen(
         &peers,
-        &ConfigGenModuleParams::from_typed(MintGenParams {
-            local: EmptyGenParams::default(),
-            consensus: MintGenParamsConsensus::new(
-                2,
-                Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
-            ),
-        })
+        &ConfigGenModuleParams::from_typed(MintGenParams::new(
+            2,
+            Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
+        ))
         .unwrap(),
         false,
     );

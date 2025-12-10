@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use bitcoin::Network;
 use bitcoin::secp256k1::SecretKey;
-use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -23,33 +22,6 @@ const DEFAULT_DEPOSIT_FEE_SATS: u64 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
-    pub local: EmptyGenParams,
-    pub consensus: WalletGenParamsConsensus,
-}
-
-impl WalletGenParams {
-    pub fn regtest() -> WalletGenParams {
-        WalletGenParams {
-            local: EmptyGenParams {},
-            consensus: WalletGenParamsConsensus {
-                network: Network::Regtest,
-                finality_delay: 10,
-                client_default_bitcoin_rpc: BitcoinRpcConfig {
-                    kind: "esplora".to_string(),
-                    url: SafeUrl::parse(&format!(
-                        "http://127.0.0.1:{}/",
-                        std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
-                    ))
-                    .expect("Failed to parse default esplora server"),
-                },
-                fee_consensus: FeeConsensus::default(),
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletGenParamsConsensus {
     pub network: Network,
     pub finality_delay: u32,
     /// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
@@ -59,6 +31,24 @@ pub struct WalletGenParamsConsensus {
     ///
     /// Deposit fees in particular are a protection against dust attacks.
     pub fee_consensus: FeeConsensus,
+}
+
+impl WalletGenParams {
+    pub fn regtest() -> WalletGenParams {
+        WalletGenParams {
+            network: Network::Regtest,
+            finality_delay: 10,
+            client_default_bitcoin_rpc: BitcoinRpcConfig {
+                kind: "esplora".to_string(),
+                url: SafeUrl::parse(&format!(
+                    "http://127.0.0.1:{}/",
+                    std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
+                ))
+                .expect("Failed to parse default esplora server"),
+            },
+            fee_consensus: FeeConsensus::default(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -190,9 +180,6 @@ impl WalletConfig {
 
 plugin_types_trait_impl_config!(
     WalletCommonInit,
-    WalletGenParams,
-    EmptyGenParams,
-    WalletGenParamsConsensus,
     WalletConfig,
     WalletConfigPrivate,
     WalletConfigConsensus,

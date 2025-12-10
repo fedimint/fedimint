@@ -4239,6 +4239,7 @@ dependencies = [
  "fs-lock",
  "lightning-invoice",
  "rand 0.8.5",
+ "serde",
  "tempfile",
  "tokio",
  "tokio-rustls 0.26.2",

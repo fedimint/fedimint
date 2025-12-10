@@ -4,7 +4,6 @@ use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
-use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::module::{AmountUnit, Amounts};
@@ -22,7 +21,7 @@ use fedimint_mint_client::{
     SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState,
     SpendableNoteUndecoded,
 };
-use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
+use fedimint_mint_common::config::{FeeConsensus, MintGenParams};
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
@@ -37,14 +36,10 @@ fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(
         MintClientInit,
         MintInit,
-        MintGenParams {
-            consensus: MintGenParamsConsensus::new(
-                2,
-                Some(FeeConsensus::new(1_000).expect("Relative fee is within range")),
-            ),
-
-            local: EmptyGenParams {},
-        },
+        MintGenParams::new(
+            2,
+            Some(FeeConsensus::new(1_000).expect("Relative fee is within range")),
+        ),
     );
 
     fixtures.with_module(DummyClientInit, DummyInit, DummyGenParams::default())

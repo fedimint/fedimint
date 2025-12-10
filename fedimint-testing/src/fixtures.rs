@@ -8,7 +8,7 @@ use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
-use fedimint_core::config::{ModuleInitParams, ServerModuleConfigGenParamsRegistry};
+use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -27,6 +27,7 @@ use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use fedimint_testing_core::test_dir;
+use serde::Serialize;
 
 use crate::btc::BitcoinTest;
 use crate::btc::mock::FakeBitcoinTest;
@@ -60,7 +61,7 @@ impl Fixtures {
     pub fn new_primary(
         client: impl IClientModuleInit + 'static,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
-        params: impl ModuleInitParams,
+        params: impl Serialize,
     ) -> Self {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
@@ -160,7 +161,7 @@ impl Fixtures {
         mut self,
         client: impl IClientModuleInit + 'static,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
-        params: impl ModuleInitParams,
+        params: impl Serialize,
     ) -> Self {
         self.params
             .attach_config_gen_params_by_id(self.id, server.module_kind(), params);
@@ -174,7 +175,7 @@ impl Fixtures {
     pub fn with_server_only_module(
         mut self,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
-        params: impl ModuleInitParams,
+        params: impl Serialize,
     ) -> Self {
         self.params
             .attach_config_gen_params_by_id(self.id, server.module_kind(), params);

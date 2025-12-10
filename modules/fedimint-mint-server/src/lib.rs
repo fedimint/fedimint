@@ -160,7 +160,6 @@ impl ServerModuleInit for MintInit {
         let params = self.parse_params(params).unwrap();
 
         let tbs_keys = params
-            .consensus
             .gen_denominations()
             .iter()
             .map(|&amount| {
@@ -179,7 +178,6 @@ impl ServerModuleInit for MintInit {
                             .iter()
                             .map(|&key_peer| {
                                 let keys = params
-                                    .consensus
                                     .gen_denominations()
                                     .iter()
                                     .map(|amount| {
@@ -192,7 +190,7 @@ impl ServerModuleInit for MintInit {
                         fee_consensus: if disable_base_fees {
                             FeeConsensus::zero()
                         } else {
-                            params.consensus.fee_consensus().unwrap_or_else(|| {
+                            params.fee_consensus().unwrap_or_else(|| {
                                 FeeConsensus::new(0).expect("Relative fee is within range")
                             })
                         },
@@ -200,7 +198,6 @@ impl ServerModuleInit for MintInit {
                     },
                     private: MintConfigPrivate {
                         tbs_sks: params
-                            .consensus
                             .gen_denominations()
                             .iter()
                             .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
@@ -227,7 +224,7 @@ impl ServerModuleInit for MintInit {
 
         let mut amount_keys = HashMap::new();
 
-        for amount in params.consensus.gen_denominations() {
+        for amount in params.gen_denominations() {
             amount_keys.insert(amount, peers.run_dkg_g2().await?);
         }
 
@@ -253,14 +250,11 @@ impl ServerModuleInit for MintInit {
                         (peer, pks)
                     })
                     .collect(),
-                fee_consensus: params
-                    .consensus
-                    .fee_consensus()
-                    .unwrap_or(if disable_base_fees {
-                        FeeConsensus::zero()
-                    } else {
-                        FeeConsensus::new(0).expect("Relative fee is within range")
-                    }),
+                fee_consensus: params.fee_consensus().unwrap_or(if disable_base_fees {
+                    FeeConsensus::zero()
+                } else {
+                    FeeConsensus::new(0).expect("Relative fee is within range")
+                }),
                 max_notes_per_denomination: DEFAULT_MAX_NOTES_PER_DENOMINATION,
             },
         };
