@@ -41,6 +41,7 @@ strum_macros = { workspace = true }
 tbs = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true

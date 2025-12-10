@@ -28,7 +28,7 @@ pub struct UploadSpendBookBatchRequest {
 }
 
 /// API: Response from uploading spend book batch
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UploadSpendBookBatchResponse {
     pub new_entries: u64,
     pub total_entries_uploaded: u64,

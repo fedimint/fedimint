@@ -57,6 +57,14 @@ impl fmt::Display for TransferId {
     }
 }
 
+impl std::str::FromStr for TransferId {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u64>().map(TransferId)
+    }
+}
+
 /// Hash of the spend book of the liability transfer
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct SpendBookHash(pub sha256::Hash);

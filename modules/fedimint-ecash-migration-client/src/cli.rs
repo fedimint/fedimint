@@ -4,6 +4,7 @@ use std::{ffi, iter};
 use anyhow::Context as _;
 use clap::Parser;
 use fedimint_core::core::OperationId;
+use fedimint_ecash_migration_common::TransferId;
 use futures::StreamExt;
 use serde::Serialize;
 
@@ -43,6 +44,44 @@ enum Opts {
         /// started.
         operation_id: OperationId,
     },
+
+    /// Upload the origin federation's keyset to associate with a transfer.
+    ///
+    /// This must be done after the transfer is registered but before
+    /// activation.
+    UploadKeyset {
+        /// The transfer ID to associate the keyset with.
+        transfer_id: TransferId,
+
+        /// Path to the JSON file containing the origin federation's client
+        /// config. This contains the public keys needed to verify origin
+        /// federation ecash.
+        ///
+        /// The config can be dumped in JSON format using `fedimint-cli
+        /// --data-dir <data-dir> config` on the origin federation.
+        #[arg(long)]
+        origin_config: PathBuf,
+    },
+
+    /// Upload the spend book entries in batches to the destination federation.
+    ///
+    /// This must be done after the transfer is registered but before
+    /// activation. The spend book can be uploaded in multiple sessions; the
+    /// server tracks progress.
+    UploadSpendBook {
+        /// The transfer ID to upload the spend book for.
+        transfer_id: TransferId,
+
+        /// Path to a file containing the sorted spend book entries from the
+        /// origin federation. Each line should contain a hex-encoded nonce
+        /// that has been spent in the origin federation.
+        #[arg(long)]
+        spend_book: PathBuf,
+
+        /// Number of entries to upload per batch.
+        #[arg(long, default_value = "10000")]
+        batch_size: usize,
+    },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -60,6 +99,15 @@ pub(crate) async fn handle_cli_command(
         Opts::AwaitRegisterTransfer { operation_id } => {
             await_register_transfer(module, operation_id).await
         }
+        Opts::UploadKeyset {
+            transfer_id,
+            origin_config,
+        } => upload_keyset(module, transfer_id, origin_config).await,
+        Opts::UploadSpendBook {
+            transfer_id,
+            spend_book,
+            batch_size,
+        } => upload_spend_book(module, transfer_id, spend_book, batch_size).await,
     }
 }
 
@@ -114,5 +162,38 @@ async fn await_register_transfer(
     Ok(serde_json::json!({
         "operation_id": operation_id,
         "transfer_id": transfer_id,
+    }))
+}
+
+async fn upload_keyset(
+    module: &EcashMigrationClientModule,
+    transfer_id: TransferId,
+    origin_config_path: PathBuf,
+) -> anyhow::Result<serde_json::Value> {
+    module
+        .upload_keyset(transfer_id, &origin_config_path)
+        .await
+        .context("Failed to upload keyset")?;
+
+    Ok(serde_json::json!({
+        "transfer_id": transfer_id,
+    }))
+}
+
+async fn upload_spend_book(
+    module: &EcashMigrationClientModule,
+    transfer_id: TransferId,
+    spend_book_path: PathBuf,
+    batch_size: usize,
+) -> anyhow::Result<serde_json::Value> {
+    let progress = module
+        .upload_spend_book(transfer_id, &spend_book_path, batch_size)
+        .await
+        .context("Failed to upload spend book")?;
+
+    Ok(serde_json::json!({
+        "transfer_id": transfer_id,
+        "total_uploaded": progress.total_uploaded,
+        "batches_uploaded": progress.batches_uploaded,
     }))
 }

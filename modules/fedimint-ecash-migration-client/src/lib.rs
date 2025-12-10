@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::pin::Pin;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use async_stream::stream;
@@ -26,14 +27,20 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::{All, Secp256k1};
+use fedimint_core::util::backoff_util::custom_backoff;
+use fedimint_core::util::retry;
 use fedimint_core::{Amount, OutPoint, Tiered, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_ecash_migration_common as common;
+use fedimint_ecash_migration_common::api::{
+    UPLOAD_KEY_SET_ENDPOINT, UPLOAD_SPEND_BOOK_BATCH_ENDPOINT, UploadKeySetRequest,
+    UploadSpendBookBatchRequest, UploadSpendBookBatchResponse,
+};
 use fedimint_ecash_migration_common::config::EcashMigrationClientConfig;
 use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdKey;
 use fedimint_ecash_migration_common::{
     EcashMigrationCommonInit, EcashMigrationCreateTransferOutput, EcashMigrationModuleTypes,
-    EcashMigrationOutput, KeySetHash, SpendBookHash, hash_and_count_spend_book,
+    EcashMigrationOutput, KeySetHash, SpendBookHash, TransferId, hash_and_count_spend_book,
 };
 use fedimint_mint_common::config::MintClientConfig;
 use fedimint_mint_common::{MintCommonInit, Nonce};
@@ -46,6 +53,7 @@ use states::{
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tracing::info;
 
 pub mod api;
 #[cfg(feature = "cli")]
@@ -462,6 +470,181 @@ impl EcashMigrationClientModule {
             .child_key(CONTROLLER_KEY_CHILD_ID)
             .to_secp_key(&secp)
     }
+
+    /// Upload the origin federation's keyset to the destination federation.
+    ///
+    /// This reads the keyset from the origin config file and uploads it
+    /// to associate with the given transfer. The keyset is uploaded to all
+    /// federation peers.
+    ///
+    /// # Errors
+    /// - If the origin config file cannot be read or parsed.
+    /// - If uploading to any peer fails.
+    pub async fn upload_keyset(
+        &self,
+        transfer_id: TransferId,
+        origin_config_path: impl AsRef<Path>,
+    ) -> anyhow::Result<()> {
+        use fedimint_api_client::api::FederationApiExt as _;
+        use fedimint_core::module::ApiRequestErased;
+
+        let tier_keys = read_origin_keyset(origin_config_path).await?;
+
+        let request = UploadKeySetRequest {
+            transfer_id,
+            tier_keys,
+        };
+
+        // Upload to all peers
+        let params = ApiRequestErased::new(request);
+        let results = futures::future::join_all(self.module_api.all_peers().iter().map(|&peer| {
+            let params = params.clone();
+            async move {
+                (
+                    peer,
+                    self.module_api
+                        .request_single_peer::<()>(
+                            UPLOAD_KEY_SET_ENDPOINT.to_string(),
+                            params,
+                            peer,
+                        )
+                        .await,
+                )
+            }
+        }))
+        .await;
+
+        // Check for errors
+        let errors: Vec<_> = results
+            .into_iter()
+            .filter_map(|(peer, result)| result.err().map(|e| (peer, e)))
+            .collect();
+
+        if !errors.is_empty() {
+            anyhow::bail!(
+                "Failed to upload keyset to peers: {:?}",
+                errors
+                    .into_iter()
+                    .map(|(p, e)| format!("{p}: {e}"))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Upload the spend book entries in batches to the destination federation.
+    ///
+    /// This streams the spend book file and uploads entries in batches of
+    /// `batch_size` to avoid memory issues with large spend books.
+    /// Each batch is uploaded to all federation peers.
+    ///
+    /// Returns the total number of entries uploaded.
+    ///
+    /// # Errors
+    /// - If opening the spend book file fails.
+    /// - If uploading to any peer fails.
+    ///
+    /// # Panics
+    /// - If an error occurs while reading the spend book file.
+    pub async fn upload_spend_book(
+        &self,
+        transfer_id: TransferId,
+        spend_book_path: impl AsRef<Path>,
+        batch_size: usize,
+    ) -> anyhow::Result<UploadSpendBookProgress> {
+        use fedimint_api_client::api::FederationApiExt as _;
+        use fedimint_core::module::ApiRequestErased;
+
+        let mut nonce_stream = stream_nonces_from_file(spend_book_path).await?;
+
+        let mut total_uploaded = 0u64;
+        let mut batches_uploaded = 0u64;
+
+        loop {
+            let batch = nonce_stream
+                .by_ref()
+                .take(batch_size)
+                .collect::<Vec<_>>()
+                .await;
+            let batch_len = batch.len() as u64;
+
+            if batch.is_empty() {
+                break;
+            }
+
+            info!("Uploading spend book batch {batches_uploaded} with {batch_len} entries");
+
+            let request = UploadSpendBookBatchRequest {
+                transfer_id,
+                entries: batch,
+            };
+
+            // Upload batch to all peers
+            let params = ApiRequestErased::new(request);
+            let results =
+                futures::future::join_all(self.module_api.all_peers().iter().map(|&peer| {
+                    let params = params.clone();
+                    async move {
+                        let res = retry(
+                            format!("Upload spend book batch {batches_uploaded} to peer {peer}"),
+                            custom_backoff(
+                                Duration::from_millis(50),
+                                Duration::from_secs(10),
+                                Some(10),
+                            ),
+                            || async {
+                                self.module_api
+                                    .request_single_peer::<UploadSpendBookBatchResponse>(
+                                        UPLOAD_SPEND_BOOK_BATCH_ENDPOINT.to_string(),
+                                        params.clone(),
+                                        peer,
+                                    )
+                                    .await?;
+                                Ok(())
+                            },
+                        )
+                        .await;
+
+                        (peer, res)
+                    }
+                }))
+                .await;
+
+            // Check for errors
+            let errors: Vec<_> = results
+                .iter()
+                .filter_map(|(peer, result)| result.as_ref().err().map(|e| (*peer, e)))
+                .collect();
+
+            if !errors.is_empty() {
+                anyhow::bail!(
+                    "Failed to upload spend book batch to peers: {:?}",
+                    errors
+                        .into_iter()
+                        .map(|(p, e)| format!("{p}: {e}"))
+                        .collect::<Vec<_>>()
+                );
+            }
+
+            total_uploaded += batch_len as u64;
+            batches_uploaded += 1;
+        }
+
+        Ok(UploadSpendBookProgress {
+            total_uploaded,
+            batches_uploaded,
+        })
+    }
+}
+
+/// Progress information from uploading a spend book.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadSpendBookProgress {
+    /// Total number of entries uploaded to the server.
+    pub total_uploaded: u64,
+    /// Number of batches sent.
+    pub batches_uploaded: u64,
 }
 
 #[derive(Debug, Clone)]

@@ -472,7 +472,6 @@ impl ServerModule for EcashMigration {
                 UPLOAD_KEY_SET_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &EcashMigration, context, request: UploadKeySetRequest| -> () {
-                    check_auth(context, request.transfer_id, &request).await?;
                     module.upload_key_set(&mut context.dbtx().into_nc(), request.transfer_id, request.tier_keys)
                         .await
                 }
@@ -481,7 +480,6 @@ impl ServerModule for EcashMigration {
                 UPLOAD_SPEND_BOOK_BATCH_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &EcashMigration, context, request: UploadSpendBookBatchRequest| -> UploadSpendBookBatchResponse {
-                    check_auth(context, request.transfer_id, &request).await?;
                     module.upload_spend_book_batch(&mut context.dbtx().into_nc(), request.transfer_id, request.entries)
                         .await
                 }
