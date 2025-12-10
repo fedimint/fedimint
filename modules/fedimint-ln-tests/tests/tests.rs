@@ -53,7 +53,7 @@ pub async fn ln_operation(
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
-    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
+    let ln_params = LightningGenParams::regtest();
     fixtures.with_module(
         LightningClientInit {
             gateway_conn: Some(Arc::new(MockGatewayConnection)),

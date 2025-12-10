@@ -82,7 +82,7 @@ fn fixtures() -> Fixtures {
     info!(target: LOG_TEST, "Setting up fixtures");
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
         .with_server_only_module(UnknownInit, UnknownGenParams::default());
-    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
+    let ln_params = LightningGenParams::regtest();
     let fixtures = fixtures.with_module(
         LightningClientInit {
             gateway_conn: Some(Arc::new(MockGatewayConnection)),
@@ -91,12 +91,10 @@ fn fixtures() -> Fixtures {
         ln_params,
     );
 
-    let bitcoin_server = fixtures.bitcoin_server();
-
     fixtures.with_module(
         fedimint_lnv2_client::LightningClientInit::default(),
         fedimint_lnv2_server::LightningInit,
-        fedimint_lnv2_common::config::LightningGenParams::regtest(bitcoin_server),
+        fedimint_lnv2_common::config::LightningGenParams::regtest(),
     )
 }
 

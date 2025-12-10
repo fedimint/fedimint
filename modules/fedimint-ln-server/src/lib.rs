@@ -1231,7 +1231,7 @@ mod tests {
     use assert_matches::assert_matches;
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
-    use fedimint_core::config::ConfigGenModuleParams;
+    use fedimint_core::config::{ConfigGenModuleParams, EmptyGenParams};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
@@ -1244,7 +1244,7 @@ mod tests {
     use fedimint_core::{Amount, Feerate, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
-        LightningGenParamsLocal, Network,
+        Network,
     };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,
@@ -1315,12 +1315,7 @@ mod tests {
             &LightningInit,
             &peers,
             &ConfigGenModuleParams::from_typed(LightningGenParams {
-                local: LightningGenParamsLocal {
-                    bitcoin_rpc: BitcoinRpcConfig {
-                        kind: "bitcoind".to_string(),
-                        url: "http://localhost:18332".parse().unwrap(),
-                    },
-                },
+                local: EmptyGenParams {},
                 consensus: LightningGenParamsConsensus {
                     network: Network::Regtest,
                 },

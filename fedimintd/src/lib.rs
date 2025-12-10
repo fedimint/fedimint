@@ -19,17 +19,15 @@ use clap::{ArgGroup, Parser};
 use fedimint_core::config::{EmptyGenParams, ServerModuleConfigGenParamsRegistry};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
-    BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV,
-    FM_USE_UNKNOWN_MODULE_ENV, is_env_var_set,
+    FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV,
+    is_env_var_set,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
 use fedimint_core::{default_esplora_server, timing};
-use fedimint_ln_common::config::{
-    LightningGenParams, LightningGenParamsConsensus, LightningGenParamsLocal,
-};
+use fedimint_ln_common::config::{LightningGenParams, LightningGenParamsConsensus};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, TracingSetup};
 use fedimint_meta_server::{MetaGenParams, MetaInit};
@@ -47,9 +45,7 @@ use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
-use fedimint_wallet_server::common::config::{
-    WalletGenParams, WalletGenParamsConsensus, WalletGenParamsLocal,
-};
+use fedimint_wallet_server::common::config::{WalletGenParams, WalletGenParamsConsensus};
 use fedimintd_envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
@@ -429,18 +425,11 @@ pub fn default_modules(
     let mut server_gens = ServerModuleInitRegistry::new();
     let mut server_gen_params = ServerModuleConfigGenParamsRegistry::default();
 
-    let bitcoin_rpc_config = BitcoinRpcConfig {
-        kind: "bitcoind".to_string(),
-        url: "http://unused_dummy.xyz".parse().unwrap(),
-    };
-
     server_gens.attach(LightningInit);
     server_gen_params.attach_config_gen_params(
         LightningInit::kind(),
         LightningGenParams {
-            local: LightningGenParamsLocal {
-                bitcoin_rpc: bitcoin_rpc_config.clone(),
-            },
+            local: EmptyGenParams {},
             consensus: LightningGenParamsConsensus { network },
         },
     );
@@ -458,9 +447,7 @@ pub fn default_modules(
     server_gen_params.attach_config_gen_params(
         WalletInit::kind(),
         WalletGenParams {
-            local: WalletGenParamsLocal {
-                bitcoin_rpc: bitcoin_rpc_config.clone(),
-            },
+            local: EmptyGenParams {},
             consensus: WalletGenParamsConsensus {
                 network,
                 finality_delay: default_finality_delay(network),
@@ -481,9 +468,7 @@ pub fn default_modules(
         server_gen_params.attach_config_gen_params(
             fedimint_lnv2_server::LightningInit::kind(),
             fedimint_lnv2_common::config::LightningGenParams {
-                local: fedimint_lnv2_common::config::LightningGenParamsLocal {
-                    bitcoin_rpc: bitcoin_rpc_config.clone(),
-                },
+                local: EmptyGenParams {},
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
                     fee_consensus: None,
                     network,

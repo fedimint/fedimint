@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use bitcoin::Network;
 use bitcoin::secp256k1::SecretKey;
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -22,14 +23,14 @@ const DEFAULT_DEPOSIT_FEE_SATS: u64 = 1000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParams {
-    pub local: WalletGenParamsLocal,
+    pub local: EmptyGenParams,
     pub consensus: WalletGenParamsConsensus,
 }
 
 impl WalletGenParams {
-    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> WalletGenParams {
+    pub fn regtest() -> WalletGenParams {
         WalletGenParams {
-            local: WalletGenParamsLocal { bitcoin_rpc },
+            local: EmptyGenParams {},
             consensus: WalletGenParamsConsensus {
                 network: Network::Regtest,
                 finality_delay: 10,
@@ -45,11 +46,6 @@ impl WalletGenParams {
             },
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletGenParamsLocal {
-    pub bitcoin_rpc: BitcoinRpcConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -195,7 +191,7 @@ impl WalletConfig {
 plugin_types_trait_impl_config!(
     WalletCommonInit,
     WalletGenParams,
-    WalletGenParamsLocal,
+    EmptyGenParams,
     WalletGenParamsConsensus,
     WalletConfig,
     WalletConfigPrivate,

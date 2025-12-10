@@ -1,4 +1,5 @@
 pub use bitcoin::Network;
+use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -12,14 +13,14 @@ use crate::LightningCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParams {
-    pub local: LightningGenParamsLocal,
+    pub local: EmptyGenParams,
     pub consensus: LightningGenParamsConsensus,
 }
 
 impl LightningGenParams {
-    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
+    pub fn regtest() -> Self {
         Self {
-            local: LightningGenParamsLocal { bitcoin_rpc },
+            local: EmptyGenParams {},
             consensus: LightningGenParamsConsensus {
                 network: Network::Regtest,
             },
@@ -30,11 +31,6 @@ impl LightningGenParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParamsConsensus {
     pub network: Network,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsLocal {
-    pub bitcoin_rpc: BitcoinRpcConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +89,7 @@ impl std::fmt::Display for LightningClientConfig {
 plugin_types_trait_impl_config!(
     LightningCommonInit,
     LightningGenParams,
-    LightningGenParamsLocal,
+    EmptyGenParams,
     LightningGenParamsConsensus,
     LightningConfig,
     LightningConfigPrivate,
