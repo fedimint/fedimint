@@ -101,7 +101,7 @@ where
         }
 
         div class="card h-100" {
-            div class="card-header dashboard-header" { "Lightning" }
+            div class="card-header dashboard-header" { "Lightning Node" }
             div class="card-body" {
 
                 // --- TABS ---
