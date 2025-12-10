@@ -472,9 +472,37 @@ impl ClientConfig {
 #[derive(Clone, Debug)]
 pub struct ModuleInitRegistry<M>(BTreeMap<ModuleKind, M>);
 
+/// Legacy module ordering used before alphabetical ordering was introduced.
+/// This ordering was: ln, mint, wallet, lnv2, meta, unknown
+const LEGACY_MODULE_ORDER: &[&str] = &["ln", "mint", "wallet", "lnv2", "meta", "unknown"];
+
 impl<M> ModuleInitRegistry<M> {
     pub fn iter(&self) -> impl Iterator<Item = (&ModuleKind, &M)> {
         self.0.iter()
+    }
+
+    /// Iterate over modules in the legacy insertion order for backwards
+    /// compatibility. Modules not in the legacy order list are appended
+    /// at the end in alphabetical order.
+    pub fn iter_legacy_order(&self) -> Vec<(&ModuleKind, &M)> {
+        let mut ordered: Vec<(&ModuleKind, &M)> = Vec::new();
+
+        // First add modules in legacy order
+        for kind_str in LEGACY_MODULE_ORDER {
+            let kind = ModuleKind::from_static_str(kind_str);
+            if let Some((k, m)) = self.0.get_key_value(&kind) {
+                ordered.push((k, m));
+            }
+        }
+
+        // Then add any remaining modules in alphabetical order
+        for (kind, module) in &self.0 {
+            if !LEGACY_MODULE_ORDER.contains(&kind.as_str()) {
+                ordered.push((kind, module));
+            }
+        }
+
+        ordered
     }
 }
 

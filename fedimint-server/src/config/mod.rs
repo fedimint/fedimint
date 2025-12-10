@@ -10,7 +10,7 @@ pub use fedimint_core::config::{
     PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
@@ -495,8 +495,16 @@ impl ServerConfig {
             disable_base_fees: peer0.disable_base_fees,
         };
 
-        let module_configs: BTreeMap<_, _> = registry
-            .iter()
+        // Use legacy module ordering for backwards compatibility tests
+        let use_legacy_order = is_env_var_set("FM_BACKWARDS_COMPATIBILITY_TEST");
+        let module_iter: Vec<_> = if use_legacy_order {
+            registry.iter_legacy_order()
+        } else {
+            registry.iter().collect()
+        };
+
+        let module_configs: BTreeMap<_, _> = module_iter
+            .into_iter()
             .enumerate()
             .map(|(module_id, (_kind, module_init))| {
                 let module_id = module_id as ModuleInstanceId;
@@ -641,9 +649,17 @@ impl ServerConfig {
             disable_base_fees: params.disable_base_fees,
         };
 
+        // Use legacy module ordering for backwards compatibility tests
+        let use_legacy_order = is_env_var_set("FM_BACKWARDS_COMPATIBILITY_TEST");
+        let module_iter: Vec<_> = if use_legacy_order {
+            registry.iter_legacy_order()
+        } else {
+            registry.iter().collect()
+        };
+
         let mut module_cfgs = BTreeMap::new();
 
-        for (module_id, (kind, module_init)) in registry.iter().enumerate() {
+        for (module_id, (kind, module_init)) in module_iter.into_iter().enumerate() {
             let module_id = module_id as ModuleInstanceId;
 
             info!(
