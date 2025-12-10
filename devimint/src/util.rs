@@ -11,8 +11,7 @@ use std::{env, unreachable};
 use anyhow::{Context, Result, anyhow, bail, format_err};
 use fedimint_api_client::api::StatusResponse;
 use fedimint_core::PeerId;
-use fedimint_core::admin_client::{PeerServerParamsLegacy, SetupStatus};
-use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
+use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self, block_in_place, block_on};
@@ -20,7 +19,6 @@ use fedimint_core::time::now;
 use fedimint_core::util::FmtCompactAnyhow as _;
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_logging::LOG_DEVIMINT;
-use legacy_types::ConfigGenParamsResponseLegacy;
 use semver::Version;
 use serde::de::DeserializeOwned;
 use tokio::fs::OpenOptions;
@@ -834,143 +832,6 @@ impl FedimintCli {
         .await
     }
 
-    pub async fn set_config_gen_params(
-        self,
-        auth: &ApiAuth,
-        endpoint: &str,
-        meta: BTreeMap<String, String>,
-        server_gen_params: ServerModuleConfigGenParamsRegistry,
-    ) -> Result<()> {
-        cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "set-config-gen-params",
-            "--meta-json",
-            serde_json::to_string(&meta)?,
-            "--modules-json",
-            serde_json::to_string(&server_gen_params)?
-        )
-        .run()
-        .await
-    }
-
-    pub async fn consensus_config_gen_params_legacy(
-        self,
-        endpoint: &str,
-    ) -> Result<ConfigGenParamsResponseLegacy> {
-        let result = cmd!(
-            self,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "consensus-config-gen-params"
-        )
-        .out_json()
-        .await
-        .context("non-json returned for consensus_config_gen_params")?;
-        Ok(serde_json::from_value(result)?)
-    }
-
-    pub async fn set_config_gen_connections(
-        self,
-        auth: &ApiAuth,
-        endpoint: &str,
-        our_name: &str,
-        leader_api_url: Option<&str>,
-    ) -> Result<()> {
-        // FIXME: this should be a single command
-        if let Some(leader_api_url) = leader_api_url {
-            cmd!(
-                self,
-                "--password",
-                &auth.0,
-                "admin",
-                "dkg",
-                "--ws",
-                endpoint,
-                "set-config-gen-connections",
-                "--our-name",
-                our_name,
-                "--leader-api-url",
-                leader_api_url,
-            )
-            .run()
-            .await
-        } else {
-            cmd!(
-                self,
-                "--password",
-                &auth.0,
-                "admin",
-                "dkg",
-                "--ws",
-                endpoint,
-                "set-config-gen-connections",
-                "--our-name",
-                our_name,
-            )
-            .run()
-            .await
-        }
-    }
-
-    pub async fn get_config_gen_peers(self, endpoint: &str) -> Result<Vec<PeerServerParamsLegacy>> {
-        let result = cmd!(
-            self,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "get-config-gen-peers"
-        )
-        .out_json()
-        .await
-        .context("non-json returned for get_config_gen_peers")?;
-        Ok(serde_json::from_value(result)?)
-    }
-
-    pub async fn run_dkg(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
-        cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "run-dkg"
-        )
-        .run()
-        .await
-    }
-
-    pub async fn get_verify_config_hash(
-        self,
-        auth: &ApiAuth,
-        endpoint: &str,
-    ) -> Result<BTreeMap<PeerId, bitcoincore_rpc::bitcoin::hashes::sha256::Hash>> {
-        let result = cmd!(
-            self,
-            "--password",
-            &auth.0,
-            "admin",
-            "dkg",
-            "--ws",
-            endpoint,
-            "get-verify-config-hash"
-        )
-        .out_json()
-        .await
-        .context("non-json returned for get_verify_config_hash")?;
-        Ok(serde_json::from_value(result)?)
-    }
-
     pub async fn shutdown(self, auth: &ApiAuth, our_id: u64, session_count: u64) -> Result<()> {
         cmd!(
             self,
@@ -1264,34 +1125,4 @@ fn test_parse_clap_version() -> Result<()> {
     assert_eq!(expected_version, parse_clap_version(version_str));
 
     Ok(())
-}
-
-mod legacy_types {
-    use std::collections::BTreeMap;
-
-    use fedimint_core::PeerId;
-    use fedimint_core::admin_client::PeerServerParamsLegacy;
-    use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
-    use serde::{Deserialize, Serialize};
-
-    /// The config gen params that need to be in consensus, sent by the config
-    /// gen leader to all the other guardians
-    #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-    pub struct ConfigGenParamsConsensusLegacy {
-        /// Endpoints of all servers
-        pub peers: BTreeMap<PeerId, PeerServerParamsLegacy>,
-        /// Guardian-defined key-value pairs that will be passed to the client
-        pub meta: BTreeMap<String, String>,
-        /// Module init params (also contains local params from us)
-        pub modules: ServerModuleConfigGenParamsRegistry,
-    }
-
-    /// The config gen params response which includes our peer id
-    #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-    pub struct ConfigGenParamsResponseLegacy {
-        /// The same for all peers
-        pub consensus: ConfigGenParamsConsensusLegacy,
-        /// Our id (might change if new peers join)
-        pub our_current_id: PeerId,
-    }
 }
