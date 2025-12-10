@@ -17,7 +17,6 @@ use fedimint_logging::LOG_CORE;
 use hex::FromHex;
 use secp256k1::PublicKey;
 use serde::de::DeserializeOwned;
-use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
 use threshold_crypto::{G1Projective, G2Projective};
@@ -530,34 +529,6 @@ impl Eq for ServerModuleConfigGenParamsRegistry {}
 impl PartialEq for ServerModuleConfigGenParamsRegistry {
     fn eq(&self, other: &Self) -> bool {
         self.iter_modules().eq(other.iter_modules())
-    }
-}
-
-impl Serialize for ServerModuleConfigGenParamsRegistry {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let modules: Vec<_> = self.iter_modules().collect();
-        let mut serializer = serializer.serialize_map(Some(modules.len()))?;
-        for (id, kind, params) in modules {
-            serializer.serialize_key(&id)?;
-            serializer.serialize_value(&(kind.clone(), params.clone()))?;
-        }
-        serializer.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for ServerModuleConfigGenParamsRegistry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let json: BTreeMap<ModuleInstanceId, (ModuleKind, ConfigGenModuleParams)> =
-            Deserialize::deserialize(deserializer)?;
-        let mut params = BTreeMap::new();
-
-        for (id, (kind, module)) in json {
-            params.insert(id, (kind, module));
-        }
-        Ok(Self::from(params))
     }
 }
 
