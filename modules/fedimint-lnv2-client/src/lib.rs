@@ -19,7 +19,7 @@ use async_stream::stream;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
-use fedimint_api_client::api::{DynModuleApi, ServerError};
+use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -40,7 +40,7 @@ use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
@@ -434,6 +434,10 @@ impl LightningClientModule {
         }
     }
 
+    /// Selects an available gateway by querying the federation's registered
+    /// gateways, checking if one of them match the invoice's payee public
+    /// key, then queries the gateway for `RoutingInfo` to determine if it is
+    /// online.
     pub async fn select_gateway(
         &self,
         invoice: Option<Bolt11Invoice>,
@@ -471,10 +475,35 @@ impl LightningClientModule {
         Err(SelectGatewayError::GatewaysUnresponsive)
     }
 
-    async fn routing_info(&self, gateway: &SafeUrl) -> Result<Option<RoutingInfo>, ServerError> {
+    /// Sends a request to each peer for their registered gateway list and
+    /// returns a `Vec<SafeUrl` of all registered gateways to the client.
+    pub async fn list_gateways(
+        &self,
+        peer: Option<PeerId>,
+    ) -> Result<Vec<SafeUrl>, ListGatewaysError> {
+        if let Some(peer) = peer {
+            self.module_api
+                .gateways_from_peer(peer)
+                .await
+                .map_err(|_| ListGatewaysError::FailedToListGateways)
+        } else {
+            self.module_api
+                .gateways()
+                .await
+                .map_err(|_| ListGatewaysError::FailedToListGateways)
+        }
+    }
+
+    /// Requests the `RoutingInfo`, including fee information, from the gateway
+    /// available at the `SafeUrl`.
+    pub async fn routing_info(
+        &self,
+        gateway: &SafeUrl,
+    ) -> Result<Option<RoutingInfo>, RoutingInfoError> {
         self.gateway_conn
             .routing_info(gateway.clone(), &self.federation_id)
             .await
+            .map_err(|_| RoutingInfoError::FailedToRequestRoutingInfo)
     }
 
     /// Pay an invoice. For testing you can optionally specify a gateway to
@@ -1169,6 +1198,18 @@ pub enum GenerateLnurlError {
     FailedToRequestGateways(String),
     #[error("Failed to request LNURL")]
     FailedToRequestLnurl(String),
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum ListGatewaysError {
+    #[error("Failed to request gateways")]
+    FailedToListGateways,
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum RoutingInfoError {
+    #[error("Failed to request routing info")]
+    FailedToRequestRoutingInfo,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
