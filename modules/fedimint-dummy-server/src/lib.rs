@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use anyhow::bail;
 use async_trait::async_trait;
 use fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -21,7 +21,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::{Amount, InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_dummy_common::config::{
-    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate, DummyGenParams,
+    DummyClientConfig, DummyConfig, DummyConfigConsensus, DummyConfigPrivate,
 };
 use fedimint_dummy_common::{
     DummyCommonInit, DummyConsensusItem, DummyInput, DummyInputError, DummyModuleTypes,
@@ -30,7 +30,9 @@ use fedimint_dummy_common::{
 };
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use futures::{FutureExt, StreamExt};
 use strum::IntoEnumIterator;
 
@@ -94,7 +96,6 @@ impl ModuleInit for DummyInit {
 #[async_trait]
 impl ServerModuleInit for DummyInit {
     type Module = Dummy;
-    type Params = DummyGenParams;
 
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -121,10 +122,8 @@ impl ServerModuleInit for DummyInit {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = self.parse_params(params).unwrap();
         // Generate a config for each peer
         peers
             .iter()
@@ -132,7 +131,7 @@ impl ServerModuleInit for DummyInit {
                 let config = DummyConfig {
                     private: DummyConfigPrivate,
                     consensus: DummyConfigConsensus {
-                        tx_fee: params.tx_fee,
+                        tx_fee: Amount::ZERO,
                     },
                 };
                 (peer, config.to_erased())
@@ -144,15 +143,12 @@ impl ServerModuleInit for DummyInit {
     async fn distributed_gen(
         &self,
         _peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let params = self.parse_params(params).unwrap();
-
         Ok(DummyConfig {
             private: DummyConfigPrivate,
             consensus: DummyConfigConsensus {
-                tx_fee: params.tx_fee,
+                tx_fee: Amount::ZERO,
             },
         }
         .to_erased())

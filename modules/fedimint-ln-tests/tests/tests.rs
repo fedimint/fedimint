@@ -14,13 +14,11 @@ use fedimint_core::module::{Amounts, CommonModuleInit as _};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
-use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
     LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
 use fedimint_ln_common::{LightningCommonInit, LightningOutput};
@@ -52,14 +50,12 @@ pub async fn ln_operation(
 }
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
-    let ln_params = LightningGenParams::regtest();
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
     fixtures.with_module(
         LightningClientInit {
             gateway_conn: Some(Arc::new(MockGatewayConnection)),
         },
         LightningInit,
-        ln_params,
     )
 }
 

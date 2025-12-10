@@ -70,6 +70,7 @@ pub fn local_config_gen_params(
                 peers: connections.clone(),
                 meta: BTreeMap::new(),
                 disable_base_fees: !enable_mint_fees,
+                network: bitcoin::Network::Regtest,
             };
             Ok((*peer, params))
         })

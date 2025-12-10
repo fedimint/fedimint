@@ -10,7 +10,7 @@ use fedimint_core::module::{AmountUnit, Amounts, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Secp256k1;
 use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
-use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
+use fedimint_dummy_common::config::DummyClientConfig;
 use fedimint_dummy_common::{
     DummyInput, DummyInputV1, DummyOutput, DummyOutputV1, KIND, broken_fed_key_pair, fed_key_pair,
 };
@@ -18,7 +18,7 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_testing::fixtures::Fixtures;
 
 fn fixtures() -> Fixtures {
-    Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
+    Fixtures::new_primary(DummyClientInit, DummyInit)
 }
 
 #[tokio::test(flavor = "multi_thread")]

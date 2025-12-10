@@ -21,7 +21,6 @@ use fedimint_core::time::now;
 use fedimint_core::util::{NextOrPending, backoff_util, retry};
 use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
-use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
@@ -45,7 +44,6 @@ use fedimint_ln_client::{
     LightningOperationMetaVariant, LnPayState, LnReceiveState, MockGatewayConnection,
     OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
@@ -59,7 +57,6 @@ use fedimint_testing::db::BYTE_33;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::FakeLightningTest;
-use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use itertools::Itertools;
@@ -80,21 +77,18 @@ async fn user_pay_invoice(
 
 fn fixtures() -> Fixtures {
     info!(target: LOG_TEST, "Setting up fixtures");
-    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
-        .with_server_only_module(UnknownInit, UnknownGenParams);
-    let ln_params = LightningGenParams::regtest();
+    let fixtures =
+        Fixtures::new_primary(DummyClientInit, DummyInit).with_server_only_module(UnknownInit);
     let fixtures = fixtures.with_module(
         LightningClientInit {
             gateway_conn: Some(Arc::new(MockGatewayConnection)),
         },
         LightningInit,
-        ln_params,
     );
 
     fixtures.with_module(
         fedimint_lnv2_client::LightningClientInit::default(),
         fedimint_lnv2_server::LightningInit,
-        fedimint_lnv2_common::config::LightningGenParams::regtest(),
     )
 }
 

@@ -14,8 +14,8 @@ use db::{
     MetaSubmissionsKey,
 };
 use fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
@@ -31,7 +31,6 @@ use fedimint_core::module::{
 };
 use fedimint_core::{InPoint, NumPeers, OutPoint, PeerId, push_db_pair_items};
 use fedimint_logging::LOG_MODULE_META;
-pub use fedimint_meta_common::config::MetaGenParams;
 use fedimint_meta_common::config::{
     MetaClientConfig, MetaConfig, MetaConfigConsensus, MetaConfigPrivate,
 };
@@ -47,7 +46,9 @@ use fedimint_meta_common::{
 };
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use futures::StreamExt;
 use rand::{Rng, thread_rng};
 use strum::IntoEnumIterator;
@@ -121,7 +122,6 @@ impl ModuleInit for MetaInit {
 #[async_trait]
 impl ServerModuleInit for MetaInit {
     type Module = Meta;
-    type Params = MetaGenParams;
 
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -153,10 +153,8 @@ impl ServerModuleInit for MetaInit {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let _params = self.parse_params(params).unwrap();
         // Generate a config for each peer
         peers
             .iter()
@@ -174,11 +172,8 @@ impl ServerModuleInit for MetaInit {
     async fn distributed_gen(
         &self,
         _peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let _params = self.parse_params(params).unwrap();
-
         Ok(MetaConfig {
             private: MetaConfigPrivate,
             consensus: MetaConfigConsensus {},

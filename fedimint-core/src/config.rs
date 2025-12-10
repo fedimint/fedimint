@@ -484,21 +484,7 @@ impl<M> Default for ModuleInitRegistry<M> {
     }
 }
 
-/// Type erased module config gen params
-pub type ConfigGenModuleParams = serde_json::Value;
-
 pub type CommonModuleInitRegistry = ModuleInitRegistry<DynCommonModuleInit>;
-
-/// Registry that contains the config gen params for all modules
-pub type ServerModuleConfigGenParamsRegistry = ModuleRegistry<ConfigGenModuleParams>;
-
-impl Eq for ServerModuleConfigGenParamsRegistry {}
-
-impl PartialEq for ServerModuleConfigGenParamsRegistry {
-    fn eq(&self, other: &Self) -> bool {
-        self.iter_modules().eq(other.iter_modules())
-    }
-}
 
 impl<M> From<Vec<M>> for ModuleInitRegistry<M>
 where
@@ -551,31 +537,6 @@ impl<M> ModuleInitRegistry<M> {
 
     pub fn get(&self, k: &ModuleKind) -> Option<&M> {
         self.0.get(k)
-    }
-}
-
-impl ModuleRegistry<ConfigGenModuleParams> {
-    pub fn attach_config_gen_params_by_id<T: Serialize>(
-        &mut self,
-        id: ModuleInstanceId,
-        kind: ModuleKind,
-        r#gen: T,
-    ) -> &mut Self {
-        let params = serde_json::to_value(r#gen)
-            .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
-        self.register_module(id, kind, params);
-        self
-    }
-
-    pub fn attach_config_gen_params<T: Serialize>(
-        &mut self,
-        kind: ModuleKind,
-        r#gen: T,
-    ) -> &mut Self {
-        let params = serde_json::to_value(r#gen)
-            .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
-        self.append_module(kind, params);
-        self
     }
 }
 

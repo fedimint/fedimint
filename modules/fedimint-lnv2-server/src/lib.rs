@@ -11,8 +11,8 @@ use anyhow::{Context, anyhow, ensure};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
@@ -35,7 +35,7 @@ use fedimint_core::{
 };
 use fedimint_lnv2_common::config::{
     FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigPrivate, LightningGenParams,
+    LightningConfigPrivate,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -52,7 +52,9 @@ use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use futures::StreamExt;
 use group::Curve;
 use group::ff::Field;
@@ -214,7 +216,6 @@ impl ModuleInit for LightningInit {
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for LightningInit {
     type Module = Lightning;
-    type Params = LightningGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
@@ -242,13 +243,8 @@ impl ServerModuleInit for LightningInit {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = self
-            .parse_params(params)
-            .expect("Failed tp parse lnv2 config gen params");
-
         let tpe_pks = peers
             .iter()
             .map(|peer| (*peer, dealer_pk(peers.to_num_peers(), *peer)))
@@ -261,14 +257,12 @@ impl ServerModuleInit for LightningInit {
                     consensus: LightningConfigConsensus {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
-                        fee_consensus: params.fee_consensus.clone().unwrap_or(
-                            if disable_base_fees {
-                                FeeConsensus::zero()
-                            } else {
-                                FeeConsensus::new(0).expect("Relative fee is within range")
-                            },
-                        ),
-                        network: params.network,
+                        fee_consensus: if args.disable_base_fees {
+                            FeeConsensus::zero()
+                        } else {
+                            FeeConsensus::new(0).expect("Relative fee is within range")
+                        },
+                        network: args.network,
                     },
                     private: LightningConfigPrivate {
                         sk: dealer_sk(peers.to_num_peers(), *peer),
@@ -283,10 +277,8 @@ impl ServerModuleInit for LightningInit {
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let params = self.parse_params(params).unwrap();
         let (polynomial, sks) = peers.run_dkg_g1().await?;
 
         let server = LightningConfig {
@@ -297,15 +289,12 @@ impl ServerModuleInit for LightningInit {
                     .peer_ids()
                     .map(|peer| (peer, PublicKeyShare(eval_poly_g1(&polynomial, &peer))))
                     .collect(),
-                fee_consensus: params
-                    .fee_consensus
-                    .clone()
-                    .unwrap_or(if disable_base_fees {
-                        FeeConsensus::zero()
-                    } else {
-                        FeeConsensus::new(0).expect("Relative fee is within range")
-                    }),
-                network: params.network,
+                fee_consensus: if args.disable_base_fees {
+                    FeeConsensus::zero()
+                } else {
+                    FeeConsensus::new(0).expect("Relative fee is within range")
+                },
+                network: args.network,
             },
             private: LightningConfigPrivate {
                 sk: SecretKeyShare(sks),

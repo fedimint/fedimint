@@ -12,13 +12,11 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
-use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
 use fedimint_core::{Amount, BitcoinHash, Feerate, InPoint, PeerId, TransactionId, sats};
 use fedimint_dummy_client::DummyClientInit;
-use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_server::core::ServerModule;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -29,7 +27,7 @@ use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{DepositStateV2, WalletClientInit, WalletClientModule, WithdrawState};
-use fedimint_wallet_common::config::{WalletConfig, WalletGenParams};
+use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{PegOutFees, Rbf, TxOutputSummary};
@@ -40,10 +38,9 @@ use tokio::select;
 use tracing::{info, warn};
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
-    let wallet_params = WalletGenParams::regtest();
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
     let wallet_client = WalletClientInit::new(fixtures.client_esplora_rpc());
-    fixtures.with_module(wallet_client, WalletInit, wallet_params)
+    fixtures.with_module(wallet_client, WalletInit)
 }
 
 fn bsats(satoshi: u64) -> bitcoin::Amount {
@@ -680,14 +677,13 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
 async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let bitcoin = fixtures.bitcoin();
-    let server_bitcoin_rpc_config = fixtures.bitcoin_server();
     let dyn_bitcoin_rpc = fixtures.server_bitcoin_rpc();
     let bitcoin_rpc_connection = fixtures.server_bitcoin_rpc();
     let db = MemDatabase::new().into_database();
     let task_group = fedimint_core::task::TaskGroup::new();
     info!("Starting test peg_ins_that_are_unconfirmed_are_rejected");
 
-    let (wallet_server_cfg, _) = build_wallet_server_configs(server_bitcoin_rpc_config)?;
+    let (wallet_server_cfg, _) = build_wallet_server_configs()?;
 
     let module_instance_id = 1;
     let root_secret =
@@ -1132,24 +1128,17 @@ const MINTS: usize = 5;
 
 // TODO: Something similar to this is needed in every module, maybe we can
 // remove some code duplication
-fn build_wallet_server_configs(
-    bitcoin_rpc: BitcoinRpcConfig,
-) -> anyhow::Result<(
+fn build_wallet_server_configs() -> anyhow::Result<(
     Vec<fedimint_core::config::ServerModuleConfig>,
     fedimint_core::config::ClientModuleConfig,
 )> {
     let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-    let wallet_cfg = fedimint_server::core::ServerModuleInit::trusted_dealer_gen(
-        &WalletInit,
-        &peers,
-        &serde_json::to_value(WalletGenParams {
-            network: bitcoin::Network::Regtest,
-            finality_delay: 10,
-            client_default_bitcoin_rpc: bitcoin_rpc.clone(),
-            fee_consensus: Default::default(),
-        })?,
-        false,
-    );
+    let args = fedimint_server_core::ConfigGenModuleArgs {
+        network: bitcoin::Network::Regtest,
+        disable_base_fees: false,
+    };
+    let wallet_cfg =
+        fedimint_server::core::ServerModuleInit::trusted_dealer_gen(&WalletInit, &peers, &args);
     let client_cfg = fedimint_core::config::ClientModuleConfig::from_typed(
         0,
         <WalletInit as fedimint_server::core::ServerModuleInit>::kind(),

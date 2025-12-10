@@ -335,7 +335,6 @@ pub async fn run_config_gen(
     .into_dyn();
 
     let cfg = ServerConfig::distributed_gen(
-        settings.modules,
         &cg_params,
         settings.registry.clone(),
         code_version_str.clone(),

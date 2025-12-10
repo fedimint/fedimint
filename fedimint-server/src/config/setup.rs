@@ -347,6 +347,7 @@ impl ISetupApi for SetupApi {
                 federation_name,
             )]),
             disable_base_fees,
+            network: self.settings.network,
         };
 
         self.sender

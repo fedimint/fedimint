@@ -12,22 +12,6 @@ use tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 use crate::LightningCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParams {
-    pub fee_consensus: Option<FeeConsensus>,
-    pub network: Network,
-}
-
-impl LightningGenParams {
-    #[allow(clippy::missing_panics_doc)]
-    pub fn regtest() -> Self {
-        Self {
-            fee_consensus: Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
-            network: Network::Regtest,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
     pub private: LightningConfigPrivate,
     pub consensus: LightningConfigConsensus,

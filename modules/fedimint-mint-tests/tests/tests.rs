@@ -11,7 +11,6 @@ use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
-use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::api::MintFederationApi;
@@ -21,7 +20,6 @@ use fedimint_mint_client::{
     SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState,
     SpendableNoteUndecoded,
 };
-use fedimint_mint_common::config::{FeeConsensus, MintGenParams};
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
@@ -33,16 +31,9 @@ use tracing::{debug, info};
 const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(20);
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(
-        MintClientInit,
-        MintInit,
-        MintGenParams::new(
-            2,
-            Some(FeeConsensus::new(1_000).expect("Relative fee is within range")),
-        ),
-    );
+    let fixtures = Fixtures::new_primary(MintClientInit, MintInit);
 
-    fixtures.with_module(DummyClientInit, DummyInit, DummyGenParams::default())
+    fixtures.with_module(DummyClientInit, DummyInit)
 }
 
 #[derive(Serialize, Deserialize)]

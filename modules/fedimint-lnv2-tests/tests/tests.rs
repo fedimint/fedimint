@@ -9,13 +9,11 @@ use fedimint_core::module::Amounts;
 use fedimint_core::util::NextOrPending as _;
 use fedimint_core::{Amount, OutPoint, sats};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
-use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_lnv2_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta, ReceiveOperationState,
     SendOperationState, SendPaymentError,
 };
-use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, LightningInput, LightningInputV0, OutgoingWitness,
 };
@@ -28,7 +26,7 @@ use tracing::warn;
 use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
 
 fn fixtures() -> Fixtures {
-    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
 
     fixtures.with_module(
         LightningClientInit {
@@ -40,7 +38,6 @@ fn fixtures() -> Fixtures {
             }),
         },
         LightningInit,
-        LightningGenParams::regtest(),
     )
 }
 

@@ -11,19 +11,6 @@ use threshold_crypto::serde_impl::SerdeSecret;
 use crate::LightningCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParams {
-    pub network: Network,
-}
-
-impl LightningGenParams {
-    pub fn regtest() -> Self {
-        Self {
-            network: Network::Regtest,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningConfig {
     pub private: LightningConfigPrivate,
     pub consensus: LightningConfigConsensus,
