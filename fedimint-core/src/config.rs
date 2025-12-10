@@ -485,20 +485,7 @@ impl<M> Default for ModuleInitRegistry<M> {
 }
 
 /// Type erased module config gen params
-#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct ConfigGenModuleParams(serde_json::Value);
-
-impl ConfigGenModuleParams {
-    /// Converts the JSON into typed version
-    pub fn to_typed<P: DeserializeOwned>(&self) -> anyhow::Result<P> {
-        serde_json::from_value(self.0.clone()).context("Schema mismatch for module params")
-    }
-
-    pub fn from_typed<P: Serialize>(p: P) -> anyhow::Result<Self> {
-        Ok(Self(serde_json::to_value(p)?))
-    }
-}
+pub type ConfigGenModuleParams = serde_json::Value;
 
 pub type CommonModuleInitRegistry = ModuleInitRegistry<DynCommonModuleInit>;
 
@@ -574,7 +561,7 @@ impl ModuleRegistry<ConfigGenModuleParams> {
         kind: ModuleKind,
         r#gen: T,
     ) -> &mut Self {
-        let params = ConfigGenModuleParams::from_typed(r#gen)
+        let params = serde_json::to_value(r#gen)
             .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
         self.register_module(id, kind, params);
         self
@@ -585,7 +572,7 @@ impl ModuleRegistry<ConfigGenModuleParams> {
         kind: ModuleKind,
         r#gen: T,
     ) -> &mut Self {
-        let params = ConfigGenModuleParams::from_typed(r#gen)
+        let params = serde_json::to_value(r#gen)
             .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
         self.append_module(kind, params);
         self

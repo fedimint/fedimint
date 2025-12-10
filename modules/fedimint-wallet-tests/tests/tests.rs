@@ -1142,7 +1142,7 @@ fn build_wallet_server_configs(
     let wallet_cfg = fedimint_server::core::ServerModuleInit::trusted_dealer_gen(
         &WalletInit,
         &peers,
-        &fedimint_core::config::ConfigGenModuleParams::from_typed(WalletGenParams {
+        &serde_json::to_value(WalletGenParams {
             network: bitcoin::Network::Regtest,
             finality_delay: 10,
             client_default_bitcoin_rpc: bitcoin_rpc.clone(),

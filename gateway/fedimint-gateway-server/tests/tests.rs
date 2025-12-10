@@ -81,7 +81,7 @@ async fn user_pay_invoice(
 fn fixtures() -> Fixtures {
     info!(target: LOG_TEST, "Setting up fixtures");
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
-        .with_server_only_module(UnknownInit, UnknownGenParams::default());
+        .with_server_only_module(UnknownInit, UnknownGenParams);
     let ln_params = LightningGenParams::regtest();
     let fixtures = fixtures.with_module(
         LightningClientInit {

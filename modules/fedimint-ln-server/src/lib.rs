@@ -1231,13 +1231,12 @@ mod tests {
     use assert_matches::assert_matches;
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
-    use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
-    use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts};
+    use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts, serde_json};
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
@@ -1313,7 +1312,7 @@ mod tests {
         let server_cfg = ServerModuleInit::trusted_dealer_gen(
             &LightningInit,
             &peers,
-            &ConfigGenModuleParams::from_typed(LightningGenParams {
+            &serde_json::to_value(LightningGenParams {
                 network: Network::Regtest,
             })
             .expect("valid config params"),

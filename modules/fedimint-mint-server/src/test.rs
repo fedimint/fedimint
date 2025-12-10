@@ -1,9 +1,9 @@
 use assert_matches::assert_matches;
-use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
+use fedimint_core::config::{ClientModuleConfig, ServerModuleConfig};
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::{ModuleConsensusVersion, serde_json};
 use fedimint_core::{Amount, BitcoinHash, InPoint, PeerId, TransactionId, secp256k1};
 use fedimint_mint_common::config::FeeConsensus;
 use fedimint_mint_common::{MintInput, Nonce, Note};
@@ -18,7 +18,7 @@ fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
     let peers = (0..MINTS).map(PeerId::from).collect::<Vec<_>>();
     let mint_cfg = MintInit.trusted_dealer_gen(
         &peers,
-        &ConfigGenModuleParams::from_typed(MintGenParams::new(
+        &serde_json::to_value(MintGenParams::new(
             2,
             Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
         ))
