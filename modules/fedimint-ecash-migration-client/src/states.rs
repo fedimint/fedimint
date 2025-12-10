@@ -6,7 +6,7 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::{OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ecash_migration_common::TransferId;
 use fedimint_ecash_migration_common::api::GET_TRANSFER_ID_ENDPOINT;
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,8 @@ use crate::EcashMigrationClientContext;
 pub enum EcashMigrationStateMachine {
     /// State machine for registering a transfer
     RegisterTransfer(RegisterTransferStateMachine),
+    /// State machine for funding a transfer
+    FundTransfer(FundTransferStateMachine),
 }
 
 impl State for EcashMigrationStateMachine {
@@ -36,12 +38,19 @@ impl State for EcashMigrationStateMachine {
                     EcashMigrationStateMachine::RegisterTransfer
                 )
             }
+            EcashMigrationStateMachine::FundTransfer(sm) => {
+                sm_enum_variant_translation!(
+                    sm.transitions(global_context),
+                    EcashMigrationStateMachine::FundTransfer
+                )
+            }
         }
     }
 
     fn operation_id(&self) -> OperationId {
         match self {
             EcashMigrationStateMachine::RegisterTransfer(sm) => sm.operation_id(),
+            EcashMigrationStateMachine::FundTransfer(sm) => sm.operation_id(),
         }
     }
 }
@@ -205,5 +214,135 @@ pub enum RegisterTransferState {
     /// Transfer registration completed successfully
     Success { transfer_id: TransferId },
     /// Transfer registration failed
+    Failed { error: String },
+}
+
+// ============================================================================
+// Fund Transfer State Machine
+// ============================================================================
+
+/// Common data for the fund transfer state machine
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct FundTransferCommon {
+    pub operation_id: OperationId,
+    pub txid: TransactionId,
+    pub transfer_id: TransferId,
+    pub amount: Amount,
+}
+
+/// State machine for funding a liability transfer
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct FundTransferStateMachine {
+    pub common: FundTransferCommon,
+    pub state: FundTransferStates,
+}
+
+impl FundTransferStateMachine {
+    fn operation_id(&self) -> OperationId {
+        self.common.operation_id
+    }
+
+    fn transitions(&self, global_context: &DynGlobalClientContext) -> Vec<StateTransition<Self>> {
+        match &self.state {
+            FundTransferStates::Created => {
+                Self::created_transitions(global_context, self.common.clone())
+            }
+            FundTransferStates::Aborted(_) | FundTransferStates::Success(_) => vec![],
+        }
+    }
+
+    fn created_transitions(
+        global_context: &DynGlobalClientContext,
+        common: FundTransferCommon,
+    ) -> Vec<StateTransition<Self>> {
+        vec![
+            // Check if transaction was rejected
+            StateTransition::new(
+                Self::await_tx_rejected(global_context.clone(), common.txid),
+                |_dbtx, (), old_state| {
+                    Box::pin(async move { Self::transition_tx_rejected(old_state) })
+                },
+            ),
+            // Check for transaction acceptance
+            StateTransition::new(
+                Self::await_tx_accepted(global_context.clone(), common.clone()),
+                |_dbtx, (), old_state| {
+                    Box::pin(async move { Self::transition_tx_accepted(old_state) })
+                },
+            ),
+        ]
+    }
+
+    async fn await_tx_rejected(global_context: DynGlobalClientContext, txid: TransactionId) {
+        if global_context.await_tx_accepted(txid).await.is_err() {
+            return;
+        }
+        std::future::pending::<()>().await;
+    }
+
+    fn transition_tx_rejected(old_state: Self) -> Self {
+        Self {
+            common: old_state.common,
+            state: FundTransferStates::Aborted(FundTransferAborted {
+                reason: "Transaction was rejected".to_string(),
+            }),
+        }
+    }
+
+    async fn await_tx_accepted(global_context: DynGlobalClientContext, common: FundTransferCommon) {
+        // Wait for transaction to be accepted
+        if global_context.await_tx_accepted(common.txid).await.is_err() {
+            // Transaction was rejected, hang forever since the rejection
+            // transition will take precedence
+            std::future::pending::<()>().await;
+        }
+    }
+
+    fn transition_tx_accepted(old_state: Self) -> Self {
+        Self {
+            common: old_state.common.clone(),
+            state: FundTransferStates::Success(FundTransferSuccess {
+                transfer_id: old_state.common.transfer_id,
+                amount: old_state.common.amount,
+            }),
+        }
+    }
+}
+
+/// States of the fund transfer state machine
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum FundTransferStates {
+    /// Fund transfer transaction submitted, waiting for confirmation
+    Created,
+    /// Fund transfer transaction was rejected
+    Aborted(FundTransferAborted),
+    /// Fund transfer completed successfully
+    Success(FundTransferSuccess),
+}
+
+/// Fund transfer was aborted
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct FundTransferAborted {
+    pub reason: String,
+}
+
+/// Fund transfer completed successfully
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct FundTransferSuccess {
+    pub transfer_id: TransferId,
+    pub amount: Amount,
+}
+
+/// State updates for fund transfer operation that can be observed by clients
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum FundTransferState {
+    /// Transaction submitted, waiting for confirmation
+    Created,
+    /// Fund transfer completed successfully
+    Success {
+        transfer_id: TransferId,
+        amount: Amount,
+    },
+    /// Fund transfer failed
     Failed { error: String },
 }

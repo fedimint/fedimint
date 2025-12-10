@@ -14,7 +14,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
-use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
+use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, ModuleNotifier};
 use fedimint_client_module::transaction::{ClientOutput, ClientOutputBundle, TransactionBuilder};
@@ -39,21 +39,23 @@ use fedimint_ecash_migration_common::api::{
 use fedimint_ecash_migration_common::config::EcashMigrationClientConfig;
 use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdKey;
 use fedimint_ecash_migration_common::{
-    EcashMigrationCommonInit, EcashMigrationCreateTransferOutput, EcashMigrationModuleTypes,
-    EcashMigrationOutput, KeySetHash, SpendBookHash, TransferId, hash_and_count_spend_book,
+    EcashMigrationCommonInit, EcashMigrationCreateTransferOutput, EcashMigrationFundTransferOutput,
+    EcashMigrationModuleTypes, EcashMigrationOutput, KeySetHash, SpendBookHash, TransferId,
+    hash_and_count_spend_book,
 };
 use fedimint_mint_common::config::MintClientConfig;
 use fedimint_mint_common::{MintCommonInit, Nonce};
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use states::{
-    EcashMigrationStateMachine, RegisterTransferCommon, RegisterTransferState,
+    EcashMigrationStateMachine, FundTransferCommon, FundTransferState, FundTransferStateMachine,
+    FundTransferStates, RegisterTransferCommon, RegisterTransferState,
     RegisterTransferStateMachine, RegisterTransferStates,
 };
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tracing::info;
+use tracing::{info, warn};
 
 pub mod api;
 #[cfg(feature = "cli")]
@@ -163,6 +165,14 @@ pub struct RegisterTransferOperationMeta {
     pub spend_book_entries: u64,
     pub key_set_hash: KeySetHash,
     pub out_point: OutPoint,
+}
+
+/// Metadata stored with the fund transfer operation
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FundTransferOperationMeta {
+    pub transfer_id: TransferId,
+    pub amount: Amount,
+    pub change: OutPointRange,
 }
 
 /// Read the origin federation's mint keyset from a config file.
@@ -413,6 +423,10 @@ impl EcashMigrationClientModule {
                 EcashMigrationStateMachine::RegisterTransfer(register_transfer_state_machine) => {
                     register_transfer_state_machine.state
                 }
+                EcashMigrationStateMachine::FundTransfer(_) => {
+                    // This shouldn't happen, but return Created as a no-op
+                    RegisterTransferStates::Created
+                }
             });
 
         Ok(self
@@ -469,6 +483,167 @@ impl EcashMigrationClientModule {
         self.module_secret
             .child_key(CONTROLLER_KEY_CHILD_ID)
             .to_secp_key(&secp)
+    }
+
+    /// Fund an existing liability transfer with Bitcoin.
+    ///
+    /// This deposits the specified amount of Bitcoin into the transfer
+    /// contract, making it available for redemption of origin federation
+    /// ecash.
+    ///
+    /// Returns the operation ID that can be used to subscribe to updates.
+    ///
+    /// # Errors
+    /// - If submitting the transaction fails.
+    pub async fn fund_transfer(
+        &self,
+        transfer_id: TransferId,
+        amount: Amount,
+    ) -> anyhow::Result<OperationId> {
+        // Create the output
+        let output = ClientOutput {
+            output: EcashMigrationOutput::FundTransfer(EcashMigrationFundTransferOutput {
+                transfer_id,
+                amount,
+            }),
+            amounts: Amounts::new_bitcoin(amount),
+        };
+
+        // Create the state machine
+        let operation_id = OperationId::new_random();
+
+        let sm_gen = move |out_point_range: fedimint_client_module::module::OutPointRange| {
+            vec![EcashMigrationStateMachine::FundTransfer(
+                FundTransferStateMachine {
+                    common: FundTransferCommon {
+                        operation_id,
+                        txid: out_point_range.txid(),
+                        transfer_id,
+                        amount,
+                    },
+                    state: FundTransferStates::Created,
+                },
+            )]
+        };
+
+        // Build the transaction with state machine
+        let output_bundle = ClientOutputBundle::new(
+            vec![output],
+            vec![fedimint_client_module::transaction::ClientOutputSM {
+                state_machines: std::sync::Arc::new(sm_gen),
+            }],
+        );
+
+        let tx = TransactionBuilder::new()
+            .with_outputs(self.client_ctx.make_client_outputs(output_bundle));
+
+        // Metadata for the operation log
+        let meta_gen =
+            move |out_point_range: fedimint_client_module::module::OutPointRange| -> FundTransferOperationMeta {
+                FundTransferOperationMeta {
+                    transfer_id,
+                    amount,
+                    change: out_point_range,
+                }
+            };
+
+        // Submit the transaction
+        self.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                fedimint_ecash_migration_common::KIND.as_str(),
+                meta_gen,
+                tx,
+            )
+            .await
+            .context("Failed to submit fund transfer transaction")?;
+
+        Ok(operation_id)
+    }
+
+    /// Subscribe to updates on the progress of a fund transfer operation
+    /// started with [`Self::fund_transfer`].
+    ///
+    /// # Errors
+    /// - If the operation does not exist.
+    pub async fn subscribe_fund_transfer(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<FundTransferState>> {
+        let operation = self
+            .client_ctx
+            .get_operation(operation_id)
+            .await
+            .context("Operation not found")?;
+
+        let meta = operation.meta::<FundTransferOperationMeta>();
+        let change = meta.change;
+        let client_ctx = self.client_ctx.clone();
+
+        let mut sm_updates = client_ctx
+            .self_ref()
+            .notifier
+            .subscribe(operation_id)
+            .await
+            .map(|state| match state {
+                EcashMigrationStateMachine::FundTransfer(fund_transfer_state_machine) => {
+                    fund_transfer_state_machine.state
+                }
+                EcashMigrationStateMachine::RegisterTransfer(_) => {
+                    // This shouldn't happen, but return Created as a no-op
+                    FundTransferStates::Created
+                }
+            });
+
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                stream! {
+                    yield FundTransferState::Created;
+
+                    // Wait for transaction to be accepted
+                    match client_ctx
+                        .transaction_updates(operation_id)
+                        .await
+                        .await_tx_accepted(change.txid)
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(e) => {
+                            yield FundTransferState::Failed {
+                                error: format!("Transaction not accepted: {e:?}"),
+                            };
+                            return;
+                        }
+                    }
+
+                    // Await state machine to transition to success
+                    while let Some(state) = sm_updates.next().await {
+                        match state {
+                            FundTransferStates::Created => {}
+                            FundTransferStates::Aborted(fund_transfer_aborted) => {
+                                yield FundTransferState::Failed { error: fund_transfer_aborted.reason };
+                                return;
+                            }
+                            FundTransferStates::Success(fund_transfer_success) => {
+                                match client_ctx.await_primary_module_outputs(operation_id, change.into_iter().collect::<Vec<_>>()).await {
+                                    Ok(()) => {}
+                                    Err(e) => {
+                                        warn!(?operation_id, "Error occurred while waiting for ecash change: {e:?}");
+                                    }
+                                }
+                                yield FundTransferState::Success {
+                                    transfer_id: fund_transfer_success.transfer_id,
+                                    amount: fund_transfer_success.amount,
+                                };
+                                return;
+                            }
+                        }
+                    }
+
+                    unreachable!("State machine update stream ended unexpectedly");
+                }
+            }))
     }
 
     /// Upload the origin federation's keyset to the destination federation.

@@ -3,13 +3,14 @@ use std::{ffi, iter};
 
 use anyhow::Context as _;
 use clap::Parser;
+use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
 use fedimint_ecash_migration_common::TransferId;
 use futures::StreamExt;
 use serde::Serialize;
 
 use crate::EcashMigrationClientModule;
-use crate::states::RegisterTransferState;
+use crate::states::{FundTransferState, RegisterTransferState};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -82,6 +83,29 @@ enum Opts {
         #[arg(long, default_value = "10000")]
         batch_size: usize,
     },
+
+    /// Fund an existing liability transfer with Bitcoin.
+    ///
+    /// This deposits Bitcoin into the transfer contract, making it available
+    /// for redemption of origin federation ecash.
+    FundTransfer {
+        /// The transfer ID to fund.
+        #[arg(long)]
+        transfer_id: TransferId,
+
+        /// Amount to deposit in millisatoshis.
+        #[arg(long)]
+        amount: Amount,
+    },
+
+    /// Await completion of a previously started fund transfer.
+    ///
+    /// Use this to resume waiting for a fund transfer that was interrupted
+    /// (e.g., due to a client crash) before it completed.
+    AwaitFundTransfer {
+        /// The operation ID returned when the fund transfer was started.
+        operation_id: OperationId,
+    },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -108,6 +132,11 @@ pub(crate) async fn handle_cli_command(
             spend_book,
             batch_size,
         } => upload_spend_book(module, transfer_id, spend_book, batch_size).await,
+        Opts::FundTransfer {
+            transfer_id,
+            amount,
+        } => fund_transfer(module, transfer_id, amount).await,
+        Opts::AwaitFundTransfer { operation_id } => await_fund_transfer(module, operation_id).await,
     }
 }
 
@@ -195,5 +224,61 @@ async fn upload_spend_book(
         "transfer_id": transfer_id,
         "total_uploaded": progress.total_uploaded,
         "batches_uploaded": progress.batches_uploaded,
+    }))
+}
+
+async fn fund_transfer(
+    module: &EcashMigrationClientModule,
+    transfer_id: TransferId,
+    amount: Amount,
+) -> anyhow::Result<serde_json::Value> {
+    let operation_id = module
+        .fund_transfer(transfer_id, amount)
+        .await
+        .context("Failed to fund transfer")?;
+
+    await_fund_transfer(module, operation_id).await
+}
+
+async fn await_fund_transfer(
+    module: &EcashMigrationClientModule,
+    operation_id: OperationId,
+) -> anyhow::Result<serde_json::Value> {
+    let mut updates = module
+        .subscribe_fund_transfer(operation_id)
+        .await
+        .context("Failed to subscribe to fund transfer updates")?
+        .into_stream();
+
+    let mut result = None;
+    let mut error = None;
+
+    while let Some(state) = updates.next().await {
+        match state {
+            FundTransferState::Success {
+                transfer_id,
+                amount,
+            } => {
+                result = Some((transfer_id, amount));
+                break;
+            }
+            FundTransferState::Failed { error: e } => {
+                error = Some(e);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(error) = error {
+        anyhow::bail!("Fund transfer failed: {error}");
+    }
+
+    let (transfer_id, amount) = result.context("Fund transfer did not complete successfully")?;
+
+    Ok(serde_json::json!({
+        "operation_id": operation_id,
+        "transfer_id": transfer_id,
+        "amount_msat": amount.msats,
     }))
 }
