@@ -9,7 +9,6 @@ use std::time::Duration;
 use std::{env, unreachable};
 
 use anyhow::{Context, Result, anyhow, bail, format_err};
-use fedimint_api_client::api::StatusResponse;
 use fedimint_core::PeerId;
 use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::envs::{FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
@@ -717,13 +716,6 @@ impl FedimintCli {
             Ok(version) => parse_clap_version(&version),
             Err(_) => DEFAULT_VERSION,
         }
-    }
-
-    pub async fn ws_status(self, endpoint: &str) -> Result<StatusResponse> {
-        let status = cmd!(self, "admin", "dkg", "--ws", endpoint, "ws-status")
-            .out_json()
-            .await?;
-        Ok(serde_json::from_value(status)?)
     }
 
     pub async fn set_password(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
