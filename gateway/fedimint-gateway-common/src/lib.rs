@@ -137,7 +137,6 @@ pub struct GatewayInfo {
     pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
     pub gateway_state: String,
     pub lightning_info: LightningInfo,
-    pub iroh_api: SafeUrl,
     pub lightning_mode: LightningMode,
     pub registrations: BTreeMap<RegisteredProtocol, (SafeUrl, secp256k1::PublicKey)>,
 }

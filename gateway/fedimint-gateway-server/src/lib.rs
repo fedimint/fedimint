@@ -1719,8 +1719,6 @@ impl IAdminGateway for Gateway {
                 version_hash: fedimint_build_code_version_env!().to_string(),
                 gateway_state: self.state.read().await.to_string(),
                 lightning_info: LightningInfo::NotConnected,
-                iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
-                    .expect("could not parse iroh api"),
                 lightning_mode: self.lightning_mode.clone(),
                 registrations: self
                     .registrations
@@ -1756,8 +1754,6 @@ impl IAdminGateway for Gateway {
             version_hash: fedimint_build_code_version_env!().to_string(),
             gateway_state: self.state.read().await.to_string(),
             lightning_info,
-            iroh_api: SafeUrl::parse(&format!("iroh://{}", self.iroh_sk.public()))
-                .expect("could not parse iroh api"),
             lightning_mode: self.lightning_mode.clone(),
             registrations: self
                 .registrations
