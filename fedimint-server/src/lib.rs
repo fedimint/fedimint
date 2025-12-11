@@ -146,6 +146,7 @@ pub async fn run(
                 code_version_str.clone(),
                 force_api_secrets.clone(),
                 setup_ui_router,
+                module_init_registry.clone(),
             ))
             .await?
         }
@@ -226,6 +227,7 @@ pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
     Ok(None)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_config_gen(
     data_dir: PathBuf,
     settings: ConfigGenSettings,
@@ -234,6 +236,7 @@ pub async fn run_config_gen(
     code_version_str: String,
     api_secrets: ApiSecrets,
     setup_ui_handler: SetupUiRouter,
+    module_init_registry: ServerModuleInitRegistry,
 ) -> anyhow::Result<(
     ServerConfig,
     DynP2PConnections<P2PMessage>,
@@ -336,7 +339,7 @@ pub async fn run_config_gen(
 
     let cfg = ServerConfig::distributed_gen(
         &cg_params,
-        settings.registry.clone(),
+        module_init_registry.clone(),
         code_version_str.clone(),
         connections.clone(),
         p2p_status_receivers.clone(),
@@ -355,7 +358,7 @@ pub async fn run_config_gen(
         &cfg,
         &data_dir,
         &cfg.private.api_auth.0,
-        &settings.registry,
+        &module_init_registry,
         api_secrets.get_active(),
     )?;
 

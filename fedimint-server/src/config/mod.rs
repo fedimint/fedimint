@@ -216,8 +216,6 @@ pub struct ConfigGenSettings {
     pub iroh_dns: Option<SafeUrl>,
     /// Optional URLs of the Iroh relays to register on
     pub iroh_relays: Vec<SafeUrl>,
-    /// Registry for config gen
-    pub registry: ServerModuleInitRegistry,
     /// Bitcoin network for the federation
     pub network: bitcoin::Network,
 }

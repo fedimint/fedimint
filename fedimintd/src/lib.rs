@@ -247,7 +247,7 @@ impl ServerOpts {
 ///   peers.
 #[allow(clippy::too_many_lines)]
 pub async fn run(
-    modules_fn: fn() -> ServerModuleInitRegistry,
+    gen_module_init_registry: fn() -> ServerModuleInitRegistry,
     code_version_hash: &str,
     code_version_vendor_suffix: Option<&str>,
 ) -> ! {
@@ -282,8 +282,6 @@ pub async fn run(
         |suffix| format!("{fedimint_version}+{suffix}"),
     );
 
-    let server_gens = modules_fn();
-
     let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
 
     let root_task_group = TaskGroup::new();
@@ -304,7 +302,6 @@ pub async fn run(
         enable_iroh: server_opts.enable_iroh,
         iroh_dns: server_opts.iroh_dns.clone(),
         iroh_relays: server_opts.iroh_relays.clone(),
-        registry: server_gens.clone(),
         network: server_opts.bitcoin_network,
     };
 
@@ -366,7 +363,7 @@ pub async fn run(
             settings,
             db,
             code_version_str,
-            server_gens,
+            gen_module_init_registry(),
             task_group,
             dyn_server_bitcoin_rpc,
             Box::new(fedimint_server_ui::setup::router),
@@ -389,6 +386,7 @@ pub async fn run(
         });
 
     shutdown_future.await;
+
     debug!(target: LOG_CORE, "Terminating main task");
 
     if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
