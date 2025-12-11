@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["attach_default_module_init_params"]};

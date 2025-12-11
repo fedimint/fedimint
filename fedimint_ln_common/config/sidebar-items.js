@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Network"],"struct":["FeeConsensus","LightningClientConfig","LightningConfig","LightningConfigConsensus","LightningConfigLocal","LightningConfigPrivate","LightningGenParams","LightningGenParamsConsensus","LightningGenParamsLocal"],"trait":["FeeToAmount"]};
+window.SIDEBAR_ITEMS = {"enum":["Network"],"struct":["FeeConsensus","LightningClientConfig","LightningConfig","LightningConfigConsensus","LightningConfigLocal","LightningConfigPrivate","LightningGenParams"],"trait":["FeeToAmount"]};

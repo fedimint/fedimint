@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ServerStatusLegacy","SetupStatus"],"struct":["GuardianConfigBackup","PeerServerParamsLegacy","SetLocalParamsRequest"]};
+window.SIDEBAR_ITEMS = {"enum":["ServerStatusLegacy","SetupStatus"],"struct":["GuardianConfigBackup","SetLocalParamsRequest"]};

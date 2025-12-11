@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["FEDIMINTD_API_PORT_OFFSET","FEDIMINTD_METRICS_PORT_OFFSET","FEDIMINTD_P2P_PORT_OFFSET","FEDIMINTD_UI_PORT_OFFSET","PORTS_PER_FEDIMINTD"],"fn":["cli_set_config_gen_params","cli_wait_server_status","run_cli_dkg","run_cli_dkg_v2"],"mod":["config"],"struct":["Client","Federation","Fedimintd"]};
+window.SIDEBAR_ITEMS = {"constant":["FEDIMINTD_API_PORT_OFFSET","FEDIMINTD_METRICS_PORT_OFFSET","FEDIMINTD_P2P_PORT_OFFSET","FEDIMINTD_UI_PORT_OFFSET","PORTS_PER_FEDIMINTD"],"fn":["run_cli_dkg_v2"],"struct":["Client","Federation","Fedimintd"]};
