@@ -246,7 +246,7 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
-                            network: NetworkLegacyEncodingWrapper(params.consensus.network),
+                            network: NetworkLegacyEncodingWrapper(params.network),
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -272,7 +272,7 @@ impl ServerModuleInit for LightningInit {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: PublicKeySet::from(Commitment::from(polynomial)),
                 fee_consensus: FeeConsensus::default(),
-                network: NetworkLegacyEncodingWrapper(params.consensus.network),
+                network: NetworkLegacyEncodingWrapper(params.network),
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: SerdeSecret(SecretKeyShare::from_mut(&mut sks)),
@@ -1231,20 +1231,18 @@ mod tests {
     use assert_matches::assert_matches;
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
-    use fedimint_core::config::ConfigGenModuleParams;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;
-    use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts};
+    use fedimint_core::module::{Amounts, InputMeta, TransactionItemAmounts, serde_json};
     use fedimint_core::secp256k1::{PublicKey, generate_keypair};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, Feerate, InPoint, OutPoint, PeerId, TransactionId};
     use fedimint_ln_common::config::{
-        LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
-        LightningGenParamsLocal, Network,
+        LightningClientConfig, LightningConfig, LightningGenParams, Network,
     };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,
@@ -1314,16 +1312,8 @@ mod tests {
         let server_cfg = ServerModuleInit::trusted_dealer_gen(
             &LightningInit,
             &peers,
-            &ConfigGenModuleParams::from_typed(LightningGenParams {
-                local: LightningGenParamsLocal {
-                    bitcoin_rpc: BitcoinRpcConfig {
-                        kind: "bitcoind".to_string(),
-                        url: "http://localhost:18332".parse().unwrap(),
-                    },
-                },
-                consensus: LightningGenParamsConsensus {
-                    network: Network::Regtest,
-                },
+            &serde_json::to_value(LightningGenParams {
+                network: Network::Regtest,
             })
             .expect("valid config params"),
             false, // disable_base_fees

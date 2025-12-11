@@ -334,10 +334,10 @@ impl ServerModuleInit for WalletInit {
                         .collect(),
                     *sk,
                     peers.to_num_peers().threshold(),
-                    params.consensus.network,
-                    params.consensus.finality_delay,
-                    params.consensus.client_default_bitcoin_rpc.clone(),
-                    params.consensus.fee_consensus,
+                    params.network,
+                    params.finality_delay,
+                    params.client_default_bitcoin_rpc.clone(),
+                    params.fee_consensus,
                 );
                 (*id, cfg)
             })
@@ -370,10 +370,10 @@ impl ServerModuleInit for WalletInit {
             peer_peg_in_keys,
             sk,
             peers.num_peers().threshold(),
-            params.consensus.network,
-            params.consensus.finality_delay,
-            params.consensus.client_default_bitcoin_rpc.clone(),
-            params.consensus.fee_consensus,
+            params.network,
+            params.finality_delay,
+            params.client_default_bitcoin_rpc.clone(),
+            params.fee_consensus,
         );
 
         Ok(wallet_cfg.to_erased())

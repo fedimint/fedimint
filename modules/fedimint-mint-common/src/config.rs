@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::serde_json;
@@ -10,24 +9,18 @@ use tbs::{AggregatePublicKey, PublicKeyShare};
 
 use crate::MintCommonInit;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MintGenParams {
-    pub local: EmptyGenParams,
-    pub consensus: MintGenParamsConsensus,
-}
+// The maximum size of an E-Cash note (1,000,000 coins)
+// Changing this value is considered a breaking change because it is not saved
+// in `MintGenParams` but instead is hardcoded here
+const MAX_DENOMINATION_SIZE: Amount = Amount::from_bitcoins(1_000_000);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MintGenParamsConsensus {
+pub struct MintGenParams {
     denomination_base: u16,
     fee_consensus: Option<FeeConsensus>,
 }
 
-// The maximum size of an E-Cash note (1,000,000 coins)
-// Changing this value is considered a breaking change because it is not saved
-// in `MintGenParamsConsensus` but instead is hardcoded here
-const MAX_DENOMINATION_SIZE: Amount = Amount::from_bitcoins(1_000_000);
-
-impl MintGenParamsConsensus {
+impl MintGenParams {
     pub fn new(denomination_base: u16, fee_consensus: Option<FeeConsensus>) -> Self {
         Self {
             denomination_base,
@@ -98,9 +91,6 @@ impl std::fmt::Display for MintClientConfig {
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     MintCommonInit,
-    MintGenParams,
-    EmptyGenParams,
-    MintGenParamsConsensus,
     MintConfig,
     MintConfigPrivate,
     MintConfigConsensus,

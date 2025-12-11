@@ -30,8 +30,6 @@ use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
 
-    let bitcoin_server = fixtures.bitcoin_server();
-
     fixtures.with_module(
         LightningClientInit {
             gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
@@ -42,7 +40,7 @@ fn fixtures() -> Fixtures {
             }),
         },
         LightningInit,
-        LightningGenParams::regtest(bitcoin_server.clone()),
+        LightningGenParams::regtest(),
     )
 }
 

@@ -12,29 +12,15 @@ use crate::LightningCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParams {
-    pub local: LightningGenParamsLocal,
-    pub consensus: LightningGenParamsConsensus,
-}
-
-impl LightningGenParams {
-    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
-        Self {
-            local: LightningGenParamsLocal { bitcoin_rpc },
-            consensus: LightningGenParamsConsensus {
-                network: Network::Regtest,
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsConsensus {
     pub network: Network,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsLocal {
-    pub bitcoin_rpc: BitcoinRpcConfig,
+impl LightningGenParams {
+    pub fn regtest() -> Self {
+        Self {
+            network: Network::Regtest,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,9 +78,6 @@ impl std::fmt::Display for LightningClientConfig {
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     LightningCommonInit,
-    LightningGenParams,
-    LightningGenParamsLocal,
-    LightningGenParamsConsensus,
     LightningConfig,
     LightningConfigPrivate,
     LightningConfigConsensus,

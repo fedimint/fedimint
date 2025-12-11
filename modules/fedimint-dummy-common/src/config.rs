@@ -8,27 +8,13 @@ use crate::DummyCommonInit;
 /// Parameters necessary to generate this module's configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DummyGenParams {
-    pub local: DummyGenParamsLocal,
-    pub consensus: DummyGenParamsConsensus,
-}
-
-/// Local parameters for config generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DummyGenParamsLocal;
-
-/// Consensus parameters for config generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DummyGenParamsConsensus {
     pub tx_fee: Amount,
 }
 
 impl Default for DummyGenParams {
     fn default() -> Self {
         Self {
-            local: DummyGenParamsLocal,
-            consensus: DummyGenParamsConsensus {
-                tx_fee: Amount::ZERO,
-            },
+            tx_fee: Amount::ZERO,
         }
     }
 }
@@ -65,9 +51,6 @@ pub struct DummyConfigPrivate;
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     DummyCommonInit,
-    DummyGenParams,
-    DummyGenParamsLocal,
-    DummyGenParamsConsensus,
     DummyConfig,
     DummyConfigPrivate,
     DummyConfigConsensus,

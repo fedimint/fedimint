@@ -17,7 +17,6 @@ use fedimint_logging::LOG_CORE;
 use hex::FromHex;
 use secp256k1::PublicKey;
 use serde::de::DeserializeOwned;
-use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
 use threshold_crypto::{G1Projective, G2Projective};
@@ -485,40 +484,8 @@ impl<M> Default for ModuleInitRegistry<M> {
     }
 }
 
-/// Type erased `ModuleInitParams` used to generate the `ServerModuleConfig`
-/// during config gen
-#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
-pub struct ConfigGenModuleParams {
-    pub local: serde_json::Value,
-    pub consensus: serde_json::Value,
-}
-
-impl ConfigGenModuleParams {
-    pub fn new(local: serde_json::Value, consensus: serde_json::Value) -> Self {
-        Self { local, consensus }
-    }
-
-    /// Converts the JSON into typed version, errors unless both `local` and
-    /// `consensus` values are defined
-    pub fn to_typed<P: ModuleInitParams>(&self) -> anyhow::Result<P> {
-        Ok(P::from_parts(
-            Self::parse("local", self.local.clone())?,
-            Self::parse("consensus", self.consensus.clone())?,
-        ))
-    }
-
-    fn parse<P: DeserializeOwned>(name: &str, json: serde_json::Value) -> anyhow::Result<P> {
-        serde_json::from_value(json).with_context(|| format!("Schema mismatch for {name} argument"))
-    }
-
-    pub fn from_typed<P: ModuleInitParams>(p: P) -> anyhow::Result<Self> {
-        let (local, consensus) = p.to_parts();
-        Ok(Self {
-            local: serde_json::to_value(local)?,
-            consensus: serde_json::to_value(consensus)?,
-        })
-    }
-}
+/// Type erased module config gen params
+pub type ConfigGenModuleParams = serde_json::Value;
 
 pub type CommonModuleInitRegistry = ModuleInitRegistry<DynCommonModuleInit>;
 
@@ -530,34 +497,6 @@ impl Eq for ServerModuleConfigGenParamsRegistry {}
 impl PartialEq for ServerModuleConfigGenParamsRegistry {
     fn eq(&self, other: &Self) -> bool {
         self.iter_modules().eq(other.iter_modules())
-    }
-}
-
-impl Serialize for ServerModuleConfigGenParamsRegistry {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let modules: Vec<_> = self.iter_modules().collect();
-        let mut serializer = serializer.serialize_map(Some(modules.len()))?;
-        for (id, kind, params) in modules {
-            serializer.serialize_key(&id)?;
-            serializer.serialize_value(&(kind.clone(), params.clone()))?;
-        }
-        serializer.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for ServerModuleConfigGenParamsRegistry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let json: BTreeMap<ModuleInstanceId, (ModuleKind, ConfigGenModuleParams)> =
-            Deserialize::deserialize(deserializer)?;
-        let mut params = BTreeMap::new();
-
-        for (id, (kind, module)) in json {
-            params.insert(id, (kind, module));
-        }
-        Ok(Self::from(params))
     }
 }
 
@@ -616,24 +555,24 @@ impl<M> ModuleInitRegistry<M> {
 }
 
 impl ModuleRegistry<ConfigGenModuleParams> {
-    pub fn attach_config_gen_params_by_id<T: ModuleInitParams>(
+    pub fn attach_config_gen_params_by_id<T: Serialize>(
         &mut self,
         id: ModuleInstanceId,
         kind: ModuleKind,
         r#gen: T,
     ) -> &mut Self {
-        let params = ConfigGenModuleParams::from_typed(r#gen)
+        let params = serde_json::to_value(r#gen)
             .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
         self.register_module(id, kind, params);
         self
     }
 
-    pub fn attach_config_gen_params<T: ModuleInitParams>(
+    pub fn attach_config_gen_params<T: Serialize>(
         &mut self,
         kind: ModuleKind,
         r#gen: T,
     ) -> &mut Self {
-        let params = ConfigGenModuleParams::from_typed(r#gen)
+        let params = serde_json::to_value(r#gen)
             .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
         self.append_module(kind, params);
         self
@@ -688,23 +627,6 @@ where
         }
         Ok(ModuleDecoderRegistry::from(decoders))
     }
-}
-
-/// Empty struct for if there are no params
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct EmptyGenParams {}
-
-pub trait ModuleInitParams: serde::Serialize + serde::de::DeserializeOwned {
-    /// Locally configurable parameters for config generation
-    type Local: DeserializeOwned + Serialize;
-    /// Consensus parameters for config generation
-    type Consensus: DeserializeOwned + Serialize;
-
-    /// Assemble from the distinct parts
-    fn from_parts(local: Self::Local, consensus: Self::Consensus) -> Self;
-
-    /// Split the config into its distinct parts
-    fn to_parts(self) -> (Self::Local, Self::Consensus);
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]

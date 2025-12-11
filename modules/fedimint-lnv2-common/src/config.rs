@@ -13,32 +13,18 @@ use crate::LightningCommonInit;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParams {
-    pub local: LightningGenParamsLocal,
-    pub consensus: LightningGenParamsConsensus,
-}
-
-impl LightningGenParams {
-    #[allow(clippy::missing_panics_doc)]
-    pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
-        Self {
-            local: LightningGenParamsLocal { bitcoin_rpc },
-            consensus: LightningGenParamsConsensus {
-                fee_consensus: Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
-                network: Network::Regtest,
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsConsensus {
     pub fee_consensus: Option<FeeConsensus>,
     pub network: Network,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsLocal {
-    pub bitcoin_rpc: BitcoinRpcConfig,
+impl LightningGenParams {
+    #[allow(clippy::missing_panics_doc)]
+    pub fn regtest() -> Self {
+        Self {
+            fee_consensus: Some(FeeConsensus::new(1000).expect("Relative fee is within range")),
+            network: Network::Regtest,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,9 +68,6 @@ impl std::fmt::Display for LightningClientConfig {
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     LightningCommonInit,
-    LightningGenParams,
-    LightningGenParamsLocal,
-    LightningGenParamsConsensus,
     LightningConfig,
     LightningConfigPrivate,
     LightningConfigConsensus,

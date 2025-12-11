@@ -535,20 +535,7 @@ macro_rules! module_plugin_static_trait_define_config{
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl_config {
-    ($common_gen:ty, $gen:ty, $gen_local:ty, $gen_consensus:ty, $cfg:ty, $cfg_private:ty, $cfg_consensus:ty, $cfg_client:ty) => {
-        impl fedimint_core::config::ModuleInitParams for $gen {
-            type Local = $gen_local;
-            type Consensus = $gen_consensus;
-
-            fn from_parts(local: Self::Local, consensus: Self::Consensus) -> Self {
-                Self { local, consensus }
-            }
-
-            fn to_parts(self) -> (Self::Local, Self::Consensus) {
-                (self.local, self.consensus)
-            }
-        }
-
+    ($common_gen:ty, $cfg:ty, $cfg_private:ty, $cfg_consensus:ty, $cfg_client:ty) => {
         impl fedimint_core::config::TypedServerModuleConsensusConfig for $cfg_consensus {
             fn kind(&self) -> fedimint_core::core::ModuleKind {
                 <$common_gen as fedimint_core::module::CommonModuleInit>::KIND

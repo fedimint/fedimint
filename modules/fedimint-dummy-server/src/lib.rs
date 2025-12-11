@@ -132,7 +132,7 @@ impl ServerModuleInit for DummyInit {
                 let config = DummyConfig {
                     private: DummyConfigPrivate,
                     consensus: DummyConfigConsensus {
-                        tx_fee: params.consensus.tx_fee,
+                        tx_fee: params.tx_fee,
                     },
                 };
                 (peer, config.to_erased())
@@ -152,7 +152,7 @@ impl ServerModuleInit for DummyInit {
         Ok(DummyConfig {
             private: DummyConfigPrivate,
             consensus: DummyConfigConsensus {
-                tx_fee: params.consensus.tx_fee,
+                tx_fee: params.tx_fee,
             },
         }
         .to_erased())

@@ -261,14 +261,14 @@ impl ServerModuleInit for LightningInit {
                     consensus: LightningConfigConsensus {
                         tpe_agg_pk: dealer_agg_pk(),
                         tpe_pks: tpe_pks.clone(),
-                        fee_consensus: params.consensus.fee_consensus.clone().unwrap_or(
+                        fee_consensus: params.fee_consensus.clone().unwrap_or(
                             if disable_base_fees {
                                 FeeConsensus::zero()
                             } else {
                                 FeeConsensus::new(0).expect("Relative fee is within range")
                             },
                         ),
-                        network: params.consensus.network,
+                        network: params.network,
                     },
                     private: LightningConfigPrivate {
                         sk: dealer_sk(peers.to_num_peers(), *peer),
@@ -297,14 +297,15 @@ impl ServerModuleInit for LightningInit {
                     .peer_ids()
                     .map(|peer| (peer, PublicKeyShare(eval_poly_g1(&polynomial, &peer))))
                     .collect(),
-                fee_consensus: params.consensus.fee_consensus.clone().unwrap_or(
-                    if disable_base_fees {
+                fee_consensus: params
+                    .fee_consensus
+                    .clone()
+                    .unwrap_or(if disable_base_fees {
                         FeeConsensus::zero()
                     } else {
                         FeeConsensus::new(0).expect("Relative fee is within range")
-                    },
-                ),
-                network: params.consensus.network,
+                    }),
+                network: params.network,
             },
             private: LightningConfigPrivate {
                 sk: SecretKeyShare(sks),

@@ -6,28 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::UnknownCommonInit;
 
 /// Parameters necessary to generate this module's configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UnknownGenParams {
-    pub local: UnknownGenParamsLocal,
-    pub consensus: UnknownGenParamsConsensus,
-}
-
-/// Local parameters for config generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UnknownGenParamsLocal;
-
-/// Consensus parameters for config generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UnknownGenParamsConsensus;
-
-impl Default for UnknownGenParams {
-    fn default() -> Self {
-        Self {
-            local: UnknownGenParamsLocal,
-            consensus: UnknownGenParamsConsensus,
-        }
-    }
-}
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UnknownGenParams;
 
 /// Contains all the configuration for the server
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -55,9 +35,6 @@ pub struct UnknownConfigPrivate;
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     UnknownCommonInit,
-    UnknownGenParams,
-    UnknownGenParamsLocal,
-    UnknownGenParamsConsensus,
     UnknownConfig,
     UnknownConfigPrivate,
     UnknownConfigConsensus,
