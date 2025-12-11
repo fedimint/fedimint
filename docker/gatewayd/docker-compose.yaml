@@ -1,0 +1,35 @@
+services:
+  gatewayd:
+    # TODO: Uncomment after release
+    #image: fedimint/gatewayd:v0.10.0
+    image: gatewayd:zmhvg8xrpqviw208dl9f57z0dcf6rjid
+    command: gatewayd ldk
+    ports:
+      - 8176:8176/tcp # ui
+      - 8177:8177/udp # iroh
+      - 10010:10010/tcp # lightning
+    volumes:
+      - gatewayd_data:/data
+    environment:
+      FM_GATEWAY_DATA_DIR: /data
+      FM_GATEWAY_LISTEN_ADDR: 0.0.0.0:8176
+      FM_GATEWAY_NETWORK: bitcoin
+      FM_GATEWAY_IROH_LISTEN_ADDR: 0.0.0.0:8177
+      FM_PORT_LDK: 10010
+      FM_ESPLORA_URL: https://mempool.space/api/
+
+      # OPTIONAL: Set the alias of your Lightning Node
+      FM_LDK_ALIAS: "Fedimint LDK Gateway"
+
+      # REQUIRED: Set the password hash to your own password
+      # Run:
+      #
+      # docker run gatewayd:zmhvg8xrpqviw208dl9f57z0dcf6rjid gateway-cli create-password-hash <REPLACE ME> | sed 's/\$/$$/g'
+      #
+      # Then paste the result here.
+      FM_GATEWAY_BCRYPT_PASSWORD_HASH: "REPLACE ME"
+
+    restart: no
+
+volumes:
+  gatewayd_data:
