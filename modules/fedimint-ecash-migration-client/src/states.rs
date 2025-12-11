@@ -21,6 +21,8 @@ pub enum EcashMigrationStateMachine {
     RegisterTransfer(RegisterTransferStateMachine),
     /// State machine for funding a transfer
     FundTransfer(FundTransferStateMachine),
+    /// State machine for redeeming origin ecash
+    RedeemOriginEcash(RedeemOriginEcashStateMachine),
 }
 
 impl State for EcashMigrationStateMachine {
@@ -44,6 +46,12 @@ impl State for EcashMigrationStateMachine {
                     EcashMigrationStateMachine::FundTransfer
                 )
             }
+            EcashMigrationStateMachine::RedeemOriginEcash(sm) => {
+                sm_enum_variant_translation!(
+                    sm.transitions(global_context),
+                    EcashMigrationStateMachine::RedeemOriginEcash
+                )
+            }
         }
     }
 
@@ -51,6 +59,7 @@ impl State for EcashMigrationStateMachine {
         match self {
             EcashMigrationStateMachine::RegisterTransfer(sm) => sm.operation_id(),
             EcashMigrationStateMachine::FundTransfer(sm) => sm.operation_id(),
+            EcashMigrationStateMachine::RedeemOriginEcash(sm) => sm.operation_id(),
         }
     }
 }
@@ -344,5 +353,121 @@ pub enum FundTransferState {
         amount: Amount,
     },
     /// Fund transfer failed
+    Failed { error: String },
+}
+
+// ============================================================================
+// Redeem Origin Ecash State Machine
+// ============================================================================
+
+/// Common data for the redeem origin ecash state machine
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct RedeemOriginEcashCommon {
+    pub operation_id: OperationId,
+    pub txid: TransactionId,
+    pub transfer_id: TransferId,
+    pub amount: Amount,
+}
+
+/// State machine for redeeming origin federation ecash
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct RedeemOriginEcashStateMachine {
+    pub common: RedeemOriginEcashCommon,
+    pub state: RedeemOriginEcashStates,
+}
+
+impl RedeemOriginEcashStateMachine {
+    fn operation_id(&self) -> OperationId {
+        self.common.operation_id
+    }
+
+    fn transitions(&self, global_context: &DynGlobalClientContext) -> Vec<StateTransition<Self>> {
+        match &self.state {
+            RedeemOriginEcashStates::Created => {
+                Self::created_transitions(global_context, self.common.clone())
+            }
+            RedeemOriginEcashStates::Aborted(_) | RedeemOriginEcashStates::Success => vec![],
+        }
+    }
+
+    fn created_transitions(
+        global_context: &DynGlobalClientContext,
+        common: RedeemOriginEcashCommon,
+    ) -> Vec<StateTransition<Self>> {
+        vec![
+            // Check if transaction was rejected
+            StateTransition::new(
+                Self::await_tx_rejected(global_context.clone(), common.txid),
+                |_dbtx, (), old_state| {
+                    Box::pin(async move { Self::transition_tx_rejected(old_state) })
+                },
+            ),
+            // Check for transaction acceptance
+            StateTransition::new(
+                Self::await_tx_accepted(global_context.clone(), common.clone()),
+                |_dbtx, (), old_state| {
+                    Box::pin(async move { Self::transition_tx_accepted(old_state) })
+                },
+            ),
+        ]
+    }
+
+    async fn await_tx_rejected(global_context: DynGlobalClientContext, txid: TransactionId) {
+        if global_context.await_tx_accepted(txid).await.is_err() {
+            return;
+        }
+        std::future::pending::<()>().await;
+    }
+
+    fn transition_tx_rejected(old_state: Self) -> Self {
+        Self {
+            common: old_state.common,
+            state: RedeemOriginEcashStates::Aborted("Transaction was rejected".to_string()),
+        }
+    }
+
+    async fn await_tx_accepted(
+        global_context: DynGlobalClientContext,
+        common: RedeemOriginEcashCommon,
+    ) {
+        // Wait for transaction to be accepted
+        if global_context.await_tx_accepted(common.txid).await.is_err() {
+            // Transaction was rejected, hang forever since the rejection
+            // transition will take precedence
+            std::future::pending::<()>().await;
+        }
+    }
+
+    fn transition_tx_accepted(old_state: Self) -> Self {
+        Self {
+            common: old_state.common,
+            state: RedeemOriginEcashStates::Success,
+        }
+    }
+}
+
+/// States of the redeem origin ecash state machine
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum RedeemOriginEcashStates {
+    /// Redeem transaction submitted, waiting for confirmation
+    Created,
+    /// Redeem transaction was rejected (contains error message)
+    Aborted(String),
+    /// Redeem completed successfully (transfer_id and amount are in common)
+    Success,
+}
+
+/// State updates for redeem origin ecash operation that can be observed by
+/// clients
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum RedeemOriginEcashState {
+    /// Transaction submitted, waiting for confirmation
+    Created,
+    /// Redeem completed successfully
+    Success {
+        transfer_id: TransferId,
+        amount: Amount,
+    },
+    /// Redeem failed
     Failed { error: String },
 }

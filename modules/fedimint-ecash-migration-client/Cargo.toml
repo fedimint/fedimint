@@ -31,6 +31,7 @@ fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-ecash-migration-common = { workspace = true }
+fedimint-mint-client = { workspace = true }
 fedimint-mint-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }

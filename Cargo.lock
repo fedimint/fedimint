@@ -3125,6 +3125,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-ecash-migration-common",
+ "fedimint-mint-client",
  "fedimint-mint-common",
  "fedimint-tbs",
  "futures",

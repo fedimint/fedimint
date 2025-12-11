@@ -6,11 +6,12 @@ use clap::Parser;
 use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
 use fedimint_ecash_migration_common::TransferId;
+use fedimint_mint_client::OOBNotes;
 use futures::StreamExt;
 use serde::Serialize;
 
 use crate::EcashMigrationClientModule;
-use crate::states::{FundTransferState, RegisterTransferState};
+use crate::states::{FundTransferState, RedeemOriginEcashState, RegisterTransferState};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -122,6 +123,31 @@ enum Opts {
         #[arg(long)]
         transfer_id: TransferId,
     },
+
+    /// Redeem origin federation ecash notes.
+    ///
+    /// This submits origin federation ecash notes for redemption. The notes
+    /// must belong to a transfer that has been activated. The redeemed amount
+    /// (minus fees) is deposited as local ecash into the client's wallet.
+    RedeemOriginEcash {
+        /// The transfer ID that the notes belong to.
+        #[arg(long)]
+        transfer_id: TransferId,
+
+        /// Out-of-band notes from the origin federation (base64 or base32
+        /// encoded).
+        #[arg(long)]
+        notes: OOBNotes,
+    },
+
+    /// Await completion of a previously started origin ecash redemption.
+    ///
+    /// Use this to resume waiting for a redemption that was interrupted
+    /// (e.g., due to a client crash) before it completed.
+    AwaitRedeemOriginEcash {
+        /// The operation ID returned when the redemption was started.
+        operation_id: OperationId,
+    },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -154,6 +180,12 @@ pub(crate) async fn handle_cli_command(
         } => fund_transfer(module, transfer_id, amount).await,
         Opts::AwaitFundTransfer { operation_id } => await_fund_transfer(module, operation_id).await,
         Opts::RequestActivation { transfer_id } => request_activation(module, transfer_id).await,
+        Opts::RedeemOriginEcash { transfer_id, notes } => {
+            redeem_origin_ecash(module, transfer_id, &notes).await
+        }
+        Opts::AwaitRedeemOriginEcash { operation_id } => {
+            await_redeem_origin_ecash(module, operation_id).await
+        }
     }
 }
 
@@ -312,5 +344,61 @@ async fn request_activation(
     Ok(serde_json::json!({
         "transfer_id": transfer_id,
         "status": "activation_requested",
+    }))
+}
+
+async fn redeem_origin_ecash(
+    module: &EcashMigrationClientModule,
+    transfer_id: TransferId,
+    notes: &OOBNotes,
+) -> anyhow::Result<serde_json::Value> {
+    let operation_id = module
+        .redeem_origin_ecash(transfer_id, notes.notes().clone())
+        .await
+        .context("Failed to redeem origin ecash")?;
+
+    await_redeem_origin_ecash(module, operation_id).await
+}
+
+async fn await_redeem_origin_ecash(
+    module: &EcashMigrationClientModule,
+    operation_id: OperationId,
+) -> anyhow::Result<serde_json::Value> {
+    let mut updates = module
+        .subscribe_redeem_origin_ecash(operation_id)
+        .await
+        .context("Failed to subscribe to redeem updates")?
+        .into_stream();
+
+    let mut result = None;
+    let mut error = None;
+
+    while let Some(state) = updates.next().await {
+        match state {
+            RedeemOriginEcashState::Success {
+                transfer_id,
+                amount,
+            } => {
+                result = Some((transfer_id, amount));
+                break;
+            }
+            RedeemOriginEcashState::Failed { error: e } => {
+                error = Some(e);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(error) = error {
+        anyhow::bail!("Origin ecash redemption failed: {error}");
+    }
+
+    let (transfer_id, amount) = result.context("Redemption did not complete successfully")?;
+
+    Ok(serde_json::json!({
+        "operation_id": operation_id,
+        "transfer_id": transfer_id,
+        "amount_msat": amount.msats,
     }))
 }

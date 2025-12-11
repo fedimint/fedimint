@@ -17,7 +17,9 @@ use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_client_module::sm::{Context, ModuleNotifier};
-use fedimint_client_module::transaction::{ClientOutput, ClientOutputBundle, TransactionBuilder};
+use fedimint_client_module::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_core::config::{JsonClientConfig, JsonWithKind};
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
@@ -29,7 +31,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::{All, Secp256k1};
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::retry;
-use fedimint_core::{Amount, OutPoint, Tiered, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 pub use fedimint_ecash_migration_common as common;
 use fedimint_ecash_migration_common::api::{
@@ -41,17 +43,19 @@ use fedimint_ecash_migration_common::config::EcashMigrationClientConfig;
 use fedimint_ecash_migration_common::naive_threshold::NaiveThresholdKey;
 use fedimint_ecash_migration_common::{
     EcashMigrationCommonInit, EcashMigrationCreateTransferOutput, EcashMigrationFundTransferOutput,
-    EcashMigrationModuleTypes, EcashMigrationOutput, KeySetHash, SpendBookHash, TransferId,
-    hash_and_count_spend_book,
+    EcashMigrationInput, EcashMigrationModuleTypes, EcashMigrationOutput, KeySetHash,
+    SpendBookHash, TransferId, hash_and_count_spend_book,
 };
+use fedimint_mint_client::SpendableNote;
 use fedimint_mint_common::config::MintClientConfig;
-use fedimint_mint_common::{MintCommonInit, Nonce};
+use fedimint_mint_common::{MintCommonInit, Nonce, Note};
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use states::{
     EcashMigrationStateMachine, FundTransferCommon, FundTransferState, FundTransferStateMachine,
-    FundTransferStates, RegisterTransferCommon, RegisterTransferState,
-    RegisterTransferStateMachine, RegisterTransferStates,
+    FundTransferStates, RedeemOriginEcashCommon, RedeemOriginEcashState,
+    RedeemOriginEcashStateMachine, RedeemOriginEcashStates, RegisterTransferCommon,
+    RegisterTransferState, RegisterTransferStateMachine, RegisterTransferStates,
 };
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
@@ -171,6 +175,14 @@ pub struct RegisterTransferOperationMeta {
 /// Metadata stored with the fund transfer operation
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FundTransferOperationMeta {
+    pub transfer_id: TransferId,
+    pub amount: Amount,
+    pub change: OutPointRange,
+}
+
+/// Metadata stored with the redeem origin ecash operation
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+pub struct RedeemOriginEcashOperationMeta {
     pub transfer_id: TransferId,
     pub amount: Amount,
     pub change: OutPointRange,
@@ -424,7 +436,8 @@ impl EcashMigrationClientModule {
                 EcashMigrationStateMachine::RegisterTransfer(register_transfer_state_machine) => {
                     register_transfer_state_machine.state
                 }
-                EcashMigrationStateMachine::FundTransfer(_) => {
+                EcashMigrationStateMachine::FundTransfer(_)
+                | EcashMigrationStateMachine::RedeemOriginEcash(_) => {
                     // This shouldn't happen, but return Created as a no-op
                     RegisterTransferStates::Created
                 }
@@ -590,7 +603,8 @@ impl EcashMigrationClientModule {
                 EcashMigrationStateMachine::FundTransfer(fund_transfer_state_machine) => {
                     fund_transfer_state_machine.state
                 }
-                EcashMigrationStateMachine::RegisterTransfer(_) => {
+                EcashMigrationStateMachine::RegisterTransfer(_)
+                | EcashMigrationStateMachine::RedeemOriginEcash(_) => {
                     // This shouldn't happen, but return Created as a no-op
                     FundTransferStates::Created
                 }
@@ -868,6 +882,174 @@ impl EcashMigrationClientModule {
         }
 
         Ok(())
+    }
+
+    /// Redeem origin federation ecash notes for local federation ecash.
+    ///
+    /// Takes a set of spendable notes from the origin federation and submits
+    /// them to the ecash migration module. The received amount (minus fees)
+    /// is deposited as local ecash into the client's wallet.
+    ///
+    /// # Errors
+    /// - If submitting the transaction fails.
+    pub async fn redeem_origin_ecash(
+        &self,
+        transfer_id: TransferId,
+        notes: TieredMulti<SpendableNote>,
+    ) -> anyhow::Result<OperationId> {
+        let total_amount = notes.total_amount();
+
+        // Create inputs from the notes
+        let inputs: Vec<_> = notes
+            .into_iter_items()
+            .map(|(amount, spendable_note)| ClientInput {
+                input: EcashMigrationInput::RedeemOriginEcash {
+                    transfer_id,
+                    note: Note {
+                        nonce: spendable_note.nonce(),
+                        signature: spendable_note.signature,
+                    },
+                    amount,
+                },
+                amounts: Amounts::new_bitcoin(amount),
+                keys: vec![spendable_note.spend_key],
+            })
+            .collect();
+
+        let operation_id = OperationId::new_random();
+
+        // Create the state machine
+        let sm_gen = move |_out_point_range: OutPointRange| {
+            vec![EcashMigrationStateMachine::RedeemOriginEcash(
+                RedeemOriginEcashStateMachine {
+                    common: RedeemOriginEcashCommon {
+                        operation_id,
+                        txid: _out_point_range.txid(),
+                        transfer_id,
+                        amount: total_amount,
+                    },
+                    state: RedeemOriginEcashStates::Created,
+                },
+            )]
+        };
+
+        // Build the transaction with inputs
+        let input_bundle = ClientInputBundle::new(
+            inputs,
+            vec![fedimint_client_module::transaction::ClientInputSM {
+                state_machines: std::sync::Arc::new(sm_gen),
+            }],
+        );
+
+        let tx =
+            TransactionBuilder::new().with_inputs(self.client_ctx.make_client_inputs(input_bundle));
+
+        // Metadata for the operation log
+        let meta_gen = move |change_range: OutPointRange| -> RedeemOriginEcashOperationMeta {
+            RedeemOriginEcashOperationMeta {
+                transfer_id,
+                amount: total_amount,
+                change: change_range,
+            }
+        };
+
+        // Submit the transaction
+        self.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                fedimint_ecash_migration_common::KIND.as_str(),
+                meta_gen,
+                tx,
+            )
+            .await
+            .context("Failed to submit redeem origin ecash transaction")?;
+
+        Ok(operation_id)
+    }
+
+    /// Subscribe to updates on the progress of a redeem origin ecash operation
+    /// started with [`Self::redeem_origin_ecash`].
+    ///
+    /// # Errors
+    /// - If the operation does not exist.
+    pub async fn subscribe_redeem_origin_ecash(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<RedeemOriginEcashState>> {
+        let operation = self
+            .client_ctx
+            .get_operation(operation_id)
+            .await
+            .context("Operation not found")?;
+
+        let meta = operation.meta::<RedeemOriginEcashOperationMeta>();
+        let change = meta.change;
+        let transfer_id = meta.transfer_id;
+        let amount = meta.amount;
+        let client_ctx = self.client_ctx.clone();
+
+        let mut sm_updates = client_ctx
+            .self_ref()
+            .notifier
+            .subscribe(operation_id)
+            .await
+            .map(|state| match state {
+                EcashMigrationStateMachine::RedeemOriginEcash(redeem_state_machine) => {
+                    redeem_state_machine.state
+                }
+                _ => RedeemOriginEcashStates::Created,
+            });
+
+        Ok(self
+            .client_ctx
+            .outcome_or_updates(operation, operation_id, move || {
+                stream! {
+                    yield RedeemOriginEcashState::Created;
+
+                    // Wait for transaction to be accepted
+                    match client_ctx
+                        .transaction_updates(operation_id)
+                        .await
+                        .await_tx_accepted(change.txid())
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(e) => {
+                            yield RedeemOriginEcashState::Failed {
+                                error: format!("Transaction not accepted: {e:?}"),
+                            };
+                            return;
+                        }
+                    }
+
+                    // Await state machine to transition to success and await change
+                    while let Some(state) = sm_updates.next().await {
+                        match state {
+                            RedeemOriginEcashStates::Created => {}
+                            RedeemOriginEcashStates::Aborted(error) => {
+                                yield RedeemOriginEcashState::Failed { error };
+                                return;
+                            }
+                            RedeemOriginEcashStates::Success => {
+                                // Wait for the change (local ecash) to be received
+                                match client_ctx.await_primary_module_outputs(operation_id, change.into_iter().collect::<Vec<_>>()).await {
+                                    Ok(()) => {}
+                                    Err(e) => {
+                                        warn!(?operation_id, "Error occurred while waiting for ecash change: {e:?}");
+                                    }
+                                }
+                                yield RedeemOriginEcashState::Success {
+                                    transfer_id,
+                                    amount,
+                                };
+                                return;
+                            }
+                        }
+                    }
+
+                    unreachable!("State machine update stream ended unexpectedly");
+                }
+            }))
     }
 }
 
