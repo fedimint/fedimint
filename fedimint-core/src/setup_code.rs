@@ -1,5 +1,8 @@
+use std::collections::BTreeSet;
+
 use serde::Serialize;
 
+use crate::core::ModuleKind;
 use crate::encoding::{Decodable, Encodable};
 use crate::util::SafeUrl;
 
@@ -14,6 +17,9 @@ pub struct PeerSetupCode {
     pub federation_name: Option<String>,
     /// Whether to disable base fees, set by the leader
     pub disable_base_fees: Option<bool>,
+    /// Modules enabled by the leader (if None, all available modules are
+    /// enabled)
+    pub enabled_modules: Option<BTreeSet<ModuleKind>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]

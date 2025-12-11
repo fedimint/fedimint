@@ -1,8 +1,11 @@
+use std::collections::BTreeSet;
+
 use axum::Router;
 use axum::extract::{Form, State};
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
+use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -26,8 +29,10 @@ pub(crate) struct SetupInput {
     #[serde(default)]
     pub is_lead: bool,
     pub federation_name: String,
-    #[serde(default)] // will not be send if disabled
+    #[serde(default)] // will not be sent if disabled
     pub enable_base_fees: bool,
+    #[serde(default)] // list of enabled module kinds
+    pub enabled_modules: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +75,8 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
         return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
 
+    let available_modules = state.api.available_modules();
+
     let content = html! {
         form method="post" action=(ROOT_ROUTE) {
             style {
@@ -77,7 +84,7 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                 .toggle-content {
                     display: none;
                 }
-                
+
                 .toggle-control:checked ~ .toggle-content {
                     display: block;
                 }
@@ -87,50 +94,111 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                 }
 
                 .form-check:has(#enable_base_fees:checked) + #base-fees-warning {
-                    /* hide the warning if the fees are enabled */
                     display: none;
+                }
+
+                .accordion-button {
+                    background-color: #f8f9fa;
+                }
+
+                .accordion-button:not(.collapsed) {
+                    background-color: #f8f9fa;
+                    box-shadow: none;
+                }
+
+                .accordion-button:focus {
+                    box-shadow: none;
+                }
+
+                #modules-warning {
+                    display: none;
+                }
+
+                #modules-list:has(.form-check-input:not(:checked)) ~ #modules-warning {
+                    display: block;
                 }
                 "#
             }
 
             div class="form-group mb-4" {
-                input type="text" class="form-control" id="name" name="name" placeholder="Your guardian name" required;
+                input type="text" class="form-control" id="name" name="name" placeholder="Your Guardian Name" required;
             }
 
             div class="form-group mb-4" {
-                input type="password" class="form-control" id="password" name="password" placeholder="Set password" required;
+                input type="password" class="form-control" id="password" name="password" placeholder="Your Password" required;
+            }
+
+            div class="alert alert-warning mb-3" style="font-size: 0.875rem;" {
+                "Exactly one guardian must set the global config."
             }
 
             div class="form-group mb-4" {
-                div class="form-check" {
-                    input type="checkbox" class="form-check-input toggle-control" id="is_lead" name="is_lead" value="true";
+                input type="checkbox" class="form-check-input toggle-control" id="is_lead" name="is_lead" value="true";
 
-                    label class="form-check-label" for="is_lead" {
-                        "Set global configuration. "
-                        b { "Only one guardian must enable this." }
+                label class="form-check-label ms-2" for="is_lead" {
+                    "Set the global config"
+                }
+
+                div class="toggle-content mt-3" {
+                    input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation Name";
+
+                    div class="form-check mt-3" {
+                        input type="checkbox" class="form-check-input" id="enable_base_fees" name="enable_base_fees" checked value="true";
+
+                        label class="form-check-label" for="enable_base_fees" {
+                            "Enable base fees for this federation"
+                        }
                     }
 
-                    div class="toggle-content mt-3" {
-                        input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation name";
+                    div id="base-fees-warning" class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
+                        strong { "Warning: " }
+                        "Base fees discourage spam and wasting storage space. The typical fee is only 1-3 sats per transaction, regardless of the value transferred. We recommend enabling the base fee and it cannot be changed later."
+                    }
 
-                        div class="form-check mt-3" {
-                            input type="checkbox" class="form-check-input" id="enable_base_fees" name="enable_base_fees" checked value="true";
+                    // Hidden inputs to ensure all modules are enabled by default
+                    @for kind in &available_modules {
+                        input type="hidden" name="enabled_modules" value=(kind.as_str());
+                    }
 
-                            label class="form-check-label" for="enable_base_fees" {
-                                "Enable base fees for this federation"
+                    div class="accordion mt-3" id="modulesAccordion" {
+                        div class="accordion-item" {
+                            h2 class="accordion-header" {
+                                button class="accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#modulesConfig"
+                                    aria-expanded="false" aria-controls="modulesConfig" {
+                                    "Advanced: Configure Enabled Modules"
+                                }
                             }
-                        }
+                            div id="modulesConfig" class="accordion-collapse collapse" data-bs-parent="#modulesAccordion" {
+                                div class="accordion-body" {
+                                    div id="modules-list" {
+                                        @for kind in &available_modules {
+                                            div class="form-check" {
+                                                input type="checkbox" class="form-check-input"
+                                                    id=(format!("module_{}", kind.as_str()))
+                                                    name="enabled_modules"
+                                                    value=(kind.as_str())
+                                                    checked;
 
-                        div id="base-fees-warning" class="alert alert-warning mt-2" style="font-size: 0.875rem;" {
-                            strong { "Warning: " }
-                            "Base fees discourage spam and wasting storage space. The typical fee is only 1-3 sats per transaction, regardless of the value transferred. We recommend enabling the base fee and it cannot be changed later."
+                                                label class="form-check-label" for=(format!("module_{}", kind.as_str())) {
+                                                    (kind.as_str())
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    div id="modules-warning" class="alert alert-warning mt-2 mb-0" style="font-size: 0.875rem;" {
+                                        "Only modify this if you know what you are doing. Disabled modules cannot be enabled later."
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
             div class="button-container" {
-                button type="submit" class="btn btn-primary setup-btn" { "OK" }
+                button type="submit" class="btn btn-primary setup-btn" { "Confirm" }
             }
         }
     };
@@ -143,16 +211,27 @@ async fn setup_submit(
     State(state): State<UiState<DynSetupApi>>,
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
-    // Only use federation_name if is_lead is true
+    // Only use these settings if is_lead is true
     let federation_name = if input.is_lead {
         Some(input.federation_name)
     } else {
         None
     };
 
-    // Only use enable_base_fees if is_lead is true
     let disable_base_fees = if input.is_lead {
         Some(!input.enable_base_fees)
+    } else {
+        None
+    };
+
+    let enabled_modules = if input.is_lead {
+        let enabled: BTreeSet<ModuleKind> = input
+            .enabled_modules
+            .into_iter()
+            .map(|s| ModuleKind::from_static_str(s.leak()))
+            .collect();
+
+        Some(enabled)
     } else {
         None
     };
@@ -164,6 +243,7 @@ async fn setup_submit(
             input.name,
             federation_name,
             disable_base_fees,
+            enabled_modules,
         )
         .await
     {
