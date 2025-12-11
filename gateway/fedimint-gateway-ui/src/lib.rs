@@ -26,7 +26,8 @@ use fedimint_gateway_common::{
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayInfo, LeaveFedPayload, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
     MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentSummaryPayload,
-    PaymentSummaryResponse, SendOnchainRequest, SetFeesPayload,
+    PaymentSummaryResponse, SendOnchainRequest, SetFeesPayload, SpendEcashPayload,
+    SpendEcashResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -39,7 +40,9 @@ use lightning_invoice::Bolt11Invoice;
 use maud::html;
 
 use crate::connect_fed::connect_federation_handler;
-use crate::federation::{deposit_address_handler, leave_federation_handler, set_fees_handler};
+use crate::federation::{
+    deposit_address_handler, leave_federation_handler, set_fees_handler, spend_ecash_handler,
+};
 use crate::lightning::{
     channels_fragment_handler, close_channel_handler, create_bolt11_invoice_handler,
     generate_receive_address_handler, open_channel_handler, pay_bolt11_invoice_handler,
@@ -64,6 +67,7 @@ pub(crate) const CREATE_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/receive/bolt1
 pub(crate) const PAY_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/send/bolt11";
 pub(crate) const TRANSACTIONS_FRAGMENT_ROUTE: &str = "/ui/transactions/fragment";
 pub(crate) const STOP_GATEWAY_ROUTE: &str = "/ui/stop";
+pub(crate) const SPEND_ECASH_ROUTE: &str = "/ui/federations/spend";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -151,6 +155,11 @@ pub trait IAdminGateway {
         &self,
         payload: ListTransactionsPayload,
     ) -> Result<ListTransactionsResponse, Self::Error>;
+
+    async fn handle_spend_ecash_msg(
+        &self,
+        payload: SpendEcashPayload,
+    ) -> Result<SpendEcashResponse, Self::Error>;
 
     async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> Result<(), Self::Error>;
 
@@ -334,6 +343,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
             get(generate_receive_address_handler),
         )
         .route(DEPOSIT_ADDRESS_ROUTE, post(deposit_address_handler))
+        .route(SPEND_ECASH_ROUTE, post(spend_ecash_handler))
         .route(PAYMENTS_FRAGMENT_ROUTE, get(payments_fragment_handler))
         .route(
             CREATE_BOLT11_INVOICE_ROUTE,

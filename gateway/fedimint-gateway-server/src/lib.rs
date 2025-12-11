@@ -2251,6 +2251,13 @@ impl IAdminGateway for Gateway {
         Ok(response)
     }
 
+    async fn handle_spend_ecash_msg(
+        &self,
+        payload: SpendEcashPayload,
+    ) -> AdminResult<SpendEcashResponse> {
+        Gateway::handle_spend_ecash_msg(self, payload).await
+    }
+
     /// Instructs the gateway to shutdown, but only after all incoming payments
     /// have been handled.
     async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
