@@ -507,9 +507,8 @@ impl ServerConfig {
             .into_iter()
             .enumerate()
             .map(|(module_id, (_kind, module_init))| {
-                let module_id = module_id as ModuleInstanceId;
                 (
-                    module_id,
+                    module_id as ModuleInstanceId,
                     module_init.trusted_dealer_gen(&peer0.peer_ids(), &args),
                 )
             })
@@ -660,8 +659,6 @@ impl ServerConfig {
         let mut module_cfgs = BTreeMap::new();
 
         for (module_id, (kind, module_init)) in module_iter.into_iter().enumerate() {
-            let module_id = module_id as ModuleInstanceId;
-
             info!(
                 target: LOG_NET_PEER_DKG,
                 "Running config generation for module of kind {kind}..."
@@ -669,7 +666,7 @@ impl ServerConfig {
 
             let cfg = module_init.distributed_gen(&handle, &args).await?;
 
-            module_cfgs.insert(module_id, cfg);
+            module_cfgs.insert(module_id as ModuleInstanceId, cfg);
         }
 
         let cfg = ServerConfig::from(

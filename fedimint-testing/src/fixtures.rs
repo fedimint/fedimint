@@ -43,8 +43,8 @@ pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 
 /// A tool for easily writing fedimint integration tests
 pub struct Fixtures {
-    clients: Vec<DynClientModuleInit>,
-    servers: Vec<DynServerModuleInit>,
+    clients: ClientModuleInitRegistry,
+    servers: ServerModuleInitRegistry,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
     fake_bitcoin_rpc: Option<DynBitcoindRpc>,
@@ -132,8 +132,8 @@ impl Fixtures {
         };
 
         Self {
-            clients: vec![],
-            servers: vec![],
+            clients: ClientModuleInitRegistry::default(),
+            servers: ServerModuleInitRegistry::default(),
             bitcoin_rpc: config,
             fake_bitcoin_rpc,
             bitcoin,
@@ -153,8 +153,8 @@ impl Fixtures {
         client: impl IClientModuleInit + 'static,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
     ) -> Self {
-        self.clients.push(DynClientModuleInit::from(client));
-        self.servers.push(DynServerModuleInit::from(server));
+        self.clients.attach(DynClientModuleInit::from(client));
+        self.servers.attach(DynServerModuleInit::from(server));
         self
     }
 
@@ -162,7 +162,7 @@ impl Fixtures {
         mut self,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
     ) -> Self {
-        self.servers.push(DynServerModuleInit::from(server));
+        self.servers.attach(DynServerModuleInit::from(server));
         self
     }
 
@@ -180,8 +180,8 @@ impl Fixtures {
     /// `FederationTest` for module tests.
     pub fn new_fed_builder(&self, num_offline: u16) -> FederationTestBuilder {
         FederationTestBuilder::new(
-            ServerModuleInitRegistry::from(self.servers.clone()),
-            ClientModuleInitRegistry::from(self.clients.clone()),
+            self.servers.clone(),
+            self.clients.clone(),
             self.primary_module_kind.clone(),
             num_offline,
             self.server_bitcoin_rpc(),
@@ -190,29 +190,32 @@ impl Fixtures {
 
     /// Creates a new Gateway that can be used for module tests.
     pub async fn new_gateway(&self) -> Gateway {
-        let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
         // Use server_gens.iter() to match the alphabetical order used by the server
         // when assigning module instance IDs (BTreeMap iteration order)
-        let module_kinds: Vec<_> = server_gens
+        let module_kinds: Vec<_> = self
+            .servers
             .iter()
             .enumerate()
             .map(|(id, (kind, _))| (id as ModuleInstanceId, kind.clone()))
             .collect();
-        let decoders = server_gens
+        let decoders = self
+            .servers
             .available_decoders(module_kinds.iter().map(|(id, kind)| (*id, kind)))
             .unwrap();
         let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
-        let clients = self.clients.clone().into_iter();
 
-        let registry = clients
-            .filter(|client| {
+        let registry = self
+            .clients
+            .iter()
+            .filter(|(kind, _)| {
                 // Remove LN module because the gateway adds one
-                client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
+                **kind != ModuleKind::from_static_str("ln")
             })
-            .filter(|client| {
+            .filter(|(kind, _)| {
                 // Remove LN NG module because the gateway adds one
-                client.to_dyn_common().module_kind() != ModuleKind::from_static_str("lnv2")
+                **kind != ModuleKind::from_static_str("lnv2")
             })
+            .map(|(_, client)| client.clone())
             .collect();
 
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
