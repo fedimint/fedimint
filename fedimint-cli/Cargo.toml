@@ -37,6 +37,7 @@ fedimint-client = { workspace = true }
 fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-cursed-redb = { workspace = true }
+fedimint-ecash-migration-client = { workspace = true, features = ["cli"] }
 fedimint-eventlog = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-lnv2-client = { workspace = true, features = ["cli"] }
