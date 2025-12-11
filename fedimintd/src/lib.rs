@@ -19,7 +19,7 @@ use clap::{ArgGroup, Parser};
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
     FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV,
-    is_env_var_set,
+    is_env_var_set, is_env_var_set_opt,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::rustls::install_crypto_provider;
@@ -410,10 +410,7 @@ pub fn default_modules() -> ServerModuleInitRegistry {
     server_gens.attach(MintInit);
     server_gens.attach(WalletInit);
 
-    let enable_lnv2 = std::env::var_os(FM_ENABLE_MODULE_LNV2_ENV).is_none()
-        || is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV);
-
-    if enable_lnv2 {
+    if is_env_var_set_opt(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or(true) {
         server_gens.attach(fedimint_lnv2_server::LightningInit);
     }
 
