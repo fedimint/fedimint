@@ -25,6 +25,107 @@ pub struct SignedGuardianMetadata {
     pub signature: secp256k1::schnorr::Signature,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
+pub struct SignedGuardianMetadataSubmission {
+    #[serde(flatten)]
+    pub signed_guardian_metadata: SignedGuardianMetadata,
+    pub peer_id: crate::PeerId,
+}
+
+// Implement Serialize/Deserialize for SignedGuardianMetadata for JSON
+impl Serialize for SignedGuardianMetadata {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("SignedGuardianMetadata", 2)?;
+
+        // Try to parse the JSON bytes and serialize as structured JSON if possible
+        // Otherwise fall back to hex encoding
+        match serde_json::from_slice::<serde_json::Value>(&self.json_bytes) {
+            Ok(json_value) => {
+                state.serialize_field("guardian_metadata", &json_value)?;
+            }
+            Err(_) => {
+                // If JSON parsing fails, hex encode the bytes
+                state.serialize_field("guardian_metadata_hex", &hex::encode(&self.json_bytes))?;
+            }
+        }
+
+        // Serialize signature as hex string
+        state.serialize_field("signature", &hex::encode(self.signature.as_ref()))?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SignedGuardianMetadata {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum SignedGuardianMetadataHelper {
+            // New format with structured guardian_metadata
+            Structured {
+                guardian_metadata: serde_json::Value,
+                signature: String,
+            },
+            // Fallback hex format
+            Hex {
+                guardian_metadata_hex: String,
+                signature: String,
+            },
+            // Legacy format with raw json_bytes
+            Legacy {
+                json_bytes: Vec<u8>,
+                signature: secp256k1::schnorr::Signature,
+            },
+        }
+
+        let helper = SignedGuardianMetadataHelper::deserialize(deserializer)?;
+        match helper {
+            SignedGuardianMetadataHelper::Structured {
+                guardian_metadata,
+                signature,
+            } => {
+                let json_bytes =
+                    serde_json::to_vec(&guardian_metadata).map_err(D::Error::custom)?;
+                let signature_bytes = hex::decode(&signature).map_err(D::Error::custom)?;
+                let signature = secp256k1::schnorr::Signature::from_slice(&signature_bytes)
+                    .map_err(D::Error::custom)?;
+                Ok(Self {
+                    json_bytes,
+                    signature,
+                })
+            }
+            SignedGuardianMetadataHelper::Hex {
+                guardian_metadata_hex,
+                signature,
+            } => {
+                let json_bytes = hex::decode(&guardian_metadata_hex).map_err(D::Error::custom)?;
+                let signature_bytes = hex::decode(&signature).map_err(D::Error::custom)?;
+                let signature = secp256k1::schnorr::Signature::from_slice(&signature_bytes)
+                    .map_err(D::Error::custom)?;
+                Ok(Self {
+                    json_bytes,
+                    signature,
+                })
+            }
+            SignedGuardianMetadataHelper::Legacy {
+                json_bytes,
+                signature,
+            } => Ok(Self {
+                json_bytes,
+                signature,
+            }),
+        }
+    }
+}
+
 // Implement Encodable/Decodable for SignedGuardianMetadata only
 impl Encodable for SignedGuardianMetadata {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
