@@ -16,6 +16,7 @@ use crate::util::FmtCompact as _;
 /// all client code handles correct modules that client doesn't know about.
 pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 
+pub const FM_ENABLE_MODULE_LNV1_ENV: &str = "FM_ENABLE_MODULE_LNV1";
 pub const FM_ENABLE_MODULE_LNV2_ENV: &str = "FM_ENABLE_MODULE_LNV2";
 
 /// Disable mint base fees for testing and development environments
