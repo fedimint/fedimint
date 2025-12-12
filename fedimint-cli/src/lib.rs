@@ -437,6 +437,15 @@ enum AdminCmd {
         #[clap(long)]
         override_url: Option<SafeUrl>,
     },
+    /// Sign guardian metadata
+    SignGuardianMetadata {
+        /// API URLs (comma-separated)
+        #[clap(long)]
+        api_urls: String,
+        /// Pkarr ID (z32 format)
+        #[clap(long)]
+        pkarr_id: String,
+    },
     /// Stop fedimintd after the specified session to do a coordinated upgrade
     Shutdown {
         /// Session index to stop after
@@ -552,6 +561,8 @@ Examples:
     },
 
     ApiAnnouncements,
+
+    GuardianMetadata,
 
     /// Advance the note_idx
     AdvanceNoteIdx {
@@ -986,6 +997,37 @@ impl FedimintCli {
                     serde_json::to_value(announcement).map_err_cli_msg("invalid response")?,
                 ))
             }
+            Command::Admin(AdminCmd::SignGuardianMetadata { api_urls, pkarr_id }) => {
+                let client = self.client_open(&cli).await?;
+
+                let urls: Vec<fedimint_core::util::SafeUrl> = api_urls
+                    .split(',')
+                    .map(|s| s.trim().parse())
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err_cli_msg("Invalid API URL format")?;
+
+                let metadata = fedimint_core::net::guardian_metadata::GuardianMetadata {
+                    api_urls: urls,
+                    pkarr_id_z32: pkarr_id,
+                    timestamp_secs: fedimint_core::time::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time went backwards")
+                        .as_secs(),
+                };
+
+                let signed_metadata = cli
+                    .admin_client(
+                        &client.get_peer_urls().await,
+                        client.api_secret().as_deref(),
+                    )
+                    .await?
+                    .sign_guardian_metadata(metadata, cli.auth()?)
+                    .await?;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(signed_metadata).map_err_cli_msg("invalid response")?,
+                ))
+            }
             Command::Admin(AdminCmd::Shutdown { session_idx }) => {
                 let client = self.client_open(&cli).await?;
 
@@ -1105,6 +1147,13 @@ impl FedimintCli {
                 let announcements = client.get_peer_url_announcements().await;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(announcements).expect("Can be encoded"),
+                ))
+            }
+            Command::Dev(DevCmd::GuardianMetadata) => {
+                let client = self.client_open(&cli).await?;
+                let metadata = client.get_guardian_metadata().await;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(metadata).expect("Can be encoded"),
                 ))
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => retry(
