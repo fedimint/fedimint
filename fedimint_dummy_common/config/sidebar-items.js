@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["DummyClientConfig","DummyConfig","DummyConfigConsensus","DummyConfigLocal","DummyConfigPrivate","DummyGenParams"]};
+window.SIDEBAR_ITEMS = {"struct":["DummyClientConfig","DummyConfig","DummyConfigConsensus","DummyConfigLocal","DummyConfigPrivate"]};

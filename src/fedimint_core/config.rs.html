@@ -472,391 +472,380 @@
 <a href=#472 id=472 data-nosnippet>472</a><span class="attr">#[derive(Clone, Debug)]
 <a href=#473 id=473 data-nosnippet>473</a></span><span class="kw">pub struct </span>ModuleInitRegistry&lt;M&gt;(BTreeMap&lt;ModuleKind, M&gt;);
 <a href=#474 id=474 data-nosnippet>474</a>
-<a href=#475 id=475 data-nosnippet>475</a><span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt; {
-<a href=#476 id=476 data-nosnippet>476</a>    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; {
-<a href=#477 id=477 data-nosnippet>477</a>        <span class="self">self</span>.<span class="number">0</span>.iter()
-<a href=#478 id=478 data-nosnippet>478</a>    }
-<a href=#479 id=479 data-nosnippet>479</a>}
-<a href=#480 id=480 data-nosnippet>480</a>
-<a href=#481 id=481 data-nosnippet>481</a><span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleInitRegistry&lt;M&gt; {
-<a href=#482 id=482 data-nosnippet>482</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-<a href=#483 id=483 data-nosnippet>483</a>        <span class="self">Self</span>(BTreeMap::new())
-<a href=#484 id=484 data-nosnippet>484</a>    }
-<a href=#485 id=485 data-nosnippet>485</a>}
-<a href=#486 id=486 data-nosnippet>486</a>
-<a href=#487 id=487 data-nosnippet>487</a><span class="doccomment">/// Type erased module config gen params
-<a href=#488 id=488 data-nosnippet>488</a></span><span class="kw">pub type </span>ConfigGenModuleParams = serde_json::Value;
+<a href=#475 id=475 data-nosnippet>475</a><span class="doccomment">/// Legacy module ordering used before alphabetical ordering was introduced.
+<a href=#476 id=476 data-nosnippet>476</a>/// This ordering was: ln, mint, wallet, lnv2, meta, unknown
+<a href=#477 id=477 data-nosnippet>477</a></span><span class="kw">const </span>LEGACY_MODULE_ORDER: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str] = <span class="kw-2">&amp;</span>[<span class="string">"ln"</span>, <span class="string">"mint"</span>, <span class="string">"wallet"</span>, <span class="string">"lnv2"</span>, <span class="string">"meta"</span>, <span class="string">"unknown"</span>];
+<a href=#478 id=478 data-nosnippet>478</a>
+<a href=#479 id=479 data-nosnippet>479</a><span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt; {
+<a href=#480 id=480 data-nosnippet>480</a>    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; {
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="self">self</span>.<span class="number">0</span>.iter()
+<a href=#482 id=482 data-nosnippet>482</a>    }
+<a href=#483 id=483 data-nosnippet>483</a>
+<a href=#484 id=484 data-nosnippet>484</a>    <span class="doccomment">/// Iterate over modules in the legacy insertion order for backwards
+<a href=#485 id=485 data-nosnippet>485</a>    /// compatibility. Modules not in the legacy order list are appended
+<a href=#486 id=486 data-nosnippet>486</a>    /// at the end in alphabetical order.
+<a href=#487 id=487 data-nosnippet>487</a>    </span><span class="kw">pub fn </span>iter_legacy_order(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(<span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; {
+<a href=#488 id=488 data-nosnippet>488</a>        <span class="kw">let </span><span class="kw-2">mut </span>ordered: Vec&lt;(<span class="kw-2">&amp;</span>ModuleKind, <span class="kw-2">&amp;</span>M)&gt; = Vec::new();
 <a href=#489 id=489 data-nosnippet>489</a>
-<a href=#490 id=490 data-nosnippet>490</a><span class="kw">pub type </span>CommonModuleInitRegistry = ModuleInitRegistry&lt;DynCommonModuleInit&gt;;
-<a href=#491 id=491 data-nosnippet>491</a>
-<a href=#492 id=492 data-nosnippet>492</a><span class="doccomment">/// Registry that contains the config gen params for all modules
-<a href=#493 id=493 data-nosnippet>493</a></span><span class="kw">pub type </span>ServerModuleConfigGenParamsRegistry = ModuleRegistry&lt;ConfigGenModuleParams&gt;;
-<a href=#494 id=494 data-nosnippet>494</a>
-<a href=#495 id=495 data-nosnippet>495</a><span class="kw">impl </span>Eq <span class="kw">for </span>ServerModuleConfigGenParamsRegistry {}
-<a href=#496 id=496 data-nosnippet>496</a>
-<a href=#497 id=497 data-nosnippet>497</a><span class="kw">impl </span>PartialEq <span class="kw">for </span>ServerModuleConfigGenParamsRegistry {
-<a href=#498 id=498 data-nosnippet>498</a>    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
-<a href=#499 id=499 data-nosnippet>499</a>        <span class="self">self</span>.iter_modules().eq(other.iter_modules())
-<a href=#500 id=500 data-nosnippet>500</a>    }
-<a href=#501 id=501 data-nosnippet>501</a>}
-<a href=#502 id=502 data-nosnippet>502</a>
-<a href=#503 id=503 data-nosnippet>503</a><span class="kw">impl</span>&lt;M&gt; From&lt;Vec&lt;M&gt;&gt; <span class="kw">for </span>ModuleInitRegistry&lt;M&gt;
-<a href=#504 id=504 data-nosnippet>504</a><span class="kw">where
-<a href=#505 id=505 data-nosnippet>505</a>    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>&gt;,
-<a href=#506 id=506 data-nosnippet>506</a>{
-<a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">fn </span>from(value: Vec&lt;M&gt;) -&gt; <span class="self">Self </span>{
-<a href=#508 id=508 data-nosnippet>508</a>        <span class="self">Self</span>(
-<a href=#509 id=509 data-nosnippet>509</a>            value
-<a href=#510 id=510 data-nosnippet>510</a>                .into_iter()
-<a href=#511 id=511 data-nosnippet>511</a>                .map(|i| (i.as_ref().module_kind(), i))
-<a href=#512 id=512 data-nosnippet>512</a>                .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
-<a href=#513 id=513 data-nosnippet>513</a>        )
-<a href=#514 id=514 data-nosnippet>514</a>    }
-<a href=#515 id=515 data-nosnippet>515</a>}
+<a href=#490 id=490 data-nosnippet>490</a>        <span class="comment">// First add modules in legacy order
+<a href=#491 id=491 data-nosnippet>491</a>        </span><span class="kw">for </span>kind_str <span class="kw">in </span>LEGACY_MODULE_ORDER {
+<a href=#492 id=492 data-nosnippet>492</a>            <span class="kw">let </span>kind = ModuleKind::from_static_str(kind_str);
+<a href=#493 id=493 data-nosnippet>493</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>((k, m)) = <span class="self">self</span>.<span class="number">0</span>.get_key_value(<span class="kw-2">&amp;</span>kind) {
+<a href=#494 id=494 data-nosnippet>494</a>                ordered.push((k, m));
+<a href=#495 id=495 data-nosnippet>495</a>            }
+<a href=#496 id=496 data-nosnippet>496</a>        }
+<a href=#497 id=497 data-nosnippet>497</a>
+<a href=#498 id=498 data-nosnippet>498</a>        <span class="comment">// Then add any remaining modules in alphabetical order
+<a href=#499 id=499 data-nosnippet>499</a>        </span><span class="kw">for </span>(kind, module) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>{
+<a href=#500 id=500 data-nosnippet>500</a>            <span class="kw">if </span>!LEGACY_MODULE_ORDER.contains(<span class="kw-2">&amp;</span>kind.as_str()) {
+<a href=#501 id=501 data-nosnippet>501</a>                ordered.push((kind, module));
+<a href=#502 id=502 data-nosnippet>502</a>            }
+<a href=#503 id=503 data-nosnippet>503</a>        }
+<a href=#504 id=504 data-nosnippet>504</a>
+<a href=#505 id=505 data-nosnippet>505</a>        ordered
+<a href=#506 id=506 data-nosnippet>506</a>    }
+<a href=#507 id=507 data-nosnippet>507</a>}
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a><span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleInitRegistry&lt;M&gt; {
+<a href=#510 id=510 data-nosnippet>510</a>    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+<a href=#511 id=511 data-nosnippet>511</a>        <span class="self">Self</span>(BTreeMap::new())
+<a href=#512 id=512 data-nosnippet>512</a>    }
+<a href=#513 id=513 data-nosnippet>513</a>}
+<a href=#514 id=514 data-nosnippet>514</a>
+<a href=#515 id=515 data-nosnippet>515</a><span class="kw">pub type </span>CommonModuleInitRegistry = ModuleInitRegistry&lt;DynCommonModuleInit&gt;;
 <a href=#516 id=516 data-nosnippet>516</a>
-<a href=#517 id=517 data-nosnippet>517</a><span class="kw">impl</span>&lt;M&gt; FromIterator&lt;M&gt; <span class="kw">for </span>ModuleInitRegistry&lt;M&gt;
+<a href=#517 id=517 data-nosnippet>517</a><span class="kw">impl</span>&lt;M&gt; From&lt;Vec&lt;M&gt;&gt; <span class="kw">for </span>ModuleInitRegistry&lt;M&gt;
 <a href=#518 id=518 data-nosnippet>518</a><span class="kw">where
-<a href=#519 id=519 data-nosnippet>519</a>    </span>M: AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static</span>)&gt;,
+<a href=#519 id=519 data-nosnippet>519</a>    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>&gt;,
 <a href=#520 id=520 data-nosnippet>520</a>{
-<a href=#521 id=521 data-nosnippet>521</a>    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = M&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
+<a href=#521 id=521 data-nosnippet>521</a>    <span class="kw">fn </span>from(value: Vec&lt;M&gt;) -&gt; <span class="self">Self </span>{
 <a href=#522 id=522 data-nosnippet>522</a>        <span class="self">Self</span>(
-<a href=#523 id=523 data-nosnippet>523</a>            iter.into_iter()
-<a href=#524 id=524 data-nosnippet>524</a>                .map(|i| (i.as_ref().module_kind(), i))
-<a href=#525 id=525 data-nosnippet>525</a>                .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
-<a href=#526 id=526 data-nosnippet>526</a>        )
-<a href=#527 id=527 data-nosnippet>527</a>    }
-<a href=#528 id=528 data-nosnippet>528</a>}
-<a href=#529 id=529 data-nosnippet>529</a>
-<a href=#530 id=530 data-nosnippet>530</a><span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt; {
-<a href=#531 id=531 data-nosnippet>531</a>    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-<a href=#532 id=532 data-nosnippet>532</a>        <span class="self">Self</span>::default()
-<a href=#533 id=533 data-nosnippet>533</a>    }
-<a href=#534 id=534 data-nosnippet>534</a>
-<a href=#535 id=535 data-nosnippet>535</a>    <span class="kw">pub fn </span>attach&lt;T&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, r#gen: T)
-<a href=#536 id=536 data-nosnippet>536</a>    <span class="kw">where
-<a href=#537 id=537 data-nosnippet>537</a>        </span>T: Into&lt;M&gt; + <span class="lifetime">'static </span>+ Send + Sync,
-<a href=#538 id=538 data-nosnippet>538</a>        M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static </span>+ Send + Sync&gt;,
-<a href=#539 id=539 data-nosnippet>539</a>    {
-<a href=#540 id=540 data-nosnippet>540</a>        <span class="kw">let </span>r#gen: M = r#gen.into();
-<a href=#541 id=541 data-nosnippet>541</a>        <span class="kw">let </span>kind = r#gen.as_ref().module_kind();
-<a href=#542 id=542 data-nosnippet>542</a>        <span class="macro">assert!</span>(
-<a href=#543 id=543 data-nosnippet>543</a>            <span class="self">self</span>.<span class="number">0</span>.insert(kind.clone(), r#gen).is_none(),
-<a href=#544 id=544 data-nosnippet>544</a>            <span class="string">"Can't insert module of same kind twice: {kind}"
-<a href=#545 id=545 data-nosnippet>545</a>        </span>);
-<a href=#546 id=546 data-nosnippet>546</a>    }
-<a href=#547 id=547 data-nosnippet>547</a>
-<a href=#548 id=548 data-nosnippet>548</a>    <span class="kw">pub fn </span>kinds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;ModuleKind&gt; {
-<a href=#549 id=549 data-nosnippet>549</a>        <span class="self">self</span>.<span class="number">0</span>.keys().cloned().collect()
-<a href=#550 id=550 data-nosnippet>550</a>    }
-<a href=#551 id=551 data-nosnippet>551</a>
-<a href=#552 id=552 data-nosnippet>552</a>    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, k: <span class="kw-2">&amp;</span>ModuleKind) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>M&gt; {
-<a href=#553 id=553 data-nosnippet>553</a>        <span class="self">self</span>.<span class="number">0</span>.get(k)
-<a href=#554 id=554 data-nosnippet>554</a>    }
-<a href=#555 id=555 data-nosnippet>555</a>}
-<a href=#556 id=556 data-nosnippet>556</a>
-<a href=#557 id=557 data-nosnippet>557</a><span class="kw">impl </span>ModuleRegistry&lt;ConfigGenModuleParams&gt; {
-<a href=#558 id=558 data-nosnippet>558</a>    <span class="kw">pub fn </span>attach_config_gen_params_by_id&lt;T: Serialize&gt;(
-<a href=#559 id=559 data-nosnippet>559</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#560 id=560 data-nosnippet>560</a>        id: ModuleInstanceId,
-<a href=#561 id=561 data-nosnippet>561</a>        kind: ModuleKind,
-<a href=#562 id=562 data-nosnippet>562</a>        r#gen: T,
-<a href=#563 id=563 data-nosnippet>563</a>    ) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
-<a href=#564 id=564 data-nosnippet>564</a>        <span class="kw">let </span>params = serde_json::to_value(r#gen)
-<a href=#565 id=565 data-nosnippet>565</a>            .unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Invalid config gen params for {kind}: {err}"</span>));
-<a href=#566 id=566 data-nosnippet>566</a>        <span class="self">self</span>.register_module(id, kind, params);
-<a href=#567 id=567 data-nosnippet>567</a>        <span class="self">self
-<a href=#568 id=568 data-nosnippet>568</a>    </span>}
-<a href=#569 id=569 data-nosnippet>569</a>
-<a href=#570 id=570 data-nosnippet>570</a>    <span class="kw">pub fn </span>attach_config_gen_params&lt;T: Serialize&gt;(
-<a href=#571 id=571 data-nosnippet>571</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#572 id=572 data-nosnippet>572</a>        kind: ModuleKind,
-<a href=#573 id=573 data-nosnippet>573</a>        r#gen: T,
-<a href=#574 id=574 data-nosnippet>574</a>    ) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
-<a href=#575 id=575 data-nosnippet>575</a>        <span class="kw">let </span>params = serde_json::to_value(r#gen)
-<a href=#576 id=576 data-nosnippet>576</a>            .unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Invalid config gen params for {kind}: {err}"</span>));
-<a href=#577 id=577 data-nosnippet>577</a>        <span class="self">self</span>.append_module(kind, params);
-<a href=#578 id=578 data-nosnippet>578</a>        <span class="self">self
-<a href=#579 id=579 data-nosnippet>579</a>    </span>}
-<a href=#580 id=580 data-nosnippet>580</a>}
-<a href=#581 id=581 data-nosnippet>581</a>
-<a href=#582 id=582 data-nosnippet>582</a><span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt;
-<a href=#583 id=583 data-nosnippet>583</a><span class="kw">where
-<a href=#584 id=584 data-nosnippet>584</a>    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>&gt;,
-<a href=#585 id=585 data-nosnippet>585</a>{
-<a href=#586 id=586 data-nosnippet>586</a>    <span class="attr">#[deprecated(
-<a href=#587 id=587 data-nosnippet>587</a>        note = <span class="string">"You probably want `available_decoders` to support missing module kinds. If you really want a strict behavior, use `decoders_strict`"
-<a href=#588 id=588 data-nosnippet>588</a>    </span>)]
-<a href=#589 id=589 data-nosnippet>589</a>    </span><span class="kw">pub fn </span>decoders&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#591 id=591 data-nosnippet>591</a>        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
-<a href=#592 id=592 data-nosnippet>592</a>    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
-<a href=#593 id=593 data-nosnippet>593</a>        <span class="self">self</span>.decoders_strict(modules)
-<a href=#594 id=594 data-nosnippet>594</a>    }
-<a href=#595 id=595 data-nosnippet>595</a>
-<a href=#596 id=596 data-nosnippet>596</a>    <span class="doccomment">/// Get decoders for `modules` and fail if any is unsupported
-<a href=#597 id=597 data-nosnippet>597</a>    </span><span class="kw">pub fn </span>decoders_strict&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#598 id=598 data-nosnippet>598</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#599 id=599 data-nosnippet>599</a>        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
-<a href=#600 id=600 data-nosnippet>600</a>    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
-<a href=#601 id=601 data-nosnippet>601</a>        <span class="kw">let </span><span class="kw-2">mut </span>decoders = BTreeMap::new();
-<a href=#602 id=602 data-nosnippet>602</a>        <span class="kw">for </span>(id, kind) <span class="kw">in </span>modules {
-<a href=#603 id=603 data-nosnippet>603</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.<span class="number">0</span>.get(kind) <span class="kw">else </span>{
-<a href=#604 id=604 data-nosnippet>604</a>                <span class="macro">anyhow::bail!</span>(
-<a href=#605 id=605 data-nosnippet>605</a>                    <span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"
-<a href=#606 id=606 data-nosnippet>606</a>                </span>)
-<a href=#607 id=607 data-nosnippet>607</a>            };
-<a href=#608 id=608 data-nosnippet>608</a>
-<a href=#609 id=609 data-nosnippet>609</a>            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
-<a href=#610 id=610 data-nosnippet>610</a>        }
-<a href=#611 id=611 data-nosnippet>611</a>        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(decoders))
-<a href=#612 id=612 data-nosnippet>612</a>    }
-<a href=#613 id=613 data-nosnippet>613</a>
-<a href=#614 id=614 data-nosnippet>614</a>    <span class="doccomment">/// Get decoders for `modules` and skip unsupported ones
-<a href=#615 id=615 data-nosnippet>615</a>    </span><span class="kw">pub fn </span>available_decoders&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#616 id=616 data-nosnippet>616</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#617 id=617 data-nosnippet>617</a>        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
-<a href=#618 id=618 data-nosnippet>618</a>    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
-<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">let </span><span class="kw-2">mut </span>decoders = BTreeMap::new();
-<a href=#620 id=620 data-nosnippet>620</a>        <span class="kw">for </span>(id, kind) <span class="kw">in </span>modules {
-<a href=#621 id=621 data-nosnippet>621</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.<span class="number">0</span>.get(kind) <span class="kw">else </span>{
-<a href=#622 id=622 data-nosnippet>622</a>                <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"Unsupported module id: {id}, kind: {kind}"</span>);
-<a href=#623 id=623 data-nosnippet>623</a>                <span class="kw">continue</span>;
-<a href=#624 id=624 data-nosnippet>624</a>            };
-<a href=#625 id=625 data-nosnippet>625</a>
-<a href=#626 id=626 data-nosnippet>626</a>            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
-<a href=#627 id=627 data-nosnippet>627</a>        }
-<a href=#628 id=628 data-nosnippet>628</a>        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(decoders))
-<a href=#629 id=629 data-nosnippet>629</a>    }
-<a href=#630 id=630 data-nosnippet>630</a>}
-<a href=#631 id=631 data-nosnippet>631</a>
-<a href=#632 id=632 data-nosnippet>632</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-<a href=#633 id=633 data-nosnippet>633</a></span><span class="kw">pub struct </span>ServerModuleConsensusConfig {
-<a href=#634 id=634 data-nosnippet>634</a>    <span class="kw">pub </span>kind: ModuleKind,
-<a href=#635 id=635 data-nosnippet>635</a>    <span class="kw">pub </span>version: ModuleConsensusVersion,
-<a href=#636 id=636 data-nosnippet>636</a>    <span class="attr">#[serde(with = <span class="string">"::hex::serde"</span>)]
-<a href=#637 id=637 data-nosnippet>637</a>    </span><span class="kw">pub </span>config: Vec&lt;u8&gt;,
-<a href=#638 id=638 data-nosnippet>638</a>}
-<a href=#639 id=639 data-nosnippet>639</a>
-<a href=#640 id=640 data-nosnippet>640</a><span class="doccomment">/// Config for the client-side of a particular Federation module
-<a href=#641 id=641 data-nosnippet>641</a>///
-<a href=#642 id=642 data-nosnippet>642</a>/// Since modules are (tbd.) pluggable into Federations,
-<a href=#643 id=643 data-nosnippet>643</a>/// it needs to be some form of an abstract type-erased-like
-<a href=#644 id=644 data-nosnippet>644</a>/// value.
-<a href=#645 id=645 data-nosnippet>645</a></span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-<a href=#646 id=646 data-nosnippet>646</a></span><span class="kw">pub struct </span>ClientModuleConfig {
-<a href=#647 id=647 data-nosnippet>647</a>    <span class="kw">pub </span>kind: ModuleKind,
-<a href=#648 id=648 data-nosnippet>648</a>    <span class="kw">pub </span>version: ModuleConsensusVersion,
-<a href=#649 id=649 data-nosnippet>649</a>    <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
-<a href=#650 id=650 data-nosnippet>650</a>    </span><span class="kw">pub </span>config: DynRawFallback&lt;DynClientConfig&gt;,
-<a href=#651 id=651 data-nosnippet>651</a>}
-<a href=#652 id=652 data-nosnippet>652</a>
-<a href=#653 id=653 data-nosnippet>653</a><span class="kw">impl </span>ClientModuleConfig {
-<a href=#654 id=654 data-nosnippet>654</a>    <span class="kw">pub fn </span>from_typed&lt;T: fedimint_core::core::ClientConfig&gt;(
-<a href=#655 id=655 data-nosnippet>655</a>        module_instance_id: ModuleInstanceId,
-<a href=#656 id=656 data-nosnippet>656</a>        kind: ModuleKind,
-<a href=#657 id=657 data-nosnippet>657</a>        version: ModuleConsensusVersion,
-<a href=#658 id=658 data-nosnippet>658</a>        value: T,
-<a href=#659 id=659 data-nosnippet>659</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-<a href=#660 id=660 data-nosnippet>660</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#661 id=661 data-nosnippet>661</a>            kind,
-<a href=#662 id=662 data-nosnippet>662</a>            version,
-<a href=#663 id=663 data-nosnippet>663</a>            config: fedimint_core::core::DynClientConfig::from_typed(module_instance_id, value)
-<a href=#664 id=664 data-nosnippet>664</a>                .into(),
-<a href=#665 id=665 data-nosnippet>665</a>        })
-<a href=#666 id=666 data-nosnippet>666</a>    }
-<a href=#667 id=667 data-nosnippet>667</a>
-<a href=#668 id=668 data-nosnippet>668</a>    <span class="kw">pub fn </span>redecode_raw(
-<a href=#669 id=669 data-nosnippet>669</a>        <span class="self">self</span>,
-<a href=#670 id=670 data-nosnippet>670</a>        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-<a href=#671 id=671 data-nosnippet>671</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
-<a href=#672 id=672 data-nosnippet>672</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#673 id=673 data-nosnippet>673</a>            config: <span class="self">self</span>.config.redecode_raw(modules)<span class="question-mark">?</span>,
-<a href=#674 id=674 data-nosnippet>674</a>            ..<span class="self">self
-<a href=#675 id=675 data-nosnippet>675</a>        </span>})
-<a href=#676 id=676 data-nosnippet>676</a>    }
-<a href=#677 id=677 data-nosnippet>677</a>
-<a href=#678 id=678 data-nosnippet>678</a>    <span class="kw">pub fn </span>is_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, kind: <span class="kw-2">&amp;</span>ModuleKind) -&gt; bool {
-<a href=#679 id=679 data-nosnippet>679</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.kind == kind
-<a href=#680 id=680 data-nosnippet>680</a>    }
-<a href=#681 id=681 data-nosnippet>681</a>
-<a href=#682 id=682 data-nosnippet>682</a>    <span class="kw">pub fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleKind {
-<a href=#683 id=683 data-nosnippet>683</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.kind
-<a href=#684 id=684 data-nosnippet>684</a>    }
-<a href=#685 id=685 data-nosnippet>685</a>}
-<a href=#686 id=686 data-nosnippet>686</a>
-<a href=#687 id=687 data-nosnippet>687</a><span class="kw">impl </span>ClientModuleConfig {
-<a href=#688 id=688 data-nosnippet>688</a>    <span class="kw">pub fn </span>cast&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>T&gt;
-<a href=#689 id=689 data-nosnippet>689</a>    <span class="kw">where
-<a href=#690 id=690 data-nosnippet>690</a>        </span>T: <span class="lifetime">'static</span>,
-<a href=#691 id=691 data-nosnippet>691</a>    {
-<a href=#692 id=692 data-nosnippet>692</a>        <span class="self">self</span>.config
-<a href=#693 id=693 data-nosnippet>693</a>            .expect_decoded_ref()
-<a href=#694 id=694 data-nosnippet>694</a>            .as_any()
-<a href=#695 id=695 data-nosnippet>695</a>            .downcast_ref::&lt;T&gt;()
-<a href=#696 id=696 data-nosnippet>696</a>            .context(<span class="string">"can't convert client module config to desired type"</span>)
-<a href=#697 id=697 data-nosnippet>697</a>    }
-<a href=#698 id=698 data-nosnippet>698</a>}
-<a href=#699 id=699 data-nosnippet>699</a>
-<a href=#700 id=700 data-nosnippet>700</a><span class="doccomment">/// Config for the server-side of a particular Federation module
-<a href=#701 id=701 data-nosnippet>701</a>///
-<a href=#702 id=702 data-nosnippet>702</a>/// See [`ClientModuleConfig`].
-<a href=#703 id=703 data-nosnippet>703</a></span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-<a href=#704 id=704 data-nosnippet>704</a></span><span class="kw">pub struct </span>ServerModuleConfig {
-<a href=#705 id=705 data-nosnippet>705</a>    <span class="kw">pub </span>private: JsonWithKind,
-<a href=#706 id=706 data-nosnippet>706</a>    <span class="kw">pub </span>consensus: ServerModuleConsensusConfig,
-<a href=#707 id=707 data-nosnippet>707</a>}
-<a href=#708 id=708 data-nosnippet>708</a>
-<a href=#709 id=709 data-nosnippet>709</a><span class="kw">impl </span>ServerModuleConfig {
-<a href=#710 id=710 data-nosnippet>710</a>    <span class="kw">pub fn </span>from(private: JsonWithKind, consensus: ServerModuleConsensusConfig) -&gt; <span class="self">Self </span>{
-<a href=#711 id=711 data-nosnippet>711</a>        <span class="self">Self </span>{ private, consensus }
-<a href=#712 id=712 data-nosnippet>712</a>    }
+<a href=#523 id=523 data-nosnippet>523</a>            value
+<a href=#524 id=524 data-nosnippet>524</a>                .into_iter()
+<a href=#525 id=525 data-nosnippet>525</a>                .map(|i| (i.as_ref().module_kind(), i))
+<a href=#526 id=526 data-nosnippet>526</a>                .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
+<a href=#527 id=527 data-nosnippet>527</a>        )
+<a href=#528 id=528 data-nosnippet>528</a>    }
+<a href=#529 id=529 data-nosnippet>529</a>}
+<a href=#530 id=530 data-nosnippet>530</a>
+<a href=#531 id=531 data-nosnippet>531</a><span class="kw">impl</span>&lt;M&gt; FromIterator&lt;M&gt; <span class="kw">for </span>ModuleInitRegistry&lt;M&gt;
+<a href=#532 id=532 data-nosnippet>532</a><span class="kw">where
+<a href=#533 id=533 data-nosnippet>533</a>    </span>M: AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static</span>)&gt;,
+<a href=#534 id=534 data-nosnippet>534</a>{
+<a href=#535 id=535 data-nosnippet>535</a>    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = M&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
+<a href=#536 id=536 data-nosnippet>536</a>        <span class="self">Self</span>(
+<a href=#537 id=537 data-nosnippet>537</a>            iter.into_iter()
+<a href=#538 id=538 data-nosnippet>538</a>                .map(|i| (i.as_ref().module_kind(), i))
+<a href=#539 id=539 data-nosnippet>539</a>                .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
+<a href=#540 id=540 data-nosnippet>540</a>        )
+<a href=#541 id=541 data-nosnippet>541</a>    }
+<a href=#542 id=542 data-nosnippet>542</a>}
+<a href=#543 id=543 data-nosnippet>543</a>
+<a href=#544 id=544 data-nosnippet>544</a><span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt; {
+<a href=#545 id=545 data-nosnippet>545</a>    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="self">Self</span>::default()
+<a href=#547 id=547 data-nosnippet>547</a>    }
+<a href=#548 id=548 data-nosnippet>548</a>
+<a href=#549 id=549 data-nosnippet>549</a>    <span class="kw">pub fn </span>attach&lt;T&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, r#gen: T)
+<a href=#550 id=550 data-nosnippet>550</a>    <span class="kw">where
+<a href=#551 id=551 data-nosnippet>551</a>        </span>T: Into&lt;M&gt; + <span class="lifetime">'static </span>+ Send + Sync,
+<a href=#552 id=552 data-nosnippet>552</a>        M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static </span>+ Send + Sync&gt;,
+<a href=#553 id=553 data-nosnippet>553</a>    {
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="kw">let </span>r#gen: M = r#gen.into();
+<a href=#555 id=555 data-nosnippet>555</a>        <span class="kw">let </span>kind = r#gen.as_ref().module_kind();
+<a href=#556 id=556 data-nosnippet>556</a>        <span class="macro">assert!</span>(
+<a href=#557 id=557 data-nosnippet>557</a>            <span class="self">self</span>.<span class="number">0</span>.insert(kind.clone(), r#gen).is_none(),
+<a href=#558 id=558 data-nosnippet>558</a>            <span class="string">"Can't insert module of same kind twice: {kind}"
+<a href=#559 id=559 data-nosnippet>559</a>        </span>);
+<a href=#560 id=560 data-nosnippet>560</a>    }
+<a href=#561 id=561 data-nosnippet>561</a>
+<a href=#562 id=562 data-nosnippet>562</a>    <span class="kw">pub fn </span>kinds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;ModuleKind&gt; {
+<a href=#563 id=563 data-nosnippet>563</a>        <span class="self">self</span>.<span class="number">0</span>.keys().cloned().collect()
+<a href=#564 id=564 data-nosnippet>564</a>    }
+<a href=#565 id=565 data-nosnippet>565</a>
+<a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, k: <span class="kw-2">&amp;</span>ModuleKind) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>M&gt; {
+<a href=#567 id=567 data-nosnippet>567</a>        <span class="self">self</span>.<span class="number">0</span>.get(k)
+<a href=#568 id=568 data-nosnippet>568</a>    }
+<a href=#569 id=569 data-nosnippet>569</a>}
+<a href=#570 id=570 data-nosnippet>570</a>
+<a href=#571 id=571 data-nosnippet>571</a><span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt;
+<a href=#572 id=572 data-nosnippet>572</a><span class="kw">where
+<a href=#573 id=573 data-nosnippet>573</a>    </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>&gt;,
+<a href=#574 id=574 data-nosnippet>574</a>{
+<a href=#575 id=575 data-nosnippet>575</a>    <span class="attr">#[deprecated(
+<a href=#576 id=576 data-nosnippet>576</a>        note = <span class="string">"You probably want `available_decoders` to support missing module kinds. If you really want a strict behavior, use `decoders_strict`"
+<a href=#577 id=577 data-nosnippet>577</a>    </span>)]
+<a href=#578 id=578 data-nosnippet>578</a>    </span><span class="kw">pub fn </span>decoders&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#579 id=579 data-nosnippet>579</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#580 id=580 data-nosnippet>580</a>        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
+<a href=#581 id=581 data-nosnippet>581</a>    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
+<a href=#582 id=582 data-nosnippet>582</a>        <span class="self">self</span>.decoders_strict(modules)
+<a href=#583 id=583 data-nosnippet>583</a>    }
+<a href=#584 id=584 data-nosnippet>584</a>
+<a href=#585 id=585 data-nosnippet>585</a>    <span class="doccomment">/// Get decoders for `modules` and fail if any is unsupported
+<a href=#586 id=586 data-nosnippet>586</a>    </span><span class="kw">pub fn </span>decoders_strict&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#587 id=587 data-nosnippet>587</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#588 id=588 data-nosnippet>588</a>        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
+<a href=#589 id=589 data-nosnippet>589</a>    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
+<a href=#590 id=590 data-nosnippet>590</a>        <span class="kw">let </span><span class="kw-2">mut </span>decoders = BTreeMap::new();
+<a href=#591 id=591 data-nosnippet>591</a>        <span class="kw">for </span>(id, kind) <span class="kw">in </span>modules {
+<a href=#592 id=592 data-nosnippet>592</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.<span class="number">0</span>.get(kind) <span class="kw">else </span>{
+<a href=#593 id=593 data-nosnippet>593</a>                <span class="macro">anyhow::bail!</span>(
+<a href=#594 id=594 data-nosnippet>594</a>                    <span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"
+<a href=#595 id=595 data-nosnippet>595</a>                </span>)
+<a href=#596 id=596 data-nosnippet>596</a>            };
+<a href=#597 id=597 data-nosnippet>597</a>
+<a href=#598 id=598 data-nosnippet>598</a>            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
+<a href=#599 id=599 data-nosnippet>599</a>        }
+<a href=#600 id=600 data-nosnippet>600</a>        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(decoders))
+<a href=#601 id=601 data-nosnippet>601</a>    }
+<a href=#602 id=602 data-nosnippet>602</a>
+<a href=#603 id=603 data-nosnippet>603</a>    <span class="doccomment">/// Get decoders for `modules` and skip unsupported ones
+<a href=#604 id=604 data-nosnippet>604</a>    </span><span class="kw">pub fn </span>available_decoders&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#605 id=605 data-nosnippet>605</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#606 id=606 data-nosnippet>606</a>        modules: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
+<a href=#607 id=607 data-nosnippet>607</a>    ) -&gt; anyhow::Result&lt;ModuleDecoderRegistry&gt; {
+<a href=#608 id=608 data-nosnippet>608</a>        <span class="kw">let </span><span class="kw-2">mut </span>decoders = BTreeMap::new();
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="kw">for </span>(id, kind) <span class="kw">in </span>modules {
+<a href=#610 id=610 data-nosnippet>610</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = <span class="self">self</span>.<span class="number">0</span>.get(kind) <span class="kw">else </span>{
+<a href=#611 id=611 data-nosnippet>611</a>                <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"Unsupported module id: {id}, kind: {kind}"</span>);
+<a href=#612 id=612 data-nosnippet>612</a>                <span class="kw">continue</span>;
+<a href=#613 id=613 data-nosnippet>613</a>            };
+<a href=#614 id=614 data-nosnippet>614</a>
+<a href=#615 id=615 data-nosnippet>615</a>            decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
+<a href=#616 id=616 data-nosnippet>616</a>        }
+<a href=#617 id=617 data-nosnippet>617</a>        <span class="prelude-val">Ok</span>(ModuleDecoderRegistry::from(decoders))
+<a href=#618 id=618 data-nosnippet>618</a>    }
+<a href=#619 id=619 data-nosnippet>619</a>}
+<a href=#620 id=620 data-nosnippet>620</a>
+<a href=#621 id=621 data-nosnippet>621</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+<a href=#622 id=622 data-nosnippet>622</a></span><span class="kw">pub struct </span>ServerModuleConsensusConfig {
+<a href=#623 id=623 data-nosnippet>623</a>    <span class="kw">pub </span>kind: ModuleKind,
+<a href=#624 id=624 data-nosnippet>624</a>    <span class="kw">pub </span>version: ModuleConsensusVersion,
+<a href=#625 id=625 data-nosnippet>625</a>    <span class="attr">#[serde(with = <span class="string">"::hex::serde"</span>)]
+<a href=#626 id=626 data-nosnippet>626</a>    </span><span class="kw">pub </span>config: Vec&lt;u8&gt;,
+<a href=#627 id=627 data-nosnippet>627</a>}
+<a href=#628 id=628 data-nosnippet>628</a>
+<a href=#629 id=629 data-nosnippet>629</a><span class="doccomment">/// Config for the client-side of a particular Federation module
+<a href=#630 id=630 data-nosnippet>630</a>///
+<a href=#631 id=631 data-nosnippet>631</a>/// Since modules are (tbd.) pluggable into Federations,
+<a href=#632 id=632 data-nosnippet>632</a>/// it needs to be some form of an abstract type-erased-like
+<a href=#633 id=633 data-nosnippet>633</a>/// value.
+<a href=#634 id=634 data-nosnippet>634</a></span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+<a href=#635 id=635 data-nosnippet>635</a></span><span class="kw">pub struct </span>ClientModuleConfig {
+<a href=#636 id=636 data-nosnippet>636</a>    <span class="kw">pub </span>kind: ModuleKind,
+<a href=#637 id=637 data-nosnippet>637</a>    <span class="kw">pub </span>version: ModuleConsensusVersion,
+<a href=#638 id=638 data-nosnippet>638</a>    <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
+<a href=#639 id=639 data-nosnippet>639</a>    </span><span class="kw">pub </span>config: DynRawFallback&lt;DynClientConfig&gt;,
+<a href=#640 id=640 data-nosnippet>640</a>}
+<a href=#641 id=641 data-nosnippet>641</a>
+<a href=#642 id=642 data-nosnippet>642</a><span class="kw">impl </span>ClientModuleConfig {
+<a href=#643 id=643 data-nosnippet>643</a>    <span class="kw">pub fn </span>from_typed&lt;T: fedimint_core::core::ClientConfig&gt;(
+<a href=#644 id=644 data-nosnippet>644</a>        module_instance_id: ModuleInstanceId,
+<a href=#645 id=645 data-nosnippet>645</a>        kind: ModuleKind,
+<a href=#646 id=646 data-nosnippet>646</a>        version: ModuleConsensusVersion,
+<a href=#647 id=647 data-nosnippet>647</a>        value: T,
+<a href=#648 id=648 data-nosnippet>648</a>    ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#649 id=649 data-nosnippet>649</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#650 id=650 data-nosnippet>650</a>            kind,
+<a href=#651 id=651 data-nosnippet>651</a>            version,
+<a href=#652 id=652 data-nosnippet>652</a>            config: fedimint_core::core::DynClientConfig::from_typed(module_instance_id, value)
+<a href=#653 id=653 data-nosnippet>653</a>                .into(),
+<a href=#654 id=654 data-nosnippet>654</a>        })
+<a href=#655 id=655 data-nosnippet>655</a>    }
+<a href=#656 id=656 data-nosnippet>656</a>
+<a href=#657 id=657 data-nosnippet>657</a>    <span class="kw">pub fn </span>redecode_raw(
+<a href=#658 id=658 data-nosnippet>658</a>        <span class="self">self</span>,
+<a href=#659 id=659 data-nosnippet>659</a>        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+<a href=#660 id=660 data-nosnippet>660</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+<a href=#661 id=661 data-nosnippet>661</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#662 id=662 data-nosnippet>662</a>            config: <span class="self">self</span>.config.redecode_raw(modules)<span class="question-mark">?</span>,
+<a href=#663 id=663 data-nosnippet>663</a>            ..<span class="self">self
+<a href=#664 id=664 data-nosnippet>664</a>        </span>})
+<a href=#665 id=665 data-nosnippet>665</a>    }
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>    <span class="kw">pub fn </span>is_kind(<span class="kw-2">&amp;</span><span class="self">self</span>, kind: <span class="kw-2">&amp;</span>ModuleKind) -&gt; bool {
+<a href=#668 id=668 data-nosnippet>668</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.kind == kind
+<a href=#669 id=669 data-nosnippet>669</a>    }
+<a href=#670 id=670 data-nosnippet>670</a>
+<a href=#671 id=671 data-nosnippet>671</a>    <span class="kw">pub fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ModuleKind {
+<a href=#672 id=672 data-nosnippet>672</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.kind
+<a href=#673 id=673 data-nosnippet>673</a>    }
+<a href=#674 id=674 data-nosnippet>674</a>}
+<a href=#675 id=675 data-nosnippet>675</a>
+<a href=#676 id=676 data-nosnippet>676</a><span class="kw">impl </span>ClientModuleConfig {
+<a href=#677 id=677 data-nosnippet>677</a>    <span class="kw">pub fn </span>cast&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>T&gt;
+<a href=#678 id=678 data-nosnippet>678</a>    <span class="kw">where
+<a href=#679 id=679 data-nosnippet>679</a>        </span>T: <span class="lifetime">'static</span>,
+<a href=#680 id=680 data-nosnippet>680</a>    {
+<a href=#681 id=681 data-nosnippet>681</a>        <span class="self">self</span>.config
+<a href=#682 id=682 data-nosnippet>682</a>            .expect_decoded_ref()
+<a href=#683 id=683 data-nosnippet>683</a>            .as_any()
+<a href=#684 id=684 data-nosnippet>684</a>            .downcast_ref::&lt;T&gt;()
+<a href=#685 id=685 data-nosnippet>685</a>            .context(<span class="string">"can't convert client module config to desired type"</span>)
+<a href=#686 id=686 data-nosnippet>686</a>    }
+<a href=#687 id=687 data-nosnippet>687</a>}
+<a href=#688 id=688 data-nosnippet>688</a>
+<a href=#689 id=689 data-nosnippet>689</a><span class="doccomment">/// Config for the server-side of a particular Federation module
+<a href=#690 id=690 data-nosnippet>690</a>///
+<a href=#691 id=691 data-nosnippet>691</a>/// See [`ClientModuleConfig`].
+<a href=#692 id=692 data-nosnippet>692</a></span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+<a href=#693 id=693 data-nosnippet>693</a></span><span class="kw">pub struct </span>ServerModuleConfig {
+<a href=#694 id=694 data-nosnippet>694</a>    <span class="kw">pub </span>private: JsonWithKind,
+<a href=#695 id=695 data-nosnippet>695</a>    <span class="kw">pub </span>consensus: ServerModuleConsensusConfig,
+<a href=#696 id=696 data-nosnippet>696</a>}
+<a href=#697 id=697 data-nosnippet>697</a>
+<a href=#698 id=698 data-nosnippet>698</a><span class="kw">impl </span>ServerModuleConfig {
+<a href=#699 id=699 data-nosnippet>699</a>    <span class="kw">pub fn </span>from(private: JsonWithKind, consensus: ServerModuleConsensusConfig) -&gt; <span class="self">Self </span>{
+<a href=#700 id=700 data-nosnippet>700</a>        <span class="self">Self </span>{ private, consensus }
+<a href=#701 id=701 data-nosnippet>701</a>    }
+<a href=#702 id=702 data-nosnippet>702</a>
+<a href=#703 id=703 data-nosnippet>703</a>    <span class="kw">pub fn </span>to_typed&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
+<a href=#704 id=704 data-nosnippet>704</a>        <span class="kw">let </span>private = serde_json::from_value(<span class="self">self</span>.private.value().clone())<span class="question-mark">?</span>;
+<a href=#705 id=705 data-nosnippet>705</a>        <span class="kw">let </span>consensus = &lt;T::Consensus&gt;::consensus_decode_whole(
+<a href=#706 id=706 data-nosnippet>706</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.config[..],
+<a href=#707 id=707 data-nosnippet>707</a>            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
+<a href=#708 id=708 data-nosnippet>708</a>        )<span class="question-mark">?</span>;
+<a href=#709 id=709 data-nosnippet>709</a>
+<a href=#710 id=710 data-nosnippet>710</a>        <span class="prelude-val">Ok</span>(TypedServerModuleConfig::from_parts(private, consensus))
+<a href=#711 id=711 data-nosnippet>711</a>    }
+<a href=#712 id=712 data-nosnippet>712</a>}
 <a href=#713 id=713 data-nosnippet>713</a>
-<a href=#714 id=714 data-nosnippet>714</a>    <span class="kw">pub fn </span>to_typed&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
-<a href=#715 id=715 data-nosnippet>715</a>        <span class="kw">let </span>private = serde_json::from_value(<span class="self">self</span>.private.value().clone())<span class="question-mark">?</span>;
-<a href=#716 id=716 data-nosnippet>716</a>        <span class="kw">let </span>consensus = &lt;T::Consensus&gt;::consensus_decode_whole(
-<a href=#717 id=717 data-nosnippet>717</a>            <span class="kw-2">&amp;</span><span class="self">self</span>.consensus.config[..],
-<a href=#718 id=718 data-nosnippet>718</a>            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
-<a href=#719 id=719 data-nosnippet>719</a>        )<span class="question-mark">?</span>;
-<a href=#720 id=720 data-nosnippet>720</a>
-<a href=#721 id=721 data-nosnippet>721</a>        <span class="prelude-val">Ok</span>(TypedServerModuleConfig::from_parts(private, consensus))
-<a href=#722 id=722 data-nosnippet>722</a>    }
-<a href=#723 id=723 data-nosnippet>723</a>}
-<a href=#724 id=724 data-nosnippet>724</a>
-<a href=#725 id=725 data-nosnippet>725</a><span class="doccomment">/// Consensus-critical part of a server side module config
-<a href=#726 id=726 data-nosnippet>726</a></span><span class="kw">pub trait </span>TypedServerModuleConsensusConfig:
-<a href=#727 id=727 data-nosnippet>727</a>    DeserializeOwned + Serialize + Encodable + Decodable
-<a href=#728 id=728 data-nosnippet>728</a>{
-<a href=#729 id=729 data-nosnippet>729</a>    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
-<a href=#730 id=730 data-nosnippet>730</a>
-<a href=#731 id=731 data-nosnippet>731</a>    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion;
-<a href=#732 id=732 data-nosnippet>732</a>
-<a href=#733 id=733 data-nosnippet>733</a>    <span class="kw">fn </span>from_erased(erased: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-<a href=#734 id=734 data-nosnippet>734</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::consensus_decode_whole(
-<a href=#735 id=735 data-nosnippet>735</a>            <span class="kw-2">&amp;</span>erased.config[..],
-<a href=#736 id=736 data-nosnippet>736</a>            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
-<a href=#737 id=737 data-nosnippet>737</a>        )<span class="question-mark">?</span>)
-<a href=#738 id=738 data-nosnippet>738</a>    }
-<a href=#739 id=739 data-nosnippet>739</a>}
+<a href=#714 id=714 data-nosnippet>714</a><span class="doccomment">/// Consensus-critical part of a server side module config
+<a href=#715 id=715 data-nosnippet>715</a></span><span class="kw">pub trait </span>TypedServerModuleConsensusConfig:
+<a href=#716 id=716 data-nosnippet>716</a>    DeserializeOwned + Serialize + Encodable + Decodable
+<a href=#717 id=717 data-nosnippet>717</a>{
+<a href=#718 id=718 data-nosnippet>718</a>    <span class="kw">fn </span>kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
+<a href=#719 id=719 data-nosnippet>719</a>
+<a href=#720 id=720 data-nosnippet>720</a>    <span class="kw">fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleConsensusVersion;
+<a href=#721 id=721 data-nosnippet>721</a>
+<a href=#722 id=722 data-nosnippet>722</a>    <span class="kw">fn </span>from_erased(erased: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+<a href=#723 id=723 data-nosnippet>723</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::consensus_decode_whole(
+<a href=#724 id=724 data-nosnippet>724</a>            <span class="kw-2">&amp;</span>erased.config[..],
+<a href=#725 id=725 data-nosnippet>725</a>            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
+<a href=#726 id=726 data-nosnippet>726</a>        )<span class="question-mark">?</span>)
+<a href=#727 id=727 data-nosnippet>727</a>    }
+<a href=#728 id=728 data-nosnippet>728</a>}
+<a href=#729 id=729 data-nosnippet>729</a>
+<a href=#730 id=730 data-nosnippet>730</a><span class="doccomment">/// Module (server side) config, typed
+<a href=#731 id=731 data-nosnippet>731</a></span><span class="kw">pub trait </span>TypedServerModuleConfig: DeserializeOwned + Serialize {
+<a href=#732 id=732 data-nosnippet>732</a>    <span class="doccomment">/// Private for this federation member data that are security sensitive and
+<a href=#733 id=733 data-nosnippet>733</a>    /// will be encrypted at rest
+<a href=#734 id=734 data-nosnippet>734</a>    </span><span class="kw">type </span>Private: DeserializeOwned + Serialize;
+<a href=#735 id=735 data-nosnippet>735</a>    <span class="doccomment">/// Shared consensus-critical config
+<a href=#736 id=736 data-nosnippet>736</a>    </span><span class="kw">type </span>Consensus: TypedServerModuleConsensusConfig;
+<a href=#737 id=737 data-nosnippet>737</a>
+<a href=#738 id=738 data-nosnippet>738</a>    <span class="doccomment">/// Assemble from the three functionally distinct parts
+<a href=#739 id=739 data-nosnippet>739</a>    </span><span class="kw">fn </span>from_parts(private: <span class="self">Self</span>::Private, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self</span>;
 <a href=#740 id=740 data-nosnippet>740</a>
-<a href=#741 id=741 data-nosnippet>741</a><span class="doccomment">/// Module (server side) config, typed
-<a href=#742 id=742 data-nosnippet>742</a></span><span class="kw">pub trait </span>TypedServerModuleConfig: DeserializeOwned + Serialize {
-<a href=#743 id=743 data-nosnippet>743</a>    <span class="doccomment">/// Private for this federation member data that are security sensitive and
-<a href=#744 id=744 data-nosnippet>744</a>    /// will be encrypted at rest
-<a href=#745 id=745 data-nosnippet>745</a>    </span><span class="kw">type </span>Private: DeserializeOwned + Serialize;
-<a href=#746 id=746 data-nosnippet>746</a>    <span class="doccomment">/// Shared consensus-critical config
-<a href=#747 id=747 data-nosnippet>747</a>    </span><span class="kw">type </span>Consensus: TypedServerModuleConsensusConfig;
-<a href=#748 id=748 data-nosnippet>748</a>
-<a href=#749 id=749 data-nosnippet>749</a>    <span class="doccomment">/// Assemble from the three functionally distinct parts
-<a href=#750 id=750 data-nosnippet>750</a>    </span><span class="kw">fn </span>from_parts(private: <span class="self">Self</span>::Private, consensus: <span class="self">Self</span>::Consensus) -&gt; <span class="self">Self</span>;
-<a href=#751 id=751 data-nosnippet>751</a>
-<a href=#752 id=752 data-nosnippet>752</a>    <span class="doccomment">/// Split the config into its two functionally distinct parts
-<a href=#753 id=753 data-nosnippet>753</a>    </span><span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus);
-<a href=#754 id=754 data-nosnippet>754</a>
-<a href=#755 id=755 data-nosnippet>755</a>    <span class="doccomment">/// Turn the typed config into type-erased version
-<a href=#756 id=756 data-nosnippet>756</a>    </span><span class="kw">fn </span>to_erased(<span class="self">self</span>) -&gt; ServerModuleConfig {
-<a href=#757 id=757 data-nosnippet>757</a>        <span class="kw">let </span>(kind, private, consensus) = <span class="self">self</span>.to_parts();
-<a href=#758 id=758 data-nosnippet>758</a>
-<a href=#759 id=759 data-nosnippet>759</a>        ServerModuleConfig {
-<a href=#760 id=760 data-nosnippet>760</a>            private: JsonWithKind::new(
-<a href=#761 id=761 data-nosnippet>761</a>                kind,
-<a href=#762 id=762 data-nosnippet>762</a>                serde_json::to_value(private).expect(<span class="string">"serialization can't fail"</span>),
-<a href=#763 id=763 data-nosnippet>763</a>            ),
-<a href=#764 id=764 data-nosnippet>764</a>            consensus: ServerModuleConsensusConfig {
-<a href=#765 id=765 data-nosnippet>765</a>                kind: consensus.kind(),
-<a href=#766 id=766 data-nosnippet>766</a>                version: consensus.version(),
-<a href=#767 id=767 data-nosnippet>767</a>                config: consensus.consensus_encode_to_vec(),
-<a href=#768 id=768 data-nosnippet>768</a>            },
-<a href=#769 id=769 data-nosnippet>769</a>        }
-<a href=#770 id=770 data-nosnippet>770</a>    }
-<a href=#771 id=771 data-nosnippet>771</a>}
-<a href=#772 id=772 data-nosnippet>772</a>
-<a href=#773 id=773 data-nosnippet>773</a><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
-<a href=#774 id=774 data-nosnippet>774</a></span><span class="kw">pub enum </span>P2PMessage {
-<a href=#775 id=775 data-nosnippet>775</a>    Aleph(Vec&lt;u8&gt;),
-<a href=#776 id=776 data-nosnippet>776</a>    SessionSignature(secp256k1::schnorr::Signature),
-<a href=#777 id=777 data-nosnippet>777</a>    SessionIndex(u64),
-<a href=#778 id=778 data-nosnippet>778</a>    SignedSessionOutcome(SerdeModuleEncoding&lt;SignedSessionOutcome&gt;),
-<a href=#779 id=779 data-nosnippet>779</a>    Checksum(sha256::Hash),
-<a href=#780 id=780 data-nosnippet>780</a>    DkgG1(DkgMessageG1),
-<a href=#781 id=781 data-nosnippet>781</a>    DkgG2(DkgMessageG2),
-<a href=#782 id=782 data-nosnippet>782</a>    Encodable(Vec&lt;u8&gt;),
-<a href=#783 id=783 data-nosnippet>783</a>    <span class="attr">#[encodable_default]
-<a href=#784 id=784 data-nosnippet>784</a>    </span>Default {
-<a href=#785 id=785 data-nosnippet>785</a>        variant: u64,
-<a href=#786 id=786 data-nosnippet>786</a>        bytes: Vec&lt;u8&gt;,
-<a href=#787 id=787 data-nosnippet>787</a>    },
-<a href=#788 id=788 data-nosnippet>788</a>}
-<a href=#789 id=789 data-nosnippet>789</a>
-<a href=#790 id=790 data-nosnippet>790</a><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
-<a href=#791 id=791 data-nosnippet>791</a></span><span class="kw">pub enum </span>DkgMessageG1 {
-<a href=#792 id=792 data-nosnippet>792</a>    Hash(sha256::Hash),
-<a href=#793 id=793 data-nosnippet>793</a>    Commitment(Vec&lt;G1Projective&gt;),
-<a href=#794 id=794 data-nosnippet>794</a>    Share(Scalar),
-<a href=#795 id=795 data-nosnippet>795</a>}
-<a href=#796 id=796 data-nosnippet>796</a>
-<a href=#797 id=797 data-nosnippet>797</a><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
-<a href=#798 id=798 data-nosnippet>798</a></span><span class="kw">pub enum </span>DkgMessageG2 {
-<a href=#799 id=799 data-nosnippet>799</a>    Hash(sha256::Hash),
-<a href=#800 id=800 data-nosnippet>800</a>    Commitment(Vec&lt;G2Projective&gt;),
-<a href=#801 id=801 data-nosnippet>801</a>    Share(Scalar),
+<a href=#741 id=741 data-nosnippet>741</a>    <span class="doccomment">/// Split the config into its two functionally distinct parts
+<a href=#742 id=742 data-nosnippet>742</a>    </span><span class="kw">fn </span>to_parts(<span class="self">self</span>) -&gt; (ModuleKind, <span class="self">Self</span>::Private, <span class="self">Self</span>::Consensus);
+<a href=#743 id=743 data-nosnippet>743</a>
+<a href=#744 id=744 data-nosnippet>744</a>    <span class="doccomment">/// Turn the typed config into type-erased version
+<a href=#745 id=745 data-nosnippet>745</a>    </span><span class="kw">fn </span>to_erased(<span class="self">self</span>) -&gt; ServerModuleConfig {
+<a href=#746 id=746 data-nosnippet>746</a>        <span class="kw">let </span>(kind, private, consensus) = <span class="self">self</span>.to_parts();
+<a href=#747 id=747 data-nosnippet>747</a>
+<a href=#748 id=748 data-nosnippet>748</a>        ServerModuleConfig {
+<a href=#749 id=749 data-nosnippet>749</a>            private: JsonWithKind::new(
+<a href=#750 id=750 data-nosnippet>750</a>                kind,
+<a href=#751 id=751 data-nosnippet>751</a>                serde_json::to_value(private).expect(<span class="string">"serialization can't fail"</span>),
+<a href=#752 id=752 data-nosnippet>752</a>            ),
+<a href=#753 id=753 data-nosnippet>753</a>            consensus: ServerModuleConsensusConfig {
+<a href=#754 id=754 data-nosnippet>754</a>                kind: consensus.kind(),
+<a href=#755 id=755 data-nosnippet>755</a>                version: consensus.version(),
+<a href=#756 id=756 data-nosnippet>756</a>                config: consensus.consensus_encode_to_vec(),
+<a href=#757 id=757 data-nosnippet>757</a>            },
+<a href=#758 id=758 data-nosnippet>758</a>        }
+<a href=#759 id=759 data-nosnippet>759</a>    }
+<a href=#760 id=760 data-nosnippet>760</a>}
+<a href=#761 id=761 data-nosnippet>761</a>
+<a href=#762 id=762 data-nosnippet>762</a><span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+<a href=#763 id=763 data-nosnippet>763</a></span><span class="kw">pub enum </span>P2PMessage {
+<a href=#764 id=764 data-nosnippet>764</a>    Aleph(Vec&lt;u8&gt;),
+<a href=#765 id=765 data-nosnippet>765</a>    SessionSignature(secp256k1::schnorr::Signature),
+<a href=#766 id=766 data-nosnippet>766</a>    SessionIndex(u64),
+<a href=#767 id=767 data-nosnippet>767</a>    SignedSessionOutcome(SerdeModuleEncoding&lt;SignedSessionOutcome&gt;),
+<a href=#768 id=768 data-nosnippet>768</a>    Checksum(sha256::Hash),
+<a href=#769 id=769 data-nosnippet>769</a>    DkgG1(DkgMessageG1),
+<a href=#770 id=770 data-nosnippet>770</a>    DkgG2(DkgMessageG2),
+<a href=#771 id=771 data-nosnippet>771</a>    Encodable(Vec&lt;u8&gt;),
+<a href=#772 id=772 data-nosnippet>772</a>    <span class="attr">#[encodable_default]
+<a href=#773 id=773 data-nosnippet>773</a>    </span>Default {
+<a href=#774 id=774 data-nosnippet>774</a>        variant: u64,
+<a href=#775 id=775 data-nosnippet>775</a>        bytes: Vec&lt;u8&gt;,
+<a href=#776 id=776 data-nosnippet>776</a>    },
+<a href=#777 id=777 data-nosnippet>777</a>}
+<a href=#778 id=778 data-nosnippet>778</a>
+<a href=#779 id=779 data-nosnippet>779</a><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
+<a href=#780 id=780 data-nosnippet>780</a></span><span class="kw">pub enum </span>DkgMessageG1 {
+<a href=#781 id=781 data-nosnippet>781</a>    Hash(sha256::Hash),
+<a href=#782 id=782 data-nosnippet>782</a>    Commitment(Vec&lt;G1Projective&gt;),
+<a href=#783 id=783 data-nosnippet>783</a>    Share(Scalar),
+<a href=#784 id=784 data-nosnippet>784</a>}
+<a href=#785 id=785 data-nosnippet>785</a>
+<a href=#786 id=786 data-nosnippet>786</a><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Encodable, Decodable)]
+<a href=#787 id=787 data-nosnippet>787</a></span><span class="kw">pub enum </span>DkgMessageG2 {
+<a href=#788 id=788 data-nosnippet>788</a>    Hash(sha256::Hash),
+<a href=#789 id=789 data-nosnippet>789</a>    Commitment(Vec&lt;G2Projective&gt;),
+<a href=#790 id=790 data-nosnippet>790</a>    Share(Scalar),
+<a href=#791 id=791 data-nosnippet>791</a>}
+<a href=#792 id=792 data-nosnippet>792</a>
+<a href=#793 id=793 data-nosnippet>793</a><span class="comment">// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
+<a href=#794 id=794 data-nosnippet>794</a>// requirement
+<a href=#795 id=795 data-nosnippet>795</a></span><span class="kw">impl </span>Serialize <span class="kw">for </span>DkgMessageG1 {
+<a href=#796 id=796 data-nosnippet>796</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#797 id=797 data-nosnippet>797</a>    <span class="kw">where
+<a href=#798 id=798 data-nosnippet>798</a>        </span>S: Serializer,
+<a href=#799 id=799 data-nosnippet>799</a>    {
+<a href=#800 id=800 data-nosnippet>800</a>        <span class="self">self</span>.consensus_encode_to_hex().serialize(serializer)
+<a href=#801 id=801 data-nosnippet>801</a>    }
 <a href=#802 id=802 data-nosnippet>802</a>}
 <a href=#803 id=803 data-nosnippet>803</a>
-<a href=#804 id=804 data-nosnippet>804</a><span class="comment">// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
-<a href=#805 id=805 data-nosnippet>805</a>// requirement
-<a href=#806 id=806 data-nosnippet>806</a></span><span class="kw">impl </span>Serialize <span class="kw">for </span>DkgMessageG1 {
-<a href=#807 id=807 data-nosnippet>807</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-<a href=#808 id=808 data-nosnippet>808</a>    <span class="kw">where
-<a href=#809 id=809 data-nosnippet>809</a>        </span>S: Serializer,
-<a href=#810 id=810 data-nosnippet>810</a>    {
-<a href=#811 id=811 data-nosnippet>811</a>        <span class="self">self</span>.consensus_encode_to_hex().serialize(serializer)
-<a href=#812 id=812 data-nosnippet>812</a>    }
-<a href=#813 id=813 data-nosnippet>813</a>}
-<a href=#814 id=814 data-nosnippet>814</a>
-<a href=#815 id=815 data-nosnippet>815</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>DkgMessageG1 {
-<a href=#816 id=816 data-nosnippet>816</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
-<a href=#817 id=817 data-nosnippet>817</a>    <span class="kw">where
-<a href=#818 id=818 data-nosnippet>818</a>        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
-<a href=#819 id=819 data-nosnippet>819</a>    {
-<a href=#820 id=820 data-nosnippet>820</a>        <span class="self">Self</span>::consensus_decode_hex(
-<a href=#821 id=821 data-nosnippet>821</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
-<a href=#822 id=822 data-nosnippet>822</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-<a href=#823 id=823 data-nosnippet>823</a>        )
-<a href=#824 id=824 data-nosnippet>824</a>        .map_err(serde::de::Error::custom)
+<a href=#804 id=804 data-nosnippet>804</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>DkgMessageG1 {
+<a href=#805 id=805 data-nosnippet>805</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+<a href=#806 id=806 data-nosnippet>806</a>    <span class="kw">where
+<a href=#807 id=807 data-nosnippet>807</a>        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#808 id=808 data-nosnippet>808</a>    {
+<a href=#809 id=809 data-nosnippet>809</a>        <span class="self">Self</span>::consensus_decode_hex(
+<a href=#810 id=810 data-nosnippet>810</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
+<a href=#811 id=811 data-nosnippet>811</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+<a href=#812 id=812 data-nosnippet>812</a>        )
+<a href=#813 id=813 data-nosnippet>813</a>        .map_err(serde::de::Error::custom)
+<a href=#814 id=814 data-nosnippet>814</a>    }
+<a href=#815 id=815 data-nosnippet>815</a>}
+<a href=#816 id=816 data-nosnippet>816</a>
+<a href=#817 id=817 data-nosnippet>817</a><span class="comment">// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
+<a href=#818 id=818 data-nosnippet>818</a>// requirement
+<a href=#819 id=819 data-nosnippet>819</a></span><span class="kw">impl </span>Serialize <span class="kw">for </span>DkgMessageG2 {
+<a href=#820 id=820 data-nosnippet>820</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+<a href=#821 id=821 data-nosnippet>821</a>    <span class="kw">where
+<a href=#822 id=822 data-nosnippet>822</a>        </span>S: Serializer,
+<a href=#823 id=823 data-nosnippet>823</a>    {
+<a href=#824 id=824 data-nosnippet>824</a>        <span class="self">self</span>.consensus_encode_to_hex().serialize(serializer)
 <a href=#825 id=825 data-nosnippet>825</a>    }
 <a href=#826 id=826 data-nosnippet>826</a>}
 <a href=#827 id=827 data-nosnippet>827</a>
-<a href=#828 id=828 data-nosnippet>828</a><span class="comment">// TODO: Remove the Serde encoding as soon as the p2p layer drops it as
-<a href=#829 id=829 data-nosnippet>829</a>// requirement
-<a href=#830 id=830 data-nosnippet>830</a></span><span class="kw">impl </span>Serialize <span class="kw">for </span>DkgMessageG2 {
-<a href=#831 id=831 data-nosnippet>831</a>    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
-<a href=#832 id=832 data-nosnippet>832</a>    <span class="kw">where
-<a href=#833 id=833 data-nosnippet>833</a>        </span>S: Serializer,
-<a href=#834 id=834 data-nosnippet>834</a>    {
-<a href=#835 id=835 data-nosnippet>835</a>        <span class="self">self</span>.consensus_encode_to_hex().serialize(serializer)
-<a href=#836 id=836 data-nosnippet>836</a>    }
-<a href=#837 id=837 data-nosnippet>837</a>}
-<a href=#838 id=838 data-nosnippet>838</a>
-<a href=#839 id=839 data-nosnippet>839</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>DkgMessageG2 {
-<a href=#840 id=840 data-nosnippet>840</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
-<a href=#841 id=841 data-nosnippet>841</a>    <span class="kw">where
-<a href=#842 id=842 data-nosnippet>842</a>        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
-<a href=#843 id=843 data-nosnippet>843</a>    {
-<a href=#844 id=844 data-nosnippet>844</a>        <span class="self">Self</span>::consensus_decode_hex(
-<a href=#845 id=845 data-nosnippet>845</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
-<a href=#846 id=846 data-nosnippet>846</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
-<a href=#847 id=847 data-nosnippet>847</a>        )
-<a href=#848 id=848 data-nosnippet>848</a>        .map_err(serde::de::Error::custom)
-<a href=#849 id=849 data-nosnippet>849</a>    }
-<a href=#850 id=850 data-nosnippet>850</a>}
-<a href=#851 id=851 data-nosnippet>851</a>
-<a href=#852 id=852 data-nosnippet>852</a><span class="doccomment">/// Key under which the federation name can be sent to client in the `meta` part
-<a href=#853 id=853 data-nosnippet>853</a>/// of the config
-<a href=#854 id=854 data-nosnippet>854</a></span><span class="kw">pub const </span>META_FEDERATION_NAME_KEY: <span class="kw-2">&amp;</span>str = <span class="string">"federation_name"</span>;
-<a href=#855 id=855 data-nosnippet>855</a>
-<a href=#856 id=856 data-nosnippet>856</a><span class="kw">pub fn </span>load_from_file&lt;T: DeserializeOwned&gt;(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt; {
-<a href=#857 id=857 data-nosnippet>857</a>    <span class="kw">let </span>file = std::fs::File::open(path)<span class="question-mark">?</span>;
-<a href=#858 id=858 data-nosnippet>858</a>    <span class="prelude-val">Ok</span>(serde_json::from_reader(file)<span class="question-mark">?</span>)
-<a href=#859 id=859 data-nosnippet>859</a>}
-<a href=#860 id=860 data-nosnippet>860</a>
-<a href=#861 id=861 data-nosnippet>861</a><span class="attr">#[cfg(test)]
-<a href=#862 id=862 data-nosnippet>862</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>
+<a href=#828 id=828 data-nosnippet>828</a><span class="kw">impl</span>&lt;<span class="lifetime">'de</span>&gt; Deserialize&lt;<span class="lifetime">'de</span>&gt; <span class="kw">for </span>DkgMessageG2 {
+<a href=#829 id=829 data-nosnippet>829</a>    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt;
+<a href=#830 id=830 data-nosnippet>830</a>    <span class="kw">where
+<a href=#831 id=831 data-nosnippet>831</a>        </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+<a href=#832 id=832 data-nosnippet>832</a>    {
+<a href=#833 id=833 data-nosnippet>833</a>        <span class="self">Self</span>::consensus_decode_hex(
+<a href=#834 id=834 data-nosnippet>834</a>            <span class="kw-2">&amp;</span>String::deserialize(deserializer)<span class="question-mark">?</span>,
+<a href=#835 id=835 data-nosnippet>835</a>            <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
+<a href=#836 id=836 data-nosnippet>836</a>        )
+<a href=#837 id=837 data-nosnippet>837</a>        .map_err(serde::de::Error::custom)
+<a href=#838 id=838 data-nosnippet>838</a>    }
+<a href=#839 id=839 data-nosnippet>839</a>}
+<a href=#840 id=840 data-nosnippet>840</a>
+<a href=#841 id=841 data-nosnippet>841</a><span class="doccomment">/// Key under which the federation name can be sent to client in the `meta` part
+<a href=#842 id=842 data-nosnippet>842</a>/// of the config
+<a href=#843 id=843 data-nosnippet>843</a></span><span class="kw">pub const </span>META_FEDERATION_NAME_KEY: <span class="kw-2">&amp;</span>str = <span class="string">"federation_name"</span>;
+<a href=#844 id=844 data-nosnippet>844</a>
+<a href=#845 id=845 data-nosnippet>845</a><span class="kw">pub fn </span>load_from_file&lt;T: DeserializeOwned&gt;(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt; {
+<a href=#846 id=846 data-nosnippet>846</a>    <span class="kw">let </span>file = std::fs::File::open(path)<span class="question-mark">?</span>;
+<a href=#847 id=847 data-nosnippet>847</a>    <span class="prelude-val">Ok</span>(serde_json::from_reader(file)<span class="question-mark">?</span>)
+<a href=#848 id=848 data-nosnippet>848</a>}
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a><span class="attr">#[cfg(test)]
+<a href=#851 id=851 data-nosnippet>851</a></span><span class="kw">mod </span>tests;</code></pre></div></section></main></body></html>

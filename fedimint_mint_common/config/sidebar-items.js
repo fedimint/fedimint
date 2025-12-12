@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_DENOMINATION_SIZE"],"struct":["FeeConsensus","MintClientConfig","MintConfig","MintConfigConsensus","MintConfigLocal","MintConfigPrivate","MintGenParams"]};
+window.SIDEBAR_ITEMS = {"struct":["FeeConsensus","MintClientConfig","MintConfig","MintConfigConsensus","MintConfigLocal","MintConfigPrivate"]};

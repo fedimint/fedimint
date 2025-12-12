@@ -5,38 +5,34 @@
 <a href=#5 id=5 data-nosnippet>5</a>
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span><span class="kw">crate</span>::MetaCommonInit;
 <a href=#7 id=7 data-nosnippet>7</a>
-<a href=#8 id=8 data-nosnippet>8</a><span class="doccomment">/// Parameters necessary to generate this module's configuration
-<a href=#9 id=9 data-nosnippet>9</a></span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub struct </span>MetaGenParams;
-<a href=#11 id=11 data-nosnippet>11</a>
-<a href=#12 id=12 data-nosnippet>12</a><span class="doccomment">/// Contains all the configuration for the server
-<a href=#13 id=13 data-nosnippet>13</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
-<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub struct </span>MetaConfig {
-<a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">pub </span>private: MetaConfigPrivate,
-<a href=#16 id=16 data-nosnippet>16</a>    <span class="kw">pub </span>consensus: MetaConfigConsensus,
-<a href=#17 id=17 data-nosnippet>17</a>}
+<a href=#8 id=8 data-nosnippet>8</a><span class="doccomment">/// Contains all the configuration for the server
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub struct </span>MetaConfig {
+<a href=#11 id=11 data-nosnippet>11</a>    <span class="kw">pub </span>private: MetaConfigPrivate,
+<a href=#12 id=12 data-nosnippet>12</a>    <span class="kw">pub </span>consensus: MetaConfigConsensus,
+<a href=#13 id=13 data-nosnippet>13</a>}
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a><span class="doccomment">/// Contains all the configuration for the client
+<a href=#16 id=16 data-nosnippet>16</a></span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">pub struct </span>MetaClientConfig;
 <a href=#18 id=18 data-nosnippet>18</a>
-<a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// Contains all the configuration for the client
-<a href=#20 id=20 data-nosnippet>20</a></span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
-<a href=#21 id=21 data-nosnippet>21</a></span><span class="kw">pub struct </span>MetaClientConfig;
+<a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// Locally unencrypted config unique to each member
+<a href=#20 id=20 data-nosnippet>20</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
+<a href=#21 id=21 data-nosnippet>21</a></span><span class="kw">pub struct </span>MetaConfigLocal;
 <a href=#22 id=22 data-nosnippet>22</a>
-<a href=#23 id=23 data-nosnippet>23</a><span class="doccomment">/// Locally unencrypted config unique to each member
+<a href=#23 id=23 data-nosnippet>23</a><span class="doccomment">/// Will be the same for every federation member
 <a href=#24 id=24 data-nosnippet>24</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">pub struct </span>MetaConfigLocal;
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="kw">pub struct </span>MetaConfigConsensus;
 <a href=#26 id=26 data-nosnippet>26</a>
-<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// Will be the same for every federation member
-<a href=#28 id=28 data-nosnippet>28</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-<a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub struct </span>MetaConfigConsensus;
+<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// Will be encrypted and not shared such as private key material
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
+<a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub struct </span>MetaConfigPrivate;
 <a href=#30 id=30 data-nosnippet>30</a>
-<a href=#31 id=31 data-nosnippet>31</a><span class="doccomment">/// Will be encrypted and not shared such as private key material
-<a href=#32 id=32 data-nosnippet>32</a></span><span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
-<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">pub struct </span>MetaConfigPrivate;
-<a href=#34 id=34 data-nosnippet>34</a>
-<a href=#35 id=35 data-nosnippet>35</a><span class="comment">// Wire together the configs for this module
-<a href=#36 id=36 data-nosnippet>36</a></span><span class="macro">plugin_types_trait_impl_config!</span>(
-<a href=#37 id=37 data-nosnippet>37</a>    MetaCommonInit,
-<a href=#38 id=38 data-nosnippet>38</a>    MetaConfig,
-<a href=#39 id=39 data-nosnippet>39</a>    MetaConfigPrivate,
-<a href=#40 id=40 data-nosnippet>40</a>    MetaConfigConsensus,
-<a href=#41 id=41 data-nosnippet>41</a>    MetaClientConfig
-<a href=#42 id=42 data-nosnippet>42</a>);</code></pre></div></section></main></body></html>
+<a href=#31 id=31 data-nosnippet>31</a><span class="comment">// Wire together the configs for this module
+<a href=#32 id=32 data-nosnippet>32</a></span><span class="macro">plugin_types_trait_impl_config!</span>(
+<a href=#33 id=33 data-nosnippet>33</a>    MetaCommonInit,
+<a href=#34 id=34 data-nosnippet>34</a>    MetaConfig,
+<a href=#35 id=35 data-nosnippet>35</a>    MetaConfigPrivate,
+<a href=#36 id=36 data-nosnippet>36</a>    MetaConfigConsensus,
+<a href=#37 id=37 data-nosnippet>37</a>    MetaClientConfig
+<a href=#38 id=38 data-nosnippet>38</a>);</code></pre></div></section></main></body></html>

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["EmptyClientConfig","EmptyConfig","EmptyConfigConsensus","EmptyConfigPrivate","EmptyGenParams"]};
+window.SIDEBAR_ITEMS = {"struct":["EmptyClientConfig","EmptyConfig","EmptyConfigConsensus","EmptyConfigPrivate"]};

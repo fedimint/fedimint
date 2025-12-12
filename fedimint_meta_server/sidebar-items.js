@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["db"],"struct":["Meta","MetaGenParams","MetaInit"]};
+window.SIDEBAR_ITEMS = {"mod":["db"],"struct":["Meta","MetaInit"]};

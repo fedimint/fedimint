@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["UnknownClientConfig","UnknownConfig","UnknownConfigConsensus","UnknownConfigLocal","UnknownConfigPrivate","UnknownGenParams"]};
+window.SIDEBAR_ITEMS = {"struct":["UnknownClientConfig","UnknownConfig","UnknownConfigConsensus","UnknownConfigLocal","UnknownConfigPrivate"]};

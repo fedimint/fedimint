@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"fn":["default_finality_delay","default_modules","run"],"mod":["metrics"],"struct":["ServerOpts"]};
+window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"fn":["default_modules","run"],"mod":["metrics"],"struct":["ServerOpts"]};
