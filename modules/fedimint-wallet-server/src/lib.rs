@@ -40,8 +40,8 @@ use db::{BlockHashByHeightKey, BlockHashByHeightKeyPrefix, BlockHashByHeightValu
 use envs::get_feerate_multiplier;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt};
 use fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
@@ -69,15 +69,18 @@ use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 pub use fedimint_wallet_common as common;
-use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
+use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig, WalletConfig};
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
     PEG_OUT_FEES_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, UTXO_CONFIRMED_ENDPOINT,
     WALLET_SUMMARY_ENDPOINT,
 };
+use fedimint_wallet_common::envs::FM_PORT_ESPLORA_ENV;
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
@@ -264,10 +267,38 @@ impl ModuleInit for WalletInit {
     }
 }
 
+/// Default finality delay based on network
+fn default_finality_delay(network: Network) -> u32 {
+    match network {
+        Network::Bitcoin | Network::Regtest => 10,
+        Network::Testnet | Network::Signet | Network::Testnet4 => 2,
+        _ => panic!("Unsupported network"),
+    }
+}
+
+/// Default Bitcoin RPC config for clients
+fn default_client_bitcoin_rpc(network: Network) -> BitcoinRpcConfig {
+    let url = match network {
+        Network::Bitcoin => "https://mempool.space/api/".to_string(),
+        Network::Testnet => "https://mempool.space/testnet/api/".to_string(),
+        Network::Testnet4 => "https://mempool.space/testnet4/api/".to_string(),
+        Network::Signet => "https://mutinynet.com/api/".to_string(),
+        Network::Regtest => format!(
+            "http://127.0.0.1:{}/",
+            std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or_else(|_| String::from("50002"))
+        ),
+        _ => panic!("Unsupported network"),
+    };
+
+    BitcoinRpcConfig {
+        kind: "esplora".to_string(),
+        url: fedimint_core::util::SafeUrl::parse(&url).expect("hardcoded URL is valid"),
+    }
+}
+
 #[apply(async_trait_maybe_send!)]
 impl ServerModuleInit for WalletInit {
     type Module = Wallet;
-    type Params = WalletGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
@@ -313,11 +344,11 @@ impl ServerModuleInit for WalletInit {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let params = self.parse_params(params).unwrap();
         let secp = bitcoin::secp256k1::Secp256k1::new();
+        let finality_delay = default_finality_delay(args.network);
+        let client_default_bitcoin_rpc = default_client_bitcoin_rpc(args.network);
 
         let btc_pegin_keys = peers
             .iter()
@@ -334,10 +365,10 @@ impl ServerModuleInit for WalletInit {
                         .collect(),
                     *sk,
                     peers.to_num_peers().threshold(),
-                    params.network,
-                    params.finality_delay,
-                    params.client_default_bitcoin_rpc.clone(),
-                    params.fee_consensus,
+                    args.network,
+                    finality_delay,
+                    client_default_bitcoin_rpc.clone(),
+                    FeeConsensus::default(),
                 );
                 (*id, cfg)
             })
@@ -352,10 +383,8 @@ impl ServerModuleInit for WalletInit {
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let params = self.parse_params(params).unwrap();
         let secp = secp256k1::Secp256k1::new();
         let (sk, pk) = secp.generate_keypair(&mut OsRng);
         let our_key = CompressedPublicKey { key: pk };
@@ -366,14 +395,17 @@ impl ServerModuleInit for WalletInit {
             .map(|(k, key)| (k, CompressedPublicKey { key }))
             .collect();
 
+        let finality_delay = default_finality_delay(args.network);
+        let client_default_bitcoin_rpc = default_client_bitcoin_rpc(args.network);
+
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
             peers.num_peers().threshold(),
-            params.network,
-            params.finality_delay,
-            params.client_default_bitcoin_rpc.clone(),
-            params.fee_consensus,
+            args.network,
+            finality_delay,
+            client_default_bitcoin_rpc,
+            FeeConsensus::default(),
         );
 
         Ok(wallet_cfg.to_erased())

@@ -21,7 +21,6 @@ use fedimint_core::time::now;
 use fedimint_core::util::{NextOrPending, backoff_util, retry};
 use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
-use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
@@ -45,7 +44,6 @@ use fedimint_ln_client::{
     LightningOperationMetaVariant, LnPayState, LnReceiveState, MockGatewayConnection,
     OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
@@ -59,7 +57,6 @@ use fedimint_testing::db::BYTE_33;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::FakeLightningTest;
-use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use itertools::Itertools;
@@ -80,21 +77,18 @@ async fn user_pay_invoice(
 
 fn fixtures() -> Fixtures {
     info!(target: LOG_TEST, "Setting up fixtures");
-    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
-        .with_server_only_module(UnknownInit, UnknownGenParams);
-    let ln_params = LightningGenParams::regtest();
+    let fixtures =
+        Fixtures::new_primary(DummyClientInit, DummyInit).with_server_only_module(UnknownInit);
     let fixtures = fixtures.with_module(
         LightningClientInit {
             gateway_conn: Some(Arc::new(MockGatewayConnection)),
         },
         LightningInit,
-        ln_params,
     );
 
     fixtures.with_module(
         fedimint_lnv2_client::LightningClientInit::default(),
         fedimint_lnv2_server::LightningInit,
-        fedimint_lnv2_common::config::LightningGenParams::regtest(),
     )
 }
 
@@ -1150,9 +1144,15 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     fed1.connect_gateway(&gateway).await;
     fed2.connect_gateway(&gateway).await;
     let client1 = gateway.select_client(fed1.id()).await?.into_value();
+    let lnv2_module_id = client1
+        .get_first_instance(&fedimint_lnv2_common::KIND)
+        .expect("lnv2 module not found");
     let mut dbtx = client1.db().begin_transaction().await;
     for _ in 0..10 {
-        let mut fed1_module_dbtx = dbtx.to_ref_with_prefix_module_id(3).0.into_nc();
+        let mut fed1_module_dbtx = dbtx
+            .to_ref_with_prefix_module_id(lnv2_module_id)
+            .0
+            .into_nc();
         let fed1_lnv2 = client1.get_first_module::<GatewayClientModuleV2>()?;
         let outgoing_payment_event = OutgoingPaymentStarted {
             outgoing_contract: OutgoingContract {
@@ -1189,10 +1189,16 @@ async fn gateway_read_payment_log() -> anyhow::Result<()> {
     dbtx.commit_tx().await;
 
     let client2 = gateway.select_client(fed2.id()).await?.into_value();
+    let lnv2_module_id2 = client2
+        .get_first_instance(&fedimint_lnv2_common::KIND)
+        .expect("lnv2 module not found");
     let mut dbtx = client2.db().begin_transaction().await;
     {
         let fed2_lnv2 = client2.get_first_module::<GatewayClientModuleV2>()?;
-        let mut fed2_module_dbtx = dbtx.to_ref_with_prefix_module_id(3).0.into_nc();
+        let mut fed2_module_dbtx = dbtx
+            .to_ref_with_prefix_module_id(lnv2_module_id2)
+            .0
+            .into_nc();
 
         let contract = IncomingContract::new(
             fed2_lnv2.cfg.tpe_agg_pk,

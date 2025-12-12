@@ -9,7 +9,7 @@ use fedimint_client_module::AdminCreds;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::PeerId;
-use fedimint_core::config::{ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry};
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -179,7 +179,6 @@ pub struct FederationTestBuilder {
     base_port: u16,
     primary_module_kind: ModuleKind,
     version_hash: String,
-    modules: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
     bitcoin_rpc_connection: DynServerBitcoinRpc,
@@ -188,7 +187,6 @@ pub struct FederationTestBuilder {
 
 impl FederationTestBuilder {
     pub fn new(
-        params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
         primary_module_kind: ModuleKind,
@@ -203,7 +201,6 @@ impl FederationTestBuilder {
                 .expect("Failed to allocate a port range"),
             primary_module_kind,
             version_hash: "fedimint-testing-dummy-version-hash".to_owned(),
-            modules: params,
             server_init,
             client_init,
             bitcoin_rpc_connection,
@@ -253,12 +250,8 @@ impl FederationTestBuilder {
         let params = local_config_gen_params(&peers, self.base_port, self.enable_mint_fees)
             .expect("Generates local config");
 
-        let configs = ServerConfig::trusted_dealer_gen(
-            self.modules,
-            &params,
-            &self.server_init,
-            &self.version_hash,
-        );
+        let configs =
+            ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
 
         let task_group = TaskGroup::new();
         for (peer_id, cfg) in configs.clone() {

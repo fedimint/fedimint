@@ -12,7 +12,7 @@ use fedimint_client_module::module::ClientModule;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::config::{ClientConfig, load_from_file};
-use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
@@ -430,6 +430,15 @@ impl Federation {
         load_from_file(&cfg_path)
     }
 
+    /// Get the module instance ID for a given module kind
+    pub fn module_instance_id_by_kind(&self, kind: &ModuleKind) -> Result<ModuleInstanceId> {
+        self.client_config()?
+            .modules
+            .iter()
+            .find_map(|(id, cfg)| if &cfg.kind == kind { Some(*id) } else { None })
+            .with_context(|| format!("Module kind {kind} not found"))
+    }
+
     pub fn module_client_config<M: ClientModule>(
         &self,
     ) -> Result<Option<<M::Common as ModuleCommon>::ClientConfig>> {
@@ -839,14 +848,15 @@ impl Federation {
     }
 
     fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
+        let wallet_instance_id = self.module_instance_id_by_kind(&fedimint_wallet_client::KIND)?;
         let client_config = &self.client_config()?;
         let wallet_cfg = client_config
             .modules
-            .get(&LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            .get(&wallet_instance_id)
             .context("wallet module not found")?
             .clone()
             .redecode_raw(&ModuleDecoderRegistry::new([(
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                wallet_instance_id,
                 fedimint_wallet_client::KIND,
                 fedimint_wallet_client::WalletModuleTypes::decoder(),
             )]))?;
@@ -902,7 +912,7 @@ impl Federation {
                 "dev",
                 "api",
                 "--module",
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                "wallet",
                 "block_count"
             )
             .run()
@@ -924,7 +934,7 @@ impl Federation {
                 "--peer-id",
                 peer_id,
                 "--module",
-                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                "wallet",
                 "block_count"
             )
             .run()

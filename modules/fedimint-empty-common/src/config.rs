@@ -5,10 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::EmptyCommonInit;
 
-/// Parameters necessary to generate this module's configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct EmptyGenParams;
-
 /// Contains all the configuration for the server
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EmptyConfig {

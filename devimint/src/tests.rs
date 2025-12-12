@@ -9,7 +9,7 @@ use std::{env, ffi};
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::Txid;
 use clap::Subcommand;
-use fedimint_core::core::{LEGACY_HARDCODED_INSTANCE_ID_WALLET, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_DISABLE_BASE_FEES_ENV, FM_ENABLE_MODULE_LNV2_ENV, is_env_var_set};
 use fedimint_core::module::registry::ModuleRegistry;
@@ -688,7 +688,13 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // # Test the correct descriptor is used
     let config = cmd!(client, "config").out_json().await?;
     let guardian_count = config["global"]["api_endpoints"].as_object().unwrap().len();
-    let descriptor = config["modules"]["2"]["peg_in_descriptor"]
+    let wallet_module = config["modules"]
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|m| m["kind"].as_str() == Some("wallet"))
+        .expect("wallet module not found");
+    let descriptor = wallet_module["peg_in_descriptor"]
         .as_str()
         .unwrap()
         .to_owned();
@@ -1886,7 +1892,7 @@ async fn peer_block_count(client: &Client, peer: PeerId) -> Result<u64> {
         "--peer-id",
         peer.to_string(),
         "--module",
-        LEGACY_HARDCODED_INSTANCE_ID_WALLET.to_string(),
+        "wallet",
         "block_count",
     )
     .out_json()

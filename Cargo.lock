@@ -4017,6 +4017,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
+ "bitcoin",
  "erased-serde",
  "fedimint-core",
  "fedimint-logging",
@@ -4243,6 +4244,7 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bitcoin",
  "bls12_381",
  "fedimint-api-client",
  "fedimint-core",
@@ -4357,6 +4359,7 @@ name = "fedimint-testing-core"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "bitcoin",
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",

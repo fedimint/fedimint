@@ -5,13 +5,12 @@ use std::time::Duration;
 
 use anyhow::{Context, bail, format_err};
 use bitcoin::hashes::sha256;
-use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 pub use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonWithKind, ModuleInitRegistry, P2PMessage,
     PeerUrl, ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
@@ -24,7 +23,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, PeerId, secp256k1, timing};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::PeerHandleOpsExt as _;
-use fedimint_server_core::{DynServerModuleInit, ServerModuleInitRegistry};
+use fedimint_server_core::{ConfigGenModuleArgs, DynServerModuleInit, ServerModuleInitRegistry};
 use futures::future::select_all;
 use hex::{FromHex, ToHex};
 use peer_handle::PeerHandle;
@@ -217,10 +216,8 @@ pub struct ConfigGenSettings {
     pub iroh_dns: Option<SafeUrl>,
     /// Optional URLs of the Iroh relays to register on
     pub iroh_relays: Vec<SafeUrl>,
-    /// Set the params (if leader) or just the local params (if follower)
-    pub modules: ServerModuleConfigGenParamsRegistry,
-    /// Registry for config gen
-    pub registry: ServerModuleInitRegistry,
+    /// Bitcoin network for the federation
+    pub network: bitcoin::Network,
 }
 
 #[derive(Debug, Clone)]
@@ -245,6 +242,8 @@ pub struct ConfigGenParams {
     pub meta: BTreeMap<String, String>,
     /// Whether to disable base fees for this federation
     pub disable_base_fees: bool,
+    /// Bitcoin network for this federation
+    pub network: bitcoin::Network,
 }
 
 impl ServerConfigConsensus {
@@ -475,7 +474,6 @@ impl ServerConfig {
     }
 
     pub fn trusted_dealer_gen(
-        modules: ServerModuleConfigGenParamsRegistry,
         params: &HashMap<PeerId, ConfigGenParams>,
         registry: &ServerModuleInitRegistry,
         code_version_str: &str,
@@ -490,19 +488,26 @@ impl ServerConfig {
             broadcast_sks.insert(peer_id, broadcast_sk);
         }
 
-        let module_configs: BTreeMap<_, _> = modules
-            .iter_modules()
-            .map(|(module_id, kind, module_params)| {
+        let args = ConfigGenModuleArgs {
+            network: peer0.network,
+            disable_base_fees: peer0.disable_base_fees,
+        };
+
+        // Use legacy module ordering for backwards compatibility tests
+        let use_legacy_order = is_env_var_set("FM_BACKWARDS_COMPATIBILITY_TEST");
+        let module_iter: Vec<_> = if use_legacy_order {
+            registry.iter_legacy_order()
+        } else {
+            registry.iter().collect()
+        };
+
+        let module_configs: BTreeMap<_, _> = module_iter
+            .into_iter()
+            .enumerate()
+            .map(|(module_id, (_kind, module_init))| {
                 (
-                    module_id,
-                    registry
-                        .get(kind)
-                        .expect("Module not registered")
-                        .trusted_dealer_gen(
-                            &peer0.peer_ids(),
-                            module_params,
-                            params[&PeerId::from(0)].disable_base_fees,
-                        ),
+                    module_id as ModuleInstanceId,
+                    module_init.trusted_dealer_gen(&peer0.peer_ids(), &args),
                 )
             })
             .collect();
@@ -531,7 +536,6 @@ impl ServerConfig {
 
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
-        modules: ServerModuleConfigGenParamsRegistry,
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
         code_version_str: String,
@@ -543,7 +547,6 @@ impl ServerConfig {
         // in case we are running by ourselves, avoid DKG
         if params.peer_ids().len() == 1 {
             let server = Self::trusted_dealer_gen(
-                modules,
                 &HashMap::from([(params.identity, params.clone())]),
                 &registry,
                 &code_version_str,
@@ -638,21 +641,30 @@ impl ServerConfig {
 
         let broadcast_public_keys = handle.exchange_encodable(broadcast_pk).await?;
 
+        let args = ConfigGenModuleArgs {
+            network: params.network,
+            disable_base_fees: params.disable_base_fees,
+        };
+
+        // Use legacy module ordering for backwards compatibility tests
+        let use_legacy_order = is_env_var_set("FM_BACKWARDS_COMPATIBILITY_TEST");
+        let module_iter: Vec<_> = if use_legacy_order {
+            registry.iter_legacy_order()
+        } else {
+            registry.iter().collect()
+        };
+
         let mut module_cfgs = BTreeMap::new();
 
-        for (module_id, kind, module_params) in modules.iter_modules() {
+        for (module_id, (kind, module_init)) in module_iter.into_iter().enumerate() {
             info!(
                 target: LOG_NET_PEER_DKG,
                 "Running config generation for module of kind {kind}..."
             );
 
-            let cfg = registry
-                .get(kind)
-                .with_context(|| format!("Module of kind {kind} not found"))?
-                .distributed_gen(&handle, module_params, params.disable_base_fees)
-                .await?;
+            let cfg = module_init.distributed_gen(&handle, &args).await?;
 
-            module_cfgs.insert(module_id, cfg);
+            module_cfgs.insert(module_id as ModuleInstanceId, cfg);
         }
 
         let cfg = ServerConfig::from(

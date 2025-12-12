@@ -6,17 +6,17 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::{any, marker};
 
-use anyhow::Context as _;
+use bitcoin::Network;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_core::config::{
-    ClientModuleConfig, CommonModuleInitRegistry, ConfigGenModuleParams, ModuleInitRegistry,
-    ServerModuleConfig, ServerModuleConsensusConfig,
+    ClientModuleConfig, CommonModuleInitRegistry, ModuleInitRegistry, ServerModuleConfig,
+    ServerModuleConsensusConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, DatabaseVersion};
 use fedimint_core::module::{
     CommonModuleInit, CoreConsensusVersion, IDynCommonModuleInit, ModuleConsensusVersion,
-    ModuleInit, SupportedModuleApiVersions, serde_json,
+    ModuleInit, SupportedModuleApiVersions,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::{NumPeers, PeerId, apply, async_trait_maybe_send, dyn_newtype_define};
@@ -28,6 +28,18 @@ use crate::migration::{
     ServerModuleDbMigrationFn,
 };
 use crate::{DynServerModule, ServerModule};
+
+/// Arguments passed to modules during config generation
+///
+/// This replaces the per-module GenParams approach with a unified struct
+/// containing all the information modules need for DKG/config generation.
+#[derive(Debug, Clone, Copy)]
+pub struct ConfigGenModuleArgs {
+    /// Bitcoin network for the federation
+    pub network: Network,
+    /// Whether to disable base fees for this federation
+    pub disable_base_fees: bool,
+}
 
 /// Interface for Module Generation
 ///
@@ -57,20 +69,16 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor,
     ) -> anyhow::Result<DynServerModule>;
 
-    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
-
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
@@ -153,7 +161,6 @@ where
 #[apply(async_trait_maybe_send!)]
 pub trait ServerModuleInit: ModuleInit + Sized {
     type Module: ServerModule + Send + Sync;
-    type Params: serde::de::DeserializeOwned;
 
     /// Version of the module consensus supported by this implementation given a
     /// certain [`CoreConsensusVersion`].
@@ -178,22 +185,16 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// Initialize the module instance from its config
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
 
-    fn parse_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<Self::Params> {
-        serde_json::from_value(params.clone()).context("Failed to parse module params")
-    }
-
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig>;
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig>;
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()>;
@@ -268,27 +269,20 @@ where
         Ok(DynServerModule::from(module))
     }
 
-    fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()> {
-        <Self as ServerModuleInit>::parse_params(self, params)?;
-        Ok(())
-    }
-
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, params, disable_base_fees)
+        <Self as ServerModuleInit>::trusted_dealer_gen(self, peers, args)
     }
 
     async fn distributed_gen(
         &self,
         peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        disable_base_fees: bool,
+        args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        <Self as ServerModuleInit>::distributed_gen(self, peers, params, disable_base_fees).await
+        <Self as ServerModuleInit>::distributed_gen(self, peers, args).await
     }
 
     fn validate_config(&self, identity: &PeerId, config: ServerModuleConfig) -> anyhow::Result<()> {

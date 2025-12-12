@@ -9,41 +9,6 @@ use tbs::{AggregatePublicKey, PublicKeyShare};
 
 use crate::MintCommonInit;
 
-// The maximum size of an E-Cash note (1,000,000 coins)
-// Changing this value is considered a breaking change because it is not saved
-// in `MintGenParams` but instead is hardcoded here
-const MAX_DENOMINATION_SIZE: Amount = Amount::from_bitcoins(1_000_000);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MintGenParams {
-    denomination_base: u16,
-    fee_consensus: Option<FeeConsensus>,
-}
-
-impl MintGenParams {
-    pub fn new(denomination_base: u16, fee_consensus: Option<FeeConsensus>) -> Self {
-        Self {
-            denomination_base,
-            fee_consensus,
-        }
-    }
-
-    pub fn denomination_base(&self) -> u16 {
-        self.denomination_base
-    }
-
-    pub fn fee_consensus(&self) -> Option<FeeConsensus> {
-        self.fee_consensus.clone()
-    }
-
-    pub fn gen_denominations(&self) -> Vec<Amount> {
-        Tiered::gen_denominations(self.denomination_base, MAX_DENOMINATION_SIZE)
-            .tiers()
-            .copied()
-            .collect()
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
     pub private: MintConfigPrivate,

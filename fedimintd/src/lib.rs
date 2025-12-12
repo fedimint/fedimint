@@ -16,36 +16,31 @@ use std::time::Duration;
 use anyhow::Context as _;
 use bitcoin::Network;
 use clap::{ArgGroup, Parser};
-use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{
     FM_ENABLE_MODULE_LNV2_ENV, FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV, FM_USE_UNKNOWN_MODULE_ENV,
-    is_env_var_set,
+    is_env_var_set, is_env_var_set_opt,
 };
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::timing;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
-use fedimint_core::{default_esplora_server, timing};
-use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, TracingSetup};
-use fedimint_meta_server::{MetaGenParams, MetaInit};
+use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
-use fedimint_mint_server::common::config::MintGenParams;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::DB_FILE;
-use fedimint_server::core::{ServerModuleInit, ServerModuleInitRegistry};
+use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
-use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::WalletInit;
-use fedimint_wallet_server::common::config::WalletGenParams;
 use fedimintd_envs::{
     FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_ENV, FM_BIND_P2P_ENV,
     FM_BIND_TOKIO_CONSOLE_ENV, FM_BIND_UI_ENV, FM_BITCOIN_NETWORK_ENV, FM_BITCOIND_PASSWORD_ENV,
@@ -53,7 +48,6 @@ use fedimintd_envs::{
     FM_DATA_DIR_ENV, FM_DB_CHECKPOINT_RETENTION_ENV, FM_DISABLE_META_MODULE_ENV,
     FM_ENABLE_IROH_ENV, FM_ESPLORA_URL_ENV, FM_FORCE_API_SECRETS_ENV,
     FM_IROH_API_MAX_CONNECTIONS_ENV, FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, FM_P2P_URL_ENV,
-    FM_PORT_ESPLORA_ENV,
 };
 use futures::FutureExt as _;
 use tracing::{debug, error, info};
@@ -253,12 +247,7 @@ impl ServerOpts {
 ///   peers.
 #[allow(clippy::too_many_lines)]
 pub async fn run(
-    modules_fn: fn(
-        Network,
-    ) -> (
-        ServerModuleInitRegistry,
-        ServerModuleConfigGenParamsRegistry,
-    ),
+    module_init_registry: ServerModuleInitRegistry,
     code_version_hash: &str,
     code_version_vendor_suffix: Option<&str>,
 ) -> ! {
@@ -293,8 +282,6 @@ pub async fn run(
         |suffix| format!("{fedimint_version}+{suffix}"),
     );
 
-    let (server_gens, server_gen_params) = modules_fn(server_opts.bitcoin_network);
-
     let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
 
     let root_task_group = TaskGroup::new();
@@ -315,8 +302,7 @@ pub async fn run(
         enable_iroh: server_opts.enable_iroh,
         iroh_dns: server_opts.iroh_dns.clone(),
         iroh_relays: server_opts.iroh_relays.clone(),
-        modules: server_gen_params.clone(),
-        registry: server_gens.clone(),
+        network: server_opts.bitcoin_network,
     };
 
     let db = Database::new(
@@ -377,7 +363,7 @@ pub async fn run(
             settings,
             db,
             code_version_str,
-            server_gens,
+            module_init_registry,
             task_group,
             dyn_server_bitcoin_rpc,
             Box::new(fedimint_server_ui::setup::router),
@@ -400,6 +386,7 @@ pub async fn run(
         });
 
     shutdown_future.await;
+
     debug!(target: LOG_CORE, "Terminating main task");
 
     if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
@@ -416,69 +403,24 @@ pub async fn run(
     std::process::exit(-1);
 }
 
-pub fn default_modules(
-    network: Network,
-) -> (
-    ServerModuleInitRegistry,
-    ServerModuleConfigGenParamsRegistry,
-) {
+pub fn default_modules() -> ServerModuleInitRegistry {
     let mut server_gens = ServerModuleInitRegistry::new();
-    let mut server_gen_params = ServerModuleConfigGenParamsRegistry::default();
 
     server_gens.attach(LightningInit);
-    server_gen_params
-        .attach_config_gen_params(LightningInit::kind(), LightningGenParams { network });
-
     server_gens.attach(MintInit);
-    server_gen_params.attach_config_gen_params(MintInit::kind(), MintGenParams::new(2, None));
-
     server_gens.attach(WalletInit);
-    server_gen_params.attach_config_gen_params(
-        WalletInit::kind(),
-        WalletGenParams {
-            network,
-            finality_delay: default_finality_delay(network),
-            client_default_bitcoin_rpc: default_esplora_server(
-                network,
-                std::env::var(FM_PORT_ESPLORA_ENV).ok(),
-            ),
-            fee_consensus: fedimint_wallet_server::common::config::FeeConsensus::default(),
-        },
-    );
 
-    let enable_lnv2 = std::env::var_os(FM_ENABLE_MODULE_LNV2_ENV).is_none()
-        || is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV);
-
-    if enable_lnv2 {
+    if is_env_var_set_opt(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or(true) {
         server_gens.attach(fedimint_lnv2_server::LightningInit);
-        server_gen_params.attach_config_gen_params(
-            fedimint_lnv2_server::LightningInit::kind(),
-            fedimint_lnv2_common::config::LightningGenParams {
-                fee_consensus: None,
-                network,
-            },
-        );
     }
 
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         server_gens.attach(MetaInit);
-        server_gen_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams);
     }
 
     if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
         server_gens.attach(UnknownInit);
-        server_gen_params.attach_config_gen_params(UnknownInit::kind(), UnknownGenParams);
     }
 
-    (server_gens, server_gen_params)
-}
-
-/// For real Bitcoin we want to have a responsible default, while for demos
-/// nobody wants to wait multiple minutes
-fn default_finality_delay(network: Network) -> u32 {
-    match network {
-        Network::Bitcoin | Network::Regtest => 10,
-        Network::Testnet | Network::Signet | Network::Testnet4 => 2,
-        _ => panic!("Unsupported network"),
-    }
+    server_gens
 }

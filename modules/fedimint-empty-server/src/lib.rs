@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use anyhow::bail;
 use async_trait::async_trait;
 use fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -19,7 +19,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::{InPoint, OutPoint, PeerId, push_db_pair_items};
 use fedimint_empty_common::config::{
-    EmptyClientConfig, EmptyConfig, EmptyConfigConsensus, EmptyConfigPrivate, EmptyGenParams,
+    EmptyClientConfig, EmptyConfig, EmptyConfigConsensus, EmptyConfigPrivate,
 };
 use fedimint_empty_common::{
     EmptyCommonInit, EmptyConsensusItem, EmptyInput, EmptyInputError, EmptyModuleTypes,
@@ -27,7 +27,9 @@ use fedimint_empty_common::{
 };
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use futures::StreamExt;
 use strum::IntoEnumIterator;
 
@@ -78,7 +80,6 @@ impl ModuleInit for EmptyInit {
 #[async_trait]
 impl ServerModuleInit for EmptyInit {
     type Module = Empty;
-    type Params = EmptyGenParams;
 
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -105,10 +106,8 @@ impl ServerModuleInit for EmptyInit {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let _params = self.parse_params(params).unwrap();
         // Generate a config for each peer
         peers
             .iter()
@@ -126,11 +125,8 @@ impl ServerModuleInit for EmptyInit {
     async fn distributed_gen(
         &self,
         _peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let _params = self.parse_params(params).unwrap();
-
         Ok(EmptyConfig {
             private: EmptyConfigPrivate,
             consensus: EmptyConfigConsensus {},

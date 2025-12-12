@@ -8,12 +8,10 @@ use fedimint_bitcoind::{DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
 use fedimint_client::module_init::{
     ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
-use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{ChainSource, LightningInfo, LightningMode};
@@ -27,7 +25,6 @@ use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use fedimint_testing_core::test_dir;
-use serde::Serialize;
 
 use crate::btc::BitcoinTest;
 use crate::btc::mock::FakeBitcoinTest;
@@ -46,22 +43,19 @@ pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 
 /// A tool for easily writing fedimint integration tests
 pub struct Fixtures {
-    clients: Vec<DynClientModuleInit>,
-    servers: Vec<DynServerModuleInit>,
-    params: ServerModuleConfigGenParamsRegistry,
+    clients: ClientModuleInitRegistry,
+    servers: ServerModuleInitRegistry,
     bitcoin_rpc: BitcoinRpcConfig,
     bitcoin: Arc<dyn BitcoinTest>,
     fake_bitcoin_rpc: Option<DynBitcoindRpc>,
     server_bitcoin_rpc: DynServerBitcoinRpc,
     primary_module_kind: ModuleKind,
-    id: ModuleInstanceId,
 }
 
 impl Fixtures {
     pub fn new_primary(
         client: impl IClientModuleInit + 'static,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
-        params: impl Serialize,
     ) -> Self {
         // Ensure tracing has been set once
         let _ = TracingSetup::default().init();
@@ -138,50 +132,37 @@ impl Fixtures {
         };
 
         Self {
-            clients: vec![],
-            servers: vec![],
-            params: ModuleRegistry::default(),
+            clients: ClientModuleInitRegistry::default(),
+            servers: ServerModuleInitRegistry::default(),
             bitcoin_rpc: config,
             fake_bitcoin_rpc,
             bitcoin,
             server_bitcoin_rpc: bitcoin_rpc_connection,
             primary_module_kind: IClientModuleInit::module_kind(&client),
-            id: 0,
         }
-        .with_module(client, server, params)
+        .with_module(client, server)
     }
 
     pub fn is_real_test() -> bool {
         env::var(FM_TEST_USE_REAL_DAEMONS_ENV) == Ok("1".to_string())
     }
 
-    // TODO: Auto-assign instance ids after removing legacy id order
     /// Add a module to the fed
     pub fn with_module(
         mut self,
         client: impl IClientModuleInit + 'static,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
-        params: impl Serialize,
     ) -> Self {
-        self.params
-            .attach_config_gen_params_by_id(self.id, server.module_kind(), params);
-        self.clients.push(DynClientModuleInit::from(client));
-        self.servers.push(DynServerModuleInit::from(server));
-        self.id += 1;
-
+        self.clients.attach(DynClientModuleInit::from(client));
+        self.servers.attach(DynServerModuleInit::from(server));
         self
     }
 
     pub fn with_server_only_module(
         mut self,
         server: impl IServerModuleInit + MaybeSend + MaybeSync + 'static,
-        params: impl Serialize,
     ) -> Self {
-        self.params
-            .attach_config_gen_params_by_id(self.id, server.module_kind(), params);
-        self.servers.push(DynServerModuleInit::from(server));
-        self.id += 1;
-
+        self.servers.attach(DynServerModuleInit::from(server));
         self
     }
 
@@ -199,9 +180,8 @@ impl Fixtures {
     /// `FederationTest` for module tests.
     pub fn new_fed_builder(&self, num_offline: u16) -> FederationTestBuilder {
         FederationTestBuilder::new(
-            self.params.clone(),
-            ServerModuleInitRegistry::from(self.servers.clone()),
-            ClientModuleInitRegistry::from(self.clients.clone()),
+            self.servers.clone(),
+            self.clients.clone(),
             self.primary_module_kind.clone(),
             num_offline,
             self.server_bitcoin_rpc(),
@@ -210,21 +190,32 @@ impl Fixtures {
 
     /// Creates a new Gateway that can be used for module tests.
     pub async fn new_gateway(&self) -> Gateway {
-        let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
-        let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
-        let decoders = server_gens.available_decoders(module_kinds).unwrap();
+        // Use server_gens.iter() to match the alphabetical order used by the server
+        // when assigning module instance IDs (BTreeMap iteration order)
+        let module_kinds: Vec<_> = self
+            .servers
+            .iter()
+            .enumerate()
+            .map(|(id, (kind, _))| (id as ModuleInstanceId, kind.clone()))
+            .collect();
+        let decoders = self
+            .servers
+            .available_decoders(module_kinds.iter().map(|(id, kind)| (*id, kind)))
+            .unwrap();
         let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
-        let clients = self.clients.clone().into_iter();
 
-        let registry = clients
-            .filter(|client| {
+        let registry = self
+            .clients
+            .iter()
+            .filter(|(kind, _)| {
                 // Remove LN module because the gateway adds one
-                client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
+                **kind != ModuleKind::from_static_str("ln")
             })
-            .filter(|client| {
+            .filter(|(kind, _)| {
                 // Remove LN NG module because the gateway adds one
-                client.to_dyn_common().module_kind() != ModuleKind::from_static_str("lnv2")
+                **kind != ModuleKind::from_static_str("lnv2")
             })
+            .map(|(_, client)| client.clone())
             .collect();
 
         let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));

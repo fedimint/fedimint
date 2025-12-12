@@ -7,49 +7,16 @@ use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::serde_json;
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, PeerId, plugin_types_trait_impl_config};
 use miniscript::descriptor::{Wpkh, Wsh};
 use serde::{Deserialize, Serialize};
 
-use crate::envs::FM_PORT_ESPLORA_ENV;
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonInit};
 
 /// Helps against dust attacks where an attacker deposits UTXOs that, with
 /// higher fee levels, cannot be spent profitably.
 const DEFAULT_DEPOSIT_FEE_SATS: u64 = 1000;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletGenParams {
-    pub network: Network,
-    pub finality_delay: u32,
-    /// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
-    pub client_default_bitcoin_rpc: BitcoinRpcConfig,
-    /// Fees to be charged for deposits and withdraws _by the federation_ in
-    /// addition to any on-chain fees.
-    ///
-    /// Deposit fees in particular are a protection against dust attacks.
-    pub fee_consensus: FeeConsensus,
-}
-
-impl WalletGenParams {
-    pub fn regtest() -> WalletGenParams {
-        WalletGenParams {
-            network: Network::Regtest,
-            finality_delay: 10,
-            client_default_bitcoin_rpc: BitcoinRpcConfig {
-                kind: "esplora".to_string(),
-                url: SafeUrl::parse(&format!(
-                    "http://127.0.0.1:{}/",
-                    std::env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
-                ))
-                .expect("Failed to parse default esplora server"),
-            },
-            fee_consensus: FeeConsensus::default(),
-        }
-    }
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {

@@ -472,9 +472,37 @@ impl ClientConfig {
 #[derive(Clone, Debug)]
 pub struct ModuleInitRegistry<M>(BTreeMap<ModuleKind, M>);
 
+/// Legacy module ordering used before alphabetical ordering was introduced.
+/// This ordering was: ln, mint, wallet, lnv2, meta, unknown
+const LEGACY_MODULE_ORDER: &[&str] = &["ln", "mint", "wallet", "lnv2", "meta", "unknown"];
+
 impl<M> ModuleInitRegistry<M> {
     pub fn iter(&self) -> impl Iterator<Item = (&ModuleKind, &M)> {
         self.0.iter()
+    }
+
+    /// Iterate over modules in the legacy insertion order for backwards
+    /// compatibility. Modules not in the legacy order list are appended
+    /// at the end in alphabetical order.
+    pub fn iter_legacy_order(&self) -> Vec<(&ModuleKind, &M)> {
+        let mut ordered: Vec<(&ModuleKind, &M)> = Vec::new();
+
+        // First add modules in legacy order
+        for kind_str in LEGACY_MODULE_ORDER {
+            let kind = ModuleKind::from_static_str(kind_str);
+            if let Some((k, m)) = self.0.get_key_value(&kind) {
+                ordered.push((k, m));
+            }
+        }
+
+        // Then add any remaining modules in alphabetical order
+        for (kind, module) in &self.0 {
+            if !LEGACY_MODULE_ORDER.contains(&kind.as_str()) {
+                ordered.push((kind, module));
+            }
+        }
+
+        ordered
     }
 }
 
@@ -484,21 +512,7 @@ impl<M> Default for ModuleInitRegistry<M> {
     }
 }
 
-/// Type erased module config gen params
-pub type ConfigGenModuleParams = serde_json::Value;
-
 pub type CommonModuleInitRegistry = ModuleInitRegistry<DynCommonModuleInit>;
-
-/// Registry that contains the config gen params for all modules
-pub type ServerModuleConfigGenParamsRegistry = ModuleRegistry<ConfigGenModuleParams>;
-
-impl Eq for ServerModuleConfigGenParamsRegistry {}
-
-impl PartialEq for ServerModuleConfigGenParamsRegistry {
-    fn eq(&self, other: &Self) -> bool {
-        self.iter_modules().eq(other.iter_modules())
-    }
-}
 
 impl<M> From<Vec<M>> for ModuleInitRegistry<M>
 where
@@ -551,31 +565,6 @@ impl<M> ModuleInitRegistry<M> {
 
     pub fn get(&self, k: &ModuleKind) -> Option<&M> {
         self.0.get(k)
-    }
-}
-
-impl ModuleRegistry<ConfigGenModuleParams> {
-    pub fn attach_config_gen_params_by_id<T: Serialize>(
-        &mut self,
-        id: ModuleInstanceId,
-        kind: ModuleKind,
-        r#gen: T,
-    ) -> &mut Self {
-        let params = serde_json::to_value(r#gen)
-            .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
-        self.register_module(id, kind, params);
-        self
-    }
-
-    pub fn attach_config_gen_params<T: Serialize>(
-        &mut self,
-        kind: ModuleKind,
-        r#gen: T,
-    ) -> &mut Self {
-        let params = serde_json::to_value(r#gen)
-            .unwrap_or_else(|err| panic!("Invalid config gen params for {kind}: {err}"));
-        self.append_module(kind, params);
-        self
     }
 }
 
