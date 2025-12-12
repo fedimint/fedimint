@@ -9,7 +9,6 @@ use fedimint_core::envs::{
     FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV, is_env_var_set_opt,
     parse_kv_list_from_env,
 };
-use fedimint_core::iroh_prod::FM_IROH_DNS_FEDIMINT_PROD;
 use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, FEDIMINT_GATEWAY_ALPN,
     IrohApiRequest, IrohGatewayRequest, IrohGatewayResponse,
@@ -28,7 +27,6 @@ use iroh_next::Watcher as _;
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 use tracing::{debug, trace, warn};
-use url::Url;
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
 use crate::{DynGatewayConnection, IConnection, IGatewayConnection};
@@ -85,22 +83,12 @@ impl IrohConnector {
         iroh_enable_dht: bool,
         iroh_enable_next: bool,
     ) -> anyhow::Result<Self> {
-        let iroh_dns_servers: Vec<_> = iroh_dns.map_or_else(
-            || {
-                FM_IROH_DNS_FEDIMINT_PROD
-                    .into_iter()
-                    .map(|url| Url::parse(url).expect("Hardcoded, can't fail"))
-                    .collect()
-            },
-            |url| vec![url.to_unsafe()],
-        );
-
         let endpoint_stable = Box::pin({
-            let iroh_dns_servers = iroh_dns_servers.clone();
+            let iroh_dns = iroh_dns.clone();
             async {
                 let mut builder = Endpoint::builder();
 
-                for iroh_dns in iroh_dns_servers {
+                if let Some(iroh_dns) = iroh_dns.map(SafeUrl::to_unsafe) {
                     builder = builder.add_discovery(|_| Some(PkarrResolver::new(iroh_dns)));
                 }
 
@@ -154,7 +142,7 @@ impl IrohConnector {
         let endpoint_next = Box::pin(async {
             let mut builder = iroh_next::Endpoint::builder();
 
-            for iroh_dns in iroh_dns_servers {
+            if let Some(iroh_dns) = iroh_dns.map(SafeUrl::to_unsafe) {
                 builder = builder.add_discovery(
                     iroh_next::discovery::pkarr::PkarrResolver::builder(iroh_dns).build(),
                 );
