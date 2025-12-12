@@ -108,6 +108,7 @@ impl EcashCommands {
                         federation_id,
                         amount,
                         address,
+                        quoted_fees: None,
                     },
                 )
                 .await?;

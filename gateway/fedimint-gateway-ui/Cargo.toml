@@ -24,6 +24,7 @@ fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-ui-common = { workspace = true }
+fedimint-wallet-client = { workspace = true }
 lightning-invoice = { workspace = true }
 maud = { workspace = true }
 qrcode = { workspace = true }

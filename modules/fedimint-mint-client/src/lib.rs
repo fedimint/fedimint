@@ -1157,6 +1157,30 @@ impl MintClientModule {
         self.get_note_counts_by_denomination(dbtx).await
     }
 
+    /// Estimates the total fees to spend all currently held notes.
+    ///
+    /// This is useful for calculating max withdrawable amounts, where all
+    /// notes will be spent. Notes that are uneconomical to spend (fee >= value)
+    /// are excluded from the calculation since the wallet won't spend them.
+    pub async fn estimate_spend_all_fees(&self) -> Amount {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let note_counts = self.get_note_counts_by_denomination(&mut dbtx).await;
+
+        note_counts
+            .iter()
+            .filter_map(|(amount, count)| {
+                let note_fee = self.cfg.fee_consensus.fee(amount);
+                if note_fee < amount {
+                    note_fee.checked_mul(count as u64)
+                } else {
+                    None
+                }
+            })
+            .fold(Amount::ZERO, |acc, fee| {
+                acc.checked_add(fee).expect("fee sum overflow")
+            })
+    }
+
     /// Wait for the e-cash notes to be retrieved. If this is not possible
     /// because another terminal state was reached an error describing the
     /// failure is returned.
