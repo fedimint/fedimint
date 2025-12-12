@@ -11,6 +11,20 @@ fn scalar_multiplication_by_amount() {
 }
 
 #[test]
+fn checked_mul_success() {
+    assert_eq!(
+        Amount::from_msats(100).checked_mul(5),
+        Some(Amount::from_msats(500))
+    );
+}
+
+#[test]
+fn checked_mul_overflow() {
+    assert_eq!(Amount::from_msats(u64::MAX).checked_mul(2), None);
+    assert_eq!(Amount::from_msats(u64::MAX / 2 + 1).checked_mul(2), None);
+}
+
+#[test]
 fn test_amount_parsing() {
     // msats
     assert_eq!(Amount::from_msats(123), Amount::from_str("123").unwrap());
