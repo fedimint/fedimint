@@ -26,7 +26,8 @@ use fedimint_gateway_common::{
     CreateInvoiceForOperatorPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayInfo, LeaveFedPayload, LightningMode, ListTransactionsPayload, ListTransactionsResponse,
     MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload, PaymentSummaryPayload,
-    PaymentSummaryResponse, SendOnchainRequest, SetFeesPayload,
+    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest,
+    SetFeesPayload,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -39,7 +40,9 @@ use lightning_invoice::Bolt11Invoice;
 use maud::html;
 
 use crate::connect_fed::connect_federation_handler;
-use crate::federation::{deposit_address_handler, leave_federation_handler, set_fees_handler};
+use crate::federation::{
+    deposit_address_handler, leave_federation_handler, receive_ecash_handler, set_fees_handler,
+};
 use crate::lightning::{
     channels_fragment_handler, close_channel_handler, create_bolt11_invoice_handler,
     generate_receive_address_handler, open_channel_handler, pay_bolt11_invoice_handler,
@@ -63,6 +66,7 @@ pub(crate) const PAYMENTS_FRAGMENT_ROUTE: &str = "/ui/payments/fragment";
 pub(crate) const CREATE_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/receive/bolt11";
 pub(crate) const PAY_BOLT11_INVOICE_ROUTE: &str = "/ui/payments/send/bolt11";
 pub(crate) const TRANSACTIONS_FRAGMENT_ROUTE: &str = "/ui/transactions/fragment";
+pub(crate) const RECEIVE_ECASH_ROUTE: &str = "/ui/federations/receive";
 pub(crate) const STOP_GATEWAY_ROUTE: &str = "/ui/stop";
 
 #[derive(Default, Deserialize)]
@@ -136,6 +140,11 @@ pub trait IAdminGateway {
         &self,
         payload: DepositAddressPayload,
     ) -> Result<Address, Self::Error>;
+
+    async fn handle_receive_ecash_msg(
+        &self,
+        payload: ReceiveEcashPayload,
+    ) -> Result<ReceiveEcashResponse, Self::Error>;
 
     async fn handle_create_invoice_for_operator_msg(
         &self,
@@ -334,6 +343,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
             get(generate_receive_address_handler),
         )
         .route(DEPOSIT_ADDRESS_ROUTE, post(deposit_address_handler))
+        .route(RECEIVE_ECASH_ROUTE, post(receive_ecash_handler))
         .route(PAYMENTS_FRAGMENT_ROUTE, get(payments_fragment_handler))
         .route(
             CREATE_BOLT11_INVOICE_ROUTE,
