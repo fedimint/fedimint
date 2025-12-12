@@ -131,6 +131,11 @@ function lnv2_module() {
 }
 export -f lnv2_module
 
+function lnv1_lnv2_swap() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv1-lnv2-swap-test.sh
+}
+export -f lnv1_lnv2_swap
+
 function mint_client_sanity() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mint-client-sanity.sh
 }
@@ -358,6 +363,7 @@ tests_to_run_in_parallel+=(
   "gw_restore_test"
   "gw_liquidity_test"
   "lnv2_module"
+  "lnv1_lnv2_swap"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"

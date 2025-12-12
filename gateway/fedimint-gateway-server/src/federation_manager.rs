@@ -149,13 +149,14 @@ impl FederationManager {
         let removal_futures = self
             .clients
             .values()
-            .map(|client| async {
+            .filter_map(|client| {
                 client
                     .value()
                     .get_first_module::<GatewayClientModule>()
-                    .expect("Must have client module")
-                    .remove_from_federation(gateway_keypair)
-                    .await;
+                    .ok()
+                    .map(|lnv1| async move {
+                        lnv1.remove_from_federation(gateway_keypair).await;
+                    })
             })
             .collect::<Vec<_>>();
 
