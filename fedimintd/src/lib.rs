@@ -247,7 +247,7 @@ impl ServerOpts {
 ///   peers.
 #[allow(clippy::too_many_lines)]
 pub async fn run(
-    gen_module_init_registry: fn() -> ServerModuleInitRegistry,
+    module_init_registry: ServerModuleInitRegistry,
     code_version_hash: &str,
     code_version_vendor_suffix: Option<&str>,
 ) -> ! {
@@ -363,7 +363,7 @@ pub async fn run(
             settings,
             db,
             code_version_str,
-            gen_module_init_registry(),
+            module_init_registry,
             task_group,
             dyn_server_bitcoin_rpc,
             Box::new(fedimint_server_ui::setup::router),
