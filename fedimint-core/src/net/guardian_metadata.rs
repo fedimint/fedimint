@@ -26,6 +26,67 @@ pub struct SignedGuardianMetadata {
     pub signature: secp256k1::schnorr::Signature,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
+pub struct SignedGuardianMetadataSubmission {
+    #[serde(flatten)]
+    pub signed_guardian_metadata: SignedGuardianMetadata,
+    pub peer_id: crate::PeerId,
+}
+
+// Implement Serialize/Deserialize for SignedGuardianMetadata for JSON
+//
+// Format: {"content": "<json string>", "signature": "<hex-encoded signature>"}
+// The `content` field contains the exact JSON string that was signed (preserved
+// byte-for-byte). The `signature` field contains the hex-encoded Schnorr
+// signature over the content bytes.
+impl Serialize for SignedGuardianMetadata {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("SignedGuardianMetadata", 2)?;
+
+        // Serialize bytes as a UTF-8 string (content field)
+        let content = String::from_utf8(self.bytes.clone())
+            .map_err(|e| serde::ser::Error::custom(format!("Invalid UTF-8 in bytes: {e}")))?;
+        state.serialize_field("content", &content)?;
+
+        // Serialize signature as hex string
+        state.serialize_field("signature", &hex::encode(self.signature.as_ref()))?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SignedGuardianMetadata {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        #[derive(Deserialize)]
+        struct SignedGuardianMetadataHelper {
+            content: String,
+            signature: String,
+        }
+
+        let helper = SignedGuardianMetadataHelper::deserialize(deserializer)?;
+
+        let bytes = helper.content.into_bytes();
+        let value: GuardianMetadata = serde_json::from_slice(&bytes).map_err(D::Error::custom)?;
+        let signature_bytes = hex::decode(&helper.signature).map_err(D::Error::custom)?;
+        let signature = secp256k1::schnorr::Signature::from_slice(&signature_bytes)
+            .map_err(D::Error::custom)?;
+
+        Ok(Self {
+            bytes,
+            value,
+            signature,
+        })
+    }
+}
+
 // Implement Encodable/Decodable for SignedGuardianMetadata only
 impl Encodable for SignedGuardianMetadata {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {

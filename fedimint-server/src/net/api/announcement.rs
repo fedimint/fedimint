@@ -5,9 +5,8 @@ use fedimint_api_client::api::DynGlobalApi;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::net::api_announcement::{
-    ApiAnnouncement, SignedApiAnnouncement, override_api_urls,
-};
+use fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
+use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
@@ -16,6 +15,7 @@ use futures::stream::StreamExt;
 use tokio::select;
 use tracing::debug;
 
+use super::guardian_metadata::GuardianMetadataPrefix;
 use crate::config::{ServerConfig, ServerConfigConsensus};
 use crate::db::DbKeyPrefix;
 
@@ -46,7 +46,11 @@ pub async fn start_api_announcement_service(
     const FAILURE_RETRY_SECONDS: u64 = 60;
     const SUCCESS_RETRY_SECONDS: u64 = 600;
 
-    insert_signed_api_announcement_if_not_present(db, cfg).await;
+    let initial_delay = if insert_signed_api_announcement_if_not_present(db, cfg).await {
+        Duration::ZERO
+    } else {
+        Duration::from_secs(INITIAL_DEALY_SECONDS)
+    };
 
     let db = db.clone();
     // FIXME: (@leonardo) how should we handle the connector here ?
@@ -61,7 +65,7 @@ pub async fn start_api_announcement_service(
     tg.spawn_cancellable("submit-api-url-announcement", async move {
         // Give other servers some time to start up in case they were just restarted
         // together
-        sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).await;
+        sleep(initial_delay).await;
         loop {
             let mut success = true;
             let announcements = db.begin_transaction_nc()
@@ -116,14 +120,16 @@ pub async fn start_api_announcement_service(
 
 /// Checks if we already have a signed API endpoint announcement for our own
 /// identity in the database and creates one if not.
-async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) {
+///
+/// Return `true` fresh announcements were inserted because it was not present
+async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) -> bool {
     let mut dbtx = db.begin_transaction().await;
     if dbtx
         .get_value(&ApiAnnouncementKey(cfg.local.identity))
         .await
         .is_some()
     {
-        return;
+        return false;
     }
 
     let api_announcement = ApiAnnouncement::new(
@@ -142,19 +148,51 @@ async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &Serv
     )
     .await;
     dbtx.commit_tx().await;
+
+    true
 }
 
 /// Returns a list of all peers and their respective API URLs taking into
-/// account announcements overwriting the URLs contained in the original
-/// configuration.
+/// account guardian metadata and API announcements overwriting the URLs
+/// contained in the original configuration.
+///
+/// Priority order:
+/// 1. Guardian metadata (if available) - uses first URL from api_urls
+/// 2. API announcement (if available)
+/// 3. Configured URL (fallback)
 pub async fn get_api_urls(db: &Database, cfg: &ServerConfigConsensus) -> BTreeMap<PeerId, SafeUrl> {
-    override_api_urls(
-        db,
-        cfg.api_endpoints()
-            .iter()
-            .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
-        &ApiAnnouncementPrefix,
-        |key| key.0,
-    )
-    .await
+    let mut dbtx = db.begin_transaction_nc().await;
+
+    // Load guardian metadata for all peers
+    let guardian_metadata: BTreeMap<PeerId, SignedGuardianMetadata> = dbtx
+        .find_by_prefix(&GuardianMetadataPrefix)
+        .await
+        .map(|(key, metadata)| (key.0, metadata))
+        .collect()
+        .await;
+
+    // Load API announcements for all peers
+    let api_announcements: BTreeMap<PeerId, SignedApiAnnouncement> = dbtx
+        .find_by_prefix(&ApiAnnouncementPrefix)
+        .await
+        .map(|(key, announcement)| (key.0, announcement))
+        .collect()
+        .await;
+
+    // For each peer: prefer guardian metadata, then API announcement, then config
+    cfg.api_endpoints()
+        .iter()
+        .map(|(peer_id, peer_url)| {
+            let url = guardian_metadata
+                .get(peer_id)
+                .and_then(|m| m.guardian_metadata().api_urls.first().cloned())
+                .or_else(|| {
+                    api_announcements
+                        .get(peer_id)
+                        .map(|a| a.api_announcement.api_url.clone())
+                })
+                .unwrap_or_else(|| peer_url.url.clone());
+            (*peer_id, url)
+        })
+        .collect()
 }

@@ -28,6 +28,7 @@ use fedimint_core::module::{
     ApiAuth, ApiMethod, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
+use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
@@ -550,6 +551,24 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         api_url: SafeUrl,
         auth: ApiAuth,
     ) -> FederationResult<SignedApiAnnouncement>;
+
+    /// Publish our signed guardian metadata to other guardians
+    async fn submit_guardian_metadata(
+        &self,
+        peer_id: PeerId,
+        metadata: SignedGuardianMetadata,
+    ) -> FederationResult<()>;
+
+    async fn guardian_metadata(
+        &self,
+        guardian: PeerId,
+    ) -> ServerResult<BTreeMap<PeerId, SignedGuardianMetadata>>;
+
+    async fn sign_guardian_metadata(
+        &self,
+        metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
+        auth: ApiAuth,
+    ) -> FederationResult<SignedGuardianMetadata>;
 
     async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
 
