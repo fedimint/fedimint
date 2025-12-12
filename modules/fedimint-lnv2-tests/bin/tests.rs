@@ -29,6 +29,15 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
+            if !devimint::util::is_backwards_compatibility_test() {
+                info!("Verifying that LNv1 module is disabled...");
+
+                ensure!(
+                    !devimint::util::supports_lnv1(),
+                    "LNv1 module should be disabled when not in backwards compatibility test"
+                );
+            }
+
             test_gateway_registration(&dev_fed).await?;
             test_payments(&dev_fed).await?;
             test_lnurl_pay(&dev_fed).await?;
@@ -223,31 +232,6 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         await_receive_claimed(&client, receive_op).await?;
     }
 
-    let mut lnv1_swap = 0;
-    let mut lnv2_swap = 0;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-    if gatewayd_version >= *VERSION_0_9_0_ALPHA && gateway_cli_version >= *VERSION_0_9_0_ALPHA {
-        info!("Testing LNv1 client can pay LNv2 invoice...");
-        let lnd_gw_id = gw_lnd.gateway_id.clone();
-        let (invoice, receive_op) = receive(&client, &gw_lnd.addr, 1_000_000).await?;
-        test_send_lnv1(&client, &lnd_gw_id, &invoice.to_string()).await?;
-        lnv1_swap += 1;
-        await_receive_claimed(&client, receive_op).await?;
-
-        info!("Testing LNv2 client can pay LNv1 invoice...");
-        let (invoice, receive_op) = receive_lnv1(&client, &lnd_gw_id, 1_000_000).await?;
-        test_send(
-            &client,
-            &gw_lnd.addr,
-            &invoice.to_string(),
-            FinalSendOperationState::Success,
-        )
-        .await?;
-        lnv2_swap += 1;
-        await_receive_lnv1(&client, receive_op).await?;
-    }
-
     info!("Testing payments from client to gateways...");
 
     for (gw_send, gw_receive) in gateway_pairs {
@@ -335,13 +319,9 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let lnd_payment_summary = gw_lnd.payment_summary().await?;
 
-    assert_eq!(
-        lnd_payment_summary.outgoing.total_success,
-        5 + lnv1_swap + lnv2_swap
-    );
+    assert_eq!(lnd_payment_summary.outgoing.total_success, 5);
     assert_eq!(lnd_payment_summary.outgoing.total_failure, 2);
-    // LNv1 does not count swaps as incoming payments
-    assert_eq!(lnd_payment_summary.incoming.total_success, 4 + lnv1_swap);
+    assert_eq!(lnd_payment_summary.incoming.total_success, 4);
     assert_eq!(lnd_payment_summary.incoming.total_failure, 0);
 
     assert!(lnd_payment_summary.outgoing.median_latency.is_some());
@@ -491,53 +471,6 @@ async fn test_send(
     Ok(())
 }
 
-async fn receive_lnv1(
-    client: &Client,
-    gateway_id: &String,
-    amount_msats: u64,
-) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
-    let invoice_response = cmd!(
-        client,
-        "module",
-        "ln",
-        "invoice",
-        amount_msats,
-        "--gateway-id",
-        gateway_id
-    )
-    .out_json()
-    .await?;
-    let invoice = serde_json::from_value::<Bolt11Invoice>(
-        invoice_response
-            .get("invoice")
-            .expect("Invoice should be present")
-            .clone(),
-    )?;
-    let operation_id = serde_json::from_value::<OperationId>(
-        invoice_response
-            .get("operation_id")
-            .expect("OperationId should be present")
-            .clone(),
-    )?;
-    Ok((invoice, operation_id))
-}
-
-async fn test_send_lnv1(client: &Client, gateway_id: &str, invoice: &str) -> anyhow::Result<()> {
-    let payment_result = cmd!(
-        client,
-        "module",
-        "ln",
-        "pay",
-        invoice,
-        "--gateway-id",
-        gateway_id
-    )
-    .out_json()
-    .await?;
-    assert!(payment_result.get("Success").is_some() || payment_result.get("preimage").is_some());
-    Ok(())
-}
-
 async fn await_receive_claimed(client: &Client, operation_id: OperationId) -> anyhow::Result<()> {
     assert_eq!(
         cmd!(
@@ -556,13 +489,6 @@ async fn await_receive_claimed(client: &Client, operation_id: OperationId) -> an
     Ok(())
 }
 
-async fn await_receive_lnv1(client: &Client, operation_id: OperationId) -> anyhow::Result<()> {
-    let lnv1_response = cmd!(client, "await-invoice", operation_id.fmt_full())
-        .out_json()
-        .await?;
-    assert!(lnv1_response.get("total_amount_msat").is_some());
-    Ok(())
-}
 async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     if util::FedimintCli::version_or_default().await < *VERSION_0_9_0_ALPHA {
         return Ok(());
