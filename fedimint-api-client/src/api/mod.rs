@@ -549,6 +549,24 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         auth: ApiAuth,
     ) -> FederationResult<SignedApiAnnouncement>;
 
+    /// Publish our signed guardian metadata to other guardians
+    async fn submit_guardian_metadata(
+        &self,
+        peer_id: PeerId,
+        metadata: fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
+    ) -> FederationResult<()>;
+
+    async fn guardian_metadata(
+        &self,
+        guardian: PeerId,
+    ) -> ServerResult<BTreeMap<PeerId, fedimint_core::net::guardian_metadata::SignedGuardianMetadata>>;
+
+    async fn sign_guardian_metadata(
+        &self,
+        metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
+        auth: ApiAuth,
+    ) -> FederationResult<fedimint_core::net::guardian_metadata::SignedGuardianMetadata>;
+
     async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
 
     /// Returns the fedimintd version a peer is running

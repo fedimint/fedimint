@@ -46,7 +46,11 @@ pub async fn start_api_announcement_service(
     const FAILURE_RETRY_SECONDS: u64 = 60;
     const SUCCESS_RETRY_SECONDS: u64 = 600;
 
-    insert_signed_api_announcement_if_not_present(db, cfg).await;
+    let initial_delay = if insert_signed_api_announcement_if_not_present(db, cfg).await {
+        Duration::ZERO
+    } else {
+        Duration::from_secs(INITIAL_DEALY_SECONDS)
+    };
 
     let db = db.clone();
     // FIXME: (@leonardo) how should we handle the connector here ?
@@ -61,7 +65,7 @@ pub async fn start_api_announcement_service(
     tg.spawn_cancellable("submit-api-url-announcement", async move {
         // Give other servers some time to start up in case they were just restarted
         // together
-        sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).await;
+        sleep(initial_delay).await;
         loop {
             let mut success = true;
             let announcements = db.begin_transaction_nc()
@@ -116,14 +120,16 @@ pub async fn start_api_announcement_service(
 
 /// Checks if we already have a signed API endpoint announcement for our own
 /// identity in the database and creates one if not.
-async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) {
+///
+/// Return `true` fresh announcements were inserted because it was not present
+async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) -> bool {
     let mut dbtx = db.begin_transaction().await;
     if dbtx
         .get_value(&ApiAnnouncementKey(cfg.local.identity))
         .await
         .is_some()
     {
-        return;
+        return false;
     }
 
     let api_announcement = ApiAnnouncement::new(
@@ -142,6 +148,8 @@ async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &Serv
     )
     .await;
     dbtx.commit_tx().await;
+
+    true
 }
 
 /// Returns a list of all peers and their respective API URLs taking into
