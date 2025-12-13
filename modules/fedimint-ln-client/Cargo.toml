@@ -42,6 +42,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
 lnurl-rs = { workspace = true, features = ["async"] }
+once_cell = "1.21.3"
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
