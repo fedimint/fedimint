@@ -8,8 +8,8 @@ use bitcoin::secp256k1;
 use fedimint_connectors::ServerResult;
 use fedimint_core::admin_client::{GuardianConfigBackup, SetLocalParamsRequest, SetupStatus};
 use fedimint_core::backup::{BackupStatistics, ClientBackupSnapshot};
-use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::core::backup::SignedBackupRequest;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::endpoint_constants::{
     ADD_PEER_SETUP_CODE_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
@@ -373,6 +373,7 @@ where
         name: String,
         federation_name: Option<String>,
         disable_base_fees: Option<bool>,
+        enabled_modules: Option<BTreeSet<ModuleKind>>,
         auth: ApiAuth,
     ) -> FederationResult<String> {
         self.request_admin(
@@ -381,6 +382,7 @@ where
                 name,
                 federation_name,
                 disable_base_fees,
+                enabled_modules,
             }),
             auth,
         )

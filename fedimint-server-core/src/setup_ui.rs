@@ -1,7 +1,9 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
 
 pub type DynSetupApi = Arc<dyn ISetupApi + Send + Sync + 'static>;
@@ -18,6 +20,9 @@ pub trait ISetupApi {
     /// Get list of names of connected peers
     async fn connected_peers(&self) -> Vec<String>;
 
+    /// Get the available modules that can be enabled during setup
+    fn available_modules(&self) -> BTreeSet<ModuleKind>;
+
     /// Reset the set of other guardians
     async fn reset_setup_codes(&self);
 
@@ -28,6 +33,7 @@ pub trait ISetupApi {
         name: String,
         federation_name: Option<String>,
         disable_base_fees: Option<bool>,
+        enabled_modules: Option<BTreeSet<ModuleKind>>,
     ) -> Result<String>;
 
     /// Add peer connection info

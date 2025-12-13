@@ -218,6 +218,8 @@ pub struct ConfigGenSettings {
     pub iroh_relays: Vec<SafeUrl>,
     /// Bitcoin network for the federation
     pub network: bitcoin::Network,
+    /// Available modules that can be enabled during setup
+    pub available_modules: BTreeSet<ModuleKind>,
 }
 
 #[derive(Debug, Clone)]
@@ -242,6 +244,8 @@ pub struct ConfigGenParams {
     pub meta: BTreeMap<String, String>,
     /// Whether to disable base fees for this federation
     pub disable_base_fees: bool,
+    /// Modules enabled by the leader during setup
+    pub enabled_modules: BTreeSet<ModuleKind>,
     /// Bitcoin network for this federation
     pub network: bitcoin::Network,
 }
@@ -503,6 +507,7 @@ impl ServerConfig {
 
         let module_configs: BTreeMap<_, _> = module_iter
             .into_iter()
+            .filter(|(kind, _)| peer0.enabled_modules.contains(kind))
             .enumerate()
             .map(|(module_id, (_kind, module_init))| {
                 (
@@ -656,7 +661,11 @@ impl ServerConfig {
 
         let mut module_cfgs = BTreeMap::new();
 
-        for (module_id, (kind, module_init)) in module_iter.into_iter().enumerate() {
+        for (module_id, (kind, module_init)) in module_iter
+            .into_iter()
+            .filter(|(kind, _)| params.enabled_modules.contains(kind))
+            .enumerate()
+        {
             info!(
                 target: LOG_NET_PEER_DKG,
                 "Running config generation for module of kind {kind}..."

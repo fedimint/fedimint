@@ -1,7 +1,9 @@
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::ModuleKind;
 use crate::encoding::{Decodable, Encodable};
 
 /// The state of the server returned via APIs
@@ -47,6 +49,9 @@ pub struct SetLocalParamsRequest {
     pub federation_name: Option<String>,
     /// Whether to disable base fees, set by the leader
     pub disable_base_fees: Option<bool>,
+    /// Modules enabled by the leader (if None, all available modules are
+    /// enabled)
+    pub enabled_modules: Option<BTreeSet<ModuleKind>>,
 }
 
 /// Archive of all the guardian config files that can be used to recover a lost

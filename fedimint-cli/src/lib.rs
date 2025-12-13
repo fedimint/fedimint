@@ -1470,7 +1470,13 @@ impl FedimintCli {
                 federation_name,
             } => {
                 let info = client
-                    .set_local_params(name.clone(), federation_name.clone(), None, cli.auth()?)
+                    .set_local_params(
+                        name.clone(),
+                        federation_name.clone(),
+                        None,
+                        None,
+                        cli.auth()?,
+                    )
                     .await?;
 
                 Ok(serde_json::to_value(info).expect("JSON serialization failed"))

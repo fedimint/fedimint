@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -14,8 +14,8 @@ use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::config::{ClientConfig, load_from_file};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::ModuleCommon;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::block_on;
 use fedimint_core::task::jit::JitTryAnyhow;
@@ -23,8 +23,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
 use fedimint_logging::LOG_DEVIMINT;
-use fedimint_server::config::ConfigGenParams;
-use fedimint_testing_core::config::local_config_gen_params;
+use fedimint_testing_core::config::API_AUTH;
 use fedimint_testing_core::node_type::LightningNodeType;
 use fedimint_wallet_client::WalletClientModule;
 use fedimint_wallet_client::config::WalletClientConfig;
@@ -304,10 +303,6 @@ impl Federation {
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
 
-        let peers: Vec<_> = num_peers.peer_ids().collect();
-        let params: HashMap<PeerId, ConfigGenParams> =
-            local_config_gen_params(&peers, process_mgr.globals.FM_FEDERATION_BASE_PORT, true)?;
-
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut api_endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
 
@@ -351,7 +346,7 @@ impl Federation {
             let (original_fedimint_cli_path, original_fm_mint_client) =
                 crate::util::use_matching_fedimint_cli_for_dkg().await?;
 
-            run_cli_dkg_v2(params, api_endpoints).await?;
+            run_cli_dkg_v2(api_endpoints).await?;
 
             // we're done with dkg, so we can reset the fedimint-cli version
             crate::util::use_fedimint_cli(original_fedimint_cli_path, original_fm_mint_client);
@@ -1016,20 +1011,14 @@ impl Fedimintd {
     }
 }
 
-pub async fn run_cli_dkg_v2(
-    params: HashMap<PeerId, ConfigGenParams>,
-    endpoints: BTreeMap<PeerId, String>,
-) -> Result<()> {
-    let auth_for = |peer: &PeerId| -> &ApiAuth { &params[peer].api_auth };
-
+pub async fn run_cli_dkg_v2(endpoints: BTreeMap<PeerId, String>) -> Result<()> {
     // Parallelize setup status checks
-    let status_futures = endpoints.iter().map(|(peer, endpoint)| {
-        let peer = *peer;
+    let status_futures = endpoints.values().map(|endpoint| {
         let endpoint = endpoint.clone();
         async move {
             let status = poll("awaiting-setup-status-awaiting-local-params", || async {
                 crate::util::FedimintCli
-                    .setup_status(auth_for(&peer), &endpoint)
+                    .setup_status(&API_AUTH, &endpoint)
                     .await
                     .map_err(ControlFlow::Continue)
             })
@@ -1050,11 +1039,11 @@ pub async fn run_cli_dkg_v2(
         async move {
             let info = if peer.to_usize() == 0 {
                 crate::util::FedimintCli
-                    .set_local_params_leader(&peer, auth_for(&peer), &endpoint)
+                    .set_local_params_leader(&peer, &API_AUTH, &endpoint)
                     .await
             } else {
                 crate::util::FedimintCli
-                    .set_local_params_follower(&peer, auth_for(&peer), &endpoint)
+                    .set_local_params_follower(&peer, &API_AUTH, &endpoint)
                     .await
             };
             info.map(|i| (peer, i))
@@ -1073,13 +1062,12 @@ pub async fn run_cli_dkg_v2(
         endpoints
             .iter()
             .filter(move |(p, _)| *p != peer)
-            .map(move |(p, endpoint)| {
-                let p = *p;
+            .map(move |(_, endpoint)| {
                 let endpoint = endpoint.clone();
                 let info = info.clone();
                 async move {
                     crate::util::FedimintCli
-                        .add_peer(&info, auth_for(&p), &endpoint)
+                        .add_peer(&info, &API_AUTH, &endpoint)
                         .await
                 }
             })
@@ -1089,12 +1077,11 @@ pub async fn run_cli_dkg_v2(
     debug!(target: LOG_DEVIMINT, "Starting DKG...");
 
     // Parallelize DKG start
-    let start_dkg_futures = endpoints.iter().map(|(peer, endpoint)| {
-        let peer = *peer;
+    let start_dkg_futures = endpoints.values().map(|endpoint| {
         let endpoint = endpoint.clone();
         async move {
             crate::util::FedimintCli
-                .start_dkg(auth_for(&peer), &endpoint)
+                .start_dkg(&API_AUTH, &endpoint)
                 .await
         }
     });
