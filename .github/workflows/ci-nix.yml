@@ -570,7 +570,7 @@ jobs:
           done
 
       - name: Upload Binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: "${{ matrix.build.flake-output}}-${{ matrix.platform.name }}"
           path: "bins/**"
@@ -607,7 +607,7 @@ jobs:
 
       - name: Upload DEB packages
         if: matrix.platform.build-deb
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: "${{ matrix.build.flake-output }}-${{ matrix.platform.name }}-deb-bundle"
           path: "debs/**.deb"
@@ -622,7 +622,7 @@ jobs:
 
       - name: Upload RPM packages
         if: matrix.platform.build-rpm
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: "${{ matrix.build.flake-output }}-${{ matrix.platform.name }}-rpm-bundle"
           path: "rpms/**.rpm"
