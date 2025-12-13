@@ -4161,6 +4161,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-recurringdv2"
+version = "0.10.0-alpha"
+dependencies = [
+ "anyhow",
+ "axum 0.8.7",
+ "bitcoin",
+ "clap",
+ "fedimint-connectors",
+ "fedimint-core",
+ "fedimint-lnv2-common",
+ "fedimint-logging",
+ "fedimint-tpe",
+ "lightning-invoice",
+ "lnurl-rs",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-rocksdb"
 version = "0.10.0-alpha"
 dependencies = [

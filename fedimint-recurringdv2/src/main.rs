@@ -1,13 +1,17 @@
+use std::net::SocketAddr;
+
 use anyhow::{anyhow, bail, ensure};
 use axum::body::Body;
 use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::{Json, Router};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{self, PublicKey};
+use clap::Parser;
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed, encode_prefixed};
+use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::Scalar;
@@ -18,117 +22,101 @@ use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
-use fedimint_lnv2_common::lnurl::{LnurlRequest, LnurlResponse};
+use fedimint_lnv2_common::lnurl::LnurlRequest;
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, GatewayApi, MINIMUM_INCOMING_CONTRACT_AMOUNT, tweak,
 };
+use fedimint_logging::TracingSetup;
 use lightning_invoice::Bolt11Invoice;
 use lnurl::Tag;
 use lnurl::pay::PayResponse;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
+use tower_http::cors;
+use tower_http::cors::CorsLayer;
 use tpe::AggregatePublicKey;
-
-use crate::encrypt::EncryptedData;
+use tracing::{info, warn};
 
 const MAX_SENDABLE_MSAT: u64 = 100_000_000_000;
 const MIN_SENDABLE_MSAT: u64 = 100_000;
 
+#[derive(Debug, Parser)]
+struct CliOpts {
+    /// Address to bind the server to
+    ///
+    /// Should be `0.0.0.0:8176` most of the time, as api connectivity is public
+    /// and direct, and the port should be open in the firewall.
+    #[arg(long, env = "FM_BIND_API", default_value = "0.0.0.0:8176")]
+    bind_api: SocketAddr,
+}
+
 #[derive(Clone)]
-struct Recurringd {
-    base_url: SafeUrl,
-    encryption_key: Option<[u8; 32]>,
+struct AppState {
     gateway_conn: RealGatewayConnection,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct GetInvoiceParams {
-    amount: u64,
-}
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    TracingSetup::default().init()?;
 
-#[derive(Debug, Serialize, Deserialize)]
-struct LNURLPayInvoice {
-    pr: String,
-    verify: String,
-}
+    let cli_opts = CliOpts::parse();
 
-struct LnurlError {
-    code: StatusCode,
-    reason: anyhow::Error,
-}
-
-impl LnurlError {
-    fn bad_request(reason: anyhow::Error) -> Self {
-        Self {
-            code: StatusCode::BAD_REQUEST,
-            reason,
-        }
-    }
-
-    fn internal(reason: anyhow::Error) -> Self {
-        Self {
-            code: StatusCode::INTERNAL_SERVER_ERROR,
-            reason,
-        }
-    }
-}
-
-impl IntoResponse for LnurlError {
-    fn into_response(self) -> Response<Body> {
-        let json = Json(serde_json::json!({
-            "status": "ERROR",
-            "reason": self.reason.to_string(),
-        }));
-
-        (self.code, json).into_response()
-    }
-}
-
-pub async fn router(base_url: SafeUrl, encryption_key: Option<String>) -> anyhow::Result<Router> {
     let connector_registry = ConnectorRegistry::build_from_client_defaults()
         .with_env_var_overrides()?
         .bind()
         .await?;
-    let api = GatewayApi::new(None, connector_registry);
-    let gateway_conn = RealGatewayConnection { api };
-    let state = Recurringd {
-        base_url: base_url.clone(),
-        encryption_key: encryption_key
-            .map(|key| key.consensus_hash::<sha256::Hash>().to_byte_array()),
-        gateway_conn,
+
+    let state = AppState {
+        gateway_conn: RealGatewayConnection {
+            api: GatewayApi::new(None, connector_registry),
+        },
     };
 
-    Ok(Router::new()
+    let cors = CorsLayer::new()
+        .allow_origin(cors::Any)
+        .allow_methods(cors::Any);
+
+    let app = Router::new()
         .route("/", get(health_check))
-        .route("/lnurl", post(lnv2_register))
-        .route("/pay/{payload}", get(lnv2_pay))
-        .route("/invoice/{payload}", get(lnv2_invoice))
-        .with_state(state))
+        .route("/pay/{payload}", get(pay))
+        .route("/invoice/{payload}", get(invoice))
+        .layer(cors)
+        .with_state(state);
+
+    info!(bind_api = %cli_opts.bind_api, "recurringdv2 started");
+
+    let listener = TcpListener::bind(cli_opts.bind_api).await?;
+
+    axum::serve(listener, app).await?;
+
+    Ok(())
 }
 
-async fn health_check() -> impl IntoResponse {
-    "RecurringdV2 is up and running!"
+async fn health_check(headers: HeaderMap) -> impl IntoResponse {
+    format!("recurringdv2 is up and running at {}", base_url(&headers))
 }
 
-async fn lnv2_register(
-    State(state): State<Recurringd>,
-    Json(request): Json<LnurlRequest>,
-) -> Result<Json<LnurlResponse>, LnurlError> {
-    Ok(Json(LnurlResponse {
-        lnurl: format!(
-            "{}pay/{}",
-            state.base_url,
-            encode_prefixed(FEDIMINT_PREFIX, &request)
-        ),
-    }))
+fn base_url(headers: &HeaderMap) -> String {
+    let host = headers
+        .get("x-forwarded-host")
+        .or_else(|| headers.get("host"))
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost");
+
+    let scheme = headers
+        .get("x-forwarded-proto")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("http");
+
+    format!("{scheme}://{host}/")
 }
 
-async fn lnv2_pay(
+async fn pay(
+    headers: HeaderMap,
     Path(payload): Path<String>,
-    State(state): State<Recurringd>,
 ) -> Result<Json<PayResponse>, LnurlError> {
     let response = PayResponse {
-        callback: format!("{}invoice/{payload}", state.base_url),
+        callback: format!("{}invoice/{payload}", base_url(&headers)),
         max_sendable: MAX_SENDABLE_MSAT,
         min_sendable: MIN_SENDABLE_MSAT,
         tag: Tag::PayRequest,
@@ -141,22 +129,24 @@ async fn lnv2_pay(
     Ok(Json(response))
 }
 
-async fn lnv2_invoice(
+#[derive(Debug, Serialize, Deserialize)]
+struct GetInvoiceParams {
+    amount: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct LnUrlPayInvoiceResponse {
+    pr: Bolt11Invoice,
+    verify: String,
+}
+
+async fn invoice(
     Path(payload): Path<String>,
     Query(params): Query<GetInvoiceParams>,
-    State(state): State<Recurringd>,
-) -> Result<Json<LNURLPayInvoice>, LnurlError> {
-    // Try plaintext format first, then fall back to legacy encrypted format
-    let request: LnurlRequest = match decode_prefixed(FEDIMINT_PREFIX, &payload) {
-        Ok(request) => request,
-        Err(_) => state
-            .encryption_key
-            .as_ref()
-            .and_then(|key| {
-                EncryptedData::decode_base32(&payload).and_then(|encrypted| encrypted.decrypt(key))
-            })
-            .ok_or_else(|| LnurlError::bad_request(anyhow!("Failed to decode payload")))?,
-    };
+    State(state): State<AppState>,
+) -> Result<Json<LnUrlPayInvoiceResponse>, LnurlError> {
+    let request: LnurlRequest = decode_prefixed(FEDIMINT_PREFIX, &payload)
+        .map_err(|_| LnurlError::bad_request(anyhow!("Failed to decode payload")))?;
 
     if params.amount < MIN_SENDABLE_MSAT || params.amount > MAX_SENDABLE_MSAT {
         return Err(LnurlError::bad_request(anyhow!(
@@ -178,14 +168,16 @@ async fn lnv2_invoice(
     .await
     .map_err(LnurlError::internal)?;
 
-    Ok(Json(LNURLPayInvoice {
-        pr: invoice.to_string(),
+    info!(%params.amount, %gateway, "Created invoice");
+
+    Ok(Json(LnUrlPayInvoiceResponse {
+        pr: invoice.clone(),
         verify: format!("{}/verify/{}", gateway, invoice.payment_hash()),
     }))
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn create_contract_and_fetch_invoice(
+async fn create_contract_and_fetch_invoice(
     federation_id: FederationId,
     recipient_pk: PublicKey,
     aggregate_pk: AggregatePublicKey,
@@ -196,7 +188,7 @@ pub async fn create_contract_and_fetch_invoice(
 ) -> anyhow::Result<(SafeUrl, Bolt11Invoice)> {
     let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_pk);
 
-    let scalar = Scalar::from_be_bytes(ephemeral_tweak).unwrap();
+    let scalar = Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order");
 
     let claim_pk = recipient_pk
         .mul_tweak(secp256k1::SECP256K1, &scalar)
@@ -279,4 +271,38 @@ async fn select_gateway(
     }
 
     bail!("All gateways are offline or do not support this federation")
+}
+
+struct LnurlError {
+    code: StatusCode,
+    reason: anyhow::Error,
+}
+
+impl LnurlError {
+    fn bad_request(reason: anyhow::Error) -> Self {
+        Self {
+            code: StatusCode::BAD_REQUEST,
+            reason,
+        }
+    }
+
+    fn internal(reason: anyhow::Error) -> Self {
+        Self {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            reason,
+        }
+    }
+}
+
+impl IntoResponse for LnurlError {
+    fn into_response(self) -> Response<Body> {
+        warn!(reason = %self.reason, "Request failed");
+
+        let json = Json(serde_json::json!({
+            "status": "ERROR",
+            "reason": self.reason.to_string(),
+        }));
+
+        (self.code, json).into_response()
+    }
 }

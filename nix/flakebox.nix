@@ -899,6 +899,16 @@ in
       bin = "fedimint-recurringd";
     };
 
+    fedimint-recurringdv2-pkgs = fedimintBuildPackageGroup {
+      pname = "fedimint-recurringdv2-pkgs";
+      packages = [ "fedimint-recurringdv2" ];
+    };
+
+    fedimint-recurringdv2 = pickBinary {
+      pkg = fedimint-recurringdv2-pkgs;
+      bin = "fedimint-recurringdv2";
+    };
+
     container =
       let
         entrypointScript = pkgs.writeShellScriptBin "entrypoint" ''
@@ -961,6 +971,14 @@ in
           contents = [ fedimint-recurringd-pkgs ] ++ defaultPackages;
           config = {
             Cmd = [ "${fedimint-recurringd-pkgs}/bin/fedimint-recurringd" ];
+          };
+        };
+
+        fedimint-recurringdv2 = pkgs.dockerTools.buildLayeredImage {
+          name = "fedimint-recurringdv2";
+          contents = [ fedimint-recurringdv2-pkgs ] ++ defaultPackages;
+          config = {
+            Cmd = [ "${fedimint-recurringdv2-pkgs}/bin/fedimint-recurringdv2" ];
           };
         };
 
