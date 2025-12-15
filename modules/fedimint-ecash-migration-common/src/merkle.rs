@@ -467,8 +467,12 @@ fn pop_siblings(stack: &mut Vec<StackItem>) -> Option<(StackItem, StackItem)> {
         return None;
     }
 
-    let right = stack.pop().unwrap();
-    let left = stack.pop().unwrap();
+    let right = stack
+        .pop()
+        .expect("Stack has at least 2 elements, verified by length check above");
+    let left = stack
+        .pop()
+        .expect("Stack has at least 2 elements, verified by length check above");
     Some((left, right))
 }
 
