@@ -97,12 +97,34 @@ pub struct WithdrawPayload {
     pub federation_id: FederationId,
     pub amount: BitcoinAmountOrAll,
     pub address: Address<NetworkUnchecked>,
+    /// When provided (from UI preview flow), uses these quoted fees.
+    /// When None, fetches current fees from the wallet.
+    #[serde(default)]
+    pub quoted_fees: Option<PegOutFees>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WithdrawResponse {
     pub txid: bitcoin::Txid,
     pub fees: PegOutFees,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WithdrawPreviewPayload {
+    pub federation_id: FederationId,
+    pub amount: BitcoinAmountOrAll,
+    pub address: Address<NetworkUnchecked>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WithdrawPreviewResponse {
+    pub withdraw_amount: Amount,
+    pub address: String,
+    pub peg_out_fees: PegOutFees,
+    pub total_cost: Amount,
+    /// Estimated mint fees when withdrawing all. None for partial withdrawals.
+    #[serde(default)]
+    pub mint_fees: Option<Amount>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
