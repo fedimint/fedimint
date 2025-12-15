@@ -677,7 +677,7 @@ impl Gateway {
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
-                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone());
+                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone()).await;
 
                     debug!(target: LOG_GATEWAY, "Establishing lightning payment stream...");
                     let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await
@@ -1560,7 +1560,7 @@ impl Gateway {
         }
     }
 
-    fn create_lightning_client(
+    async fn create_lightning_client(
         &self,
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> Box<dyn ILnRpcClient> {
@@ -1578,18 +1578,29 @@ impl Gateway {
             LightningMode::Ldk {
                 lightning_port,
                 alias,
-            } => Box::new(
-                ldk::GatewayLdkClient::new(
+            } => loop {
+                let client = ldk::GatewayLdkClient::new(
                     &self.client_builder.data_dir().join(LDK_NODE_DB_FOLDER),
                     self.chain_source.clone(),
                     self.network,
                     lightning_port,
-                    alias,
+                    alias.clone(),
                     self.mnemonic.clone(),
-                    runtime,
-                )
-                .expect("Failed to create LDK client"),
-            ),
+                    runtime.clone(),
+                );
+
+                match client {
+                    Ok(client) => return Box::new(client),
+                    Err(err) => {
+                        // Retrieving the fees inside of LDK can sometimes fail/time out. To prevent
+                        // crashing the gateway, we wait a bit and just try
+                        // to re-create the client. The gateway cannot proceed until this succeeds.
+                        let sleep_duration = Duration::from_secs(60);
+                        warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), ?sleep_duration, "Could not create LDK client, trying again...");
+                        sleep(sleep_duration).await;
+                    }
+                }
+            },
         }
     }
 }
