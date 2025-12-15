@@ -23,6 +23,7 @@ fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
+fedimint-mint-client = { workspace = true }
 fedimint-ui-common = { workspace = true }
 fedimint-wallet-client = { workspace = true }
 lightning-invoice = { workspace = true }
