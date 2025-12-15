@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::base32::FEDIMINT_PREFIX;
 use fedimint_core::config::META_FEDERATION_NAME_KEY;
-use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
     ADD_PEER_SETUP_CODE_ENDPOINT, GET_SETUP_CODE_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
@@ -64,6 +64,9 @@ pub struct LocalParams {
     federation_name: Option<String>,
     /// Whether to disable base fees, set by the leader
     disable_base_fees: Option<bool>,
+    /// Modules enabled by the leader (if None, all available modules are
+    /// enabled)
+    enabled_modules: Option<BTreeSet<ModuleKind>>,
 }
 
 impl LocalParams {
@@ -73,6 +76,7 @@ impl LocalParams {
             endpoints: self.endpoints.clone(),
             federation_name: self.federation_name.clone(),
             disable_base_fees: self.disable_base_fees,
+            enabled_modules: self.enabled_modules.clone(),
         }
     }
 }
@@ -139,6 +143,10 @@ impl ISetupApi for SetupApi {
             .collect()
     }
 
+    fn available_modules(&self) -> BTreeSet<ModuleKind> {
+        self.settings.available_modules.clone()
+    }
+
     async fn reset_setup_codes(&self) {
         self.state.lock().await.setup_codes.clear();
     }
@@ -149,12 +157,14 @@ impl ISetupApi for SetupApi {
         name: String,
         federation_name: Option<String>,
         disable_base_fees: Option<bool>,
+        enabled_modules: Option<BTreeSet<ModuleKind>>,
     ) -> anyhow::Result<String> {
         if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
             && existing_local_parameters.auth == auth
             && existing_local_parameters.name == name
             && existing_local_parameters.federation_name == federation_name
             && existing_local_parameters.disable_base_fees == disable_base_fees
+            && existing_local_parameters.enabled_modules == enabled_modules
         {
             return Ok(base32::encode_prefixed(
                 FEDIMINT_PREFIX,
@@ -209,6 +219,7 @@ impl ISetupApi for SetupApi {
                 name,
                 federation_name,
                 disable_base_fees,
+                enabled_modules,
             }
         } else {
             let (tls_cert, tls_key) =
@@ -236,6 +247,7 @@ impl ISetupApi for SetupApi {
                 name,
                 federation_name,
                 disable_base_fees,
+                enabled_modules,
             }
         };
 
@@ -292,6 +304,18 @@ impl ISetupApi for SetupApi {
             );
         }
 
+        if state
+            .setup_codes
+            .iter()
+            .chain(once(&local_params.setup_code()))
+            .any(|info| info.enabled_modules.is_some())
+        {
+            ensure!(
+                info.enabled_modules.is_none(),
+                "Enabled modules have already been configured by another guardian"
+            );
+        }
+
         state.setup_codes.insert(info.clone());
 
         Ok(info.name)
@@ -326,6 +350,12 @@ impl ISetupApi for SetupApi {
             .find_map(|info| info.disable_base_fees)
             .unwrap_or(is_env_var_set(FM_DISABLE_BASE_FEES_ENV));
 
+        let enabled_modules = state
+            .setup_codes
+            .iter()
+            .find_map(|info| info.enabled_modules.clone())
+            .unwrap_or_else(|| self.settings.available_modules.clone());
+
         let our_id = state
             .setup_codes
             .iter()
@@ -347,6 +377,7 @@ impl ISetupApi for SetupApi {
                 federation_name,
             )]),
             disable_base_fees,
+            enabled_modules,
             network: self.settings.network,
         };
 
@@ -402,7 +433,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                 config.set_local_parameters(auth, request.name, request.federation_name, request.disable_base_fees)
+                 config.set_local_parameters(auth, request.name, request.federation_name, request.disable_base_fees, request.enabled_modules)
                     .await
                     .map_err(|e| ApiError::bad_request(e.to_string()))
             }

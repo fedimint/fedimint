@@ -233,7 +233,7 @@ impl ServerOpts {
 ///
 /// # Arguments
 ///
-/// * `modules_fn` - A function to initialize the modules.
+/// * `module_init_registry` - The registry of available modules.
 ///
 /// * `code_version_hash` - The git hash of the code that the `fedimintd` binary
 ///   is being built from. This is used mostly for information purposes
@@ -303,6 +303,7 @@ pub async fn run(
         iroh_dns: server_opts.iroh_dns.clone(),
         iroh_relays: server_opts.iroh_relays.clone(),
         network: server_opts.bitcoin_network,
+        available_modules: module_init_registry.kinds(),
     };
 
     let db = Database::new(
