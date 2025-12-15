@@ -242,6 +242,7 @@ pub fn hash_keyset(keyset: &Tiered<AggregatePublicKey>) -> KeySetHash {
 ///
 /// # Panics
 /// - If an error occurs while reading the spend book file.
+/// - If nonces are not in strictly ascending sorted order.
 pub async fn stream_nonces_from_file(
     spend_book_path: impl AsRef<Path>,
 ) -> anyhow::Result<Pin<Box<dyn Stream<Item = Nonce> + Send>>> {
@@ -254,6 +255,8 @@ pub async fn stream_nonces_from_file(
     let mut line_num = 0u64;
 
     Ok(Box::pin(stream! {
+        let mut last_nonce: Option<Nonce> = None;
+
         while let Some(line) = lines.next_line().await.with_context(|| {
             format!("Failed to read line {} of spend book file", line_num + 1)
         }).expect("Failed to read line of spend book file") {
@@ -268,6 +271,16 @@ pub async fn stream_nonces_from_file(
                     format!("Failed to decode nonce on line {line_num} of spend book file")
                 })
                 .expect("Failed to decode spend book file");
+
+            // Validate sortedness: each nonce must be strictly greater than the previous
+            if let Some(prev_nonce) = last_nonce {
+                assert!(
+                    nonce > prev_nonce,
+                    "Spend book must be sorted in strictly ascending order: \
+                     nonce on line {line_num} is not greater than previous nonce"
+                );
+            }
+            last_nonce = Some(nonce);
 
             yield nonce;
         }
