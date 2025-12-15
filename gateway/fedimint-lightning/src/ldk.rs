@@ -8,7 +8,6 @@ use async_trait::async_trait;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::{FeeRate, Network, OutPoint};
 use fedimint_bip39::Mnemonic;
-use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::{TaskGroup, TaskHandle, block_in_place};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinAmountOrAll, crit};
@@ -261,17 +260,12 @@ impl Drop for GatewayLdkClient {
 #[async_trait]
 impl ILnRpcClient for GatewayLdkClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
-        // HACK: https://github.com/lightningdevkit/ldk-node/issues/339 when running in devimint
-        // to speed up tests
-        if is_env_var_set("FM_IN_DEVIMINT") {
-            block_in_place(|| {
-                let _ = self.node.sync_wallets();
-            });
-        }
         let node_status = self.node.status();
-
         let ldk_block_height = node_status.current_best_block.height;
-        let synced_to_chain = node_status.latest_onchain_wallet_sync_timestamp.is_some();
+        let onchain_sync = node_status.latest_onchain_wallet_sync_timestamp;
+        let lightning_sync = node_status.latest_lightning_wallet_sync_timestamp;
+        let is_running = node_status.is_running;
+        debug!(target: LOG_LIGHTNING, ?onchain_sync, ?lightning_sync, ?is_running, "LDK Sync Status");
 
         Ok(GetNodeInfoResponse {
             pub_key: self.node.node_id(),
@@ -281,7 +275,9 @@ impl ILnRpcClient for GatewayLdkClient {
             },
             network: self.node.config().network.to_string(),
             block_height: ldk_block_height,
-            synced_to_chain,
+            // `synced_to_chain` is used for determining if the Lightning node is ready, so we care
+            // about the `lightning_sync` status.
+            synced_to_chain: lightning_sync.is_some(),
         })
     }
 
@@ -825,6 +821,13 @@ impl ILnRpcClient for GatewayLdkClient {
             }
             fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    fn sync_wallet(&self) -> Result<(), LightningRpcError> {
+        block_in_place(|| {
+            let _ = self.node.sync_wallets();
+        });
+        Ok(())
     }
 }
 
