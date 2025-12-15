@@ -15,7 +15,7 @@ use crate::states::{FundTransferState, RedeemOriginEcashState, RegisterTransferS
 
 #[derive(Parser, Serialize)]
 enum Opts {
-    /// Register a new liability transfer with the federation.
+    /// Register a new transfer with the federation.
     ///
     /// This creates a transfer request that allows ecash from another
     /// federation to be redeemed in this federation after the transfer
@@ -90,7 +90,7 @@ enum Opts {
         chunk_size: usize,
     },
 
-    /// Fund an existing liability transfer with Bitcoin.
+    /// Fund an existing transfer with Bitcoin.
     ///
     /// This deposits Bitcoin into the transfer contract, making it available
     /// for redemption of origin federation ecash.

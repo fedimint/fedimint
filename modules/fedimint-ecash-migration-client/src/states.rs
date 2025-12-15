@@ -17,9 +17,9 @@ use crate::EcashMigrationClientContext;
 /// State machine for ecash migration operations
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum EcashMigrationStateMachine {
-    /// State machine for registering a liability transfer
+    /// State machine for registering a transfer
     RegisterTransfer(RegisterTransferStateMachine),
-    /// State machine for funding a liability transfer
+    /// State machine for funding a transfer
     FundTransfer(FundTransferStateMachine),
     /// State machine for redeeming origin ecash
     RedeemOriginEcash(RedeemOriginEcashStateMachine),
@@ -72,7 +72,7 @@ impl IntoDynInstance for EcashMigrationStateMachine {
     }
 }
 
-/// Common data for the register liability transfer state machine
+/// Common data for the register transfer state machine
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct RegisterTransferCommon {
     pub operation_id: OperationId,
@@ -80,7 +80,7 @@ pub struct RegisterTransferCommon {
     pub out_point: OutPoint,
 }
 
-/// State machine for registering a liability transfer
+/// State machine for registering a transfer
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct RegisterTransferStateMachine {
     pub common: RegisterTransferCommon,
@@ -239,7 +239,7 @@ pub struct FundTransferCommon {
     pub amount: Amount,
 }
 
-/// State machine for funding a liability transfer
+/// State machine for funding a transfer
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct FundTransferStateMachine {
     pub common: FundTransferCommon,
@@ -323,39 +323,39 @@ impl FundTransferStateMachine {
 /// States of the fund transfer state machine
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum FundTransferStates {
-    /// Fund liability transfer transaction submitted, waiting for confirmation
+    /// Fund transfer transaction submitted, waiting for confirmation
     Created,
-    /// Fund liability transfer transaction was rejected
+    /// Fund transfer transaction was rejected
     Aborted(FundTransferAborted),
-    /// Fund liability transfer completed successfully
+    /// Fund transfer completed successfully
     Success(FundTransferSuccess),
 }
 
-/// Fund liability transfer was aborted
+/// Fund transfer was aborted
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct FundTransferAborted {
     pub reason: String,
 }
 
-/// Fund liability transfer completed successfully
+/// Fund transfer completed successfully
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct FundTransferSuccess {
     pub transfer_id: TransferId,
     pub amount: Amount,
 }
 
-/// State updates for fund liability transfer operation that can be observed by
+/// State updates for fund transfer operation that can be observed by
 /// clients
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum FundTransferState {
     /// Transaction submitted, waiting for confirmation
     Created,
-    /// Fund liability transfer completed successfully
+    /// Fund transfer completed successfully
     Success {
         transfer_id: TransferId,
         amount: Amount,
     },
-    /// Fund liability transfer failed
+    /// Fund transfer failed
     Failed { error: String },
 }
 

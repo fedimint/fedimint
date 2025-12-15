@@ -158,7 +158,7 @@ impl ClientModule for EcashMigrationClientModule {
     }
 }
 
-/// Metadata stored with the register liability transfer operation
+/// Metadata stored with the register transfer operation
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RegisterTransferOperationMeta {
     pub spend_book_merkle_root: MerkleRoot<Nonce>,
@@ -167,7 +167,7 @@ pub struct RegisterTransferOperationMeta {
     pub out_point: OutPoint,
 }
 
-/// Metadata stored with the fund liability transfer operation
+/// Metadata stored with the fund transfer operation
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FundTransferOperationMeta {
     pub transfer_id: TransferId,
@@ -374,7 +374,7 @@ impl EcashMigrationClientModule {
     /// * `creator_keys` - Threshold public keys for the creator
     ///
     /// # Returns
-    /// The liability transfer output containing the Merkle root and entry count
+    /// The transfer output containing the Merkle root and entry count
     #[allow(clippy::missing_errors_doc)]
     pub async fn create_transfer_output(
         origin_config_path: impl AsRef<Path>,
@@ -394,11 +394,11 @@ impl EcashMigrationClientModule {
         })
     }
 
-    /// Register a new liability transfer with the federation.
+    /// Register a new transfer with the federation.
     ///
-    /// This starts a client operation that creates a liability transfer request
-    /// with the destinationfederationthat allows ecash from the origin
-    /// federation to be redeemed after the liability transfer is funded and
+    /// This starts a client operation that creates a transfer request
+    /// with the destination federation that allows ecash from the origin
+    /// federation to be redeemed after the transfer is funded and
     /// activated.
     ///
     /// Returns the operation ID and transfer ID.
@@ -493,7 +493,7 @@ impl EcashMigrationClientModule {
         Ok(operation_id)
     }
 
-    /// Subscribe to updates on the progress of a register liability transfer
+    /// Subscribe to updates on the progress of a register transfer
     /// operation started with [`Self::register_transfer`].
     ///
     /// # Errors
@@ -576,7 +576,7 @@ impl EcashMigrationClientModule {
     /// Get the controller keypair derived from the module secret.
     ///
     /// This keypair is used to authenticate requests to the federation
-    /// for operations on liability transfers created by this client.
+    /// for operations on transfers created by this client.
     pub fn controller_keypair(&self) -> fedimint_core::secp256k1::Keypair {
         let secp = Secp256k1::<All>::new();
         self.module_secret
@@ -584,10 +584,10 @@ impl EcashMigrationClientModule {
             .to_secp_key(&secp)
     }
 
-    /// Fund an existing liability transfer with Bitcoin.
+    /// Fund an existing transfer with Bitcoin.
     ///
-    /// This deposits the specified amount of Bitcoin into the liability
-    /// transfer contract, making it available for redemption of origin
+    /// This deposits the specified amount of Bitcoin into the transfer
+    /// contract, making it available for redemption of origin
     /// federation ecash.
     ///
     /// Returns the operation ID that can be used to subscribe to updates.
@@ -660,7 +660,7 @@ impl EcashMigrationClientModule {
         Ok(operation_id)
     }
 
-    /// Subscribe to updates on the progress of a fund liability transfer
+    /// Subscribe to updates on the progress of a fund transfer
     /// operation started with [`Self::fund_transfer`].
     ///
     /// # Errors
@@ -749,7 +749,7 @@ impl EcashMigrationClientModule {
     /// Upload the origin federation's keyset to the destination federation.
     ///
     /// This reads the keyset from the origin config file and uploads it
-    /// to associate with the given liability transfer. The keyset is uploaded
+    /// to associate with the given transfer. The keyset is uploaded
     /// to all federation peers.
     ///
     /// # Errors
@@ -820,7 +820,7 @@ impl EcashMigrationClientModule {
     /// Returns the total number of entries uploaded.
     ///
     /// # Arguments
-    /// * `transfer_id` - The liability transfer to upload to
+    /// * `transfer_id` - The transfer to upload to
     /// * `spend_book_path` - Path to the spend book file
     /// * `chunk_size` - Number of nonces per chunk (must be a power of 2)
     ///

@@ -281,7 +281,7 @@ impl ServerModule for EcashMigration {
             .expect("Withdrawn amount not found for existing transfer");
         let transfer_balance = deposited_amount
             .checked_sub(withdrawn_amount)
-            .expect("Liability transfer balance cannot be negative");
+            .expect("Transfer balance cannot be negative");
 
         // Check amount is within transfer balance
         if transfer_balance < *amount {

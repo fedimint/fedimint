@@ -63,7 +63,7 @@ impl std::str::FromStr for TransferId {
     }
 }
 
-/// Hash of the key set of the liability transfer
+/// Hash of the key set of the transfer
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct KeySetHash(pub sha256::Hash);
 
@@ -105,7 +105,7 @@ pub enum EcashMigrationOutput {
     /// Create a new transfer, this is a transaction output so that we can
     /// charge a fee for spend book size.
     CreateTransfer(EcashMigrationCreateTransferOutput),
-    /// Add funding to an existing liability transfer.
+    /// Add funding to an existing transfer.
     FundTransfer(EcashMigrationFundTransferOutput),
     #[encodable_default]
     Default { variant: u64, bytes: Vec<u8> },

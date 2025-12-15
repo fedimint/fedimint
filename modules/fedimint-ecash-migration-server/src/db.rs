@@ -33,7 +33,7 @@ impl std::fmt::Display for DbKeyPrefix {
     }
 }
 
-/// Metadata about a liability transfer
+/// Metadata about a transfer
 #[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
 pub struct TransferMetadata {
     /// Merkle root for verifiable chunk uploads
