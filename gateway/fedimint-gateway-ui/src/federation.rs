@@ -10,8 +10,8 @@ use bitcoin::address::NetworkUnchecked;
 use fedimint_core::config::FederationId;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_common::{
-    DepositAddressPayload, FederationInfo, LeaveFedPayload, SetFeesPayload, WithdrawPayload,
-    WithdrawPreviewPayload,
+    DepositAddressPayload, FederationInfo, LeaveFedPayload, SetFeesPayload, SpendEcashPayload,
+    WithdrawPayload, WithdrawPreviewPayload,
 };
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
@@ -21,8 +21,8 @@ use qrcode::QrCode;
 use qrcode::render::svg;
 
 use crate::{
-    DEPOSIT_ADDRESS_ROUTE, DynGatewayApi, SET_FEES_ROUTE, WITHDRAW_CONFIRM_ROUTE,
-    WITHDRAW_PREVIEW_ROUTE, redirect_error, redirect_success,
+    DEPOSIT_ADDRESS_ROUTE, DynGatewayApi, SET_FEES_ROUTE, SPEND_ECASH_ROUTE,
+    WITHDRAW_CONFIRM_ROUTE, WITHDRAW_PREVIEW_ROUTE, redirect_error, redirect_success,
 };
 
 pub fn scripts() -> Markup {
@@ -116,6 +116,15 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                     type="button"
                                     role="tab"
                                 { "Withdraw" }
+                            }
+                            li class="nav-item" role="presentation" {
+                                button class="nav-link"
+                                    id={(format!("spend-tab-{}", fed.federation_id))}
+                                    data-bs-toggle="tab"
+                                    data-bs-target={(format!("#spend-tab-pane-{}", fed.federation_id))}
+                                    type="button"
+                                    role="tab"
+                                { "Spend" }
                             }
                         }
 
@@ -284,6 +293,52 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                 }
 
                                 div id=(format!("withdraw-result-{}", fed.federation_id)) class="mt-3" {}
+                            }
+
+                            // ──────────────────────────────────────────
+                            //   TAB: SPEND
+                            // ──────────────────────────────────────────
+                            div class="tab-pane fade"
+                                id={(format!("spend-tab-pane-{}", fed.federation_id))}
+                                role="tabpanel"
+                                aria-labelledby={(format!("spend-tab-{}", fed.federation_id))} {
+
+                                form hx-post=(SPEND_ECASH_ROUTE)
+                                     hx-target={(format!("#spend-result-{}", fed.federation_id))}
+                                     hx-swap="innerHTML"
+                                {
+                                    input type="hidden" name="federation_id" value=(fed.federation_id.to_string());
+
+                                    // Amount input (required)
+                                    div class="mb-3" {
+                                        label class="form-label" for={(format!("spend-amount-{}", fed.federation_id))} {
+                                            "Amount (msats)"
+                                        }
+                                        input type="number"
+                                            class="form-control"
+                                            id={(format!("spend-amount-{}", fed.federation_id))}
+                                            name="amount"
+                                            placeholder="1000"
+                                            min="1"
+                                            required;
+                                    }
+
+                                    // Optional: allow_overpay checkbox
+                                    div class="form-check mb-2" {
+                                        input type="checkbox"
+                                            class="form-check-input"
+                                            id={(format!("spend-overpay-{}", fed.federation_id))}
+                                            name="allow_overpay"
+                                            value="true";
+                                        label class="form-check-label" for={(format!("spend-overpay-{}", fed.federation_id))} {
+                                            "Allow overpay (if exact amount unavailable)"
+                                        }
+                                    }
+
+                                    button type="submit" class="btn btn-primary" { "Generate Ecash" }
+                                }
+
+                                div id=(format!("spend-result-{}", fed.federation_id)) class="mt-3" {}
                             }
                         }
                     }
@@ -591,6 +646,93 @@ pub async fn withdraw_confirm_handler<E: Display>(
             html! {
                 div class="alert alert-danger" {
                     "Error: " (err.to_string())
+                }
+            }
+        }
+    };
+    Html(markup.into_string())
+}
+
+pub async fn spend_ecash_handler<E: Display>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<SpendEcashPayload>,
+) -> impl IntoResponse {
+    let federation_id = payload.federation_id;
+    let requested_amount = payload.amount;
+
+    // Always include the federation invite in the ecash notes
+    let mut payload = payload;
+    payload.include_invite = true;
+
+    let markup = match state.api.handle_spend_ecash_msg(payload).await {
+        Ok(response) => {
+            let notes_string = response.notes.to_string();
+            let actual_amount = response.notes.total_amount();
+            let overspent = actual_amount > requested_amount;
+
+            // Fetch updated balance for the out-of-band swap
+            let updated_balance = state
+                .api
+                .handle_get_balances_msg()
+                .await
+                .ok()
+                .and_then(|balances| {
+                    balances
+                        .ecash_balances
+                        .into_iter()
+                        .find(|b| b.federation_id == federation_id)
+                        .map(|b| b.ecash_balance_msats)
+                })
+                .unwrap_or(Amount::ZERO);
+
+            let balance_class = if updated_balance == Amount::ZERO {
+                "alert alert-danger"
+            } else {
+                "alert alert-success"
+            };
+
+            html! {
+                div class="card card-body bg-light" {
+                    div class="d-flex justify-content-between align-items-center mb-2" {
+                        span class="fw-bold" { "Ecash Generated" }
+                        span class="badge bg-success" { (actual_amount) }
+                    }
+
+                    @if overspent {
+                        div class="alert alert-warning py-2 mb-2" {
+                            "Note: Spent " (actual_amount) " ("
+                            (actual_amount.saturating_sub(requested_amount))
+                            " more than requested due to note denominations)"
+                        }
+                    }
+
+                    div class="mb-2" {
+                        label class="form-label small text-muted" { "Ecash Notes (click to copy):" }
+                        textarea
+                            class="form-control font-monospace"
+                            rows="4"
+                            readonly
+                            onclick="copyToClipboard(this)"
+                            style="font-size: 0.85rem;"
+                        { (notes_string) }
+                        small class="text-muted" { "Click to copy" }
+                    }
+                }
+
+                // Out-of-band swap to update balance banner
+                div id=(format!("balance-{}", federation_id))
+                    class=(balance_class)
+                    hx-swap-oob="true"
+                {
+                    "Balance: " strong { (updated_balance) }
+                }
+            }
+        }
+        Err(err) => {
+            html! {
+                div class="alert alert-danger" {
+                    "Failed to generate ecash: " (err)
                 }
             }
         }
