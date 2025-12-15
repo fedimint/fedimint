@@ -866,9 +866,10 @@ impl EcashMigrationClientModule {
             let chunk_len = chunk_proof.chunk().len() as u64;
 
             info!(
-                "Uploading spend book chunk {} ({} entries)",
-                chunk_index + 1,
-                chunk_len
+                chunk_index = chunk_index + 1,
+                chunk_entries = chunk_len,
+                transfer_id = ?transfer_id,
+                "Uploading spend book chunk"
             );
 
             let request = UploadSpendBookBatchRequest {
@@ -883,8 +884,10 @@ impl EcashMigrationClientModule {
         }
 
         info!(
-            "Uploaded {} entries in {} chunks",
-            total_uploaded, chunks_uploaded
+            total_entries = total_uploaded,
+            chunks = chunks_uploaded,
+            transfer_id = ?transfer_id,
+            "Spend book upload complete"
         );
 
         Ok(UploadSpendBookProgress {
