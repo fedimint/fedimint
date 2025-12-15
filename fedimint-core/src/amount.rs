@@ -121,6 +121,12 @@ impl Amount {
             msats: self.msats.checked_add(other.msats)?,
         })
     }
+
+    pub fn checked_mul(self, other: u64) -> Option<Self> {
+        Some(Self {
+            msats: self.msats.checked_mul(other)?,
+        })
+    }
 }
 
 impl std::fmt::Display for Amount {
