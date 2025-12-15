@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use fedimint_core::config::{
-    ConfigGenModuleParams, ServerModuleConfig, ServerModuleConsensusConfig,
-    TypedServerModuleConfig, TypedServerModuleConsensusConfig,
+    ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
+    TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -30,7 +30,7 @@ use fedimint_ecash_migration_common::api::{
 };
 use fedimint_ecash_migration_common::config::{
     EcashMigrationClientConfig, EcashMigrationConfig, EcashMigrationConfigConsensus,
-    EcashMigrationConfigPrivate, EcashMigrationGenParams, FeeConfig,
+    EcashMigrationConfigPrivate, FeeConfig,
 };
 use fedimint_ecash_migration_common::merkle::ChunkMerkleProof;
 use fedimint_ecash_migration_common::{
@@ -42,7 +42,9 @@ use fedimint_ecash_migration_common::{
 use fedimint_mint_common::Nonce;
 use fedimint_server_core::config::PeerHandleOps;
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::{ServerModule, ServerModuleInit, ServerModuleInitArgs};
+use fedimint_server_core::{
+    ConfigGenModuleArgs, ServerModule, ServerModuleInit, ServerModuleInitArgs,
+};
 use futures::StreamExt;
 use tbs::AggregatePublicKey;
 
@@ -83,7 +85,6 @@ impl ModuleInit for EcashMigrationInit {
 #[async_trait]
 impl ServerModuleInit for EcashMigrationInit {
     type Module = EcashMigration;
-    type Params = EcashMigrationGenParams;
 
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
@@ -114,10 +115,8 @@ impl ServerModuleInit for EcashMigrationInit {
     fn trusted_dealer_gen(
         &self,
         peers: &[PeerId],
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let _params = self.parse_params(params).unwrap();
         // Generate a config for each peer
         peers
             .iter()
@@ -137,11 +136,8 @@ impl ServerModuleInit for EcashMigrationInit {
     async fn distributed_gen(
         &self,
         _peers: &(dyn PeerHandleOps + Send + Sync),
-        params: &ConfigGenModuleParams,
-        _disable_base_fees: bool,
+        _args: &ConfigGenModuleArgs,
     ) -> anyhow::Result<ServerModuleConfig> {
-        let _params = self.parse_params(params).unwrap();
-
         Ok(EcashMigrationConfig {
             private: EcashMigrationConfigPrivate,
             consensus: EcashMigrationConfigConsensus {

@@ -185,9 +185,6 @@ pub struct RedeemOriginEcashOperationMeta {
 
 /// Read the origin federation's mint keyset from a config file.
 ///
-/// The config file should be in JSON format as produced by
-/// `fedimint-cli --data-dir <data-dir> config` on the origin federation.
-///
 /// # Errors
 /// - If the origin config file cannot be read or parsed.
 pub async fn read_origin_keyset(
@@ -345,6 +342,11 @@ async fn upload_chunk_to_peers(
 }
 
 impl EcashMigrationClientModule {
+    /// Get the module API for making federation API calls.
+    pub fn api(&self) -> &DynModuleApi {
+        &self.module_api
+    }
+
     /// Create a `RegisterTransferInput` by reading and processing input files.
     ///
     /// This streams the spend book file to build the Merkle tree (for

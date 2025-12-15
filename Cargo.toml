@@ -60,6 +60,7 @@ members = [
     "modules/fedimint-ecash-migration-client",
     "modules/fedimint-ecash-migration-common",
     "modules/fedimint-ecash-migration-server",
+    "modules/fedimint-ecash-migration-tests",
     "modules/fedimint-empty-client",
     "modules/fedimint-empty-common",
     "modules/fedimint-empty-server",

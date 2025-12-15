@@ -90,9 +90,6 @@ pub struct EcashMigrationConfigPrivate;
 // Wire together the configs for this module
 plugin_types_trait_impl_config!(
     EcashMigrationCommonInit,
-    EcashMigrationGenParams,
-    EcashMigrationGenParamsLocal,
-    EcashMigrationGenParamsConsensus,
     EcashMigrationConfig,
     EcashMigrationConfigPrivate,
     EcashMigrationConfigConsensus,
