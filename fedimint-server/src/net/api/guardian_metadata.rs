@@ -10,9 +10,10 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
+use futures::future::join_all;
 use futures::stream::StreamExt;
 use tokio::select;
-use tracing::debug;
+use tracing::{debug, info};
 
 use crate::config::ServerConfig;
 use crate::db::DbKeyPrefix;
@@ -72,12 +73,29 @@ pub async fn start_guardian_metadata_service(
                 .collect::<Vec<(PeerId, SignedGuardianMetadata)>>()
                 .await;
 
-            // Announce all peer guardian metadata we know, but at least our own
-            for (peer, metadata) in metadata_list {
-                if let Err(err) = api_client
-                    .submit_guardian_metadata(peer, metadata.clone())
-                    .await
-                {
+            info!(
+                target: LOG_NET_API,
+                len = %metadata_list.len(),
+                "Submitting guardian metadata"
+            );
+            // Submit all metadata we know (including our own and other peers') to all
+            // federation members (in parallel). Each submit_guardian_metadata call
+            // broadcasts one piece of metadata to all peers.
+            let results = join_all(metadata_list.iter().map(|(peer, metadata)| {
+                let api_client = &api_client;
+                async move {
+                    (*peer, api_client.submit_guardian_metadata(*peer, metadata.clone()).await)
+                }
+            }))
+            .await;
+
+            info!(
+                target: LOG_NET_API,
+                len = %metadata_list.len(),
+                "Done"
+            );
+            for (peer, result) in results {
+                if let Err(err) = result {
                     debug!(target: LOG_NET_API, ?peer, err = %err.fmt_compact(), "Submitting guardian metadata did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
                     success = false;
                 }

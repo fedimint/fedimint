@@ -12,6 +12,7 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
+use futures::future::join_all;
 use futures::stream::StreamExt;
 use tokio::select;
 use tracing::debug;
@@ -77,11 +78,19 @@ pub async fn start_api_announcement_service(
                 .collect::<Vec<(PeerId, SignedApiAnnouncement)>>()
                 .await;
 
-            // Announce all peer API URLs we know, but at least our own
-            for (peer, announcement) in announcements {
-                if let Err(err) = api_client
-                    .submit_api_announcement(peer, announcement.clone())
-                    .await {
+            // Submit all API announcements we know (including our own and other peers')
+            // to all federation members (in parallel). Each submit_api_announcement call
+            // broadcasts one announcement to all peers.
+            let results = join_all(announcements.iter().map(|(peer, announcement)| {
+                let api_client = &api_client;
+                async move {
+                    (*peer, api_client.submit_api_announcement(*peer, announcement.clone()).await)
+                }
+            }))
+            .await;
+
+            for (peer, result) in results {
+                if let Err(err) = result {
                     debug!(target: LOG_NET_API, ?peer, err = %err.fmt_compact(), "Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
                     success = false;
                 }
