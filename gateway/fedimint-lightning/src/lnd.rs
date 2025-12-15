@@ -1584,6 +1584,11 @@ impl ILnRpcClient for GatewayLndClient {
             failure_reason: "LND Does not support Bolt12".to_string(),
         })
     }
+
+    fn sync_wallet(&self) -> Result<(), LightningRpcError> {
+        // There is nothing explicit needed to do for syncing an LND node
+        Ok(())
+    }
 }
 
 fn route_hints_to_lnd(
