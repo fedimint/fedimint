@@ -4,6 +4,7 @@ use fedimint_api_client::api::DynGlobalApi;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::guardian_metadata::{GuardianMetadata, SignedGuardianMetadata};
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::FmtCompact;
@@ -97,8 +98,11 @@ pub async fn start_guardian_metadata_service(
                 })
             });
 
+
             let auto_announcement_delay = if success {
                 Duration::from_secs(SUCCESS_RETRY_SECONDS)
+            } else if is_running_in_test_env() {
+                Duration::from_secs(3)
             } else {
                 Duration::from_secs(FAILURE_RETRY_SECONDS)
             };
