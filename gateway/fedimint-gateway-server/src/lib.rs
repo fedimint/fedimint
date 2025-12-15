@@ -1142,58 +1142,6 @@ impl Gateway {
         Ok(())
     }
 
-    // Handles a request the spend the gateway's ecash for a given federation.
-    pub async fn handle_spend_ecash_msg(
-        &self,
-        payload: SpendEcashPayload,
-    ) -> AdminResult<SpendEcashResponse> {
-        let client = self
-            .select_client(payload.federation_id)
-            .await?
-            .into_value();
-        let mint_module = client.get_first_module::<MintClientModule>()?;
-        let timeout = Duration::from_secs(payload.timeout);
-        let (operation_id, notes) = if payload.allow_overpay {
-            let (operation_id, notes) = mint_module
-                .spend_notes_with_selector(
-                    &SelectNotesWithAtleastAmount,
-                    payload.amount,
-                    timeout,
-                    payload.include_invite,
-                    (),
-                )
-                .await?;
-
-            let overspend_amount = notes.total_amount().saturating_sub(payload.amount);
-            if overspend_amount != Amount::ZERO {
-                warn!(
-                    target: LOG_GATEWAY,
-                    overspend_amount = %overspend_amount,
-                    "Selected notes worth more than requested",
-                );
-            }
-
-            (operation_id, notes)
-        } else {
-            mint_module
-                .spend_notes_with_selector(
-                    &SelectNotesWithExactAmount,
-                    payload.amount,
-                    timeout,
-                    payload.include_invite,
-                    (),
-                )
-                .await?
-        };
-
-        debug!(target: LOG_GATEWAY, ?operation_id, ?notes, "Spend ecash notes");
-
-        Ok(SpendEcashResponse {
-            operation_id,
-            notes,
-        })
-    }
-
     /// Handles a request to receive ecash into the gateway.
     pub async fn handle_receive_ecash_msg(
         &self,
@@ -2211,6 +2159,58 @@ impl IAdminGateway for Gateway {
             .list_transactions(payload.start_secs, payload.end_secs)
             .await?;
         Ok(response)
+    }
+
+    // Handles a request the spend the gateway's ecash for a given federation.
+    async fn handle_spend_ecash_msg(
+        &self,
+        payload: SpendEcashPayload,
+    ) -> AdminResult<SpendEcashResponse> {
+        let client = self
+            .select_client(payload.federation_id)
+            .await?
+            .into_value();
+        let mint_module = client.get_first_module::<MintClientModule>()?;
+        let timeout = Duration::from_secs(payload.timeout);
+        let (operation_id, notes) = if payload.allow_overpay {
+            let (operation_id, notes) = mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithAtleastAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?;
+
+            let overspend_amount = notes.total_amount().saturating_sub(payload.amount);
+            if overspend_amount != Amount::ZERO {
+                warn!(
+                    target: LOG_GATEWAY,
+                    overspend_amount = %overspend_amount,
+                    "Selected notes worth more than requested",
+                );
+            }
+
+            (operation_id, notes)
+        } else {
+            mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithExactAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?
+        };
+
+        debug!(target: LOG_GATEWAY, ?operation_id, ?notes, "Spend ecash notes");
+
+        Ok(SpendEcashResponse {
+            operation_id,
+            notes,
+        })
     }
 
     /// Instructs the gateway to shutdown, but only after all incoming payments
