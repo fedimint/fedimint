@@ -1067,14 +1067,12 @@ impl LightningClientModule {
         };
 
         let lnurl = lnurl::generate_lnurl(
-            recurringd,
+            &recurringd,
             self.federation_id,
             self.lnurl_keypair.public_key(),
             self.cfg.tpe_agg_pk,
             gateways,
-        )
-        .await
-        .map_err(|e| GenerateLnurlError::FailedToRequestLnurl(e.to_string()))?;
+        );
 
         Ok(lnurl)
     }
@@ -1196,8 +1194,6 @@ pub enum GenerateLnurlError {
     NoGatewaysAvailable,
     #[error("Failed to request gateways")]
     FailedToRequestGateways(String),
-    #[error("Failed to request LNURL")]
-    FailedToRequestLnurl(String),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

@@ -46,6 +46,7 @@ struct CliOpts {
     bearer_token: String,
     #[clap(long, env = "FM_RECURRING_DATA_DIR")]
     data_dir: PathBuf,
+    /// Legacy encryption key for backwards compatibility with old LNURLs.
     #[clap(long, env = "FM_RECURRING_ENCRYPTION_KEY")]
     encryption_key: Option<String>,
 }
@@ -100,9 +101,7 @@ async fn main() -> anyhow::Result<()> {
             recurring_invoice_server,
         });
 
-    if let Some(encryption_key) = cli_opts.encryption_key {
-        app = app.merge(v2::router(cli_opts.api_address, encryption_key).await?);
-    }
+    app = app.merge(v2::router(cli_opts.api_address, cli_opts.encryption_key).await?);
 
     info!(api_address = %cli_opts.bind_address, "recurringd started");
     let listener = TcpListener::bind(&cli_opts.bind_address).await?;
