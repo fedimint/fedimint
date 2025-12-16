@@ -942,12 +942,15 @@ impl Gateway {
                 let htlc = htlc_request.clone().try_into();
                 match htlc {
                     Ok(htlc) => {
-                        match client
-                            .get_first_module::<GatewayClientModule>()
-                            .expect("Must have client module")
-                            .gateway_handle_intercepted_htlc(htlc)
-                            .await
-                        {
+                        let lnv1 =
+                            client
+                                .get_first_module::<GatewayClientModule>()
+                                .map_err(|_| {
+                                    PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                                        "Federation does not have LNv1 module".to_string(),
+                                    ))
+                                })?;
+                        match lnv1.gateway_handle_intercepted_htlc(htlc).await {
                             Ok(_) => Ok(()),
                             Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
                                 format!("Error intercepting lightning payment {e:?}"),
@@ -1321,9 +1324,11 @@ impl Gateway {
                     register_task_group.spawn_cancellable_silent(
                         "register federation",
                         async move {
-                            let gateway_client = client_arc
-                                .get_first_module::<GatewayClientModule>()
-                                .expect("No GatewayClientModule exists");
+                            let Ok(gateway_client) =
+                                client_arc.get_first_module::<GatewayClientModule>()
+                            else {
+                                return;
+                            };
 
                             for registration in registrations {
                                 gateway_client
@@ -1463,54 +1468,52 @@ impl Gateway {
         }
     }
 
-    /// Verifies that the supplied `network` matches the Bitcoin network in the
-    /// connected client's LNv1 configuration.
-    async fn check_lnv1_federation_network(
+    /// Verifies that the federation has at least one lightning module (LNv1 or
+    /// LNv2) and that the network matches the gateway's network.
+    async fn check_federation_network(
         client: &ClientHandleArc,
         network: Network,
     ) -> AdminResult<()> {
         let federation_id = client.federation_id();
         let config = client.config().await;
-        let cfg = config
+
+        let lnv1_cfg = config
             .modules
             .values()
-            .find(|m| LightningCommonInit::KIND == m.kind)
-            .ok_or(AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Federation {federation_id} does not have an LNv1 module"
-            ))))?;
-        let ln_cfg: &LightningClientConfig = cfg.cast()?;
+            .find(|m| LightningCommonInit::KIND == m.kind);
 
-        if ln_cfg.network.0 != network {
-            crit!(
-                target: LOG_GATEWAY,
-                federation_id = %federation_id,
-                network = %network,
-                "Incorrect network for federation",
-            );
-            return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
-                "Unsupported network {}",
-                ln_cfg.network
-            ))));
-        }
-
-        Ok(())
-    }
-
-    /// Verifies that the supplied `network` matches the Bitcoin network in the
-    /// connected client's LNv2 configuration.
-    async fn check_lnv2_federation_network(
-        client: &ClientHandleArc,
-        network: Network,
-    ) -> AdminResult<()> {
-        let federation_id = client.federation_id();
-        let config = client.config().await;
-        let cfg = config
+        let lnv2_cfg = config
             .modules
             .values()
             .find(|m| fedimint_lnv2_common::LightningCommonInit::KIND == m.kind);
 
-        // If the federation does not have LNv2, we don't need to verify the network
-        if let Some(cfg) = cfg {
+        // Ensure the federation has at least one lightning module
+        if lnv1_cfg.is_none() && lnv2_cfg.is_none() {
+            return Err(AdminGatewayError::ClientCreationError(anyhow!(
+                "Federation {federation_id} does not have any lightning module (LNv1 or LNv2)"
+            )));
+        }
+
+        // Verify the LNv1 network if present
+        if let Some(cfg) = lnv1_cfg {
+            let ln_cfg: &LightningClientConfig = cfg.cast()?;
+
+            if ln_cfg.network.0 != network {
+                crit!(
+                    target: LOG_GATEWAY,
+                    federation_id = %federation_id,
+                    network = %network,
+                    "Incorrect LNv1 network for federation",
+                );
+                return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
+                    "Unsupported LNv1 network {}",
+                    ln_cfg.network
+                ))));
+            }
+        }
+
+        // Verify the LNv2 network if present
+        if let Some(cfg) = lnv2_cfg {
             let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
 
             if ln_cfg.network != network {
@@ -1518,10 +1521,10 @@ impl Gateway {
                     target: LOG_GATEWAY,
                     federation_id = %federation_id,
                     network = %network,
-                    "Incorrect network for federation",
+                    "Incorrect LNv2 network for federation",
                 );
                 return Err(AdminGatewayError::ClientCreationError(anyhow!(format!(
-                    "Unsupported network {}",
+                    "Unsupported LNv2 network {}",
                     ln_cfg.network
                 ))));
             }
@@ -1825,22 +1828,21 @@ impl IAdminGateway for Gateway {
             last_backup_time: None,
         };
 
-        Self::check_lnv1_federation_network(&client, self.network).await?;
-        Self::check_lnv2_federation_network(&client, self.network).await?;
-        if matches!(self.lightning_mode, LightningMode::Lnd { .. }) {
+        Self::check_federation_network(&client, self.network).await?;
+        if matches!(self.lightning_mode, LightningMode::Lnd { .. })
+            && let Ok(lnv1) = client.get_first_module::<GatewayClientModule>()
+        {
             for registration in self.registrations.values() {
-                client
-                    .get_first_module::<GatewayClientModule>()?
-                    .try_register_with_federation(
-                        // Route hints will be updated in the background
-                        Vec::new(),
-                        GW_ANNOUNCEMENT_TTL,
-                        federation_config.lightning_fee.into(),
-                        lightning_context.clone(),
-                        registration.endpoint_url.clone(),
-                        registration.keypair.public_key(),
-                    )
-                    .await;
+                lnv1.try_register_with_federation(
+                    // Route hints will be updated in the background
+                    Vec::new(),
+                    GW_ANNOUNCEMENT_TTL,
+                    federation_config.lightning_fee.into(),
+                    lightning_context.clone(),
+                    registration.endpoint_url.clone(),
+                    registration.keypair.public_key(),
+                )
+                .await;
             }
         }
 

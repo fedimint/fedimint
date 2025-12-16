@@ -11,6 +11,10 @@ version = { workspace = true }
 name = "lnv2-module-tests"
 path = "bin/tests.rs"
 
+[[bin]]
+name = "lnv1-lnv2-swap-tests"
+path = "bin/swap_tests.rs"
+
 [[test]]
 name = "fedimint_lnv2_tests"
 path = "tests/tests.rs"
