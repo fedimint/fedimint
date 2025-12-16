@@ -7,6 +7,7 @@ use axum::{Json, Router};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed, encode_prefixed};
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::Scalar;
@@ -26,7 +27,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tpe::AggregatePublicKey;
 
-use crate::encrypt::{Encryptable, EncryptedData};
+use crate::encrypt::EncryptedData;
 
 const MAX_SENDABLE_MSAT: u64 = 100_000_000_000;
 const MIN_SENDABLE_MSAT: u64 = 100_000;
@@ -34,7 +35,7 @@ const MIN_SENDABLE_MSAT: u64 = 100_000;
 #[derive(Clone)]
 struct Recurringd {
     base_url: SafeUrl,
-    encryption_key: [u8; 32],
+    encryption_key: Option<[u8; 32]>,
     gateway_conn: RealGatewayConnection,
 }
 
@@ -81,7 +82,7 @@ impl IntoResponse for LnurlError {
     }
 }
 
-pub async fn router(base_url: SafeUrl, encryption_key: String) -> anyhow::Result<Router> {
+pub async fn router(base_url: SafeUrl, encryption_key: Option<String>) -> anyhow::Result<Router> {
     let connector_registry = ConnectorRegistry::build_from_client_defaults()
         .with_env_var_overrides()?
         .bind()
@@ -91,8 +92,7 @@ pub async fn router(base_url: SafeUrl, encryption_key: String) -> anyhow::Result
     let state = Recurringd {
         base_url: base_url.clone(),
         encryption_key: encryption_key
-            .consensus_hash::<sha256::Hash>()
-            .to_byte_array(),
+            .map(|key| key.consensus_hash::<sha256::Hash>().to_byte_array()),
         gateway_conn,
     };
 
@@ -112,10 +112,12 @@ async fn lnv2_register(
     State(state): State<Recurringd>,
     Json(request): Json<LnurlRequest>,
 ) -> Result<Json<LnurlResponse>, LnurlError> {
-    let payload = request.encrypt(&state.encryption_key).encode_base32();
-
     Ok(Json(LnurlResponse {
-        lnurl: format!("{}pay/{}", state.base_url, payload),
+        lnurl: format!(
+            "{}pay/{}",
+            state.base_url,
+            encode_prefixed(FEDIMINT_PREFIX, &request)
+        ),
     }))
 }
 
@@ -142,12 +144,17 @@ async fn lnv2_invoice(
     Query(params): Query<GetInvoiceParams>,
     State(state): State<Recurringd>,
 ) -> Result<Json<LNURLPayInvoice>, LnurlError> {
-    let request: LnurlRequest = EncryptedData::decode_base32(&payload)
-        .ok_or(LnurlError::bad_request(anyhow!("Failed to decode payload")))?
-        .decrypt(&state.encryption_key)
-        .ok_or(LnurlError::bad_request(anyhow!(
-            "Failed to decrypt payload"
-        )))?;
+    // Try plaintext format first, then fall back to legacy encrypted format
+    let request: LnurlRequest = match decode_prefixed(FEDIMINT_PREFIX, &payload) {
+        Ok(request) => request,
+        Err(_) => state
+            .encryption_key
+            .as_ref()
+            .and_then(|key| {
+                EncryptedData::decode_base32(&payload).and_then(|encrypted| encrypted.decrypt(key))
+            })
+            .ok_or_else(|| LnurlError::bad_request(anyhow!("Failed to decode payload")))?,
+    };
 
     if params.amount < MIN_SENDABLE_MSAT || params.amount > MAX_SENDABLE_MSAT {
         return Err(LnurlError::bad_request(anyhow!(

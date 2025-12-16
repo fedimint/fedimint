@@ -1,4 +1,5 @@
 use bitcoin::secp256k1::PublicKey;
+use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
@@ -19,29 +20,24 @@ pub struct LnurlResponse {
     pub lnurl: String,
 }
 
-pub async fn generate_lnurl(
-    recurringd: SafeUrl,
+pub fn generate_lnurl(
+    recurringd: &SafeUrl,
     federation_id: FederationId,
     recipient_pk: PublicKey,
     aggregate_pk: AggregatePublicKey,
     gateways: Vec<SafeUrl>,
-) -> anyhow::Result<String> {
-    let payload = LnurlRequest {
-        federation_id,
-        recipient_pk,
-        aggregate_pk,
-        gateways,
-    };
+) -> String {
+    let payload = encode_prefixed(
+        FEDIMINT_PREFIX,
+        &LnurlRequest {
+            federation_id,
+            recipient_pk,
+            aggregate_pk,
+            gateways,
+        },
+    );
 
-    let response = reqwest::Client::new()
-        .post(format!("{recurringd}lnurl"))
-        .json(&payload)
-        .send()
-        .await?
-        .json::<LnurlResponse>()
-        .await?;
-
-    Ok(LnUrl::from_url(response.lnurl).encode())
+    LnUrl::from_url(format!("{recurringd}pay/{payload}")).encode()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
