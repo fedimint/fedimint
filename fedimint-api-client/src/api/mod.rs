@@ -102,6 +102,11 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
     ///
     /// The stream emits a new value whenever the connection status changes.
     fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>>;
+    /// Wait for some connections being initialized
+    ///
+    /// This is useful to avoid initializing networking by
+    /// tasks that are not high priority.
+    async fn wait_for_initialized_connections(&self);
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -729,6 +734,11 @@ impl IRawFederationApi for FederationApi {
                     .collect()
             })
             .boxed()
+    }
+    async fn wait_for_initialized_connections(&self) {
+        self.connection_pool
+            .wait_for_initialized_connections()
+            .await;
     }
 }
 

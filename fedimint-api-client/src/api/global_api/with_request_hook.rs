@@ -90,4 +90,8 @@ impl IRawFederationApi for RawFederationApiWithRequestHook {
     fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>> {
         self.inner.connection_status_stream()
     }
+
+    async fn wait_for_initialized_connections(&self) {
+        self.inner.wait_for_initialized_connections().await;
+    }
 }
