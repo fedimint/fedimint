@@ -1083,8 +1083,10 @@ impl LightningClientModule {
         task_group: &TaskGroup,
     ) {
         let module = self.clone();
+        let api = self.module_api.clone();
 
         task_group.spawn_cancellable("receive_lnurl_task", async move {
+            api.wait_for_initialized_connections().await;
             loop {
                 module.receive_lnurl(custom_meta_fn()).await;
             }
