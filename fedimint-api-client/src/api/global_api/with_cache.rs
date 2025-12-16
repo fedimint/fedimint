@@ -39,6 +39,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::join_all;
+use futures::stream::BoxStream;
 use itertools::Itertools;
 use rand::seq::SliceRandom;
 use serde_json::Value;
@@ -236,6 +237,10 @@ where
         params: &ApiRequestErased,
     ) -> ServerResult<Value> {
         self.inner.request_raw(peer_id, method, params).await
+    }
+
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>> {
+        self.inner.connection_status_stream()
     }
 }
 
