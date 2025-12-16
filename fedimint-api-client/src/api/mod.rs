@@ -44,6 +44,7 @@ use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::watch;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -654,6 +655,13 @@ impl FederationApi {
         trace!(target: LOG_CLIENT_NET_API, ?method, res_ok = res.is_ok(), "Api response");
 
         res
+    }
+
+    /// Get receiver for changes in the active connections
+    ///
+    /// This allows real-time monitoring of connection status.
+    pub fn get_active_connection_receiver(&self) -> watch::Receiver<BTreeSet<SafeUrl>> {
+        self.connection_pool.get_active_connection_receiver()
     }
 }
 
