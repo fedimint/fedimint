@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["await_receive_claimed","receive","send"]};
