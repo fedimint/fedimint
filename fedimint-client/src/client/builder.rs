@@ -1056,6 +1056,7 @@ impl ClientBuilder {
 
         // Spawn background task to refetch config
         task_group.spawn_cancellable("refresh_client_config_static", async move {
+            api.wait_for_initialized_connections().await;
             Self::refresh_client_config_static(&config, &api, &db).await;
         });
     }
