@@ -10,20 +10,29 @@ use bitcoin::address::NetworkUnchecked;
 use fedimint_core::config::FederationId;
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_gateway_common::{
-    DepositAddressPayload, FederationInfo, LeaveFedPayload, SetFeesPayload, SpendEcashPayload,
-    WithdrawPayload, WithdrawPreviewPayload,
+    DepositAddressPayload, FederationInfo, LeaveFedPayload, ReceiveEcashPayload, SetFeesPayload,
+    SpendEcashPayload, WithdrawPayload, WithdrawPreviewPayload,
 };
+use fedimint_mint_client::OOBNotes;
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_wallet_client::PegOutFees;
 use maud::{Markup, PreEscaped, html};
 use qrcode::QrCode;
 use qrcode::render::svg;
+use serde::Deserialize;
 
 use crate::{
-    DEPOSIT_ADDRESS_ROUTE, DynGatewayApi, SET_FEES_ROUTE, SPEND_ECASH_ROUTE,
+    DEPOSIT_ADDRESS_ROUTE, DynGatewayApi, RECEIVE_ECASH_ROUTE, SET_FEES_ROUTE, SPEND_ECASH_ROUTE,
     WITHDRAW_CONFIRM_ROUTE, WITHDRAW_PREVIEW_ROUTE, redirect_error, redirect_success,
 };
+
+#[derive(Deserialize)]
+pub struct ReceiveEcashForm {
+    pub notes: String,
+    #[serde(default)]
+    pub wait: bool,
+}
 
 pub fn scripts() -> Markup {
     html!(
@@ -125,6 +134,15 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                     type="button"
                                     role="tab"
                                 { "Spend" }
+                            }
+                            li class="nav-item" role="presentation" {
+                                button class="nav-link"
+                                    id=(format!("receive-tab-{}", fed.federation_id))
+                                    data-bs-toggle="tab"
+                                    data-bs-target=(format!("#receive-tab-pane-{}", fed.federation_id))
+                                    type="button"
+                                    role="tab"
+                                { "Receive" }
                             }
                         }
 
@@ -339,6 +357,39 @@ pub fn render(fed: &FederationInfo) -> Markup {
                                 }
 
                                 div id=(format!("spend-result-{}", fed.federation_id)) class="mt-3" {}
+                            }
+
+                            // ──────────────────────────────────────────
+                            //   TAB: RECEIVE
+                            // ──────────────────────────────────────────
+                            div class="tab-pane fade"
+                                id=(format!("receive-tab-pane-{}", fed.federation_id))
+                                role="tabpanel"
+                                aria-labelledby=(format!("receive-tab-{}", fed.federation_id)) {
+
+                                form hx-post=(RECEIVE_ECASH_ROUTE)
+                                     hx-target=(format!("#receive-result-{}", fed.federation_id))
+                                     hx-swap="innerHTML"
+                                {
+                                    input type="hidden" name="wait" value="true";
+
+                                    div class="mb-3" {
+                                        label class="form-label" for=(format!("receive-notes-{}", fed.federation_id)) {
+                                            "Ecash Notes"
+                                        }
+                                        textarea
+                                            class="form-control font-monospace"
+                                            id=(format!("receive-notes-{}", fed.federation_id))
+                                            name="notes"
+                                            rows="4"
+                                            placeholder="Paste ecash string here..."
+                                            required {}
+                                    }
+
+                                    button type="submit" class="btn btn-primary" { "Receive Ecash" }
+                                }
+
+                                div id=(format!("receive-result-{}", fed.federation_id)) class="mt-3" {}
                             }
                         }
                     }
@@ -733,6 +784,86 @@ pub async fn spend_ecash_handler<E: Display>(
             html! {
                 div class="alert alert-danger" {
                     "Failed to generate ecash: " (err)
+                }
+            }
+        }
+    };
+    Html(markup.into_string())
+}
+
+pub async fn receive_ecash_handler<E: Display>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(form): Form<ReceiveEcashForm>,
+) -> impl IntoResponse {
+    // Parse the notes string manually to provide better error messages
+    let notes = match form.notes.trim().parse::<OOBNotes>() {
+        Ok(n) => n,
+        Err(e) => {
+            return Html(
+                html! {
+                    div class="alert alert-danger" {
+                        "Invalid ecash format: " (e)
+                    }
+                }
+                .into_string(),
+            );
+        }
+    };
+
+    // Construct payload from parsed notes
+    let payload = ReceiveEcashPayload {
+        notes,
+        wait: form.wait,
+    };
+
+    // Extract federation_id_prefix from notes before consuming payload
+    let federation_id_prefix = payload.notes.federation_id_prefix();
+
+    let markup = match state.api.handle_receive_ecash_msg(payload).await {
+        Ok(response) => {
+            // Fetch updated balance for oob swap
+            let (federation_id, updated_balance) = state
+                .api
+                .handle_get_balances_msg()
+                .await
+                .ok()
+                .and_then(|balances| {
+                    balances
+                        .ecash_balances
+                        .into_iter()
+                        .find(|b| b.federation_id.to_prefix() == federation_id_prefix)
+                        .map(|b| (b.federation_id, b.ecash_balance_msats))
+                })
+                .expect("Federation not found");
+
+            let balance_class = if updated_balance == Amount::ZERO {
+                "alert alert-danger"
+            } else {
+                "alert alert-success"
+            };
+
+            html! {
+                div class=(balance_class) {
+                    div class="d-flex justify-content-between align-items-center" {
+                        span { "Ecash received successfully!" }
+                        span class="badge bg-success" { (response.amount) }
+                    }
+                }
+
+                // Out-of-band swap to update balance banner
+                div id=(format!("balance-{}", federation_id))
+                    class=(balance_class)
+                    hx-swap-oob="true"
+                {
+                    "Balance: " strong { (updated_balance) }
+                }
+            }
+        }
+        Err(err) => {
+            html! {
+                div class="alert alert-danger" {
+                    "Failed to receive ecash: " (err)
                 }
             }
         }

@@ -3477,6 +3477,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-gateway-common",
  "fedimint-ln-common",
+ "fedimint-mint-client",
  "fedimint-ui-common",
  "fedimint-wallet-client",
  "lightning-invoice",
