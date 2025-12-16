@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["deposit_address_handler","leave_federation_handler","render","scripts","set_fees_handler","spend_ecash_handler","time_ago","withdraw_confirm_handler","withdraw_preview_handler"],"struct":["WithdrawConfirmPayload"]};
+window.SIDEBAR_ITEMS = {"fn":["deposit_address_handler","leave_federation_handler","receive_ecash_handler","render","scripts","set_fees_handler","spend_ecash_handler","time_ago","withdraw_confirm_handler","withdraw_preview_handler"],"struct":["ReceiveEcashForm","WithdrawConfirmPayload"]};
