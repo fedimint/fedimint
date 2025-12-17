@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::string::ToString;
 
 use fedimint_api_client::api::{DynModuleApi, IRawFederationApi, ServerResult};
@@ -52,6 +52,7 @@ impl Event for ApiCallDone {
 }
 
 use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind, EventPersistence};
+use futures::stream::BoxStream;
 
 /// Convenience extension trait used for wrapping [`IRawFederationApi`] in
 /// a [`ClientRawFederationApi`]
@@ -162,5 +163,9 @@ where
         .await;
 
         res
+    }
+
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>> {
+        self.inner.connection_status_stream()
     }
 }
