@@ -16,4 +16,4 @@ elif [[ "${FM_GATEWAYD_BASE_IMAGE_VERSION:-}" == "v0.10"* ]] || \
     export FM_ENABLE_MODULE_LNV1=0
 fi
 
-lnv2-module-tests
+lnv2-module-tests "$@"

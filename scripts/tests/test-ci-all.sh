@@ -126,10 +126,20 @@ function meta_module() {
 }
 export -f meta_module
 
-function lnv2_module() {
-  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh
+function lnv2_module_gateway_registration() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh gateway-registration
 }
-export -f lnv2_module
+export -f lnv2_module_gateway_registration
+
+function lnv2_module_payments() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh payments
+}
+export -f lnv2_module_payments
+
+function lnv2_module_lnurl_pay() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh lnurl-pay
+}
+export -f lnv2_module_lnurl_pay
 
 function lnv1_lnv2_swap() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv1-lnv2-swap-test.sh
@@ -362,7 +372,9 @@ tests_to_run_in_parallel+=(
   "gw_config_test_lnd"
   "gw_restore_test"
   "gw_liquidity_test"
-  "lnv2_module"
+  "lnv2_module_gateway_registration"
+  "lnv2_module_payments"
+  "lnv2_module_lnurl_pay"
   "lnv1_lnv2_swap"
   "devimint_cli_test"
   "devimint_cli_test_single"
