@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 
 use anyhow::Context;
@@ -9,6 +10,7 @@ use fedimint_core::util::SafeUrl;
 use reqwest::Method;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use tokio::sync::watch;
 
 #[derive(Clone, Debug)]
 pub struct GatewayApi {
@@ -56,5 +58,12 @@ impl GatewayApi {
             ServerError::InvalidResponse(anyhow::anyhow!("Received invalid response: {e}"))
         })?;
         Ok(response)
+    }
+
+    /// Get receiver for changes in the active connections
+    ///
+    /// This allows real-time monitoring of connection status.
+    pub fn get_active_connection_receiver(&self) -> watch::Receiver<BTreeSet<SafeUrl>> {
+        self.connection_pool.get_active_connection_receiver()
     }
 }

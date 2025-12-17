@@ -5,7 +5,7 @@ pub mod iroh;
 pub mod tor;
 pub mod ws;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,7 +21,7 @@ use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_NET_API, LOG_NET};
 use reqwest::Method;
 use serde_json::Value;
-use tokio::sync::{OnceCell, SetOnce, broadcast};
+use tokio::sync::{OnceCell, SetOnce, broadcast, watch};
 use tracing::trace;
 
 use crate::error::ServerError;
@@ -513,6 +513,8 @@ pub struct ConnectionPool<T: IConnection + ?Sized> {
     /// Available connectors which we can make connections
     connectors: ConnectorRegistry,
 
+    active_connections: watch::Sender<BTreeSet<SafeUrl>>,
+
     /// Connection pool
     ///
     /// Every entry in this map will be created on demand and correspond to a
@@ -527,6 +529,7 @@ impl<T: IConnection + ?Sized> Clone for ConnectionPool<T> {
         Self {
             connectors: self.connectors.clone(),
             connections: self.connections.clone(),
+            active_connections: self.active_connections.clone(),
         }
     }
 }
@@ -536,7 +539,36 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
         Self {
             connectors,
             connections: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            active_connections: watch::channel(BTreeSet::new()).0,
         }
+    }
+
+    async fn get_or_init_pool_entry(&self, url: &SafeUrl) -> Arc<ConnectionState<T>> {
+        let mut pool_locked = self.connections.lock().await;
+        pool_locked
+            .entry(url.to_owned())
+            .and_modify(|entry_arc| {
+                // Check if existing connection is disconnected and reset the whole entry.
+                //
+                // This resets the state (like connectivity backoff), which is what we want.
+                // Since the (`OnceCell`) was already initialized, it means connection was
+                // successfully before, and disconnected afterwards.
+                if let Some(existing_conn) = entry_arc.connection.get()
+                    && !existing_conn.is_connected()
+                {
+                    trace!(
+                        target: LOG_CLIENT_NET_API,
+                        %url,
+                        "Existing connection is disconnected, removing from pool"
+                    );
+                    self.active_connections.send_modify(|v| {
+                        v.remove(url);
+                    });
+                    *entry_arc = Arc::new(ConnectionState::new_reconnecting());
+                }
+            })
+            .or_insert_with(|| Arc::new(ConnectionState::new_initial()))
+            .clone()
     }
 
     pub async fn get_or_create_connection<F, Fut>(
@@ -549,27 +581,7 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
         F: Fn(SafeUrl, Option<String>, ConnectorRegistry) -> Fut + Clone + Send + Sync + 'static,
         Fut: Future<Output = ServerResult<Arc<T>>> + Send + 'static,
     {
-        let mut pool_locked = self.connections.lock().await;
-
-        let pool_entry_arc = pool_locked
-            .entry(url.to_owned())
-                        .and_modify(|entry_arc| {
-                // Check if existing connection is disconnected and reset the whole entry.
-                //
-                // This resets the state (like connectivity backoff), which is what we want.
-                // Since the (`OnceCell`) was already initialized, it means connection was successfully
-                // before, and disconnected afterwards.
-                if let Some(existing_conn) = entry_arc.connection.get()
-                    && !existing_conn.is_connected(){
-                        trace!(target: LOG_CLIENT_NET_API, %url, "Existing connection is disconnected, removing from pool");
-                        *entry_arc = Arc::new(ConnectionState::new_reconnecting());
-                    }
-            })
-            .or_insert_with(|| Arc::new(ConnectionState::new_initial()))
-            .clone();
-
-        // Drop the pool lock so other connections can work in parallel
-        drop(pool_locked);
+        let pool_entry_arc = self.get_or_init_pool_entry(url).await;
 
         let leader_tx = loop {
             let mut leader_rx = {
@@ -615,19 +627,47 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
                 .await;
 
                 // If any other task was also waiting to connect, send them the connection
-                // result
+                // result.
+                //
+                // Note: we want to send both Ok or Err, so `res?` is used only afterwards.
                 let _ = leader_tx.send(
                     res.as_ref()
                         .map(|o| o.clone())
                         .map_err(|err| err.to_string()),
                 );
 
-                res
+                let conn = res?;
+
+                self.active_connections.send_modify(|v| {
+                    v.insert(url.clone());
+                });
+
+                fedimint_core::runtime::spawn("connection disconnect watch", {
+                    let conn = conn.clone();
+                    let s = self.clone();
+                    let url = url.clone();
+                    async move {
+                        // wait for this connection to disconnect
+                        conn.await_disconnection().await;
+                        // And afterwards, update `active_connections`.
+                        //
+                        // This will update the `active_connections` just like calling
+                        // `get_or_create_connection` normally do, but we will
+                        // not attempt to do anything with the result (i.e. try to connect).
+                        s.get_or_init_pool_entry(&url).await;
+                    }
+                });
+
+                Ok(conn)
             })
             .await?;
 
         trace!(target: LOG_CLIENT_NET_API, %url, "Connection ready");
         Ok(conn.clone())
+    }
+    /// Get receiver for changes in the active connections
+    pub fn get_active_connection_receiver(&self) -> watch::Receiver<BTreeSet<SafeUrl>> {
+        self.active_connections.subscribe()
     }
 }
 
