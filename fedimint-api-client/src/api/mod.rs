@@ -38,13 +38,14 @@ use fedimint_core::{
     NumPeersExt, PeerId, TransactionId, apply, async_trait_maybe_send, dyn_newtype_define, util,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
-use futures::stream::FuturesUnordered;
+use futures::stream::{BoxStream, FuturesUnordered};
 use futures::{Future, StreamExt};
 use global_api::with_cache::GlobalFederationApiWithCache;
 use jsonrpsee_core::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::watch;
+use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -96,6 +97,11 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         method: &str,
         params: &ApiRequestErased,
     ) -> ServerResult<Value>;
+
+    /// Returns a stream of connection status for each peer
+    ///
+    /// The stream emits a new value whenever the connection status changes.
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>>;
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -710,6 +716,19 @@ impl IRawFederationApi for FederationApi {
         };
 
         self.request(peer_id, method, params.clone()).await
+    }
+
+    fn connection_status_stream(&self) -> BoxStream<'static, BTreeMap<PeerId, bool>> {
+        let peers = self.peers.clone();
+
+        WatchStream::new(self.connection_pool.get_active_connection_receiver())
+            .map(move |active_urls| {
+                peers
+                    .iter()
+                    .map(|(peer_id, url)| (*peer_id, active_urls.contains(url)))
+                    .collect()
+            })
+            .boxed()
     }
 }
 
