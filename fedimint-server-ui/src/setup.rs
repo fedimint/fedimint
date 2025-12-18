@@ -1,9 +1,10 @@
 use std::collections::BTreeSet;
 
 use axum::Router;
-use axum::extract::{Form, State};
+use axum::extract::State;
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
+use axum_extra::extract::Form;
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
@@ -155,11 +156,6 @@ async fn setup_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRespo
                         "Base fees discourage spam and wasting storage space. The typical fee is only 1-3 sats per transaction, regardless of the value transferred. We recommend enabling the base fee and it cannot be changed later."
                     }
 
-                    // Hidden inputs to ensure all modules are enabled by default
-                    @for kind in &available_modules {
-                        input type="hidden" name="enabled_modules" value=(kind.as_str());
-                    }
-
                     div class="accordion mt-3" id="modulesAccordion" {
                         div class="accordion-item" {
                             h2 class="accordion-header" {
@@ -228,7 +224,7 @@ async fn setup_submit(
         let enabled: BTreeSet<ModuleKind> = input
             .enabled_modules
             .into_iter()
-            .map(|s| ModuleKind::from_static_str(s.leak()))
+            .map(|s| ModuleKind::clone_from_str(&s))
             .collect();
 
         Some(enabled)
