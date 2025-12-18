@@ -17,6 +17,99 @@ use tracing::{debug, trace, warn};
 
 use crate::btc::BitcoinTest;
 
+/// Newtype wrapper around bitcoincore_rpc::Client that automatically wraps all
+/// calls in `block_in_place` to ensure they don't block the async runtime.
+#[derive(Clone)]
+struct BitcoinClient {
+    inner: Arc<Client>,
+}
+
+impl BitcoinClient {
+    fn new(client: Arc<Client>) -> Self {
+        Self { inner: client }
+    }
+
+    fn generate_to_address(
+        &self,
+        block_num: u64,
+        address: &Address,
+    ) -> Result<Vec<bitcoin::BlockHash>, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.generate_to_address(block_num, address))
+    }
+
+    fn get_block_header_info(
+        &self,
+        hash: &bitcoin::BlockHash,
+    ) -> Result<bitcoincore_rpc::json::GetBlockHeaderResult, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_block_header_info(hash))
+    }
+
+    fn get_block_count(&self) -> Result<u64, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_block_count())
+    }
+
+    fn send_to_address(
+        &self,
+        address: &Address,
+        amount: bitcoin::Amount,
+    ) -> Result<Txid, bitcoincore_rpc::Error> {
+        block_in_place(|| {
+            self.inner
+                .send_to_address(address, amount, None, None, None, None, None, None)
+        })
+    }
+
+    fn get_raw_transaction(
+        &self,
+        txid: &Txid,
+        block_hash: Option<&bitcoin::BlockHash>,
+    ) -> Result<Transaction, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_raw_transaction(txid, block_hash))
+    }
+
+    fn get_tx_out_proof(
+        &self,
+        txids: &[Txid],
+        block_hash: Option<&bitcoin::BlockHash>,
+    ) -> Result<Vec<u8>, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_tx_out_proof(txids, block_hash))
+    }
+
+    fn get_received_by_address(
+        &self,
+        address: &Address,
+        minconf: Option<u32>,
+    ) -> Result<bitcoin::Amount, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_received_by_address(address, minconf))
+    }
+
+    fn get_new_address(
+        &self,
+        label: Option<&str>,
+        address_type: Option<bitcoincore_rpc::json::AddressType>,
+    ) -> Result<bitcoin::Address<bitcoin::address::NetworkUnchecked>, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_new_address(label, address_type))
+    }
+
+    fn get_mempool_entry(
+        &self,
+        txid: &Txid,
+    ) -> Result<bitcoincore_rpc::json::GetMempoolEntryResult, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_mempool_entry(txid))
+    }
+
+    fn get_block_hash(&self, height: u64) -> Result<bitcoin::BlockHash, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_block_hash(height))
+    }
+
+    fn get_block_info(
+        &self,
+        hash: &bitcoin::BlockHash,
+    ) -> Result<bitcoincore_rpc::json::GetBlockResult, bitcoincore_rpc::Error> {
+        block_in_place(|| self.inner.get_block_info(hash))
+    }
+}
+
 /// Fixture implementing bitcoin node under test by talking to a `bitcoind` with
 /// no locking considerations.
 ///
@@ -24,7 +117,7 @@ use crate::btc::BitcoinTest;
 /// considerations).
 #[derive(Clone)]
 struct RealBitcoinTestNoLock {
-    client: Arc<Client>,
+    client: BitcoinClient,
     /// RPC used to connect to bitcoind, used for waiting for the RPC to sync
     rpc: DynServerBitcoinRpc,
 }
@@ -73,18 +166,16 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         }
 
         let new_address = self.get_new_address().await;
-        let mined_block_hashes = block_in_place(|| {
-            self.client
-                .generate_to_address(block_num, &new_address)
-                .expect(Self::ERROR)
-        });
+        let mined_block_hashes = self
+            .client
+            .generate_to_address(block_num, &new_address)
+            .expect(Self::ERROR);
 
         if let Some(block_hash) = mined_block_hashes.last() {
-            let last_mined_block = block_in_place(|| {
-                self.client
-                    .get_block_header_info(block_hash)
-                    .expect("rpc failed")
-            });
+            let last_mined_block = self
+                .client
+                .get_block_header_info(block_hash)
+                .expect("rpc failed");
             let expected_block_count = last_mined_block.height as u64 + 1;
             // waits for the rpc client to catch up to bitcoind
             loop {
@@ -116,8 +207,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     }
 
     async fn prepare_funding_wallet(&self) {
-        let block_count =
-            block_in_place(|| self.client.get_block_count().expect("should not fail"));
+        let block_count = self.client.get_block_count().expect("should not fail");
         if block_count < 100 {
             self.mine_blocks(100 - block_count).await;
         }
@@ -128,22 +218,20 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         address: &Address,
         amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
-        let id = block_in_place(|| {
-            self.client
-                .send_to_address(address, amount, None, None, None, None, None, None)
-                .expect(Self::ERROR)
-        });
+        let id = self
+            .client
+            .send_to_address(address, amount)
+            .expect(Self::ERROR);
         let mined_block_hashes = self.mine_blocks(1).await;
         let mined_block_hash = mined_block_hashes.first().expect("mined a block");
 
-        let tx = block_in_place(|| {
-            self.client
-                .get_raw_transaction(&id, Some(mined_block_hash))
-                .expect(Self::ERROR)
-        });
+        let tx = self
+            .client
+            .get_raw_transaction(&id, Some(mined_block_hash))
+            .expect(Self::ERROR);
         let proof = TxOutProof::consensus_decode_whole(
             &loop {
-                match block_in_place(|| self.client.get_tx_out_proof(&[id], None)) {
+                match self.client.get_tx_out_proof(&[id], None) {
                     Ok(o) => break o,
                     Err(e) => {
                         if e.to_string().contains("not yet in block") {
@@ -163,26 +251,22 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     }
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
         self.mine_blocks(1).await;
-        block_in_place(|| {
-            self.client
-                .get_received_by_address(address, None)
-                .expect(Self::ERROR)
-                .into()
-        })
+        self.client
+            .get_received_by_address(address, None)
+            .expect(Self::ERROR)
+            .into()
     }
 
     async fn get_new_address(&self) -> Address {
-        block_in_place(|| {
-            self.client
-                .get_new_address(None, None)
-                .expect(Self::ERROR)
-                .assume_checked()
-        })
+        self.client
+            .get_new_address(None, None)
+            .expect(Self::ERROR)
+            .assume_checked()
     }
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
         loop {
-            if let Ok(tx) = block_in_place(|| self.client.get_mempool_entry(txid)) {
+            if let Ok(tx) = self.client.get_mempool_entry(txid) {
                 return tx.fees.base.into();
             }
 
@@ -191,42 +275,37 @@ impl BitcoinTest for RealBitcoinTestNoLock {
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {
-        let current_block_count = block_in_place(|| {
-            self.client
-                .get_block_count()
-                .expect("failed to fetch chain tip")
-        });
+        let current_block_count = self
+            .client
+            .get_block_count()
+            .expect("failed to fetch chain tip");
         (0..=current_block_count)
             .position(|height| {
-                block_in_place(|| {
-                    let block_hash = self
-                        .client
-                        .get_block_hash(height)
-                        .expect("failed to fetch block hash");
+                let block_hash = self
+                    .client
+                    .get_block_hash(height)
+                    .expect("failed to fetch block hash");
 
-                    self.client
-                        .get_block_info(&block_hash)
-                        .expect("failed to fetch block info")
-                        .tx
-                        .iter()
-                        .any(|id| id == txid)
-                })
+                self.client
+                    .get_block_info(&block_hash)
+                    .expect("failed to fetch block info")
+                    .tx
+                    .iter()
+                    .any(|id| id == txid)
             })
             .map(|height| height as u64)
     }
 
     async fn get_block_count(&self) -> u64 {
-        block_in_place(|| {
-            self.client
-                .get_block_count()
-                // The RPC function is confusingly named and actually returns the block height
-                .map(|count| count + 1)
-                .expect("failed to fetch block count")
-        })
+        self.client
+            .get_block_count()
+            // The RPC function is confusingly named and actually returns the block height
+            .map(|count| count + 1)
+            .expect("failed to fetch block count")
     }
 
     async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction> {
-        block_in_place(|| self.client.get_raw_transaction(txid, None).ok())
+        self.client.get_raw_transaction(txid, None).ok()
     }
 }
 
@@ -249,7 +328,7 @@ impl RealBitcoinTest {
 
         let host = url.without_auth().unwrap().to_string();
 
-        let client = Arc::new(Client::new(&host, auth).expect(Self::ERROR));
+        let client = BitcoinClient::new(Arc::new(Client::new(&host, auth).expect(Self::ERROR)));
 
         Self {
             inner: RealBitcoinTestNoLock { client, rpc },
@@ -345,9 +424,9 @@ impl BitcoinTest for RealBitcoinTestLocked {
     }
 
     async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
-        let pre = block_in_place(|| self.inner.client.get_block_count().unwrap());
+        let pre = self.inner.client.get_block_count().unwrap();
         let mined_block_hashes = self.inner.mine_blocks(block_num).await;
-        let post = block_in_place(|| self.inner.client.get_block_count().unwrap());
+        let post = self.inner.client.get_block_count().unwrap();
         assert_eq!(post - pre, block_num);
         mined_block_hashes
     }
