@@ -113,10 +113,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
 use bitcoin::hex::DisplayHex as _;
 use fedimint_core::util::BoxFuture;
 use fedimint_logging::LOG_DB;
+use fedimint_util_error::FmtCompact as _;
 use futures::{Stream, StreamExt};
 use macro_rules_attribute::apply;
 use rand::Rng;
@@ -129,7 +129,6 @@ use crate::core::{ModuleInstanceId, ModuleKind};
 use crate::encoding::{Decodable, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
 use crate::task::{MaybeSend, MaybeSync};
-use crate::util::FmtCompactAnyhow as _;
 use crate::{async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, timing};
 
 pub mod mem_impl;
@@ -141,6 +140,9 @@ use self::notifications::{Notifications, NotifyQueue};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 
 pub const MODULE_GLOBAL_PREFIX: u8 = 0xff;
+
+/// Result type for database operations
+pub type DatabaseResult<T> = std::result::Result<T, DatabaseError>;
 
 pub trait DatabaseKeyPrefix: Debug {
     fn to_bytes(&self) -> Vec<u8>;
@@ -180,7 +182,10 @@ pub trait DatabaseKey: Sized {
     /// value of the `DatabaseKey` as parameter to verify some changes to
     /// that value.
     const NOTIFY_ON_MODIFY: bool = false;
-    fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError>;
+    fn from_bytes(
+        data: &[u8],
+        modules: &ModuleDecoderRegistry,
+    ) -> std::result::Result<Self, DecodingError>;
 }
 
 /// Marker trait for `DatabaseKey`s where `NOTIFY` is true
@@ -188,7 +193,10 @@ pub trait DatabaseKeyWithNotify {}
 
 /// `DatabaseValue` that represents the value structure of database records.
 pub trait DatabaseValue: Sized + Debug {
-    fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError>;
+    fn from_bytes(
+        data: &[u8],
+        modules: &ModuleDecoderRegistry,
+    ) -> std::result::Result<Self, DecodingError>;
     fn to_bytes(&self) -> Vec<u8>;
 }
 
@@ -208,7 +216,7 @@ pub enum AutocommitError<E> {
         /// Number of attempts
         attempts: usize,
         /// Last error on commit
-        last_error: anyhow::Error,
+        last_error: DatabaseError,
     },
     /// Error returned by the closure provided to `autocommit`. If returned no
     /// commit was attempted in that round
@@ -229,11 +237,11 @@ pub trait AutocommitResultExt<T, E> {
     /// Unwraps the "commit failed" error variant. Use this in cases where
     /// autocommit is instructed to run indefinitely and commit will thus never
     /// fail.
-    fn unwrap_autocommit(self) -> Result<T, E>;
+    fn unwrap_autocommit(self) -> std::result::Result<T, E>;
 }
 
-impl<T, E> AutocommitResultExt<T, E> for Result<T, AutocommitError<E>> {
-    fn unwrap_autocommit(self) -> Result<T, E> {
+impl<T, E> AutocommitResultExt<T, E> for std::result::Result<T, AutocommitError<E>> {
+    fn unwrap_autocommit(self) -> std::result::Result<T, E> {
         match self {
             Ok(value) => Ok(value),
             Err(AutocommitError::CommitFailed { .. }) => {
@@ -261,7 +269,7 @@ pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
 
     // Checkpoint the database to a backup directory
-    fn checkpoint(&self, backup_path: &Path) -> Result<()>;
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -275,7 +283,7 @@ where
         (**self).begin_transaction().await
     }
 
-    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         (**self).checkpoint(backup_path)
     }
 }
@@ -317,7 +325,7 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     fn is_global(&self) -> bool;
 
     /// Checkpoints the database to a backup directory
-    fn checkpoint(&self, backup_path: &Path) -> Result<()>;
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -339,7 +347,7 @@ where
         (**self).is_global()
     }
 
-    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         (**self).checkpoint(backup_path)
     }
 }
@@ -377,7 +385,7 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
         true
     }
 
-    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         self.raw.checkpoint(backup_path)
     }
 }
@@ -477,18 +485,22 @@ impl Database {
     }
 
     /// `Err` if [`Self::is_global`] is not true
-    pub fn ensure_global(&self) -> Result<()> {
+    pub fn ensure_global(&self) -> DatabaseResult<()> {
         if !self.is_global() {
-            bail!("Database instance not global");
+            return Err(DatabaseError::Other(anyhow::anyhow!(
+                "Database instance not global"
+            )));
         }
 
         Ok(())
     }
 
     /// `Err` if [`Self::is_global`] is true
-    pub fn ensure_isolated(&self) -> Result<()> {
+    pub fn ensure_isolated(&self) -> DatabaseResult<()> {
         if self.is_global() {
-            bail!("Database instance not isolated");
+            return Err(DatabaseError::Other(anyhow::anyhow!(
+                "Database instance not isolated"
+            )));
         }
 
         Ok(())
@@ -513,7 +525,7 @@ impl Database {
         self.begin_transaction().await.into_nc()
     }
 
-    pub fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+    pub fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         self.inner.checkpoint(backup_path)
     }
 
@@ -548,13 +560,13 @@ impl Database {
         &'s self,
         tx_fn: F,
         max_attempts: Option<usize>,
-    ) -> Result<T, AutocommitError<E>>
+    ) -> std::result::Result<T, AutocommitError<E>>
     where
         's: 'dbtx,
         for<'r, 'o> F: Fn(
             &'r mut DatabaseTransaction<'o>,
             PhantomBound<'dbtx, 'o>,
-        ) -> BoxFuture<'r, Result<T, E>>,
+        ) -> BoxFuture<'r, std::result::Result<T, E>>,
     {
         assert_ne!(max_attempts, Some(0));
         let mut curr_attempts: usize = 0;
@@ -593,7 +605,7 @@ impl Database {
                         warn!(
                             target: LOG_DB,
                             curr_attempts,
-                            err = %err.fmt_compact_anyhow(),
+                            err = %err.fmt_compact(),
                             "Database commit failed in an autocommit block - terminating"
                         );
                         return Err(AutocommitError::CommitFailed {
@@ -607,7 +619,7 @@ impl Database {
                     warn!(
                         target: LOG_DB,
                         curr_attempts,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %err.fmt_compact(),
                         delay_ms = %delay,
                         "Database commit failed in an autocommit block - retrying"
                     );
@@ -728,7 +740,7 @@ where
         }
     }
 
-    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         self.inner.checkpoint(backup_path)
     }
 }
@@ -771,7 +783,7 @@ impl<Inner> IDatabaseTransaction for PrefixDatabaseTransaction<Inner>
 where
     Inner: IDatabaseTransaction,
 {
-    async fn commit_tx(&mut self) -> Result<()> {
+    async fn commit_tx(&mut self) -> DatabaseResult<()> {
         self.inner.commit_tx().await
     }
 
@@ -804,22 +816,26 @@ impl<Inner> IDatabaseTransactionOpsCore for PrefixDatabaseTransaction<Inner>
 where
     Inner: IDatabaseTransactionOpsCore,
 {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
         self.inner.raw_insert_bytes(&key, value).await
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
         self.inner.raw_get_bytes(&key).await
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
         self.inner.raw_remove_entry(&key).await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         let key = self.get_full_key(key_prefix);
         let stream = self.inner.raw_find_by_prefix(&key).await?;
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
@@ -828,7 +844,7 @@ where
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         let key = self.get_full_key(key_prefix);
         let stream = self
             .inner
@@ -837,7 +853,7 @@ where
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
     }
 
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         let range = self.get_full_range(range);
         let stream = self
             .inner
@@ -849,7 +865,7 @@ where
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         let key = self.get_full_key(key_prefix);
         self.inner.raw_remove_by_prefix(&key).await
     }
@@ -860,11 +876,11 @@ impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner>
 where
     Inner: IDatabaseTransactionOps,
 {
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         self.inner.rollback_tx_to_savepoint().await
     }
 
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         self.set_tx_savepoint().await
     }
 }
@@ -875,31 +891,35 @@ where
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOpsCore: MaybeSend {
     /// Insert entry
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>>;
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>>;
 
     /// Get key value
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
 
     /// Remove entry by `key`
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
 
     /// Returns an stream of key-value pairs with keys that start with
     /// `key_prefix`, sorted by key.
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>>;
 
     /// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>>;
+    ) -> DatabaseResult<PrefixStream<'_>>;
 
     /// Returns an stream of key-value pairs with keys within a `range`, sorted
     /// by key. [`Range`] is an (half-open) range bounded inclusively below and
     /// exclusively above.
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>>;
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>>;
 
     /// Delete keys matching prefix
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()>;
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -907,36 +927,40 @@ impl<T> IDatabaseTransactionOpsCore for Box<T>
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_insert_bytes(key, value).await
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_remove_entry(key).await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_prefix(key_prefix).await
     }
 
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         (**self)
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
 
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         (**self).raw_remove_by_prefix(key_prefix).await
     }
 }
@@ -946,36 +970,40 @@ impl<T> IDatabaseTransactionOpsCore for &mut T
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_insert_bytes(key, value).await
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_remove_entry(key).await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_prefix(key_prefix).await
     }
 
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         (**self)
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
 
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         (**self).raw_remove_by_prefix(key_prefix).await
     }
 }
@@ -995,9 +1023,9 @@ pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {
     /// Warning: Avoid using this in fedimint client code as not all database
     /// transaction implementations will support setting a savepoint during
     /// a transaction.
-    async fn set_tx_savepoint(&mut self) -> Result<()>;
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()>;
 
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()>;
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -1005,11 +1033,11 @@ impl<T> IDatabaseTransactionOps for Box<T>
 where
     T: IDatabaseTransactionOps + ?Sized,
 {
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         (**self).set_tx_savepoint().await
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         (**self).rollback_tx_to_savepoint().await
     }
 }
@@ -1019,11 +1047,11 @@ impl<T> IDatabaseTransactionOps for &mut T
 where
     T: IDatabaseTransactionOps + ?Sized,
 {
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         (**self).set_tx_savepoint().await
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         (**self).rollback_tx_to_savepoint().await
     }
 }
@@ -1269,7 +1297,7 @@ pub trait WithDecoders {
 /// Raw database transaction (e.g. rocksdb implementation)
 #[apply(async_trait_maybe_send!)]
 pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
-    async fn commit_tx(self) -> Result<()>;
+    async fn commit_tx(self) -> DatabaseResult<()>;
 }
 
 /// Fedimint database transaction
@@ -1278,7 +1306,7 @@ pub trait IRawDatabaseTransaction: MaybeSend + IDatabaseTransactionOps {
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransaction: MaybeSend + IDatabaseTransactionOps + fmt::Debug {
     /// Commit the transaction
-    async fn commit_tx(&mut self) -> Result<()>;
+    async fn commit_tx(&mut self) -> DatabaseResult<()>;
 
     /// Is global database
     fn is_global(&self) -> bool;
@@ -1297,7 +1325,7 @@ impl<T> IDatabaseTransaction for Box<T>
 where
     T: IDatabaseTransaction + ?Sized,
 {
-    async fn commit_tx(&mut self) -> Result<()> {
+    async fn commit_tx(&mut self) -> DatabaseResult<()> {
         (**self).commit_tx().await
     }
 
@@ -1318,7 +1346,7 @@ impl<'a, T> IDatabaseTransaction for &'a mut T
 where
     T: IDatabaseTransaction + ?Sized,
 {
-    async fn commit_tx(&mut self) -> Result<()> {
+    async fn commit_tx(&mut self) -> DatabaseResult<()> {
         (**self).commit_tx().await
     }
 
@@ -1363,55 +1391,62 @@ where
         }
     }
 
-    fn add_notification_key(&mut self, key: &[u8]) -> Result<()> {
+    fn add_notification_key(&mut self, key: &[u8]) -> DatabaseResult<()> {
         self.notify_queue
             .as_mut()
-            .context("can not call add_notification_key after commit")?
-            .add(&key);
+            .ok_or(DatabaseError::TransactionConsumed)?
+            .add(key);
         Ok(())
     }
 }
 
 #[apply(async_trait_maybe_send!)]
 impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTransaction<Tx> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         self.add_notification_key(key)?;
         self.raw
             .as_mut()
-            .context("Cannot insert into already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .raw_insert_bytes(key, value)
             .await
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.raw
             .as_mut()
-            .context("Cannot retrieve from already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .raw_get_bytes(key)
             .await
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.add_notification_key(key)?;
         self.raw
             .as_mut()
-            .context("Cannot remove from already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .raw_remove_entry(key)
             .await
     }
 
-    async fn raw_find_by_range(&mut self, key_range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(
+        &mut self,
+        key_range: Range<&[u8]>,
+    ) -> DatabaseResult<PrefixStream<'_>> {
         self.raw
             .as_mut()
-            .context("Cannot retrieve from already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .raw_find_by_range(key_range)
             .await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         self.raw
             .as_mut()
-            .context("Cannot retrieve from already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .raw_find_by_prefix(key_prefix)
             .await
     }
@@ -1419,18 +1454,18 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         self.raw
             .as_mut()
-            .context("Cannot retrieve from already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         self.raw
             .as_mut()
-            .context("Cannot remove from already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .raw_remove_by_prefix(key_prefix)
             .await
     }
@@ -1438,19 +1473,19 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
 
 #[apply(async_trait_maybe_send!)]
 impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransaction<Tx> {
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         self.raw
             .as_mut()
-            .context("Cannot rollback to a savepoint on an already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .rollback_tx_to_savepoint()
             .await?;
         Ok(())
     }
 
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         self.raw
             .as_mut()
-            .context("Cannot set a tx savepoint on an already consumed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .set_tx_savepoint()
             .await?;
         Ok(())
@@ -1461,10 +1496,10 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransa
 impl<Tx: IRawDatabaseTransaction + fmt::Debug> IDatabaseTransaction
     for BaseDatabaseTransaction<Tx>
 {
-    async fn commit_tx(&mut self) -> Result<()> {
+    async fn commit_tx(&mut self) -> DatabaseResult<()> {
         self.raw
             .take()
-            .context("Cannot commit an already committed transaction")?
+            .ok_or(DatabaseError::TransactionConsumed)?
             .commit_tx()
             .await?;
         self.notifications.submit_queue(
@@ -1584,7 +1619,7 @@ impl<Cap> WithDecoders for DatabaseTransaction<'_, Cap> {
 fn decode_value<V: DatabaseValue>(
     value_bytes: &[u8],
     decoders: &ModuleDecoderRegistry,
-) -> Result<V, DecodingError> {
+) -> std::result::Result<V, DecodingError> {
     trace!(
         bytes = %AbbreviateHexBytes(value_bytes),
         "decoding value",
@@ -1774,18 +1809,22 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     }
 
     /// `Err` if [`Self::is_global`] is not true
-    pub fn ensure_global(&self) -> Result<()> {
+    pub fn ensure_global(&self) -> DatabaseResult<()> {
         if !self.is_global() {
-            bail!("Database instance not global");
+            return Err(DatabaseError::Other(anyhow::anyhow!(
+                "Database instance not global"
+            )));
         }
 
         Ok(())
     }
 
     /// `Err` if [`Self::is_global`] is true
-    pub fn ensure_isolated(&self) -> Result<()> {
+    pub fn ensure_isolated(&self) -> DatabaseResult<()> {
         if self.is_global() {
-            bail!("Database instance not isolated");
+            return Err(DatabaseError::Other(anyhow::anyhow!(
+                "Database instance not isolated"
+            )));
         }
 
         Ok(())
@@ -1869,7 +1908,7 @@ impl<'tx> DatabaseTransaction<'tx, Committable> {
         }
     }
 
-    pub async fn commit_tx_result(mut self) -> Result<()> {
+    pub async fn commit_tx_result(mut self) -> DatabaseResult<()> {
         self.commit_tracker.is_committed = true;
         let commit_result = self.tx.commit_tx().await;
 
@@ -1896,48 +1935,55 @@ impl<Cap> IDatabaseTransactionOpsCore for DatabaseTransaction<'_, Cap>
 where
     Cap: Send,
 {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         self.commit_tracker.has_writes = true;
         self.tx.raw_insert_bytes(key, value).await
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.tx.raw_get_bytes(key).await
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.tx.raw_remove_entry(key).await
     }
 
-    async fn raw_find_by_range(&mut self, key_range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(
+        &mut self,
+        key_range: Range<&[u8]>,
+    ) -> DatabaseResult<PrefixStream<'_>> {
         self.tx.raw_find_by_range(key_range).await
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         self.tx.raw_find_by_prefix(key_prefix).await
     }
 
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         self.tx
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         self.commit_tracker.has_writes = true;
         self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
 #[apply(async_trait_maybe_send!)]
 impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         self.tx.set_tx_savepoint().await
     }
 
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         self.tx.rollback_tx_to_savepoint().await
     }
 }
@@ -1960,7 +2006,10 @@ where
     T: DatabaseRecord + crate::encoding::Decodable + Sized,
 {
     const NOTIFY_ON_MODIFY: bool = <T as DatabaseRecord>::NOTIFY_ON_MODIFY;
-    fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
+    fn from_bytes(
+        data: &[u8],
+        modules: &ModuleDecoderRegistry,
+    ) -> std::result::Result<Self, DecodingError> {
         if data.is_empty() {
             // TODO: build better coding errors, pretty useless right now
             return Err(DecodingError::wrong_length(1, 0));
@@ -1979,7 +2028,10 @@ impl<T> DatabaseValue for T
 where
     T: Debug + Encodable + Decodable,
 {
-    fn from_bytes(data: &[u8], modules: &ModuleDecoderRegistry) -> Result<Self, DecodingError> {
+    fn from_bytes(
+        data: &[u8],
+        modules: &ModuleDecoderRegistry,
+    ) -> std::result::Result<Self, DecodingError> {
         T::consensus_decode_whole(data, modules).map_err(|e| DecodingError::Other(e.0))
     }
 
@@ -2153,6 +2205,46 @@ impl DecodingError {
     }
 }
 
+/// Error type for database operations
+#[derive(Debug, Error)]
+pub enum DatabaseError {
+    /// Write-write conflict during optimistic transaction commit.
+    /// This occurs when two transactions attempt to modify the same key.
+    #[error("Write-write conflict detected")]
+    WriteConflict,
+
+    /// The transaction has already been consumed (committed or dropped).
+    /// Operations cannot be performed on a consumed transaction.
+    #[error("Transaction already consumed")]
+    TransactionConsumed,
+
+    /// Error from the underlying database backend (e.g., RocksDB I/O errors).
+    #[error("Database backend error: {0}")]
+    DatabaseBackend(#[from] Box<dyn Error + Send + Sync>),
+
+    /// Other database error
+    #[error("Database error: {0:#}")]
+    Other(anyhow::Error),
+}
+
+impl DatabaseError {
+    /// Create a DatabaseError from any error type
+    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
+        Self::Other(anyhow::Error::from(error))
+    }
+
+    /// Create a DatabaseBackend error from any error type
+    pub fn backend<E: Error + Send + Sync + 'static>(error: E) -> Self {
+        Self::DatabaseBackend(Box::new(error))
+    }
+}
+
+impl From<anyhow::Error> for DatabaseError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Other(error)
+    }
+}
+
 #[macro_export]
 macro_rules! push_db_pair_items {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
@@ -2311,7 +2403,7 @@ pub async fn apply_migrations<C>(
     // When used in client side context, we can/should ignore keys that external app
     // is allowed to use, and but since this function is shared, we make it optional argument
     external_prefixes_above: Option<u8>,
-) -> Result<(), anyhow::Error>
+) -> std::result::Result<(), anyhow::Error>
 where
     C: Clone,
 {
@@ -2326,7 +2418,9 @@ where
     )
     .await?;
 
-    dbtx.commit_tx_result().await
+    dbtx.commit_tx_result()
+        .await
+        .map_err(|e| anyhow::Error::msg(e.to_string()))
 }
 /// `apply_migrations` iterates from the on disk database version for the
 /// module.
@@ -2348,7 +2442,7 @@ pub async fn apply_migrations_dbtx<C>(
     // When used in client side context, we can/should ignore keys that external app
     // is allowed to use, and but since this function is shared, we make it optional argument
     external_prefixes_above: Option<u8>,
-) -> Result<(), anyhow::Error>
+) -> std::result::Result<(), anyhow::Error>
 where
     C: Clone,
 {
@@ -2433,7 +2527,7 @@ pub async fn create_database_version(
     module_instance_id: Option<ModuleInstanceId>,
     kind: String,
     is_new_db: bool,
-) -> Result<(), anyhow::Error> {
+) -> std::result::Result<(), anyhow::Error> {
     let mut dbtx = db.begin_transaction().await;
 
     create_database_version_dbtx(
@@ -2458,7 +2552,7 @@ pub async fn create_database_version_dbtx(
     module_instance_id: Option<ModuleInstanceId>,
     kind: String,
     is_new_db: bool,
-) -> Result<(), anyhow::Error> {
+) -> std::result::Result<(), anyhow::Error> {
     let key_module_instance_id = module_instance_id_or_global(module_instance_id);
 
     // First check if the module has a `DatabaseVersion` written to
@@ -3335,7 +3429,7 @@ mod test_utils {
     #[allow(dead_code)]
     async fn migrate_test_db_version_0(
         mut ctx: DbMigrationFnContext<'_, ()>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> std::result::Result<(), anyhow::Error> {
         let mut dbtx = ctx.dbtx();
         let example_keys_v0 = dbtx
             .find_by_prefix(&DbPrefixTestPrefixV0)
@@ -3362,9 +3456,9 @@ mod test_utils {
 
         use crate::ModuleDecoderRegistry;
         use crate::db::{
-            AutocommitError, BaseDatabaseTransaction, IDatabaseTransaction,
-            IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase,
-            IRawDatabaseTransaction,
+            AutocommitError, BaseDatabaseTransaction, DatabaseError, DatabaseResult,
+            IDatabaseTransaction, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
+            IRawDatabase, IRawDatabaseTransaction,
         };
 
         #[derive(Debug)]
@@ -3377,7 +3471,7 @@ mod test_utils {
                 FakeTransaction(PhantomData)
             }
 
-            fn checkpoint(&self, _backup_path: &Path) -> anyhow::Result<()> {
+            fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
                 Ok(())
             }
         }
@@ -3391,59 +3485,59 @@ mod test_utils {
                 &mut self,
                 _key: &[u8],
                 _value: &[u8],
-            ) -> anyhow::Result<Option<Vec<u8>>> {
+            ) -> DatabaseResult<Option<Vec<u8>>> {
                 unimplemented!()
             }
 
-            async fn raw_get_bytes(&mut self, _key: &[u8]) -> anyhow::Result<Option<Vec<u8>>> {
+            async fn raw_get_bytes(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
                 unimplemented!()
             }
 
-            async fn raw_remove_entry(&mut self, _key: &[u8]) -> anyhow::Result<Option<Vec<u8>>> {
+            async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
                 unimplemented!()
             }
 
             async fn raw_find_by_range(
                 &mut self,
                 _key_range: Range<&[u8]>,
-            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
+            ) -> DatabaseResult<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
 
             async fn raw_find_by_prefix(
                 &mut self,
                 _key_prefix: &[u8],
-            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
+            ) -> DatabaseResult<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
 
-            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> anyhow::Result<()> {
+            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
                 unimplemented!()
             }
 
             async fn raw_find_by_prefix_sorted_descending(
                 &mut self,
                 _key_prefix: &[u8],
-            ) -> anyhow::Result<crate::db::PrefixStream<'_>> {
+            ) -> DatabaseResult<crate::db::PrefixStream<'_>> {
                 unimplemented!()
             }
         }
 
         #[async_trait]
         impl IDatabaseTransactionOps for FakeTransaction<'_> {
-            async fn rollback_tx_to_savepoint(&mut self) -> anyhow::Result<()> {
+            async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
                 unimplemented!()
             }
 
-            async fn set_tx_savepoint(&mut self) -> anyhow::Result<()> {
+            async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
                 unimplemented!()
             }
         }
 
         #[async_trait]
         impl IRawDatabaseTransaction for FakeTransaction<'_> {
-            async fn commit_tx(self) -> anyhow::Result<()> {
-                Err(anyhow!("Can't commit!"))
+            async fn commit_tx(self) -> DatabaseResult<()> {
+                Err(DatabaseError::Other(anyhow::anyhow!("Can't commit!")))
             }
         }
 

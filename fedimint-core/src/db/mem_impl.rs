@@ -2,13 +2,13 @@ use std::fmt::{self, Debug};
 use std::ops::Range;
 use std::path::Path;
 
-use anyhow::Result;
 use futures::{StreamExt, stream};
 use imbl::OrdMap;
 use macro_rules_attribute::apply;
 
 use super::{
-    IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
+    DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
+    IRawDatabase, IRawDatabaseTransaction,
 };
 use crate::async_trait_maybe_send;
 use crate::db::PrefixStream;
@@ -92,7 +92,7 @@ impl IRawDatabase for MemDatabase {
         memtx
     }
 
-    fn checkpoint(&self, _backup_path: &Path) -> Result<()> {
+    fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
         Ok(())
     }
 }
@@ -101,7 +101,11 @@ impl IRawDatabase for MemDatabase {
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
 impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         // Insert data from copy so we can read our own writes
         let old_value = self.tx_data.insert(key.to_vec(), value.to_owned());
         self.operations
@@ -114,11 +118,11 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
         Ok(old_value)
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self.tx_data.get(key).cloned())
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         // Remove data from copy so we can read our own writes
         let old_value = self.tx_data.remove(&key.to_vec());
         self.operations
@@ -130,7 +134,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
         Ok(old_value)
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         let keys = self
             .raw_find_by_prefix(key_prefix)
             .await?
@@ -143,7 +147,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
         Ok(())
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         let data = self
             .tx_data
             .range((key_prefix.to_vec())..)
@@ -156,7 +160,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         let mut data = self
             .tx_data
             .range((key_prefix.to_vec())..)
@@ -168,7 +172,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
         Ok(Box::pin(stream::iter(data)))
     }
 
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         let data = self
             .tx_data
             .range(Range {
@@ -183,7 +187,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
 
 #[apply(async_trait_maybe_send!)]
 impl IDatabaseTransactionOps for MemTransaction<'_> {
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         self.tx_data = self.savepoint.clone();
 
         // Remove any pending operations beyond the savepoint
@@ -195,7 +199,7 @@ impl IDatabaseTransactionOps for MemTransaction<'_> {
         Ok(())
     }
 
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         self.savepoint = self.tx_data.clone();
         self.num_savepoint_operations = self.num_pending_operations;
         Ok(())
@@ -205,22 +209,20 @@ impl IDatabaseTransactionOps for MemTransaction<'_> {
 #[apply(async_trait_maybe_send!)]
 impl IRawDatabaseTransaction for MemTransaction<'_> {
     #[allow(clippy::significant_drop_tightening)]
-    async fn commit_tx(self) -> Result<()> {
+    async fn commit_tx(self) -> DatabaseResult<()> {
         let mut data = self.db.data.write().expect("Poisoned rwlock");
         let mut data_copy = data.clone();
         for op in self.operations {
             match op {
                 DatabaseOperation::Insert(insert_op) => {
-                    anyhow::ensure!(
-                        data_copy.insert(insert_op.key, insert_op.value) == insert_op.old_value,
-                        "write-write conflict"
-                    );
+                    if data_copy.insert(insert_op.key, insert_op.value) != insert_op.old_value {
+                        return Err(DatabaseError::WriteConflict);
+                    }
                 }
                 DatabaseOperation::Delete(delete_op) => {
-                    anyhow::ensure!(
-                        data_copy.remove(&delete_op.key) == delete_op.old_value,
-                        "write-write conflict"
-                    );
+                    if data_copy.remove(&delete_op.key) != delete_op.old_value {
+                        return Err(DatabaseError::WriteConflict);
+                    }
                 }
             }
         }

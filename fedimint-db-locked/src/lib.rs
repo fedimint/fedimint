@@ -75,7 +75,7 @@ where
         self.inner.begin_transaction().await
     }
 
-    fn checkpoint(&self, backup_path: &Path) -> anyhow::Result<()> {
+    fn checkpoint(&self, backup_path: &Path) -> fedimint_core::db::DatabaseResult<()> {
         self.inner.checkpoint(backup_path)
     }
 }

@@ -10,11 +10,11 @@ use std::ops::Range;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context as _, bail};
 use async_trait::async_trait;
 use fedimint_core::db::{
-    IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
-    PrefixStream,
+    DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
+    IRawDatabase, IRawDatabaseTransaction, PrefixStream,
 };
 use fedimint_core::task::block_in_place;
 use fedimint_db_locked::{Locked, LockedBuilder};
@@ -202,9 +202,12 @@ impl IRawDatabase for RocksDb {
         rocksdb_tx
     }
 
-    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
-        let checkpoint = rocksdb::checkpoint::Checkpoint::new(&self.0)?;
-        checkpoint.create_checkpoint(backup_path)?;
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
+        let checkpoint =
+            rocksdb::checkpoint::Checkpoint::new(&self.0).map_err(DatabaseError::backend)?;
+        checkpoint
+            .create_checkpoint(backup_path)
+            .map_err(DatabaseError::backend)?;
         Ok(())
     }
 }
@@ -216,36 +219,45 @@ impl IRawDatabase for RocksDbReadOnly {
         RocksDbReadOnlyTransaction(&self.0)
     }
 
-    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
-        let checkpoint = rocksdb::checkpoint::Checkpoint::new(&self.0)?;
-        checkpoint.create_checkpoint(backup_path)?;
+    fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
+        let checkpoint =
+            rocksdb::checkpoint::Checkpoint::new(&self.0).map_err(DatabaseError::backend)?;
+        checkpoint
+            .create_checkpoint(backup_path)
+            .map_err(DatabaseError::backend)?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             let val = self.0.snapshot().get(key).unwrap();
-            self.0.put(key, value)?;
+            self.0.put(key, value).map_err(DatabaseError::backend)?;
             Ok(val)
         })
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| Ok(self.0.snapshot().get(key)?))
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        fedimint_core::runtime::block_in_place(|| {
+            self.0.snapshot().get(key).map_err(DatabaseError::backend)
+        })
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             let val = self.0.snapshot().get(key).unwrap();
-            self.0.delete(key)?;
+            self.0.delete(key).map_err(DatabaseError::backend)?;
             Ok(val)
         })
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         Ok(fedimint_core::runtime::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let mut options = rocksdb::ReadOptions::default();
@@ -264,7 +276,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
         }))
     }
 
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         Ok(fedimint_core::runtime::block_in_place(|| {
             let range = Range {
                 start: range.start.to_vec(),
@@ -285,7 +297,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
         }))
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> anyhow::Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         fedimint_core::runtime::block_in_place(|| {
             // Note: delete_range is not supported in Transactions :/
             let mut options = rocksdb::ReadOptions::default();
@@ -307,8 +319,8 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
                 });
 
             for item in iter {
-                let key = item?;
-                self.0.delete(key)?;
+                let key = item.map_err(DatabaseError::backend)?;
+                self.0.delete(key).map_err(DatabaseError::backend)?;
             }
 
             Ok(())
@@ -318,7 +330,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         let prefix = key_prefix.to_vec();
         let next_prefix = next_prefix(&prefix);
         let iterator_mode = if let Some(next_prefix) = &next_prefix {
@@ -343,13 +355,15 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
 
 #[async_trait]
 impl IDatabaseTransactionOps for RocksDbTransaction<'_> {
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
-        Ok(fedimint_core::runtime::block_in_place(|| {
-            self.0.rollback_to_savepoint()
-        })?)
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
+        fedimint_core::runtime::block_in_place(|| {
+            self.0
+                .rollback_to_savepoint()
+                .map_err(DatabaseError::backend)
+        })
     }
 
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         fedimint_core::runtime::block_in_place(|| self.0.set_savepoint());
 
         Ok(())
@@ -358,9 +372,18 @@ impl IDatabaseTransactionOps for RocksDbTransaction<'_> {
 
 #[async_trait]
 impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
-    async fn commit_tx(self) -> Result<()> {
+    async fn commit_tx(self) -> DatabaseResult<()> {
         fedimint_core::runtime::block_in_place(|| {
-            self.0.commit()?;
+            self.0.commit().map_err(|e| {
+                // RocksDB optimistic transactions return errors on write conflicts
+                // The error message typically contains "Resource busy" for conflicts
+                let error_string = e.to_string();
+                if error_string.contains("Resource busy") || error_string.contains("Conflict") {
+                    DatabaseError::WriteConflict
+                } else {
+                    DatabaseError::backend(e)
+                }
+            })?;
             Ok(())
         })
     }
@@ -368,19 +391,25 @@ impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
 
 #[async_trait]
 impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
-    async fn raw_insert_bytes(&mut self, _key: &[u8], _value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        _key: &[u8],
+        _value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         panic!("Cannot insert into a read only transaction");
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| Ok(self.0.snapshot().get(key)?))
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        fedimint_core::runtime::block_in_place(|| {
+            self.0.snapshot().get(key).map_err(DatabaseError::backend)
+        })
     }
 
-    async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         panic!("Cannot remove from a read only transaction");
     }
 
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         Ok(fedimint_core::runtime::block_in_place(|| {
             let range = Range {
                 start: range.start.to_vec(),
@@ -401,7 +430,7 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
         }))
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         Ok(fedimint_core::runtime::block_in_place(|| {
             let prefix = key_prefix.to_vec();
             let mut options = rocksdb::ReadOptions::default();
@@ -420,14 +449,14 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
         }))
     }
 
-    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> anyhow::Result<()> {
+    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
         panic!("Cannot remove from a read only transaction");
     }
 
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         let prefix = key_prefix.to_vec();
         let next_prefix = next_prefix(&prefix);
         let iterator_mode = if let Some(next_prefix) = &next_prefix {
@@ -452,18 +481,18 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
 
 #[async_trait]
 impl IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         panic!("Cannot rollback a read only transaction");
     }
 
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         panic!("Cannot set a savepoint in a read only transaction");
     }
 }
 
 #[async_trait]
 impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
-    async fn commit_tx(self) -> Result<()> {
+    async fn commit_tx(self) -> DatabaseResult<()> {
         panic!("Cannot commit a read only transaction");
     }
 }

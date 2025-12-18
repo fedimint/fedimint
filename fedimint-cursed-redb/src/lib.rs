@@ -5,10 +5,9 @@ use std::ops::Range;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use anyhow::{Context as _, Result};
 use fedimint_core::db::{
-    IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
-    PrefixStream,
+    DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
+    IRawDatabase, IRawDatabaseTransaction, PrefixStream,
 };
 use fedimint_core::{apply, async_trait_maybe_send};
 use futures::stream;
@@ -62,17 +61,15 @@ mod native;
 mod wasm;
 
 impl MemAndRedb {
-    fn new_from_redb(db: Database) -> Result<Self> {
+    fn new_from_redb(db: Database) -> DatabaseResult<Self> {
         let db = Arc::new(db);
         let mut data = OrdMap::new();
 
         // Load existing data from redb
-        let read_txn = db
-            .begin_read()
-            .context("Failed to begin read transaction")?;
+        let read_txn = db.begin_read().map_err(DatabaseError::backend)?;
         if let Ok(table) = read_txn.open_table(KV_TABLE) {
-            for entry in table.iter()? {
-                let (key, value) = entry?;
+            for entry in table.iter().map_err(DatabaseError::backend)? {
+                let (key, value) = entry.map_err(DatabaseError::backend)?;
                 data.insert(key.value().to_vec(), value.value().to_vec());
             }
         }
@@ -100,14 +97,18 @@ impl IRawDatabase for MemAndRedb {
         }
     }
 
-    fn checkpoint(&self, _: &Path) -> Result<()> {
+    fn checkpoint(&self, _: &Path) -> DatabaseResult<()> {
         unimplemented!()
     }
 }
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
-    async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
         let val = IDatabaseTransactionOpsCore::raw_get_bytes(self, key).await;
         // Insert data from copy so we can read our own writes
         let old_value = self.tx_data.insert(key.to_vec(), value.to_vec());
@@ -120,11 +121,11 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
         val
     }
 
-    async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self.tx_data.get(key).cloned())
     }
 
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         // Remove data from copy so we can read our own writes
         let old_value = self.tx_data.remove(&key.to_vec());
         self.operations
@@ -135,7 +136,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
         Ok(old_value)
     }
 
-    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         let data = self
             .tx_data
             .range::<_, Vec<u8>>(Range {
@@ -148,7 +149,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
         Ok(Box::pin(stream::iter(data)))
     }
 
-    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
         let data = self
             .tx_data
             .range::<_, Vec<u8>>((key_prefix.to_vec())..)
@@ -159,7 +160,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
         Ok(Box::pin(stream::iter(data)))
     }
 
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> anyhow::Result<()> {
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         let keys = self
             .tx_data
             .range::<_, Vec<u8>>((key_prefix.to_vec())..)
@@ -180,7 +181,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
-    ) -> Result<PrefixStream<'_>> {
+    ) -> DatabaseResult<PrefixStream<'_>> {
         let mut data = self
             .tx_data
             .range::<_, Vec<u8>>((key_prefix.to_vec())..)
@@ -195,11 +196,11 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransactionOps for MemAndRedbTransaction<'a> {
-    async fn rollback_tx_to_savepoint(&mut self) -> Result<()> {
+    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
         unimplemented!()
     }
 
-    async fn set_tx_savepoint(&mut self) -> Result<()> {
+    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
         unimplemented!()
     }
 }
@@ -208,15 +209,15 @@ impl<'a> IDatabaseTransactionOps for MemAndRedbTransaction<'a> {
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
 impl<'a> IRawDatabaseTransaction for MemAndRedbTransaction<'a> {
-    async fn commit_tx(self) -> Result<()> {
+    async fn commit_tx(self) -> DatabaseResult<()> {
         let mut data_locked = self.db.data.lock().expect("poison");
-        let write_txn = self.db.db.begin_write()?;
+        let write_txn = self.db.db.begin_write().map_err(DatabaseError::backend)?;
         let operations = self.operations;
         let mut data_new = data_locked.clone();
         {
             let mut table = write_txn
                 .open_table(KV_TABLE)
-                .context("Failed to open redb table")?;
+                .map_err(DatabaseError::backend)?;
 
             // Apply all operations
             for op in operations {
@@ -224,24 +225,26 @@ impl<'a> IRawDatabaseTransaction for MemAndRedbTransaction<'a> {
                     DatabaseOperation::Insert(insert_op) => {
                         table
                             .insert(&insert_op.key[..], &insert_op.value[..])
-                            .context("Failed to insert into redb")?;
+                            .map_err(DatabaseError::backend)?;
                         let old_value = data_new.insert(insert_op.key, insert_op.value);
-                        anyhow::ensure!(old_value == insert_op.old_value, "write-write conflict");
+                        if old_value != insert_op.old_value {
+                            return Err(DatabaseError::WriteConflict);
+                        }
                     }
                     DatabaseOperation::Delete(delete_op) => {
                         table
                             .remove(&delete_op.key[..])
-                            .context("Failed to delete from redb")?;
+                            .map_err(DatabaseError::backend)?;
                         let old_value = data_new.remove(&delete_op.key);
-                        anyhow::ensure!(old_value == delete_op.old_value, "write-write conflict");
+                        if old_value != delete_op.old_value {
+                            return Err(DatabaseError::WriteConflict);
+                        }
                     }
                 }
             }
         }
         // Commit redb transaction
-        write_txn
-            .commit()
-            .context("Failed to commit redb transaction")?;
+        write_txn.commit().map_err(DatabaseError::backend)?;
 
         // Update in-memory data
         *data_locked = data_new;

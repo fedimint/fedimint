@@ -157,7 +157,10 @@ pub async fn apply_migrations_server(
     let mut global_dbtx = db.begin_transaction().await;
     global_dbtx.ensure_global()?;
     apply_migrations_server_dbtx(&mut global_dbtx.to_ref_nc(), ctx, kind, migrations).await?;
-    global_dbtx.commit_tx_result().await
+    global_dbtx
+        .commit_tx_result()
+        .await
+        .map_err(|e| anyhow::Error::msg(e.to_string()))
 }
 
 /// Applies the database migrations to a non-isolated database.

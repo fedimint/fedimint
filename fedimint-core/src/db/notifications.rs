@@ -93,7 +93,7 @@ impl NotifyQueue {
 
     pub fn add<K>(&mut self, key: &K)
     where
-        K: Hash,
+        K: Hash + ?Sized,
     {
         self.buckets.set(slot_index_for_key(key), true);
     }
