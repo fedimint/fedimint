@@ -431,7 +431,10 @@ impl ServerModule for Meta {
                     match context.request_auth() {
                         None => return Err(ApiError::bad_request("Missing password".to_string())),
                         Some(auth) => {
-                            module.handle_submit_request(&mut context.dbtx(), &auth, &request).await?;
+                            let db = context.db();
+                            let mut dbtx = db.begin_transaction().await;
+                            module.handle_submit_request(&mut dbtx.to_ref_nc(), &auth, &request).await?;
+                            dbtx.commit_tx_result().await?;
                         }
                     }
 
@@ -442,14 +445,18 @@ impl ServerModule for Meta {
                 GET_CONSENSUS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetConsensusRequest| -> Option<MetaConsensusValue> {
-                    module.handle_get_consensus_request(&mut context.dbtx().into_nc(), &request).await
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    module.handle_get_consensus_request(&mut dbtx, &request).await
                 }
             },
             api_endpoint! {
                 GET_CONSENSUS_REV_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetConsensusRequest| -> Option<u64> {
-                    module.handle_get_consensus_revision_request(&mut context.dbtx().into_nc(), &request).await
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    module.handle_get_consensus_revision_request(&mut dbtx, &request).await
                 }
             },
             api_endpoint! {
@@ -459,7 +466,9 @@ impl ServerModule for Meta {
                     match context.request_auth() {
                         None => return Err(ApiError::bad_request("Missing password".to_string())),
                         Some(auth) => {
-                            module.handle_get_submissions_request(&mut context.dbtx().into_nc(),&auth, &request).await
+                            let db = context.db();
+                            let mut dbtx = db.begin_transaction_nc().await;
+                            module.handle_get_submissions_request(&mut dbtx, &auth, &request).await
                         }
                     }
                 }

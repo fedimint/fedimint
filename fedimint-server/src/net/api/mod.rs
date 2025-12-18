@@ -89,7 +89,7 @@ pub trait HasApiContext<State> {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
-    ) -> (&State, ApiEndpointContext<'_>);
+    ) -> (&State, ApiEndpointContext);
 }
 
 pub async fn spawn<T>(

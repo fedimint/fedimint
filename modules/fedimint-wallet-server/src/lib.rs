@@ -921,7 +921,9 @@ impl ServerModule for Wallet {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    Ok(module.consensus_block_count(&mut context.dbtx().into_nc()).await)
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.consensus_block_count(&mut dbtx).await)
                 }
             },
             api_endpoint! {
@@ -936,7 +938,9 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: (Address<NetworkUnchecked>, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
-                    let feerate = module.consensus_fee_rate(&mut context.dbtx().into_nc()).await;
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    let feerate = module.consensus_fee_rate(&mut dbtx).await;
 
                     // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
                     let dummy_tweak = [0; 33];
@@ -948,7 +952,7 @@ impl ServerModule for Wallet {
                         // reject a transaction with the wrong network upon attempted peg-out.
                         address.assume_checked().script_pubkey(),
                         vec![],
-                        module.available_utxos(&mut context.dbtx().into_nc()).await,
+                        module.available_utxos(&mut dbtx).await,
                         feerate,
                         &dummy_tweak,
                         None
@@ -993,14 +997,18 @@ impl ServerModule for Wallet {
                 WALLET_SUMMARY_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> WalletSummary {
-                    Ok(module.get_wallet_summary(&mut context.dbtx().into_nc()).await)
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.get_wallet_summary(&mut dbtx).await)
                 }
             },
             api_endpoint! {
                 MODULE_CONSENSUS_VERSION_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
-                    Ok(module.consensus_module_consensus_version(&mut context.dbtx().into_nc()).await)
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.consensus_module_consensus_version(&mut dbtx).await)
                 }
             },
             api_endpoint! {
@@ -1016,9 +1024,10 @@ impl ServerModule for Wallet {
                 async |_module: &Wallet, context, _params: ()| -> () {
                     check_auth(context)?;
 
-                    // api_endpoint! calls dbtx.commit_tx_result
-                    let mut dbtx = context.dbtx();
-                    dbtx.insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction().await;
+                    dbtx.to_ref().insert_entry(&ConsensusVersionVotingActivationKey, &()).await;
+                    dbtx.commit_tx_result().await?;
                     Ok(())
                 }
             },
@@ -1026,7 +1035,9 @@ impl ServerModule for Wallet {
                 UTXO_CONFIRMED_ENDPOINT,
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, outpoint: bitcoin::OutPoint| -> bool {
-                    Ok(module.is_utxo_confirmed(&mut context.dbtx().into_nc(), outpoint).await)
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.is_utxo_confirmed(&mut dbtx, outpoint).await)
                 }
             },
         ]

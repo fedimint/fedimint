@@ -43,8 +43,8 @@ use crate::core::{
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 use crate::db::{
-    Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    NonCommittable,
+    Database, DatabaseError, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord,
+    DatabaseTransaction,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
@@ -389,38 +389,30 @@ impl ApiError {
     }
 }
 
+impl From<DatabaseError> for ApiError {
+    fn from(err: DatabaseError) -> Self {
+        Self {
+            code: 500,
+            message: format!("API server error when writing to database: {err}"),
+        }
+    }
+}
+
 /// State made available to all API endpoints for handling a request
-pub struct ApiEndpointContext<'dbtx> {
+pub struct ApiEndpointContext {
     db: Database,
-    dbtx: DatabaseTransaction<'dbtx, Committable>,
     has_auth: bool,
     request_auth: Option<ApiAuth>,
 }
 
-impl<'a> ApiEndpointContext<'a> {
-    /// `db` and `dbtx` should be isolated.
-    pub fn new(
-        db: Database,
-        dbtx: DatabaseTransaction<'a, Committable>,
-        has_auth: bool,
-        request_auth: Option<ApiAuth>,
-    ) -> Self {
+impl ApiEndpointContext {
+    /// `db` should be isolated.
+    pub fn new(db: Database, has_auth: bool, request_auth: Option<ApiAuth>) -> Self {
         Self {
             db,
-            dbtx,
             has_auth,
             request_auth,
         }
-    }
-
-    /// Database tx handle, will be committed
-    pub fn dbtx<'s, 'mtx>(&'s mut self) -> DatabaseTransaction<'mtx, NonCommittable>
-    where
-        'a: 'mtx,
-        's: 'mtx,
-    {
-        // dbtx is already isolated.
-        self.dbtx.to_ref_nc()
     }
 
     /// Returns the auth set on the request (regardless of whether it was
@@ -462,22 +454,6 @@ impl<'a> ApiEndpointContext<'a> {
         let db = self.db.clone();
         async move { db.wait_key_check(&key, |v| v.filter(matcher)).await.0 }
     }
-
-    /// Attempts to commit the dbtx or returns an `ApiError`
-    pub async fn commit_tx_result(self, path: &'static str) -> Result<(), ApiError> {
-        self.dbtx.commit_tx_result().await.map_err(|err| {
-            tracing::warn!(
-                target: fedimint_logging::LOG_NET_API,
-                err = %err.fmt_compact(),
-                %path,
-                "API server error when writing to database",
-            );
-            ApiError {
-                code: 500,
-                message: "API server error when writing to database".to_string(),
-            }
-        })
-    }
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -490,13 +466,11 @@ pub trait TypedApiEndpoint {
     type Param: serde::de::DeserializeOwned + Send;
     type Response: serde::Serialize;
 
-    async fn handle<'state, 'context, 'dbtx>(
+    async fn handle<'state, 'context>(
         state: &'state Self::State,
-        context: &'context mut ApiEndpointContext<'dbtx>,
+        context: &'context mut ApiEndpointContext,
         request: Self::Param,
-    ) -> Result<Self::Response, ApiError>
-    where
-        'dbtx: 'context;
+    ) -> Result<Self::Response, ApiError>;
 }
 
 pub use serde_json;
@@ -535,9 +509,9 @@ macro_rules! __api_endpoint {
             type Param = $param_ty;
             type Response = $resp_ty;
 
-            async fn handle<'state, 'context, 'dbtx>(
+            async fn handle<'state, 'context>(
                 $state: &'state Self::State,
-                $context: &'context mut $crate::module::ApiEndpointContext<'dbtx>,
+                $context: &'context mut $crate::module::ApiEndpointContext,
                 $param: Self::Param,
             ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
                 {
@@ -560,7 +534,7 @@ type HandlerFnReturn<'a> =
     Pin<Box<maybe_add_send!(dyn Future<Output = Result<serde_json::Value, ApiError>> + 'a)>>;
 type HandlerFn<M> = Box<
     maybe_add_send_sync!(
-        dyn for<'a> Fn(&'a M, ApiEndpointContext<'a>, ApiRequestErased) -> HandlerFnReturn<'a>
+        dyn for<'a> Fn(&'a M, ApiEndpointContext, ApiRequestErased) -> HandlerFnReturn<'a>
     ),
 >;
 
@@ -588,13 +562,12 @@ impl ApiEndpoint<()> {
         E::Param: Debug,
         E::Response: Debug,
     {
-        async fn handle_request<'state, 'context, 'dbtx, E>(
+        async fn handle_request<'state, 'context, E>(
             state: &'state E::State,
-            context: &'context mut ApiEndpointContext<'dbtx>,
+            context: &'context mut ApiEndpointContext,
             request: ApiRequest<E::Param>,
         ) -> Result<E::Response, ApiError>
         where
-            'dbtx: 'context,
             E: TypedApiEndpoint,
             E::Param: Debug,
             E::Response: Debug,
@@ -615,7 +588,7 @@ impl ApiEndpoint<()> {
         ApiEndpoint {
             path: E::PATH,
             handler: Box::new(|m, mut context, request| {
-                Box::pin(async {
+                Box::pin(async move {
                     let request = request
                         .to_typed()
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
@@ -629,8 +602,6 @@ impl ApiEndpoint<()> {
                     let ret = handle_request::<E>(m, &mut context, request)
                         .instrument(span)
                         .await?;
-
-                    context.commit_tx_result(E::PATH).await?;
 
                     Ok(serde_json::to_value(ret).expect("encoding error"))
                 })
