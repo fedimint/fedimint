@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["RealBitcoinTest","RealBitcoinTestLocked","RealBitcoinTestNoLock"]};
+window.SIDEBAR_ITEMS = {"struct":["BitcoinClient","RealBitcoinTest","RealBitcoinTestLocked","RealBitcoinTestNoLock"]};
