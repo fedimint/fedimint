@@ -190,6 +190,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             connector: ConnectorType::Tcp,
+            max_ecash_exposure: None,
         },
     )
     .await;
@@ -209,6 +210,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             connector: ConnectorType::Tcp,
+            max_ecash_exposure: None,
         },
     )
     .await;

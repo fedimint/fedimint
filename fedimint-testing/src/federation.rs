@@ -154,6 +154,7 @@ impl FederationTest {
             invite_code: self.invite_code().to_string(),
             use_tor: Some(false),
             recover: Some(false),
+            max_ecash_exposure: None,
         })
         .await
         .expect("Failed to connect federation");
