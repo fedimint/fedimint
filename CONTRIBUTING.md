@@ -19,7 +19,7 @@ Here are the recommended steps for new developers:
 2. **Set Up Your Development Environment**: Follow our [dev environment setup guide](docs/dev-env.md) to install the necessary tools.
 3. **Run the Development Environment**: Use [this tutorial](docs/tutorial.md) to launch the development environment and ensure everything works correctly on your machine.
 4. **Find Your First Issue**:
-   - Contact @kodylow to get a good first issue matched to your skillset. You can schedule a [call with Kody here](https://cal.com/kody-low-ix8qoa/30min) or send him a direct message in our [Developer Discord](https://chat.fedimint.org) with your background, skillset, and areas of interest.
+   - Send a message in our [Developer Discord](https://chat.fedimint.org) with your background, skillset, and areas of interest. A contributor will help direct you to a good first issue. 
    - Browse our [GitHub Issues](https://github.com/fedimint/fedimint/issues) and filter by [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22).
 5. **Join Developer Calls**: Participate in our [Developer Calls](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com), especially our Weekly Dev Calls every Monday.
 
@@ -27,7 +27,7 @@ Small PRs fixing typos, TODOs, or broken links are always welcome. Please discus
 
 For commit messages, please use the [imperative mood](https://stackoverflow.com/questions/3580013/should-i-use-past-or-present-tense-in-git-commit-messages/3580764#3580764).
 
-**Note:** Contributing to the core Fedimint repo requires expertise in Rust and distributed systems. If you're new to coding, Bitcoin, or Rust, consider starting with our more approachable projects like UIs, clients, or other services to familiarize yourself with Fedimint before tackling the core repo. Finding a good issue that matches your skillset is crucial—please reach out to @kodylow to ensure a smooth start.
+**Note:** Contributing to the core Fedimint repo requires expertise in Rust and distributed systems. If you're new to coding, Bitcoin, or Rust, consider starting with our more approachable projects like UIs, clients, or other services to familiarize yourself with Fedimint before tackling the core repo. Finding a good issue that matches your skillset is crucial.
 
 Once you've found an issue to work on, please post any blockers or questions in the [#new-contributors](https://discord.gg/BGFMXSkNJW) channel on Discord. There are almost always fast and simple answers to early contributor problems. We're here to help you overcome those challenges quickly so you can make valuable contributions.
 
