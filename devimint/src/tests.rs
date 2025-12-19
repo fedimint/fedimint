@@ -1007,6 +1007,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         "Check initial announcements",
         aggressive_backoff(),
         || async {
+            // Give the client some time to fetch updates
+            cmd!(client, "dev", "wait", "1").run().await?;
+
             // # API URL announcements
             let initial_announcements =
                 serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
@@ -1021,9 +1024,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
                     fed.members.len()
                 )
             }
-
-            // Give the client some time to fetch updates
-            cmd!(client, "dev", "wait", "1").run().await?;
 
             if !initial_announcements
                 .values()

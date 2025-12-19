@@ -1463,6 +1463,8 @@ async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleA
             break;
         }
 
+        module_api.wait_for_initialized_connections().await;
+
         if let Ok(module_consensus_version) = module_api.module_consensus_version().await
             && SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version
         {

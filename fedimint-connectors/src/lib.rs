@@ -669,6 +669,10 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
     pub fn get_active_connection_receiver(&self) -> watch::Receiver<BTreeSet<SafeUrl>> {
         self.active_connections.subscribe()
     }
+
+    pub async fn wait_for_initialized_connections(&self) {
+        self.connectors.wait_for_initialized_connections().await
+    }
 }
 
 /// Inner part of [`ConnectionState`] preserving state between attempts to
