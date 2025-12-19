@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use bls12_381::{G2Projective, Scalar};
-use devimint::cmd;
 use devimint::devfed::DevJitFed;
+use devimint::version_constants::VERSION_0_10_0_ALPHA;
+use devimint::{cmd, util};
 use fedimint_core::config::{FederationId, GlobalClientConfig, JsonClientConfig, JsonWithKind};
 use fedimint_core::module::{CommonModuleInit, CoreConsensusVersion};
 use fedimint_core::util::write_new_async;
@@ -280,6 +281,19 @@ async fn test_ecash_migration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
+            let fedimint_cli_version = util::FedimintCli::version_or_default().await;
+            let fedimintd_version = util::FedimintdCmd::version_or_default().await;
+
+            if fedimint_cli_version < *VERSION_0_10_0_ALPHA {
+                info!("fedimint-cli version too old, skipping ecash migration tests");
+                return Ok(());
+            }
+
+            if fedimintd_version < *VERSION_0_10_0_ALPHA {
+                info!("fedimintd version too old, skipping ecash migration tests");
+                return Ok(());
+            }
+
             test_ecash_migration(&dev_fed).await?;
             info!("Ecash migration tests completed successfully!");
             Ok(())
