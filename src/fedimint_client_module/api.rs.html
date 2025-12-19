@@ -168,4 +168,8 @@
 <a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">fn </span>connection_status_stream(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, BTreeMap&lt;PeerId, bool&gt;&gt; {
 <a href=#169 id=169 data-nosnippet>169</a>        <span class="self">self</span>.inner.connection_status_stream()
 <a href=#170 id=170 data-nosnippet>170</a>    }
-<a href=#171 id=171 data-nosnippet>171</a>}</code></pre></div></section></main></body></html>
+<a href=#171 id=171 data-nosnippet>171</a>
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">async fn </span>wait_for_initialized_connections(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+<a href=#173 id=173 data-nosnippet>173</a>        <span class="self">self</span>.inner.wait_for_initialized_connections().<span class="kw">await</span>;
+<a href=#174 id=174 data-nosnippet>174</a>    }
+<a href=#175 id=175 data-nosnippet>175</a>}</code></pre></div></section></main></body></html>

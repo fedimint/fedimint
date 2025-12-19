@@ -1007,23 +1007,23 @@
 <a href=#1007 id=1007 data-nosnippet>1007</a>        <span class="string">"Check initial announcements"</span>,
 <a href=#1008 id=1008 data-nosnippet>1008</a>        aggressive_backoff(),
 <a href=#1009 id=1009 data-nosnippet>1009</a>        || <span class="kw">async </span>{
-<a href=#1010 id=1010 data-nosnippet>1010</a>            <span class="comment">// # API URL announcements
-<a href=#1011 id=1011 data-nosnippet>1011</a>            </span><span class="kw">let </span>initial_announcements =
-<a href=#1012 id=1012 data-nosnippet>1012</a>                serde_json::from_value::&lt;BTreeMap&lt;PeerId, SignedApiAnnouncement&gt;&gt;(
-<a href=#1013 id=1013 data-nosnippet>1013</a>                    <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"api-announcements"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#1014 id=1014 data-nosnippet>1014</a>                )
-<a href=#1015 id=1015 data-nosnippet>1015</a>                .expect(<span class="string">"failed to parse API announcements"</span>);
-<a href=#1016 id=1016 data-nosnippet>1016</a>
-<a href=#1017 id=1017 data-nosnippet>1017</a>            <span class="kw">if </span>initial_announcements.len() &lt; fed.members.len() {
-<a href=#1018 id=1018 data-nosnippet>1018</a>                <span class="macro">bail!</span>(
-<a href=#1019 id=1019 data-nosnippet>1019</a>                    <span class="string">"Not all announcements ready; got: {}, expected: {}"</span>,
-<a href=#1020 id=1020 data-nosnippet>1020</a>                    initial_announcements.len(),
-<a href=#1021 id=1021 data-nosnippet>1021</a>                    fed.members.len()
-<a href=#1022 id=1022 data-nosnippet>1022</a>                )
-<a href=#1023 id=1023 data-nosnippet>1023</a>            }
-<a href=#1024 id=1024 data-nosnippet>1024</a>
-<a href=#1025 id=1025 data-nosnippet>1025</a>            <span class="comment">// Give the client some time to fetch updates
-<a href=#1026 id=1026 data-nosnippet>1026</a>            </span><span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"1"</span>).run().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1010 id=1010 data-nosnippet>1010</a>            <span class="comment">// Give the client some time to fetch updates
+<a href=#1011 id=1011 data-nosnippet>1011</a>            </span><span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"1"</span>).run().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1012 id=1012 data-nosnippet>1012</a>
+<a href=#1013 id=1013 data-nosnippet>1013</a>            <span class="comment">// # API URL announcements
+<a href=#1014 id=1014 data-nosnippet>1014</a>            </span><span class="kw">let </span>initial_announcements =
+<a href=#1015 id=1015 data-nosnippet>1015</a>                serde_json::from_value::&lt;BTreeMap&lt;PeerId, SignedApiAnnouncement&gt;&gt;(
+<a href=#1016 id=1016 data-nosnippet>1016</a>                    <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"api-announcements"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#1017 id=1017 data-nosnippet>1017</a>                )
+<a href=#1018 id=1018 data-nosnippet>1018</a>                .expect(<span class="string">"failed to parse API announcements"</span>);
+<a href=#1019 id=1019 data-nosnippet>1019</a>
+<a href=#1020 id=1020 data-nosnippet>1020</a>            <span class="kw">if </span>initial_announcements.len() &lt; fed.members.len() {
+<a href=#1021 id=1021 data-nosnippet>1021</a>                <span class="macro">bail!</span>(
+<a href=#1022 id=1022 data-nosnippet>1022</a>                    <span class="string">"Not all announcements ready; got: {}, expected: {}"</span>,
+<a href=#1023 id=1023 data-nosnippet>1023</a>                    initial_announcements.len(),
+<a href=#1024 id=1024 data-nosnippet>1024</a>                    fed.members.len()
+<a href=#1025 id=1025 data-nosnippet>1025</a>                )
+<a href=#1026 id=1026 data-nosnippet>1026</a>            }
 <a href=#1027 id=1027 data-nosnippet>1027</a>
 <a href=#1028 id=1028 data-nosnippet>1028</a>            <span class="kw">if </span>!initial_announcements
 <a href=#1029 id=1029 data-nosnippet>1029</a>                .values()
