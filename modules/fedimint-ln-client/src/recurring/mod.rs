@@ -168,7 +168,7 @@ impl LightningClientModule {
 
                     trace!(
                         target: LOG_CLIENT_RECURRING,
-                        root_key=?payment_code.root_keypair.public_key(),
+                        root_key=%payment_code.root_keypair.public_key(),
                         %invoice_index,
                         server=%payment_code.recurringd_api,
                         federation_id=?federation_id,
@@ -181,7 +181,7 @@ impl LightningClientModule {
                             debug!(
                                 target: LOG_CLIENT_RECURRING,
                                 err=%err.fmt_compact(),
-                                root_key=?payment_code.root_keypair.public_key(),
+                                root_key=%payment_code.root_keypair.public_key(),
                                 invoice_index=%invoice_index,
                                 server=%payment_code.recurringd_api,
                                 federation_id=?federation_id,
