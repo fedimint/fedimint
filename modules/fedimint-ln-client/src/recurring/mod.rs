@@ -150,6 +150,7 @@ impl LightningClientModule {
         new_code_registered: Arc<Notify>,
     ) {
         const QUERY_RETRY_DELAY: Duration = Duration::from_secs(60);
+        let federation_id = client.get_config().await.calculate_federation_id();
 
         loop {
             // We have to register the waiter before querying the DB for recurring payment
@@ -170,6 +171,7 @@ impl LightningClientModule {
                         root_key=?payment_code.root_keypair.public_key(),
                         %invoice_index,
                         server=%payment_code.recurringd_api,
+                        federation_id=?federation_id,
                         "Waiting for new invoice from recurringd"
                     );
 
@@ -182,6 +184,7 @@ impl LightningClientModule {
                                 root_key=?payment_code.root_keypair.public_key(),
                                 invoice_index=%invoice_index,
                                 server=%payment_code.recurringd_api,
+                                federation_id=?federation_id,
                                 "Failed querying recurring payment code invoice, will retry in {:?}",
                                 QUERY_RETRY_DELAY,
                             );
