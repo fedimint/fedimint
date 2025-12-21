@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use anyhow::ensure;
 use bitcoin::hashes::sha256;
+use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::util::almost_equal;
@@ -23,8 +24,28 @@ use tracing::info;
 #[path = "common.rs"]
 mod common;
 
+#[derive(Parser)]
+#[command(name = "lnv2-module-tests")]
+#[command(about = "LNv2 module integration tests", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Run gateway registration tests
+    GatewayRegistration,
+    /// Run payment tests
+    Payments,
+    /// Run LNURL pay tests
+    LnurlPay,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
             if !devimint::util::supports_lnv2() {
@@ -41,9 +62,23 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
 
-            test_gateway_registration(&dev_fed).await?;
-            test_payments(&dev_fed).await?;
-            test_lnurl_pay(&dev_fed).await?;
+            match &cli.command {
+                Some(Commands::GatewayRegistration) => {
+                    test_gateway_registration(&dev_fed).await?;
+                }
+                Some(Commands::Payments) => {
+                    test_payments(&dev_fed).await?;
+                }
+                Some(Commands::LnurlPay) => {
+                    test_lnurl_pay(&dev_fed).await?;
+                }
+                None => {
+                    // Run all tests if no subcommand is specified
+                    test_gateway_registration(&dev_fed).await?;
+                    test_payments(&dev_fed).await?;
+                    test_lnurl_pay(&dev_fed).await?;
+                }
+            }
 
             info!("Testing LNV2 is complete!");
 
@@ -439,6 +474,12 @@ async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed.gw_ldk().await?;
+
+    info!("Pegging-in gateways for LNURL tests...");
+
+    federation
+        .pegin_gateways(1_000_000, vec![gw_lnd, gw_ldk])
+        .await?;
 
     let gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
