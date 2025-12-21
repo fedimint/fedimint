@@ -157,16 +157,19 @@
 <a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">let </span><span class="kw-2">mut </span>global_dbtx = db.begin_transaction().<span class="kw">await</span>;
 <a href=#158 id=158 data-nosnippet>158</a>    global_dbtx.ensure_global()<span class="question-mark">?</span>;
 <a href=#159 id=159 data-nosnippet>159</a>    apply_migrations_server_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(), ctx, kind, migrations).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#160 id=160 data-nosnippet>160</a>    global_dbtx.commit_tx_result().<span class="kw">await
-<a href=#161 id=161 data-nosnippet>161</a></span>}
-<a href=#162 id=162 data-nosnippet>162</a>
-<a href=#163 id=163 data-nosnippet>163</a><span class="doccomment">/// Applies the database migrations to a non-isolated database.
-<a href=#164 id=164 data-nosnippet>164</a></span><span class="kw">pub async fn </span>apply_migrations_server_dbtx(
-<a href=#165 id=165 data-nosnippet>165</a>    global_dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#166 id=166 data-nosnippet>166</a>    ctx: DynServerDbMigrationContext,
-<a href=#167 id=167 data-nosnippet>167</a>    kind: String,
-<a href=#168 id=168 data-nosnippet>168</a>    migrations: BTreeMap&lt;DatabaseVersion, DynServerDbMigrationFn&gt;,
-<a href=#169 id=169 data-nosnippet>169</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-<a href=#170 id=170 data-nosnippet>170</a>    global_dbtx.ensure_global()<span class="question-mark">?</span>;
-<a href=#171 id=171 data-nosnippet>171</a>    apply_migrations_dbtx(global_dbtx, ctx, kind, migrations, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).<span class="kw">await
-<a href=#172 id=172 data-nosnippet>172</a></span>}</code></pre></div></section></main></body></html>
+<a href=#160 id=160 data-nosnippet>160</a>    global_dbtx
+<a href=#161 id=161 data-nosnippet>161</a>        .commit_tx_result()
+<a href=#162 id=162 data-nosnippet>162</a>        .<span class="kw">await
+<a href=#163 id=163 data-nosnippet>163</a>        </span>.map_err(|e| anyhow::Error::msg(e.to_string()))
+<a href=#164 id=164 data-nosnippet>164</a>}
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a><span class="doccomment">/// Applies the database migrations to a non-isolated database.
+<a href=#167 id=167 data-nosnippet>167</a></span><span class="kw">pub async fn </span>apply_migrations_server_dbtx(
+<a href=#168 id=168 data-nosnippet>168</a>    global_dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#169 id=169 data-nosnippet>169</a>    ctx: DynServerDbMigrationContext,
+<a href=#170 id=170 data-nosnippet>170</a>    kind: String,
+<a href=#171 id=171 data-nosnippet>171</a>    migrations: BTreeMap&lt;DatabaseVersion, DynServerDbMigrationFn&gt;,
+<a href=#172 id=172 data-nosnippet>172</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
+<a href=#173 id=173 data-nosnippet>173</a>    global_dbtx.ensure_global()<span class="question-mark">?</span>;
+<a href=#174 id=174 data-nosnippet>174</a>    apply_migrations_dbtx(global_dbtx, ctx, kind, migrations, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).<span class="kw">await
+<a href=#175 id=175 data-nosnippet>175</a></span>}</code></pre></div></section></main></body></html>

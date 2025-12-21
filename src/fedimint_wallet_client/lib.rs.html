@@ -920,7 +920,7 @@
 <a href=#920 id=920 data-nosnippet>920</a>                AutocommitError::CommitFailed {
 <a href=#921 id=921 data-nosnippet>921</a>                    last_error,
 <a href=#922 id=922 data-nosnippet>922</a>                    attempts,
-<a href=#923 id=923 data-nosnippet>923</a>                } =&gt; last_error.context(<span class="macro">format!</span>(<span class="string">"Failed to commit after {attempts} attempts"</span>)),
+<a href=#923 id=923 data-nosnippet>923</a>                } =&gt; <span class="macro">anyhow!</span>(<span class="string">"Failed to commit after {attempts} attempts: {last_error}"</span>),
 <a href=#924 id=924 data-nosnippet>924</a>                AutocommitError::ClosureError { error, .. } =&gt; error,
 <a href=#925 id=925 data-nosnippet>925</a>            })<span class="question-mark">?</span>;
 <a href=#926 id=926 data-nosnippet>926</a>

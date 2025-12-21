@@ -826,7 +826,7 @@
 <a href=#826 id=826 data-nosnippet>826</a>                    <span class="macro">debug!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>session_checkpoint_dir, <span class="question-mark">?</span>session_index, <span class="string">"Created db checkpoint"</span>);
 <a href=#827 id=827 data-nosnippet>827</a>                }
 <a href=#828 id=828 data-nosnippet>828</a>                <span class="prelude-val">Err</span>(err) =&gt; {
-<a href=#829 id=829 data-nosnippet>829</a>                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>session_checkpoint_dir, <span class="question-mark">?</span>session_index, err = %err.fmt_compact_anyhow(), <span class="string">"Could not create db checkpoint"</span>);
+<a href=#829 id=829 data-nosnippet>829</a>                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="question-mark">?</span>session_checkpoint_dir, <span class="question-mark">?</span>session_index, err = %err.fmt_compact(), <span class="string">"Could not create db checkpoint"</span>);
 <a href=#830 id=830 data-nosnippet>830</a>                }
 <a href=#831 id=831 data-nosnippet>831</a>            }
 <a href=#832 id=832 data-nosnippet>832</a>        }
