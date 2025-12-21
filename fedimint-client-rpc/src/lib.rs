@@ -79,6 +79,7 @@ pub enum RpcRequestKind {
     },
     GenerateMnemonic,
     GetMnemonic,
+    HasMnemonicSet,
     /// Join federation (requires mnemonic to be set first)
     JoinFederation {
         invite_code: String,
@@ -436,6 +437,10 @@ impl RpcGlobalState {
                 let words = self.get_mnemonic_words().await?;
                 yield serde_json::json!({ "mnemonic": words });
             })),
+            RpcRequestKind::HasMnemonicSet => Some(Box::pin(try_stream! {
+                let is_set = self.has_mnemonic_set().await?;
+                yield serde_json::json!(is_set);
+            })),
             RpcRequestKind::JoinFederation {
                 invite_code,
                 client_name,
@@ -613,6 +618,12 @@ impl RpcGlobalState {
         } else {
             Ok(None)
         }
+    }
+
+    /// Check if mnemonic is set
+    async fn has_mnemonic_set(&self) -> anyhow::Result<bool> {
+        let mnemonic = self.get_mnemonic_from_db().await?;
+        Ok(mnemonic.is_some())
     }
 }
 
