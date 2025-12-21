@@ -20,7 +20,7 @@ impl MemAndRedb {
         )?;
         LockedBuilder::new(db_path)?.with_db(|| {
             let db = Database::create(db_path).context("Failed to create/open redb database")?;
-            Self::new_from_redb(db)
+            Self::new_from_redb(db).map_err(|e| anyhow::Error::msg(e.to_string()))
         })
     }
 }

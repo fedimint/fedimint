@@ -728,7 +728,9 @@ pub async fn apply_migrations_client_module(
         module_instance_id,
     )
     .await?;
-    dbtx.commit_tx_result().await
+    dbtx.commit_tx_result()
+        .await
+        .map_err(|e| anyhow::Error::msg(e.to_string()))
 }
 
 pub async fn apply_migrations_client_module_dbtx(

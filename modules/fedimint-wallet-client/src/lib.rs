@@ -920,7 +920,7 @@ impl WalletClientModule {
                 AutocommitError::CommitFailed {
                     last_error,
                     attempts,
-                } => last_error.context(format!("Failed to commit after {attempts} attempts")),
+                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 

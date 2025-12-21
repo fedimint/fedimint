@@ -1,6 +1,7 @@
 use std::cmp;
 use std::time::{Duration, SystemTime};
 
+use anyhow::anyhow;
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
@@ -535,7 +536,7 @@ async fn claim_peg_in(
             AutocommitError::CommitFailed {
                 last_error,
                 attempts,
-            } => last_error.context(format!("Failed to commit after {attempts} attempts")),
+            } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
             AutocommitError::ClosureError { error, .. } => error,
         })?;
 

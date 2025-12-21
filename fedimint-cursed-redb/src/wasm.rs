@@ -93,6 +93,6 @@ impl MemAndRedb {
         let db = Database::builder()
             .create_with_backend(backend)
             .context("Failed to create/open redb database")?;
-        Self::new_from_redb(db)
+        Ok(Self::new_from_redb(db)?)
     }
 }

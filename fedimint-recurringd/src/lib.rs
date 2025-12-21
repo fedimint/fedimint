@@ -214,7 +214,7 @@ impl RecurringInvoiceServer {
             &0,
         )
         .await;
-        dbtx.commit_tx_result().await?;
+        dbtx.commit_tx_result().await.map_err(anyhow::Error::from)?;
 
         Ok(payment_code)
     }
