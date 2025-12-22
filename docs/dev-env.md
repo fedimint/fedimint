@@ -90,6 +90,44 @@ to your nix configuration.
 ```
 nix develop .#bootstrap -c cachix use fedimint
 ```
+### Notes for Determinate Nix users (and WSL)
+
+If you installed Nix using the Determinate Systems installer, configuration works slightly differently compared to the official Nix installer.
+
+In this case, do **not** modify:
+
+```
+/etc/nix/nix.conf
+```
+
+Instead use:
+
+```
+/etc/nix/nix.custom.conf
+```
+
+Add your user to the trusted list:
+
+```
+trusted-users = root the_name_of_your_user
+```
+
+Then restart the Nix daemon. Depending on your setup, one of the following should work:
+
+```
+sudo systemctl restart nix-daemon || sudo service nix-daemon restart
+```
+
+#### WSL users
+
+If restarting the daemon is not available or fails under WSL, restart the environment instead:
+
+```
+wsl --shutdown
+```
+
+Then reopen your Linux shell and continue normally.
+
 
 ## Setting up `direnv` or `lorri`
 
