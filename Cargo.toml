@@ -28,6 +28,7 @@ members = [
     "fedimint-load-test-tool",
     "fedimint-logging",
     "fedimint-metrics",
+    "fedimint-mint-load-tests",
     "fedimint-recoverytool",
     "fedimint-recurringd",
     "fedimint-recurringd-tests",

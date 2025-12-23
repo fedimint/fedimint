@@ -1026,6 +1026,14 @@ mod fedimint_migration_tests {
                         // Would require an entire re-design of the way we test
                         // here, manually testing instead for now
                     }
+                    DbKeyPrefix::RecoveryItem => {
+                        // New prefix for slice-based recovery, no migration
+                        // needed
+                    }
+                    DbKeyPrefix::RecoveryBlindNonceOutpoint => {
+                        // New prefix for slice-based recovery, no migration
+                        // needed
+                    }
                 }
             }
 
@@ -1113,6 +1121,10 @@ mod fedimint_migration_tests {
                             info!("Validated RecoveryFinalized");
                         }
                         fedimint_mint_client::client_db::DbKeyPrefix::ReusedNoteIndices => {}
+                        fedimint_mint_client::client_db::DbKeyPrefix::RecoveryStateV2 => {
+                            // New prefix for slice-based recovery, no migration
+                            // needed
+                        }
                         fedimint_mint_client::client_db::DbKeyPrefix::ExternalReservedStart
                         | fedimint_mint_client::client_db::DbKeyPrefix::CoreInternalReservedEnd
                         | fedimint_mint_client::client_db::DbKeyPrefix::CoreInternalReservedStart =>
