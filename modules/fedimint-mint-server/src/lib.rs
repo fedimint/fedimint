@@ -10,6 +10,7 @@ mod metrics;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::bail;
+use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -19,11 +20,12 @@ use fedimint_core::db::{
     DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
     IDatabaseTransactionOpsCoreTyped,
 };
+use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
-    api_endpoint,
+    Amounts, ApiEndpoint, ApiError, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion,
+    InputMeta, ModuleConsensusVersion, ModuleInit, SerdeModuleEncodingBase64,
+    SupportedModuleApiVersions, TransactionItemAmounts, api_endpoint,
 };
 use fedimint_core::{
     Amount, InPoint, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti, apply,
@@ -65,11 +67,16 @@ use threshold_crypto::group::Curve;
 use threshold_crypto::{G2Projective, Scalar};
 use tracing::{debug, info, warn};
 
-use crate::common::endpoint_constants::{BLIND_NONCE_USED_ENDPOINT, NOTE_SPENT_ENDPOINT};
-use crate::common::{BlindNonce, Nonce};
+use crate::common::endpoint_constants::{
+    BLIND_NONCE_USED_ENDPOINT, NOTE_SPENT_ENDPOINT, RECOVERY_BLIND_NONCE_OUTPOINTS_ENDPOINT,
+    RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
+};
+use crate::common::{BlindNonce, Nonce, RecoveryItem};
 use crate::db::{
     BlindNonceKey, BlindNonceKeyPrefix, DbKeyPrefix, MintAuditItemKey, MintAuditItemKeyPrefix,
     MintOutputOutcomeKey, MintOutputOutcomePrefix, NonceKey, NonceKeyPrefix,
+    RecoveryBlindNonceOutpointKey, RecoveryBlindNonceOutpointKeyPrefix, RecoveryItemKey,
+    RecoveryItemKeyPrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -119,6 +126,26 @@ impl ModuleInit for MintInit {
                         BlindNonceKey,
                         mint,
                         "Used Blind Nonces"
+                    );
+                }
+                DbKeyPrefix::RecoveryItem => {
+                    push_db_pair_items!(
+                        dbtx,
+                        RecoveryItemKeyPrefix,
+                        RecoveryItemKey,
+                        RecoveryItem,
+                        mint,
+                        "Recovery Items"
+                    );
+                }
+                DbKeyPrefix::RecoveryBlindNonceOutpoint => {
+                    push_db_pair_items!(
+                        dbtx,
+                        RecoveryBlindNonceOutpointKeyPrefix,
+                        RecoveryBlindNonceOutpointKey,
+                        OutPoint,
+                        mint,
+                        "Recovery Blind Nonce Outpoints"
                     );
                 }
             }
@@ -338,6 +365,10 @@ impl ServerModuleInit for MintInit {
             DatabaseVersion(1),
             Box::new(|ctx| migrate_db_v1(ctx).boxed()),
         );
+        migrations.insert(
+            DatabaseVersion(2),
+            Box::new(|ctx| migrate_db_v2(ctx).boxed()),
+        );
         migrations
     }
 
@@ -404,6 +435,56 @@ async fn migrate_db_v1(
         .raw_remove_by_prefix(&[0x15])
         .await
         .expect("DB error");
+    Ok(())
+}
+
+// Backfill RecoveryItem and RecoveryBlindNonceOutpoint from module history
+async fn migrate_db_v2(mut ctx: ServerModuleDbMigrationFnContext<'_, Mint>) -> anyhow::Result<()> {
+    let mut recovery_items = Vec::new();
+    let mut blind_nonce_outpoints = Vec::new();
+    let mut stream = ctx.get_typed_module_history_stream().await;
+
+    while let Some(history_item) = stream.next().await {
+        match history_item {
+            ModuleHistoryItem::Output(mint_output, out_point) => {
+                let output = mint_output
+                    .ensure_v0_ref()
+                    .expect("This migration only runs while we only have v0 outputs");
+
+                recovery_items.push(RecoveryItem::Output {
+                    amount: output.amount,
+                    nonce: output.blind_nonce.0.consensus_hash(),
+                });
+
+                blind_nonce_outpoints.push((output.blind_nonce, out_point));
+            }
+            ModuleHistoryItem::Input(mint_input) => {
+                let input = mint_input
+                    .ensure_v0_ref()
+                    .expect("This migration only runs while we only have v0 inputs");
+
+                recovery_items.push(RecoveryItem::Input {
+                    nonce: input.note.nonce.consensus_hash(),
+                });
+            }
+            ModuleHistoryItem::ConsensusItem(_) => {}
+        }
+    }
+
+    drop(stream);
+
+    for (index, item) in recovery_items.into_iter().enumerate() {
+        ctx.dbtx()
+            .insert_new_entry(&RecoveryItemKey(index as u64), &item)
+            .await;
+    }
+
+    for (blind_nonce, out_point) in blind_nonce_outpoints {
+        ctx.dbtx()
+            .insert_new_entry(&RecoveryBlindNonceOutpointKey(blind_nonce), &out_point)
+            .await;
+    }
+
     Ok(())
 }
 
@@ -504,6 +585,15 @@ impl ServerModule for Mint {
         )
         .await;
 
+        let next_index = get_recovery_count(dbtx).await;
+        dbtx.insert_new_entry(
+            &RecoveryItemKey(next_index),
+            &RecoveryItem::Input {
+                nonce: input.note.nonce.consensus_hash(),
+            },
+        )
+        .await;
+
         let amount = input.amount;
         let fee = self.cfg.consensus.fee_consensus.fee(amount);
 
@@ -553,6 +643,22 @@ impl ServerModule for Mint {
                 "Blind nonce already used, money was burned!"
             );
         }
+
+        let next_index = get_recovery_count(dbtx).await;
+        dbtx.insert_new_entry(
+            &RecoveryItemKey(next_index),
+            &RecoveryItem::Output {
+                amount: output.amount,
+                nonce: output.blind_nonce.0.consensus_hash(),
+            },
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &RecoveryBlindNonceOutpointKey(output.blind_nonce),
+            &out_point,
+        )
+        .await;
 
         let amount = output.amount;
         let fee = self.cfg.consensus.fee_consensus.fee(amount);
@@ -664,6 +770,50 @@ impl ServerModule for Mint {
                     Ok(dbtx.get_value(&BlindNonceKey(blind_nonce)).await.is_some())
                 }
             },
+            api_endpoint! {
+                RECOVERY_COUNT_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, _params: ()| -> u64 {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(get_recovery_count(&mut dbtx).await)
+                }
+            },
+            api_endpoint! {
+                RECOVERY_SLICE_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, range: (u64, u64)| -> SerdeModuleEncodingBase64<Vec<RecoveryItem>> {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok((&get_recovery_slice(&mut dbtx, range).await).into())
+                }
+            },
+            api_endpoint! {
+                RECOVERY_SLICE_HASH_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, range: (u64, u64)| -> sha256::Hash {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(get_recovery_slice(&mut dbtx, range).await.consensus_hash())
+                }
+            },
+            api_endpoint! {
+                RECOVERY_BLIND_NONCE_OUTPOINTS_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |_module: &Mint, context, blind_nonces: Vec<BlindNonce>| -> Vec<OutPoint> {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut result = Vec::with_capacity(blind_nonces.len());
+                    for bn in blind_nonces {
+                        let out_point = dbtx
+                            .get_value(&RecoveryBlindNonceOutpointKey(bn))
+                            .await
+                            .ok_or_else(|| ApiError::bad_request("blind nonce not found".to_string()))?;
+                        result.push(out_point);
+                    }
+                    Ok(result)
+                }
+            },
         ]
     }
 }
@@ -700,6 +850,25 @@ fn calculate_mint_redeemed_ecash_metrics(
         MINT_REDEEMED_ECASH_SATS.observe(amount.sats_f64());
         MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });
+}
+
+async fn get_recovery_count(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    dbtx.find_by_prefix_sorted_descending(&RecoveryItemKeyPrefix)
+        .await
+        .next()
+        .await
+        .map_or(0, |entry| entry.0.0 + 1)
+}
+
+async fn get_recovery_slice(
+    dbtx: &mut DatabaseTransaction<'_>,
+    range: (u64, u64),
+) -> Vec<RecoveryItem> {
+    dbtx.find_by_range(RecoveryItemKey(range.0)..RecoveryItemKey(range.1))
+        .await
+        .map(|entry| entry.1)
+        .collect()
+        .await
 }
 
 impl Mint {
