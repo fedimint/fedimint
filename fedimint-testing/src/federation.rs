@@ -71,7 +71,8 @@ impl FederationTest {
 
         self.new_client_with(
             client_config,
-            RocksDb::open(tempfile::tempdir().expect("Couldn't create temp dir"))
+            RocksDb::build(tempfile::tempdir().expect("Couldn't create temp dir"))
+                .open()
                 .await
                 .expect("Couldn't open DB")
                 .into(),

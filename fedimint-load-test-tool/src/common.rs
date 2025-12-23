@@ -146,7 +146,7 @@ pub async fn build_client(
 ) -> anyhow::Result<(ClientHandleArc, Option<InviteCode>)> {
     let db = if let Some(rocksdb) = rocksdb {
         Database::new(
-            fedimint_rocksdb::RocksDb::open(rocksdb).await?,
+            fedimint_rocksdb::RocksDb::build(rocksdb).open().await?,
             ModuleRegistry::default(),
         )
     } else {

@@ -94,7 +94,7 @@ async fn create_database(path: &str) -> anyhow::Result<Database> {
     tokio::fs::create_dir_all(path).await?;
 
     let db_path = std::path::Path::new(path).join(DB_FILE_NAME);
-    let db = fedimint_rocksdb::RocksDb::open(db_path).await?;
+    let db = fedimint_rocksdb::RocksDb::build(db_path).open().await?;
 
     Ok(Database::new(db, Default::default()))
 }

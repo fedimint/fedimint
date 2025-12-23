@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cli_opts = CliOpts::parse();
 
-    let db = RocksDb::open(cli_opts.data_dir).await?;
+    let db = RocksDb::build(cli_opts.data_dir).open().await?;
     let recurring_invoice_server = RecurringInvoiceServer::new(
         ConnectorRegistry::build_from_server_env()?.bind().await?,
         db,

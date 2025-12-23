@@ -18,6 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+bon = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-db-locked = { workspace = true }
 fedimint-logging = { workspace = true }

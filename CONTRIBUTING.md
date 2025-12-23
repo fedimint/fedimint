@@ -19,7 +19,7 @@ Here are the recommended steps for new developers:
 2. **Set Up Your Development Environment**: Follow our [dev environment setup guide](docs/dev-env.md) to install the necessary tools.
 3. **Run the Development Environment**: Use [this tutorial](docs/tutorial.md) to launch the development environment and ensure everything works correctly on your machine.
 4. **Find Your First Issue**:
-   - Send a message in our [Developer Discord](https://chat.fedimint.org) with your background, skillset, and areas of interest. A contributor will help direct you to a good first issue. 
+   - Send a message in our [Developer Discord](https://chat.fedimint.org) with your background, skillset, and areas of interest. A contributor will help direct you to a good first issue.
    - Browse our [GitHub Issues](https://github.com/fedimint/fedimint/issues) and filter by [good first issues](https://github.com/fedimint/fedimint/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22).
 5. **Join Developer Calls**: Participate in our [Developer Calls](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com), especially our Weekly Dev Calls every Monday.
 
