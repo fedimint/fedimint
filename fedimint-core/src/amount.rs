@@ -82,6 +82,7 @@ impl Amount {
         }
     }
 
+    #[deprecated(since = "0.10.0", note = "use `checked_mul` instead")]
     pub fn mul_u64(self, other: u64) -> Self {
         Self {
             msats: self.msats * other,
