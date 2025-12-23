@@ -13,6 +13,7 @@ use crate::external::{Bitcoind, Esplora, Lnd, NamedGateway, open_channels_betwee
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
 use crate::recurringd::Recurringd;
+use crate::recurringdv2::Recurringdv2;
 use crate::util::{ProcessManager, supports_lnv2};
 
 async fn spawn_drop<T>(t: T)
@@ -36,6 +37,7 @@ pub struct DevFed {
     pub gw_ldk_second: Gatewayd,
     pub esplora: Esplora,
     pub recurringd: Recurringd,
+    pub recurringdv2: Recurringdv2,
 }
 
 impl DevFed {
@@ -49,6 +51,7 @@ impl DevFed {
             gw_ldk_second,
             esplora,
             recurringd,
+            recurringdv2,
         } = self;
 
         join!(
@@ -60,6 +63,7 @@ impl DevFed {
             spawn_drop(esplora),
             spawn_drop(bitcoind),
             spawn_drop(recurringd),
+            spawn_drop(recurringdv2),
         );
     }
 }
@@ -81,6 +85,7 @@ pub struct DevJitFed {
     gw_ldk_second: JitArc<Gatewayd>,
     esplora: JitArc<Esplora>,
     recurringd: JitArc<Recurringd>,
+    recurringdv2: JitArc<Recurringdv2>,
     start_time: std::time::SystemTime,
     gw_lnd_registered: JitArc<()>,
     gw_ldk_connected: JitArc<()>,
@@ -346,6 +351,17 @@ impl DevJitFed {
             }
         });
 
+        let recurringdv2 = JitTryAnyhow::new_try({
+            let process_mgr = process_mgr.to_owned();
+            move || async move {
+                debug!(target: LOG_DEVIMINT, "Starting recurringdv2...");
+                let start_time = fedimint_core::time::now();
+                let recurringdv2 = Recurringdv2::new(&process_mgr).await?;
+                info!(target: LOG_DEVIMINT, elapsed_ms = %start_time.elapsed()?.as_millis(), "Started recurringdv2");
+                Ok(Arc::new(recurringdv2))
+            }
+        });
+
         Ok(DevJitFed {
             bitcoind,
             lnd,
@@ -355,6 +371,7 @@ impl DevJitFed {
             gw_ldk_second,
             esplora,
             recurringd,
+            recurringdv2,
             start_time,
             gw_lnd_registered,
             gw_ldk_connected,
@@ -421,6 +438,10 @@ impl DevJitFed {
         Ok(self.recurringd.get_try().await?.deref())
     }
 
+    pub async fn recurringdv2(&self) -> anyhow::Result<&Recurringdv2> {
+        Ok(self.recurringdv2.get_try().await?.deref())
+    }
+
     pub async fn finalize(&self, process_mgr: &ProcessManager) -> anyhow::Result<()> {
         let fed_size = process_mgr.globals.FM_FED_SIZE;
         let offline_nodes = process_mgr.globals.FM_OFFLINE_NODES;
@@ -439,6 +460,7 @@ impl DevJitFed {
         let _ = self.lnd().await?;
         let _ = self.esplora().await?;
         let _ = self.recurringd_connected().await?;
+        let _ = self.recurringdv2().await?;
         let _ = self.fed_epoch_generated.get_try().await?;
 
         debug!(
@@ -462,6 +484,7 @@ impl DevJitFed {
             gw_ldk_second: self.gw_ldk_second().await?.to_owned(),
             esplora: self.esplora().await?.to_owned(),
             recurringd: self.recurringd().await?.to_owned(),
+            recurringdv2: self.recurringdv2().await?.to_owned(),
         })
     }
 
@@ -475,6 +498,7 @@ impl DevJitFed {
             gw_ldk,
             gw_ldk_second,
             recurringd,
+            recurringdv2,
             ..
         } = self;
 
@@ -487,6 +511,7 @@ impl DevJitFed {
             spawn_drop(esplora),
             spawn_drop(bitcoind),
             spawn_drop(recurringd),
+            spawn_drop(recurringdv2),
         );
     }
 }

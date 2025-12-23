@@ -31,6 +31,7 @@ members = [
     "fedimint-recoverytool",
     "fedimint-recurringd",
     "fedimint-recurringd-tests",
+    "fedimint-recurringdv2",
     "fedimint-rocksdb",
     "fedimint-server",
     "fedimint-server-bitcoin-rpc",

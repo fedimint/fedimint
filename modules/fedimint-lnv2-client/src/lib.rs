@@ -49,7 +49,8 @@ use fedimint_lnv2_common::gateway_api::{
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, lnurl, tweak,
+    LightningModuleTypes, LightningOutput, LightningOutputV0, MINIMUM_INCOMING_CONTRACT_AMOUNT,
+    lnurl, tweak,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -863,9 +864,7 @@ impl LightningClientModule {
 
         let contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
 
-        // The dust limit ensures that the incoming contract can be claimed without
-        // additional funds as the contracts amount is sufficient to cover the fees
-        if contract_amount < Amount::from_sats(5) {
+        if contract_amount < MINIMUM_INCOMING_CONTRACT_AMOUNT {
             return Err(ReceiveError::AmountTooSmall);
         }
 

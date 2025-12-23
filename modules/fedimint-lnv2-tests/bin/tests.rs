@@ -70,13 +70,16 @@ async fn main() -> anyhow::Result<()> {
                     test_payments(&dev_fed).await?;
                 }
                 Some(Commands::LnurlPay) => {
-                    test_lnurl_pay(&dev_fed).await?;
+                    pegin_gateways(&dev_fed).await?;
+                    test_lnurl_pay(&dev_fed, false).await?;
+                    test_lnurl_pay(&dev_fed, true).await?;
                 }
                 None => {
                     // Run all tests if no subcommand is specified
                     test_gateway_registration(&dev_fed).await?;
                     test_payments(&dev_fed).await?;
-                    test_lnurl_pay(&dev_fed).await?;
+                    test_lnurl_pay(&dev_fed, false).await?;
+                    test_lnurl_pay(&dev_fed, true).await?;
                 }
             }
 
@@ -85,6 +88,21 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         })
         .await
+}
+
+async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    info!("Pegging-in gateways...");
+
+    let federation = dev_fed.fed().await?;
+
+    let gw_lnd = dev_fed.gw_lnd().await?;
+    let gw_ldk = dev_fed.gw_ldk().await?;
+
+    federation
+        .pegin_gateways(1_000_000, vec![gw_lnd, gw_ldk])
+        .await?;
+
+    Ok(())
 }
 
 async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
@@ -244,11 +262,7 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .await?;
     }
 
-    info!("Pegging-in gateways...");
-
-    federation
-        .pegin_gateways(1_000_000, vec![gw_lnd, gw_ldk])
-        .await?;
+    pegin_gateways(dev_fed).await?;
 
     info!("Testing circular payments...");
 
@@ -455,35 +469,37 @@ async fn remove_gateway(client: &Client, peer: usize, gateway: &String) -> anyho
     .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
 }
 
-async fn test_lnurl_pay(dev_fed: &DevJitFed) -> anyhow::Result<()> {
-    if util::FedimintCli::version_or_default().await < *VERSION_0_9_0_ALPHA {
+async fn test_lnurl_pay(dev_fed: &DevJitFed, use_v2: bool) -> anyhow::Result<()> {
+    let min_version = if use_v2 {
+        &*VERSION_0_10_0_ALPHA
+    } else {
+        &*VERSION_0_9_0_ALPHA
+    };
+
+    if util::FedimintCli::version_or_default().await < *min_version {
         return Ok(());
     }
 
-    if util::FedimintdCmd::version_or_default().await < *VERSION_0_9_0_ALPHA {
+    if util::FedimintdCmd::version_or_default().await < *min_version {
         return Ok(());
     }
 
-    if util::Gatewayd::version_or_default().await < *VERSION_0_9_0_ALPHA {
+    if util::Gatewayd::version_or_default().await < *min_version {
         return Ok(());
     }
-
-    info!("Testing LNURL pay...");
 
     let federation = dev_fed.fed().await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_ldk = dev_fed.gw_ldk().await?;
 
-    info!("Pegging-in gateways for LNURL tests...");
-
-    federation
-        .pegin_gateways(1_000_000, vec![gw_lnd, gw_ldk])
-        .await?;
-
     let gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
-    let recurringd = dev_fed.recurringd().await?.api_url().to_string();
+    let recurringd = if use_v2 {
+        dev_fed.recurringdv2().await?.api_url().to_string()
+    } else {
+        dev_fed.recurringd().await?.api_url().to_string()
+    };
 
     let client_a = federation
         .new_joined_client("lnv2-lnurl-test-client-a")

@@ -25,6 +25,7 @@ pub use external::{ExternalDaemons, LightningNode, Lnd, external_daemons};
 use futures::Future;
 pub use gatewayd::Gatewayd;
 pub use recurringd::Recurringd;
+pub use recurringdv2::Recurringdv2;
 use tests::log_binary_versions;
 use util::ProcessManager;
 
@@ -36,6 +37,7 @@ pub mod faucet;
 pub mod federation;
 pub mod gatewayd;
 pub mod recurringd;
+pub mod recurringdv2;
 pub mod tests;
 pub mod util;
 pub mod vars;
