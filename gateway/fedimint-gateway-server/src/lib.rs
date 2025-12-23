@@ -77,9 +77,9 @@ use fedimint_gateway_common::{
     ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
     PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse,
+    RegisteredProtocol, SendOnchainRequest, SetEcashLimitsPayload, SetFeesPayload,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
+    WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -936,6 +936,23 @@ impl Gateway {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
 
+        // Get the federation_id and check eCash exposure limit before processing
+        let federation_id = client.borrow().with_sync(|c| c.federation_id());
+        self.check_ecash_exposure_limit(federation_id, htlc_request.amount_msat)
+            .await
+            .map_err(|e| match e {
+                PublicGatewayError::LNv2(LNv2Error::ExposureLimitExceeded {
+                    current,
+                    incoming,
+                    limit,
+                }) => PublicGatewayError::LNv1(LNv1Error::ExposureLimitExceeded {
+                    current,
+                    incoming,
+                    limit,
+                }),
+                other => other,
+            })?;
+
         client
             .borrow()
             .with(|client| async {
@@ -1784,6 +1801,7 @@ impl IAdminGateway for Gateway {
             lightning_fee: self.default_routing_fees,
             transaction_fee: self.default_transaction_fees,
             connector,
+            max_ecash_exposure: payload.max_ecash_exposure,
         };
 
         let recover = payload.recover.unwrap_or(false);
@@ -2429,6 +2447,43 @@ impl IAdminGateway for Gateway {
 
 // LNv2 Gateway implementation
 impl Gateway {
+    /// Handles a request to set the maximum eCash exposure limit for all
+    /// federations or a federation specified by the `FederationId`.
+    pub async fn handle_set_ecash_limits_msg(
+        &self,
+        SetEcashLimitsPayload {
+            federation_id,
+            max_ecash_exposure,
+        }: SetEcashLimitsPayload,
+    ) -> AdminResult<()> {
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut fed_configs = if let Some(fed_id) = federation_id {
+            dbtx.load_federation_configs()
+                .await
+                .into_iter()
+                .filter(|(id, _)| *id == fed_id)
+                .collect::<BTreeMap<_, _>>()
+        } else {
+            dbtx.load_federation_configs().await
+        };
+
+        for config in fed_configs.values_mut() {
+            config.max_ecash_exposure = max_ecash_exposure;
+            dbtx.save_federation_config(config).await;
+        }
+
+        dbtx.commit_tx().await;
+
+        info!(
+            target: LOG_GATEWAY,
+            ?max_ecash_exposure,
+            ?federation_id,
+            "Updated eCash exposure limits"
+        );
+
+        Ok(())
+    }
+
     /// Retrieves the `PublicKey` of the Gateway module for a given federation
     /// for LNv2. This is NOT the same as the `gateway_id`, it is different
     /// per-connected federation.
@@ -2681,6 +2736,69 @@ impl Gateway {
         })
     }
 
+    /// Checks if accepting an incoming Lightning payment would exceed the
+    /// eCash exposure limit for the specified federation.
+    ///
+    /// Returns `Ok(())` if the payment is within limits, or an error if it
+    /// would exceed.
+    async fn check_ecash_exposure_limit(
+        &self,
+        federation_id: FederationId,
+        incoming_amount_msats: u64,
+    ) -> Result<()> {
+        let config = self
+            .gateway_db
+            .begin_transaction_nc()
+            .await
+            .load_federation_config(federation_id)
+            .await
+            .ok_or_else(|| {
+                PublicGatewayError::FederationNotConnected(FederationNotConnected {
+                    federation_id_prefix: federation_id.to_prefix(),
+                })
+            })?;
+
+        let Some(limit) = config.max_ecash_exposure else {
+            // No limit set
+            return Ok(());
+        };
+
+        let federation_manager = self.federation_manager.read().await;
+        let client = federation_manager.client(&federation_id).ok_or_else(|| {
+            PublicGatewayError::FederationNotConnected(FederationNotConnected {
+                federation_id_prefix: federation_id.to_prefix(),
+            })
+        })?;
+
+        let current_balance = client
+            .value()
+            .get_balance_for_btc()
+            .await
+            .unwrap_or(Amount::ZERO);
+
+        let incoming = Amount::from_msats(incoming_amount_msats);
+        let projected_balance = current_balance + incoming;
+
+        if projected_balance > limit {
+            warn!(
+                target: LOG_GATEWAY,
+                %current_balance,
+                %incoming,
+                %limit,
+                %federation_id,
+                "Rejecting incoming payment: would exceed eCash exposure limit"
+            );
+
+            return Err(PublicGatewayError::LNv2(LNv2Error::ExposureLimitExceeded {
+                current: current_balance,
+                incoming,
+                limit,
+            }));
+        }
+
+        Ok(())
+    }
+
     /// Retrieves the persisted `CreateInvoicePayload` from the database
     /// specified by the `payment_hash` and the `ClientHandleArc` specified
     /// by the payload's `federation_id`.
@@ -2705,6 +2823,10 @@ impl Gateway {
                     .to_string(),
             )));
         }
+
+        // Check eCash exposure limit before accepting the payment
+        self.check_ecash_exposure_limit(registered_incoming_contract.federation_id, amount_msats)
+            .await?;
 
         let client = self
             .select_client(registered_incoming_contract.federation_id)

@@ -345,6 +345,24 @@ pub struct FederationConfigV1 {
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
+struct FederationConfigKeyV2 {
+    id: FederationId,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct FederationConfigV2 {
+    pub invite_code: InviteCode,
+    #[serde(alias = "mint_channel_id")]
+    pub federation_index: u64,
+    pub lightning_fee: PaymentFee,
+    pub transaction_fee: PaymentFee,
+    pub connector: ConnectorType,
+}
+
+#[derive(Debug, Encodable, Decodable)]
+struct FederationConfigKeyPrefixV2;
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct FederationConfigKey {
     id: FederationId,
 }
@@ -374,6 +392,15 @@ impl_db_lookup!(
 impl_db_lookup!(
     key = FederationConfigKeyV1,
     query_prefix = FederationConfigKeyPrefixV1
+);
+impl_db_record!(
+    key = FederationConfigKeyV2,
+    value = FederationConfigV2,
+    db_prefix = DbKeyPrefix::FederationConfig,
+);
+impl_db_lookup!(
+    key = FederationConfigKeyV2,
+    query_prefix = FederationConfigKeyPrefixV2
 );
 impl_db_lookup!(
     key = FederationConfigKey,
@@ -540,6 +567,10 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDb
         DatabaseVersion(6),
         Box::new(|ctx| migrate_to_v7(ctx).boxed()),
     );
+    migrations.insert(
+        DatabaseVersion(7),
+        Box::new(|ctx| migrate_to_v8(ctx).boxed()),
+    );
     migrations
 }
 
@@ -636,6 +667,7 @@ async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
                 lightning_fee: old_federation_config.fees.into(),
                 transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
                 connector: ConnectorType::default(),
+                max_ecash_exposure: None,
             };
             let new_key = FederationConfigKey { id: fed_id.id };
             dbtx.insert_new_entry(&new_key, &new_fed_config).await;
@@ -748,6 +780,35 @@ async fn migrate_to_v7(mut ctx: GeneralDbMigrationFnContext<'_>) -> anyhow::Resu
             &gateway_keypair,
         )
         .await;
+    }
+
+    Ok(())
+}
+
+/// Adds the `max_ecash_exposure` field to `FederationConfig`.
+async fn migrate_to_v8(mut ctx: GeneralDbMigrationFnContext<'_>) -> anyhow::Result<()> {
+    let mut dbtx = ctx.dbtx();
+
+    let configs = dbtx
+        .find_by_prefix(&FederationConfigKeyPrefixV2)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+
+    for (fed_key, old_config) in configs {
+        dbtx.remove_entry(&fed_key).await;
+
+        let new_config = FederationConfig {
+            invite_code: old_config.invite_code,
+            federation_index: old_config.federation_index,
+            lightning_fee: old_config.lightning_fee,
+            transaction_fee: old_config.transaction_fee,
+            connector: old_config.connector,
+            max_ecash_exposure: None,
+        };
+
+        dbtx.insert_new_entry(&FederationConfigKey { id: fed_key.id }, &new_config)
+            .await;
     }
 
     Ok(())

@@ -50,6 +50,7 @@ pub const PAY_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/pay_offer_for_operator";
 pub const PAYMENT_LOG_ENDPOINT: &str = "/payment_log";
 pub const PAYMENT_SUMMARY_ENDPOINT: &str = "/payment_summary";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
+pub const SET_ECASH_LIMITS_ENDPOINT: &str = "/set_ecash_limits";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
@@ -61,6 +62,10 @@ pub struct ConnectFedPayload {
     pub invite_code: String,
     pub use_tor: Option<bool>,
     pub recover: Option<bool>,
+    /// Initial max eCash exposure limit for this federation. None means
+    /// unlimited.
+    #[serde(default)]
+    pub max_ecash_exposure: Option<Amount>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -137,6 +142,10 @@ pub struct FederationConfig {
     pub lightning_fee: PaymentFee,
     pub transaction_fee: PaymentFee,
     pub connector: ConnectorType,
+    /// Maximum eCash exposure allowed for this federation via Lightning
+    /// payments. None means unlimited.
+    #[serde(default)]
+    pub max_ecash_exposure: Option<Amount>,
 }
 
 /// Information about one of the feds we are connected to
@@ -175,6 +184,14 @@ pub struct SetFeesPayload {
     pub lightning_parts_per_million: Option<u64>,
     pub transaction_base: Option<Amount>,
     pub transaction_parts_per_million: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetEcashLimitsPayload {
+    /// Federation to set limits for. If None, applies to all federations.
+    pub federation_id: Option<FederationId>,
+    /// Maximum eCash exposure in msats. None removes the limit (unlimited).
+    pub max_ecash_exposure: Option<Amount>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

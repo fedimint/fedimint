@@ -25,8 +25,9 @@ use fedimint_gateway_common::{
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
     PAYMENT_SUMMARY_ENDPOINT, PayInvoiceForOperatorPayload, PayOfferPayload, PaymentLogPayload,
     PaymentSummaryPayload, RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest, SetFeesPayload,
-    SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT, WithdrawPayload,
+    SET_ECASH_LIMITS_ENDPOINT, SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetEcashLimitsPayload, SetFeesPayload, SpendEcashPayload, V1_API_ENDPOINT,
+    WITHDRAW_ENDPOINT, WithdrawPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -380,6 +381,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        SET_ECASH_LIMITS_ENDPOINT,
+        set_ecash_limits,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         CONFIGURATION_ENDPOINT,
         configuration,
         is_authenticated,
@@ -508,6 +516,15 @@ async fn set_fees(
     Json(payload): Json<SetFeesPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     gateway.handle_set_fees_msg(payload).await?;
+    Ok(Json(json!(())))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn set_ecash_limits(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<SetEcashLimitsPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    gateway.handle_set_ecash_limits_msg(payload).await?;
     Ok(Json(json!(())))
 }
 
