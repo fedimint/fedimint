@@ -4,7 +4,9 @@
       url = "github:nixos/nixpkgs/nixos-25.11";
     };
     nixpkgs-unstable = {
-      url = "github:nixos/nixpkgs/nixos-unstable";
+      # temporary https://github.com/NixOS/nixpkgs/pull/459738
+      # url = "github:nixos/nixpkgs/nixos-unstable";
+      url = "github:nixos/nixpkgs?rev=d157ecd9b559c9103c4d69904277c37e062344bf";
     };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -85,7 +87,7 @@
 
             (final: prev: {
               cargo-deluxe = cargo-deluxe.packages.${system}.default;
-              cargo-udeps = nixpkgs-unstable.legacyPackages.${system}.cargo-udeps;
+              cargo-audit = nixpkgs-unstable.legacyPackages.${system}.cargo-audit;
             })
           ];
         };
