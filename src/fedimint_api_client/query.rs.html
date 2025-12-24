@@ -137,31 +137,15 @@
 <a href=#137 id=137 data-nosnippet>137</a>
 <a href=#138 id=138 data-nosnippet>138</a><span class="attr">#[test]
 <a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">fn </span>test_threshold_consensus() {
-<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">let </span><span class="kw-2">mut </span>consensus = ThresholdConsensus::&lt;u64&gt;::new(NumPeers::from(<span class="number">4</span>));
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">use </span>assert_matches::assert_matches;
 <a href=#141 id=141 data-nosnippet>141</a>
-<a href=#142 id=142 data-nosnippet>142</a>    <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#143 id=143 data-nosnippet>143</a>        consensus.process(PeerId::from(<span class="number">0</span>), <span class="number">1</span>),
-<a href=#144 id=144 data-nosnippet>144</a>        QueryStep::Continue
-<a href=#145 id=145 data-nosnippet>145</a>    ));
-<a href=#146 id=146 data-nosnippet>146</a>    <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#147 id=147 data-nosnippet>147</a>        consensus.process(PeerId::from(<span class="number">1</span>), <span class="number">1</span>),
-<a href=#148 id=148 data-nosnippet>148</a>        QueryStep::Continue
-<a href=#149 id=149 data-nosnippet>149</a>    ));
-<a href=#150 id=150 data-nosnippet>150</a>    <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#151 id=151 data-nosnippet>151</a>        consensus.process(PeerId::from(<span class="number">2</span>), <span class="number">0</span>),
-<a href=#152 id=152 data-nosnippet>152</a>        QueryStep::Retry(..)
-<a href=#153 id=153 data-nosnippet>153</a>    ));
-<a href=#154 id=154 data-nosnippet>154</a>
-<a href=#155 id=155 data-nosnippet>155</a>    <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#156 id=156 data-nosnippet>156</a>        consensus.process(PeerId::from(<span class="number">0</span>), <span class="number">1</span>),
-<a href=#157 id=157 data-nosnippet>157</a>        QueryStep::Continue
-<a href=#158 id=158 data-nosnippet>158</a>    ));
-<a href=#159 id=159 data-nosnippet>159</a>    <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#160 id=160 data-nosnippet>160</a>        consensus.process(PeerId::from(<span class="number">1</span>), <span class="number">1</span>),
-<a href=#161 id=161 data-nosnippet>161</a>        QueryStep::Continue
-<a href=#162 id=162 data-nosnippet>162</a>    ));
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="macro">assert!</span>(<span class="macro">matches!</span>(
-<a href=#164 id=164 data-nosnippet>164</a>        consensus.process(PeerId::from(<span class="number">2</span>), <span class="number">1</span>),
-<a href=#165 id=165 data-nosnippet>165</a>        QueryStep::Success(<span class="number">1</span>)
-<a href=#166 id=166 data-nosnippet>166</a>    ));
-<a href=#167 id=167 data-nosnippet>167</a>}</code></pre></div></section></main></body></html>
+<a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">let </span><span class="kw-2">mut </span>consensus = ThresholdConsensus::&lt;u64&gt;::new(NumPeers::from(<span class="number">4</span>));
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="macro">assert_matches!</span>(consensus.process(PeerId::from(<span class="number">0</span>), <span class="number">1</span>), QueryStep::Continue);
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="macro">assert_matches!</span>(consensus.process(PeerId::from(<span class="number">1</span>), <span class="number">1</span>), QueryStep::Continue);
+<a href=#146 id=146 data-nosnippet>146</a>    <span class="macro">assert_matches!</span>(consensus.process(PeerId::from(<span class="number">2</span>), <span class="number">0</span>), QueryStep::Retry(..));
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="macro">assert_matches!</span>(consensus.process(PeerId::from(<span class="number">0</span>), <span class="number">1</span>), QueryStep::Continue);
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="macro">assert_matches!</span>(consensus.process(PeerId::from(<span class="number">1</span>), <span class="number">1</span>), QueryStep::Continue);
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="macro">assert_matches!</span>(consensus.process(PeerId::from(<span class="number">2</span>), <span class="number">1</span>), QueryStep::Success(<span class="number">1</span>));
+<a href=#151 id=151 data-nosnippet>151</a>}</code></pre></div></section></main></body></html>
