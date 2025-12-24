@@ -331,6 +331,16 @@ impl DatabaseDump {
                     "API Announcements"
                 );
             }
+            server_db::DbKeyPrefix::GuardianMetadata => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    fedimint_server::net::api::guardian_metadata::GuardianMetadataPrefix,
+                    fedimint_server::net::api::guardian_metadata::GuardianMetadataKey,
+                    fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
+                    consensus,
+                    "Guardian Metadata"
+                );
+            }
         }
     }
     async fn write_serialized_client_operation_log(

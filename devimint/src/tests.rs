@@ -1096,6 +1096,135 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
+    use fedimint_core::PeerId;
+    use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
+
+    log_binary_versions().await?;
+
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+
+    if fedimintd_version < *VERSION_0_10_0_ALPHA || fedimint_cli_version < *VERSION_0_10_0_ALPHA {
+        info!("Skipping test for too old versions");
+        return Ok(());
+    }
+
+    let DevFed { fed, .. } = dev_fed;
+
+    let client = fed.internal_client().await?;
+
+    info!("Checking initial guardian metadata...");
+
+    retry(
+        "Check initial guardian metadata",
+        aggressive_backoff(),
+        || async {
+            // Give the client some time to fetch updates
+            cmd!(client, "dev", "wait", "1").run().await?;
+
+            let initial_metadata =
+                serde_json::from_value::<BTreeMap<PeerId, SignedGuardianMetadata>>(
+                    cmd!(client, "dev", "guardian-metadata",).out_json().await?,
+                )
+                .expect("failed to parse guardian metadata");
+
+            if initial_metadata.len() < fed.members.len() {
+                bail!(
+                    "Not all guardian metadata ready; got: {}, expected: {}",
+                    initial_metadata.len(),
+                    fed.members.len()
+                )
+            }
+
+            // Check that all metadata can be parsed
+            if !initial_metadata.values().all(|metadata| {
+                metadata
+                    .guardian_metadata()
+                    .is_ok_and(|m| !m.api_urls.is_empty())
+            }) {
+                bail!("Not all guardian metadata can be parsed");
+            }
+            Ok(())
+        },
+    )
+    .await?;
+
+    const TEST_API_URL: &str = "ws://127.0.0.1:5000/";
+    const TEST_PKARR_ID: &str = "test_pkarr_id_z32";
+
+    let new_metadata = serde_json::from_value::<SignedGuardianMetadata>(
+        cmd!(
+            client,
+            "--our-id",
+            "0",
+            "--password",
+            "pass",
+            "admin",
+            "sign-guardian-metadata",
+            "--api-urls",
+            TEST_API_URL,
+            "--pkarr-id",
+            TEST_PKARR_ID
+        )
+        .out_json()
+        .await?,
+    )
+    .expect("Couldn't parse signed guardian metadata");
+
+    let parsed_metadata = new_metadata
+        .guardian_metadata()
+        .expect("Should be able to parse metadata");
+
+    assert_eq!(
+        parsed_metadata.api_urls.first().unwrap().to_string(),
+        TEST_API_URL,
+        "API URL did not match"
+    );
+
+    assert_eq!(
+        parsed_metadata.pkarr_id_z32, TEST_PKARR_ID,
+        "Pkarr ID did not match"
+    );
+
+    info!("Testing if the client syncs the guardian metadata");
+    let metadata = poll("Waiting for the guardian metadata to propagate", || async {
+        cmd!(client, "dev", "wait", "1")
+            .run()
+            .await
+            .map_err(ControlFlow::Break)?;
+
+        let new_metadata_peer0 =
+            serde_json::from_value::<BTreeMap<PeerId, SignedGuardianMetadata>>(
+                cmd!(client, "dev", "guardian-metadata",)
+                    .out_json()
+                    .await
+                    .map_err(ControlFlow::Break)?,
+            )
+            .expect("failed to parse guardian metadata");
+
+        let metadata = new_metadata_peer0[&PeerId::from(0)]
+            .guardian_metadata()
+            .expect("Should be able to parse");
+
+        if metadata.api_urls.first().unwrap().to_string() == TEST_API_URL {
+            Ok(metadata)
+        } else {
+            Err(ControlFlow::Continue(anyhow!(
+                "Haven't received updated guardian metadata yet"
+            )))
+        }
+    })
+    .await?;
+
+    assert_eq!(
+        metadata.pkarr_id_z32, TEST_PKARR_ID,
+        "Pkarr ID did not propagate correctly"
+    );
+
+    Ok(())
+}
+
 pub async fn cli_load_test_tool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
@@ -2411,6 +2540,8 @@ pub enum TestCmd {
     ReconnectTest,
     /// `devfed` then tests a bunch of the fedimint-cli commands
     CliTests,
+    /// `devfed` then tests guardian metadata functionality
+    GuardianMetadataTests,
     /// `devfed` then calls binary `fedimint-load-test-tool`. See
     /// `LoadTestArgs`.
     LoadTestToolTest,
@@ -2509,6 +2640,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             cli_tests(dev_fed).await?;
+        }
+        TestCmd::GuardianMetadataTests => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            guardian_metadata_tests(dev_fed).await?;
         }
         TestCmd::LoadTestToolTest => {
             // For the load test tool test, explicitly disable mint base fees

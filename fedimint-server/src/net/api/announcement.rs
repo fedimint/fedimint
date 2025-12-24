@@ -5,6 +5,7 @@ use fedimint_api_client::api::DynGlobalApi;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, override_api_urls,
 };
@@ -12,6 +13,7 @@ use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
+use futures::future::join_all;
 use futures::stream::StreamExt;
 use tokio::select;
 use tracing::debug;
@@ -46,7 +48,11 @@ pub async fn start_api_announcement_service(
     const FAILURE_RETRY_SECONDS: u64 = 60;
     const SUCCESS_RETRY_SECONDS: u64 = 600;
 
-    insert_signed_api_announcement_if_not_present(db, cfg).await;
+    let initial_delay = if insert_signed_api_announcement_if_not_present(db, cfg).await {
+        Duration::ZERO
+    } else {
+        Duration::from_secs(INITIAL_DEALY_SECONDS)
+    };
 
     let db = db.clone();
     // FIXME: (@leonardo) how should we handle the connector here ?
@@ -61,7 +67,7 @@ pub async fn start_api_announcement_service(
     tg.spawn_cancellable("submit-api-url-announcement", async move {
         // Give other servers some time to start up in case they were just restarted
         // together
-        sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).await;
+        sleep(initial_delay).await;
         loop {
             let mut success = true;
             let announcements = db.begin_transaction_nc()
@@ -72,11 +78,19 @@ pub async fn start_api_announcement_service(
                 .collect::<Vec<(PeerId, SignedApiAnnouncement)>>()
                 .await;
 
-            // Announce all peer API URLs we know, but at least our own
-            for (peer, announcement) in announcements {
-                if let Err(err) = api_client
-                    .submit_api_announcement(peer, announcement.clone())
-                    .await {
+            // Submit all API announcements we know (including our own and other peers')
+            // to all federation members (in parallel). Each submit_api_announcement call
+            // broadcasts one announcement to all peers.
+            let results = join_all(announcements.iter().map(|(peer, announcement)| {
+                let api_client = &api_client;
+                async move {
+                    (*peer, api_client.submit_api_announcement(*peer, announcement.clone()).await)
+                }
+            }))
+            .await;
+
+            for (peer, result) in results {
+                if let Err(err) = result {
                     debug!(target: LOG_NET_API, ?peer, err = %err.fmt_compact(), "Announcing API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
                     success = false;
                 }
@@ -100,6 +114,8 @@ pub async fn start_api_announcement_service(
 
             let auto_announcement_delay = if success {
                 Duration::from_secs(SUCCESS_RETRY_SECONDS)
+            } else if is_running_in_test_env() {
+                Duration::from_secs(3)
             } else {
                 Duration::from_secs(FAILURE_RETRY_SECONDS)
             };
@@ -116,14 +132,16 @@ pub async fn start_api_announcement_service(
 
 /// Checks if we already have a signed API endpoint announcement for our own
 /// identity in the database and creates one if not.
-async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) {
+///
+/// Return `true` fresh announcements were inserted because it was not present
+async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) -> bool {
     let mut dbtx = db.begin_transaction().await;
     if dbtx
         .get_value(&ApiAnnouncementKey(cfg.local.identity))
         .await
         .is_some()
     {
-        return;
+        return false;
     }
 
     let api_announcement = ApiAnnouncement::new(
@@ -142,6 +160,8 @@ async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &Serv
     )
     .await;
     dbtx.commit_tx().await;
+
+    true
 }
 
 /// Returns a list of all peers and their respective API URLs taking into
