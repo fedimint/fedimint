@@ -1,3 +1,4 @@
+use assert_matches::assert_matches;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -148,7 +149,7 @@ impl MintInputStateCreated {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
-        assert!(matches!(old_state.state, MintInputStates::Created(_)));
+        assert_matches!(old_state.state, MintInputStates::Created(_));
 
         match result {
             Ok(()) => {
@@ -241,7 +242,7 @@ impl MintInputStateCreatedBundle {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
-        assert!(matches!(old_state.state, MintInputStates::CreatedBundle(_)));
+        assert_matches!(old_state.state, MintInputStates::CreatedBundle(_));
 
         match result {
             Ok(()) => {
@@ -346,10 +347,7 @@ impl MintInputStateRefundedBundle {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
-        assert!(matches!(
-            old_state.state,
-            MintInputStates::RefundedBundle(_)
-        ));
+        assert_matches!(old_state.state, MintInputStates::RefundedBundle(_));
 
         match result {
             Ok(()) => {

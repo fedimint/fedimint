@@ -281,10 +281,10 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         .await;
 
     info!("Waiting for confirmation");
-    assert!(matches!(
+    assert_matches!(
         deposit_updates.next().await.unwrap(),
         DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    ));
+    );
 
     bitcoin.mine_blocks(finality_delay).await;
 
@@ -306,16 +306,16 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     };
 
     info!("Waiting for claim tx");
-    assert!(matches!(
+    assert_matches!(
         await_update_while_rechecking.await.unwrap(),
         DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    ));
+    );
 
     info!("Waiting for e-cash");
-    assert!(matches!(
+    assert_matches!(
         deposit_updates.next().await.unwrap(),
         DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    ));
+    );
 
     info!("Checking balance after deposit");
     let mut balance_sub = client.subscribe_balance_changes(AmountUnit::BITCOIN).await;
@@ -478,7 +478,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
     assert_eq!(sub.ok().await?, WithdrawState::Created);
-    assert!(matches!(sub.ok().await?, WithdrawState::Failed(_)));
+    assert_matches!(sub.ok().await?, WithdrawState::Failed(_));
 
     // Check that we get our money back if the peg-out fails
     assert_eq!(balance_sub.next().await.unwrap(), sats(PEG_IN_AMOUNT_SATS));
@@ -849,15 +849,15 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
 
     let mut deposit_updates = wallet_module.subscribe_deposit(op).await?.into_stream();
     info!("Waiting for transaction");
-    assert!(matches!(
+    assert_matches!(
         deposit_updates.next().await.unwrap(),
         DepositStateV2::WaitingForTransaction
-    ));
+    );
     info!("Waiting for confirmation");
-    assert!(matches!(
+    assert_matches!(
         deposit_updates.next().await.unwrap(),
         DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    ));
+    );
 
     bitcoin.mine_blocks(finality_delay).await;
 
@@ -879,16 +879,16 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     };
 
     info!("Waiting for claim tx");
-    assert!(matches!(
+    assert_matches!(
         await_update_while_rechecking.await.unwrap(),
         DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    ));
+    );
 
     info!("Waiting for e-cash");
-    assert!(matches!(
+    assert_matches!(
         deposit_updates.next().await.unwrap(),
         DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.compute_txid()
-    ));
+    );
 
     info!("Checking balance after deposit");
     assert_eq!(client.get_balance_for_btc().await?, Amount::ZERO);

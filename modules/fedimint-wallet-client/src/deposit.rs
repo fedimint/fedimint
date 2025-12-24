@@ -1,6 +1,7 @@
 use std::cmp;
 use std::time::{Duration, SystemTime};
 
+use assert_matches::assert_matches;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
@@ -178,8 +179,9 @@ async fn await_deposit_address_timeout(timeout_at: SystemTime) {
 }
 
 fn transition_deposit_timeout(old_state: &DepositStateMachine) -> DepositStateMachine {
-    assert!(
-        matches!(old_state.state, DepositStates::Created(_)),
+    assert_matches!(
+        old_state.state,
+        DepositStates::Created(_),
         "Invalid previous state"
     );
 
