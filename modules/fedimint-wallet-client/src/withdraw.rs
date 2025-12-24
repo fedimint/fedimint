@@ -1,3 +1,4 @@
+use assert_matches::assert_matches;
 use bitcoin::Txid;
 use fedimint_api_client::api::{FederationApiExt, deserialize_outcome};
 use fedimint_client_module::DynGlobalClientContext;
@@ -105,8 +106,9 @@ async fn transition_withdraw_processed(
     client_ctx: WalletClientContext,
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
 ) -> WithdrawStateMachine {
-    assert!(
-        matches!(old_state.state, WithdrawStates::Created(_)),
+    assert_matches!(
+        old_state.state,
+        WithdrawStates::Created(_),
         "Unexpected old state: got {:?}, expected Created",
         old_state.state
     );

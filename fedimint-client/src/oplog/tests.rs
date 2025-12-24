@@ -1,5 +1,6 @@
 use std::time::{Duration, SystemTime};
 
+use assert_matches::assert_matches;
 use fedimint_client_module::oplog::{JsonStringed, OperationOutcome, UpdateStreamOrOutcome};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -77,10 +78,10 @@ async fn test_operation_log_update() {
     let update_stream_or_outcome =
         OperationLog::outcome_or_updates::<String, _>(&db, op_id, op, futures::stream::empty);
 
-    assert!(matches!(
+    assert_matches!(
         &update_stream_or_outcome,
         UpdateStreamOrOutcome::Outcome(s) if s == "baz"
-    ));
+    );
 
     let updates = update_stream_or_outcome
         .into_stream()

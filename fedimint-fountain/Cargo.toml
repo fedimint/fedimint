@@ -19,5 +19,8 @@ fedimint-core = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 
+[dev-dependencies]
+assert_matches = { workspace = true }
+
 [lints]
 workspace = true

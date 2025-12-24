@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::hash;
 
 use anyhow::{anyhow, bail};
+use assert_matches::assert_matches;
 use fedimint_api_client::api::{
     FederationApiExt, SerdeOutputOutcome, ServerError,
     VERSION_THAT_INTRODUCED_AWAIT_OUTPUTS_OUTCOMES, deserialize_outcome,
@@ -193,7 +194,7 @@ impl MintOutputStatesCreated {
     }
 
     fn transition_tx_rejected(old_state: &MintOutputStateMachine) -> MintOutputStateMachine {
-        assert!(matches!(old_state.state, MintOutputStates::Created(_)));
+        assert_matches!(old_state.state, MintOutputStates::Created(_));
 
         MintOutputStateMachine {
             common: old_state.common,
@@ -386,7 +387,7 @@ impl MintOutputStatesCreatedMulti {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: MintOutputStateMachine,
     ) -> MintOutputStateMachine {
-        assert!(matches!(old_state.state, MintOutputStates::CreatedMulti(_)));
+        assert_matches!(old_state.state, MintOutputStates::CreatedMulti(_));
 
         client_ctx
             .log_event(

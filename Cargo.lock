@@ -2765,6 +2765,7 @@ name = "fedimint-api-client"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-channel",
  "async-trait",
  "bitcoin",
@@ -2861,6 +2862,7 @@ name = "fedimint-client"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -3017,6 +3019,7 @@ name = "fedimint-core"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-channel",
  "async-lock",
  "async-recursion",
@@ -3301,6 +3304,7 @@ name = "fedimint-fountain"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "bitcoin_hashes 0.14.0",
  "fedimint-core",
  "rand 0.8.5",
@@ -3630,6 +3634,7 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
+ "assert_matches",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -3970,6 +3975,7 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
+ "assert_matches",
  "async-stream",
  "async-trait",
  "base64 0.22.1",
@@ -4049,6 +4055,7 @@ name = "fedimint-mint-tests"
 version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "bitcoin_hashes 0.14.0",
  "bls12_381",
  "clap",
@@ -4506,6 +4513,7 @@ version = "0.10.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
+ "assert_matches",
  "async-stream",
  "async-trait",
  "bitcoin",

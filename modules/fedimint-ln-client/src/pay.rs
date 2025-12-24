@@ -1,5 +1,6 @@
 use std::time::{Duration, SystemTime};
 
+use assert_matches::assert_matches;
 use bitcoin::hashes::sha256;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -192,10 +193,10 @@ impl LightningPayCreatedOutgoingLnContract {
         old_state: LightningPayStateMachine,
         gateway: LightningGateway,
     ) -> LightningPayStateMachine {
-        assert!(matches!(
+        assert_matches!(
             old_state.state,
             LightningPayStates::CreatedOutgoingLnContract(_)
-        ));
+        );
 
         match result {
             Ok(timelock) => {

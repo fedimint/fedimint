@@ -182,6 +182,15 @@ pub enum UpdateStreamOrOutcome<U> {
     Outcome(U),
 }
 
+impl<U: Debug> Debug for UpdateStreamOrOutcome<U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UpdateStreamOrOutcome::UpdateStream(_) => write!(f, "UpdateStream"),
+            UpdateStreamOrOutcome::Outcome(o) => f.debug_tuple("Outcome").field(o).finish(),
+        }
+    }
+}
+
 impl<U> UpdateStreamOrOutcome<U>
 where
     U: MaybeSend + MaybeSync + 'static,

@@ -13,7 +13,6 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-assert_matches = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
@@ -35,6 +34,9 @@ strum = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
 
 [lints]
 workspace = true

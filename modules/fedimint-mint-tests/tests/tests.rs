@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use assert_matches::assert_matches;
 use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
@@ -713,14 +714,14 @@ async fn repair_wallet() -> anyhow::Result<()> {
             )
             .await?;
         let op_id = client_mint.reissue_external_notes(reissue_note, ()).await?;
-        assert!(matches!(
+        assert_matches!(
             client_mint
                 .subscribe_reissue_external_notes(op_id)
                 .await?
                 .await_outcome()
                 .await,
             Some(ReissueExternalNotesState::Done)
-        ));
+        );
 
         let mut dbtx = client_mint.db.begin_transaction().await;
         dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &(old_nonce_index - 1))

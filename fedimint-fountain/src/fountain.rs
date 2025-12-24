@@ -293,6 +293,8 @@ impl Decoder {
 
 #[cfg(test)]
 mod tests {
+    use assert_matches::assert_matches;
+
     use super::*;
 
     #[test]
@@ -328,10 +330,10 @@ mod tests {
         assert_eq!(decoder.receive(encoder1.next_fragment()).unwrap(), None);
 
         // Try to receive fragment from encoder2 with different metadata - should reject
-        assert!(matches!(
+        assert_matches!(
             decoder.receive(encoder2.next_fragment()),
             Err(Error::InconsistentFragment)
-        ));
+        );
 
         // Receiving another fragment from encoder1 should work and complete
         assert_eq!(
@@ -351,25 +353,25 @@ mod tests {
 
         // Check simple_fragments.
         fragment.meta.simple_fragments = 0;
-        assert!(matches!(
+        assert_matches!(
             decoder.receive(fragment.clone()),
             Err(Error::InvalidFragment)
-        ));
+        );
         fragment.meta.simple_fragments = 8;
 
         // Check message_length.
         fragment.meta.message_length = 0;
-        assert!(matches!(
+        assert_matches!(
             decoder.receive(fragment.clone()),
             Err(Error::InvalidFragment)
-        ));
+        );
         fragment.meta.message_length = 100;
 
         // Check data.
         fragment.data = vec![];
-        assert!(matches!(
+        assert_matches!(
             decoder.receive(fragment.clone()),
             Err(Error::InvalidFragment)
-        ));
+        );
     }
 }

@@ -10,6 +10,7 @@
 use core::fmt;
 use std::time::Duration;
 
+use assert_matches::assert_matches;
 use bitcoin::hashes::sha256;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -273,10 +274,7 @@ impl DecryptingPreimageState {
         global_context: DynGlobalClientContext,
         context: LightningClientContext,
     ) -> IncomingStateMachine {
-        assert!(matches!(
-            old_state.state,
-            IncomingSmStates::DecryptingPreimage(_)
-        ));
+        assert_matches!(old_state.state, IncomingSmStates::DecryptingPreimage(_));
 
         match result {
             Ok(preimage) => {
