@@ -120,6 +120,7 @@ pub enum WalletRecoveryState {
 ///
 /// Eventually last known used `TweakIdx `is moved a bit forward, and that's the
 /// new point a client will use for new peg-ins.
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct WalletRecovery {
     state: WalletRecoveryStateV1,
@@ -409,7 +410,79 @@ impl RecoveryFromHistory for WalletRecovery {
 
 /// We will check this many addresses after last actually used
 /// one before we give up
-pub(crate) const ONCHAIN_RECOVER_MAX_GAP: u64 = 10;
+pub(crate) const ONCHAIN_RECOVER_MAX_GAP: u64 = 50;
+
+/// Esplora-only wallet recovery that doesn't require downloading federation
+/// history.
+///
+/// This scans Bitcoin addresses via Esplora from index 0 using a gap limit
+/// to find all peg-in addresses.
+///
+/// Trade-offs compared to federation history recovery:
+/// - Faster: No need to download potentially large federation history
+/// - Less private: Esplora server can see which addresses you're querying
+pub async fn recover_esplora_only(
+    args: &ClientModuleRecoverArgs<WalletClientInit>,
+    init: &WalletClientInit,
+) -> anyhow::Result<()> {
+    let btc_rpc = init.0.clone().unwrap_or(create_esplora_rpc(
+        &WalletClientModule::get_rpc_config(args.cfg()).url,
+    )?);
+
+    let data = WalletClientModuleData {
+        cfg: args.cfg().clone(),
+        module_root_secret: args.module_root_secret().clone(),
+    };
+
+    let RecoverScanOutcome {
+        last_used_idx: _,
+        new_start_idx,
+        tweak_idxes_with_pegins,
+    } = recover_scan_idxes_for_activity(TweakIdx(0), &BTreeSet::new(), |cur_tweak_idx| {
+        let data = &data;
+        let btc_rpc = &btc_rpc;
+        async move {
+            let script = data.derive_peg_in_script(cur_tweak_idx).0;
+            btc_rpc.get_script_history(&script).await
+        }
+    })
+    .await?;
+
+    let mut tweak_idx = TweakIdx(0);
+
+    let mut dbtx = args.db().begin_transaction().await;
+
+    while tweak_idx < new_start_idx {
+        let operation_id = data.derive_peg_in_script(tweak_idx).3;
+
+        dbtx.insert_new_entry(
+            &PegInTweakIndexKey(tweak_idx),
+            &PegInTweakIndexData {
+                creation_time: fedimint_core::time::now(),
+                next_check_time: if tweak_idxes_with_pegins.contains(&tweak_idx) {
+                    Some(fedimint_core::time::now())
+                } else {
+                    None
+                },
+                last_check_time: None,
+                operation_id,
+                claimed: vec![],
+            },
+        )
+        .await;
+
+        tweak_idx = tweak_idx.next();
+    }
+
+    dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
+        .await;
+
+    dbtx.insert_entry(&RecoveryFinalizedKey, &true).await;
+
+    dbtx.commit_tx().await;
+
+    Ok(())
+}
 
 /// When scanning the history of the Federation, there's no need to be
 /// so cautious about the privacy (as it's perfectly private), so might
