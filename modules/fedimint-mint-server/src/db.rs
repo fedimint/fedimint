@@ -1,6 +1,6 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, impl_db_lookup, impl_db_record};
-use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
+use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce, RecoveryItem};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -12,6 +12,8 @@ pub enum DbKeyPrefix {
     MintAuditItem = 0x14,
     // 0x15 was previously used for e-cash backups, but removed in DB migration 1
     BlindNonce = 0x16,
+    RecoveryItem = 0x17,
+    RecoveryBlindNonceOutpoint = 0x18,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -88,4 +90,34 @@ impl_db_record!(
 impl_db_lookup!(
     key = MintAuditItemKey,
     query_prefix = MintAuditItemKeyPrefix
+);
+
+#[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
+pub struct RecoveryItemKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RecoveryItemKeyPrefix;
+
+impl_db_record!(
+    key = RecoveryItemKey,
+    value = RecoveryItem,
+    db_prefix = DbKeyPrefix::RecoveryItem,
+);
+impl_db_lookup!(key = RecoveryItemKey, query_prefix = RecoveryItemKeyPrefix);
+
+/// Maps blind nonce to outpoint for recovery
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct RecoveryBlindNonceOutpointKey(pub BlindNonce);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RecoveryBlindNonceOutpointKeyPrefix;
+
+impl_db_record!(
+    key = RecoveryBlindNonceOutpointKey,
+    value = OutPoint,
+    db_prefix = DbKeyPrefix::RecoveryBlindNonceOutpoint,
+);
+impl_db_lookup!(
+    key = RecoveryBlindNonceOutpointKey,
+    query_prefix = RecoveryBlindNonceOutpointKeyPrefix
 );

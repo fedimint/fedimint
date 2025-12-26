@@ -240,6 +240,19 @@ plugin_types_trait_impl_common!(
     MintOutputError
 );
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub enum RecoveryItem {
+    /// A mint output was created (note issuance)
+    Output {
+        amount: Amount,
+        nonce: bitcoin_hashes::hash160::Hash,
+    },
+    /// A mint input was spent (note redemption)
+    Input {
+        nonce: bitcoin_hashes::hash160::Hash,
+    },
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum MintInputError {
     #[error("The note is already spent")]
