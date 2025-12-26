@@ -307,7 +307,8 @@ pub async fn run(
     };
 
     let db = Database::new(
-        RocksDb::open(server_opts.data_dir.join(DB_FILE))
+        RocksDb::build(server_opts.data_dir.join(DB_FILE))
+            .open()
             .await
             .unwrap(),
         ModuleRegistry::default(),

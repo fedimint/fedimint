@@ -47,30 +47,58 @@ pub struct RocksDb(rocksdb::OptimisticTransactionDB);
 
 pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
+#[bon::bon]
 impl RocksDb {
-    #[allow(clippy::unused_async)]
-    pub async fn open(db_path: impl AsRef<Path>) -> anyhow::Result<Locked<RocksDb>> {
+    /// Open the database using blocking IO
+    #[builder(start_fn = build)]
+    #[builder(finish_fn = open_blocking)]
+    pub fn open_blocking(
+        #[builder(start_fn)] db_path: impl AsRef<Path>,
+        /// Relaxed consistency allows opening the database
+        /// even if the wal got corrupted.
+        relaxed_consistency: Option<bool>,
+    ) -> anyhow::Result<Locked<RocksDb>> {
         let db_path = db_path.as_ref();
 
-        block_in_place(|| Self::open_blocking(db_path))
-    }
-
-    pub fn open_blocking(db_path: &Path) -> anyhow::Result<Locked<RocksDb>> {
         block_in_place(|| {
             std::fs::create_dir_all(
                 db_path
                     .parent()
                     .ok_or_else(|| anyhow::anyhow!("db path must have a base dir"))?,
             )?;
-            LockedBuilder::new(db_path)?.with_db(|| Self::open_blocking_unlocked(db_path))
+            LockedBuilder::new(db_path)?.with_db(|| {
+                Self::open_blocking_unlocked(db_path, relaxed_consistency.unwrap_or_default())
+            })
         })
     }
+}
 
-    pub fn open_blocking_unlocked(db_path: &Path) -> anyhow::Result<RocksDb> {
+impl<I1, S> RocksDbOpenBlockingBuilder<I1, S>
+where
+    S: rocks_db_open_blocking_builder::State,
+    I1: std::convert::AsRef<std::path::Path>,
+{
+    /// Open the database
+    #[allow(clippy::unused_async)]
+    pub async fn open(self) -> anyhow::Result<Locked<RocksDb>> {
+        block_in_place(|| self.open_blocking())
+    }
+}
+
+impl RocksDb {
+    fn open_blocking_unlocked(
+        db_path: &Path,
+        relaxed_consistency: bool,
+    ) -> anyhow::Result<RocksDb> {
         let mut opts = get_default_options()?;
-        // Since we turned synchronous writes one we should never encounter a corrupted
-        // WAL and should rather fail in this case
-        opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
+        if relaxed_consistency {
+            // https://github.com/fedimint/fedimint/issues/8072
+            opts.set_wal_recovery_mode(DBRecoveryMode::TolerateCorruptedTailRecords);
+        } else {
+            // Since we turned synchronous writes one we should never encounter a corrupted
+            // WAL and should rather fail in this case
+            opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
+        }
         let db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, db_path)?;
         Ok(RocksDb(db))
@@ -514,7 +542,7 @@ mod fedimint_rocksdb_tests {
             .unwrap();
 
         Database::new(
-            RocksDb::open_blocking(path.as_ref()).unwrap(),
+            RocksDb::build(path.as_ref()).open_blocking().unwrap(),
             ModuleDecoderRegistry::default(),
         )
     }
@@ -629,7 +657,7 @@ mod fedimint_rocksdb_tests {
             .unwrap();
 
         let module_db = Database::new(
-            RocksDb::open_blocking(path.as_ref()).unwrap(),
+            RocksDb::build(path.as_ref()).open_blocking().unwrap(),
             ModuleDecoderRegistry::default(),
         );
 
@@ -705,7 +733,7 @@ mod fedimint_rocksdb_tests {
             .unwrap();
         {
             let db = Database::new(
-                RocksDb::open(&path).await.unwrap(),
+                RocksDb::build(&path).open().await.unwrap(),
                 ModuleDecoderRegistry::default(),
             );
             let mut dbtx = db.begin_transaction().await;

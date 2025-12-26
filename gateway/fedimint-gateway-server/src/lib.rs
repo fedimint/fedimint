@@ -416,7 +416,10 @@ impl Gateway {
         let gateway_db = match opts.db_backend {
             DatabaseBackend::RocksDb => {
                 debug!(target: LOG_GATEWAY, "Using RocksDB database backend");
-                Database::new(fedimint_rocksdb::RocksDb::open(db_path).await?, decoders)
+                Database::new(
+                    fedimint_rocksdb::RocksDb::build(db_path).open().await?,
+                    decoders,
+                )
             }
             DatabaseBackend::CursedRedb => {
                 debug!(target: LOG_GATEWAY, "Using CursedRedb database backend");

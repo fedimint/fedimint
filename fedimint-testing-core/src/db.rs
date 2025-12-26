@@ -64,7 +64,8 @@ async fn open_snapshot_db(
 ) -> anyhow::Result<Database> {
     if is_isolated {
         Ok(Database::new(
-            RocksDb::open(snapshot_dir)
+            RocksDb::build(snapshot_dir)
+                .open()
                 .await
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
@@ -73,7 +74,8 @@ async fn open_snapshot_db(
         .0)
     } else {
         Ok(Database::new(
-            RocksDb::open(snapshot_dir)
+            RocksDb::build(snapshot_dir)
+                .open()
                 .await
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
@@ -447,7 +449,7 @@ async fn open_temp_db_and_copy(
     })?;
 
     Ok((
-        Database::new(RocksDb::open(&tmp_dir).await?, decoders),
+        Database::new(RocksDb::build(&tmp_dir).open().await?, decoders),
         tmp_dir,
     ))
 }

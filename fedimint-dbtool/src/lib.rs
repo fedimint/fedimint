@@ -244,7 +244,8 @@ impl FedimintDBTool {
 }
 
 async fn open_db(options: &Options) -> fedimint_core::db::Database {
-    fedimint_rocksdb::RocksDb::open(&options.database_dir)
+    fedimint_rocksdb::RocksDb::build(&options.database_dir)
+        .open()
         .await
         .unwrap()
         .into_database()

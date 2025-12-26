@@ -339,7 +339,8 @@ impl Opts {
         match self.db_backend {
             DatabaseBackend::RocksDb => {
                 debug!(target: LOG_CLIENT, "Using RocksDB database backend");
-                Ok(fedimint_rocksdb::RocksDb::open(db_path)
+                Ok(fedimint_rocksdb::RocksDb::build(db_path)
+                    .open()
                     .await
                     .map_err_cli_msg("could not open rocksdb database")?
                     .into())
