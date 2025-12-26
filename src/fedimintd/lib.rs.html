@@ -307,124 +307,125 @@
 <a href=#307 id=307 data-nosnippet>307</a>    };
 <a href=#308 id=308 data-nosnippet>308</a>
 <a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">let </span>db = Database::new(
-<a href=#310 id=310 data-nosnippet>310</a>        RocksDb::open(server_opts.data_dir.join(DB_FILE))
-<a href=#311 id=311 data-nosnippet>311</a>            .<span class="kw">await
-<a href=#312 id=312 data-nosnippet>312</a>            </span>.unwrap(),
-<a href=#313 id=313 data-nosnippet>313</a>        ModuleRegistry::default(),
-<a href=#314 id=314 data-nosnippet>314</a>    );
-<a href=#315 id=315 data-nosnippet>315</a>
-<a href=#316 id=316 data-nosnippet>316</a>    <span class="kw">let </span>dyn_server_bitcoin_rpc = <span class="kw">match </span>(
-<a href=#317 id=317 data-nosnippet>317</a>        server_opts.bitcoind_url.as_ref(),
-<a href=#318 id=318 data-nosnippet>318</a>        server_opts.esplora_url.as_ref(),
-<a href=#319 id=319 data-nosnippet>319</a>    ) {
-<a href=#320 id=320 data-nosnippet>320</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; {
-<a href=#321 id=321 data-nosnippet>321</a>            <span class="kw">let </span>bitcoind_username = server_opts
-<a href=#322 id=322 data-nosnippet>322</a>                .bitcoind_username
-<a href=#323 id=323 data-nosnippet>323</a>                .clone()
-<a href=#324 id=324 data-nosnippet>324</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
-<a href=#325 id=325 data-nosnippet>325</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
-<a href=#326 id=326 data-nosnippet>326</a>                .get_bitcoind_url_and_password()
-<a href=#327 id=327 data-nosnippet>327</a>                .<span class="kw">await
-<a href=#328 id=328 data-nosnippet>328</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
-<a href=#329 id=329 data-nosnippet>329</a>            BitcoindClient::new(bitcoind_username, bitcoind_password, <span class="kw-2">&amp;</span>bitcoind_url)
-<a href=#330 id=330 data-nosnippet>330</a>                .unwrap()
-<a href=#331 id=331 data-nosnippet>331</a>                .into_dyn()
-<a href=#332 id=332 data-nosnippet>332</a>        }
-<a href=#333 id=333 data-nosnippet>333</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(url)) =&gt; EsploraClient::new(url).unwrap().into_dyn(),
-<a href=#334 id=334 data-nosnippet>334</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(esplora_url)) =&gt; {
-<a href=#335 id=335 data-nosnippet>335</a>            <span class="kw">let </span>bitcoind_username = server_opts
-<a href=#336 id=336 data-nosnippet>336</a>                .bitcoind_username
-<a href=#337 id=337 data-nosnippet>337</a>                .clone()
-<a href=#338 id=338 data-nosnippet>338</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
-<a href=#339 id=339 data-nosnippet>339</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
-<a href=#340 id=340 data-nosnippet>340</a>                .get_bitcoind_url_and_password()
-<a href=#341 id=341 data-nosnippet>341</a>                .<span class="kw">await
-<a href=#342 id=342 data-nosnippet>342</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
-<a href=#343 id=343 data-nosnippet>343</a>            BitcoindClientWithFallback::new(
-<a href=#344 id=344 data-nosnippet>344</a>                bitcoind_username,
-<a href=#345 id=345 data-nosnippet>345</a>                bitcoind_password,
-<a href=#346 id=346 data-nosnippet>346</a>                <span class="kw-2">&amp;</span>bitcoind_url,
-<a href=#347 id=347 data-nosnippet>347</a>                esplora_url,
-<a href=#348 id=348 data-nosnippet>348</a>            )
-<a href=#349 id=349 data-nosnippet>349</a>            .unwrap()
-<a href=#350 id=350 data-nosnippet>350</a>            .into_dyn()
-<a href=#351 id=351 data-nosnippet>351</a>        }
-<a href=#352 id=352 data-nosnippet>352</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"ArgGroup already enforced XOR relation"</span>),
-<a href=#353 id=353 data-nosnippet>353</a>    };
-<a href=#354 id=354 data-nosnippet>354</a>
-<a href=#355 id=355 data-nosnippet>355</a>    root_task_group.install_kill_handler();
-<a href=#356 id=356 data-nosnippet>356</a>
-<a href=#357 id=357 data-nosnippet>357</a>    install_crypto_provider().<span class="kw">await</span>;
-<a href=#358 id=358 data-nosnippet>358</a>
-<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">let </span>task_group = root_task_group.clone();
-<a href=#360 id=360 data-nosnippet>360</a>    root_task_group.spawn_cancellable(<span class="string">"main"</span>, <span class="kw">async move </span>{
-<a href=#361 id=361 data-nosnippet>361</a>        fedimint_server::run(
-<a href=#362 id=362 data-nosnippet>362</a>            server_opts.data_dir,
-<a href=#363 id=363 data-nosnippet>363</a>            server_opts.force_api_secrets,
-<a href=#364 id=364 data-nosnippet>364</a>            settings,
-<a href=#365 id=365 data-nosnippet>365</a>            db,
-<a href=#366 id=366 data-nosnippet>366</a>            code_version_str,
-<a href=#367 id=367 data-nosnippet>367</a>            module_init_registry,
-<a href=#368 id=368 data-nosnippet>368</a>            task_group,
-<a href=#369 id=369 data-nosnippet>369</a>            dyn_server_bitcoin_rpc,
-<a href=#370 id=370 data-nosnippet>370</a>            Box::new(fedimint_server_ui::setup::router),
-<a href=#371 id=371 data-nosnippet>371</a>            Box::new(fedimint_server_ui::dashboard::router),
-<a href=#372 id=372 data-nosnippet>372</a>            server_opts.db_checkpoint_retention,
-<a href=#373 id=373 data-nosnippet>373</a>            fedimint_server::ConnectionLimits::new(
-<a href=#374 id=374 data-nosnippet>374</a>                server_opts.iroh_api_max_connections,
-<a href=#375 id=375 data-nosnippet>375</a>                server_opts.iroh_api_max_requests_per_connection,
-<a href=#376 id=376 data-nosnippet>376</a>            ),
-<a href=#377 id=377 data-nosnippet>377</a>        )
-<a href=#378 id=378 data-nosnippet>378</a>        .<span class="kw">await
-<a href=#379 id=379 data-nosnippet>379</a>        </span>.unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Main task returned error: {}"</span>, err.fmt_compact_anyhow()));
-<a href=#380 id=380 data-nosnippet>380</a>    });
-<a href=#381 id=381 data-nosnippet>381</a>
-<a href=#382 id=382 data-nosnippet>382</a>    <span class="kw">let </span>shutdown_future = root_task_group
-<a href=#383 id=383 data-nosnippet>383</a>        .make_handle()
-<a href=#384 id=384 data-nosnippet>384</a>        .make_shutdown_rx()
-<a href=#385 id=385 data-nosnippet>385</a>        .then(|()| <span class="kw">async </span>{
-<a href=#386 id=386 data-nosnippet>386</a>            <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Shutdown called"</span>);
-<a href=#387 id=387 data-nosnippet>387</a>        });
-<a href=#388 id=388 data-nosnippet>388</a>
-<a href=#389 id=389 data-nosnippet>389</a>    shutdown_future.<span class="kw">await</span>;
-<a href=#390 id=390 data-nosnippet>390</a>
-<a href=#391 id=391 data-nosnippet>391</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Terminating main task"</span>);
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="macro">error!</span>(target: LOG_CORE, err = %err.fmt_compact_anyhow(), <span class="string">"Error while shutting down task group"</span>);
-<a href=#395 id=395 data-nosnippet>395</a>    }
-<a href=#396 id=396 data-nosnippet>396</a>
-<a href=#397 id=397 data-nosnippet>397</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Shutdown complete"</span>);
-<a href=#398 id=398 data-nosnippet>398</a>
-<a href=#399 id=399 data-nosnippet>399</a>    fedimint_logging::shutdown();
-<a href=#400 id=400 data-nosnippet>400</a>
-<a href=#401 id=401 data-nosnippet>401</a>    drop(timing_total_runtime);
-<a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a>    <span class="comment">// Should we ever shut down without an error code?
-<a href=#404 id=404 data-nosnippet>404</a>    </span>std::process::exit(-<span class="number">1</span>);
-<a href=#405 id=405 data-nosnippet>405</a>}
-<a href=#406 id=406 data-nosnippet>406</a>
-<a href=#407 id=407 data-nosnippet>407</a><span class="kw">pub fn </span>default_modules() -&gt; ServerModuleInitRegistry {
-<a href=#408 id=408 data-nosnippet>408</a>    <span class="kw">let </span><span class="kw-2">mut </span>server_gens = ServerModuleInitRegistry::new();
-<a href=#409 id=409 data-nosnippet>409</a>
-<a href=#410 id=410 data-nosnippet>410</a>    server_gens.attach(MintInit);
-<a href=#411 id=411 data-nosnippet>411</a>    server_gens.attach(WalletInit);
-<a href=#412 id=412 data-nosnippet>412</a>
-<a href=#413 id=413 data-nosnippet>413</a>    <span class="kw">if </span>is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(<span class="bool-val">true</span>) {
-<a href=#414 id=414 data-nosnippet>414</a>        server_gens.attach(LightningInit);
-<a href=#415 id=415 data-nosnippet>415</a>    }
-<a href=#416 id=416 data-nosnippet>416</a>
-<a href=#417 id=417 data-nosnippet>417</a>    <span class="kw">if </span>is_env_var_set_opt(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or(<span class="bool-val">true</span>) {
-<a href=#418 id=418 data-nosnippet>418</a>        server_gens.attach(fedimint_lnv2_server::LightningInit);
-<a href=#419 id=419 data-nosnippet>419</a>    }
-<a href=#420 id=420 data-nosnippet>420</a>
-<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
-<a href=#422 id=422 data-nosnippet>422</a>        server_gens.attach(MetaInit);
-<a href=#423 id=423 data-nosnippet>423</a>    }
-<a href=#424 id=424 data-nosnippet>424</a>
-<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
-<a href=#426 id=426 data-nosnippet>426</a>        server_gens.attach(UnknownInit);
-<a href=#427 id=427 data-nosnippet>427</a>    }
-<a href=#428 id=428 data-nosnippet>428</a>
-<a href=#429 id=429 data-nosnippet>429</a>    server_gens
-<a href=#430 id=430 data-nosnippet>430</a>}</code></pre></div></section></main></body></html>
+<a href=#310 id=310 data-nosnippet>310</a>        RocksDb::build(server_opts.data_dir.join(DB_FILE))
+<a href=#311 id=311 data-nosnippet>311</a>            .open()
+<a href=#312 id=312 data-nosnippet>312</a>            .<span class="kw">await
+<a href=#313 id=313 data-nosnippet>313</a>            </span>.unwrap(),
+<a href=#314 id=314 data-nosnippet>314</a>        ModuleRegistry::default(),
+<a href=#315 id=315 data-nosnippet>315</a>    );
+<a href=#316 id=316 data-nosnippet>316</a>
+<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">let </span>dyn_server_bitcoin_rpc = <span class="kw">match </span>(
+<a href=#318 id=318 data-nosnippet>318</a>        server_opts.bitcoind_url.as_ref(),
+<a href=#319 id=319 data-nosnippet>319</a>        server_opts.esplora_url.as_ref(),
+<a href=#320 id=320 data-nosnippet>320</a>    ) {
+<a href=#321 id=321 data-nosnippet>321</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; {
+<a href=#322 id=322 data-nosnippet>322</a>            <span class="kw">let </span>bitcoind_username = server_opts
+<a href=#323 id=323 data-nosnippet>323</a>                .bitcoind_username
+<a href=#324 id=324 data-nosnippet>324</a>                .clone()
+<a href=#325 id=325 data-nosnippet>325</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
+<a href=#326 id=326 data-nosnippet>326</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
+<a href=#327 id=327 data-nosnippet>327</a>                .get_bitcoind_url_and_password()
+<a href=#328 id=328 data-nosnippet>328</a>                .<span class="kw">await
+<a href=#329 id=329 data-nosnippet>329</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
+<a href=#330 id=330 data-nosnippet>330</a>            BitcoindClient::new(bitcoind_username, bitcoind_password, <span class="kw-2">&amp;</span>bitcoind_url)
+<a href=#331 id=331 data-nosnippet>331</a>                .unwrap()
+<a href=#332 id=332 data-nosnippet>332</a>                .into_dyn()
+<a href=#333 id=333 data-nosnippet>333</a>        }
+<a href=#334 id=334 data-nosnippet>334</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(url)) =&gt; EsploraClient::new(url).unwrap().into_dyn(),
+<a href=#335 id=335 data-nosnippet>335</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(esplora_url)) =&gt; {
+<a href=#336 id=336 data-nosnippet>336</a>            <span class="kw">let </span>bitcoind_username = server_opts
+<a href=#337 id=337 data-nosnippet>337</a>                .bitcoind_username
+<a href=#338 id=338 data-nosnippet>338</a>                .clone()
+<a href=#339 id=339 data-nosnippet>339</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
+<a href=#340 id=340 data-nosnippet>340</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
+<a href=#341 id=341 data-nosnippet>341</a>                .get_bitcoind_url_and_password()
+<a href=#342 id=342 data-nosnippet>342</a>                .<span class="kw">await
+<a href=#343 id=343 data-nosnippet>343</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
+<a href=#344 id=344 data-nosnippet>344</a>            BitcoindClientWithFallback::new(
+<a href=#345 id=345 data-nosnippet>345</a>                bitcoind_username,
+<a href=#346 id=346 data-nosnippet>346</a>                bitcoind_password,
+<a href=#347 id=347 data-nosnippet>347</a>                <span class="kw-2">&amp;</span>bitcoind_url,
+<a href=#348 id=348 data-nosnippet>348</a>                esplora_url,
+<a href=#349 id=349 data-nosnippet>349</a>            )
+<a href=#350 id=350 data-nosnippet>350</a>            .unwrap()
+<a href=#351 id=351 data-nosnippet>351</a>            .into_dyn()
+<a href=#352 id=352 data-nosnippet>352</a>        }
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"ArgGroup already enforced XOR relation"</span>),
+<a href=#354 id=354 data-nosnippet>354</a>    };
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a>    root_task_group.install_kill_handler();
+<a href=#357 id=357 data-nosnippet>357</a>
+<a href=#358 id=358 data-nosnippet>358</a>    install_crypto_provider().<span class="kw">await</span>;
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="kw">let </span>task_group = root_task_group.clone();
+<a href=#361 id=361 data-nosnippet>361</a>    root_task_group.spawn_cancellable(<span class="string">"main"</span>, <span class="kw">async move </span>{
+<a href=#362 id=362 data-nosnippet>362</a>        fedimint_server::run(
+<a href=#363 id=363 data-nosnippet>363</a>            server_opts.data_dir,
+<a href=#364 id=364 data-nosnippet>364</a>            server_opts.force_api_secrets,
+<a href=#365 id=365 data-nosnippet>365</a>            settings,
+<a href=#366 id=366 data-nosnippet>366</a>            db,
+<a href=#367 id=367 data-nosnippet>367</a>            code_version_str,
+<a href=#368 id=368 data-nosnippet>368</a>            module_init_registry,
+<a href=#369 id=369 data-nosnippet>369</a>            task_group,
+<a href=#370 id=370 data-nosnippet>370</a>            dyn_server_bitcoin_rpc,
+<a href=#371 id=371 data-nosnippet>371</a>            Box::new(fedimint_server_ui::setup::router),
+<a href=#372 id=372 data-nosnippet>372</a>            Box::new(fedimint_server_ui::dashboard::router),
+<a href=#373 id=373 data-nosnippet>373</a>            server_opts.db_checkpoint_retention,
+<a href=#374 id=374 data-nosnippet>374</a>            fedimint_server::ConnectionLimits::new(
+<a href=#375 id=375 data-nosnippet>375</a>                server_opts.iroh_api_max_connections,
+<a href=#376 id=376 data-nosnippet>376</a>                server_opts.iroh_api_max_requests_per_connection,
+<a href=#377 id=377 data-nosnippet>377</a>            ),
+<a href=#378 id=378 data-nosnippet>378</a>        )
+<a href=#379 id=379 data-nosnippet>379</a>        .<span class="kw">await
+<a href=#380 id=380 data-nosnippet>380</a>        </span>.unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Main task returned error: {}"</span>, err.fmt_compact_anyhow()));
+<a href=#381 id=381 data-nosnippet>381</a>    });
+<a href=#382 id=382 data-nosnippet>382</a>
+<a href=#383 id=383 data-nosnippet>383</a>    <span class="kw">let </span>shutdown_future = root_task_group
+<a href=#384 id=384 data-nosnippet>384</a>        .make_handle()
+<a href=#385 id=385 data-nosnippet>385</a>        .make_shutdown_rx()
+<a href=#386 id=386 data-nosnippet>386</a>        .then(|()| <span class="kw">async </span>{
+<a href=#387 id=387 data-nosnippet>387</a>            <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Shutdown called"</span>);
+<a href=#388 id=388 data-nosnippet>388</a>        });
+<a href=#389 id=389 data-nosnippet>389</a>
+<a href=#390 id=390 data-nosnippet>390</a>    shutdown_future.<span class="kw">await</span>;
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Terminating main task"</span>);
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
+<a href=#395 id=395 data-nosnippet>395</a>        <span class="macro">error!</span>(target: LOG_CORE, err = %err.fmt_compact_anyhow(), <span class="string">"Error while shutting down task group"</span>);
+<a href=#396 id=396 data-nosnippet>396</a>    }
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Shutdown complete"</span>);
+<a href=#399 id=399 data-nosnippet>399</a>
+<a href=#400 id=400 data-nosnippet>400</a>    fedimint_logging::shutdown();
+<a href=#401 id=401 data-nosnippet>401</a>
+<a href=#402 id=402 data-nosnippet>402</a>    drop(timing_total_runtime);
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="comment">// Should we ever shut down without an error code?
+<a href=#405 id=405 data-nosnippet>405</a>    </span>std::process::exit(-<span class="number">1</span>);
+<a href=#406 id=406 data-nosnippet>406</a>}
+<a href=#407 id=407 data-nosnippet>407</a>
+<a href=#408 id=408 data-nosnippet>408</a><span class="kw">pub fn </span>default_modules() -&gt; ServerModuleInitRegistry {
+<a href=#409 id=409 data-nosnippet>409</a>    <span class="kw">let </span><span class="kw-2">mut </span>server_gens = ServerModuleInitRegistry::new();
+<a href=#410 id=410 data-nosnippet>410</a>
+<a href=#411 id=411 data-nosnippet>411</a>    server_gens.attach(MintInit);
+<a href=#412 id=412 data-nosnippet>412</a>    server_gens.attach(WalletInit);
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">if </span>is_env_var_set_opt(FM_ENABLE_MODULE_LNV1_ENV).unwrap_or(<span class="bool-val">true</span>) {
+<a href=#415 id=415 data-nosnippet>415</a>        server_gens.attach(LightningInit);
+<a href=#416 id=416 data-nosnippet>416</a>    }
+<a href=#417 id=417 data-nosnippet>417</a>
+<a href=#418 id=418 data-nosnippet>418</a>    <span class="kw">if </span>is_env_var_set_opt(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or(<span class="bool-val">true</span>) {
+<a href=#419 id=419 data-nosnippet>419</a>        server_gens.attach(fedimint_lnv2_server::LightningInit);
+<a href=#420 id=420 data-nosnippet>420</a>    }
+<a href=#421 id=421 data-nosnippet>421</a>
+<a href=#422 id=422 data-nosnippet>422</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+<a href=#423 id=423 data-nosnippet>423</a>        server_gens.attach(MetaInit);
+<a href=#424 id=424 data-nosnippet>424</a>    }
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+<a href=#427 id=427 data-nosnippet>427</a>        server_gens.attach(UnknownInit);
+<a href=#428 id=428 data-nosnippet>428</a>    }
+<a href=#429 id=429 data-nosnippet>429</a>
+<a href=#430 id=430 data-nosnippet>430</a>    server_gens
+<a href=#431 id=431 data-nosnippet>431</a>}</code></pre></div></section></main></body></html>

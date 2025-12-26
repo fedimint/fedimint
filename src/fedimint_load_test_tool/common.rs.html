@@ -146,7 +146,7 @@
 <a href=#146 id=146 data-nosnippet>146</a>) -&gt; anyhow::Result&lt;(ClientHandleArc, <span class="prelude-ty">Option</span>&lt;InviteCode&gt;)&gt; {
 <a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">let </span>db = <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
 <a href=#148 id=148 data-nosnippet>148</a>        Database::new(
-<a href=#149 id=149 data-nosnippet>149</a>            fedimint_rocksdb::RocksDb::open(rocksdb).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#149 id=149 data-nosnippet>149</a>            fedimint_rocksdb::RocksDb::build(rocksdb).open().<span class="kw">await</span><span class="question-mark">?</span>,
 <a href=#150 id=150 data-nosnippet>150</a>            ModuleRegistry::default(),
 <a href=#151 id=151 data-nosnippet>151</a>        )
 <a href=#152 id=152 data-nosnippet>152</a>    } <span class="kw">else </span>{
