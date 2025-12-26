@@ -650,14 +650,18 @@ impl ServerModule for Mint {
                 NOTE_SPENT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, nonce: Nonce| -> bool {
-                    Ok(context.dbtx().get_value(&NonceKey(nonce)).await.is_some())
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(dbtx.get_value(&NonceKey(nonce)).await.is_some())
                 }
             },
             api_endpoint! {
                 BLIND_NONCE_USED_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, blind_nonce: BlindNonce| -> bool {
-                    Ok(context.dbtx().get_value(&BlindNonceKey(blind_nonce)).await.is_some())
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(dbtx.get_value(&BlindNonceKey(blind_nonce)).await.is_some())
                 }
             },
         ]

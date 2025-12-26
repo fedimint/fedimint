@@ -396,11 +396,10 @@ impl HasApiContext<SetupApi> for SetupApi {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
-    ) -> (&SetupApi, ApiEndpointContext<'_>) {
+    ) -> (&SetupApi, ApiEndpointContext) {
         assert!(id.is_none());
 
         let db = self.db.clone();
-        let dbtx = self.db.begin_transaction().await;
 
         let is_authenticated = match self.state.lock().await.local_params {
             None => false,
@@ -410,7 +409,7 @@ impl HasApiContext<SetupApi> for SetupApi {
             },
         };
 
-        let context = ApiEndpointContext::new(db, dbtx, is_authenticated, request.auth.clone());
+        let context = ApiEndpointContext::new(db, is_authenticated, request.auth.clone());
 
         (self, context)
     }

@@ -836,15 +836,19 @@ impl ServerModule for Lightning {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
-                    Ok(Some(module.consensus_block_count(&mut context.dbtx().into_nc()).await))
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(Some(module.consensus_block_count(&mut dbtx).await))
                 }
             },
             api_endpoint! {
                 ACCOUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
                     Ok(module
-                        .get_contract_account(&mut context.dbtx().into_nc(), contract_id)
+                        .get_contract_account(&mut dbtx, contract_id)
                         .await)
                 }
             },
@@ -861,7 +865,9 @@ impl ServerModule for Lightning {
                 AWAIT_BLOCK_HEIGHT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, block_height: u64| -> () {
-                    module.wait_block_height(block_height, &mut context.dbtx().into_nc()).await;
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    module.wait_block_height(block_height, &mut dbtx).await;
                     Ok(())
                 }
             },
@@ -890,8 +896,10 @@ impl ServerModule for Lightning {
                 OFFER_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
                     Ok(module
-                        .get_offer(&mut context.dbtx().into_nc(), payment_hash)
+                        .get_offer(&mut dbtx, payment_hash)
                         .await)
                }
             },
@@ -908,14 +916,19 @@ impl ServerModule for Lightning {
                 LIST_GATEWAYS_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
-                    Ok(module.list_gateways(&mut context.dbtx().into_nc()).await)
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.list_gateways(&mut dbtx).await)
                 }
             },
             api_endpoint! {
                 REGISTER_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, gateway: LightningGatewayAnnouncement| -> () {
-                    module.register_gateway(&mut context.dbtx().into_nc(), gateway).await;
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction().await;
+                    module.register_gateway(&mut dbtx.to_ref_nc(), gateway).await;
+                    dbtx.commit_tx_result().await?;
                     Ok(())
                 }
             },
@@ -923,15 +936,23 @@ impl ServerModule for Lightning {
                 REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, gateway_id: PublicKey| -> Option<sha256::Hash> {
-                    Ok(module.get_gateway_remove_challenge(gateway_id, &mut context.dbtx().into_nc()).await)
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.get_gateway_remove_challenge(gateway_id, &mut dbtx).await)
                 }
             },
             api_endpoint! {
                 REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
-                    match module.remove_gateway(remove_gateway_request.clone(), &mut context.dbtx().into_nc()).await {
-                        Ok(()) => Ok(true),
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction().await;
+                    let result = module.remove_gateway(remove_gateway_request.clone(), &mut dbtx.to_ref_nc()).await;
+                    match result {
+                        Ok(()) => {
+                            dbtx.commit_tx_result().await?;
+                            Ok(true)
+                        },
                         Err(err) => {
                             warn!(target: LOG_MODULE_LN, err = %err.fmt_compact_anyhow(), gateway_id = %remove_gateway_request.gateway_id, "Unable to remove gateway registration");
                             Ok(false)
@@ -1001,7 +1022,7 @@ impl Lightning {
 
     async fn wait_offer(
         &self,
-        context: &mut ApiEndpointContext<'_>,
+        context: &mut ApiEndpointContext,
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -> IncomingContractOffer {
         let future = context.wait_key_exists(OfferKey(payment_hash));
@@ -1018,7 +1039,7 @@ impl Lightning {
 
     async fn wait_contract_account(
         &self,
-        context: &mut ApiEndpointContext<'_>,
+        context: &mut ApiEndpointContext,
         contract_id: ContractId,
     ) -> ContractAccount {
         // not using a variable here leads to a !Send error
@@ -1028,7 +1049,7 @@ impl Lightning {
 
     async fn wait_outgoing_contract_account_cancelled(
         &self,
-        context: &mut ApiEndpointContext<'_>,
+        context: &mut ApiEndpointContext,
         contract_id: ContractId,
     ) -> ContractAccount {
         let future =
@@ -1043,7 +1064,7 @@ impl Lightning {
 
     async fn get_decrypted_preimage_status(
         &self,
-        context: &mut ApiEndpointContext<'_>,
+        context: &mut ApiEndpointContext,
         contract_id: ContractId,
     ) -> (IncomingContractAccount, DecryptedPreimageStatus) {
         let f_contract = context.wait_key_exists(ContractKey(contract_id));
@@ -1065,7 +1086,7 @@ impl Lightning {
 
     async fn wait_preimage_decrypted(
         &self,
-        context: &mut ApiEndpointContext<'_>,
+        context: &mut ApiEndpointContext,
         contract_id: ContractId,
     ) -> (IncomingContractAccount, Option<Preimage>) {
         let future =

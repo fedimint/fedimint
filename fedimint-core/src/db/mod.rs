@@ -3537,6 +3537,8 @@ mod test_utils {
         #[async_trait]
         impl IRawDatabaseTransaction for FakeTransaction<'_> {
             async fn commit_tx(self) -> DatabaseResult<()> {
+                use crate::db::DatabaseError;
+
                 Err(DatabaseError::Other(anyhow::anyhow!("Can't commit!")))
             }
         }

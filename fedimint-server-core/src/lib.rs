@@ -491,7 +491,7 @@ where
                 path,
                 handler: Box::new(
                     move |module: &DynServerModule,
-                          context: ApiEndpointContext<'_>,
+                          context: ApiEndpointContext,
                           value: ApiRequestErased| {
                         let typed_module = module
                             .as_any()

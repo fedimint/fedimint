@@ -558,18 +558,15 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
-    ) -> (&ConsensusApi, ApiEndpointContext<'_>) {
+    ) -> (&ConsensusApi, ApiEndpointContext) {
         let mut db = self.db.clone();
-        let mut dbtx = self.db.begin_transaction().await;
         if let Some(id) = id {
             db = self.db.with_prefix_module_id(id).0;
-            dbtx = dbtx.with_prefix_module_id(id).0;
         }
         (
             self,
             ApiEndpointContext::new(
                 db,
-                dbtx,
                 request.auth == Some(self.cfg.private.api_auth.clone()),
                 request.auth.clone(),
             ),
@@ -583,7 +580,7 @@ impl HasApiContext<DynServerModule> for ConsensusApi {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
-    ) -> (&DynServerModule, ApiEndpointContext<'_>) {
+    ) -> (&DynServerModule, ApiEndpointContext) {
         let (_, context): (&ConsensusApi, _) = self.context(request, id).await;
         (
             self.modules.get_expect(id.expect("required module id")),
@@ -887,8 +884,11 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             BACKUP_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
+                let db = context.db();
+                let mut dbtx = db.begin_transaction().await;
                 fedimint
-                    .handle_backup_request(&mut context.dbtx().into_nc(), request).await?;
+                    .handle_backup_request(&mut dbtx.to_ref_nc(), request).await?;
+                dbtx.commit_tx_result().await?;
                 Ok(())
 
             }
@@ -897,8 +897,10 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             RECOVER_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, id: PublicKey| -> Option<ClientBackupSnapshot> {
+                let db = context.db();
+                let mut dbtx = db.begin_transaction_nc().await;
                 Ok(fedimint
-                    .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
+                    .handle_recover_request(&mut dbtx, id).await)
             }
         },
         api_endpoint! {
@@ -943,7 +945,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 5),
             async |_fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
                 check_auth(context)?;
-                Ok(backup_statistics_static(&mut context.dbtx().into_nc()).await)
+                let db = context.db();
+                let mut dbtx = db.begin_transaction_nc().await;
+                Ok(backup_statistics_static(&mut dbtx).await)
             }
         },
         api_endpoint! {
