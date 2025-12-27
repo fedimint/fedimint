@@ -20,6 +20,7 @@ use crate::client_db::TweakIdx;
 /// other clients, just to query for them as decoys and thus hopefully make the
 /// malicious Bitcoin node operator have less confidence about which addresses
 /// are actually linked with each other.
+#[allow(dead_code)]
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct ConsensusPegInTweakIdxesUsedTracker {
     /// Any time we detect one of the scripts in `pending_pubkey_scripts` was
