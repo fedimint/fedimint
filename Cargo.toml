@@ -340,6 +340,7 @@ webpki-roots = "1.0.2"
 z32 = "1"
 
 [workspace.lints.clippy]
+dbg_macro = "deny"
 literal_string_with_formatting_args = "deny"
 
 [profile.dev]

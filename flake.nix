@@ -139,6 +139,7 @@
             just.importPaths = [ "justfile.fedimint.just" ];
             # we have a custom final check
             just.rules.final-check.enable = false;
+            rust.pre-commit.leftover-dbg.enable = false;
             git.pre-commit.trailing_newline = false;
             git.pre-commit.hooks = {
               check_forbidden_dependencies = builtins.readFile ./nix/check-forbidden-deps.sh;
