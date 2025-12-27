@@ -61,7 +61,7 @@ use fedimint_client_module::transaction::{
     ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
-use fedimint_core::base32::FEDIMINT_PREFIX;
+use fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
@@ -1764,7 +1764,7 @@ impl MintClientModule {
                                 SendPaymentEvent {
                                     operation_id,
                                     amount: oob_notes.total_amount(),
-                                    oob_notes: oob_notes.to_string(),
+                                    oob_notes: encode_prefixed(FEDIMINT_PREFIX, &oob_notes),
                                 },
                             )
                             .await;
@@ -1963,7 +1963,7 @@ impl MintClientModule {
                 SendPaymentEvent {
                     operation_id,
                     amount: oob_notes.total_amount(),
-                    oob_notes: oob_notes.to_string(),
+                    oob_notes: encode_prefixed(FEDIMINT_PREFIX, &oob_notes),
                 },
             )
             .await;
