@@ -194,16 +194,7 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl<'a> IDatabaseTransactionOps for MemAndRedbTransaction<'a> {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        unimplemented!()
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        unimplemented!()
-    }
-}
+impl<'a> IDatabaseTransactionOps for MemAndRedbTransaction<'a> {}
 
 // In-memory database transaction should only be used for test code and never
 // for production as it doesn't properly implement MVCC
