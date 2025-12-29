@@ -913,6 +913,34 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()>;
 }
 
+/// Write operations for database transactions
+///
+/// This trait extends [`IDatabaseTransactionOpsCore`] with write operations.
+/// It exists to support databases that distinguish between read-only and
+/// read-write transactions (like redb).
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOpsCoreWrite: IDatabaseTransactionOpsCore {
+    /// Insert entry
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>>;
+
+    /// Remove entry by `key`
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
+
+    /// Delete keys matching prefix
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()>;
+}
+
+/// Marker trait for read-only database transactions
+///
+/// Implemented by transaction types that only support read operations.
+/// This allows databases like redb to use true read transactions that
+/// don't block writers.
+pub trait IRawDatabaseReadTransaction: IDatabaseTransactionOpsCore + MaybeSend + Debug {}
+
 #[apply(async_trait_maybe_send!)]
 impl<T> IDatabaseTransactionOpsCore for Box<T>
 where
