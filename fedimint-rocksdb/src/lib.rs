@@ -220,14 +220,7 @@ impl IRawDatabase for RocksDb {
         // Make sure we never lose data on unclean shutdown
         write_options.set_sync(true);
 
-        let mut rocksdb_tx =
-            RocksDbTransaction(self.0.transaction_opt(&write_options, &optimistic_options));
-        rocksdb_tx
-            .set_tx_savepoint()
-            .await
-            .expect("setting tx savepoint failed");
-
-        rocksdb_tx
+        RocksDbTransaction(self.0.transaction_opt(&write_options, &optimistic_options))
     }
 
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -381,22 +374,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
     }
 }
 
-#[async_trait]
-impl IDatabaseTransactionOps for RocksDbTransaction<'_> {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        fedimint_core::runtime::block_in_place(|| {
-            self.0
-                .rollback_to_savepoint()
-                .map_err(DatabaseError::backend)
-        })
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        fedimint_core::runtime::block_in_place(|| self.0.set_savepoint());
-
-        Ok(())
-    }
-}
+impl IDatabaseTransactionOps for RocksDbTransaction<'_> {}
 
 #[async_trait]
 impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
@@ -512,16 +490,7 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
     }
 }
 
-#[async_trait]
-impl IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        panic!("Cannot rollback a read only transaction");
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        panic!("Cannot set a savepoint in a read only transaction");
-    }
-}
+impl IDatabaseTransactionOps for RocksDbReadOnlyTransaction<'_> {}
 
 #[async_trait]
 impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
@@ -615,14 +584,6 @@ mod fedimint_rocksdb_tests {
     async fn test_dbtx_snapshot_isolation() {
         fedimint_core::db::verify_snapshot_isolation(open_temp_db(
             "fcb-rocksdb-test-snapshot-isolation",
-        ))
-        .await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_dbtx_rollback_to_savepoint() {
-        fedimint_core::db::verify_rollback_to_savepoint(open_temp_db(
-            "fcb-rocksdb-test-rollback-to-savepoint",
         ))
         .await;
     }
