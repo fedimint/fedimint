@@ -1563,6 +1563,84 @@ pub struct Committable;
 /// Opposite of [`Committable`].
 pub struct NonCommittable;
 
+/// A high level read-only database transaction handle
+///
+/// This type only exposes read operations and cannot be committed.
+/// It uses a true read transaction internally when available (e.g., with redb),
+/// allowing concurrent readers without blocking writers.
+pub struct ReadDatabaseTransaction<'tx> {
+    tx: Box<dyn IRawDatabaseReadTransaction + Send + 'tx>,
+    decoders: ModuleDecoderRegistry,
+}
+
+impl fmt::Debug for ReadDatabaseTransaction<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ReadDatabaseTransaction")
+    }
+}
+
+impl WithDecoders for ReadDatabaseTransaction<'_> {
+    fn decoders(&self) -> &ModuleDecoderRegistry {
+        &self.decoders
+    }
+}
+
+impl<'tx> ReadDatabaseTransaction<'tx> {
+    /// Create a new read-only transaction
+    pub fn new(
+        tx: impl IRawDatabaseReadTransaction + Send + 'tx,
+        decoders: ModuleDecoderRegistry,
+    ) -> Self {
+        Self {
+            tx: Box::new(tx),
+            decoders,
+        }
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IDatabaseTransactionOpsCore for ReadDatabaseTransaction<'_> {
+    async fn raw_insert_bytes(
+        &mut self,
+        _key: &[u8],
+        _value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot insert into a read-only transaction");
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.tx.raw_get_bytes(key).await
+    }
+
+    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot remove from a read-only transaction");
+    }
+
+    async fn raw_find_by_range(
+        &mut self,
+        key_range: Range<&[u8]>,
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx.raw_find_by_range(key_range).await
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx.raw_find_by_prefix(key_prefix).await
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        self.tx
+            .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
+    }
+
+    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
+        panic!("Cannot remove from a read-only transaction");
+    }
+}
+
 /// A high level database transaction handle
 ///
 /// `Cap` is a session type
