@@ -326,6 +326,10 @@ where
 pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a>;
+    /// Start a read-only database transaction
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a>;
     /// Register (and wait) for `key` updates
     async fn register(&self, key: &[u8]);
     /// Notify about `key` update (creation, modification, deletion)
@@ -346,6 +350,11 @@ where
 {
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
         (**self).begin_transaction().await
+    }
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a> {
+        (**self).begin_read_transaction().await
     }
     async fn register(&self, key: &[u8]) {
         (**self).register(key).await;
@@ -384,6 +393,11 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
             self.raw.begin_transaction().await,
             self.notifications.clone(),
         ))
+    }
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a> {
+        Box::new(self.raw.begin_read_transaction().await)
     }
     async fn register(&self, key: &[u8]) {
         self.notifications.register(key).await;
@@ -529,11 +543,27 @@ impl Database {
     }
 
     /// Begin a new non-committable database transaction
+    ///
+    /// Note: This still uses a write transaction internally. For a true read
+    /// transaction that doesn't block writers, use
+    /// [`Self::begin_read_transaction`].
     pub async fn begin_transaction_nc<'s, 'tx>(&'s self) -> DatabaseTransaction<'tx, NonCommittable>
     where
         's: 'tx,
     {
         self.begin_transaction().await.into_nc()
+    }
+
+    /// Begin a new read-only database transaction
+    ///
+    /// This returns a [`ReadDatabaseTransaction`] which only supports read
+    /// operations. It uses a true read transaction internally when available
+    /// (e.g., with redb), allowing concurrent readers without blocking writers.
+    pub async fn begin_read_transaction(&self) -> ReadDatabaseTransaction<'_> {
+        ReadDatabaseTransaction::new(
+            self.inner.begin_read_transaction().await,
+            self.module_decoders.clone(),
+        )
     }
 
     pub fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -751,9 +781,110 @@ where
         }
     }
 
+    async fn begin_read_transaction<'a>(
+        &'a self,
+    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a> {
+        Box::new(PrefixReadTransaction {
+            inner: self.inner.begin_read_transaction().await,
+            prefix: self.prefix.clone(),
+        })
+    }
+
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
         self.inner.checkpoint(backup_path)
     }
+}
+
+/// A read-only database transaction that adds a prefix to all operations.
+///
+/// Produced by [`PrefixDatabase`].
+struct PrefixReadTransaction<Inner> {
+    inner: Inner,
+    prefix: Vec<u8>,
+}
+
+impl<Inner> fmt::Debug for PrefixReadTransaction<Inner> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PrefixReadTransaction")
+    }
+}
+
+impl<Inner> PrefixReadTransaction<Inner> {
+    fn get_full_key(&self, key: &[u8]) -> Vec<u8> {
+        let mut full_key = self.prefix.clone();
+        full_key.extend_from_slice(key);
+        full_key
+    }
+
+    fn get_full_range(&self, range: Range<&[u8]>) -> Range<Vec<u8>> {
+        Range {
+            start: self.get_full_key(range.start),
+            end: self.get_full_key(range.end),
+        }
+    }
+
+    fn adapt_prefix_stream(stream: PrefixStream<'_>, prefix_len: usize) -> PrefixStream<'_> {
+        Box::pin(stream.map(move |(k, v)| (k[prefix_len..].to_owned(), v)))
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Inner> IDatabaseTransactionOpsCore for PrefixReadTransaction<Inner>
+where
+    Inner: IDatabaseTransactionOpsCore + Send,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        _key: &[u8],
+        _value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot insert into a read-only transaction");
+    }
+
+    async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_get_bytes(&key).await
+    }
+
+    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot remove from a read-only transaction");
+    }
+
+    async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
+        let key_prefix = self.get_full_key(key_prefix);
+        let stream = self.inner.raw_find_by_prefix(&key_prefix).await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        let key_prefix = self.get_full_key(key_prefix);
+        let stream = self
+            .inner
+            .raw_find_by_prefix_sorted_descending(&key_prefix)
+            .await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
+        let range = self.get_full_range(range);
+        let stream = self
+            .inner
+            .raw_find_by_range(range.start.as_slice()..range.end.as_slice())
+            .await?;
+        Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
+    }
+
+    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
+        panic!("Cannot remove from a read-only transaction");
+    }
+}
+
+impl<Inner> IRawDatabaseReadTransaction for PrefixReadTransaction<Inner> where
+    Inner: IDatabaseTransactionOpsCore + Send + Debug
+{
 }
 
 /// A database transactions that wraps an `inner` one and adds a prefix to all
@@ -951,6 +1082,8 @@ pub trait IDatabaseTransactionOpsCoreWrite: IDatabaseTransactionOpsCore {
 /// This allows databases like redb to use true read transactions that
 /// don't block writers.
 pub trait IRawDatabaseReadTransaction: IDatabaseTransactionOpsCore + MaybeSend + Debug {}
+
+impl<T: IRawDatabaseReadTransaction + ?Sized> IRawDatabaseReadTransaction for Box<T> {}
 
 #[apply(async_trait_maybe_send!)]
 impl<T> IDatabaseTransactionOpsCore for Box<T>
@@ -1595,6 +1728,28 @@ impl<'tx> ReadDatabaseTransaction<'tx> {
             tx: Box::new(tx),
             decoders,
         }
+    }
+
+    /// Create a new read-only transaction prefixed with the given module id
+    pub fn with_prefix_module_id<'a: 'tx>(
+        self,
+        module_instance_id: ModuleInstanceId,
+    ) -> (ReadDatabaseTransaction<'a>, GlobalDBTxAccessToken)
+    where
+        'tx: 'a,
+    {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            ReadDatabaseTransaction {
+                tx: Box::new(PrefixReadTransaction {
+                    inner: self.tx,
+                    prefix,
+                }),
+                decoders: self.decoders,
+            },
+            global_dbtx_access_token,
+        )
     }
 }
 
