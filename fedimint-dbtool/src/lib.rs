@@ -13,7 +13,9 @@ use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client_module::module::init::ClientModuleInit;
-use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
+use fedimint_core::db::{
+    IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreWrite as _, IRawDatabaseExt,
+};
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_ln_server::LightningInit;

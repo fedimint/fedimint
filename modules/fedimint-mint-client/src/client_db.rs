@@ -3,7 +3,9 @@ use std::io::Cursor;
 use fedimint_client_module::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_client_module::module::{IdxRange, OutPointRange};
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCore};
+use fedimint_core::db::{
+    DatabaseRecord, DatabaseTransaction, IDatabaseTransactionOpsCoreWrite as _,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record};

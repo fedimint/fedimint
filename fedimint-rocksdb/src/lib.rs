@@ -14,7 +14,8 @@ use anyhow::{Context as _, bail};
 use async_trait::async_trait;
 use fedimint_core::db::{
     DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction, PrefixStream,
+    IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
+    IRawDatabaseTransaction, PrefixStream,
 };
 use fedimint_core::task::block_in_place;
 use fedimint_db_locked::{Locked, LockedBuilder};
@@ -270,29 +271,9 @@ impl IRawDatabaseReadTransaction for RocksDbReadOnlyTransaction<'_> {}
 
 #[async_trait]
 impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.snapshot().get(key).unwrap();
-            self.0.put(key, value).map_err(DatabaseError::backend)?;
-            Ok(val)
-        })
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             self.0.snapshot().get(key).map_err(DatabaseError::backend)
-        })
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.snapshot().get(key).unwrap();
-            self.0.delete(key).map_err(DatabaseError::backend)?;
-            Ok(val)
         })
     }
 
@@ -334,6 +315,54 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
+    }
+
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        let prefix = key_prefix.to_vec();
+        let next_prefix = next_prefix(&prefix);
+        let iterator_mode = if let Some(next_prefix) = &next_prefix {
+            rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
+        } else {
+            rocksdb::IteratorMode::End
+        };
+        Ok(fedimint_core::runtime::block_in_place(|| {
+            let mut options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+            let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                key_bytes
+                    .starts_with(&prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
+        }))
+    }
+}
+
+#[async_trait]
+impl IDatabaseTransactionOpsCoreWrite for RocksDbTransaction<'_> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        fedimint_core::runtime::block_in_place(|| {
+            let val = self.0.snapshot().get(key).unwrap();
+            self.0.put(key, value).map_err(DatabaseError::backend)?;
+            Ok(val)
+        })
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        fedimint_core::runtime::block_in_place(|| {
+            let val = self.0.snapshot().get(key).unwrap();
+            self.0.delete(key).map_err(DatabaseError::backend)?;
+            Ok(val)
+        })
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
@@ -365,31 +394,6 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
             Ok(())
         })
     }
-
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> DatabaseResult<PrefixStream<'_>> {
-        let prefix = key_prefix.to_vec();
-        let next_prefix = next_prefix(&prefix);
-        let iterator_mode = if let Some(next_prefix) = &next_prefix {
-            rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
-        } else {
-            rocksdb::IteratorMode::End
-        };
-        Ok(fedimint_core::runtime::block_in_place(|| {
-            let mut options = rocksdb::ReadOptions::default();
-            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
-            let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
-            let rocksdb_iter = iter.map_while(move |res| {
-                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
-                key_bytes
-                    .starts_with(&prefix)
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
-            });
-            Box::pin(convert_to_async_stream(rocksdb_iter))
-        }))
-    }
 }
 
 impl IDatabaseTransactionOps for RocksDbTransaction<'_> {}
@@ -420,22 +424,10 @@ impl IRawDatabaseTransaction for RocksDbTransaction<'_> {
 
 #[async_trait]
 impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
-    async fn raw_insert_bytes(
-        &mut self,
-        _key: &[u8],
-        _value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot insert into a read only transaction");
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
             self.0.snapshot().get(key).map_err(DatabaseError::backend)
         })
-    }
-
-    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot remove from a read only transaction");
     }
 
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
@@ -478,10 +470,6 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
         }))
     }
 
-    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
-        panic!("Cannot remove from a read only transaction");
-    }
-
     async fn raw_find_by_prefix_sorted_descending(
         &mut self,
         key_prefix: &[u8],
@@ -505,6 +493,25 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
             });
             Box::pin(stream::iter(rocksdb_iter))
         }))
+    }
+}
+
+#[async_trait]
+impl IDatabaseTransactionOpsCoreWrite for RocksDbReadOnlyTransaction<'_> {
+    async fn raw_insert_bytes(
+        &mut self,
+        _key: &[u8],
+        _value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot insert into a read only transaction");
+    }
+
+    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        panic!("Cannot remove from a read only transaction");
+    }
+
+    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
+        panic!("Cannot remove from a read only transaction");
     }
 }
 

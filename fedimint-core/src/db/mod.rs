@@ -329,7 +329,7 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// Start a read-only database transaction
     async fn begin_read_transaction<'a>(
         &'a self,
-    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a>;
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)>;
     /// Register (and wait) for `key` updates
     async fn register(&self, key: &[u8]);
     /// Notify about `key` update (creation, modification, deletion)
@@ -396,7 +396,7 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
     }
     async fn begin_read_transaction<'a>(
         &'a self,
-    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a> {
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)> {
         Box::new(self.raw.begin_read_transaction().await)
     }
     async fn register(&self, key: &[u8]) {
@@ -833,21 +833,9 @@ impl<Inner> IDatabaseTransactionOpsCore for PrefixReadTransaction<Inner>
 where
     Inner: IDatabaseTransactionOpsCore + Send,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        _key: &[u8],
-        _value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot insert into a read-only transaction");
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
         self.inner.raw_get_bytes(&key).await
-    }
-
-    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot remove from a read-only transaction");
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -875,10 +863,6 @@ where
             .raw_find_by_range(range.start.as_slice()..range.end.as_slice())
             .await?;
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
-    }
-
-    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
-        panic!("Cannot remove from a read-only transaction");
     }
 }
 
@@ -958,23 +942,9 @@ impl<Inner> IDatabaseTransactionOpsCore for PrefixDatabaseTransaction<Inner>
 where
     Inner: IDatabaseTransactionOpsCore,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        let key = self.get_full_key(key);
-        self.inner.raw_insert_bytes(&key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
         self.inner.raw_get_bytes(&key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        let key = self.get_full_key(key);
-        self.inner.raw_remove_entry(&key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -1006,6 +976,26 @@ where
             .await?;
         Ok(Self::adapt_prefix_stream(stream, self.prefix.len()))
     }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Inner> IDatabaseTransactionOpsCoreWrite for PrefixDatabaseTransaction<Inner>
+where
+    Inner: IDatabaseTransactionOpsCoreWrite,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_insert_bytes(&key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        let key = self.get_full_key(key);
+        self.inner.raw_remove_entry(&key).await
+    }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         let key = self.get_full_key(key_prefix);
@@ -1018,23 +1008,15 @@ impl<Inner> IDatabaseTransactionOps for PrefixDatabaseTransaction<Inner> where
 {
 }
 
-/// Core raw a operations database transactions supports
+/// Core raw read operations database transactions supports
 ///
-/// Used to enforce the same signature on all types supporting it
+/// Used to enforce the same signature on all types supporting it.
+/// This trait contains only read operations. Write operations are in
+/// [`IDatabaseTransactionOpsCoreWrite`].
 #[apply(async_trait_maybe_send!)]
 pub trait IDatabaseTransactionOpsCore: MaybeSend {
-    /// Insert entry
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>>;
-
     /// Get key value
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
-
-    /// Remove entry by `key`
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
 
     /// Returns an stream of key-value pairs with keys that start with
     /// `key_prefix`, sorted by key.
@@ -1050,9 +1032,6 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
     /// by key. [`Range`] is an (half-open) range bounded inclusively below and
     /// exclusively above.
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>>;
-
-    /// Delete keys matching prefix
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()>;
 }
 
 /// Write operations for database transactions
@@ -1090,20 +1069,8 @@ impl<T> IDatabaseTransactionOpsCore for Box<T>
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_insert_bytes(key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -1121,6 +1088,24 @@ where
 
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCoreWrite for Box<T>
+where
+    T: IDatabaseTransactionOpsCoreWrite + ?Sized,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_remove_entry(key).await
     }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
@@ -1133,20 +1118,8 @@ impl<T> IDatabaseTransactionOpsCore for &mut T
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_insert_bytes(key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         (**self).raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        (**self).raw_remove_entry(key).await
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -1165,6 +1138,24 @@ where
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
         (**self).raw_find_by_range(range).await
     }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCoreWrite for &mut T
+where
+    T: IDatabaseTransactionOpsCoreWrite + ?Sized,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        (**self).raw_remove_entry(key).await
+    }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         (**self).raw_remove_by_prefix(key_prefix).await
@@ -1172,11 +1163,11 @@ where
 }
 
 /// Additional operations (only some) database transactions expose, on top of
-/// [`IDatabaseTransactionOpsCore`]
+/// [`IDatabaseTransactionOpsCoreWrite`]
 ///
 /// In certain contexts exposing these operations would be a problem, so they
 /// are moved to a separate trait.
-pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCore + MaybeSend {}
+pub trait IDatabaseTransactionOps: IDatabaseTransactionOpsCoreWrite + MaybeSend {}
 
 impl<T> IDatabaseTransactionOps for Box<T> where T: IDatabaseTransactionOps + ?Sized {}
 
@@ -1263,7 +1254,7 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
 #[apply(async_trait_maybe_send!)]
 impl<T> IDatabaseTransactionOpsCoreTyped<'_> for T
 where
-    T: IDatabaseTransactionOpsCore + WithDecoders,
+    T: IDatabaseTransactionOpsCore + IDatabaseTransactionOpsCoreWrite + WithDecoders,
 {
     async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
@@ -1528,33 +1519,11 @@ where
 
 #[apply(async_trait_maybe_send!)]
 impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTransaction<Tx> {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        self.add_notification_key(key)?;
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .raw_insert_bytes(key, value)
-            .await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.raw
             .as_mut()
             .ok_or(DatabaseError::TransactionConsumed)?
             .raw_get_bytes(key)
-            .await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        self.add_notification_key(key)?;
-        self.raw
-            .as_mut()
-            .ok_or(DatabaseError::TransactionConsumed)?
-            .raw_remove_entry(key)
             .await
     }
 
@@ -1585,6 +1554,31 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTr
             .as_mut()
             .ok_or(DatabaseError::TransactionConsumed)?
             .raw_find_by_prefix_sorted_descending(key_prefix)
+            .await
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCoreWrite for BaseDatabaseTransaction<Tx> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        self.add_notification_key(key)?;
+        self.raw
+            .as_mut()
+            .ok_or(DatabaseError::TransactionConsumed)?
+            .raw_insert_bytes(key, value)
+            .await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.add_notification_key(key)?;
+        self.raw
+            .as_mut()
+            .ok_or(DatabaseError::TransactionConsumed)?
+            .raw_remove_entry(key)
             .await
     }
 
@@ -1755,20 +1749,8 @@ impl<'tx> ReadDatabaseTransaction<'tx> {
 
 #[apply(async_trait_maybe_send!)]
 impl IDatabaseTransactionOpsCore for ReadDatabaseTransaction<'_> {
-    async fn raw_insert_bytes(
-        &mut self,
-        _key: &[u8],
-        _value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot insert into a read-only transaction");
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.tx.raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        panic!("Cannot remove from a read-only transaction");
     }
 
     async fn raw_find_by_range(
@@ -1789,10 +1771,6 @@ impl IDatabaseTransactionOpsCore for ReadDatabaseTransaction<'_> {
         self.tx
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
-    }
-
-    async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
-        panic!("Cannot remove from a read-only transaction");
     }
 }
 
@@ -2142,21 +2120,8 @@ impl<Cap> IDatabaseTransactionOpsCore for DatabaseTransaction<'_, Cap>
 where
     Cap: Send,
 {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        self.commit_tracker.has_writes = true;
-        self.tx.raw_insert_bytes(key, value).await
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         self.tx.raw_get_bytes(key).await
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        self.tx.raw_remove_entry(key).await
     }
 
     async fn raw_find_by_range(
@@ -2178,12 +2143,32 @@ where
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
     }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<Cap> IDatabaseTransactionOpsCoreWrite for DatabaseTransaction<'_, Cap>
+where
+    Cap: Send,
+{
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_insert_bytes(key, value).await
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.tx.raw_remove_entry(key).await
+    }
 
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         self.commit_tracker.has_writes = true;
         self.tx.raw_remove_by_prefix(key_prefix).await
     }
 }
+
 impl IDatabaseTransactionOps for DatabaseTransaction<'_, Committable> {}
 
 impl<T> DatabaseKeyPrefix for T
@@ -3615,7 +3600,8 @@ mod test_utils {
         use crate::db::{
             AutocommitError, BaseDatabaseTransaction, DatabaseError, DatabaseResult,
             IDatabaseTransaction, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-            IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction,
+            IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
+            IRawDatabaseTransaction,
         };
 
         #[derive(Debug)]
@@ -3646,19 +3632,7 @@ mod test_utils {
 
         #[async_trait]
         impl IDatabaseTransactionOpsCore for FakeTransaction<'_> {
-            async fn raw_insert_bytes(
-                &mut self,
-                _key: &[u8],
-                _value: &[u8],
-            ) -> DatabaseResult<Option<Vec<u8>>> {
-                unimplemented!()
-            }
-
             async fn raw_get_bytes(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-                unimplemented!()
-            }
-
-            async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
                 unimplemented!()
             }
 
@@ -3676,14 +3650,29 @@ mod test_utils {
                 unimplemented!()
             }
 
-            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
-                unimplemented!()
-            }
-
             async fn raw_find_by_prefix_sorted_descending(
                 &mut self,
                 _key_prefix: &[u8],
             ) -> DatabaseResult<crate::db::PrefixStream<'_>> {
+                unimplemented!()
+            }
+        }
+
+        #[async_trait]
+        impl IDatabaseTransactionOpsCoreWrite for FakeTransaction<'_> {
+            async fn raw_insert_bytes(
+                &mut self,
+                _key: &[u8],
+                _value: &[u8],
+            ) -> DatabaseResult<Option<Vec<u8>>> {
+                unimplemented!()
+            }
+
+            async fn raw_remove_entry(&mut self, _key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+                unimplemented!()
+            }
+
+            async fn raw_remove_by_prefix(&mut self, _key_prefix: &[u8]) -> DatabaseResult<()> {
                 unimplemented!()
             }
         }

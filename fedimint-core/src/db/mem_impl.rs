@@ -8,7 +8,8 @@ use macro_rules_attribute::apply;
 
 use super::{
     DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction,
+    IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
+    IRawDatabaseTransaction,
 };
 use crate::async_trait_maybe_send;
 use crate::db::PrefixStream;
@@ -99,48 +100,8 @@ impl IRawDatabaseReadTransaction for MemTransaction<'_> {}
 // for production as it doesn't properly implement MVCC
 #[apply(async_trait_maybe_send!)]
 impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        // Insert data from copy so we can read our own writes
-        let old_value = self.tx_data.insert(key.to_vec(), value.to_owned());
-        self.operations
-            .push(DatabaseOperation::Insert(DatabaseInsertOperation {
-                key: key.to_vec(),
-                value: value.to_owned(),
-                old_value: old_value.clone(),
-            }));
-        Ok(old_value)
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self.tx_data.get(key).cloned())
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        // Remove data from copy so we can read our own writes
-        let old_value = self.tx_data.remove(&key.to_vec());
-        self.operations
-            .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
-                key: key.to_vec(),
-                old_value: old_value.clone(),
-            }));
-        Ok(old_value)
-    }
-
-    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
-        let keys = self
-            .raw_find_by_prefix(key_prefix)
-            .await?
-            .map(|kv| kv.0)
-            .collect::<Vec<_>>()
-            .await;
-        for key in keys {
-            self.raw_remove_entry(key.as_slice()).await?;
-        }
-        Ok(())
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<PrefixStream<'_>> {
@@ -178,6 +139,49 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<Vec<_>>();
         Ok(Box::pin(stream::iter(data)))
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IDatabaseTransactionOpsCoreWrite for MemTransaction<'_> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        // Insert data from copy so we can read our own writes
+        let old_value = self.tx_data.insert(key.to_vec(), value.to_owned());
+        self.operations
+            .push(DatabaseOperation::Insert(DatabaseInsertOperation {
+                key: key.to_vec(),
+                value: value.to_owned(),
+                old_value: old_value.clone(),
+            }));
+        Ok(old_value)
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        // Remove data from copy so we can read our own writes
+        let old_value = self.tx_data.remove(&key.to_vec());
+        self.operations
+            .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
+                key: key.to_vec(),
+                old_value: old_value.clone(),
+            }));
+        Ok(old_value)
+    }
+
+    async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
+        let keys = self
+            .raw_find_by_prefix(key_prefix)
+            .await?
+            .map(|kv| kv.0)
+            .collect::<Vec<_>>()
+            .await;
+        for key in keys {
+            self.raw_remove_entry(key.as_slice()).await?;
+        }
+        Ok(())
     }
 }
 

@@ -1,4 +1,7 @@
-use fedimint_core::db::{IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped,
+    IDatabaseTransactionOpsCoreWrite as _,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::AmountUnit;
 use fedimint_core::module::registry::ModuleRegistry;
