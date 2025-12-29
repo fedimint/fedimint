@@ -46,21 +46,15 @@ pub struct MemTransaction<'a> {
     operations: Vec<DatabaseOperation>,
     tx_data: OrdMap<Vec<u8>, Vec<u8>>,
     db: &'a MemDatabase,
-    savepoint: OrdMap<Vec<u8>, Vec<u8>>,
-    num_pending_operations: usize,
-    num_savepoint_operations: usize,
 }
 
 impl fmt::Debug for MemTransaction<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
-            "MemTransaction {{ db={:?}, operations_len={}, tx_data_len={}, savepoint_len={}, num_pending_ops={}, num_savepoint_ops={} }}",
+            "MemTransaction {{ db={:?}, operations_len={}, tx_data_len={} }}",
             self.db,
             self.operations.len(),
             self.tx_data.len(),
-            self.savepoint.len(),
-            self.num_pending_operations,
-            self.num_savepoint_operations,
         ))
     }
 }
@@ -79,17 +73,11 @@ impl IRawDatabase for MemDatabase {
     type Transaction<'a> = MemTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
         let db_copy = self.data.read().expect("Poisoned rwlock").clone();
-        let mut memtx = MemTransaction {
+        MemTransaction {
             operations: Vec::new(),
-            tx_data: db_copy.clone(),
+            tx_data: db_copy,
             db: self,
-            savepoint: db_copy,
-            num_pending_operations: 0,
-            num_savepoint_operations: 0,
-        };
-
-        memtx.set_tx_savepoint().await.expect("can't fail");
-        memtx
+        }
     }
 
     fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
@@ -114,7 +102,6 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
                 value: value.to_owned(),
                 old_value: old_value.clone(),
             }));
-        self.num_pending_operations += 1;
         Ok(old_value)
     }
 
@@ -130,7 +117,6 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
                 key: key.to_vec(),
                 old_value: old_value.clone(),
             }));
-        self.num_pending_operations += 1;
         Ok(old_value)
     }
 
@@ -185,26 +171,7 @@ impl IDatabaseTransactionOpsCore for MemTransaction<'_> {
     }
 }
 
-#[apply(async_trait_maybe_send!)]
-impl IDatabaseTransactionOps for MemTransaction<'_> {
-    async fn rollback_tx_to_savepoint(&mut self) -> DatabaseResult<()> {
-        self.tx_data = self.savepoint.clone();
-
-        // Remove any pending operations beyond the savepoint
-        let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
-        for _i in 0..removed_ops {
-            self.operations.pop();
-        }
-
-        Ok(())
-    }
-
-    async fn set_tx_savepoint(&mut self) -> DatabaseResult<()> {
-        self.savepoint = self.tx_data.clone();
-        self.num_savepoint_operations = self.num_pending_operations;
-        Ok(())
-    }
-}
+impl IDatabaseTransactionOps for MemTransaction<'_> {}
 
 #[apply(async_trait_maybe_send!)]
 impl IRawDatabaseTransaction for MemTransaction<'_> {
