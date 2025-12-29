@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex};
 
 use fedimint_core::db::{
     DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction, PrefixStream,
+    IDatabaseTransactionOpsCoreWrite, IRawDatabase, IRawDatabaseReadTransaction,
+    IRawDatabaseTransaction, PrefixStream,
 };
 use fedimint_core::{apply, async_trait_maybe_send};
 use futures::stream;
@@ -113,36 +114,8 @@ impl IRawDatabaseReadTransaction for MemAndRedbTransaction<'_> {}
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
-    async fn raw_insert_bytes(
-        &mut self,
-        key: &[u8],
-        value: &[u8],
-    ) -> DatabaseResult<Option<Vec<u8>>> {
-        let val = IDatabaseTransactionOpsCore::raw_get_bytes(self, key).await;
-        // Insert data from copy so we can read our own writes
-        let old_value = self.tx_data.insert(key.to_vec(), value.to_vec());
-        self.operations
-            .push(DatabaseOperation::Insert(DatabaseInsertOperation {
-                key: key.to_vec(),
-                value: value.to_vec(),
-                old_value,
-            }));
-        val
-    }
-
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         Ok(self.tx_data.get(key).cloned())
-    }
-
-    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
-        // Remove data from copy so we can read our own writes
-        let old_value = self.tx_data.remove(&key.to_vec());
-        self.operations
-            .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
-                key: key.to_vec(),
-                old_value: old_value.clone(),
-            }));
-        Ok(old_value)
     }
 
     async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> DatabaseResult<PrefixStream<'_>> {
@@ -169,6 +142,52 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
         Ok(Box::pin(stream::iter(data)))
     }
 
+    async fn raw_find_by_prefix_sorted_descending(
+        &mut self,
+        key_prefix: &[u8],
+    ) -> DatabaseResult<PrefixStream<'_>> {
+        let mut data = self
+            .tx_data
+            .range::<_, Vec<u8>>((key_prefix.to_vec())..)
+            .take_while(|(key, _)| key.starts_with(key_prefix))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>();
+        data.sort_by(|a, b| a.cmp(b).reverse());
+
+        Ok(Box::pin(stream::iter(data)))
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl<'a> IDatabaseTransactionOpsCoreWrite for MemAndRedbTransaction<'a> {
+    async fn raw_insert_bytes(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<Option<Vec<u8>>> {
+        let val = IDatabaseTransactionOpsCore::raw_get_bytes(self, key).await;
+        // Insert data from copy so we can read our own writes
+        let old_value = self.tx_data.insert(key.to_vec(), value.to_vec());
+        self.operations
+            .push(DatabaseOperation::Insert(DatabaseInsertOperation {
+                key: key.to_vec(),
+                value: value.to_vec(),
+                old_value,
+            }));
+        val
+    }
+
+    async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        // Remove data from copy so we can read our own writes
+        let old_value = self.tx_data.remove(&key.to_vec());
+        self.operations
+            .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
+                key: key.to_vec(),
+                old_value: old_value.clone(),
+            }));
+        Ok(old_value)
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> DatabaseResult<()> {
         let keys = self
             .tx_data
@@ -185,21 +204,6 @@ impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {
                 }));
         }
         Ok(())
-    }
-
-    async fn raw_find_by_prefix_sorted_descending(
-        &mut self,
-        key_prefix: &[u8],
-    ) -> DatabaseResult<PrefixStream<'_>> {
-        let mut data = self
-            .tx_data
-            .range::<_, Vec<u8>>((key_prefix.to_vec())..)
-            .take_while(|(key, _)| key.starts_with(key_prefix))
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect::<Vec<_>>();
-        data.sort_by(|a, b| a.cmp(b).reverse());
-
-        Ok(Box::pin(stream::iter(data)))
     }
 }
 

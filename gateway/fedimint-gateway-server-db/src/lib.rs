@@ -7,7 +7,8 @@ use fedimint_api_client::api::net::ConnectorType;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, GeneralDbMigrationFn,
-    GeneralDbMigrationFnContext, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+    GeneralDbMigrationFnContext, IDatabaseTransactionOpsCore as _,
+    IDatabaseTransactionOpsCoreTyped, IDatabaseTransactionOpsCoreWrite as _,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};
