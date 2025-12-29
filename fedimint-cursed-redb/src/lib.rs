@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use fedimint_core::db::{
     DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IRawDatabase, IRawDatabaseTransaction, PrefixStream,
+    IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction, PrefixStream,
 };
 use fedimint_core::{apply, async_trait_maybe_send};
 use futures::stream;
@@ -85,6 +85,8 @@ impl MemAndRedb {
 #[apply(async_trait_maybe_send!)]
 impl IRawDatabase for MemAndRedb {
     type Transaction<'a> = MemAndRedbTransaction<'a>;
+    // Fallback: use write transaction as read transaction for now
+    type ReadTransaction<'a> = MemAndRedbTransaction<'a>;
 
     async fn begin_transaction<'a>(&'a self) -> MemAndRedbTransaction<'a> {
         MemAndRedbTransaction {
@@ -97,10 +99,17 @@ impl IRawDatabase for MemAndRedb {
         }
     }
 
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
+        // Fallback: use write transaction as read transaction
+        self.begin_transaction().await
+    }
+
     fn checkpoint(&self, _: &Path) -> DatabaseResult<()> {
         unimplemented!()
     }
 }
+
+impl IRawDatabaseReadTransaction for MemAndRedbTransaction<'_> {}
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> IDatabaseTransactionOpsCore for MemAndRedbTransaction<'a> {

@@ -8,7 +8,7 @@ use macro_rules_attribute::apply;
 
 use super::{
     DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IRawDatabase, IRawDatabaseTransaction,
+    IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction,
 };
 use crate::async_trait_maybe_send;
 use crate::db::PrefixStream;
@@ -71,6 +71,9 @@ impl MemDatabase {
 #[apply(async_trait_maybe_send!)]
 impl IRawDatabase for MemDatabase {
     type Transaction<'a> = MemTransaction<'a>;
+    // Fallback: use write transaction as read transaction for now
+    type ReadTransaction<'a> = MemTransaction<'a>;
+
     async fn begin_transaction<'a>(&'a self) -> MemTransaction<'a> {
         let db_copy = self.data.read().expect("Poisoned rwlock").clone();
         MemTransaction {
@@ -80,10 +83,17 @@ impl IRawDatabase for MemDatabase {
         }
     }
 
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
+        // Fallback: use write transaction as read transaction
+        self.begin_transaction().await
+    }
+
     fn checkpoint(&self, _backup_path: &Path) -> DatabaseResult<()> {
         Ok(())
     }
 }
+
+impl IRawDatabaseReadTransaction for MemTransaction<'_> {}
 
 // In-memory database transaction should only be used for test code and never
 // for production as it doesn't properly implement MVCC
