@@ -13,7 +13,8 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_core::task::{block_in_place, sleep, timeout};
-use fedimint_core::util::{FmtCompact as _, SafeUrl, write_overwrite_async};
+use fedimint_core::util::backoff_util::api_networking_backoff;
+use fedimint_core::util::{FmtCompact as _, SafeUrl, retry, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
 use futures::StreamExt;
@@ -401,11 +402,21 @@ impl Bitcoind {
         })
         .await??;
 
-        // If this ever fails, it means we need to poll here, before we return to the
-        // user, as downstream code expects that mining blocks will include this
-        // tx.
-        assert!(client.get_transaction(txid).await?.is_some());
+        // Downstream code expects that mining blocks will include this
+        // tx. Seems like this is not always immediately the case in Bitcoin Knobs.
+        retry(
+            "await-genesis-tx-processed".to_string(),
+            api_networking_backoff(),
+            || async {
+                if client.get_transaction(txid).await?.is_none() {
+                    bail!("Genesis tx not visible yet = {}", txid);
+                }
 
+                Ok(())
+            },
+        )
+        .await
+        .expect("Number of retries has no limit");
         Ok(txid)
     }
 
