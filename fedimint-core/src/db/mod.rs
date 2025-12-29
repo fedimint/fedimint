@@ -265,8 +265,14 @@ pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// A raw database transaction type
     type Transaction<'a>: IRawDatabaseTransaction + Debug;
 
+    /// A raw read-only database transaction type
+    type ReadTransaction<'a>: IRawDatabaseReadTransaction + Debug;
+
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
+
+    /// Start a read-only database transaction
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a>;
 
     // Checkpoint the database to a backup directory
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()>;
@@ -278,9 +284,14 @@ where
     T: IRawDatabase,
 {
     type Transaction<'a> = <T as IRawDatabase>::Transaction<'a>;
+    type ReadTransaction<'a> = <T as IRawDatabase>::ReadTransaction<'a>;
 
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
         (**self).begin_transaction().await
+    }
+
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
+        (**self).begin_read_transaction().await
     }
 
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -3371,7 +3382,7 @@ mod test_utils {
         use crate::db::{
             AutocommitError, BaseDatabaseTransaction, DatabaseError, DatabaseResult,
             IDatabaseTransaction, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-            IRawDatabase, IRawDatabaseTransaction,
+            IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction,
         };
 
         #[derive(Debug)]
@@ -3380,7 +3391,13 @@ mod test_utils {
         #[async_trait]
         impl IRawDatabase for FakeDatabase {
             type Transaction<'a> = FakeTransaction<'a>;
+            type ReadTransaction<'a> = FakeTransaction<'a>;
+
             async fn begin_transaction(&self) -> FakeTransaction {
+                FakeTransaction(PhantomData)
+            }
+
+            async fn begin_read_transaction(&self) -> FakeTransaction {
                 FakeTransaction(PhantomData)
             }
 
@@ -3391,6 +3408,8 @@ mod test_utils {
 
         #[derive(Debug)]
         struct FakeTransaction<'a>(PhantomData<&'a ()>);
+
+        impl IRawDatabaseReadTransaction for FakeTransaction<'_> {}
 
         #[async_trait]
         impl IDatabaseTransactionOpsCore for FakeTransaction<'_> {

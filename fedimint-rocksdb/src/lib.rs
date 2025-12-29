@@ -14,7 +14,7 @@ use anyhow::{Context as _, bail};
 use async_trait::async_trait;
 use fedimint_core::db::{
     DatabaseError, DatabaseResult, IDatabaseTransactionOps, IDatabaseTransactionOpsCore,
-    IRawDatabase, IRawDatabaseTransaction, PrefixStream,
+    IRawDatabase, IRawDatabaseReadTransaction, IRawDatabaseTransaction, PrefixStream,
 };
 use fedimint_core::task::block_in_place;
 use fedimint_db_locked::{Locked, LockedBuilder};
@@ -212,6 +212,9 @@ fn next_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
 #[async_trait]
 impl IRawDatabase for RocksDb {
     type Transaction<'a> = RocksDbTransaction<'a>;
+    // Fallback: use write transaction as read transaction for now
+    type ReadTransaction<'a> = RocksDbTransaction<'a>;
+
     async fn begin_transaction<'a>(&'a self) -> RocksDbTransaction {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
@@ -221,6 +224,11 @@ impl IRawDatabase for RocksDb {
         write_options.set_sync(true);
 
         RocksDbTransaction(self.0.transaction_opt(&write_options, &optimistic_options))
+    }
+
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
+        // Fallback: use write transaction as read transaction
+        self.begin_transaction().await
     }
 
     fn checkpoint(&self, backup_path: &Path) -> DatabaseResult<()> {
@@ -233,10 +241,18 @@ impl IRawDatabase for RocksDb {
     }
 }
 
+impl IRawDatabaseReadTransaction for RocksDbTransaction<'_> {}
+
 #[async_trait]
 impl IRawDatabase for RocksDbReadOnly {
     type Transaction<'a> = RocksDbReadOnlyTransaction<'a>;
+    type ReadTransaction<'a> = RocksDbReadOnlyTransaction<'a>;
+
     async fn begin_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
+        RocksDbReadOnlyTransaction(&self.0)
+    }
+
+    async fn begin_read_transaction<'a>(&'a self) -> Self::ReadTransaction<'a> {
         RocksDbReadOnlyTransaction(&self.0)
     }
 
@@ -249,6 +265,8 @@ impl IRawDatabase for RocksDbReadOnly {
         Ok(())
     }
 }
+
+impl IRawDatabaseReadTransaction for RocksDbReadOnlyTransaction<'_> {}
 
 #[async_trait]
 impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
