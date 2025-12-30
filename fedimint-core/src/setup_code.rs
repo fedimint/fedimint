@@ -15,8 +15,6 @@ pub struct PeerSetupCode {
     pub name: String,
     /// The peer's api and p2p endpoint
     pub endpoints: PeerEndpoints,
-    /// Federation name set by the leader
-    pub federation_name: Option<String>,
     /// Whether to disable base fees, set by the leader
     pub disable_base_fees: Option<bool>,
     /// Modules enabled by the leader (if None, all available modules are
