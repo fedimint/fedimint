@@ -353,7 +353,7 @@ where
     }
     async fn begin_read_transaction<'a>(
         &'a self,
-    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a> {
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)> {
         (**self).begin_read_transaction().await
     }
     async fn register(&self, key: &[u8]) {
@@ -783,7 +783,7 @@ where
 
     async fn begin_read_transaction<'a>(
         &'a self,
-    ) -> Box<dyn IRawDatabaseReadTransaction + Send + 'a> {
+    ) -> Box<maybe_add_send!(dyn IRawDatabaseReadTransaction + 'a)> {
         Box::new(PrefixReadTransaction {
             inner: self.inner.begin_read_transaction().await,
             prefix: self.prefix.clone(),
@@ -831,7 +831,7 @@ impl<Inner> PrefixReadTransaction<Inner> {
 #[apply(async_trait_maybe_send!)]
 impl<Inner> IDatabaseTransactionOpsCore for PrefixReadTransaction<Inner>
 where
-    Inner: IDatabaseTransactionOpsCore + Send,
+    Inner: IDatabaseTransactionOpsCore + MaybeSend,
 {
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
         let key = self.get_full_key(key);
@@ -867,7 +867,7 @@ where
 }
 
 impl<Inner> IRawDatabaseReadTransaction for PrefixReadTransaction<Inner> where
-    Inner: IDatabaseTransactionOpsCore + Send + Debug
+    Inner: IDatabaseTransactionOpsCore + MaybeSend + Debug
 {
 }
 
@@ -1696,7 +1696,7 @@ pub struct NonCommittable;
 /// It uses a true read transaction internally when available (e.g., with redb),
 /// allowing concurrent readers without blocking writers.
 pub struct ReadDatabaseTransaction<'tx> {
-    tx: Box<dyn IRawDatabaseReadTransaction + Send + 'tx>,
+    tx: Box<dyn IRawDatabaseReadTransaction + 'tx>,
     decoders: ModuleDecoderRegistry,
 }
 
@@ -1715,7 +1715,7 @@ impl WithDecoders for ReadDatabaseTransaction<'_> {
 impl<'tx> ReadDatabaseTransaction<'tx> {
     /// Create a new read-only transaction
     pub fn new(
-        tx: impl IRawDatabaseReadTransaction + Send + 'tx,
+        tx: impl IRawDatabaseReadTransaction + 'tx,
         decoders: ModuleDecoderRegistry,
     ) -> Self {
         Self {
