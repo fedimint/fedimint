@@ -182,7 +182,7 @@ async fn dashboard_view(
     let content = html! {
         div class="row gy-4" {
             div class="col-md-6" {
-                (general::render(&federation_name, session_count, &guardian_names))
+                (general::render(federation_name.as_deref(), session_count, &guardian_names))
             }
 
             div class="col-md-6" {

@@ -59,8 +59,6 @@ pub struct LocalParams {
     endpoints: PeerEndpoints,
     /// Name of the peer, used in TLS auth
     name: String,
-    /// Federation name set by the leader
-    federation_name: Option<String>,
     /// Whether to disable base fees, set by the leader
     disable_base_fees: Option<bool>,
     /// Modules enabled by the leader (if None, all available modules are
@@ -73,7 +71,6 @@ impl LocalParams {
         PeerSetupCode {
             name: self.name.clone(),
             endpoints: self.endpoints.clone(),
-            federation_name: self.federation_name.clone(),
             disable_base_fees: self.disable_base_fees,
             enabled_modules: self.enabled_modules.clone(),
         }
@@ -154,14 +151,12 @@ impl ISetupApi for SetupApi {
         &self,
         auth: ApiAuth,
         name: String,
-        federation_name: Option<String>,
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
     ) -> anyhow::Result<String> {
         if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
             && existing_local_parameters.auth == auth
             && existing_local_parameters.name == name
-            && existing_local_parameters.federation_name == federation_name
             && existing_local_parameters.disable_base_fees == disable_base_fees
             && existing_local_parameters.enabled_modules == enabled_modules
         {
@@ -179,10 +174,6 @@ impl ISetupApi for SetupApi {
             auth.0.trim() == auth.0,
             "The password contains leading/trailing whitespace",
         );
-
-        if let Some(federation_name) = federation_name.as_ref() {
-            ensure!(!federation_name.is_empty(), "The federation name is empty");
-        }
 
         let mut state = self.state.lock().await;
 
@@ -216,7 +207,6 @@ impl ISetupApi for SetupApi {
                     p2p_pk: iroh_p2p_sk.public(),
                 },
                 name,
-                federation_name,
                 disable_base_fees,
                 enabled_modules,
             }
@@ -244,7 +234,6 @@ impl ISetupApi for SetupApi {
                     cert: tls_cert.as_ref().to_vec(),
                 },
                 name,
-                federation_name,
                 disable_base_fees,
                 enabled_modules,
             }
@@ -278,18 +267,6 @@ impl ISetupApi for SetupApi {
             discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
             "Guardian has different endpoint variant (TCP/Iroh) than us.",
         );
-
-        if let Some(federation_name) = state
-            .setup_codes
-            .iter()
-            .chain(once(&local_params.setup_code()))
-            .find_map(|info| info.federation_name.clone())
-        {
-            ensure!(
-                info.federation_name.is_none(),
-                "Federation name has already been set to {federation_name}"
-            );
-        }
 
         if let Some(disable_base_fees) = state
             .setup_codes
@@ -336,12 +313,6 @@ impl ISetupApi for SetupApi {
             state.setup_codes.len() == 1 || state.setup_codes.len() >= 4,
             "The number of guardians is invalid"
         );
-
-        let _federation_name = state
-            .setup_codes
-            .iter()
-            .find_map(|info| info.federation_name.clone())
-            .context("We need one guardian to configure the federations name")?;
 
         let disable_base_fees = state
             .setup_codes
@@ -428,7 +399,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
                     .request_auth()
                     .ok_or(ApiError::bad_request("Missing password".to_string()))?;
 
-                 config.set_local_parameters(auth, request.name, request.federation_name, request.disable_base_fees, request.enabled_modules)
+                 config.set_local_parameters(auth, request.name, request.disable_base_fees, request.enabled_modules)
                     .await
                     .map_err(|e| ApiError::bad_request(e.to_string()))
             }
