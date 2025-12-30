@@ -476,7 +476,7 @@ impl ConsensusApi {
             return Err(ApiError::bad_request("Invalid signature".into()));
         }
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         if let Some(existing_announcement) = dbtx.get_value(&ApiAnnouncementKey(peer_id)).await {
             // If the current announcement is semantically identical to the new one (except

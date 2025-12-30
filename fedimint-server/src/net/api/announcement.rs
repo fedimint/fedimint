@@ -117,7 +117,7 @@ pub async fn start_api_announcement_service(
 /// Checks if we already have a signed API endpoint announcement for our own
 /// identity in the database and creates one if not.
 async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) {
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
     if dbtx
         .get_value(&ApiAnnouncementKey(cfg.local.identity))
         .await
