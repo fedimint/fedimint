@@ -476,50 +476,30 @@ impl ConsensusApi {
             return Err(ApiError::bad_request("Invalid signature".into()));
         }
 
-        // Use autocommit to handle potential transaction conflicts with retries
-        self.db
-            .autocommit(
-                |dbtx, _| {
-                    let announcement = announcement.clone();
-                    Box::pin(async move {
-                        if let Some(existing_announcement) =
-                            dbtx.get_value(&ApiAnnouncementKey(peer_id)).await
-                        {
-                            // If the current announcement is semantically identical to the new one
-                            // (except for potentially having a
-                            // different, valid signature) we return ok to allow
-                            // the caller to stop submitting the value if they are in a retry loop.
-                            if existing_announcement.api_announcement
-                                == announcement.api_announcement
-                            {
-                                return Ok(());
-                            }
+        let mut dbtx = self.db.begin_write_transaction().await;
 
-                            // We only accept announcements with a nonce higher than the current one
-                            // to avoid replay attacks.
-                            if existing_announcement.api_announcement.nonce
-                                >= announcement.api_announcement.nonce
-                            {
-                                return Err(ApiError::bad_request(
-                                    "Outdated or redundant announcement".into(),
-                                ));
-                            }
-                        }
+        if let Some(existing_announcement) = dbtx.get_value(&ApiAnnouncementKey(peer_id)).await {
+            // If the current announcement is semantically identical to the new one
+            // (except for potentially having a different, valid signature) we return ok
+            // to allow the caller to stop submitting the value if they are in a retry
+            // loop.
+            if existing_announcement.api_announcement == announcement.api_announcement {
+                return Ok(());
+            }
 
-                        dbtx.insert_entry(&ApiAnnouncementKey(peer_id), &announcement)
-                            .await;
-                        Ok(())
-                    })
-                },
-                None,
-            )
-            .await
-            .map_err(|e| match e {
-                fedimint_core::db::AutocommitError::ClosureError { error, .. } => error,
-                fedimint_core::db::AutocommitError::CommitFailed { last_error, .. } => {
-                    ApiError::server_error(format!("Database commit failed: {last_error}"))
-                }
-            })
+            // We only accept announcements with a nonce higher than the current one
+            // to avoid replay attacks.
+            if existing_announcement.api_announcement.nonce >= announcement.api_announcement.nonce {
+                return Err(ApiError::bad_request(
+                    "Outdated or redundant announcement".into(),
+                ));
+            }
+        }
+
+        dbtx.insert_entry(&ApiAnnouncementKey(peer_id), &announcement)
+            .await;
+        dbtx.commit_tx().await;
+        Ok(())
     }
 
     async fn sign_api_announcement(&self, new_url: SafeUrl) -> SignedApiAnnouncement {
