@@ -12,8 +12,8 @@ use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction,
+    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
@@ -896,7 +896,7 @@ impl ConsensusEngine {
             ])
             .set(session_index as i64);
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         dbtx.ignore_uncommitted();
 
@@ -965,6 +965,7 @@ impl ConsensusEngine {
             module
                 .audit(
                     &mut dbtx
+                        .as_legacy_dbtx()
                         .to_ref_with_prefix_module_id(module_instance_id)
                         .0
                         .into_nc(),
@@ -1000,7 +1001,7 @@ impl ConsensusEngine {
 
     async fn process_consensus_item_with_db_transaction(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -1016,7 +1017,11 @@ impl ConsensusEngine {
 
                 self.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, &module_item, peer_id)
+                    .process_consensus_item(
+                        &mut module_dbtx.as_legacy_dbtx(),
+                        &module_item,
+                        peer_id,
+                    )
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
@@ -1042,7 +1047,7 @@ impl ConsensusEngine {
 
                 process_transaction_with_dbtx(
                     self.modules.clone(),
-                    dbtx,
+                    &mut dbtx.as_legacy_dbtx(),
                     &transaction,
                     self.cfg.consensus.version,
                     TxProcessingMode::Consensus,
