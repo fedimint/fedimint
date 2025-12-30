@@ -1064,6 +1064,8 @@ pub trait IRawDatabaseReadTransaction: IDatabaseTransactionOpsCore + MaybeSend +
 
 impl<T: IRawDatabaseReadTransaction + ?Sized> IRawDatabaseReadTransaction for Box<T> {}
 
+impl<T: IRawDatabaseReadTransaction + ?Sized> IRawDatabaseReadTransaction for &mut T {}
+
 #[apply(async_trait_maybe_send!)]
 impl<T> IDatabaseTransactionOpsCore for Box<T>
 where
@@ -1741,6 +1743,53 @@ impl<'tx> ReadDatabaseTransaction<'tx> {
                     prefix,
                 }),
                 decoders: self.decoders,
+            },
+            global_dbtx_access_token,
+        )
+    }
+
+    /// Get [`ReadDatabaseTransaction`] isolated to a `prefix`
+    pub fn with_prefix<'a: 'tx>(self, prefix: Vec<u8>) -> ReadDatabaseTransaction<'a>
+    where
+        'tx: 'a,
+    {
+        ReadDatabaseTransaction {
+            tx: Box::new(PrefixReadTransaction {
+                inner: self.tx,
+                prefix,
+            }),
+            decoders: self.decoders,
+        }
+    }
+
+    /// Get a reference to this transaction
+    pub fn to_ref<'s, 'a>(&'s mut self) -> ReadDatabaseTransaction<'a>
+    where
+        's: 'a,
+    {
+        ReadDatabaseTransaction {
+            tx: Box::new(&mut self.tx),
+            decoders: self.decoders.clone(),
+        }
+    }
+
+    /// Get a reference to this transaction with a module prefix
+    pub fn to_ref_with_prefix_module_id<'a>(
+        &'a mut self,
+        module_instance_id: ModuleInstanceId,
+    ) -> (ReadDatabaseTransaction<'a>, GlobalDBTxAccessToken)
+    where
+        'tx: 'a,
+    {
+        let prefix = module_instance_id_to_byte_prefix(module_instance_id);
+        let global_dbtx_access_token = GlobalDBTxAccessToken::from_prefix(&prefix);
+        (
+            ReadDatabaseTransaction {
+                tx: Box::new(PrefixReadTransaction {
+                    inner: &mut self.tx,
+                    prefix,
+                }),
+                decoders: self.decoders.clone(),
             },
             global_dbtx_access_token,
         )
