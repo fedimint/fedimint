@@ -617,7 +617,7 @@ impl IDashboardApi for ConsensusApi {
             .meta
             .get(META_FEDERATION_NAME_KEY)
             .cloned()
-            .expect("Federation name must be set")
+            .unwrap_or_default()
     }
 
     async fn session_count(&self) -> u64 {

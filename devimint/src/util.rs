@@ -747,9 +747,7 @@ impl FedimintCli {
             "setup",
             endpoint,
             "set-local-params",
-            format!("Devimint Guardian {peer}"),
-            "--federation-name",
-            "Devimint Federation"
+            format!("Devimint Guardian {peer}")
         )
         .out_json()
         .await?;
