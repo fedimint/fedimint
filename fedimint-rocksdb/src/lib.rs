@@ -653,12 +653,13 @@ mod fedimint_rocksdb_tests {
 
         for i in 0u64..10 {
             let db_clone = Arc::clone(&db);
-            let handle = tokio::spawn(async move {
+            let handle = fedimint_core::runtime::spawn("rocksdb-transient-error-test", async move {
                 for j in 0u64..10 {
                     // Use autocommit which handles retriable errors with retry logic
                     let result = db_clone
                         .autocommit::<_, _, anyhow::Error>(
                             |dbtx, _| {
+                                #[allow(clippy::cast_possible_truncation)]
                                 let val = (i * 100 + j) as u8;
                                 Box::pin(async move {
                                     // All transactions write to the same key to force conflicts
