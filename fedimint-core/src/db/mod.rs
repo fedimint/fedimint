@@ -123,6 +123,7 @@ use rand::Rng;
 use serde::Serialize;
 use strum_macros::EnumIter;
 use thiserror::Error;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::core::{ModuleInstanceId, ModuleKind};
@@ -424,6 +425,8 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
 pub struct Database {
     inner: Arc<dyn IDatabase + 'static>,
     module_decoders: ModuleDecoderRegistry,
+    /// Semaphore to ensure only one write transaction exists at a time
+    write_semaphore: Arc<Semaphore>,
 }
 
 impl Database {
@@ -460,6 +463,7 @@ impl Database {
         Self {
             inner,
             module_decoders,
+            write_semaphore: Arc::new(Semaphore::new(1)),
         }
     }
 
@@ -472,6 +476,7 @@ impl Database {
                 prefix,
             }),
             module_decoders: self.module_decoders.clone(),
+            write_semaphore: self.write_semaphore.clone(),
         }
     }
 
@@ -492,6 +497,7 @@ impl Database {
                     prefix,
                 }),
                 module_decoders: self.module_decoders.clone(),
+                write_semaphore: self.write_semaphore.clone(),
             },
             global_dbtx_access_token,
         )
@@ -501,6 +507,7 @@ impl Database {
         Self {
             inner: self.inner.clone(),
             module_decoders,
+            write_semaphore: self.write_semaphore.clone(),
         }
     }
 
@@ -568,17 +575,24 @@ impl Database {
 
     /// Begin a new committable write database transaction
     ///
-    /// This returns a [`WriteDatabaseTransaction`] with `#[must_use]` to ensure
-    /// the transaction is committed.
+    /// Only one write transaction can exist at a time. This method will wait
+    /// until any existing write transaction is dropped.
     pub async fn begin_write_transaction<'s, 'tx>(
         &'s self,
     ) -> WriteDatabaseTransaction<'tx, Committable>
     where
         's: 'tx,
     {
+        let permit = self
+            .write_semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore is never closed");
         WriteDatabaseTransaction::<Committable>::new(
             self.inner.begin_transaction().await,
             self.module_decoders.clone(),
+            permit,
         )
     }
 
@@ -2011,13 +2025,16 @@ impl IReadDatabaseTransactionOpsCoreTyped<'_> for ReadDatabaseTransaction<'_> {
 ///
 /// `Cap` is a session type controlling whether this transaction can be
 /// committed.
-#[must_use = "write transactions must be committed with commit_tx()"]
 pub struct WriteDatabaseTransaction<'tx, Cap = NonCommittable> {
     tx: Box<dyn IDatabaseTransaction + 'tx>,
     decoders: ModuleDecoderRegistry,
     commit_tracker: MaybeRef<'tx, CommitTracker>,
     on_commit_hooks: MaybeRef<'tx, Vec<Box<maybe_add_send!(dyn FnOnce())>>>,
     capability: marker::PhantomData<Cap>,
+    /// Permit ensuring only one write transaction exists at a time.
+    /// Held for the lifetime of the transaction and released on drop.
+    #[allow(unused)]
+    write_permit: Arc<OwnedSemaphorePermit>,
 }
 
 impl<Cap> fmt::Debug for WriteDatabaseTransaction<'_, Cap> {
@@ -2044,6 +2061,7 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
             commit_tracker: self.commit_tracker,
             on_commit_hooks: self.on_commit_hooks,
             capability: PhantomData::<NonCommittable>,
+            write_permit: self.write_permit,
         }
     }
 
@@ -2070,6 +2088,7 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
             commit_tracker: self.commit_tracker,
             on_commit_hooks: self.on_commit_hooks,
             capability: self.capability,
+            write_permit: self.write_permit,
         }
     }
 
@@ -2096,6 +2115,7 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
                 commit_tracker: self.commit_tracker,
                 on_commit_hooks: self.on_commit_hooks,
                 capability: self.capability,
+                write_permit: self.write_permit,
             },
             global_dbtx_access_token,
         )
@@ -2120,6 +2140,7 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
                 MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
             },
             capability: self.capability,
+            write_permit: self.write_permit.clone(),
         }
     }
 
@@ -2168,6 +2189,7 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
                 MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
             },
             capability: self.capability,
+            write_permit: self.write_permit.clone(),
         }
     }
 
@@ -2197,6 +2219,7 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
                     MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
                 },
                 capability: self.capability,
+                write_permit: self.write_permit.clone(),
             },
             global_dbtx_access_token,
         )
@@ -2268,12 +2291,17 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
                 MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
             },
             capability: self.capability,
+            write_permit: self.write_permit.clone(),
         }
     }
 }
 
 impl<'tx> WriteDatabaseTransaction<'tx, Committable> {
-    pub fn new(dbtx: Box<dyn IDatabaseTransaction + 'tx>, decoders: ModuleDecoderRegistry) -> Self {
+    pub fn new(
+        dbtx: Box<dyn IDatabaseTransaction + 'tx>,
+        decoders: ModuleDecoderRegistry,
+        write_permit: OwnedSemaphorePermit,
+    ) -> Self {
         Self {
             tx: dbtx,
             decoders,
@@ -2284,6 +2312,7 @@ impl<'tx> WriteDatabaseTransaction<'tx, Committable> {
             }),
             on_commit_hooks: MaybeRef::Owned(vec![]),
             capability: PhantomData,
+            write_permit: Arc::new(write_permit),
         }
     }
 
