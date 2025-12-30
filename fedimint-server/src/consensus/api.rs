@@ -20,6 +20,7 @@ use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedB
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -231,7 +232,7 @@ impl ConsensusApi {
     }
 
     pub async fn session_count(&self) -> u64 {
-        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+        get_finished_session_count_static(&mut self.db.begin_read_transaction().await).await
     }
 
     pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
@@ -242,7 +243,7 @@ impl ConsensusApi {
     }
 
     pub async fn session_status(&self, session_index: u64) -> SessionStatusV2 {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
 
         match session_index.cmp(&get_finished_session_count_static(&mut dbtx).await) {
             Ordering::Greater => SessionStatusV2::Initial,
@@ -398,7 +399,7 @@ impl ConsensusApi {
 
     async fn handle_backup_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_, Committable>,
         request: SignedBackupRequest,
     ) -> Result<(), ApiError> {
         let request = request
@@ -437,7 +438,7 @@ impl ConsensusApi {
 
     async fn handle_recover_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
         id: PublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
@@ -447,7 +448,7 @@ impl ConsensusApi {
     /// least ourselves)
     async fn api_announcements(&self) -> BTreeMap<PeerId, SignedApiAnnouncement> {
         self.db
-            .begin_transaction_nc()
+            .begin_read_transaction()
             .await
             .find_by_prefix(&ApiAnnouncementPrefix)
             .await
@@ -886,9 +887,9 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, request: SignedBackupRequest| -> () {
                 let db = context.db();
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db.begin_write_transaction().await;
                 fedimint
-                    .handle_backup_request(&mut dbtx.to_ref_nc(), request).await?;
+                    .handle_backup_request(&mut dbtx, request).await?;
                 dbtx.commit_tx_result().await?;
                 Ok(())
 
@@ -899,7 +900,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, id: PublicKey| -> Option<ClientBackupSnapshot> {
                 let db = context.db();
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
                 Ok(fedimint
                     .handle_recover_request(&mut dbtx, id).await)
             }
@@ -947,7 +948,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |_fedimint: &ConsensusApi, context, _v: ()| -> BackupStatistics {
                 check_auth(context)?;
                 let db = context.db();
-                let mut dbtx = db.begin_transaction_nc().await;
+                let mut dbtx = db.begin_read_transaction().await;
                 Ok(backup_statistics_static(&mut dbtx).await)
             }
         },
@@ -970,7 +971,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
 }
 
 pub(crate) async fn backup_statistics_static(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut ReadDatabaseTransaction<'_>,
 ) -> BackupStatistics {
     const DAY_SECS: u64 = 24 * 60 * 60;
     const WEEK_SECS: u64 = 7 * DAY_SECS;

@@ -3,7 +3,9 @@ use std::time::Duration;
 
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, override_api_urls,
@@ -64,7 +66,7 @@ pub async fn start_api_announcement_service(
         sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).await;
         loop {
             let mut success = true;
-            let announcements = db.begin_transaction_nc()
+            let announcements = db.begin_read_transaction()
                 .await
                 .find_by_prefix(&ApiAnnouncementPrefix)
                 .await
@@ -85,7 +87,7 @@ pub async fn start_api_announcement_service(
             // While we announce all peer API urls, we only want to immediately trigger in case
             let our_announcement_key = ApiAnnouncementKey(our_peer_id);
             let our_announcement = db
-                .begin_transaction_nc()
+                .begin_read_transaction()
                 .await
                 .get_value(&our_announcement_key)
                 .await
