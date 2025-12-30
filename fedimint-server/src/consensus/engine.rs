@@ -1047,7 +1047,7 @@ impl ConsensusEngine {
 
                 process_transaction_with_dbtx(
                     self.modules.clone(),
-                    &mut dbtx.as_legacy_dbtx(),
+                    dbtx,
                     &transaction,
                     self.cfg.consensus.version,
                     TxProcessingMode::Consensus,
