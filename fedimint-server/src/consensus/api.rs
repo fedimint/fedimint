@@ -315,11 +315,7 @@ impl ConsensusApi {
     }
 
     async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
-        // Writes are related to compacting audit keys, which we can safely ignore
-        // within an API request since the compaction will happen when constructing an
-        // audit in the consensus server
-        dbtx.ignore_uncommitted();
+        let mut dbtx = self.db.begin_write_transaction().await;
 
         let mut audit = Audit::default();
         let mut module_instance_id_to_kind: HashMap<ModuleInstanceId, String> = HashMap::new();
@@ -327,7 +323,10 @@ impl ConsensusApi {
             module_instance_id_to_kind.insert(module_instance_id, kind.as_str().to_string());
             module
                 .audit(
-                    &mut dbtx.to_ref_with_prefix_module_id(module_instance_id).0,
+                    &mut dbtx
+                        .to_ref_with_prefix_module_id(module_instance_id)
+                        .0
+                        .to_ref_nc(),
                     &mut audit,
                     module_instance_id,
                 )

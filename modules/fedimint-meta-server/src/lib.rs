@@ -20,7 +20,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    NonCommittable,
+    NonCommittable, WriteDatabaseTransaction,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::serde_json::Value;
@@ -216,7 +216,9 @@ pub struct Meta {
 }
 
 impl Meta {
-    async fn get_desired(dbtx: &mut DatabaseTransaction<'_>) -> Vec<(MetaKey, MetaDesiredValue)> {
+    async fn get_desired(
+        dbtx: &mut WriteDatabaseTransaction<'_>,
+    ) -> Vec<(MetaKey, MetaDesiredValue)> {
         dbtx.find_by_prefix(&MetaDesiredKeyPrefix)
             .await
             .map(|(k, v)| (k.0, v))
@@ -225,21 +227,24 @@ impl Meta {
     }
 
     async fn get_submission(
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         key: MetaKey,
         peer_id: PeerId,
     ) -> Option<MetaSubmissionValue> {
         dbtx.get_value(&MetaSubmissionsKey { key, peer_id }).await
     }
 
-    async fn get_consensus(dbtx: &mut DatabaseTransaction<'_>, key: MetaKey) -> Option<MetaValue> {
+    async fn get_consensus(
+        dbtx: &mut WriteDatabaseTransaction<'_>,
+        key: MetaKey,
+    ) -> Option<MetaValue> {
         dbtx.get_value(&MetaConsensusKey(key))
             .await
             .map(|consensus_value| consensus_value.value)
     }
 
     async fn change_consensus(
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut WriteDatabaseTransaction<'_, NonCommittable>,
         key: MetaKey,
         value: MetaValue,
         matching_submissions: Vec<PeerId>,
@@ -278,7 +283,7 @@ impl ServerModule for Meta {
     /// Items to submit as our proposal.
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> Vec<MetaConsensusItem> {
         let desired: Vec<_> = Self::get_desired(dbtx).await;
 
@@ -336,7 +341,7 @@ impl ServerModule for Meta {
     /// documentation,
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         MetaConsensusItem { key, value, salt }: MetaConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -389,7 +394,7 @@ impl ServerModule for Meta {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'c>,
+        _dbtx: &mut WriteDatabaseTransaction<'c>,
         _input: &'b MetaInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, MetaInputError> {
@@ -398,7 +403,7 @@ impl ServerModule for Meta {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut WriteDatabaseTransaction<'b>,
         _output: &'a MetaOutput,
         _out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, MetaOutputError> {
@@ -415,7 +420,7 @@ impl ServerModule for Meta {
 
     async fn audit(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut WriteDatabaseTransaction<'_>,
         _audit: &mut Audit,
         _module_instance_id: ModuleInstanceId,
     ) {

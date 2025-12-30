@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
+use fedimint_core::db::{IRawDatabaseExt, WriteDatabaseTransaction};
 use fedimint_core::module::{AmountUnit, serde_json};
 use fedimint_core::task::{TaskGroup, sleep_in_test};
 use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl, retry};
@@ -723,7 +723,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     )
     .await?;
 
-    let mut dbtx = db.begin_transaction().await;
+    let mut dbtx = db.begin_write_transaction().await;
 
     // Generate a minimum number of blocks before sending transactions
     bitcoin.mine_blocks(finality_delay.into()).await;
@@ -734,7 +734,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
             .0
-            .into_nc(),
+            .to_ref_nc(),
         &mut wallet,
         consensus_block_count,
     )
@@ -768,7 +768,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
             &mut dbtx
                 .to_ref_with_prefix_module_id(module_instance_id)
                 .0
-                .into_nc(),
+                .to_ref_nc(),
             &input,
             InPoint {
                 txid: TransactionId::all_zeros(),
@@ -793,7 +793,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         &mut dbtx
             .to_ref_with_prefix_module_id(module_instance_id)
             .0
-            .into_nc(),
+            .to_ref_nc(),
         &mut wallet,
         consensus_block_count,
     )
@@ -805,7 +805,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
                 &mut dbtx
                     .to_ref_with_prefix_module_id(module_instance_id)
                     .0
-                    .into_nc(),
+                    .to_ref_nc(),
                 &input,
                 InPoint {
                     txid: TransactionId::all_zeros(),
@@ -1110,7 +1110,7 @@ async fn verify_auto_consensus_voting() -> anyhow::Result<()> {
 }
 
 async fn sync_wallet_to_block(
-    dbtx: &mut DatabaseTransaction<'_>,
+    dbtx: &mut WriteDatabaseTransaction<'_>,
     wallet: &mut fedimint_wallet_server::Wallet,
     block_count: u32,
 ) -> anyhow::Result<()> {
@@ -1118,7 +1118,7 @@ async fn sync_wallet_to_block(
         let consensus_item = fedimint_wallet_common::WalletConsensusItem::BlockCount(block_count);
         let peer_id = PeerId::from(peer as u16);
         wallet
-            .process_consensus_item(dbtx, consensus_item, peer_id)
+            .process_consensus_item(&mut dbtx.to_ref_nc(), consensus_item, peer_id)
             .await?;
     }
     Ok(())

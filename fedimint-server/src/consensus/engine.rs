@@ -965,10 +965,9 @@ impl ConsensusEngine {
             module
                 .audit(
                     &mut dbtx
-                        .as_legacy_dbtx()
                         .to_ref_with_prefix_module_id(module_instance_id)
                         .0
-                        .into_nc(),
+                        .to_ref_nc(),
                     &mut audit,
                     module_instance_id,
                 )
@@ -1013,15 +1012,11 @@ impl ConsensusEngine {
             ConsensusItem::Module(module_item) => {
                 let instance_id = module_item.module_instance_id();
 
-                let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id).0;
+                let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(instance_id).0;
 
                 self.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(
-                        &mut module_dbtx.as_legacy_dbtx(),
-                        &module_item,
-                        peer_id,
-                    )
+                    .process_consensus_item(&mut module_dbtx, &module_item, peer_id)
                     .await
             }
             ConsensusItem::Transaction(transaction) => {

@@ -15,7 +15,9 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::module::audit::Audit;
@@ -342,7 +344,7 @@ impl ServerModule for Lightning {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> Vec<LightningConsensusItem> {
         let mut items: Vec<LightningConsensusItem> = dbtx
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
@@ -363,7 +365,7 @@ impl ServerModule for Lightning {
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         consensus_item: LightningConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -520,7 +522,7 @@ impl ServerModule for Lightning {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
+        dbtx: &mut WriteDatabaseTransaction<'c>,
         input: &'b LightningInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, LightningInputError> {
@@ -605,7 +607,7 @@ impl ServerModule for Lightning {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
+        dbtx: &mut WriteDatabaseTransaction<'b>,
         output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, LightningOutputError> {
@@ -814,7 +816,7 @@ impl ServerModule for Lightning {
 
     async fn audit(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut WriteDatabaseTransaction<'_>,
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
@@ -972,7 +974,10 @@ impl Lightning {
             .context("Block count not available yet")
     }
 
-    async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+    async fn consensus_block_count(
+        &self,
+        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+    ) -> u64 {
         let peer_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
 
         let mut counts = dbtx
@@ -993,7 +998,11 @@ impl Lightning {
         counts[peer_count / 2]
     }
 
-    async fn wait_block_height(&self, block_height: u64, dbtx: &mut DatabaseTransaction<'_>) {
+    async fn wait_block_height(
+        &self,
+        block_height: u64,
+        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+    ) {
         while block_height >= self.consensus_block_count(dbtx).await {
             sleep(Duration::from_secs(5)).await;
         }
@@ -1384,11 +1393,11 @@ mod tests {
         };
 
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_write_transaction().await;
 
         server
             .process_output(
-                &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                &mut dbtx.to_ref_with_prefix_module_id(42).0.to_ref_nc(),
                 &output,
                 out_point,
             )
@@ -1411,7 +1420,7 @@ mod tests {
         assert_matches!(
             server
                 .process_output(
-                    &mut dbtx.to_ref_with_prefix_module_id(42).0.into_nc(),
+                    &mut dbtx.to_ref_with_prefix_module_id(42).0.to_ref_nc(),
                     &output2,
                     out_point2
                 )
@@ -1425,7 +1434,7 @@ mod tests {
         let task_group = TaskGroup::new();
         let (server_cfg, client_cfg) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
 
         let server = Lightning {
@@ -1502,7 +1511,7 @@ mod tests {
         let task_group = TaskGroup::new();
         let (server_cfg, _) = build_configs();
         let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_write_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
 
         let server = Lightning {
