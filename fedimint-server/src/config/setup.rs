@@ -8,7 +8,6 @@ use anyhow::{Context, ensure};
 use async_trait::async_trait;
 use fedimint_core::admin_client::{SetLocalParamsRequest, SetupStatus};
 use fedimint_core::base32::FEDIMINT_PREFIX;
-use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::Database;
 use fedimint_core::endpoint_constants::{
@@ -397,7 +396,7 @@ impl ISetupApi for SetupApi {
             );
         }
 
-        let federation_name = state
+        state
             .setup_codes
             .iter()
             .find_map(|info| info.federation_name.clone())
@@ -431,10 +430,7 @@ impl ISetupApi for SetupApi {
                 .map(|i| PeerId::from(i as u16))
                 .zip(state.setup_codes.clone())
                 .collect(),
-            meta: BTreeMap::from_iter(vec![(
-                META_FEDERATION_NAME_KEY.to_string(),
-                federation_name,
-            )]),
+            meta: BTreeMap::new(),
             disable_base_fees,
             enabled_modules,
             network: self.settings.network,
