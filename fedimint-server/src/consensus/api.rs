@@ -126,8 +126,8 @@ impl ConsensusApi {
 
         debug!(target: LOG_NET_API, %txid, "Received a submitted transaction");
 
-        // Create read-only DB tx so that the read state is consistent
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        // Create write tx for validation (uses semaphore, but we won't commit)
+        let mut dbtx = self.db.begin_write_transaction().await;
         // we already processed the transaction before
         if dbtx
             .get_value(&AcceptedTransactionKey(txid))
