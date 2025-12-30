@@ -2123,6 +2123,27 @@ impl<'tx, Cap> WriteDatabaseTransaction<'tx, Cap> {
         }
     }
 
+    /// Convert to a [`DatabaseTransaction`] for compatibility with APIs that
+    /// haven't been migrated to [`WriteDatabaseTransaction`] yet.
+    pub fn as_legacy_dbtx<'s, 'a>(&'s mut self) -> DatabaseTransaction<'a, NonCommittable>
+    where
+        's: 'a,
+    {
+        DatabaseTransaction {
+            tx: Box::new(&mut self.tx),
+            decoders: self.decoders.clone(),
+            commit_tracker: match self.commit_tracker {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            on_commit_hooks: match self.on_commit_hooks {
+                MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
+                MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
+            },
+            capability: PhantomData,
+        }
+    }
+
     /// Get [`WriteDatabaseTransaction`] isolated to a `prefix` of `self`
     pub fn to_ref_with_prefix<'a>(
         &'a mut self,
