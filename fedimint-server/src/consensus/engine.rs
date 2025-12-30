@@ -13,7 +13,7 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IReadDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction,
 };
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
@@ -1105,11 +1105,11 @@ impl ConsensusEngine {
     /// Returns the number of sessions already saved in the database. This count
     /// **does not** include the currently running session.
     async fn get_finished_session_count(&self) -> u64 {
-        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+        get_finished_session_count_static(&mut self.db.begin_read_transaction().await).await
     }
 }
 
-pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+pub async fn get_finished_session_count_static(dbtx: &mut ReadDatabaseTransaction<'_>) -> u64 {
     dbtx.find_by_prefix_sorted_descending(&SignedSessionOutcomePrefix)
         .await
         .next()
