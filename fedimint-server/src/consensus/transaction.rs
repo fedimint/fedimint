@@ -58,7 +58,7 @@ pub async fn process_transaction_with_dbtx<Cap>(
                     &mut dbtx
                         .to_ref_with_prefix_module_id(input.module_instance_id())
                         .0
-                        .as_legacy_dbtx(),
+                        .to_ref_nc(),
                     input,
                 )
                 .await
@@ -70,7 +70,7 @@ pub async fn process_transaction_with_dbtx<Cap>(
                 &mut dbtx
                     .to_ref_with_prefix_module_id(input.module_instance_id())
                     .0
-                    .as_legacy_dbtx(),
+                    .to_ref_nc(),
                 input,
                 InPoint { txid, in_idx },
             )
@@ -93,7 +93,7 @@ pub async fn process_transaction_with_dbtx<Cap>(
                     &mut dbtx
                         .to_ref_with_prefix_module_id(output.module_instance_id())
                         .0
-                        .as_legacy_dbtx(),
+                        .to_ref_nc(),
                     output,
                     OutPoint { txid, out_idx },
                 )
@@ -107,7 +107,7 @@ pub async fn process_transaction_with_dbtx<Cap>(
                 &mut dbtx
                     .to_ref_with_prefix_module_id(output.module_instance_id())
                     .0
-                    .as_legacy_dbtx(),
+                    .to_ref_nc(),
                 output,
                 OutPoint { txid, out_idx },
             )

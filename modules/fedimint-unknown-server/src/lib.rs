@@ -11,7 +11,7 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, WriteDatabaseTransaction};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -154,14 +154,14 @@ impl ServerModule for Unknown {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut WriteDatabaseTransaction<'_>,
     ) -> Vec<UnknownConsensusItem> {
         Vec::new()
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut WriteDatabaseTransaction<'b>,
         _consensus_item: UnknownConsensusItem,
         _peer_id: PeerId,
     ) -> anyhow::Result<()> {
@@ -175,7 +175,7 @@ impl ServerModule for Unknown {
 
     async fn process_input<'a, 'b, 'c>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'c>,
+        _dbtx: &mut WriteDatabaseTransaction<'c>,
         _input: &'b UnknownInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, UnknownInputError> {
@@ -184,7 +184,7 @@ impl ServerModule for Unknown {
 
     async fn process_output<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
+        _dbtx: &mut WriteDatabaseTransaction<'b>,
         _output: &'a UnknownOutput,
         _out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, UnknownOutputError> {
@@ -201,7 +201,7 @@ impl ServerModule for Unknown {
 
     async fn audit(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        _dbtx: &mut WriteDatabaseTransaction<'_>,
         _audit: &mut Audit,
         _module_instance_id: ModuleInstanceId,
     ) {
