@@ -240,6 +240,7 @@ pub struct ConfigGenParams {
     pub api_auth: ApiAuth,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
+    /// (Retried, see <https://github.com/fedimint/fedimint/issues/7889>)
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
     /// Whether to disable base fees for this federation

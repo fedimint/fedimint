@@ -14,6 +14,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
 use consensus_explorer::consensus_explorer_view;
+use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -159,7 +160,16 @@ async fn dashboard_view(
     _auth: UserAuth,
 ) -> impl IntoResponse {
     let guardian_names = state.api.guardian_names().await;
-    let federation_name = state.api.federation_name().await;
+    let federation_name =
+        if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
+            meta_module.get_consensus_json().await.and_then(|json| {
+                json.get(META_FEDERATION_NAME_KEY)
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            })
+        } else {
+            None
+        };
     let session_count = state.api.session_count().await;
     let fedimintd_version = state.api.fedimintd_version().await;
     let consensus_ord_latency = state.api.consensus_ord_latency().await;

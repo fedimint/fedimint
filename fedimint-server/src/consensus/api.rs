@@ -15,7 +15,7 @@ use fedimint_core::admin_client::{GuardianConfigBackup, ServerStatusLegacy, Setu
 use fedimint_core::backup::{
     BackupStatistics, ClientBackupKey, ClientBackupKeyPrefix, ClientBackupSnapshot,
 };
-use fedimint_core::config::{ClientConfig, JsonClientConfig, META_FEDERATION_NAME_KEY};
+use fedimint_core::config::{ClientConfig, JsonClientConfig};
 use fedimint_core::core::backup::{BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, SignedBackupRequest};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
@@ -606,15 +606,6 @@ impl IDashboardApi for ConsensusApi {
             .iter()
             .map(|(peer_id, endpoint)| (*peer_id, endpoint.name.clone()))
             .collect()
-    }
-
-    async fn federation_name(&self) -> String {
-        self.cfg
-            .consensus
-            .meta
-            .get(META_FEDERATION_NAME_KEY)
-            .cloned()
-            .expect("Federation name must be set")
     }
 
     async fn session_count(&self) -> u64 {
