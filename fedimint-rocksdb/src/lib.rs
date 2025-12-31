@@ -526,7 +526,9 @@ impl IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'_> {
 
 #[cfg(test)]
 mod fedimint_rocksdb_tests {
-    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{
+        Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::encoding::{Decodable, Encodable};
     use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
     use fedimint_core::{impl_db_lookup, impl_db_record};

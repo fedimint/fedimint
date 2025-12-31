@@ -366,11 +366,10 @@ fn submit_module_ci_proposals(
                     CONSENSUS_PROPOSAL_TIMEOUT,
                     module.consensus_proposal(
                         &mut db
-                            .begin_write_transaction()
+                            .begin_read_transaction()
                             .await
                             .to_ref_with_prefix_module_id(module_id)
-                            .0
-                            .to_ref_nc(),
+                            .0,
                         module_id,
                     ),
                 )

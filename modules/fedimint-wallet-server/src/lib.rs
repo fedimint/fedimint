@@ -468,7 +468,7 @@ impl ServerModule for Wallet {
 
     async fn consensus_proposal<'a>(
         &'a self,
-        dbtx: &mut WriteDatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<WalletConsensusItem> {
         let mut items = dbtx
             .find_by_prefix(&PegOutTxSignatureCIPrefix)
@@ -923,7 +923,7 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module.consensus_block_count(&mut dbtx).await)
                 }
             },
@@ -940,7 +940,7 @@ impl ServerModule for Wallet {
                 async |module: &Wallet, context, params: (Address<NetworkUnchecked>, u64)| -> Option<PegOutFees> {
                     let (address, sats) = params;
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     let feerate = module.consensus_fee_rate(&mut dbtx).await;
 
                     // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
@@ -999,7 +999,7 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 1),
                 async |module: &Wallet, context, _params: ()| -> WalletSummary {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module.get_wallet_summary(&mut dbtx).await)
                 }
             },
@@ -1008,7 +1008,7 @@ impl ServerModule for Wallet {
                 ApiVersion::new(0, 2),
                 async |module: &Wallet, context, _params: ()| -> ModuleConsensusVersion {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module.consensus_module_consensus_version(&mut dbtx).await)
                 }
             },
@@ -1271,7 +1271,7 @@ impl Wallet {
 
     pub async fn consensus_block_count(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> u32 {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
@@ -1295,7 +1295,7 @@ impl Wallet {
 
     pub async fn consensus_fee_rate(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> Feerate {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
@@ -1319,7 +1319,7 @@ impl Wallet {
 
     async fn consensus_module_consensus_version(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> ModuleConsensusVersion {
         let num_peers = self.cfg.consensus.peer_peg_in_keys.to_num_peers();
 
@@ -1608,7 +1608,7 @@ impl Wallet {
 
     async fn available_utxos(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> Vec<(UTXOKey, SpendableUTXO)> {
         dbtx.find_by_prefix(&UTXOPrefixKey)
             .await
@@ -1618,7 +1618,7 @@ impl Wallet {
 
     pub async fn get_wallet_value(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> bitcoin::Amount {
         let sat_sum = self
             .available_utxos(dbtx)
@@ -1631,7 +1631,7 @@ impl Wallet {
 
     async fn get_wallet_summary(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> WalletSummary {
         fn partition_peg_out_and_change(
             transactions: Vec<Transaction>,
@@ -1742,19 +1742,19 @@ impl Wallet {
 
     /// Get the current consensus block count for UI display
     pub async fn consensus_block_count_ui(&self) -> u32 {
-        self.consensus_block_count(&mut self.db.begin_transaction_nc().await)
+        self.consensus_block_count(&mut self.db.begin_read_transaction().await)
             .await
     }
 
     /// Get the current consensus fee rate for UI display
     pub async fn consensus_feerate_ui(&self) -> Feerate {
-        self.consensus_fee_rate(&mut self.db.begin_transaction_nc().await)
+        self.consensus_fee_rate(&mut self.db.begin_read_transaction().await)
             .await
     }
 
     /// Get the current wallet summary for UI display
     pub async fn get_wallet_summary_ui(&self) -> WalletSummary {
-        self.get_wallet_summary(&mut self.db.begin_transaction_nc().await)
+        self.get_wallet_summary(&mut self.db.begin_read_transaction().await)
             .await
     }
 

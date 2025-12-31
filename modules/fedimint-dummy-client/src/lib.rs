@@ -30,6 +30,7 @@ use fedimint_client_module::transaction::{
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped,
 };
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -418,7 +419,7 @@ async fn get_funds(dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amou
 }
 
 async fn get_funds_all(dbtx: &mut DatabaseTransaction<'_>) -> Amounts {
-    use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+    use fedimint_core::db::IReadDatabaseTransactionOpsCoreTyped;
 
     let funds_entries = dbtx
         .find_by_prefix(&DummyClientFundsKeyV2PrefixAll)

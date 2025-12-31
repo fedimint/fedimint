@@ -13,8 +13,9 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
     IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped,
-    IDatabaseTransactionOpsCoreWrite as _, MODULE_GLOBAL_PREFIX, apply_migrations_dbtx,
-    create_database_version_dbtx, get_current_database_version,
+    IDatabaseTransactionOpsCoreWrite as _, IReadDatabaseTransactionOpsCoreTyped,
+    MODULE_GLOBAL_PREFIX, apply_migrations_dbtx, create_database_version_dbtx,
+    get_current_database_version,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SupportedApiVersionsSummary;

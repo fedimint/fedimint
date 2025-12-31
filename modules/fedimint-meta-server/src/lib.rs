@@ -20,7 +20,8 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    NonCommittable, WriteDatabaseTransaction,
+    IReadDatabaseTransactionOpsCoreTyped, NonCommittable, ReadDatabaseTransaction,
+    WriteDatabaseTransaction,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::serde_json::Value;
@@ -217,7 +218,7 @@ pub struct Meta {
 
 impl Meta {
     async fn get_desired(
-        dbtx: &mut WriteDatabaseTransaction<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> Vec<(MetaKey, MetaDesiredValue)> {
         dbtx.find_by_prefix(&MetaDesiredKeyPrefix)
             .await
@@ -227,7 +228,7 @@ impl Meta {
     }
 
     async fn get_submission(
-        dbtx: &mut WriteDatabaseTransaction<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
         key: MetaKey,
         peer_id: PeerId,
     ) -> Option<MetaSubmissionValue> {
@@ -235,7 +236,7 @@ impl Meta {
     }
 
     async fn get_consensus(
-        dbtx: &mut WriteDatabaseTransaction<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
         key: MetaKey,
     ) -> Option<MetaValue> {
         dbtx.get_value(&MetaConsensusKey(key))
@@ -283,7 +284,7 @@ impl ServerModule for Meta {
     /// Items to submit as our proposal.
     async fn consensus_proposal(
         &self,
-        dbtx: &mut WriteDatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<MetaConsensusItem> {
         let desired: Vec<_> = Self::get_desired(dbtx).await;
 
@@ -451,7 +452,7 @@ impl ServerModule for Meta {
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetConsensusRequest| -> Option<MetaConsensusValue> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     module.handle_get_consensus_request(&mut dbtx, &request).await
                 }
             },
@@ -460,7 +461,7 @@ impl ServerModule for Meta {
                 ApiVersion::new(0, 0),
                 async |module: &Meta, context, request: GetConsensusRequest| -> Option<u64> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     module.handle_get_consensus_revision_request(&mut dbtx, &request).await
                 }
             },
@@ -472,7 +473,7 @@ impl ServerModule for Meta {
                         None => return Err(ApiError::bad_request("Missing password".to_string())),
                         Some(auth) => {
                             let db = context.db();
-                            let mut dbtx = db.begin_transaction_nc().await;
+                            let mut dbtx = db.begin_read_transaction().await;
                             module.handle_get_submissions_request(&mut dbtx, &auth, &request).await
                         }
                     }
@@ -511,7 +512,7 @@ impl Meta {
 
     async fn handle_get_consensus_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
         req: &GetConsensusRequest,
     ) -> Result<Option<MetaConsensusValue>, ApiError> {
         Ok(dbtx.get_value(&MetaConsensusKey(req.0)).await)
@@ -519,7 +520,7 @@ impl Meta {
 
     async fn handle_get_consensus_revision_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
         req: &GetConsensusRequest,
     ) -> Result<Option<u64>, ApiError> {
         Ok(dbtx
@@ -530,7 +531,7 @@ impl Meta {
 
     async fn handle_get_submissions_request(
         &self,
-        dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
         _auth: &ApiAuth,
         req: &GetSubmissionsRequest,
     ) -> Result<BTreeMap<PeerId, MetaValue>, ApiError> {
@@ -572,7 +573,7 @@ impl Meta {
     /// UI helper to get consensus data as a key-value map
     pub async fn handle_get_consensus_request_ui(&self) -> Result<Option<Value>, ApiError> {
         self.handle_get_consensus_request(
-            &mut self.db.begin_transaction_nc().await,
+            &mut self.db.begin_read_transaction().await,
             &GetConsensusRequest(DEFAULT_META_KEY),
         )
         .await?
@@ -584,7 +585,7 @@ impl Meta {
     /// UI helper to get consensus revision
     pub async fn handle_get_consensus_revision_request_ui(&self) -> Result<u64, ApiError> {
         self.handle_get_consensus_revision_request(
-            &mut self.db.begin_transaction_nc().await,
+            &mut self.db.begin_read_transaction().await,
             &GetConsensusRequest(DEFAULT_META_KEY),
         )
         .await
@@ -597,11 +598,11 @@ impl Meta {
     ) -> Result<BTreeMap<PeerId, Value>, ApiError> {
         let mut submissions = BTreeMap::new();
 
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        let mut dbtx = self.db.begin_read_transaction().await;
 
         for (peer_id, value) in self
             .handle_get_submissions_request(
-                &mut dbtx.to_ref_nc(),
+                &mut dbtx,
                 &ApiAuth(String::new()),
                 &GetSubmissionsRequest(DEFAULT_META_KEY),
             )

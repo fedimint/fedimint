@@ -5,7 +5,9 @@ use std::time::Duration;
 use anyhow::{Context, bail};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::api_announcement::{SignedApiAnnouncement, override_api_urls};

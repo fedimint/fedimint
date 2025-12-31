@@ -15,7 +15,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    WriteDatabaseTransaction,
+    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -209,7 +209,7 @@ impl ServerModule for Dummy {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut WriteDatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<DummyConsensusItem> {
         Vec::new()
     }

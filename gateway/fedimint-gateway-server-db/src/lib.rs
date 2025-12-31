@@ -8,6 +8,7 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, GeneralDbMigrationFn,
     GeneralDbMigrationFnContext, IDatabaseTransactionOpsCore as _,
     IDatabaseTransactionOpsCoreTyped, IDatabaseTransactionOpsCoreWrite as _,
+    IReadDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
 use fedimint_core::encoding::{Decodable, Encodable};

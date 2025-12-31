@@ -5,7 +5,7 @@ use anyhow::bail;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
     DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
-    NonCommittable,
+    IReadDatabaseTransactionOpsCoreTyped as _, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;

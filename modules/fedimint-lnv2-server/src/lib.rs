@@ -17,7 +17,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    WriteDatabaseTransaction,
+    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
@@ -396,7 +396,7 @@ impl ServerModule for Lightning {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut WriteDatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<LightningConsensusItem> {
         // We reduce the time granularity to deduplicate votes more often and not save
         // one consensus item every second.
@@ -631,7 +631,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _params : () | -> u64 {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
 
                     Ok(module.consensus_block_count(&mut dbtx).await)
                 }
@@ -658,10 +658,9 @@ impl ServerModule for Lightning {
                 DECRYPTION_KEY_SHARE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Lightning, context, params: OutPoint| -> DecryptionKeyShare {
-                    let share = context
-                        .db()
-                        .begin_transaction_nc()
-                        .await
+                    let db = context.db();
+                    let mut dbtx = db.begin_read_transaction().await;
+                    let share = dbtx
                         .get_value(&DecryptionKeyShareKey(params))
                         .await
                         .ok_or(ApiError::bad_request("No decryption key share found".to_string()))?;
@@ -736,7 +735,7 @@ impl Lightning {
 
     async fn consensus_block_count(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> u64 {
         let num_peers = self.cfg.consensus.tpe_pks.to_num_peers();
 
@@ -762,7 +761,7 @@ impl Lightning {
 
     async fn consensus_unix_time(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut impl IReadDatabaseTransactionOpsCoreTyped<'_>,
     ) -> u64 {
         let num_peers = self.cfg.consensus.tpe_pks.to_num_peers();
 
@@ -802,7 +801,7 @@ impl Lightning {
 
             // to avoid race conditions we have to check for the contract and
             // its expiration in the same database transaction
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             if let Some(outpoint) = dbtx
                 .get_value(&IncomingContractOutpointKey(contract_id))
@@ -833,7 +832,7 @@ impl Lightning {
 
             // to avoid race conditions we have to check for the preimage and
             // the contracts expiration in the same database transaction
-            let mut dbtx = db.begin_transaction_nc().await;
+            let mut dbtx = db.begin_read_transaction().await;
 
             if let Some(preimage) = dbtx.get_value(&PreimageKey(outpoint)).await {
                 return Some(preimage);
@@ -850,7 +849,7 @@ impl Lightning {
         db: Database,
         outpoint: OutPoint,
     ) -> Option<(ContractId, u64)> {
-        let mut dbtx = db.begin_transaction_nc().await;
+        let mut dbtx = db.begin_read_transaction().await;
 
         let contract = dbtx.get_value(&OutgoingContractKey(outpoint)).await?;
 
@@ -912,9 +911,8 @@ impl Lightning {
     }
 
     async fn gateways(db: Database) -> Vec<SafeUrl> {
-        db.begin_transaction_nc()
-            .await
-            .find_by_prefix(&GatewayPrefix)
+        let mut dbtx = db.begin_read_transaction().await;
+        dbtx.find_by_prefix(&GatewayPrefix)
             .await
             .map(|entry| entry.0.0)
             .collect()
@@ -922,12 +920,12 @@ impl Lightning {
     }
 
     pub async fn consensus_block_count_ui(&self) -> u64 {
-        self.consensus_block_count(&mut self.db.begin_transaction_nc().await)
+        self.consensus_block_count(&mut self.db.begin_read_transaction().await)
             .await
     }
 
     pub async fn consensus_unix_time_ui(&self) -> u64 {
-        self.consensus_unix_time(&mut self.db.begin_transaction_nc().await)
+        self.consensus_unix_time(&mut self.db.begin_read_transaction().await)
             .await
     }
 

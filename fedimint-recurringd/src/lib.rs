@@ -9,7 +9,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
     AutocommitResultExt, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-    IRawDatabase,
+    IRawDatabase, IReadDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;

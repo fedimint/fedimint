@@ -11,7 +11,10 @@ use fedimint_client_module::module::init::recovery::{
 };
 use fedimint_client_module::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped as _,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};

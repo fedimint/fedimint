@@ -19,7 +19,8 @@ use std::{fmt, ops};
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable,
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};

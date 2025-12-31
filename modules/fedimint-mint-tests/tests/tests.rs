@@ -6,7 +6,7 @@ use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
@@ -779,6 +779,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        IReadDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::{
         Amount, BitcoinHash, OutPoint, Tiered, TieredMulti, TransactionId, secp256k1,

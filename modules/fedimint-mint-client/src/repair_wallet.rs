@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped};
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, TieredCounts};
