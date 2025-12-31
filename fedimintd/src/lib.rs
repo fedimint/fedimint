@@ -30,7 +30,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, TracingSetup};
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
-use fedimint_rocksdb::RocksDb;
+use fedimint_redb::RedbDatabase;
 use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::DB_FILE;
 use fedimint_server::core::ServerModuleInitRegistry;
@@ -307,10 +307,7 @@ pub async fn run(
     };
 
     let db = Database::new(
-        RocksDb::build(server_opts.data_dir.join(DB_FILE))
-            .open()
-            .await
-            .unwrap(),
+        RedbDatabase::open(server_opts.data_dir.join(DB_FILE)).unwrap(),
         ModuleRegistry::default(),
     );
 

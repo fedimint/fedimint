@@ -4193,6 +4193,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-redb"
+version = "0.11.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+ "fedimint-logging",
+ "futures",
+ "redb",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-rocksdb"
 version = "0.11.0-alpha"
 dependencies = [
@@ -4656,7 +4671,7 @@ dependencies = [
  "fedimint-metrics",
  "fedimint-mint-common",
  "fedimint-mint-server",
- "fedimint-rocksdb",
+ "fedimint-redb",
  "fedimint-server",
  "fedimint-server-bitcoin-rpc",
  "fedimint-server-core",

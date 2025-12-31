@@ -32,6 +32,7 @@ members = [
     "fedimint-recurringd",
     "fedimint-recurringd-tests",
     "fedimint-recurringdv2",
+    "fedimint-redb",
     "fedimint-rocksdb",
     "fedimint-server",
     "fedimint-server-bitcoin-rpc",
@@ -208,6 +209,7 @@ fedimint-mint-client = { path = "./modules/fedimint-mint-client", version = "=0.
 fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.11.0-alpha" }
 fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.11.0-alpha" }
 fedimint-portalloc = { path = "utils/portalloc", version = "=0.11.0-alpha" }
+fedimint-redb = { path = "./fedimint-redb", version = "=0.11.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.11.0-alpha" }
 fedimint-server = { path = "./fedimint-server", version = "=0.11.0-alpha" }
 fedimint-server-bitcoin-rpc = { path = "./fedimint-server-bitcoin-rpc", version = "=0.11.0-alpha" }
