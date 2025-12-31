@@ -16,7 +16,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped, WriteDatabaseTransaction,
+    DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped,
+    IReadDatabaseTransactionOpsCoreTyped, ReadDatabaseTransaction, WriteDatabaseTransaction,
 };
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
@@ -344,7 +345,7 @@ impl ServerModule for Lightning {
 
     async fn consensus_proposal(
         &self,
-        dbtx: &mut WriteDatabaseTransaction<'_>,
+        dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<LightningConsensusItem> {
         let mut items: Vec<LightningConsensusItem> = dbtx
             .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
@@ -839,7 +840,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Option<u64> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(Some(module.consensus_block_count(&mut dbtx).await))
                 }
             },
@@ -848,7 +849,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, contract_id: ContractId| -> Option<ContractAccount> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module
                         .get_contract_account(&mut dbtx, contract_id)
                         .await)
@@ -868,7 +869,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, block_height: u64| -> () {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     module.wait_block_height(block_height, &mut dbtx).await;
                     Ok(())
                 }
@@ -899,7 +900,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, payment_hash: bitcoin_hashes::sha256::Hash| -> Option<IncomingContractOffer> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module
                         .get_offer(&mut dbtx, payment_hash)
                         .await)
@@ -919,7 +920,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, _v: ()| -> Vec<LightningGatewayAnnouncement> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module.list_gateways(&mut dbtx).await)
                 }
             },
@@ -939,7 +940,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, gateway_id: PublicKey| -> Option<sha256::Hash> {
                     let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
+                    let mut dbtx = db.begin_read_transaction().await;
                     Ok(module.get_gateway_remove_challenge(gateway_id, &mut dbtx).await)
                 }
             },
@@ -976,7 +977,7 @@ impl Lightning {
 
     async fn consensus_block_count(
         &self,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'_> + Send),
     ) -> u64 {
         let peer_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
 
@@ -1001,7 +1002,7 @@ impl Lightning {
     async fn wait_block_height(
         &self,
         block_height: u64,
-        dbtx: &mut impl IDatabaseTransactionOpsCoreTyped<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'_> + Send),
     ) {
         while block_height >= self.consensus_block_count(dbtx).await {
             sleep(Duration::from_secs(5)).await;
@@ -1023,7 +1024,7 @@ impl Lightning {
 
     async fn get_offer(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'_> + Send),
         payment_hash: bitcoin_hashes::sha256::Hash,
     ) -> Option<IncomingContractOffer> {
         dbtx.get_value(&OfferKey(payment_hash)).await
@@ -1040,7 +1041,7 @@ impl Lightning {
 
     async fn get_contract_account(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'_> + Send),
         contract_id: ContractId,
     ) -> Option<ContractAccount> {
         dbtx.get_value(&ContractKey(contract_id)).await
@@ -1137,7 +1138,7 @@ impl Lightning {
 
     async fn list_gateways(
         &self,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'_> + Send),
     ) -> Vec<LightningGatewayAnnouncement> {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
@@ -1190,7 +1191,7 @@ impl Lightning {
     async fn get_gateway_remove_challenge(
         &self,
         gateway_id: PublicKey,
-        dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut (impl IReadDatabaseTransactionOpsCoreTyped<'_> + Send),
     ) -> Option<sha256::Hash> {
         match dbtx.get_value(&LightningGatewayKey(gateway_id)).await {
             Some(gateway) => {
@@ -1258,7 +1259,9 @@ mod tests {
     use bitcoin_hashes::{Hash as BitcoinHash, sha256};
     use fedimint_core::bitcoin::{Block, BlockHash};
     use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::db::{
+        Database, IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
+    };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
     use fedimint_core::module::registry::ModuleRegistry;

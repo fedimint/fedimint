@@ -16,7 +16,7 @@ use fedimint_client_module::sm::{
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseKeyWithNotify, DatabaseTransaction,
-    IDatabaseTransactionOpsCoreTyped,
+    IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;

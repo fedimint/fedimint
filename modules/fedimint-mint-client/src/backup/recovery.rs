@@ -10,7 +10,10 @@ use fedimint_client_module::module::init::recovery::{
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::transaction::TransactionBuilder;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+    IReadDatabaseTransactionOpsCoreTyped as _,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{

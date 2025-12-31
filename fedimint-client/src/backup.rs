@@ -11,7 +11,7 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::core::backup::{
     BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, BackupRequest, SignedBackupRequest,
 };
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::serde_json;

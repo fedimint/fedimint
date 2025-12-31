@@ -11,7 +11,9 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, WriteDatabaseTransaction};
+use fedimint_core::db::{
+    DatabaseTransaction, DatabaseVersion, ReadDatabaseTransaction, WriteDatabaseTransaction,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -174,7 +176,7 @@ impl ServerModule for Empty {
 
     async fn consensus_proposal(
         &self,
-        _dbtx: &mut WriteDatabaseTransaction<'_>,
+        _dbtx: &mut ReadDatabaseTransaction<'_>,
     ) -> Vec<EmptyConsensusItem> {
         Vec::new()
     }

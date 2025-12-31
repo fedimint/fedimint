@@ -198,6 +198,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
+        IReadDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::AmountUnit;

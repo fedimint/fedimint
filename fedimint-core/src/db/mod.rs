@@ -15,7 +15,10 @@
 //!
 //! ```rust
 //! use fedimint_core::db::mem_impl::MemDatabase;
-//! use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+//! use fedimint_core::db::{
+//!     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+//!     IReadDatabaseTransactionOpsCoreTyped,
+//! };
 //! use fedimint_core::encoding::{Decodable, Encodable};
 //! use fedimint_core::impl_db_record;
 //! use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -1205,26 +1208,17 @@ impl<T> IDatabaseTransactionOps for Box<T> where T: IDatabaseTransactionOps + ?S
 
 impl<T> IDatabaseTransactionOps for &mut T where T: IDatabaseTransactionOps + ?Sized {}
 
-/// Like [`IDatabaseTransactionOpsCore`], but typed
+/// Read-only typed database operations
 ///
-/// Implemented via blanket impl for everything that implements
-/// [`IDatabaseTransactionOpsCore`] that has decoders (implements
-/// [`WithDecoders`]).
+/// This trait contains only read operations and is implemented by both
+/// `ReadDatabaseTransaction` and `WriteDatabaseTransaction`. Functions that
+/// only need to read from the database should use this trait bound to accept
+/// both transaction types.
 #[apply(async_trait_maybe_send!)]
-pub trait IDatabaseTransactionOpsCoreTyped<'a> {
+pub trait IReadDatabaseTransactionOpsCoreTyped<'a> {
     async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
-
-    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync;
-
-    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync;
 
     async fn find_by_range<K>(
         &mut self,
@@ -1271,6 +1265,27 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
     where
         KP: DatabaseLookup + MaybeSend + MaybeSync,
         KP::Record: DatabaseKey;
+}
+
+/// Like [`IDatabaseTransactionOpsCore`], but typed
+///
+/// Implemented via blanket impl for everything that implements
+/// [`IDatabaseTransactionOpsCore`] that has decoders (implements
+/// [`WithDecoders`]).
+///
+/// This trait extends [`IReadDatabaseTransactionOpsCoreTyped`] with write
+/// operations.
+#[apply(async_trait_maybe_send!)]
+pub trait IDatabaseTransactionOpsCoreTyped<'a>: IReadDatabaseTransactionOpsCoreTyped<'a> {
+    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
+
+    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
 
     async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
     where
@@ -1281,12 +1296,12 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
         KP: DatabaseLookup + MaybeSend + MaybeSync;
 }
 
-// blanket implementation of typed ops for anything that implements raw ops and
-// has decoders
+// blanket implementation of read-only typed ops for anything that implements
+// raw ops and has decoders
 #[apply(async_trait_maybe_send!)]
-impl<T> IDatabaseTransactionOpsCoreTyped<'_> for T
+impl<T> IReadDatabaseTransactionOpsCoreTyped<'_> for T
 where
-    T: IDatabaseTransactionOpsCore + IDatabaseTransactionOpsCoreWrite + WithDecoders,
+    T: IDatabaseTransactionOpsCore + WithDecoders,
 {
     async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
     where
@@ -1300,32 +1315,6 @@ where
         raw.map(|value_bytes| {
             decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
         })
-    }
-
-    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync,
-    {
-        let key_bytes = key.to_bytes();
-        self.raw_insert_bytes(&key_bytes, &value.to_bytes())
-            .await
-            .expect("Unrecoverable error occurred while inserting entry into the database")
-            .map(|value_bytes| {
-                decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
-            })
-    }
-
-    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync,
-    {
-        if let Some(prev) = self.insert_entry(key, value).await {
-            panic!(
-                "Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
-            );
-        }
     }
 
     async fn find_by_range<K>(
@@ -1415,6 +1404,40 @@ where
                 }),
         )
     }
+}
+
+// blanket implementation of write typed ops for anything that implements raw
+// ops (including write), has decoders, and implements the read trait
+#[apply(async_trait_maybe_send!)]
+impl<T> IDatabaseTransactionOpsCoreTyped<'_> for T
+where
+    T: IDatabaseTransactionOpsCore + IDatabaseTransactionOpsCoreWrite + WithDecoders,
+{
+    async fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Option<K::Value>
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        let key_bytes = key.to_bytes();
+        self.raw_insert_bytes(&key_bytes, &value.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while inserting entry into the database")
+            .map(|value_bytes| {
+                decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
+            })
+    }
+
+    async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        if let Some(prev) = self.insert_entry(key, value).await {
+            panic!(
+                "Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
+            );
+        }
+    }
 
     async fn remove_entry<K>(&mut self, key: &K) -> Option<K::Value>
     where
@@ -1438,67 +1461,6 @@ where
             .expect("Unrecoverable error when removing entries from the database");
     }
 }
-
-/// Read-only typed database operations (new trait for ReadDatabaseTransaction)
-///
-/// This trait contains only read operations and is implemented by
-/// `ReadDatabaseTransaction`.
-#[apply(async_trait_maybe_send!)]
-pub trait IReadDatabaseTransactionOpsCoreTyped<'a> {
-    async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
-
-    async fn find_by_range<K>(
-        &mut self,
-        key_range: Range<K>,
-    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (K, K::Value)> + '_)>>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync;
-
-    async fn find_by_prefix<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> Pin<
-        Box<
-            maybe_add_send!(
-                dyn Stream<
-                        Item = (
-                            KP::Record,
-                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-                        ),
-                    > + '_
-            ),
-        >,
-    >
-    where
-        KP: DatabaseLookup + MaybeSend + MaybeSync,
-        KP::Record: DatabaseKey;
-
-    async fn find_by_prefix_sorted_descending<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> Pin<
-        Box<
-            maybe_add_send!(
-                dyn Stream<
-                        Item = (
-                            KP::Record,
-                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-                        ),
-                    > + '_
-            ),
-        >,
-    >
-    where
-        KP: DatabaseLookup + MaybeSend + MaybeSync,
-        KP::Record: DatabaseKey;
-}
-
-// Note: IReadDatabaseTransactionOpsCoreTyped is implemented directly for
-// ReadDatabaseTransaction below, not via blanket impl, to avoid conflicts
-// with IDatabaseTransactionOpsCoreTyped.
 
 /// A database type that has decoders, which allows it to implement
 /// [`IDatabaseTransactionOpsCoreTyped`]
@@ -1913,111 +1875,6 @@ impl IDatabaseTransactionOpsCore for ReadDatabaseTransaction<'_> {
         self.tx
             .raw_find_by_prefix_sorted_descending(key_prefix)
             .await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl IReadDatabaseTransactionOpsCoreTyped<'_> for ReadDatabaseTransaction<'_> {
-    async fn get_value<K>(&mut self, key: &K) -> Option<K::Value>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-    {
-        let key_bytes = key.to_bytes();
-        let raw = self
-            .raw_get_bytes(&key_bytes)
-            .await
-            .expect("Unrecoverable error occurred while reading and entry from the database");
-        raw.map(|value_bytes| {
-            decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
-        })
-    }
-
-    async fn find_by_range<K>(
-        &mut self,
-        key_range: Range<K>,
-    ) -> Pin<Box<maybe_add_send!(dyn Stream<Item = (K, K::Value)> + '_)>>
-    where
-        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
-        K::Value: MaybeSend + MaybeSync,
-    {
-        let decoders = self.decoders().clone();
-        Box::pin(
-            self.raw_find_by_range(Range {
-                start: &key_range.start.to_bytes(),
-                end: &key_range.end.to_bytes(),
-            })
-            .await
-            .expect("Unrecoverable error occurred while listing entries from the database")
-            .map(move |(key_bytes, value_bytes)| {
-                let key = decode_key_expect(&key_bytes, &decoders);
-                let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
-                (key, value)
-            }),
-        )
-    }
-
-    async fn find_by_prefix<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> Pin<
-        Box<
-            maybe_add_send!(
-                dyn Stream<
-                        Item = (
-                            KP::Record,
-                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-                        ),
-                    > + '_
-            ),
-        >,
-    >
-    where
-        KP: DatabaseLookup + MaybeSend + MaybeSync,
-        KP::Record: DatabaseKey,
-    {
-        let decoders = self.decoders().clone();
-        Box::pin(
-            self.raw_find_by_prefix(&key_prefix.to_bytes())
-                .await
-                .expect("Unrecoverable error occurred while listing entries from the database")
-                .map(move |(key_bytes, value_bytes)| {
-                    let key = decode_key_expect(&key_bytes, &decoders);
-                    let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
-                    (key, value)
-                }),
-        )
-    }
-
-    async fn find_by_prefix_sorted_descending<KP>(
-        &mut self,
-        key_prefix: &KP,
-    ) -> Pin<
-        Box<
-            maybe_add_send!(
-                dyn Stream<
-                        Item = (
-                            KP::Record,
-                            <<KP as DatabaseLookup>::Record as DatabaseRecord>::Value,
-                        ),
-                    > + '_
-            ),
-        >,
-    >
-    where
-        KP: DatabaseLookup + MaybeSend + MaybeSync,
-        KP::Record: DatabaseKey,
-    {
-        let decoders = self.decoders().clone();
-        Box::pin(
-            self.raw_find_by_prefix_sorted_descending(&key_prefix.to_bytes())
-                .await
-                .expect("Unrecoverable error occurred while listing entries from the database")
-                .map(move |(key_bytes, value_bytes)| {
-                    let key = decode_key_expect(&key_bytes, &decoders);
-                    let value = decode_value_expect(&value_bytes, &decoders, &key_bytes);
-                    (key, value)
-                }),
-        )
     }
 }
 
@@ -3052,7 +2909,7 @@ impl From<anyhow::Error> for DatabaseError {
 macro_rules! push_db_pair_items {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
-            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+            $crate::db::IReadDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
                 .map(|(key, val)| {
                     (
@@ -3071,7 +2928,7 @@ macro_rules! push_db_pair_items {
 macro_rules! push_db_key_items {
     ($dbtx:ident, $prefix_type:expr_2021, $key_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =
-            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+            $crate::db::IReadDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
                 .await
                 .map(|(key, _)| key)
                 .collect::<Vec<$key_type>>()
@@ -3453,7 +3310,8 @@ mod test_utils {
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
     use crate::db::{
-        IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+        IDatabaseTransactionOps, IDatabaseTransactionOpsCoreTyped,
+        IReadDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
     };
     use crate::encoding::{Decodable, Encodable};
     use crate::module::registry::ModuleDecoderRegistry;

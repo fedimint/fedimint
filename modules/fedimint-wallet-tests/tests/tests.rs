@@ -1165,7 +1165,7 @@ mod fedimint_migration_tests {
     use fedimint_core::core::ModuleInstanceId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKey, DatabaseVersionKeyV0,
-        IDatabaseTransactionOpsCoreTyped,
+        IDatabaseTransactionOpsCoreTyped, IReadDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::module::ModuleConsensusVersion;
     use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};

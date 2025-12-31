@@ -11,7 +11,7 @@ use jsonrpsee_core::Serialize;
 use serde::Deserialize;
 
 use crate::db::{
-    Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IReadDatabaseTransactionOpsCoreTyped,
 };
 use crate::task::MaybeSync;
 use crate::util::SafeUrl;
