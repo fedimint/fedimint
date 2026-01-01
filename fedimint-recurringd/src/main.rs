@@ -73,7 +73,8 @@ async fn main() -> anyhow::Result<()> {
 
     let cors = CorsLayer::new()
         .allow_origin(cors::Any)
-        .allow_methods(cors::Any);
+        .allow_methods(cors::Any)
+        .allow_headers(cors::Any);
 
     let api_v1 = axum::Router::new()
         .route("/federations", put(add_federation))
