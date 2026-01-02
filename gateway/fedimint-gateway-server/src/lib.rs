@@ -44,7 +44,6 @@ use envs::FM_GATEWAY_SKIP_WAIT_FOR_SYNC_ENV;
 use error::FederationNotConnected;
 use events::ALL_GATEWAY_EVENTS;
 use federation_manager::FederationManager;
-use fedimint_api_client::api::net::ConnectorType;
 use fedimint_bip39::{Bip39RootSecretStrategy, Language, Mnemonic};
 use fedimint_bitcoind::bitcoincore::BitcoindClient;
 use fedimint_bitcoind::{BlockchainInfo, EsploraClient, IBitcoindRpc};
@@ -70,16 +69,16 @@ use fedimint_core::{
 use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
 use fedimint_gateway_common::{
     BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
-    ConnectFedPayload, CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
-    DepositAddressPayload, DepositAddressRecheckPayload, FederationBalanceInfo, FederationConfig,
-    FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo, GetInvoiceRequest,
-    GetInvoiceResponse, LeaveFedPayload, LightningInfo, LightningMode, ListTransactionsPayload,
-    ListTransactionsResponse, MnemonicResponse, OpenChannelRequest, PayInvoiceForOperatorPayload,
-    PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse, PaymentStats,
-    PaymentSummaryPayload, PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse,
+    ConnectFedPayload, ConnectorType, CreateInvoiceForOperatorPayload, CreateOfferPayload,
+    CreateOfferResponse, DepositAddressPayload, DepositAddressRecheckPayload,
+    FederationBalanceInfo, FederationConfig, FederationInfo, GatewayBalances, GatewayFedConfig,
+    GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
+    LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
+    OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
+    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
+    PaymentSummaryResponse, ReceiveEcashPayload, ReceiveEcashResponse, RegisteredProtocol,
+    SendOnchainRequest, SetFeesPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -1753,19 +1752,6 @@ impl IAdminGateway for Gateway {
             )))
         })?;
 
-        #[cfg(feature = "tor")]
-        let connector = match &payload.use_tor {
-            Some(true) => ConnectorType::tor(),
-            Some(false) => ConnectorType::default(),
-            None => {
-                debug!(target: LOG_GATEWAY, "Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
-                ConnectorType::default()
-            }
-        };
-
-        #[cfg(not(feature = "tor"))]
-        let connector = ConnectorType::default();
-
         let federation_id = invite_code.federation_id();
 
         let mut federation_manager = self.federation_manager.write().await;
@@ -1786,7 +1772,8 @@ impl IAdminGateway for Gateway {
             federation_index,
             lightning_fee: self.default_routing_fees,
             transaction_fee: self.default_transaction_fees,
-            connector,
+            // Note: deprecated, unused
+            _connector: ConnectorType::Tcp,
         };
 
         let recover = payload.recover.unwrap_or(false);

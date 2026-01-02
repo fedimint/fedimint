@@ -3,7 +3,6 @@ use std::str::FromStr;
 use std::time::SystemTime;
 
 use bitcoin::hashes::{Hash, sha256};
-use fedimint_api_client::api::net::ConnectorType;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, GeneralDbMigrationFn,
@@ -15,7 +14,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{Amount, impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1};
 use fedimint_gateway_common::envs::FM_GATEWAY_IROH_SECRET_KEY_OVERRIDE_ENV;
-use fedimint_gateway_common::{FederationConfig, RegisteredProtocol};
+use fedimint_gateway_common::{ConnectorType, FederationConfig, RegisteredProtocol};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -341,7 +340,6 @@ pub struct FederationConfigV1 {
     pub timelock_delta: u64,
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
-    pub connector: ConnectorType,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -589,7 +587,6 @@ async fn migrate_to_v2(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
                 federation_index: old_federation_config.federation_index,
                 timelock_delta: old_federation_config.timelock_delta,
                 fees: old_federation_config.fees,
-                connector: ConnectorType::default(),
             };
             let new_federation_key = FederationConfigKeyV1 {
                 id: old_federation_id,
@@ -635,7 +632,8 @@ async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), a
                 federation_index: old_federation_config.federation_index,
                 lightning_fee: old_federation_config.fees.into(),
                 transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-                connector: ConnectorType::default(),
+                // Note: deprecated, unused
+                _connector: ConnectorType::Tcp,
             };
             let new_key = FederationConfigKey { id: fed_id.id };
             dbtx.insert_new_entry(&new_key, &new_fed_config).await;

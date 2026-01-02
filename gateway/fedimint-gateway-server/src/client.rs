@@ -65,9 +65,7 @@ impl GatewayClientBuilder {
         gateway: Arc<Gateway>,
     ) -> AdminResult<ClientBuilder> {
         let FederationConfig {
-            federation_index,
-            connector,
-            ..
+            federation_index, ..
         } = federation_config.to_owned();
 
         let mut registry = self.registry.clone();
@@ -87,7 +85,6 @@ impl GatewayClientBuilder {
             .with_iroh_enable_dht(true)
             .with_iroh_enable_next(true);
         client_builder.with_module_inits(registry);
-        client_builder.with_connector(connector);
         Ok(client_builder)
     }
 

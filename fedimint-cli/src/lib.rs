@@ -31,7 +31,6 @@ use client::ModuleSelector;
 use envs::FM_USE_TOR_ENV;
 use envs::{FM_API_SECRET_ENV, FM_DB_BACKEND_ENV, FM_IROH_ENABLE_DHT_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
-use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::module::meta::{FetchKind, LegacyMetaSource, MetaSource};
@@ -353,18 +352,6 @@ impl Opts {
                     .into())
             }
         }
-    }
-
-    #[allow(clippy::unused_self)]
-    fn connector(&self) -> ConnectorType {
-        #[cfg(feature = "tor")]
-        if self.use_tor {
-            ConnectorType::tor()
-        } else {
-            ConnectorType::default()
-        }
-        #[cfg(not(feature = "tor"))]
-        ConnectorType::default()
     }
 }
 
@@ -741,8 +728,6 @@ impl FedimintCli {
             .with_iroh_enable_dht(cli.iroh_enable_dht())
             .with_iroh_enable_next(cli.iroh_enable_next());
         client_builder.with_module_inits(self.module_inits.clone());
-
-        client_builder.with_connector(cli.connector());
 
         let db = cli.load_database().await?;
         Ok((client_builder, db))

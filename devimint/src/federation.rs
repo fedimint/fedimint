@@ -7,7 +7,7 @@ use std::{env, fs};
 
 use anyhow::{Context, Result, bail};
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_api_client::api::net::ConnectorType;
+use fedimint_api_client::download_from_invite_code;
 use fedimint_client_module::module::ClientModule;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::admin_client::SetupStatus;
@@ -367,8 +367,7 @@ impl Federation {
                 .await
                 .context("Awaiting invite code file")?;
 
-                ConnectorType::default()
-                    .download_from_invite_code(&connectors, &InviteCode::from_str(&invite_code)?)
+                download_from_invite_code(&connectors, &InviteCode::from_str(&invite_code)?)
                     .await?;
             }
 
