@@ -285,7 +285,7 @@ where
                         tr {
                             td {
                                 code {
-                                    (format!("{:?}", entry.as_raw().kind))
+                                    (entry.as_raw().kind)
                                 }
                             }
                             td {

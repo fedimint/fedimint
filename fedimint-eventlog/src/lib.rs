@@ -12,10 +12,10 @@
 //! potentially emitting events of its own, and atomically updating persisted
 //! event log position ("cursor") of events that were already processed.
 use std::borrow::Cow;
-use std::ops;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use std::{fmt, ops};
 
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{
@@ -182,6 +182,12 @@ impl<'s> From<&'s str> for EventKind {
 impl From<String> for EventKind {
     fn from(value: String) -> Self {
         Self(Cow::Owned(value))
+    }
+}
+
+impl fmt::Display for EventKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
