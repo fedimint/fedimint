@@ -170,28 +170,41 @@ fn render_stats_table(title: &str, stats: &PaymentStats, title_class: &str) -> M
 fn render_payment_log_tab_initial(federations: &[FederationInfo]) -> Markup {
     html! {
         div {
-            div class="mb-3" {
-                label class="form-label fw-bold" {
-                    "Federation"
-                }
-
-                select
-                    class="form-select form-select-sm"
-                    name="federation_id"
-                    hx-get=(PAYMENT_LOG_ROUTE)
-                    hx-trigger="change"
-                    hx-target="#payment-log-content"
-                    hx-include="this"
-                {
-                    option value="" selected disabled {
-                        "Select a federation…"
+            form class="mb-3 d-flex gap-2 align-items-end" {
+                div class="flex-grow-1" {
+                    label class="form-label fw-bold" {
+                        "Federation"
                     }
 
-                    @for fed in federations {
-                        option value=(fed.federation_id.to_string()) {
-                            (fed.federation_name.clone().unwrap_or_default())
+                    select
+                        class="form-select form-select-sm"
+                        name="federation_id"
+                        hx-get=(PAYMENT_LOG_ROUTE)
+                        hx-trigger="change"
+                        hx-target="#payment-log-content"
+                        hx-include="this"
+                    {
+                        option value="" selected disabled {
+                            "Select a federation…"
+                        }
+
+                        @for fed in federations {
+                            option value=(fed.federation_id.to_string()) {
+                                (fed.federation_name.clone().unwrap_or_default())
+                            }
                         }
                     }
+                }
+
+                button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    title="Refresh payment log"
+                    hx-get=(PAYMENT_LOG_ROUTE)
+                    hx-target="#payment-log-content"
+                    hx-include="closest form"
+                {
+                    "↻ Refresh"
                 }
             }
 
