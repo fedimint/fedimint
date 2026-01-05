@@ -109,6 +109,7 @@ impl GeneralCommands {
                         #[cfg(not(feature = "tor"))]
                         use_tor: None,
                         recover,
+                        max_ecash_exposure: None,
                     },
                 )
                 .await?;

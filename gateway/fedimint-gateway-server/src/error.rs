@@ -4,10 +4,10 @@ use axum::Json;
 use axum::body::Body;
 use axum::response::{IntoResponse, Response};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
-use fedimint_core::crit;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::{Amount, crit};
 use fedimint_gw_client::pay::OutgoingPaymentError;
 use fedimint_lightning::LightningRpcError;
 use fedimint_logging::LOG_GATEWAY;
@@ -150,6 +150,12 @@ pub enum LNv1Error {
     },
     #[error("Outgoing Payment Error: {}", OptStacktrace(.0))]
     OutgoingPayment(#[from] anyhow::Error),
+    #[error("eCash exposure limit exceeded: current={current}, incoming={incoming}, limit={limit}")]
+    ExposureLimitExceeded {
+        current: Amount,
+        incoming: Amount,
+        limit: Amount,
+    },
 }
 
 /// Errors that can occur during the LNv2 protocol. LNv2 errors are public and
@@ -160,6 +166,12 @@ pub enum LNv2Error {
     IncomingPayment(String),
     #[error("Outgoing Payment Error: {}", OptStacktrace(.0))]
     OutgoingPayment(#[from] anyhow::Error),
+    #[error("eCash exposure limit exceeded: current={current}, incoming={incoming}, limit={limit}")]
+    ExposureLimitExceeded {
+        current: Amount,
+        incoming: Amount,
+        limit: Amount,
+    },
 }
 
 /// Public error that indicates the requested federation is not connected to
