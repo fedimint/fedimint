@@ -62,7 +62,8 @@ use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep};
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned};
+use fedimint_core::util::backoff_util::fibonacci_max_one_hour;
+use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned, retry};
 use fedimint_core::{
     Amount, BitcoinAmountOrAll, crit, fedimint_build_code_version_env, get_network_for_address,
 };
@@ -679,7 +680,7 @@ impl Gateway {
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
-                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone());
+                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone()).await;
 
                     debug!(target: LOG_GATEWAY, "Establishing lightning payment stream...");
                     let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await
@@ -1503,7 +1504,7 @@ impl Gateway {
         }
     }
 
-    fn create_lightning_client(
+    async fn create_lightning_client(
         &self,
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> Box<dyn ILnRpcClient> {
@@ -1521,18 +1522,25 @@ impl Gateway {
             LightningMode::Ldk {
                 lightning_port,
                 alias,
-            } => Box::new(
-                ldk::GatewayLdkClient::new(
-                    &self.client_builder.data_dir().join(LDK_NODE_DB_FOLDER),
-                    self.chain_source.clone(),
-                    self.network,
-                    lightning_port,
-                    alias,
-                    self.mnemonic.clone(),
-                    runtime,
-                )
-                .expect("Failed to create LDK client"),
-            ),
+            } => {
+                // Retrieving the fees inside of LDK can sometimes fail/time out. To prevent
+                // crashing the gateway, we wait a bit and just try
+                // to re-create the client. The gateway cannot proceed until this succeeds.
+                retry("create LDK Node", fibonacci_max_one_hour(), || async {
+                    ldk::GatewayLdkClient::new(
+                        &self.client_builder.data_dir().join(LDK_NODE_DB_FOLDER),
+                        self.chain_source.clone(),
+                        self.network,
+                        lightning_port,
+                        alias.clone(),
+                        self.mnemonic.clone(),
+                        runtime.clone(),
+                    )
+                    .map(Box::new)
+                })
+                .await
+                .expect("Could not create LDK Node")
+            }
         }
     }
 }
