@@ -52,7 +52,7 @@ use crate::lightning::{
     payments_fragment_handler, send_onchain_handler, transactions_fragment_handler,
     wallet_fragment_handler,
 };
-
+use crate::payment_summary::payment_log_fragment_handler;
 pub type DynGatewayApi<E> = Arc<dyn IAdminGateway<Error = E> + Send + Sync + 'static>;
 
 pub(crate) const OPEN_CHANNEL_ROUTE: &str = "/ui/channels/open";
@@ -74,6 +74,7 @@ pub(crate) const STOP_GATEWAY_ROUTE: &str = "/ui/stop";
 pub(crate) const WITHDRAW_PREVIEW_ROUTE: &str = "/ui/federations/withdraw-preview";
 pub(crate) const WITHDRAW_CONFIRM_ROUTE: &str = "/ui/federations/withdraw-confirm";
 pub(crate) const SPEND_ECASH_ROUTE: &str = "/ui/federations/spend";
+pub(crate) const PAYMENT_LOG_ROUTE: &str = "/ui/payment-log";
 
 #[derive(Default, Deserialize)]
 pub struct DashboardQuery {
@@ -299,7 +300,7 @@ where
                 (general::render(&gateway_info))
             }
             div class="col-md-6" {
-                (payment_summary::render(&state.api).await)
+                (payment_summary::render(&state.api, &gateway_info.federations).await)
             }
         }
 
@@ -384,6 +385,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         .route(STOP_GATEWAY_ROUTE, post(stop_gateway_handler))
         .route(WITHDRAW_PREVIEW_ROUTE, post(withdraw_preview_handler))
         .route(WITHDRAW_CONFIRM_ROUTE, post(withdraw_confirm_handler))
+        .route(PAYMENT_LOG_ROUTE, get(payment_log_fragment_handler))
         .with_static_routes();
 
     app.with_state(UiState::new(api))
