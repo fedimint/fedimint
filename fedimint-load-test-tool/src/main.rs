@@ -21,6 +21,7 @@ use common::{
 use devimint::cmd;
 use devimint::util::GatewayLndCli;
 use devimint::version_constants::VERSION_0_10_0_ALPHA;
+use fedimint_api_client::download_from_invite_code;
 use fedimint_client::ClientHandleArc;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::Amount;
@@ -1075,9 +1076,7 @@ fn test_download_config(
             let endpoints = endpoints.clone();
             let f: BoxFuture<_> = Box::pin(async move {
                 let m = fedimint_core::time::now();
-                let _ = fedimint_api_client::api::net::ConnectorType::default()
-                    .download_from_invite_code(&endpoints, &invite_code)
-                    .await?;
+                let _ = download_from_invite_code(&endpoints, &invite_code).await?;
                 event_sender.send(MetricEvent {
                     name: "download_client_config".into(),
                     duration: m.elapsed()?,
@@ -1101,9 +1100,7 @@ async fn test_connect_raw_client(
     use jsonrpsee_core::client::ClientT;
     use jsonrpsee_ws_client::WsClientBuilder;
 
-    let (mut cfg, _) = fedimint_api_client::api::net::ConnectorType::default()
-        .download_from_invite_code(endpoints, &invite_code)
-        .await?;
+    let (mut cfg, _) = download_from_invite_code(endpoints, &invite_code).await?;
 
     if let Some(limit_endpoints) = limit_endpoints {
         cfg.global.api_endpoints = cfg

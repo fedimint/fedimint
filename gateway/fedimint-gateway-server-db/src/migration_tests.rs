@@ -7,7 +7,7 @@ use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::SafeUrl;
-use fedimint_gateway_common::RegisteredProtocol;
+use fedimint_gateway_common::{ConnectorType, RegisteredProtocol};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::TracingSetup;
 use fedimint_testing::db::{
@@ -17,7 +17,7 @@ use strum::IntoEnumIterator;
 use tracing::info;
 
 use super::{
-    BTreeMap, ConnectorType, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
+    BTreeMap, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
     FederationConfigKeyPrefix, FederationConfigKeyV0, FederationConfigV0, FederationId,
     GatewayConfigurationKeyV0, GatewayConfigurationV0, GatewayDbExt, GatewayPublicKey,
     IDatabaseTransactionOpsCoreTyped, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng,
@@ -189,7 +189,8 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             federation_index: 0,
             lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-            connector: ConnectorType::Tcp,
+            // Note: deprecated, unused
+            _connector: ConnectorType::Tcp,
         },
     )
     .await;
@@ -208,7 +209,8 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
             federation_index: 1,
             lightning_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
             transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
-            connector: ConnectorType::Tcp,
+            // Note: deprecated, unused
+            _connector: ConnectorType::Tcp,
         },
     )
     .await;

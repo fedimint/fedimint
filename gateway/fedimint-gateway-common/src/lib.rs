@@ -10,7 +10,6 @@ use clap::Subcommand;
 use envs::{
     FM_LDK_ALIAS_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
-use fedimint_api_client::api::net::ConnectorType;
 use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -127,6 +126,16 @@ pub struct WithdrawPreviewResponse {
     pub mint_fees: Option<Amount>,
 }
 
+/// Deprecated, unused, doesn't do anything
+///
+/// Only here for backward-compat reasons.
+#[allow(deprecated)]
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub enum ConnectorType {
+    Tcp,
+    Tor,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct FederationConfig {
     pub invite_code: InviteCode,
@@ -136,7 +145,8 @@ pub struct FederationConfig {
     pub federation_index: u64,
     pub lightning_fee: PaymentFee,
     pub transaction_fee: PaymentFee,
-    pub connector: ConnectorType,
+    #[allow(deprecated)] // only here for decoding backward-compat
+    pub _connector: ConnectorType,
 }
 
 /// Information about one of the feds we are connected to

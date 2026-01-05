@@ -1,6 +1,5 @@
 mod error;
 pub mod global_api;
-pub mod net;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Debug;

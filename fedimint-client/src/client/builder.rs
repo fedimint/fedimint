@@ -10,8 +10,8 @@ use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCac
 use fedimint_api_client::api::global_api::with_request_hook::{
     ApiRequestHook, RawFederationApiWithRequestHookExt as _,
 };
-use fedimint_api_client::api::net::ConnectorType;
 use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, FederationApi, FederationApiExt as _};
+use fedimint_api_client::download_from_invite_code;
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::init::ClientModuleInit;
@@ -117,7 +117,6 @@ pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
     admin_creds: Option<AdminCreds>,
     meta_service: Arc<crate::meta::MetaService>,
-    connector: ConnectorType,
     stopped: bool,
     log_event_added_transient_tx: broadcast::Sender<EventLogEntry>,
     request_hook: ApiRequestHook,
@@ -138,7 +137,6 @@ impl ClientBuilder {
 
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
-            connector: ConnectorType::default(),
             admin_creds: None,
             stopped: false,
             meta_service,
@@ -156,7 +154,6 @@ impl ClientBuilder {
             stopped: false,
             // non unique
             meta_service: client.meta_service.clone(),
-            connector: client.connector,
             log_event_added_transient_tx: client.log_event_added_transient_tx.clone(),
             request_hook: client.request_hook.clone(),
             iroh_enable_dht: client.iroh_enable_dht,
@@ -263,15 +260,6 @@ impl ClientBuilder {
         self.admin_creds = Some(creds);
     }
 
-    pub fn with_connector(&mut self, connector: ConnectorType) {
-        self.connector = connector;
-    }
-
-    #[cfg(feature = "tor")]
-    pub fn with_tor_connector(&mut self) {
-        self.with_connector(ConnectorType::tor());
-    }
-
     #[allow(clippy::too_many_arguments)]
     async fn init(
         self,
@@ -342,10 +330,7 @@ impl ClientBuilder {
         connectors: ConnectorRegistry,
         invite_code: &InviteCode,
     ) -> anyhow::Result<ClientPreview> {
-        let (config, api) = self
-            .connector
-            .download_from_invite_code(&connectors, invite_code)
-            .await?;
+        let (config, api) = download_from_invite_code(&connectors, invite_code).await?;
 
         let prefetch_api_announcements =
             config
@@ -553,7 +538,6 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = db_no_decoders.with_decoders(decoders.clone());
-        let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
         let api = match self.admin_creds.as_ref() {
             Some(admin_creds) => FederationApi::new(
@@ -898,7 +882,6 @@ impl ClientBuilder {
             operation_log: OperationLog::new(db.clone()),
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
-            connector,
             iroh_enable_dht: self.iroh_enable_dht,
             iroh_enable_next: self.iroh_enable_next,
         });
