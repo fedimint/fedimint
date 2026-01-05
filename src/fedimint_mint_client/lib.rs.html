@@ -61,7 +61,7 @@
 <a href=#61 id=61 data-nosnippet>61</a>    ClientOutputSM, TransactionBuilder,
 <a href=#62 id=62 data-nosnippet>62</a>};
 <a href=#63 id=63 data-nosnippet>63</a><span class="kw">use </span>fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
-<a href=#64 id=64 data-nosnippet>64</a><span class="kw">use </span>fedimint_core::base32::FEDIMINT_PREFIX;
+<a href=#64 id=64 data-nosnippet>64</a><span class="kw">use </span>fedimint_core::base32::{FEDIMINT_PREFIX, encode_prefixed};
 <a href=#65 id=65 data-nosnippet>65</a><span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <a href=#66 id=66 data-nosnippet>66</a><span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <a href=#67 id=67 data-nosnippet>67</a><span class="kw">use </span>fedimint_core::db::{
@@ -1764,7 +1764,7 @@
 <a href=#1764 id=1764 data-nosnippet>1764</a>                                SendPaymentEvent {
 <a href=#1765 id=1765 data-nosnippet>1765</a>                                    operation_id,
 <a href=#1766 id=1766 data-nosnippet>1766</a>                                    amount: oob_notes.total_amount(),
-<a href=#1767 id=1767 data-nosnippet>1767</a>                                    oob_notes: oob_notes.to_string(),
+<a href=#1767 id=1767 data-nosnippet>1767</a>                                    oob_notes: encode_prefixed(FEDIMINT_PREFIX, <span class="kw-2">&amp;</span>oob_notes),
 <a href=#1768 id=1768 data-nosnippet>1768</a>                                },
 <a href=#1769 id=1769 data-nosnippet>1769</a>                            )
 <a href=#1770 id=1770 data-nosnippet>1770</a>                            .<span class="kw">await</span>;
@@ -1963,7 +1963,7 @@
 <a href=#1963 id=1963 data-nosnippet>1963</a>                SendPaymentEvent {
 <a href=#1964 id=1964 data-nosnippet>1964</a>                    operation_id,
 <a href=#1965 id=1965 data-nosnippet>1965</a>                    amount: oob_notes.total_amount(),
-<a href=#1966 id=1966 data-nosnippet>1966</a>                    oob_notes: oob_notes.to_string(),
+<a href=#1966 id=1966 data-nosnippet>1966</a>                    oob_notes: encode_prefixed(FEDIMINT_PREFIX, <span class="kw-2">&amp;</span>oob_notes),
 <a href=#1967 id=1967 data-nosnippet>1967</a>                },
 <a href=#1968 id=1968 data-nosnippet>1968</a>            )
 <a href=#1969 id=1969 data-nosnippet>1969</a>            .<span class="kw">await</span>;
